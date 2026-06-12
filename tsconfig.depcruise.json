@@ -1,0 +1,25 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@openldr/adapter-auth": ["packages/adapter-auth/src/index.ts"],
+      "@openldr/adapter-db-store": ["packages/adapter-db-store/src/index.ts"],
+      "@openldr/adapter-event-bus": ["packages/adapter-event-bus/src/index.ts"],
+      "@openldr/adapter-s3-bucket": ["packages/adapter-s3-bucket/src/index.ts"],
+      "@openldr/audit": ["packages/audit/src/index.ts"],
+      "@openldr/bootstrap": ["packages/bootstrap/src/index.ts"],
+      "@openldr/cli": ["packages/cli/src/index.ts"],
+      "@openldr/config": ["packages/config/src/index.ts"],
+      "@openldr/core": ["packages/core/src/index.ts"],
+      "@openldr/fhir": ["packages/fhir/src/index.ts"],
+      "@openldr/forms": ["packages/forms/src/index.ts"],
+      "@openldr/ingest": ["packages/ingest/src/index.ts"],
+      "@openldr/plugins": ["packages/plugins/src/index.ts"],
+      "@openldr/ports": ["packages/ports/src/index.ts"],
+      "@openldr/reporting": ["packages/reporting/src/index.ts"],
+      "@openldr/users": ["packages/users/src/index.ts"],
+      "@openldr/server": ["apps/server/src/index.ts"]
+    }
+  }
+}
