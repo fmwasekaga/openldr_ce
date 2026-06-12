@@ -397,9 +397,10 @@ Expected: FAIL — cannot find module `./redact`.
 - [ ] **Step 7: Create `packages/core/src/redact.ts`**
 
 ```ts
-// Mask "user:password@host" credentials so secrets never reach logs/health detail (P1-NFR-2).
+// Mask the password in URL userinfo (scheme://user:password@host) so secrets
+// never reach logs/health detail (P1-NFR-2).
 export function redact(text: string): string {
-  return text.replace(/(\b[\w.-]+:)[^@\s/]+(@)/g, '$1***$2');
+  return text.replace(/(\/\/[^\s:@/]+:)[^\s@]+(@)/g, '$1***$2');
 }
 ```
 
@@ -452,7 +453,7 @@ export async function probe(fn: () => Promise<string | void>): Promise<HealthRes
     return {
       status: 'up',
       latencyMs: Math.round(performance.now() - start),
-      detail: detail || undefined,
+      detail: detail === undefined || detail === '' ? undefined : detail,
     };
   } catch (err) {
     return {
@@ -537,10 +538,14 @@ export class HealthRegistry {
     const items = [...this.checks.values()];
     const settled = await Promise.all(
       items.map(async (c): Promise<readonly [string, HealthResult]> => {
+        const start = performance.now();
         try {
           return [c.name, await c.check()] as const;
         } catch (err) {
-          return [c.name, { status: 'down', latencyMs: 0, detail: redact(errorMessage(err)) }] as const;
+          return [
+            c.name,
+            { status: 'down', latencyMs: Math.round(performance.now() - start), detail: redact(errorMessage(err)) },
+          ] as const;
         }
       }),
     );
