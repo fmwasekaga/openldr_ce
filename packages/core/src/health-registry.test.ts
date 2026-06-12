@@ -32,4 +32,11 @@ describe('HealthRegistry', () => {
     expect(out.status).toBe('down');
     expect(out.checks.a.status).toBe('down');
   });
+  it('aggregates to degraded when a check is degraded and none are down', async () => {
+    const reg = new HealthRegistry();
+    reg.register(fake('a', { status: 'up', latencyMs: 1 }));
+    reg.register(fake('b', { status: 'degraded', latencyMs: 1 }));
+    const out = await reg.runAll();
+    expect(out.status).toBe('degraded');
+  });
 });

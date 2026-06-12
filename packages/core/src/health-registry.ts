@@ -18,10 +18,14 @@ export class HealthRegistry {
     const items = [...this.checks.values()];
     const settled = await Promise.all(
       items.map(async (c): Promise<readonly [string, HealthResult]> => {
+        const start = performance.now();
         try {
           return [c.name, await c.check()] as const;
         } catch (err) {
-          return [c.name, { status: 'down', latencyMs: 0, detail: redact(errorMessage(err)) }] as const;
+          return [
+            c.name,
+            { status: 'down', latencyMs: Math.round(performance.now() - start), detail: redact(errorMessage(err)) },
+          ] as const;
         }
       }),
     );

@@ -10,7 +10,7 @@ export async function probe(fn: () => Promise<string | void>): Promise<HealthRes
     return {
       status: 'up',
       latencyMs: Math.round(performance.now() - start),
-      detail: detail || undefined,
+      detail: detail === undefined || detail === '' ? undefined : detail,
     };
   } catch (err) {
     return {
