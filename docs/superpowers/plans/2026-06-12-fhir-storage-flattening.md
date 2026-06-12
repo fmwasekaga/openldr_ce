@@ -960,6 +960,7 @@ export function createFlatWriter(db: Kysely<ExternalSchema>): FlatWriter {
       const { table, row } = flat;
       const updateRow = { ...row };
       delete (updateRow as Record<string, unknown>).id;
+      delete (updateRow as Record<string, unknown>).created_at; // never overwrite the original insert time
       // Dynamic table dispatch — cast to a loose Kysely so the runtime table name
       // (produced by flatten) is accepted; the whole chain is `any` from here.
       await (db as unknown as Kysely<any>)

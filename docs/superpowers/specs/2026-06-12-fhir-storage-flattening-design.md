@@ -162,7 +162,7 @@ Flow: `validateResource` (throw on invalid — caller must pass valid FHIR) → 
 
 `migrations/{internal,external}/index.ts` export an object map `Record<string, Migration>` (Kysely `Migration = { up(db), down(db) }`) — statically imported migration modules keyed by sortable name (`001_…`). No `FileMigrationProvider`, no fs, no dynamic import (avoids the `Dynamic require` ESM-bundle pitfall).
 
-`createMigrator(db, migrations)` wraps Kysely's `Migrator` with a provider returning the static map; helpers `migrateToLatest()` and `migrateDown()` return Kysely's `MigrationResultSet`. Internal and external each get their own migrator (own `kysely_migration`/`kysely_migration_lock` tables in their respective DB).
+`createMigrator(db, migrations)` returns a Kysely `Migrator` (provider returns the static map). Callers use the `Migrator`'s built-in `migrateToLatest()` / `migrateDown()` (each returns a `MigrationResultSet`); a `migrateAllDown(migrator)` helper loops `migrateDown()` to empty for `db reset`. Internal and external each get their own migrator (own `kysely_migration`/`kysely_migration_lock` tables in their respective DB).
 
 ---
 
