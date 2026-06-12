@@ -368,7 +368,13 @@ export class ConfigError extends OpenLdrError {}
 export class AdapterError extends OpenLdrError {}
 
 export function errorMessage(err: unknown): string {
-  if (err instanceof Error) return err.message;
+  if (err instanceof Error) {
+    const base = err.message || err.name || 'Error';
+    if (err.cause instanceof Error && err.cause.message && err.cause.message !== err.message) {
+      return `${base}: ${err.cause.message}`;
+    }
+    return base;
+  }
   return String(err);
 }
 ```
@@ -1905,6 +1911,13 @@ module.exports = {
       severity: 'error',
       from: { pathNot: '(^|/)packages/(bootstrap|adapter-[^/]+)/' },
       to: { path: '(^|/)packages/adapter-[^/]+/' },
+    },
+    {
+      name: 'no-inter-adapter-imports',
+      comment: 'An adapter may not import another adapter; only bootstrap composes them.',
+      severity: 'error',
+      from: { path: 'packages/(adapter-[^/]+)/' },
+      to: { path: 'packages/(adapter-[^/]+)/', pathNot: 'packages/$1/' },
     },
     {
       name: 'ports-stays-pure',
