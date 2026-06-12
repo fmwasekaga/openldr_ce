@@ -179,6 +179,9 @@ importers:
       '@openldr/db':
         specifier: workspace:*
         version: link:../db
+      '@openldr/ingest':
+        specifier: workspace:*
+        version: link:../ingest
       '@openldr/ports':
         specifier: workspace:*
         version: link:../ports
