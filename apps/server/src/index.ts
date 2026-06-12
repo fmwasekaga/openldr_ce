@@ -1,5 +1,5 @@
 import { loadConfig } from '@openldr/config';
-import { createAppContext } from '@openldr/bootstrap';
+import { createAppContext, createIngestContext } from '@openldr/bootstrap';
 import { buildApp } from './app';
 
 async function main(): Promise<void> {
@@ -7,8 +7,13 @@ async function main(): Promise<void> {
   const ctx = await createAppContext(cfg);
   const app = buildApp(ctx);
 
+  const ingest = await createIngestContext(cfg);
+  const worker = ingest.startWorker();
+
   const close = async () => {
+    await worker.stop();
     await app.close();
+    await ingest.close();
     await ctx.close();
     process.exit(0);
   };

@@ -13,6 +13,7 @@
     "@openldr/config": "workspace:*",
     "@openldr/db": "workspace:*",
     "@openldr/core": "workspace:*",
+    "@openldr/ingest": "workspace:*",
     "@openldr/ports": "workspace:*",
     "kysely": "^0.27.5"
   },

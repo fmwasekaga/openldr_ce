@@ -14,6 +14,36 @@ export interface FhirResourcesTable {
   updated_at: Generated<Date>;
 }
 
+export interface OutboxEventsTable {
+  id: string;
+  type: string;
+  payload: JSONColumnType<Record<string, unknown>>;
+  status: Generated<string>;
+  attempts: Generated<number>;
+  max_attempts: Generated<number>;
+  last_error: string | null;
+  batch_id: string | null;
+  available_at: Generated<Date>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface IngestBatchesTable {
+  batch_id: string;
+  source: string | null;
+  blob_key: string;
+  content_type: string | null;
+  converter: string;
+  status: Generated<string>;
+  resource_count: Generated<number>;
+  attempts: Generated<number>;
+  last_error: string | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface InternalSchema {
   fhir_resources: FhirResourcesTable;
+  outbox_events: OutboxEventsTable;
+  ingest_batches: IngestBatchesTable;
 }

@@ -6,6 +6,7 @@ import { exitCodeFor, formatHealthTable } from './format';
 import { runFhirValidate, formatFhirValidate } from './fhir';
 import { runDbMigrate, runDbReset, runDbSeed } from './db';
 import { runFormsExtract } from './forms';
+import { runIngest, runPipelineStatus, runPipelineRetry, runPipelineLogs, runQueueStatus, runProvenanceAudit } from './ingest';
 
 const program = new Command();
 program.name('openldr').description('OpenLDR CE operator CLI');
@@ -119,5 +120,41 @@ forms
       process.exitCode = 1;
     }
   });
+
+program
+  .command('ingest <file>')
+  .description('Ingest a payload through the pipeline (accept + drain)')
+  .option('--source <s>', 'source system identifier', 'cli')
+  .option('--converter <id>', 'converter id', 'fhir-bundle')
+  .option('--json', 'emit JSON', false)
+  .action(async (file: string, opts: { source: string; converter: string; json: boolean }) => {
+    try {
+      process.exitCode = await runIngest(file, opts);
+    } catch (err) {
+      process.stderr.write(`ingest failed: ${errorMessage(err)}\n`);
+      process.exitCode = 1;
+    }
+  });
+
+const pipeline = program.command('pipeline').description('Inspect the ingest pipeline');
+pipeline.command('status').option('--json', 'emit JSON', false).action(async (opts: { json: boolean }) => {
+  try { process.exitCode = await runPipelineStatus(opts); } catch (err) { process.stderr.write(`pipeline status failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+});
+pipeline.command('retry <batchId>').option('--json', 'emit JSON', false).action(async (batchId: string, opts: { json: boolean }) => {
+  try { process.exitCode = await runPipelineRetry(batchId, opts); } catch (err) { process.stderr.write(`pipeline retry failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+});
+pipeline.command('logs <batchId>').option('--json', 'emit JSON', false).action(async (batchId: string, opts: { json: boolean }) => {
+  try { process.exitCode = await runPipelineLogs(batchId, opts); } catch (err) { process.stderr.write(`pipeline logs failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+});
+
+const queue = program.command('queue').description('Inspect the event queue');
+queue.command('status').option('--json', 'emit JSON', false).action(async (opts: { json: boolean }) => {
+  try { process.exitCode = await runQueueStatus(opts); } catch (err) { process.stderr.write(`queue status failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+});
+
+const provenance = program.command('provenance').description('Provenance tooling');
+provenance.command('audit').option('--json', 'emit JSON', false).action(async (opts: { json: boolean }) => {
+  try { process.exitCode = await runProvenanceAudit(opts); } catch (err) { process.stderr.write(`provenance audit failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+});
 
 program.parseAsync(process.argv);
