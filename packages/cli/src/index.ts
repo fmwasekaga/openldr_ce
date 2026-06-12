@@ -5,6 +5,7 @@ import { errorMessage } from '@openldr/core';
 import { exitCodeFor, formatHealthTable } from './format';
 import { runFhirValidate, formatFhirValidate } from './fhir';
 import { runDbMigrate, runDbReset, runDbSeed } from './db';
+import { runFormsExtract } from './forms';
 
 const program = new Command();
 program.name('openldr').description('OpenLDR CE operator CLI');
@@ -93,6 +94,28 @@ db.command('seed')
       process.exitCode = await runDbSeed(opts);
     } catch (err) {
       process.stderr.write(`db seed failed: ${errorMessage(err)}\n`);
+      process.exitCode = 1;
+    }
+  });
+
+const forms = program.command('forms').description('FHIR forms (Questionnaire) utilities');
+forms
+  .command('extract <questionnaire> <response>')
+  .description('Extract FHIR resources from a filled QuestionnaireResponse')
+  .option('--json', 'emit the full transaction Bundle JSON', false)
+  .option('--subject <ref>', 'subject reference, e.g. Patient/123')
+  .action((questionnaire: string, response: string, opts: { json: boolean; subject?: string }) => {
+    try {
+      const ctx = opts.subject ? { subject: { reference: opts.subject } } : {};
+      const out = runFormsExtract(questionnaire, response, ctx);
+      if (opts.json) {
+        process.stdout.write(JSON.stringify(out.bundle, null, 2) + '\n');
+      } else {
+        process.stdout.write(`extracted [${out.resourceTypes.join(', ')}]; invalid: ${out.invalidCount}\n`);
+      }
+      process.exitCode = out.invalidCount === 0 ? 0 : 1;
+    } catch (err) {
+      process.stderr.write(`forms extract failed: ${errorMessage(err)}\n`);
       process.exitCode = 1;
     }
   });

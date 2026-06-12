@@ -1,0 +1,15 @@
+{
+  "resourceType": "QuestionnaireResponse",
+  "status": "completed",
+  "item": [
+    {
+      "linkId": "demographics",
+      "item": [
+        { "linkId": "family", "answer": [{ "valueString": "Doe" }] },
+        { "linkId": "given", "answer": [{ "valueString": "Jane" }] },
+        { "linkId": "sex", "answer": [{ "valueCoding": { "code": "female" } }] },
+        { "linkId": "birthDate", "answer": [{ "valueDate": "1990-05-01" }] }
+      ]
+    }
+  ]
+}

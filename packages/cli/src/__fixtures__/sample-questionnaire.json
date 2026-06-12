@@ -1,0 +1,94 @@
+{
+  "resourceType": "Questionnaire",
+  "name": "PatientIntake",
+  "title": "Patient Intake",
+  "status": "active",
+  "extension": [
+    {
+      "url": "https://openldr.org/fhir/StructureDefinition/form",
+      "valueString": "{\"id\":\"patient-intake\",\"name\":\"PatientIntake\",\"title\":{\"en\":\"Patient Intake\",\"fr\":\"Admission patient\"},\"status\":\"active\",\"languages\":[\"en\",\"fr\"]}"
+    }
+  ],
+  "item": [
+    {
+      "linkId": "demographics",
+      "type": "group",
+      "text": "Demographics",
+      "repeats": false,
+      "extension": [
+        {
+          "url": "https://openldr.org/fhir/StructureDefinition/form-section",
+          "valueString": "{\"id\":\"demographics\",\"title\":{\"en\":\"Demographics\"},\"resourceType\":\"Patient\"}"
+        }
+      ],
+      "item": [
+        {
+          "linkId": "family",
+          "type": "string",
+          "text": "Family name",
+          "required": true,
+          "repeats": false,
+          "extension": [
+            {
+              "url": "https://openldr.org/fhir/StructureDefinition/form-field",
+              "valueString": "{\"id\":\"family\",\"type\":\"string\",\"label\":{\"en\":\"Family name\",\"fr\":\"Nom\"},\"required\":true,\"fhirPath\":\"name.0.family\"}"
+            }
+          ]
+        },
+        {
+          "linkId": "given",
+          "type": "string",
+          "text": "Given name",
+          "required": true,
+          "repeats": false,
+          "extension": [
+            {
+              "url": "https://openldr.org/fhir/StructureDefinition/form-field",
+              "valueString": "{\"id\":\"given\",\"type\":\"string\",\"label\":{\"en\":\"Given name\",\"fr\":\"Prénom\"},\"required\":true,\"fhirPath\":\"name.0.given.0\"}"
+            }
+          ]
+        },
+        {
+          "linkId": "sex",
+          "type": "choice",
+          "text": "Sex",
+          "required": false,
+          "repeats": false,
+          "extension": [
+            {
+              "url": "https://openldr.org/fhir/StructureDefinition/form-field",
+              "valueString": "{\"id\":\"sex\",\"type\":\"choice\",\"label\":{\"en\":\"Sex\"},\"fhirPath\":\"gender\",\"options\":[{\"code\":\"female\",\"display\":{\"en\":\"Female\",\"fr\":\"Féminin\"}},{\"code\":\"male\",\"display\":{\"en\":\"Male\",\"fr\":\"Masculin\"}}]}"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "female",
+                "display": "Female"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "male",
+                "display": "Male"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "birthDate",
+          "type": "date",
+          "text": "Date of birth",
+          "required": false,
+          "repeats": false,
+          "extension": [
+            {
+              "url": "https://openldr.org/fhir/StructureDefinition/form-field",
+              "valueString": "{\"id\":\"birthDate\",\"type\":\"date\",\"label\":{\"en\":\"Date of birth\"},\"fhirPath\":\"birthDate\"}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

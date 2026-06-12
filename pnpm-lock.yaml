@@ -207,6 +207,9 @@ importers:
       '@openldr/fhir':
         specifier: workspace:*
         version: link:../fhir
+      '@openldr/forms':
+        specifier: workspace:*
+        version: link:../forms
       commander:
         specifier: ^12.1.0
         version: 12.1.0
@@ -299,9 +302,12 @@ importers:
 
   packages/forms:
     dependencies:
-      '@openldr/ports':
+      '@openldr/fhir':
         specifier: workspace:*
-        version: link:../ports
+        version: link:../fhir
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
     devDependencies:
       typescript:
         specifier: ^5.7.2

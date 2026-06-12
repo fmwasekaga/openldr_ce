@@ -17,6 +17,7 @@
     "@openldr/config": "workspace:*",
     "@openldr/core": "workspace:*",
     "@openldr/fhir": "workspace:*",
+    "@openldr/forms": "workspace:*",
     "commander": "^12.1.0"
   },
   "devDependencies": { "tsup": "^8.3.5", "typescript": "^5.7.2", "vitest": "^2.1.8" }
