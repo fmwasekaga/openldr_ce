@@ -9,6 +9,13 @@ module.exports = {
       to: { path: '(^|/)packages/adapter-[^/]+/' },
     },
     {
+      name: 'no-inter-adapter-imports',
+      comment: 'An adapter may not import another adapter; only bootstrap composes them.',
+      severity: 'error',
+      from: { path: 'packages/(adapter-[^/]+)/' },
+      to: { path: 'packages/(adapter-[^/]+)/', pathNot: 'packages/$1/' },
+    },
+    {
       name: 'ports-stays-pure',
       comment: 'ports must not depend on any other workspace package.',
       severity: 'error',
