@@ -153,7 +153,7 @@ Field-type ↔ Questionnaire-item-type map (e.g. `string→string`, `text→text
 
 ## 8. i18n (multilingual form text)
 
-`TranslatableText { en, fr?, pt? }`. `resolveText(node, lang)` returns the requested language or falls back to `en`. `deriveLanguages(form)` returns the set of languages any text provides. On conversion, non-English text is carried in `EXT_OPENLDR_TRANSLATIONS` so the Questionnaire round-trips multilingually; the Questionnaire's primary `text` is always English.
+`TranslatableText { en, fr?, pt? }`. `resolveText(node, lang)` returns the requested language or falls back to `en`. `deriveLanguages(form)` returns the set of languages any text provides. On conversion, non-English text round-trips inside the consolidated `EXT_OPENLDR_FIELD`/`SECTION`/`FORM` JSON (§5) — the full `TranslatableText` is preserved there — while the Questionnaire's native `text`/`answerOption.display` are always English for generic FHIR renderers.
 
 ---
 
