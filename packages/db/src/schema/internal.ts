@@ -42,8 +42,18 @@ export interface IngestBatchesTable {
   updated_at: Generated<Date>;
 }
 
+export interface PluginsTable {
+  id: string;
+  version: string;
+  sha256: string;
+  manifest: JSONColumnType<Record<string, unknown>>;
+  status: Generated<string>;
+  installed_at: Generated<Date>;
+}
+
 export interface InternalSchema {
   fhir_resources: FhirResourcesTable;
   outbox_events: OutboxEventsTable;
   ingest_batches: IngestBatchesTable;
+  plugins: PluginsTable;
 }
