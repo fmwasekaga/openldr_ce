@@ -1,0 +1,17 @@
+{
+  "name": "@openldr/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "echo \"no lint\""
+  },
+  "dependencies": {
+    "@openldr/ports": "workspace:*",
+    "pino": "^9.5.0"
+  },
+  "devDependencies": { "typescript": "^5.7.2", "vitest": "^2.1.8" }
+}
