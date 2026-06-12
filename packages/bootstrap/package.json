@@ -11,8 +11,10 @@
     "@openldr/adapter-event-bus": "workspace:*",
     "@openldr/adapter-s3-bucket": "workspace:*",
     "@openldr/config": "workspace:*",
+    "@openldr/db": "workspace:*",
     "@openldr/core": "workspace:*",
-    "@openldr/ports": "workspace:*"
+    "@openldr/ports": "workspace:*",
+    "kysely": "^0.27.5"
   },
   "devDependencies": { "typescript": "^5.7.2", "vitest": "^2.1.8" }
 }

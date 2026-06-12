@@ -1,6 +1,8 @@
 import { Migrator, type Kysely, type Migration } from 'kysely';
 
-export function createMigrator(db: Kysely<unknown>, migrations: Record<string, Migration>): Migrator {
+// `db: Kysely<any>` — Kysely's DB generic is invariant, so a schema-typed Kysely is not
+// assignable to Kysely<unknown>; the migrator is schema-agnostic, so accept any.
+export function createMigrator(db: Kysely<any>, migrations: Record<string, Migration>): Migrator {
   return new Migrator({
     db,
     provider: { getMigrations: async () => migrations },

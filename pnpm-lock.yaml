@@ -176,9 +176,15 @@ importers:
       '@openldr/core':
         specifier: workspace:*
         version: link:../core
+      '@openldr/db':
+        specifier: workspace:*
+        version: link:../db
       '@openldr/ports':
         specifier: workspace:*
         version: link:../ports
+      kysely:
+        specifier: ^0.27.5
+        version: 0.27.6
     devDependencies:
       typescript:
         specifier: ^5.7.2
@@ -243,6 +249,34 @@ importers:
         specifier: ^9.5.0
         version: 9.14.0
     devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.19.21)
+
+  packages/db:
+    dependencies:
+      '@openldr/core':
+        specifier: workspace:*
+        version: link:../core
+      '@openldr/fhir':
+        specifier: workspace:*
+        version: link:../fhir
+      '@openldr/ports':
+        specifier: workspace:*
+        version: link:../ports
+      kysely:
+        specifier: ^0.27.5
+        version: 0.27.6
+      pg:
+        specifier: ^8.13.1
+        version: 8.21.0
+    devDependencies:
+      '@types/pg':
+        specifier: ^8.11.10
+        version: 8.20.0
       typescript:
         specifier: ^5.7.2
         version: 5.9.3

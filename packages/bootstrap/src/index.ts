@@ -49,3 +49,5 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     },
   };
 }
+
+export * from './db-context';
