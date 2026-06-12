@@ -3,4 +3,5 @@ dist/
 .turbo/
 *.tsbuildinfo
 .env
+docker-compose.override.yml
 coverage/

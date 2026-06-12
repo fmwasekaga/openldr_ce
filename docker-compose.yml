@@ -1,3 +1,7 @@
+# Local dev stack for the OpenLDR CE skeleton (health acceptance).
+# Standard ports. To run alongside another stack that already uses 5432/8080
+# (e.g. a sibling project), create a git-ignored docker-compose.override.yml
+# that remaps the host ports — Docker Compose merges it automatically.
 services:
   postgres:
     image: postgres:16-alpine
@@ -6,7 +10,7 @@ services:
       POSTGRES_PASSWORD: openldr
       POSTGRES_DB: openldr
     ports:
-      - '5433:5432'
+      - '5432:5432'
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U openldr']
       interval: 5s
@@ -41,6 +45,5 @@ services:
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
-      KC_HTTP_PORT: 8180
     ports:
-      - '8180:8180'
+      - '8080:8080'
