@@ -83,7 +83,12 @@ export function createEventBus(cfg: EventBusConfig, deps: EventBusDeps = {}): Ev
     for (const row of rows) {
       const handler = handlers.get(row.type);
       if (!handler) {
-        await pool.query(`update outbox_events set status='pending', updated_at=now() where id=$1`, [row.id]);
+        // No subscriber yet — requeue, but defer availability so a stray/misrouted
+        // type can't busy-loop (re-claimed every drain + every notify) consuming a slot.
+        await pool.query(
+          `update outbox_events set status='pending', available_at = now() + interval '60 seconds', updated_at=now() where id=$1`,
+          [row.id],
+        );
         continue;
       }
       try {
@@ -119,21 +124,31 @@ export function createEventBus(cfg: EventBusConfig, deps: EventBusDeps = {}): Ev
       if (stopped) return;
       void drain().catch(() => undefined);
     };
-    void (async () => {
-      listenClient = await pool.connect();
+    // Acquire the LISTEN client asynchronously. `.catch` prevents an unhandled
+    // rejection if connect/listen fails; `ready` lets stop() await an in-flight
+    // acquisition so a fast start→stop never leaks a still-connecting client.
+    const ready = (async () => {
+      const client = await pool.connect();
+      if (stopped) {
+        client.release();
+        return;
+      }
+      listenClient = client;
       await listenClient.query('listen openldr_events');
       listenClient.on('notification', () => tick());
-    })();
+    })().catch(() => undefined);
     const timer = setInterval(tick, intervalMs);
     return {
       async stop() {
         stopped = true;
         clearInterval(timer);
+        await ready;
         if (listenClient) {
           try {
             await listenClient.query('unlisten openldr_events');
           } finally {
             listenClient.release();
+            listenClient = undefined;
           }
         }
       },
