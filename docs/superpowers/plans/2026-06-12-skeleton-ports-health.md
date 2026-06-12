@@ -1819,10 +1819,13 @@ Expected: FAIL — cannot find module `./app`.
 - [ ] **Step 6: Create `apps/server/src/app.ts`**
 
 ```ts
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 
-export function buildApp(ctx: AppContext): FastifyInstance {
+// Return type is inferred: passing our pino logger as `loggerInstance` makes
+// Fastify specialize its logger generic to pino's `Logger`, which is narrower
+// than the default `FastifyBaseLogger` — so we must not force that annotation.
+export function buildApp(ctx: AppContext) {
   const app = Fastify({ loggerInstance: ctx.logger });
 
   app.get('/health', async (_req, reply) => {
