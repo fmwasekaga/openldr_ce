@@ -7,6 +7,7 @@
   "exports": { ".": "./src/index.ts" },
   "scripts": {
     "build": "tsup",
+    "build:check": "tsup && node dist/index.js --help",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "lint": "echo \"no lint\""

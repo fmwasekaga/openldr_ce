@@ -6,6 +6,7 @@
   "exports": { ".": "./src/index.ts" },
   "scripts": {
     "build": "tsup",
+    "build:check": "tsup && node scripts/smoke.mjs",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",

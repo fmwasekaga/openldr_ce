@@ -182,6 +182,7 @@ Contributions are welcome. A few conventions:
 - Keep commits small and scoped; reference the relevant requirement IDs from the phase PRDs where practical.
 - Commits should not include AI co-authorship trailers — authorship belongs to the human contributor.
 - Add Playwright coverage for new UI surfaces and tests for new core logic.
+- **Run built artifacts, not just build them.** Dev and tests execute TypeScript from source (`tsx`/`vitest`), so a bundling regression in the `tsup` ESM output can pass everything and still crash the shipped binary at startup. Acceptance for `@openldr/cli` and `apps/server` must launch the `dist/` artifact — run `pnpm build:check` (or `pnpm --filter <pkg> build:check`), which builds each binary and smoke-runs it.
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) (to be added) for the full guide.
 
