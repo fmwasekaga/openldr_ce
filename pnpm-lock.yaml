@@ -198,6 +198,9 @@ importers:
       '@openldr/core':
         specifier: workspace:*
         version: link:../core
+      '@openldr/fhir':
+        specifier: workspace:*
+        version: link:../fhir
       commander:
         specifier: ^12.1.0
         version: 12.1.0
@@ -249,9 +252,9 @@ importers:
 
   packages/fhir:
     dependencies:
-      '@openldr/ports':
-        specifier: workspace:*
-        version: link:../ports
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
     devDependencies:
       typescript:
         specifier: ^5.7.2
