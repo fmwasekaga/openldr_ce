@@ -6,9 +6,9 @@
   "exports": { ".": "./src/index.ts" },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run",
     "lint": "echo \"no lint\""
   },
-  "dependencies": { "@openldr/ports": "workspace:*" },
+  "dependencies": { "zod": "^3.24.1" },
   "devDependencies": { "typescript": "^5.7.2", "vitest": "^2.1.8" }
 }
