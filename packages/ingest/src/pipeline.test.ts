@@ -2,6 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { acceptPayload } from './accept';
 import { handleIngestEvent } from './handle';
 import { defaultConverters } from './default-converters';
+import { registryResolver } from './resolver';
+import type { BatchStore } from './batch-store';
 
 const logger = { info: vi.fn(), error: vi.fn() } as never;
 const enc = (o: unknown) => new TextEncoder().encode(JSON.stringify(o));
@@ -23,8 +25,8 @@ describe('handleIngestEvent', () => {
     return {
       blob: { get: vi.fn(async () => enc({ resourceType: 'Bundle', type: 'collection', entry: [{ resource: { resourceType: 'Patient', id: 'p1' } }] })) } as never,
       persist,
-      converters: defaultConverters(),
-      batches: { markProcessing: vi.fn(async () => {}), markDone: vi.fn(async () => {}), markFailed: vi.fn(async () => {}) } as unknown as import('./batch-store').BatchStore,
+      resolver: registryResolver(defaultConverters()),
+      batches: { markProcessing: vi.fn(async () => {}), markDone: vi.fn(async () => {}), markFailed: vi.fn(async () => {}) } as unknown as BatchStore,
       logger,
     };
   }
