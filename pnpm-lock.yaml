@@ -318,9 +318,24 @@ importers:
 
   packages/ingest:
     dependencies:
+      '@openldr/core':
+        specifier: workspace:*
+        version: link:../core
+      '@openldr/db':
+        specifier: workspace:*
+        version: link:../db
+      '@openldr/fhir':
+        specifier: workspace:*
+        version: link:../fhir
+      '@openldr/forms':
+        specifier: workspace:*
+        version: link:../forms
       '@openldr/ports':
         specifier: workspace:*
         version: link:../ports
+      kysely:
+        specifier: ^0.27.5
+        version: 0.27.6
     devDependencies:
       typescript:
         specifier: ^5.7.2
