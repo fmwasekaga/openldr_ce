@@ -20,15 +20,25 @@ import {
   handleIngestEvent,
   defaultConverters,
   createBatchStore,
+  registryResolver,
+  chainResolvers,
   type AcceptInput,
   type BatchStore,
+  type Converter,
 } from '@openldr/ingest';
+import {
+  createPluginStore,
+  createPluginRuntime,
+  createExtismRunner,
+  type PluginRuntime,
+} from '@openldr/plugins';
 
 export interface IngestContext {
   accept(input: AcceptInput): Promise<{ batchId: string; blobKey: string }>;
   drain(): Promise<{ processed: number; failed: number }>;
   startWorker(): { stop(): Promise<void> };
   batches: BatchStore;
+  plugins: PluginRuntime;
   republish(batch: { batch_id: string; blob_key: string; source: string | null; converter: string }): Promise<void>;
   queueStats(): Promise<Record<string, number>>;
   migrateAll(): Promise<void>;
@@ -56,7 +66,13 @@ export async function createIngestContext(cfg: Config): Promise<IngestContext> {
   const converters = defaultConverters();
   const batches = createBatchStore(internal.db);
 
-  await eventing.subscribe('ingest.received', (event) => handleIngestEvent({ blob, persist, converters, batches, logger }, event));
+  const pluginStore = createPluginStore(internal.db);
+  const plugins = createPluginRuntime({ blob, store: pluginStore, runner: createExtismRunner(), logger });
+
+  const pluginResolver = { resolve: (id: string): Promise<Converter | undefined> => plugins.load(id) };
+  const resolver = chainResolvers(registryResolver(converters), pluginResolver);
+
+  await eventing.subscribe('ingest.received', (event) => handleIngestEvent({ blob, persist, resolver, batches, logger }, event));
 
   const internalMigrator = createMigrator(internal.db, internalMigrations);
   const externalMigrator = createMigrator(externalDb, externalMigrations);
@@ -66,6 +82,7 @@ export async function createIngestContext(cfg: Config): Promise<IngestContext> {
     drain: () => eventing.drain(),
     startWorker: () => eventing.startWorker(),
     batches,
+    plugins,
     async republish(batch) {
       await eventing.publish({ type: 'ingest.received', payload: { batchId: batch.batch_id, blobKey: batch.blob_key, source: batch.source ?? 'cli', converter: batch.converter } });
     },
