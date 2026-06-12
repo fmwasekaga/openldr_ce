@@ -17,4 +17,14 @@ describe('FormSchema model', () => {
     const r = FormField.safeParse({ id: 'q', type: 'integer', label: { en: 'Q' }, observationExtract: true });
     expect(r.success).toBe(false);
   });
+  it('rejects duplicate field ids', () => {
+    const r = FormSchema.safeParse({
+      id: 'f', name: 'f', title: { en: 'F' }, status: 'active', languages: ['en'],
+      sections: [{ id: 's', title: { en: 'S' }, fields: [
+        { id: 'dup', type: 'string', label: { en: 'A' } },
+        { id: 'dup', type: 'string', label: { en: 'B' } },
+      ] }],
+    });
+    expect(r.success).toBe(false);
+  });
 });

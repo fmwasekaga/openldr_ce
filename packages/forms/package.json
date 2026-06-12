@@ -10,7 +10,6 @@
     "lint": "echo \"no lint\""
   },
   "dependencies": {
-    "@openldr/core": "workspace:*",
     "@openldr/fhir": "workspace:*",
     "zod": "^3.24.1"
   },

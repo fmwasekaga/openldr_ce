@@ -68,12 +68,24 @@ export const FormSection = z.object({
 });
 export type FormSection = z.infer<typeof FormSection>;
 
-export const FormSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  title: TranslatableText,
-  status: z.enum(['draft', 'active', 'retired']),
-  languages: z.array(z.enum(['en', 'fr', 'pt'])),
-  sections: z.array(FormSection),
-});
+export const FormSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    title: TranslatableText,
+    status: z.enum(['draft', 'active', 'retired']),
+    languages: z.array(z.enum(['en', 'fr', 'pt'])),
+    sections: z.array(FormSection),
+  })
+  .superRefine((form, ctx) => {
+    const seen = new Set<string>();
+    for (const section of form.sections) {
+      if (seen.has(section.id)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: `duplicate id: ${section.id}` });
+      seen.add(section.id);
+      for (const field of section.fields) {
+        if (seen.has(field.id)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: `duplicate id: ${field.id}` });
+        seen.add(field.id);
+      }
+    }
+  });
 export type FormSchema = z.infer<typeof FormSchema>;

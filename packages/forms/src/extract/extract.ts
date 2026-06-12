@@ -6,6 +6,7 @@ import { parseResponse } from '../response';
 import type { Answers, AnswerValue } from '../answer-value';
 import { setPath } from './set-path';
 import type { ExtractionContext, ExtractionResult } from './context';
+import { computeVisibility } from '../visibility';
 
 const SUBJECT_TYPES = new Set(['ServiceRequest', 'Specimen', 'Observation', 'DiagnosticReport']);
 
@@ -60,6 +61,7 @@ export function extractResources(
 ): ExtractionResult {
   const form = fromQuestionnaire(questionnaire);
   const answers: Answers = parseResponse(qr);
+  const visible = computeVisibility(form, answers);
   const resources: FhirResource[] = [];
 
   for (const section of form.sections) {
@@ -67,6 +69,7 @@ export function extractResources(
       const resource: Record<string, unknown> = { resourceType: section.resourceType, id: randomUUID() };
       if (ctx.subject && SUBJECT_TYPES.has(section.resourceType)) resource.subject = ctx.subject;
       for (const field of section.fields) {
+        if (visible.get(field.id) === false) continue;
         if (field.observationExtract) continue;
         const raw = answers[field.id];
         if (raw !== undefined && field.fhirPath) {
@@ -77,7 +80,7 @@ export function extractResources(
       resources.push(resource as FhirResource);
     }
     for (const field of section.fields) {
-      if (field.observationExtract) {
+      if (field.observationExtract && visible.get(field.id) !== false) {
         const raw = answers[field.id];
         if (raw !== undefined) {
           const v = Array.isArray(raw) ? raw[0] : raw;
