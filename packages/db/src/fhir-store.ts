@@ -20,12 +20,13 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
       const resourceType = resource.resourceType;
       const id = (resource as { id?: string }).id ?? randomUUID();
       const full = { ...resource, id } as FhirResource;
+      const serialized = JSON.stringify(full);
       const versionId = ((resource as { meta?: { versionId?: string } }).meta?.versionId) ?? null;
       const values = {
         resource_type: resourceType,
         id,
         version_id: versionId,
-        resource: JSON.stringify(full),
+        resource: serialized,
         source_system: provenance.sourceSystem ?? null,
         plugin_id: provenance.pluginId ?? null,
         plugin_version: provenance.pluginVersion ?? null,
@@ -37,7 +38,7 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
         .onConflict((oc) =>
           oc.columns(['resource_type', 'id']).doUpdateSet({
             version_id: versionId,
-            resource: JSON.stringify(full),
+            resource: serialized,
             source_system: provenance.sourceSystem ?? null,
             plugin_id: provenance.pluginId ?? null,
             plugin_version: provenance.pluginVersion ?? null,

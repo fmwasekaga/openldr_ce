@@ -2,8 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 import { persistResource } from './persist';
 import type { FhirStore } from './fhir-store';
 import type { FlatWriter, WriteResult } from './flat-writer';
+import type { Logger } from '@openldr/core';
 
-const logger = { error: vi.fn(), info: vi.fn() } as never;
+const logger = { error: vi.fn(), info: vi.fn() } as unknown as Logger;
 
 function fakeStore(): FhirStore {
   return {

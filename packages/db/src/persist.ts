@@ -27,6 +27,8 @@ export async function persistResource(
   }
   const valid = validation.resource;
 
+  // Note: a valid non-domain resource (e.g. Bundle) is still saved canonically here;
+  // the flat writer below returns 'skipped' for it (no analytics projection).
   const ref = await deps.fhirStore.save(valid, provenance);
   const withId = { ...valid, id: ref.id };
 

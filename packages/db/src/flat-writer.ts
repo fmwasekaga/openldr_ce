@@ -17,6 +17,7 @@ export function createFlatWriter(db: Kysely<ExternalSchema>): FlatWriter {
       const { table, row } = flat;
       const updateRow = { ...row };
       delete (updateRow as Record<string, unknown>).id;
+      delete (updateRow as Record<string, unknown>).created_at;
       await (db as unknown as Kysely<any>)
         .insertInto(table)
         .values(row)
