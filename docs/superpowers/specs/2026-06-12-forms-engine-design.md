@@ -116,14 +116,14 @@ interface FormSchema {
 
 ## 5. FormSchema ↔ FHIR Questionnaire (lossless)
 
-`extensions.ts` defines stable URLs, e.g. `EXT_OPENLDR_FHIRPATH = 'https://openldr.org/fhir/StructureDefinition/fhir-path'`, plus `EXT_OPENLDR_RESOURCE_TYPE`, `EXT_OPENLDR_OBSERVATION_EXTRACT`, `EXT_OPENLDR_CARDINALITY`, `EXT_OPENLDR_VISIBILITY`, `EXT_OPENLDR_LANGUAGES`, `EXT_OPENLDR_TRANSLATIONS`.
+The CE metadata that doesn't map to a standard Questionnaire field rides in **consolidated `@openldr`-namespaced JSON extensions** (`extensions.ts`): `EXT_OPENLDR_FORM` (on the Questionnaire — form-level meta: id, name, title, status, languages), `EXT_OPENLDR_SECTION` (on each group item — the section minus its fields), `EXT_OPENLDR_FIELD` (on each leaf item — the full `FormField` as JSON). This makes the round-trip lossless by construction while keeping the Questionnaire natively renderable.
 
 `toQuestionnaire(form): Questionnaire`:
-- `status`, `name`, `title` (English) → Questionnaire fields; `languages` → `EXT_OPENLDR_LANGUAGES`.
-- each `FormSection` → a `group` `QuestionnaireItem` (`linkId = section.id`, `text` = English title, `repeats` from section); section `resourceType` → `EXT_OPENLDR_RESOURCE_TYPE`.
-- each `FormField` → a leaf `QuestionnaireItem` (`linkId = field.id`, `type` mapped from FieldType, `required`, `repeats`, `answerOption` from `options`); `fhirPath`/`observationExtract`/`code`/`unit`/`cardinality` → the corresponding extensions; `visibility` → `enableWhen` (operator `=`); non-English `translations` → `EXT_OPENLDR_TRANSLATIONS`.
+- `status`, `name`, `title` (English) → Questionnaire fields; form-level meta → `EXT_OPENLDR_FORM` (valueString JSON).
+- each `FormSection` → a `group` `QuestionnaireItem` (`linkId = section.id`, `text` = English title, `repeats`); the section meta → `EXT_OPENLDR_SECTION` (valueString JSON).
+- each `FormField` → a leaf `QuestionnaireItem` (`linkId = field.id`, native `type`, English `text`, `required`, `repeats`, `answerOption` from `options` with English displays, `enableWhen` from `visibility`); the full field → `EXT_OPENLDR_FIELD` (valueString JSON), which also carries `fhirPath`/`observationExtract`/`code`/`unit`/`cardinality`/translations.
 
-`fromQuestionnaire(q): FormSchema` is the exact inverse, reading the extensions back.
+`fromQuestionnaire(q): FormSchema` is the exact inverse: it reconstructs the `FormSchema` from the `EXT_OPENLDR_FORM`/`SECTION`/`FIELD` JSON (the native item fields are for FHIR renderers, not reconstruction). Extraction (§9) reads the same `EXT_OPENLDR_FIELD`/`SECTION` JSON for `resourceType`/`fhirPath`/`observationExtract`.
 
 **Lossless guarantee** (property): `fromQuestionnaire(toQuestionnaire(form))` deep-equals `form` for every sample form.
 
