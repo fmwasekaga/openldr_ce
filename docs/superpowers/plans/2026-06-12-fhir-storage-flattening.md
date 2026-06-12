@@ -769,7 +769,9 @@ export const externalMigrations: Record<string, Migration> = {
 ```ts
 import { Migrator, type Kysely, type Migration } from 'kysely';
 
-export function createMigrator(db: Kysely<unknown>, migrations: Record<string, Migration>): Migrator {
+// `db: Kysely<any>` — Kysely's DB generic is invariant, so a schema-typed Kysely is not
+// assignable to Kysely<unknown>; the migrator is schema-agnostic, so accept any.
+export function createMigrator(db: Kysely<any>, migrations: Record<string, Migration>): Migrator {
   return new Migrator({
     db,
     provider: { getMigrations: async () => migrations },
@@ -1123,7 +1125,7 @@ git -c commit.gpgsign=false commit -m "feat(db): FlatWriter + persistResource DP
 - Create: `packages/bootstrap/src/db-context.ts`
 - Modify: `packages/bootstrap/src/index.ts` (re-export db-context)
 
-- [ ] **Step 1: Add the dependency in `packages/bootstrap/package.json`** — inside `"dependencies"`, add `"@openldr/db": "workspace:*",` (keep alphabetical with the other `@openldr/*` entries). Then run: `pnpm install`.
+- [ ] **Step 1: Add dependencies in `packages/bootstrap/package.json`** — inside `"dependencies"`, add BOTH `"@openldr/db": "workspace:*",` and `"kysely": "^0.27.5"` (db-context.ts imports `Kysely`/`MigrationResultSet` from `kysely`, so bootstrap needs it as a direct dep to share one kysely copy with `@openldr/db`). Then run: `pnpm install`.
 
 - [ ] **Step 2: Create `packages/bootstrap/src/db-context.ts`**
 
