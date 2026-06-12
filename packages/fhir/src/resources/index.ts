@@ -6,3 +6,5 @@ export * from './service-request';
 export * from './diagnostic-report';
 export * from './observation';
 export * from './bundle';
+export * from './questionnaire';
+export * from './questionnaire-response';
