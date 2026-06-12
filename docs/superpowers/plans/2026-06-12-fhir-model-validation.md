@@ -1112,12 +1112,15 @@ describe('runFhirValidate', () => {
     expect(out.results[0].valid).toBe(false);
     expect(out.results[0].outcome).toBeDefined();
   });
-  it('validates each Bundle entry and flags the bad one', () => {
+  it('validates the Bundle envelope and each entry, flagging the bad one', () => {
     const out = runFhirValidate(fixture('bundle-mixed.json'));
     expect(out.allValid).toBe(false);
-    expect(out.results[0].valid).toBe(true);
-    expect(out.results[1].valid).toBe(false);
-    expect(out.results[1].label).toBe('entry[1]');
+    const labels = out.results.map((r) => r.label);
+    expect(labels).toContain('Bundle'); // envelope row
+    expect(labels).toContain('entry[1]');
+    const bad = out.results.filter((r) => !r.valid);
+    expect(bad).toHaveLength(1);
+    expect(bad[0].label).toBe('entry[1]');
   });
 });
 ```
@@ -1154,9 +1157,15 @@ export function runFhirValidate(file: string): FhirValidateOutput {
   const isBundle =
     typeof data === 'object' && data !== null && (data as Record<string, unknown>)['resourceType'] === 'Bundle';
 
-  const results: FhirValidateRow[] = isBundle
-    ? validateBundleEntries(data).map(({ entry, result }) => toRow(`entry[${entry}]`, result))
-    : [toRow(String((data as Record<string, unknown>)?.['resourceType'] ?? 'resource'), validateResource(data))];
+  let results: FhirValidateRow[];
+  if (isBundle) {
+    // Validate the Bundle envelope itself (e.g. required `type`) then each entry.
+    const envelope = toRow('Bundle', validateResource(data));
+    const entries = validateBundleEntries(data).map(({ entry, result }) => toRow(`entry[${entry}]`, result));
+    results = [envelope, ...entries];
+  } else {
+    results = [toRow(String((data as Record<string, unknown>)?.['resourceType'] ?? 'resource'), validateResource(data))];
+  }
 
   return { file, results, allValid: results.every((r) => r.valid) };
 }
