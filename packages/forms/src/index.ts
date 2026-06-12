@@ -1,6 +1,12 @@
-/**
- * @openldr/forms — placeholder module package.
- * Locks the modular-monolith boundary topology (P1-CORE-1).
- * Real implementation arrives in its own Phase-1 sub-project.
- */
-export const MODULE_NAME = 'forms' as const;
+export * from './schema/form-schema';
+export * from './extensions';
+export * from './i18n';
+export * from './answer-value';
+export * from './response';
+export * from './visibility';
+export * from './validate-answers';
+export * from './to-questionnaire';
+export * from './from-questionnaire';
+export * from './to-bundle';
+export * from './extract/index';
+export * from './samples/forms';
