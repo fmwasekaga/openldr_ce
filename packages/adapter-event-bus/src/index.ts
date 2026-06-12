@@ -6,7 +6,15 @@ import { backoff } from './backoff';
 
 export interface EventBusConfig {
   url: string;
+  /**
+   * Lease window in ms. A row in `status='processing'` whose `updated_at` is
+   * older than this is presumed orphaned (the worker crashed between the claim
+   * commit and the terminal update) and is reclaimed as a retry. Default 5 min.
+   */
+  leaseMs?: number;
 }
+
+const DEFAULT_LEASE_MS = 300_000;
 
 export interface EventBusDeps {
   pool?: pg.Pool;
@@ -35,6 +43,7 @@ interface ClaimedRow {
 export function createEventBus(cfg: EventBusConfig, deps: EventBusDeps = {}): EventBus {
   const pool = deps.pool ?? new pg.Pool({ connectionString: cfg.url });
   const handlers = new Map<string, EventHandler>();
+  const leaseMs = cfg.leaseMs ?? DEFAULT_LEASE_MS;
 
   async function publish(event: EventEnvelope): Promise<void> {
     const id = randomUUID();
@@ -54,20 +63,55 @@ export function createEventBus(cfg: EventBusConfig, deps: EventBusDeps = {}): Ev
     const client = await pool.connect();
     try {
       await client.query('begin');
+      // Claim fresh pending rows AND reap orphaned 'processing' rows whose lease
+      // has expired: a worker that crashed after claim() committed but before the
+      // terminal update leaves a row stuck in 'processing' forever. SKIP LOCKED
+      // means an in-flight row held by a live worker's open transaction is never
+      // reaped — only rows with no holding lock and a stale updated_at qualify.
       const res = await client.query(
-        `select id, type, payload, attempts, max_attempts from outbox_events
-         where status='pending' and available_at <= now()
+        `select id, type, payload, attempts, max_attempts, status from outbox_events
+         where (status='pending' and available_at <= now())
+            or (status='processing' and updated_at < now() - ($2 || ' milliseconds')::interval)
          order by available_at limit $1 for update skip locked`,
-        [limit],
+        [limit, String(leaseMs)],
       );
-      const rows = res.rows as ClaimedRow[];
-      if (rows.length > 0) {
+      const rows = res.rows as Array<ClaimedRow & { status: string }>;
+      const freshIds: string[] = [];
+      const claimed: ClaimedRow[] = [];
+      for (const row of rows) {
+        if (row.status === 'pending') {
+          freshIds.push(row.id);
+          claimed.push({
+            id: row.id,
+            type: row.type,
+            payload: row.payload,
+            attempts: row.attempts,
+            max_attempts: row.max_attempts,
+          });
+          continue;
+        }
+        // Stale 'processing' row: count the crash as a failed attempt.
+        const attempts = row.attempts + 1;
+        if (attempts < row.max_attempts) {
+          await client.query(
+            `update outbox_events set status='processing', attempts=$2, updated_at=now() where id=$1`,
+            [row.id, attempts],
+          );
+          claimed.push({ id: row.id, type: row.type, payload: row.payload, attempts, max_attempts: row.max_attempts });
+        } else {
+          await client.query(
+            `update outbox_events set status='failed', attempts=$2, last_error=$3, updated_at=now() where id=$1`,
+            [row.id, attempts, 'lease expired: worker presumed crashed while processing'],
+          );
+        }
+      }
+      if (freshIds.length > 0) {
         await client.query(`update outbox_events set status='processing', updated_at=now() where id = any($1::text[])`, [
-          rows.map((r) => r.id),
+          freshIds,
         ]);
       }
       await client.query('commit');
-      return rows;
+      return claimed;
     } catch (err) {
       await client.query('rollback');
       throw err;
