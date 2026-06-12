@@ -29,17 +29,11 @@ export function singleIssueOutcome(
 
 export function issuesFromZodError(error: z.ZodError): OperationOutcomeIssue[] {
   return error.issues.map((i) => {
-    let code: string;
-    if (i.code === 'invalid_type' && (i as { received?: string }).received === 'undefined') {
-      code = 'structure';
-    } else if (i.code === 'invalid_type') {
-      code = 'invalid';
-    } else {
-      code = 'invalid';
-    }
+    // A missing required field is a structural issue; a present-but-wrong value is invalid.
+    const missing = i.code === 'invalid_type' && i.received === 'undefined';
     return {
-      severity: 'error',
-      code,
+      severity: 'error' as const,
+      code: missing ? 'structure' : 'invalid',
       diagnostics: i.message,
       expression: [i.path.length ? i.path.join('.') : '(root)'],
     };
