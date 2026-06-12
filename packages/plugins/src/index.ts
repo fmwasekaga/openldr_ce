@@ -4,3 +4,4 @@ export * from './runner';
 export * from './wasm-converter';
 export * from './store';
 export * from './runtime';
+export * from './extism-runner';
