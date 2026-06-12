@@ -4,6 +4,7 @@ import { createAppContext } from '@openldr/bootstrap';
 import { errorMessage } from '@openldr/core';
 import { exitCodeFor, formatHealthTable } from './format';
 import { runFhirValidate, formatFhirValidate } from './fhir';
+import { runDbMigrate, runDbReset, runDbSeed } from './db';
 
 const program = new Command();
 program.name('openldr').description('OpenLDR CE operator CLI');
@@ -56,6 +57,42 @@ fhir
       } else {
         process.stderr.write(`fhir validate failed: ${errorMessage(err)}\n`);
       }
+      process.exitCode = 1;
+    }
+  });
+
+const db = program.command('db').description('Database migrations and seeding');
+db.command('migrate')
+  .description('Run internal + external migrations to latest')
+  .option('--json', 'emit JSON', false)
+  .action(async (opts: { json: boolean }) => {
+    try {
+      process.exitCode = await runDbMigrate(opts);
+    } catch (err) {
+      process.stderr.write(`db migrate failed: ${errorMessage(err)}\n`);
+      process.exitCode = 1;
+    }
+  });
+db.command('reset')
+  .description('Drop and re-run all migrations (refuses in production without --force)')
+  .option('--json', 'emit JSON', false)
+  .option('--force', 'allow in production', false)
+  .action(async (opts: { json: boolean; force: boolean }) => {
+    try {
+      process.exitCode = await runDbReset(opts);
+    } catch (err) {
+      process.stderr.write(`db reset failed: ${errorMessage(err)}\n`);
+      process.exitCode = 1;
+    }
+  });
+db.command('seed')
+  .description('Insert a small sample data set')
+  .option('--json', 'emit JSON', false)
+  .action(async (opts: { json: boolean }) => {
+    try {
+      process.exitCode = await runDbSeed(opts);
+    } catch (err) {
+      process.stderr.write(`db seed failed: ${errorMessage(err)}\n`);
       process.exitCode = 1;
     }
   });
