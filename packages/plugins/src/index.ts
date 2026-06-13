@@ -1,6 +1,7 @@
-/**
- * @openldr/plugins — placeholder module package.
- * Locks the modular-monolith boundary topology (P1-CORE-1).
- * Real implementation arrives in its own Phase-1 sub-project.
- */
-export const MODULE_NAME = 'plugins' as const;
+export * from './manifest';
+export * from './hash';
+export * from './runner';
+export * from './wasm-converter';
+export * from './store';
+export * from './runtime';
+export * from './extism-runner';

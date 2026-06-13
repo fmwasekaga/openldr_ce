@@ -182,6 +182,9 @@ importers:
       '@openldr/ingest':
         specifier: workspace:*
         version: link:../ingest
+      '@openldr/plugins':
+        specifier: workspace:*
+        version: link:../plugins
       '@openldr/ports':
         specifier: workspace:*
         version: link:../ports
@@ -349,9 +352,30 @@ importers:
 
   packages/plugins:
     dependencies:
+      '@extism/extism':
+        specifier: ^1.0.3
+        version: 1.0.3
+      '@openldr/core':
+        specifier: workspace:*
+        version: link:../core
+      '@openldr/db':
+        specifier: workspace:*
+        version: link:../db
+      '@openldr/fhir':
+        specifier: workspace:*
+        version: link:../fhir
+      '@openldr/ingest':
+        specifier: workspace:*
+        version: link:../ingest
       '@openldr/ports':
         specifier: workspace:*
         version: link:../ports
+      kysely:
+        specifier: ^0.27.5
+        version: 0.27.6
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
     devDependencies:
       typescript:
         specifier: ^5.7.2
@@ -957,6 +981,9 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
+
+  '@extism/extism@1.0.3':
+    resolution: {integrity: sha512-kHwJwNP19c2q6tN2VYez/Bvv/mvx5J+UEyVbHJKAQ8+l9Z+MJ7TTjBw/GwDQcieXlLtPDNphugeH8ChKKfVtQg==}
 
   '@fastify/ajv-compiler@4.0.5':
     resolution: {integrity: sha512-KoWKW+MhvfTRWL4qrhUwAAZoaChluo0m0vbiJlGMt2GXvL4LVPQEjt8kSpHI3IBq5Rez8fg+XeH3cneztq+C7A==}
@@ -2469,6 +2496,8 @@ snapshots:
 
   '@esbuild/win32-x64@0.28.0':
     optional: true
+
+  '@extism/extism@1.0.3': {}
 
   '@fastify/ajv-compiler@4.0.5':
     dependencies:

@@ -7,6 +7,7 @@ import { runFhirValidate, formatFhirValidate } from './fhir';
 import { runDbMigrate, runDbReset, runDbSeed } from './db';
 import { runFormsExtract } from './forms';
 import { runIngest, runPipelineStatus, runPipelineRetry, runPipelineLogs, runQueueStatus, runProvenanceAudit } from './ingest';
+import { runPluginInstall, runPluginList, runPluginTest, runPluginRun, runPluginRemove } from './plugin';
 
 const program = new Command();
 program.name('openldr').description('OpenLDR CE operator CLI');
@@ -126,8 +127,10 @@ program
   .description('Ingest a payload through the pipeline (accept + drain)')
   .option('--source <s>', 'source system identifier', 'cli')
   .option('--converter <id>', 'converter id', 'fhir-bundle')
+  .option('--plugin <id>', 'plugin/converter id (alias of --converter)')
   .option('--json', 'emit JSON', false)
-  .action(async (file: string, opts: { source: string; converter: string; json: boolean }) => {
+  .action(async (file: string, opts: { source: string; converter: string; plugin?: string; json: boolean }) => {
+    if (opts.plugin) opts.converter = opts.plugin;
     try {
       process.exitCode = await runIngest(file, opts);
     } catch (err) {
@@ -156,5 +159,44 @@ const provenance = program.command('provenance').description('Provenance tooling
 provenance.command('audit').option('--json', 'emit JSON', false).action(async (opts: { json: boolean }) => {
   try { process.exitCode = await runProvenanceAudit(opts); } catch (err) { process.stderr.write(`provenance audit failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
 });
+
+const plugin = program.command('plugin').description('Manage WASM ingest plugins');
+plugin
+  .command('install <wasm>')
+  .description('Install a plugin (.wasm + manifest.json) into blob + registry')
+  .option('--manifest <path>', 'manifest path (default: manifest.json next to the wasm)')
+  .option('--json', 'emit JSON', false)
+  .action(async (wasm: string, opts: { manifest?: string; json: boolean }) => {
+    try { process.exitCode = await runPluginInstall(wasm, opts); } catch (err) { process.stderr.write(`plugin install failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+  });
+plugin
+  .command('list')
+  .option('--json', 'emit JSON', false)
+  .action(async (opts: { json: boolean }) => {
+    try { process.exitCode = await runPluginList(opts); } catch (err) { process.stderr.write(`plugin list failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+  });
+plugin
+  .command('test <id>')
+  .option('--version <v>', 'specific version')
+  .option('--json', 'emit JSON', false)
+  .action(async (id: string, opts: { version?: string; json: boolean }) => {
+    try { process.exitCode = await runPluginTest(id, opts); } catch (err) { process.stderr.write(`plugin test failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+  });
+plugin
+  .command('run <input>')
+  .description('Convert a local input file through a plugin (no queue)')
+  .requiredOption('--plugin <id>', 'plugin id')
+  .option('--version <v>', 'specific version')
+  .option('--json', 'emit JSON', false)
+  .action(async (input: string, opts: { plugin: string; version?: string; json: boolean }) => {
+    try { process.exitCode = await runPluginRun(input, opts); } catch (err) { process.stderr.write(`plugin run failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+  });
+plugin
+  .command('remove <id>')
+  .option('--version <v>', 'specific version (default: all)')
+  .option('--json', 'emit JSON', false)
+  .action(async (id: string, opts: { version?: string; json: boolean }) => {
+    try { process.exitCode = await runPluginRemove(id, opts); } catch (err) { process.stderr.write(`plugin remove failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+  });
 
 program.parseAsync(process.argv);

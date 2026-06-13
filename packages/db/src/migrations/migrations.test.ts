@@ -3,8 +3,8 @@ import { internalMigrations } from './internal/index';
 import { externalMigrations } from './external/index';
 
 describe('migration maps', () => {
-  it('internal has the three migrations with up/down', () => {
-    expect(Object.keys(internalMigrations)).toEqual(['001_fhir_resources', '002_outbox', '003_ingest_batches']);
+  it('internal has the four migrations with up/down', () => {
+    expect(Object.keys(internalMigrations)).toEqual(['001_fhir_resources', '002_outbox', '003_ingest_batches', '004_plugins']);
     for (const m of Object.values(internalMigrations)) {
       expect(typeof m.up).toBe('function');
       expect(typeof m.down).toBe('function');
