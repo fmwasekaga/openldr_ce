@@ -14,6 +14,8 @@ function ctxWith(status: 'up' | 'down'): AppContext {
     store: {} as never,
     health,
     reporting: {} as never,
+    audit: {} as never,
+    users: {} as never,
     async close() {},
   };
 }
