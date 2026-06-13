@@ -13,7 +13,11 @@
     "depcruise": "depcruise packages apps --config .dependency-cruiser.cjs",
     "openldr": "tsx packages/cli/src/index.ts",
     "build:plugins": "node scripts/build-wasm-plugins.mjs",
-    "make:whonet-sample": "node scripts/make-whonet-sample.mjs"
+    "make:whonet-sample": "node scripts/make-whonet-sample.mjs",
+    "e2e": "turbo build --filter=@openldr/web --filter=@openldr/server && pnpm --filter @openldr/e2e e2e",
+    "verify:ui": "turbo build --filter=@openldr/web --filter=@openldr/server && pnpm --filter @openldr/e2e capture",
+    "e2e:install-browsers": "node scripts/install-playwright-browsers.mjs",
+    "e2e:seed": "pnpm make:whonet-sample && pnpm build:plugins && pnpm openldr db reset && pnpm openldr plugin install reference-plugins/whonet-sqlite/plugin.wasm && pnpm openldr ingest samples/whonet-sample.sqlite --plugin whonet-sqlite"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
