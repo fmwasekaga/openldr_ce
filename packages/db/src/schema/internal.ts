@@ -51,9 +51,38 @@ export interface PluginsTable {
   installed_at: Generated<Date>;
 }
 
+export interface AuditEventsTable {
+  id: string;
+  occurred_at: Generated<Date>;
+  actor_type: string;
+  actor_id: string | null;
+  actor_name: string;
+  action: string;
+  entity_type: string;
+  entity_id: string;
+  before: JSONColumnType<Record<string, unknown>> | null;
+  after: JSONColumnType<Record<string, unknown>> | null;
+  metadata: JSONColumnType<Record<string, unknown>> | null;
+}
+
+export interface UsersTable {
+  id: string;
+  subject: string | null;
+  username: string;
+  display_name: string | null;
+  email: string | null;
+  roles: JSONColumnType<string[]>;
+  status: Generated<string>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+  last_login_at: Date | null;
+}
+
 export interface InternalSchema {
   fhir_resources: FhirResourcesTable;
   outbox_events: OutboxEventsTable;
   ingest_batches: IngestBatchesTable;
   plugins: PluginsTable;
+  audit_events: AuditEventsTable;
+  users: UsersTable;
 }
