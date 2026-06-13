@@ -28,6 +28,7 @@ describe('handleIngestEvent', () => {
       resolver: registryResolver(defaultConverters()),
       batches: { markProcessing: vi.fn(async () => {}), markDone: vi.fn(async () => {}), markFailed: vi.fn(async () => {}) } as unknown as BatchStore,
       logger,
+      audit: vi.fn(async () => {}),
     };
   }
 
@@ -37,6 +38,7 @@ describe('handleIngestEvent', () => {
     await handleIngestEvent(d, { type: 'ingest.received', payload: { batchId: 'b1', blobKey: 'k', source: 'test', converter: 'fhir-bundle' } });
     expect(persist).toHaveBeenCalledWith(expect.objectContaining({ resourceType: 'Patient' }), expect.objectContaining({ batchId: 'b1', sourceSystem: 'test', pluginId: 'fhir-bundle' }));
     expect(d.batches.markDone).toHaveBeenCalledWith('b1', 1);
+    expect(d.audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'ingest.batch.done', entityId: 'b1' }));
   });
 
   it('marks failed and rethrows on an unknown converter', async () => {
