@@ -1,0 +1,19 @@
+import type { ReportDefinition, ReportSummary } from './types';
+import { amrResistance } from './reports/amr-resistance';
+import { testVolume } from './reports/test-volume';
+import { patientDemographics } from './reports/patient-demographics';
+import { turnaroundTime } from './reports/turnaround-time';
+
+const REPORTS: ReportDefinition[] = [amrResistance, testVolume, patientDemographics, turnaroundTime] as ReportDefinition[];
+
+export function reportCatalog(): ReportDefinition[] {
+  return REPORTS;
+}
+
+export function getReport(id: string): ReportDefinition | undefined {
+  return REPORTS.find((r) => r.id === id);
+}
+
+export function reportSummaries(): ReportSummary[] {
+  return REPORTS.map((r) => ({ id: r.id, name: r.name, description: r.description }));
+}

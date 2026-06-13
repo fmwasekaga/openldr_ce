@@ -17,6 +17,7 @@
     "@openldr/config": "workspace:*",
     "@openldr/core": "workspace:*",
     "@openldr/fhir": "workspace:*",
+    "@openldr/reporting": "workspace:*",
     "@openldr/forms": "workspace:*",
     "commander": "^12.1.0"
   },

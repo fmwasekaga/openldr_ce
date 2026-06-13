@@ -13,6 +13,7 @@ function ctxWith(status: 'up' | 'down'): AppContext {
     eventing: {} as never,
     store: {} as never,
     health,
+    reporting: {} as never,
     async close() {},
   };
 }

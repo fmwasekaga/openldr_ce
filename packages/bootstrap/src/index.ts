@@ -1,10 +1,25 @@
+import { Kysely } from 'kysely';
 import { createAuth } from '@openldr/adapter-auth';
 import { createDbStore } from '@openldr/adapter-db-store';
 import { createEventBus } from '@openldr/adapter-event-bus';
 import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import type { Config } from '@openldr/config';
 import { createLogger, HealthRegistry, type Logger } from '@openldr/core';
+import type { ExternalSchema } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
+import { getReport, reportSummaries, type ReportResult, type ReportSummary } from '@openldr/reporting';
+
+export class ReportNotFoundError extends Error {
+  constructor(public readonly id: string) {
+    super(`unknown report: ${id}`);
+    this.name = 'ReportNotFoundError';
+  }
+}
+
+export interface ReportingApi {
+  list(): ReportSummary[];
+  run(id: string, rawParams: unknown): Promise<ReportResult>;
+}
 
 export interface AppContext {
   logger: Logger;
@@ -12,6 +27,7 @@ export interface AppContext {
   blob: BlobStoragePort;
   eventing: EventingPort;
   store: TargetStorePort;
+  reporting: ReportingApi;
   health: HealthRegistry;
   close(): Promise<void>;
 }
@@ -30,6 +46,17 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   });
   const eventing = createEventBus({ url: cfg.INTERNAL_DATABASE_URL });
   const store = createDbStore({ url: cfg.TARGET_DATABASE_URL });
+  const reportingDb = store.db as unknown as Kysely<ExternalSchema>;
+  const reporting: ReportingApi = {
+    list: () => reportSummaries(),
+    async run(id, rawParams) {
+      const def = getReport(id);
+      if (!def) throw new ReportNotFoundError(id);
+      const params = def.params.parse(rawParams);
+      const data = await def.run(reportingDb, params);
+      return { ...data, meta: { generatedAt: new Date().toISOString(), rowCount: data.rows.length } };
+    },
+  };
 
   const health = new HealthRegistry();
   health.register({ name: 'auth', check: () => auth.healthCheck() });
@@ -43,6 +70,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     blob,
     eventing,
     store,
+    reporting,
     health,
     async close() {
       await Promise.allSettled([eventing.close(), store.close()]);
