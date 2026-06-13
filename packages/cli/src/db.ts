@@ -1,4 +1,4 @@
-import { createDbContext } from '@openldr/bootstrap';
+import { createDbContext, createAppContext } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 
 interface JsonOpt {
@@ -34,6 +34,16 @@ export async function runDbReset(opts: JsonOpt & { force: boolean }): Promise<nu
   const ctx = await createDbContext(loadConfig());
   try {
     await ctx.reset({ force: opts.force });
+    try {
+      const appCtx = await createAppContext(loadConfig());
+      try {
+        await appCtx.audit.record({ actorType: 'system', actorName: 'system', action: 'db.reset', entityType: 'database', entityId: 'internal+external' });
+      } finally {
+        await appCtx.close();
+      }
+    } catch {
+      // audit is best-effort
+    }
     emit(opts.json, { ok: true }, 'database reset complete');
     return 0;
   } finally {

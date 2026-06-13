@@ -9,6 +9,8 @@ import { runFormsExtract } from './forms';
 import { runIngest, runPipelineStatus, runPipelineRetry, runPipelineLogs, runQueueStatus, runProvenanceAudit } from './ingest';
 import { runPluginInstall, runPluginList, runPluginTest, runPluginRun, runPluginRemove } from './plugin';
 import { runReportList, runReportRun } from './report';
+import { runAuditList } from './audit';
+import { runUserList, runUserShow, runUserCreate, runUserSetRole, runUserSetStatus } from './user';
 
 const program = new Command();
 program.name('openldr').description('OpenLDR CE operator CLI');
@@ -212,5 +214,46 @@ report
   .action(async (id: string, opts: { param?: string[]; json: boolean; csv: boolean }) => {
     try { process.exitCode = await runReportRun(id, opts); } catch (err) { process.stderr.write(`report run failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
   });
+
+const audit = program.command('audit').description('Append-only audit log');
+audit
+  .command('list')
+  .option('--actor <id>', 'filter by actor id')
+  .option('--entity-type <t>', 'filter by entity type')
+  .option('--entity-id <id>', 'filter by entity id')
+  .option('--action <a>', 'filter by action')
+  .option('--from <iso>', 'occurred at or after (ISO)')
+  .option('--to <iso>', 'occurred at or before (ISO)')
+  .option('--json', 'emit JSON', false)
+  .action(async (opts: { actor?: string; entityType?: string; entityId?: string; action?: string; from?: string; to?: string; json: boolean }) => {
+    try { process.exitCode = await runAuditList(opts); } catch (err) { process.stderr.write(`audit list failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+  });
+
+const user = program.command('user').description('Local user management (decoupled from the IdP)');
+user.command('list').option('--json', 'emit JSON', false).action(async (opts: { json: boolean }) => {
+  try { process.exitCode = await runUserList(opts); } catch (err) { process.stderr.write(`user list failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+});
+user.command('show <id>').option('--json', 'emit JSON', false).action(async (id: string, opts: { json: boolean }) => {
+  try { process.exitCode = await runUserShow(id, opts); } catch (err) { process.stderr.write(`user show failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+});
+user
+  .command('create')
+  .requiredOption('--username <u>', 'username (unique)')
+  .option('--name <n>', 'display name')
+  .option('--email <e>', 'email')
+  .option('--role <r...>', 'role (repeatable)')
+  .option('--json', 'emit JSON', false)
+  .action(async (opts: { username: string; name?: string; email?: string; role?: string[]; json: boolean }) => {
+    try { process.exitCode = await runUserCreate(opts); } catch (err) { process.stderr.write(`user create failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+  });
+user.command('set-role <id> <roles...>').option('--json', 'emit JSON', false).action(async (id: string, roles: string[], opts: { json: boolean }) => {
+  try { process.exitCode = await runUserSetRole(id, roles, opts); } catch (err) { process.stderr.write(`user set-role failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+});
+user.command('activate <id>').option('--json', 'emit JSON', false).action(async (id: string, opts: { json: boolean }) => {
+  try { process.exitCode = await runUserSetStatus(id, 'active', opts); } catch (err) { process.stderr.write(`user activate failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+});
+user.command('deactivate <id>').option('--json', 'emit JSON', false).action(async (id: string, opts: { json: boolean }) => {
+  try { process.exitCode = await runUserSetStatus(id, 'disabled', opts); } catch (err) { process.stderr.write(`user deactivate failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+});
 
 program.parseAsync(process.argv);
