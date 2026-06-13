@@ -11,6 +11,7 @@ import { runPluginInstall, runPluginList, runPluginTest, runPluginRun, runPlugin
 import { runReportList, runReportRun } from './report';
 import { runAuditList } from './audit';
 import { runUserList, runUserShow, runUserCreate, runUserSetRole, runUserSetStatus } from './user';
+import { runExport } from './export';
 
 const program = new Command();
 program.name('openldr').description('OpenLDR CE operator CLI');
@@ -255,5 +256,19 @@ user.command('activate <id>').option('--json', 'emit JSON', false).action(async 
 user.command('deactivate <id>').option('--json', 'emit JSON', false).action(async (id: string, opts: { json: boolean }) => {
   try { process.exitCode = await runUserSetStatus(id, 'disabled', opts); } catch (err) { process.stderr.write(`user deactivate failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
 });
+
+program
+  .command('export')
+  .description('Export the complete dataset: canonical FHIR (NDJSON + Bundle) + flat-table CSV + manifest')
+  .option('--out <dir>', 'output directory', 'openldr-export')
+  .option('--json', 'emit the manifest as JSON', false)
+  .action(async (opts: { out: string; json: boolean }) => {
+    try {
+      process.exitCode = await runExport(opts);
+    } catch (err) {
+      process.stderr.write(`export failed: ${errorMessage(err)}\n`);
+      process.exitCode = 1;
+    }
+  });
 
 program.parseAsync(process.argv);
