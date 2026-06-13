@@ -19,7 +19,15 @@ pub fn map_isolates(conn: &Connection) -> rusqlite::Result<Vec<Value>> {
     };
 
     let base = "patient_id, sex, birth_date, spec_num, spec_type, spec_date, organism, organism_code";
-    let select = if ab_cols.is_empty() { base.to_string() } else { format!("{base}, {}", ab_cols.join(", ")) };
+    // Discovered ab_* names come from the (untrusted) input DB schema; quote them as
+    // SQLite identifiers (doubling any embedded quote) so an unusual column name can
+    // neither break nor inject into the query.
+    let select = if ab_cols.is_empty() {
+        base.to_string()
+    } else {
+        let quoted = ab_cols.iter().map(|c| format!("\"{}\"", c.replace('"', "\"\""))).collect::<Vec<_>>().join(", ");
+        format!("{base}, {quoted}")
+    };
     let sql = format!("SELECT {select} FROM isolates");
 
     let mut out = Vec::new();
