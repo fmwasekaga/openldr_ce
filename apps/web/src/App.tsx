@@ -1,17 +1,15 @@
 import { Routes, Route } from 'react-router-dom';
+import { Dashboard } from './pages/Dashboard';
+import { ReportDetail } from './pages/ReportDetail';
 import { AppShell } from './shell/AppShell';
-
-function Placeholder({ title }: { title: string }) {
-  return <AppShell title={title}><div className="card">{title} — coming in the next task.</div></AppShell>;
-}
 
 export function App() {
   return (
     <Routes>
-      <Route path="/" element={<Placeholder title="Dashboard" />} />
-      <Route path="/reports" element={<Placeholder title="Reports" />} />
-      <Route path="/reports/:id" element={<Placeholder title="Report" />} />
-      <Route path="*" element={<Placeholder title="Not found" />} />
+      <Route path="/" element={<Dashboard />} />
+      <Route path="/reports" element={<Dashboard />} />
+      <Route path="/reports/:id" element={<ReportDetail />} />
+      <Route path="*" element={<AppShell title="Not found"><div className="card">Page not found.</div></AppShell>} />
     </Routes>
   );
 }
