@@ -182,6 +182,9 @@ importers:
       '@openldr/ingest':
         specifier: workspace:*
         version: link:../ingest
+      '@openldr/plugins':
+        specifier: workspace:*
+        version: link:../plugins
       '@openldr/ports':
         specifier: workspace:*
         version: link:../ports
