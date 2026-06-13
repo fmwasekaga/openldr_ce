@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { Kysely } from 'kysely';
 import type { ExternalSchema } from '@openldr/db';
 import type { ReportDefinition, ReportResultData } from '../types';
-import { pivotResistance } from '../helpers';
+import { pivotResistance, endOfDay } from '../helpers';
 
 const params = z.object({
   from: z.string().optional(),
@@ -45,7 +45,7 @@ export const amrResistance: ReportDefinition<Params> = {
       .select((eb) => eb.fn.countAll<number>().as('n'))
       .groupBy(['code_text', 'interpretation_code']);
     if (p.from) q = q.where('effective_date_time', '>=', p.from);
-    if (p.to) q = q.where('effective_date_time', '<=', p.to);
+    if (p.to) q = q.where('effective_date_time', '<=', endOfDay(p.to));
     if (subjectRefs) q = q.where('subject_ref', 'in', subjectRefs);
     const grouped = await q.execute();
     const pivoted = pivotResistance(

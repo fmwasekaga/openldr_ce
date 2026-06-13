@@ -52,10 +52,16 @@ export function hoursBetween(startIso: string | null, endIso: string | null): nu
   return Math.round((b - a) / 3_600_000);
 }
 
+/** Extend a date-only (YYYY-MM-DD) upper bound to end-of-day UTC so the whole day is inclusive; pass other strings through. */
+export function endOfDay(to: string): string {
+  return /^\d{4}-\d{2}-\d{2}$/.test(to) ? `${to}T23:59:59.999Z` : to;
+}
+
 /** Render columns+rows as RFC-4180-ish CSV. */
 export function toCsv(columns: { key: string; label: string }[], rows: Record<string, unknown>[]): string {
   const esc = (v: unknown): string => {
-    const s = v === null || v === undefined ? '' : String(v);
+    let s = v === null || v === undefined ? '' : String(v);
+    if (/^[=@\t\r]/.test(s) || (/^[+\-]/.test(s) && Number.isNaN(Number(s)))) s = `'${s}`;
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   const header = columns.map((c) => esc(c.label)).join(',');

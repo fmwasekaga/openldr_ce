@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { Kysely } from 'kysely';
 import type { ExternalSchema } from '@openldr/db';
 import type { ReportDefinition, ReportResultData } from '../types';
-import { monthKey } from '../helpers';
+import { monthKey, endOfDay } from '../helpers';
 
 const params = z.object({ from: z.string().optional(), to: z.string().optional(), facility: z.string().optional() });
 type Params = z.infer<typeof params>;
@@ -15,7 +15,7 @@ export const testVolume: ReportDefinition<Params> = {
   async run(db: Kysely<ExternalSchema>, p: Params): Promise<ReportResultData> {
     let q = db.selectFrom('service_requests').select(['code_text', 'authored_on']);
     if (p.from) q = q.where('authored_on', '>=', p.from);
-    if (p.to) q = q.where('authored_on', '<=', p.to);
+    if (p.to) q = q.where('authored_on', '<=', endOfDay(p.to));
     const reqs = await q.execute();
     const counts = new Map<string, number>();
     for (const r of reqs) {

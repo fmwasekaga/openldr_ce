@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { pivotResistance, ageBand, monthKey, hoursBetween, toCsv } from './helpers';
+import { pivotResistance, ageBand, monthKey, hoursBetween, toCsv, endOfDay } from './helpers';
 
 describe('pivotResistance', () => {
   it('sums per antibiotic and computes %R sorted desc', () => {
@@ -41,5 +41,22 @@ describe('toCsv', () => {
   it('escapes and renders', () => {
     const csv = toCsv([{ key: 'a', label: 'A' }, { key: 'b', label: 'B' }], [{ a: 'x,y', b: 1 }]);
     expect(csv).toBe('A,B\n"x,y",1\n');
+  });
+});
+
+describe('endOfDay', () => {
+  it('extends a date-only bound and passes through full timestamps', () => {
+    expect(endOfDay('2026-03-31')).toBe('2026-03-31T23:59:59.999Z');
+    expect(endOfDay('2026-03-31T08:00:00Z')).toBe('2026-03-31T08:00:00Z');
+  });
+});
+
+describe('toCsv formula-injection', () => {
+  it('neutralizes leading = @ and non-numeric +/-, leaves negative numbers intact', () => {
+    const cols = [{ key: 'a', label: 'A' }];
+    expect(toCsv(cols, [{ a: '=SUM(1)' }])).toContain("'=SUM(1)");
+    expect(toCsv(cols, [{ a: '@x' }])).toContain("'@x");
+    expect(toCsv(cols, [{ a: -5 }])).toContain('-5');
+    expect(toCsv(cols, [{ a: -5 }])).not.toContain("'-5");
   });
 });
