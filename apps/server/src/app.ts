@@ -1,9 +1,7 @@
 import Fastify from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
+import { registerReportRoutes } from './reports-routes';
 
-// Return type is inferred: passing our pino logger as `loggerInstance` makes
-// Fastify specialize its logger generic to pino's `Logger`, which is narrower
-// than the default `FastifyBaseLogger` — so we must not force that annotation.
 export function buildApp(ctx: AppContext) {
   const app = Fastify({ loggerInstance: ctx.logger });
 
@@ -12,6 +10,8 @@ export function buildApp(ctx: AppContext) {
     reply.code(result.status === 'down' ? 503 : 200);
     return result;
   });
+
+  registerReportRoutes(app, ctx);
 
   return app;
 }
