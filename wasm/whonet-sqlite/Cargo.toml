@@ -3,6 +3,13 @@ name = "whonet-sqlite"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
+description = "WHONET SQLite -> FHIR R4 AMR reference plugin"
 
 [lib]
-crate-type = ["rlib"]
+crate-type = ["cdylib"]
+
+[dependencies]
+openldr-plugin-sdk = { path = "../openldr-plugin-sdk" }
+extism-pdk = "1"
+serde_json = "1"
+rusqlite = { version = "0.31", features = ["bundled", "serialize"] }
