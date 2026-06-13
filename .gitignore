@@ -6,3 +6,5 @@ dist/
 docker-compose.override.yml
 coverage/
 .superpowers/
+openldr-export/
+tmp-export*/

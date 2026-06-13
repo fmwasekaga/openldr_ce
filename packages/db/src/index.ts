@@ -9,3 +9,4 @@ export * from './internal-db';
 export * from './fhir-store';
 export * from './flat-writer';
 export * from './persist';
+export * from './export-data';
