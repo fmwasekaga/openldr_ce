@@ -80,7 +80,7 @@ export function createUserStore(db: Kysely<InternalSchema>): UserStore {
         username: input.username,
         display_name: input.displayName ?? null,
         email: input.email ?? null,
-        roles: (input.roles ?? []) as never,
+        roles: JSON.stringify(input.roles ?? []) as never,
       })
       .execute();
     return (await get(id))!;
@@ -96,7 +96,7 @@ export function createUserStore(db: Kysely<InternalSchema>): UserStore {
       return rows.map((r) => toUser(r as unknown as Row));
     },
     async setRoles(id, roles) {
-      await db.updateTable('users').set({ roles: roles as never, updated_at: new Date() }).where('id', '=', id).execute();
+      await db.updateTable('users').set({ roles: JSON.stringify(roles) as never, updated_at: new Date() }).where('id', '=', id).execute();
     },
     async setStatus(id, status) {
       await db.updateTable('users').set({ status, updated_at: new Date() }).where('id', '=', id).execute();
