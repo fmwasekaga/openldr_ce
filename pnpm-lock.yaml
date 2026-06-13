@@ -225,6 +225,9 @@ importers:
       '@openldr/forms':
         specifier: workspace:*
         version: link:../forms
+      '@openldr/reporting':
+        specifier: workspace:*
+        version: link:../reporting
       commander:
         specifier: ^12.1.0
         version: 12.1.0

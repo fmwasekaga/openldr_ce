@@ -8,6 +8,7 @@ import { runDbMigrate, runDbReset, runDbSeed } from './db';
 import { runFormsExtract } from './forms';
 import { runIngest, runPipelineStatus, runPipelineRetry, runPipelineLogs, runQueueStatus, runProvenanceAudit } from './ingest';
 import { runPluginInstall, runPluginList, runPluginTest, runPluginRun, runPluginRemove } from './plugin';
+import { runReportList, runReportRun } from './report';
 
 const program = new Command();
 program.name('openldr').description('OpenLDR CE operator CLI');
@@ -197,6 +198,19 @@ plugin
   .option('--json', 'emit JSON', false)
   .action(async (id: string, opts: { version?: string; json: boolean }) => {
     try { process.exitCode = await runPluginRemove(id, opts); } catch (err) { process.stderr.write(`plugin remove failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+  });
+
+const report = program.command('report').description('Domain reports over the analytics DB');
+report.command('list').option('--json', 'emit JSON', false).action(async (opts: { json: boolean }) => {
+  try { process.exitCode = await runReportList(opts); } catch (err) { process.stderr.write(`report list failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+});
+report
+  .command('run <id>')
+  .option('--param <kv...>', 'parameter as key=value (repeatable)')
+  .option('--json', 'emit JSON', false)
+  .option('--csv', 'emit CSV', false)
+  .action(async (id: string, opts: { param?: string[]; json: boolean; csv: boolean }) => {
+    try { process.exitCode = await runReportRun(id, opts); } catch (err) { process.stderr.write(`report run failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
   });
 
 program.parseAsync(process.argv);
