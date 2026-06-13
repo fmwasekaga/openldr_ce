@@ -32,6 +32,7 @@ import {
   createExtismRunner,
   type PluginRuntime,
 } from '@openldr/plugins';
+import { createAuditStore, safeRecord } from '@openldr/audit';
 
 export interface IngestContext {
   accept(input: AcceptInput): Promise<{ batchId: string; blobKey: string }>;
@@ -65,6 +66,7 @@ export async function createIngestContext(cfg: Config): Promise<IngestContext> {
   const persist = (resource: unknown, provenance: Provenance) => persistResource({ fhirStore, flatWriter, logger }, resource, provenance);
   const converters = defaultConverters();
   const batches = createBatchStore(internal.db);
+  const audit = createAuditStore(internal.db);
 
   const pluginStore = createPluginStore(internal.db);
   const plugins = createPluginRuntime({ blob, store: pluginStore, runner: createExtismRunner(), logger });
@@ -72,7 +74,9 @@ export async function createIngestContext(cfg: Config): Promise<IngestContext> {
   const pluginResolver = { resolve: (id: string): Promise<Converter | undefined> => plugins.load(id) };
   const resolver = chainResolvers(registryResolver(converters), pluginResolver);
 
-  await eventing.subscribe('ingest.received', (event) => handleIngestEvent({ blob, persist, resolver, batches, logger }, event));
+  await eventing.subscribe('ingest.received', (event) =>
+    handleIngestEvent({ blob, persist, resolver, batches, logger, audit: (e) => safeRecord(audit, logger, e) }, event),
+  );
 
   const internalMigrator = createMigrator(internal.db, internalMigrations);
   const externalMigrator = createMigrator(externalDb, externalMigrations);
@@ -82,7 +86,18 @@ export async function createIngestContext(cfg: Config): Promise<IngestContext> {
     drain: () => eventing.drain(),
     startWorker: () => eventing.startWorker(),
     batches,
-    plugins,
+    plugins: {
+      ...plugins,
+      async install(wasm: Uint8Array, rawManifest: unknown) {
+        const m = await plugins.install(wasm, rawManifest);
+        await safeRecord(audit, logger, { actorType: 'system', actorName: 'system', action: 'plugin.install', entityType: 'plugin', entityId: `${m.id}@${m.version}`, metadata: { sha256: m.wasmSha256 } });
+        return m;
+      },
+      async remove(id: string, version?: string) {
+        await plugins.remove(id, version);
+        await safeRecord(audit, logger, { actorType: 'system', actorName: 'system', action: 'plugin.remove', entityType: 'plugin', entityId: version ? `${id}@${version}` : id });
+      },
+    },
     async republish(batch) {
       await eventing.publish({ type: 'ingest.received', payload: { batchId: batch.batch_id, blobKey: batch.blob_key, source: batch.source ?? 'cli', converter: batch.converter } });
     },

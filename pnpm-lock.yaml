@@ -228,6 +228,9 @@ importers:
       '@openldr/adapter-s3-bucket':
         specifier: workspace:*
         version: link:../adapter-s3-bucket
+      '@openldr/audit':
+        specifier: workspace:*
+        version: link:../audit
       '@openldr/config':
         specifier: workspace:*
         version: link:../config
@@ -249,6 +252,9 @@ importers:
       '@openldr/reporting':
         specifier: workspace:*
         version: link:../reporting
+      '@openldr/users':
+        specifier: workspace:*
+        version: link:../users
       kysely:
         specifier: ^0.27.5
         version: 0.27.6
