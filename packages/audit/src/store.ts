@@ -94,8 +94,10 @@ export function createAuditStore(db: Kysely<InternalSchema>): AuditStore {
       if (filter.entityType) q = q.where('entity_type', '=', filter.entityType);
       if (filter.entityId) q = q.where('entity_id', '=', filter.entityId);
       if (filter.action) q = q.where('action', '=', filter.action);
-      if (filter.from) q = q.where('occurred_at', '>=', new Date(filter.from));
-      if (filter.to) q = q.where('occurred_at', '<=', new Date(filter.to));
+      const from = filter.from ? new Date(filter.from) : undefined;
+      const to = filter.to ? new Date(filter.to) : undefined;
+      if (from && !Number.isNaN(from.getTime())) q = q.where('occurred_at', '>=', from);
+      if (to && !Number.isNaN(to.getTime())) q = q.where('occurred_at', '<=', to);
       const rows = await q.limit(filter.limit ?? 100).execute();
       return rows.map((r) => toEvent(r as unknown as Row));
     },

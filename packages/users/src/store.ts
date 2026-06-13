@@ -29,6 +29,12 @@ export interface UserStore {
   list(): Promise<User[]>;
   setRoles(id: string, roles: string[]): Promise<void>;
   setStatus(id: string, status: 'active' | 'disabled'): Promise<void>;
+  /**
+   * Just-in-time provision/link from verified token claims: resolve by subject,
+   * else link the subject onto a username match, else create. Does NOT change
+   * `status` — a disabled user stays disabled. The caller (auth layer) MUST
+   * reject the returned user when `status === 'disabled'`; this never reactivates.
+   */
   syncFromClaims(claims: TokenClaims): Promise<User>;
 }
 
