@@ -8,11 +8,13 @@ import type { PluginRunner, RunOptions } from './runner';
  * Sandbox notes:
  * - Isolation is default-deny: `allowedPaths`/`allowedHosts` are left unset, so
  *   the plugin gets no host filesystem or network access. WASI is opt-in per plugin.
- * - The 1.0.3 JS SDK exposes no memory-page or timeout option, so the timeout is
- *   enforced host-side: the plugin runs in a worker thread (`runInWorker: true`)
- *   and a watchdog `close()`s it — terminating the worker — if it overruns.
- *   Hard memory-page capping is not available in this SDK version (tracked as a
- *   follow-up); `opts.memoryMb` is recorded in the manifest but not enforced here.
+ * - `runInWorker` is left false: the 1.0.3 worker path bootstraps from an inline
+ *   data: URL whose bundle references a relative `worker.js.map`, which Node cannot
+ *   resolve (ERR_INVALID_URL) — a known SDK bug. Running in-process avoids it.
+ * - The 1.0.3 JS SDK exposes no memory-page or timeout option. The watchdog below
+ *   bounds async overruns, but without a worker it cannot interrupt a synchronous
+ *   runaway; hard memory + timeout enforcement awaits a newer SDK (tracked as a
+ *   follow-up). `opts.memoryMb` is recorded in the manifest but not enforced here.
  */
 export function createExtismRunner(): PluginRunner {
   return {
@@ -25,7 +27,7 @@ export function createExtismRunner(): PluginRunner {
         { wasm: [{ data: wasm }] },
         {
           useWasi: opts.wasi,
-          runInWorker: true,
+          runInWorker: false,
           functions: {
             'extism:host/user': {
               log(cp: CurrentPlugin, level: bigint, msg: bigint) {

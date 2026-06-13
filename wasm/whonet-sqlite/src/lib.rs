@@ -30,6 +30,10 @@ fn load_db(input: &[u8]) -> Result<Connection, String> {
 
 #[plugin_fn]
 pub fn convert(input: Vec<u8>) -> FnResult<String> {
+    // Empty input carries no database — emit zero resources (used by `plugin test`).
+    if input.is_empty() {
+        return Ok(String::new());
+    }
     let conn = load_db(&input).map_err(|e| WithReturnCode::new(Error::msg(e), 1))?;
     let resources =
         mapping::map_isolates(&conn).map_err(|e| WithReturnCode::new(Error::msg(format!("map: {e}")), 1))?;

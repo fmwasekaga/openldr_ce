@@ -53,7 +53,9 @@ const manifest = {
   wasmSha256: sha,
   description: 'WHONET SQLite -> FHIR R4 AMR reference plugin',
   license: 'Apache-2.0',
-  wasi: false,
+  // SQLite (bundled, wasm32-wasip1) imports wasi_snapshot_preview1 (clock/random/fd),
+  // so the sandbox must enable WASI even though the plugin reads from memory.
+  wasi: true,
   limits: { memoryMb: 256, timeoutMs: 30000 },
 };
 writeFileSync(join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
