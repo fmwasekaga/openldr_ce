@@ -67,17 +67,46 @@ export async function runDhis2Push(mappingId: string, opts: { period: string; dr
   const app = await createAppContext(cfg);
   const ctx = await createDhis2Context(cfg);
   try {
-    const outcome = await ctx.push({
-      mappingId,
-      period: opts.period,
-      dryRun: opts.dryRun,
+    const outcome = await ctx.runMapping({
+      mappingId, period: opts.period, dryRun: opts.dryRun,
       runReport: async (reportId, params) => { const r = await app.reporting.run(reportId, params ?? {}); return { rows: r.rows }; },
+      runEventSource: (id, w) => app.reporting.runEventSource(id, w),
     });
-    if (outcome.dryRun) out(opts.json, { dryRun: true, payload: outcome.build.payload, skipped: outcome.build.skipped }, `DRY RUN: ${outcome.build.payload.dataValues.length} dataValues, ${outcome.build.skipped.length} skipped (not sent)`);
-    else out(opts.json, { result: outcome.result, skipped: outcome.build.skipped.length }, `pushed: status=${outcome.result?.status} imported=${outcome.result?.imported} updated=${outcome.result?.updated} ignored=${outcome.result?.ignored}`);
-    return outcome.dryRun ? 0 : outcome.result?.status === 'error' ? 1 : 0;
+    if (outcome.dryRun) {
+      const count = outcome.kind === 'tracker' ? outcome.build.payload.events.length : outcome.build.payload.dataValues.length;
+      out(opts.json, { dryRun: true, kind: outcome.kind, payload: outcome.build.payload, skipped: outcome.build.skipped }, `DRY RUN (${outcome.kind}): ${count} records, ${outcome.build.skipped.length} skipped (not sent)`);
+      return 0;
+    }
+    out(opts.json, { kind: outcome.kind, result: outcome.result, skipped: outcome.build.skipped.length }, `pushed (${outcome.kind}): status=${outcome.result?.status} imported=${outcome.result?.imported} updated=${outcome.result?.updated} ignored=${outcome.result?.ignored}`);
+    return outcome.result?.status === 'error' ? 1 : 0;
   } catch (err) { process.stderr.write(`push failed: ${errorMessage(err)}\n`); return 1; }
   finally { await ctx.close(); await app.close(); }
+}
+
+export async function runDhis2ScheduleAdd(mappingId: string, opts: { mode: string; periodType: string; eventDriven: boolean; json: boolean }): Promise<number> {
+  const ctx = await createDhis2Context(loadConfig());
+  try {
+    const id = `${mappingId}:${opts.mode}:${opts.periodType}`;
+    await ctx.schedules.create({ id, mappingId, mode: opts.mode as 'aggregate' | 'tracker', periodType: opts.periodType as 'monthly' | 'quarterly' | 'yearly', eventDriven: opts.eventDriven });
+    out(opts.json, { id }, `created schedule ${id}`);
+    return 0;
+  } catch (err) { process.stderr.write(`schedule add failed: ${errorMessage(err)}\n`); return 1; }
+  finally { await ctx.close(); }
+}
+
+export async function runDhis2ScheduleList(opts: { json: boolean }): Promise<number> {
+  const ctx = await createDhis2Context(loadConfig());
+  try {
+    const rows = await ctx.schedules.list();
+    out(opts.json, rows, rows.map((r) => `${r.id}  mapping=${r.mappingId} mode=${r.mode} period=${r.periodType} event-driven=${r.eventDriven} enabled=${r.enabled} next=${r.nextDueAt?.toISOString() ?? '-'}`).join('\n') || '(none)');
+    return 0;
+  } finally { await ctx.close(); }
+}
+
+export async function runDhis2ScheduleRemove(id: string, opts: { json: boolean }): Promise<number> {
+  const ctx = await createDhis2Context(loadConfig());
+  try { await ctx.schedules.remove(id); out(opts.json, { id }, `removed ${id}`); return 0; }
+  finally { await ctx.close(); }
 }
 
 export async function runDhis2Status(opts: { json: boolean }): Promise<number> {
