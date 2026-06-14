@@ -16,7 +16,7 @@ export type AuditHook = (e: {
 
 export interface HandleDeps {
   blob: BlobStoragePort;
-  persist: (resource: unknown, provenance: Provenance) => Promise<PersistResult>;
+  persist: (resources: unknown[], provenance: Provenance) => Promise<PersistResult[]>;
   resolver: ConverterResolver;
   batches: BatchStore;
   logger: Logger;
@@ -41,9 +41,7 @@ export async function handleIngestEvent(deps: HandleDeps, event: EventEnvelope):
     if (!c) throw new Error(`unknown converter: ${converter}`);
     const resources = await c.convert(raw, { source, batchId, config: config ?? undefined });
     const provenance: Provenance = { sourceSystem: source, pluginId: c.id, pluginVersion: c.version, batchId };
-    for (const resource of resources) {
-      await deps.persist(resource, provenance);
-    }
+    await deps.persist(resources, provenance);
     await deps.batches.markDone(batchId, resources.length);
     deps.logger.info({ batchId, source, converter, count: resources.length }, 'ingest batch persisted');
     await deps.audit?.({

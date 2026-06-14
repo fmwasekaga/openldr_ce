@@ -22,7 +22,7 @@ describe('acceptPayload', () => {
 });
 
 describe('handleIngestEvent', () => {
-  function deps(persist = vi.fn(async () => ({ saved: true, flattened: 'written' as const }))) {
+  function deps(persist = vi.fn(async (rs: unknown[]) => rs.map(() => ({ saved: true, flattened: 'written' as const })))) {
     return {
       blob: { get: vi.fn(async () => enc({ resourceType: 'Bundle', type: 'collection', entry: [{ resource: { resourceType: 'Patient', id: 'p1' } }] })) } as never,
       persist,
@@ -33,13 +33,36 @@ describe('handleIngestEvent', () => {
     };
   }
 
-  it('converts, persists each resource with provenance, marks done', async () => {
-    const persist = vi.fn(async () => ({ saved: true, flattened: 'written' as const }));
+  it('converts, persists the resources with provenance, marks done', async () => {
+    const persist = vi.fn(async (rs: unknown[]) => rs.map(() => ({ saved: true, flattened: 'written' as const })));
     const d = deps(persist);
     await handleIngestEvent(d, { type: 'ingest.received', payload: { batchId: 'b1', blobKey: 'k', source: 'test', converter: 'fhir-bundle' } });
-    expect(persist).toHaveBeenCalledWith(expect.objectContaining({ resourceType: 'Patient' }), expect.objectContaining({ batchId: 'b1', sourceSystem: 'test', pluginId: 'fhir-bundle' }));
+    expect(persist).toHaveBeenCalledWith(
+      [expect.objectContaining({ resourceType: 'Patient' })],
+      expect.objectContaining({ batchId: 'b1', sourceSystem: 'test', pluginId: 'fhir-bundle' }),
+    );
     expect(d.batches.markDone).toHaveBeenCalledWith('b1', 1);
     expect(d.audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'ingest.batch.done', entityId: 'b1' }));
+  });
+
+  it('persists all converted resources in a single batched call', async () => {
+    const persist = vi.fn(async (rs: unknown[]) => rs.map(() => ({ saved: true, flattened: 'written' as const })));
+    const d = deps(persist);
+    d.blob = {
+      get: vi.fn(async () =>
+        enc({
+          resourceType: 'Bundle',
+          type: 'collection',
+          entry: [
+            { resource: { resourceType: 'Patient', id: 'p1' } },
+            { resource: { resourceType: 'Patient', id: 'p2' } },
+          ],
+        }),
+      ),
+    } as never;
+    await handleIngestEvent(d, { type: 'ingest.received', payload: { batchId: 'b1', blobKey: 'k', source: 'test', converter: 'fhir-bundle' } });
+    expect(persist).toHaveBeenCalledTimes(1);
+    expect((persist.mock.calls[0][0] as unknown[]).length).toBe(2);
   });
 
   it('marks failed and rethrows on an unknown converter', async () => {
@@ -94,7 +117,7 @@ describe('config threading', () => {
     for (const e of events) {
       if (e.type === 'ingest.received') {
         await handleIngestEvent(
-          { blob: blob as never, persist: vi.fn(async () => ({ saved: true, flattened: 'written' as const })), resolver, batches, logger },
+          { blob: blob as never, persist: vi.fn(async (rs: unknown[]) => rs.map(() => ({ saved: true, flattened: 'written' as const }))), resolver, batches, logger },
           e as never,
         );
       }
