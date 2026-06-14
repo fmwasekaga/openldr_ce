@@ -75,3 +75,8 @@ export async function saveDashboard(d: Dashboard): Promise<Dashboard> {
 export async function deleteDashboard(id: string): Promise<void> {
   const r = await fetch(`/api/dashboards/${id}`, { method: 'DELETE' }); if (!r.ok) throw new Error(`delete failed: ${r.status}`);
 }
+
+export interface ClientConfig { dashboardSqlEnabled: boolean }
+export async function fetchClientConfig(): Promise<ClientConfig> {
+  const r = await fetch('/api/config'); if (!r.ok) return { dashboardSqlEnabled: false }; return r.json();
+}

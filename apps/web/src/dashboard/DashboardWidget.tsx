@@ -33,6 +33,6 @@ export function DashboardWidget({ config, filterValues }: { config: WidgetConfig
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(config.query), JSON.stringify(filterValues), config.refreshIntervalSec]);
   if (error) return <div className="p-3 text-sm text-destructive">{error}</div>;
-  if (!result) return <div className="p-3 text-sm text-muted-foreground">Loading…</div>;
+  if (!result || !result.rows) return <div className="p-3 text-sm text-muted-foreground">Loading…</div>;
   return <div className="h-full w-full">{renderWidget(config, result)}</div>;
 }
