@@ -47,6 +47,9 @@ importers:
       '@openldr/reporting':
         specifier: workspace:*
         version: link:../../packages/reporting
+      '@openldr/terminology':
+        specifier: workspace:*
+        version: link:../../packages/terminology
       fastify:
         specifier: ^5.2.0
         version: 5.8.5
