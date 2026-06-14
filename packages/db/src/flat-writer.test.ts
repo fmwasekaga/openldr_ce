@@ -66,6 +66,26 @@ describe('createFlatWriter writeMany', () => {
     expect(insertInto).not.toHaveBeenCalled();
   });
 
+  // SQL Server caps a statement at 2100 parameters (params = rows x columns). A fixed row cap
+  // silently overflowed for large batches and the whole MERGE failed. The param-budget chunker
+  // must split a large batch into several MERGE statements.
+  const manyPatients = (n: number) => Array.from({ length: n }, (_, i) => ({ resource: { resourceType: 'Patient', id: `p${i}`, gender: i % 2 ? 'male' : 'female' } }));
+
+  it('mssql splits a large batch into multiple MERGE statements (param budget)', async () => {
+    const { db, mergeInto } = fakeDb();
+    const w = createFlatWriter(db, 'mssql');
+    const res = await w.writeMany(manyPatients(800));
+    expect(res.every((r) => r === 'written')).toBe(true);
+    expect(mergeInto.mock.calls.length).toBeGreaterThan(1); // chunked, not one over-limit statement
+  });
+
+  it('postgres keeps a large batch in a single insert (high param budget)', async () => {
+    const { db, insertInto } = fakeDb();
+    const w = createFlatWriter(db, 'postgres');
+    await w.writeMany(manyPatients(800));
+    expect(insertInto).toHaveBeenCalledTimes(1); // 800 rows x a few cols is well under 60000 params
+  });
+
   it('returns an empty array for an empty batch', async () => {
     const { db } = fakeDb();
     const w = createFlatWriter(db, 'postgres');

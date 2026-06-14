@@ -38,14 +38,23 @@ async function upsertMssql(
     .execute();
 }
 
-// Postgres column-param ceiling is 65535; MSSQL is ~2100 params / 1000-row insert. Chunk rows
-// per table so a large batch never exceeds the driver limit. Columns/row is small (~<=20).
-const PG_MAX_ROWS = 1000;
-const MSSQL_MAX_ROWS = 500;
+// Chunk rows per table so a multi-row statement never exceeds the driver's parameter ceiling.
+// Each row contributes one bound parameter PER COLUMN, so the safe rows-per-statement depends on
+// the column width — a fixed row cap silently blows the limit for wider tables. Size the chunk
+// from the actual column count. Postgres caps at 65535 params; SQL Server at 2100 params and a
+// 1000-row VALUES constructor. Budgets sit under each hard limit with margin.
+const PG_PARAM_BUDGET = 60000;
+const MSSQL_PARAM_BUDGET = 2000;
+const MSSQL_MAX_VALUES_ROWS = 1000;
+
+const chunkSize = (budget: number, cols: number, cap = Infinity): number =>
+  Math.min(cap, Math.max(1, Math.floor(budget / Math.max(1, cols))));
 
 async function insertBatchPg(db: Kysely<any>, table: string, rows: Record<string, unknown>[]): Promise<void> {
-  for (let i = 0; i < rows.length; i += PG_MAX_ROWS) {
-    const chunk = rows.slice(i, i + PG_MAX_ROWS);
+  if (rows.length === 0) return;
+  const step = chunkSize(PG_PARAM_BUDGET, Object.keys(rows[0]).length);
+  for (let i = 0; i < rows.length; i += step) {
+    const chunk = rows.slice(i, i + step);
     const updateCols = Object.keys(chunk[0]).filter((c) => c !== 'id' && c !== 'created_at');
     await db.insertInto(table).values(chunk).onConflict((oc: any) =>
       oc.column('id').doUpdateSet(Object.fromEntries(updateCols.map((c) => [c, (eb: any) => eb.ref(`excluded.${c}`)])))
@@ -54,8 +63,10 @@ async function insertBatchPg(db: Kysely<any>, table: string, rows: Record<string
 }
 
 async function mergeBatchMssql(db: Kysely<any>, table: string, rows: Record<string, unknown>[]): Promise<void> {
-  for (let i = 0; i < rows.length; i += MSSQL_MAX_ROWS) {
-    const chunk = rows.slice(i, i + MSSQL_MAX_ROWS);
+  if (rows.length === 0) return;
+  const step = chunkSize(MSSQL_PARAM_BUDGET, Object.keys(rows[0]).length, MSSQL_MAX_VALUES_ROWS);
+  for (let i = 0; i < rows.length; i += step) {
+    const chunk = rows.slice(i, i + step);
     const cols = Object.keys(chunk[0]);
     const sourceCols = sql.raw(cols.join(', '));
     const valuesRows = sql.join(chunk.map((r) => sql`(${sql.join(cols.map((c) => sql`${r[c]}`))})`));
