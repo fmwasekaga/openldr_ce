@@ -57,3 +57,37 @@ pub fn observation_ast(id: &str, subject_ref: &str, specimen_ref: &str, antibiot
         "interpretation": [{ "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation", "code": interpretation }] }]
     })
 }
+
+/// A laboratory ServiceRequest (an order) referencing a subject.
+pub fn service_request(id: &str, subject_ref: &str, code: Option<&str>, code_text: Option<&str>, status: &str) -> Value {
+    let mut s = json!({
+        "resourceType": "ServiceRequest", "id": id, "status": status, "intent": "order",
+        "subject": { "reference": subject_ref }
+    });
+    let mut coding = json!({});
+    if let Some(c) = code { coding["code"] = json!(c); }
+    let mut codeable = json!({});
+    if code.is_some() { codeable["coding"] = json!([coding]); }
+    if let Some(t) = code_text { codeable["text"] = json!(t); }
+    if code.is_some() || code_text.is_some() { s["code"] = codeable; }
+    s
+}
+
+/// A laboratory DiagnosticReport referencing a subject (and optionally a specimen).
+pub fn diagnostic_report(id: &str, subject_ref: &str, specimen_ref: Option<&str>, code: Option<&str>, code_text: Option<&str>, issued: Option<&str>, conclusion: Option<&str>) -> Value {
+    let mut r = json!({
+        "resourceType": "DiagnosticReport", "id": id, "status": "final",
+        "category": [{ "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/v2-0074", "code": "LAB" }] }],
+        "subject": { "reference": subject_ref }
+    });
+    let mut coding = json!({});
+    if let Some(c) = code { coding["code"] = json!(c); }
+    let mut codeable = json!({});
+    if code.is_some() { codeable["coding"] = json!([coding]); }
+    if let Some(t) = code_text { codeable["text"] = json!(t); }
+    if code.is_some() || code_text.is_some() { r["code"] = codeable; }
+    if let Some(s) = specimen_ref { r["specimen"] = json!([{ "reference": s }]); }
+    if let Some(i) = issued { r["issued"] = json!(i); }
+    if let Some(c) = conclusion { r["conclusion"] = json!(c); }
+    r
+}
