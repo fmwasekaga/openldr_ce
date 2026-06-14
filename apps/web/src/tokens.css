@@ -23,10 +23,16 @@
   --text: #18181b; --text-muted: #71717a; --table-head: #f4f4f5;
 }
 * { box-sizing: border-box; }
-body { margin: 0; font-family: var(--font); font-size: 14px; line-height: 1.5; background: var(--bg); color: var(--text); }
-h1 { font-size: 24px; font-weight: 600; } h2 { font-size: 18px; font-weight: 600; } h3 { font-size: 16px; font-weight: 500; }
-a { color: var(--link); text-decoration: none; }
-code, .mono { font-family: var(--mono); font-size: 13px; }
+/* Base element typography lives in @layer base so Tailwind utilities (e.g. text-inherit,
+   text-foreground) and scoped .doc-content rules can override it — otherwise these
+   unlayered element selectors would outrank utilities (e.g. an `a` inside a card forcing
+   all its text to the link color). */
+@layer base {
+  body { margin: 0; font-family: var(--font); font-size: 14px; line-height: 1.5; background: var(--bg); color: var(--text); }
+  h1 { font-size: 24px; font-weight: 600; } h2 { font-size: 18px; font-weight: 600; } h3 { font-size: 16px; font-weight: 500; }
+  a { color: var(--link); text-decoration: none; }
+  code, .mono { font-family: var(--mono); font-size: 13px; }
+}
 .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; }
 .btn-primary { background: var(--brand); color: #fff; border: none; border-radius: var(--radius-pill); padding: 8px 24px; font: 500 14px var(--font); cursor: pointer; display: inline-block; }
 .btn-primary:hover { background: var(--link); }
