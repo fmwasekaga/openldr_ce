@@ -9,12 +9,20 @@ import { Lightbox, type LightboxImage } from '../docs/Lightbox';
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from '@/components/ui/select';
+import { Download } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
+  DropdownMenuItem, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
+} from '@/components/ui/dropdown-menu';
+import { exportDocs, type ExportFormat, type ExportScope } from '../docs/export/download';
 
 export function Docs() {
   const { slug } = useParams();
   const [locale, setLocale] = useDocLocale();
   const [query, setQuery] = useState('');
   const [lightbox, setLightbox] = useState<LightboxImage | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
   const sections = useMemo(() => list(locale), [locale]);
   const index = useMemo(() => buildIndex(sections), [sections]);
   const hits = useMemo(() => searchDocs(index, query), [index, query]);
@@ -23,6 +31,14 @@ export function Docs() {
   const section = resolve(locale, activeSlug);
   const navSlugs = query.trim() ? hits.map((h) => h.slug) : sections.map((s) => s.slug);
   const titleFor = (s: string) => sections.find((x) => x.slug === s)?.title ?? s;
+
+  const onExport = (scope: ExportScope, format: ExportFormat) => {
+    if (!section) return;
+    setExportError(null);
+    exportDocs({ scope, format, active: section, all: sections }).catch(() => {
+      setExportError(`Could not export this page as ${format.toUpperCase()}.`);
+    });
+  };
 
   return (
     <AppShell title="Documentation">
@@ -61,6 +77,26 @@ export function Docs() {
         {/* Content */}
         <section className="flex min-w-0 flex-1 flex-col rounded-lg border border-border bg-card">
           <div className="flex items-center justify-end gap-2 border-b border-border p-2">
+            {exportError && (
+              <span role="status" aria-live="polite" className="mr-auto text-xs text-destructive">{exportError}</span>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label="Download documentation"><Download className="h-4 w-4" /></Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {(['page', 'all'] as ExportScope[]).map((scope) => (
+                  <DropdownMenuSub key={scope}>
+                    <DropdownMenuSubTrigger>{scope === 'page' ? 'This page' : 'All docs'}</DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                      <DropdownMenuItem onSelect={() => onExport(scope, 'md')}>Markdown (.md)</DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => onExport(scope, 'pdf')}>PDF (.pdf)</DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => onExport(scope, 'docx')}>Word (.docx)</DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Select value={locale} onValueChange={(v) => setLocale(v as Locale)}>
               <SelectTrigger aria-label="Language" className="w-24"><SelectValue /></SelectTrigger>
               <SelectContent>

@@ -44,4 +44,9 @@ describe('DocsLayout', () => {
     renderAt('/docs/nope');
     expect(screen.getByText(/not found/i)).toBeInTheDocument();
   });
+
+  it('exposes a download menu in the toolbar', () => {
+    renderAt('/docs');
+    expect(screen.getByRole('button', { name: 'Download documentation' })).toBeInTheDocument();
+  });
 });
