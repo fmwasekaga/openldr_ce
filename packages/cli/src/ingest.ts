@@ -11,11 +11,20 @@ function emit(json: boolean, payload: unknown, human: string): void {
   process.stdout.write(json ? JSON.stringify(payload, null, 2) + '\n' : human + '\n');
 }
 
-export async function runIngest(file: string, opts: JsonOpt & { source: string; converter: string }): Promise<number> {
+function loadPluginConfig(path?: string): Record<string, string> | undefined {
+  if (!path) return undefined;
+  const raw = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw)) out[k] = typeof v === 'string' ? v : JSON.stringify(v);
+  return out;
+}
+
+export async function runIngest(file: string, opts: JsonOpt & { source: string; converter: string; config?: string }): Promise<number> {
   const ctx = await createIngestContext(loadConfig());
   try {
     const data = readFileSync(file);
-    const { batchId } = await ctx.accept({ data: new Uint8Array(data), source: opts.source, converter: opts.converter, filename: basename(file) });
+    const config = loadPluginConfig(opts.config);
+    const { batchId } = await ctx.accept({ data: new Uint8Array(data), source: opts.source, converter: opts.converter, filename: basename(file), config });
     await ctx.drain();
     const batch = await ctx.batches.get(batchId);
     emit(
@@ -53,7 +62,7 @@ export async function runPipelineRetry(batchId: string, opts: JsonOpt): Promise<
       return 1;
     }
     await ctx.batches.reset(batchId);
-    await ctx.republish({ batch_id: batch.batch_id, blob_key: batch.blob_key, source: batch.source, converter: batch.converter });
+    await ctx.republish({ batch_id: batch.batch_id, blob_key: batch.blob_key, source: batch.source, converter: batch.converter, config: batch.config });
     await ctx.drain();
     const after = await ctx.batches.get(batchId);
     emit(opts.json, { batchId, status: after?.status }, `retried ${batchId}: ${after?.status}`);

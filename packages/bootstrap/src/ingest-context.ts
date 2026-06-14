@@ -42,7 +42,7 @@ export interface IngestContext {
   batches: BatchStore;
   plugins: PluginRuntime;
   eventing: EventingPort;
-  republish(batch: { batch_id: string; blob_key: string; source: string | null; converter: string }): Promise<void>;
+  republish(batch: { batch_id: string; blob_key: string; source: string | null; converter: string; config?: Record<string, string> | null }): Promise<void>;
   queueStats(): Promise<Record<string, number>>;
   migrateAll(): Promise<void>;
   close(): Promise<void>;
@@ -109,7 +109,7 @@ export async function createIngestContext(cfg: Config): Promise<IngestContext> {
       },
     },
     async republish(batch) {
-      await eventing.publish({ type: 'ingest.received', payload: { batchId: batch.batch_id, blobKey: batch.blob_key, source: batch.source ?? 'cli', converter: batch.converter } });
+      await eventing.publish({ type: 'ingest.received', payload: { batchId: batch.batch_id, blobKey: batch.blob_key, source: batch.source ?? 'cli', converter: batch.converter, config: batch.config ?? null } });
     },
     queueStats: () => eventing.stats(),
     async migrateAll() {
