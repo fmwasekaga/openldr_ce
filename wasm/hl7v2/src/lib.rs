@@ -1,6 +1,9 @@
 mod mapping;
 mod parser;
 
+#[cfg(test)]
+mod fuzz;
+
 // The Extism plugin glue links wasm host imports (config/memory) that don't exist on the
 // native host, so it is compiled only for the wasm target. Native `cargo test` excludes it
 // and unit-tests the pure parser + mapping modules.
