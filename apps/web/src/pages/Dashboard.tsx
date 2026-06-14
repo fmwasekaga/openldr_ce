@@ -8,12 +8,15 @@ import { ReportView } from '../reports/ReportView';
 function ReportCard({ summary }: { summary: ReportSummary }) {
   const { loading, error, result } = useReport(summary.id);
   return (
-    <Link to={`/reports/${summary.id}`} className="card" style={{ display: 'block', color: 'inherit' }}>
+    <Link
+      to={`/reports/${summary.id}`}
+      className="block rounded-lg border border-border p-4 text-inherit no-underline transition-colors hover:border-ring"
+    >
       <h3>{summary.name}</h3>
-      <p style={{ color: 'var(--text-muted)', marginTop: 4 }}>{summary.description}</p>
-      <div style={{ marginTop: 8 }}>
-        {loading ? <span style={{ color: 'var(--text-muted)' }}>Loading…</span>
-          : error ? <span style={{ color: 'var(--danger)' }}>{error}</span>
+      <p className="mt-1 text-sm text-muted-foreground">{summary.description}</p>
+      <div className="mt-3">
+        {loading ? <span className="text-sm text-muted-foreground">Loading…</span>
+          : error ? <span className="text-sm text-destructive">{error}</span>
           : result ? <ReportView result={result} /> : null}
       </div>
     </Link>
@@ -26,9 +29,11 @@ export function Dashboard() {
   useEffect(() => { fetchReports().then(setReports).catch((e) => setError(String(e))); }, []);
   return (
     <AppShell title="Dashboard">
-      {error && <div className="card" style={{ color: 'var(--danger)' }}>{error}</div>}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 16 }}>
-        {reports.map((r) => <ReportCard key={r.id} summary={r} />)}
+      <div className="ui-scope">
+        {error && <div className="mb-4 text-sm text-destructive">{error}</div>}
+        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))' }}>
+          {reports.map((r) => <ReportCard key={r.id} summary={r} />)}
+        </div>
       </div>
     </AppShell>
   );
