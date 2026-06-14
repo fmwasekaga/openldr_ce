@@ -39,6 +39,7 @@ function grainKey(value: unknown, grain: DateGrain): string {
   if (grain === 'day') return d;
   if (grain === 'week') {
     const dt = new Date(d + 'T00:00:00Z');
+    if (isNaN(dt.getTime())) return 'invalid';
     const day = dt.getUTCDay();
     dt.setUTCDate(dt.getUTCDate() - day);
     return dt.toISOString().slice(0, 10);
@@ -55,7 +56,11 @@ function applyFilters(qb: AnyQB, model: QueryModel, filters: QueryFilter[]): Any
     switch (f.op) {
       case 'eq': q = q.where(ref, '=', f.value as never); break;
       case 'in': q = q.where(ref, 'in', (Array.isArray(f.value) ? f.value : [f.value]) as never); break;
-      case 'contains': q = q.where(ref, 'like', `%${f.value}%` as never); break;
+      case 'contains': {
+        const escaped = String(f.value).replace(/[%_\\]/g, '\\$&');
+        q = q.where(ref, 'like', `%${escaped}%` as never);
+        break;
+      }
       case 'gte': q = q.where(ref, '>=', f.value as never); break;
       case 'lte': q = q.where(ref, '<=', f.value as never); break;
       case 'between':
@@ -70,9 +75,9 @@ function applyFilters(qb: AnyQB, model: QueryModel, filters: QueryFilter[]): Any
 
 /** Build the Kysely query (no grain bucketing — date grain is applied in JS after fetch). */
 export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery): AnyQB {
-  metricExpr(model, q.metric); // validate metric early
+  const expr = metricExpr(model, q.metric); // validates + builds
   let qb = db.selectFrom(model.table) as unknown as AnyQB;
-  qb = qb.select(metricExpr(model, q.metric).as('value'));
+  qb = qb.select(expr.as('value'));
   if (q.dimension) {
     const d = dim(model, q.dimension.key);
     qb = qb.select(sql.ref(d.column).as('label')).groupBy(d.column as never).orderBy(d.column as never);

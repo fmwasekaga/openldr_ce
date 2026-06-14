@@ -25,14 +25,16 @@ export interface SqlRunOpts { timeoutMs: number; rowCap: number }
 export async function runSqlQuery(
   db: Kysely<ExternalSchema>, rawSql: string, opts: SqlRunOpts,
 ): Promise<ReportResultData> {
+  if (!Number.isFinite(opts.timeoutMs) || opts.timeoutMs < 1) throw new Error('timeoutMs must be a finite positive number');
+  if (!Number.isFinite(opts.rowCap) || opts.rowCap < 1) throw new Error('rowCap must be a finite positive number');
   validateSelectSql(rawSql);
   const inner = rawSql.replace(/;\s*$/, '');
-  const cap = Math.max(1, Math.floor(opts.rowCap));
+  const cap = Math.floor(opts.rowCap);
   const capped = `select * from (${inner}) as _q limit ${cap}`;
-  return db.connection().execute(async (conn) => {
-    await sql`set transaction read only`.execute(conn);
-    await sql.raw(`set local statement_timeout = ${Math.max(1, Math.floor(opts.timeoutMs))}`).execute(conn);
-    const result = await sql.raw<Record<string, unknown>>(capped).execute(conn);
+  return db.transaction().execute(async (trx) => {
+    await sql`set transaction read only`.execute(trx);
+    await sql`set local statement_timeout = ${sql.lit(Math.floor(opts.timeoutMs))}`.execute(trx);
+    const result = await sql.raw<Record<string, unknown>>(capped).execute(trx);
     const rows = result.rows;
     const keys = rows.length ? Object.keys(rows[0]) : [];
     const columns: ReportColumn[] = keys.map((k) => ({

@@ -16,4 +16,10 @@ describe('model registry', () => {
       expect(new Set(cols).size).toBe(cols.length);
     }
   });
+  it('every metric key is unique per model', () => {
+    for (const m of listModels()) {
+      const keys = m.metrics.map((x) => x.key);
+      expect(new Set(keys).size).toBe(keys.length);
+    }
+  });
 });
