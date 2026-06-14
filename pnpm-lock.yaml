@@ -292,6 +292,9 @@ importers:
       '@openldr/reporting':
         specifier: workspace:*
         version: link:../reporting
+      '@openldr/terminology':
+        specifier: workspace:*
+        version: link:../terminology
       '@openldr/users':
         specifier: workspace:*
         version: link:../users
@@ -329,6 +332,9 @@ importers:
       '@openldr/reporting':
         specifier: workspace:*
         version: link:../reporting
+      '@openldr/terminology':
+        specifier: workspace:*
+        version: link:../terminology
       commander:
         specifier: ^12.1.0
         version: 12.1.0

@@ -91,3 +91,4 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
 export * from './db-context';
 export * from './ingest-context';
 export * from './target-store';
+export * from './terminology-context';
