@@ -116,6 +116,19 @@ export interface Dhis2MappingsTable {
   updated_at: Generated<Date>;
 }
 
+export interface Dhis2SchedulesTable {
+  id: string;
+  mapping_id: string;
+  mode: string;
+  period_type: string;
+  event_driven: Generated<boolean>;
+  enabled: Generated<boolean>;
+  last_run_at: Date | null;
+  next_due_at: Date | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface InternalSchema {
   fhir_resources: FhirResourcesTable;
   outbox_events: OutboxEventsTable;
@@ -128,4 +141,5 @@ export interface InternalSchema {
   concept_map_elements: ConceptMapElementsTable;
   dhis2_orgunit_map: Dhis2OrgUnitMapTable;
   dhis2_mappings: Dhis2MappingsTable;
+  dhis2_schedules: Dhis2SchedulesTable;
 }

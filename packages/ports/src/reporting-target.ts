@@ -4,6 +4,8 @@ export interface TargetMetadata {
   dataElements: { id: string; name: string }[];
   orgUnits: { id: string; name: string }[];
   categoryOptionCombos: { id: string; name: string }[];
+  programs?: { id: string; name: string }[];
+  programStages?: { id: string; name: string; program: string }[];
 }
 
 export interface PushResult {
@@ -21,4 +23,5 @@ export interface ReportingTargetPort {
   healthCheck(): Promise<HealthResult>;
   pullMetadata(): Promise<TargetMetadata>;
   pushAggregate(payload: unknown): Promise<PushResult>;
+  pushEvents(payload: unknown): Promise<PushResult>;
 }

@@ -1,3 +1,4 @@
 export * from './types';
 export * from './helpers';
 export * from './catalog';
+export * from './eventsource';

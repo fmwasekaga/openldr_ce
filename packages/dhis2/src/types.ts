@@ -7,6 +7,7 @@ export interface ColumnMapping {
 }
 
 export interface AggregateMapping {
+  kind?: 'aggregate';
   id: string;
   name: string;
   source: MappingSource;
@@ -34,5 +35,43 @@ export interface SkipRecord {
 
 export interface BuildOutput {
   payload: DataValueSet;
+  skipped: SkipRecord[];
+}
+
+export interface TrackerColumnMapping {
+  column: string;
+  dataElement: string;
+}
+
+export interface TrackerMapping {
+  kind: 'tracker';
+  id: string;
+  name: string;
+  source: { kind: 'event-source'; sourceId: string; params?: Record<string, string> };
+  program: string;
+  programStage: string;
+  orgUnitColumn: string;
+  eventDateColumn: string;
+  idColumn: string;
+  dataValues: TrackerColumnMapping[];
+}
+
+export type DhisMapping = AggregateMapping | TrackerMapping;
+
+export interface TrackerEvent {
+  event: string;
+  program: string;
+  programStage: string;
+  orgUnit: string;
+  occurredAt: string;
+  dataValues: { dataElement: string; value: string }[];
+}
+
+export interface EventSet {
+  events: TrackerEvent[];
+}
+
+export interface BuildEventsOutput {
+  payload: EventSet;
   skipped: SkipRecord[];
 }

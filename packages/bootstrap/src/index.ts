@@ -9,7 +9,7 @@ import type { ExternalSchema, InternalSchema } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore } from '@openldr/users';
-import { getReport, reportSummaries, type ReportResult, type ReportSummary } from '@openldr/reporting';
+import { getReport, reportSummaries, getEventSource, type ReportResult, type ReportSummary } from '@openldr/reporting';
 import { selectTargetStore } from './target-store';
 import { createOperations, type Operations } from '@openldr/terminology';
 
@@ -23,6 +23,7 @@ export class ReportNotFoundError extends Error {
 export interface ReportingApi {
   list(): ReportSummary[];
   run(id: string, rawParams: unknown): Promise<ReportResult>;
+  runEventSource(id: string, window: { from: string; to: string }): Promise<{ rows: Record<string, unknown>[] }>;
 }
 
 export interface AppContext {
@@ -65,6 +66,11 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       const params = def.params.parse(rawParams);
       const data = await def.run(reportingDb, params);
       return { ...data, meta: { generatedAt: new Date().toISOString(), rowCount: data.rows.length } };
+    },
+    async runEventSource(id, window) {
+      const src = getEventSource(id);
+      if (!src) throw new ReportNotFoundError(id);
+      return src.run(reportingDb, window);
     },
   };
 

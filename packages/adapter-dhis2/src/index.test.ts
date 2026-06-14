@@ -72,4 +72,34 @@ describe('createDhis2Target', () => {
     expect(m.orgUnits[0].id).toBe('OU1');
     expect(m.categoryOptionCombos[0].id).toBe('COC1');
   });
+  it('pushEvents parses the DHIS2 tracker import report (success)', async () => {
+    const report = { status: 'OK', stats: { created: 2, updated: 1, deleted: 0, ignored: 0 }, validationReport: { errorReports: [] } };
+    const fetchMock = vi.fn(async () => jsonResponse(report));
+    const t = createDhis2Target(cfg, { fetch: fetchMock as unknown as typeof fetch });
+    const r = await t.pushEvents({ events: [] });
+    expect(r).toMatchObject({ status: 'success', imported: 2, updated: 1 });
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/tracker'), expect.objectContaining({ method: 'POST' }));
+  });
+  it('pushEvents maps a 409 validation report to an error with conflicts', async () => {
+    const report = { status: 'ERROR', stats: { created: 0, updated: 0, deleted: 0, ignored: 1 }, validationReport: { errorReports: [{ message: 'bad event', uid: 'E1' }] } };
+    const fetchMock = vi.fn(async () => ({ ok: false, status: 409, json: async () => report, text: async () => JSON.stringify(report) } as Response));
+    const t = createDhis2Target(cfg, { fetch: fetchMock as unknown as typeof fetch });
+    const r = await t.pushEvents({ events: [] });
+    expect(r.status).toBe('error');
+    expect(r.ignored).toBe(1);
+    expect(r.conflicts).toEqual([{ object: 'E1', value: 'bad event' }]);
+  });
+  it('pullMetadata includes programs + programStages', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('dataElements')) return jsonResponse({ dataElements: [{ id: 'DE1', name: 'd' }] });
+      if (url.includes('organisationUnits')) return jsonResponse({ organisationUnits: [{ id: 'OU1', name: 'o' }] });
+      if (url.includes('programStages')) return jsonResponse({ programStages: [{ id: 'PS1', name: 'ps', program: { id: 'PR1' } }] });
+      if (url.includes('programs')) return jsonResponse({ programs: [{ id: 'PR1', name: 'pr' }] });
+      return jsonResponse({ categoryOptionCombos: [{ id: 'COC1', name: 'c' }] });
+    });
+    const t = createDhis2Target(cfg, { fetch: fetchMock as unknown as typeof fetch });
+    const m = await t.pullMetadata();
+    expect(m.programs?.[0].id).toBe('PR1');
+    expect(m.programStages?.[0]).toMatchObject({ id: 'PS1', program: 'PR1' });
+  });
 });

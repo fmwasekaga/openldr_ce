@@ -1,5 +1,5 @@
 import { loadConfig } from '@openldr/config';
-import { createAppContext, createIngestContext } from '@openldr/bootstrap';
+import { createAppContext, createIngestContext, createDhis2Context } from '@openldr/bootstrap';
 import { buildApp } from './app';
 
 async function main(): Promise<void> {
@@ -8,12 +8,24 @@ async function main(): Promise<void> {
   const app = buildApp(ctx);
 
   const ingest = await createIngestContext(cfg);
+
+  let dhis2: Awaited<ReturnType<typeof createDhis2Context>> | null = null;
+  if (cfg.REPORTING_TARGET_ADAPTER === 'dhis2' && cfg.DHIS2_SYNC_ENABLED) {
+    dhis2 = await createDhis2Context(cfg);
+    await dhis2.registerSync(ingest.eventing, {
+      runReport: (id, p) => ctx.reporting.run(id, p ?? {}).then((r) => ({ rows: r.rows })),
+      runEventSource: (id, w) => ctx.reporting.runEventSource(id, w),
+    });
+    await dhis2.reconcileSchedules(ingest.eventing);
+  }
+
   const worker = ingest.startWorker();
 
   const close = async () => {
     await worker.stop();
     await app.close();
     await ingest.close();
+    if (dhis2) await dhis2.close();
     await ctx.close();
     process.exit(0);
   };
