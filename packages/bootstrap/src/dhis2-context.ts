@@ -25,7 +25,7 @@ export interface Dhis2Context {
   schedules: ReturnType<typeof createScheduleStore>;
   pullMetadata(): Promise<TargetMetadata>;
   validate(mappingId: string): Promise<string[]>;
-  runMapping(args: { mappingId: string; period: string; dryRun: boolean } & RunCallbacks): Promise<RunOutcome>;
+  runMapping(args: { mappingId: string; period: string; dryRun: boolean; trigger?: string } & RunCallbacks): Promise<RunOutcome>;
   recentPushes(limit?: number): Promise<unknown[]>;
   registerSync(eventing: EventingPort, cb: RunCallbacks): Promise<void>;
   reconcileSchedules(eventing: EventingPort): Promise<void>;
@@ -66,8 +66,8 @@ export async function createDhis2Context(cfg: Config): Promise<Dhis2Context> {
     });
   }
 
-  async function runMapping(args: { mappingId: string; period: string; dryRun: boolean } & RunCallbacks): Promise<RunOutcome> {
-    const { mappingId, period, dryRun, runReport, runEventSource } = args;
+  async function runMapping(args: { mappingId: string; period: string; dryRun: boolean; trigger?: string } & RunCallbacks): Promise<RunOutcome> {
+    const { mappingId, period, dryRun, runReport, runEventSource, trigger = 'manual' } = args;
     const mapping = await loadMapping(mappingId);
     const orgMap = await orgUnits.getMap();
     if (mappingKind(mapping) === 'tracker') {
@@ -78,10 +78,10 @@ export async function createDhis2Context(cfg: Config): Promise<Dhis2Context> {
       if (dryRun) return { kind: 'tracker', dryRun: true, build };
       try {
         const result = await target.pushEvents(build.payload);
-        await auditPush('dhis2.tracker.push', mappingId, period, { events: build.payload.events.length, skipped: build.skipped.length, status: result.status, imported: result.imported, updated: result.updated, ignored: result.ignored, conflicts: result.conflicts.length });
+        await auditPush('dhis2.tracker.push', mappingId, period, { trigger, events: build.payload.events.length, skipped: build.skipped.length, status: result.status, imported: result.imported, updated: result.updated, ignored: result.ignored, conflicts: result.conflicts.length });
         return { kind: 'tracker', dryRun: false, build, result };
       } catch (err) {
-        await auditPush('dhis2.tracker.push.failed', mappingId, period, { error: err instanceof Error ? err.message : String(err) });
+        await auditPush('dhis2.tracker.push.failed', mappingId, period, { trigger, error: err instanceof Error ? err.message : String(err) });
         throw err;
       }
     }
@@ -92,10 +92,10 @@ export async function createDhis2Context(cfg: Config): Promise<Dhis2Context> {
     if (dryRun) return { kind: 'aggregate', dryRun: true, build };
     try {
       const result = await target.pushAggregate(build.payload);
-      await auditPush('dhis2.push', mappingId, period, { dataValues: build.payload.dataValues.length, skipped: build.skipped.length, status: result.status, imported: result.imported, updated: result.updated, ignored: result.ignored, conflicts: result.conflicts.length });
+      await auditPush('dhis2.push', mappingId, period, { trigger, dataValues: build.payload.dataValues.length, skipped: build.skipped.length, status: result.status, imported: result.imported, updated: result.updated, ignored: result.ignored, conflicts: result.conflicts.length });
       return { kind: 'aggregate', dryRun: false, build, result };
     } catch (err) {
-      await auditPush('dhis2.push.failed', mappingId, period, { error: err instanceof Error ? err.message : String(err) });
+      await auditPush('dhis2.push.failed', mappingId, period, { trigger, error: err instanceof Error ? err.message : String(err) });
       throw err;
     }
   }
@@ -124,7 +124,7 @@ export async function createDhis2Context(cfg: Config): Promise<Dhis2Context> {
         if (!sched || !sched.enabled) return;
         const now = new Date();
         const period = previousPeriod(sched.periodType, now);
-        try { await runMapping({ mappingId: sched.mappingId, period, dryRun: false, ...cb }); }
+        try { await runMapping({ mappingId: sched.mappingId, period, dryRun: false, trigger: 'scheduled', ...cb }); }
         catch { /* audited inside runMapping; still re-schedule the next period */ }
         await schedules.markRun(scheduleId, now);
         const due = nextPeriodBoundary(sched.periodType, now);
@@ -135,7 +135,7 @@ export async function createDhis2Context(cfg: Config): Promise<Dhis2Context> {
         const now = new Date();
         const all = await schedules.list();
         for (const s of all.filter((x: ScheduleRecord) => x.enabled && x.mode === 'tracker' && x.eventDriven)) {
-          try { await runMapping({ mappingId: s.mappingId, period: currentPeriod(s.periodType, now), dryRun: false, ...cb }); }
+          try { await runMapping({ mappingId: s.mappingId, period: currentPeriod(s.periodType, now), dryRun: false, trigger: 'ingest-event', ...cb }); }
           catch { /* audited inside */ }
         }
       });
