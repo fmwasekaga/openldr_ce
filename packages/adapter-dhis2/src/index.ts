@@ -22,6 +22,12 @@ interface ImportSummary {
   conflicts?: { object?: string; value?: string }[];
 }
 
+interface TrackerReport {
+  status?: string;
+  stats?: { created?: number; updated?: number; deleted?: number; ignored?: number };
+  validationReport?: { errorReports?: { message?: string; uid?: string }[] };
+}
+
 export function createDhis2Target(cfg: Dhis2Config, deps: Dhis2Deps = {}): Dhis2Target {
   const doFetch = deps.fetch ?? fetch;
   const base = cfg.baseUrl.replace(/\/$/, '');
@@ -42,10 +48,14 @@ export function createDhis2Target(cfg: Dhis2Config, deps: Dhis2Deps = {}): Dhis2
       const de = await getJson<{ dataElements?: { id: string; name: string }[] }>('/api/dataElements.json?fields=id,name&paging=false');
       const ou = await getJson<{ organisationUnits?: { id: string; name: string }[] }>('/api/organisationUnits.json?fields=id,name&paging=false');
       const coc = await getJson<{ categoryOptionCombos?: { id: string; name: string }[] }>('/api/categoryOptionCombos.json?fields=id,name&paging=false');
+      const prog = await getJson<{ programs?: { id: string; name: string }[] }>('/api/programs.json?fields=id,name&paging=false');
+      const ps = await getJson<{ programStages?: { id: string; name: string; program?: { id: string } }[] }>('/api/programStages.json?fields=id,name,program&paging=false');
       return {
         dataElements: de.dataElements ?? [],
         orgUnits: ou.organisationUnits ?? [],
         categoryOptionCombos: coc.categoryOptionCombos ?? [],
+        programs: prog.programs ?? [],
+        programStages: (ps.programStages ?? []).map((s) => ({ id: s.id, name: s.name, program: s.program?.id ?? '' })),
       };
     },
     async pushAggregate(payload): Promise<PushResult> {
@@ -78,6 +88,20 @@ export function createDhis2Target(cfg: Dhis2Config, deps: Dhis2Deps = {}): Dhis2
         conflicts,
         raw: summary,
       };
+    },
+    async pushEvents(payload): Promise<PushResult> {
+      const res = await doFetch(`${base}/api/tracker?async=false&importStrategy=CREATE_AND_UPDATE`, { method: 'POST', headers, body: JSON.stringify(payload) });
+      const text = await res.text();
+      let body: TrackerReport | undefined;
+      try { body = text ? (JSON.parse(text) as TrackerReport) : undefined; } catch { body = undefined; }
+      const hasReport = !!body && typeof body === 'object' && (body.status !== undefined || body.stats !== undefined || body.validationReport !== undefined);
+      if (!hasReport) throw new Error(`DHIS2 tracker -> ${res.status}${text ? `: ${text.slice(0, 300)}` : ''}`);
+      const stats = body!.stats ?? {};
+      const rawStatus = (body!.status ?? '').toUpperCase();
+      const status: PushResult['status'] =
+        rawStatus === 'ERROR' ? 'error' : rawStatus === 'WARNING' ? 'warning' : rawStatus === 'OK' || rawStatus === 'SUCCESS' ? 'success' : res.ok ? 'success' : 'error';
+      const conflicts = (body!.validationReport?.errorReports ?? []).map((e) => ({ object: e.uid ?? '', value: e.message ?? '' }));
+      return { status, imported: stats.created ?? 0, updated: stats.updated ?? 0, ignored: stats.ignored ?? 0, deleted: stats.deleted ?? 0, conflicts, raw: body };
     },
     async close() { /* fetch-based; nothing to close */ },
   };
