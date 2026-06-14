@@ -11,3 +11,4 @@ export * from './fhir-store';
 export * from './flat-writer';
 export * from './persist';
 export * from './export-data';
+export * from './terminology-store';
