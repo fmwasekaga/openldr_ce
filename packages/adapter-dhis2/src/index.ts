@@ -18,7 +18,7 @@ export interface Dhis2Target extends ReportingTargetPort {
 interface ImportSummary {
   status?: string;
   importCount?: { imported?: number; updated?: number; ignored?: number; deleted?: number };
-  response?: { importCount?: { imported?: number; updated?: number; ignored?: number; deleted?: number }; conflicts?: { object?: string; value?: string }[] };
+  response?: { status?: string; importCount?: { imported?: number; updated?: number; ignored?: number; deleted?: number }; conflicts?: { object?: string; value?: string }[] };
   conflicts?: { object?: string; value?: string }[];
 }
 
@@ -50,10 +50,18 @@ export function createDhis2Target(cfg: Dhis2Config, deps: Dhis2Deps = {}): Dhis2
     },
     async pushAggregate(payload): Promise<PushResult> {
       const res = await doFetch(`${base}/api/dataValueSets.json`, { method: 'POST', headers, body: JSON.stringify(payload) });
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new Error(`DHIS2 dataValueSets -> ${res.status}${text ? `: ${text.slice(0, 300)}` : ''}`);
+      }
       const body = (await res.json()) as ImportSummary;
       const ic = body.importCount ?? body.response?.importCount ?? {};
-      const rawStatus = (body.status ?? '').toUpperCase();
-      const status = rawStatus === 'SUCCESS' || rawStatus === 'OK' ? 'success' : rawStatus === 'WARNING' ? 'warning' : res.ok ? 'success' : 'error';
+      const rawStatus = (body.response?.status ?? body.status ?? '').toUpperCase();
+      const status: PushResult['status'] =
+        rawStatus === 'ERROR' ? 'error'
+        : rawStatus === 'WARNING' ? 'warning'
+        : rawStatus === 'SUCCESS' || rawStatus === 'OK' ? 'success'
+        : res.ok ? 'success' : 'error';
       const conflicts = (body.conflicts ?? body.response?.conflicts ?? []).map((c) => ({ object: c.object ?? '', value: c.value ?? '' }));
       return {
         status,

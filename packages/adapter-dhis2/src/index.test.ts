@@ -28,6 +28,27 @@ describe('createDhis2Target', () => {
     expect(r).toMatchObject({ status: 'success', imported: 3, updated: 1, ignored: 0, deleted: 0 });
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/dataValueSets'), expect.objectContaining({ method: 'POST' }));
   });
+  it('pushAggregate reads import status from nested response (WARNING with conflicts)', async () => {
+    const summary = { httpStatus: 'OK', status: 'OK', response: { status: 'WARNING', importCount: { imported: 1, updated: 0, ignored: 2, deleted: 0 }, conflicts: [{ object: 'dataElement', value: 'bad' }] } };
+    const fetchMock = vi.fn(async () => jsonResponse(summary));
+    const t = createDhis2Target(cfg, { fetch: fetchMock as unknown as typeof fetch });
+    const r = await t.pushAggregate({ dataValues: [] });
+    expect(r.status).toBe('warning');
+    expect(r.imported).toBe(1);
+    expect(r.ignored).toBe(2);
+    expect(r.conflicts).toEqual([{ object: 'dataElement', value: 'bad' }]);
+  });
+  it('pushAggregate maps a nested ERROR response to status error', async () => {
+    const summary = { status: 'WARNING', httpStatus: 'Conflict', response: { status: 'ERROR', importCount: { imported: 0, updated: 0, ignored: 1, deleted: 0 }, conflicts: [] } };
+    const fetchMock = vi.fn(async () => jsonResponse(summary));
+    const t = createDhis2Target(cfg, { fetch: fetchMock as unknown as typeof fetch });
+    expect((await t.pushAggregate({ dataValues: [] })).status).toBe('error');
+  });
+  it('pushAggregate throws a clear error on a non-OK HTTP response', async () => {
+    const fetchMock = vi.fn(async () => ({ ok: false, status: 401, json: async () => ({}), text: async () => 'Unauthorized' } as Response));
+    const t = createDhis2Target(cfg, { fetch: fetchMock as unknown as typeof fetch });
+    await expect(t.pushAggregate({ dataValues: [] })).rejects.toThrow(/401/);
+  });
   it('pullMetadata maps dataElements/orgUnits/coc', async () => {
     const fetchMock = vi.fn(async (url: string) => {
       if (url.includes('dataElements')) return jsonResponse({ dataElements: [{ id: 'DE1', name: 'd' }] });
