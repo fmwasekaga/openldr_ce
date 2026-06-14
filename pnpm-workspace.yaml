@@ -6,3 +6,4 @@ allowBuilds:
   esbuild: true
   '@extism/extism': true
   core-js: set this to true or false
+  better-sqlite3: true
