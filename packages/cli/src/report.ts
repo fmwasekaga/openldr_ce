@@ -1,3 +1,4 @@
+import { writeFileSync } from 'node:fs';
 import { createAppContext } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import { toCsv } from '@openldr/reporting';
@@ -29,9 +30,16 @@ export async function runReportList(opts: { json: boolean }): Promise<number> {
   }
 }
 
-export async function runReportRun(id: string, opts: RunOpts): Promise<number> {
+export async function runReportRun(id: string, opts: RunOpts & { format?: string; out?: string }): Promise<number> {
   const ctx = await createAppContext(loadConfig());
   try {
+    if (opts.format === 'pdf') {
+      const buf = await ctx.reporting.renderPdf(id, parseParams(opts.param));
+      const out = opts.out ?? `${id}.pdf`;
+      writeFileSync(out, buf);
+      process.stdout.write(`wrote ${out} (${buf.length} bytes)\n`);
+      return 0;
+    }
     const result = await ctx.reporting.run(id, parseParams(opts.param));
     if (opts.csv) process.stdout.write(toCsv(result.columns, result.rows));
     else if (opts.json) process.stdout.write(JSON.stringify(result, null, 2) + '\n');
@@ -40,6 +48,23 @@ export async function runReportRun(id: string, opts: RunOpts): Promise<number> {
       const body = result.rows.map((r) => result.columns.map((c) => String(r[c.key] ?? '')).join(' | ')).join('\n');
       process.stdout.write(`${header}\n${body || '(no rows)'}\n`);
     }
+    return 0;
+  } finally {
+    await ctx.close();
+  }
+}
+
+export async function runReportGlassExport(opts: { country: string; year: string; from?: string; to?: string; out?: string; json: boolean }): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const params: Record<string, string> = { country: opts.country, year: opts.year };
+    if (opts.from) params.from = opts.from;
+    if (opts.to) params.to = opts.to;
+    const result = await ctx.reporting.run('amr-glass-ris', params);
+    const csv = toCsv(result.columns, result.rows);
+    if (opts.out) { writeFileSync(opts.out, csv); process.stdout.write(`wrote ${opts.out}\n`); }
+    else if (opts.json) process.stdout.write(JSON.stringify(result.rows, null, 2) + '\n');
+    else process.stdout.write(csv);
     return 0;
   } finally {
     await ctx.close();
