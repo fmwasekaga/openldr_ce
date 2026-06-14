@@ -29,6 +29,7 @@ export interface SpecimensTable extends ProvenanceColumns {
   subject_ref: string | null;
   parent_ref: string | null;
   received_time: string | null;
+  origin: string | null;
 }
 
 export interface ServiceRequestsTable extends ProvenanceColumns {

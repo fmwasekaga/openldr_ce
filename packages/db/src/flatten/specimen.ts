@@ -1,6 +1,7 @@
 import type { Provenance } from '../provenance';
 import type { Insertable } from 'kysely';
 import type { SpecimensTable } from '../schema/external';
+import { readSpecimenOrigin } from '@openldr/fhir';
 import { provColumns, firstIdentifier, codeable, reference, str } from './extract';
 
 export function flattenSpecimen(r: Record<string, unknown>, prov: Provenance): Insertable<SpecimensTable> {
@@ -8,6 +9,7 @@ export function flattenSpecimen(r: Record<string, unknown>, prov: Provenance): I
   const type = codeable(r['type']);
   const accession = (r['accessionIdentifier'] as Record<string, unknown> | undefined)?.['value'];
   const parent = (r['parent'] as Record<string, unknown>[] | undefined)?.[0];
+  const collected = (r['collection'] as Record<string, unknown> | undefined)?.['collectedDateTime'];
   return {
     id: String(r['id']),
     identifier_value: idn.value,
@@ -17,7 +19,8 @@ export function flattenSpecimen(r: Record<string, unknown>, prov: Provenance): I
     type_text: type.text,
     subject_ref: reference(r['subject']),
     parent_ref: reference(parent),
-    received_time: str(r['receivedTime']),
+    received_time: str(r['receivedTime']) ?? str(collected),
+    origin: readSpecimenOrigin(r),
     ...provColumns(prov),
   };
 }
