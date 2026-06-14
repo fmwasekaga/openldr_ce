@@ -1,6 +1,7 @@
 //! OpenLDR plugin SDK (Apache-2.0). Helpers for authoring WASM ingest plugins.
 pub mod fhir;
 
+#[cfg(target_arch = "wasm32")]
 pub use extism_pdk;
 use serde_json::Value;
 
