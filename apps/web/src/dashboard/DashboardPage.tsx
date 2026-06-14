@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { AppShell } from '../shell/AppShell';
 import { Button } from '@/components/ui/button';
-import { Plus, Pencil, Save, SlidersHorizontal } from 'lucide-react';
-import { listDashboards, createDashboard, saveDashboard, fetchClientConfig, type Dashboard } from '../api';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
+import { Plus, Pencil, Save, SlidersHorizontal, MoreHorizontal } from 'lucide-react';
+import { listDashboards, createDashboard, saveDashboard, fetchClientConfig, type Dashboard, type WidgetConfig } from '../api';
 import { useDashboardStore } from './store';
 import { DashboardGrid } from './DashboardGrid';
 import { DashboardFilterBar } from './filters/DashboardFilterBar';
@@ -67,10 +68,11 @@ const DEFAULT_SEED: Dashboard = {
 };
 
 export function DashboardPage() {
-  const { current, editing, dirty, setCurrent, setEditing, markClean, addWidget } = useDashboardStore();
+  const { current, editing, dirty, setCurrent, setEditing, markClean, addWidget, updateWidget } = useDashboardStore();
   const [all, setAll] = useState<Dashboard[]>([]);
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [editorOpen, setEditorOpen] = useState(false);
+  const [editingWidget, setEditingWidget] = useState<WidgetConfig | undefined>(undefined);
   const [filterEditorOpen, setFilterEditorOpen] = useState(false);
   const [sqlEnabled, setSqlEnabled] = useState(false);
   const [error, setError] = useState<string>();
@@ -133,32 +135,44 @@ export function DashboardPage() {
             ))}
           </select>
           <div className="flex gap-2">
-            {editing && (
-              <Button size="sm" variant="outline" onClick={() => setFilterEditorOpen(true)}>
-                <SlidersHorizontal className="mr-1 h-4 w-4" />
-                Filters
-              </Button>
-            )}
-            {editing && (
-              <Button size="sm" variant="outline" onClick={() => setEditorOpen(true)}>
-                <Plus className="mr-1 h-4 w-4" />
-                Widget
-              </Button>
-            )}
             {editing ? (
-              <Button
-                size="sm"
-                onClick={() => {
-                  if (current)
-                    saveDashboard(current).then(() => {
-                      markClean();
-                      setEditing(false);
-                    });
-                }}
-              >
-                <Save className="mr-1 h-4 w-4" />
-                Done
-              </Button>
+              <>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="icon" variant="outline" aria-label="Dashboard menu">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        setEditingWidget(undefined);
+                        setEditorOpen(true);
+                      }}
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add widget
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setFilterEditorOpen(true)}>
+                      <SlidersHorizontal className="mr-2 h-4 w-4" />
+                      Edit filters
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    if (current)
+                      saveDashboard(current).then(() => {
+                        markClean();
+                        setEditing(false);
+                      });
+                  }}
+                >
+                  <Save className="mr-1 h-4 w-4" />
+                  Done
+                </Button>
+              </>
             ) : (
               <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
                 <Pencil className="mr-1 h-4 w-4" />
@@ -168,16 +182,28 @@ export function DashboardPage() {
           </div>
         </div>
         <DashboardFilterBar filters={current.filters} values={values} onChange={setValues} />
-        <DashboardGrid filterValues={values} onEdit={() => setEditorOpen(true)} />
+        <DashboardGrid
+          filterValues={values}
+          onEdit={(id) => {
+            setEditingWidget(current.widgets.find((w) => w.id === id));
+            setEditorOpen(true);
+          }}
+        />
       </div>
       {editorOpen && (
         <WidgetEditorDialog
           open
+          initial={editingWidget}
           sqlEnabled={sqlEnabled}
-          onClose={() => setEditorOpen(false)}
-          onSave={(w) => {
-            addWidget(w);
+          onClose={() => {
             setEditorOpen(false);
+            setEditingWidget(undefined);
+          }}
+          onSave={(w) => {
+            if (editingWidget) updateWidget(w);
+            else addWidget(w);
+            setEditorOpen(false);
+            setEditingWidget(undefined);
           }}
         />
       )}

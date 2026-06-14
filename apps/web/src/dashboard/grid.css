@@ -1,0 +1,34 @@
+/* Dashboard grid edit-mode affordances. Layered on top of react-grid-layout /
+   react-resizable defaults, which are imported before this file. */
+
+/* The default resize glyph is a low-contrast SVG that disappears on the dark
+   theme. Hide it and draw a theme-aware corner so the handle is findable. */
+.dash-grid .react-resizable-handle {
+  z-index: 20;
+  background-image: none;
+}
+.dash-grid .react-resizable-handle-se::after {
+  content: '';
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid var(--text-muted, #8a8a8a);
+  border-bottom: 2px solid var(--text-muted, #8a8a8a);
+  border-bottom-right-radius: 2px;
+}
+
+/* Dotted-grid background, shown only while editing, like corlix. */
+.dash-grid-editing {
+  background-image: radial-gradient(var(--border, #2a2a2a) 1.25px, transparent 1.25px);
+  background-size: 16px 16px;
+  background-position: -1px -1px;
+}
+
+/* Subtle drop placeholder while dragging/resizing. */
+.dash-grid .react-grid-placeholder {
+  background: var(--brand, #4682b4);
+  opacity: 0.15;
+  border-radius: 0.5rem;
+}
