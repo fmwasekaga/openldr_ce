@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { probe, errorMessage, redact } from '@openldr/core';
-import type { EventEnvelope, EventHandler, EventingPort } from '@openldr/ports';
+import type { EventEnvelope, EventHandler, EventingPort, PublishOptions } from '@openldr/ports';
 import { backoff } from './backoff';
 
 export interface EventBusConfig {
@@ -45,13 +45,20 @@ export function createEventBus(cfg: EventBusConfig, deps: EventBusDeps = {}): Ev
   const handlers = new Map<string, EventHandler>();
   const leaseMs = cfg.leaseMs ?? DEFAULT_LEASE_MS;
 
-  async function publish(event: EventEnvelope): Promise<void> {
+  async function publish(event: EventEnvelope, opts: PublishOptions = {}): Promise<void> {
     const id = randomUUID();
     const batchId = (event.payload as { batchId?: string } | null)?.batchId ?? null;
-    await pool.query(
-      `insert into outbox_events (id, type, payload, batch_id) values ($1, $2, $3, $4)`,
-      [id, event.type, JSON.stringify(event.payload), batchId],
-    );
+    if (opts.availableAt) {
+      await pool.query(
+        `insert into outbox_events (id, type, payload, batch_id, available_at) values ($1, $2, $3, $4, $5)`,
+        [id, event.type, JSON.stringify(event.payload), batchId, opts.availableAt.toISOString()],
+      );
+    } else {
+      await pool.query(
+        `insert into outbox_events (id, type, payload, batch_id) values ($1, $2, $3, $4)`,
+        [id, event.type, JSON.stringify(event.payload), batchId],
+      );
+    }
     await pool.query(`select pg_notify('openldr_events', $1)`, [event.type]);
   }
 
