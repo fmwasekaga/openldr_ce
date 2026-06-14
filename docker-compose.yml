@@ -58,3 +58,26 @@ services:
       MSSQL_SA_PASSWORD: ${MSSQL_PASSWORD:-Openldr_Local_2026!}
     ports:
       - '1433:1433'
+
+  # Optional DHIS2 aggregate reporting target. Off by default; start with:
+  #   pnpm dhis2:seed   (downloads the SL demo dump once)
+  #   docker compose --profile dhis2 up -d
+  dhis2-db:
+    image: postgis/postgis:14-3.3
+    profiles: ['dhis2']
+    environment:
+      POSTGRES_USER: dhis
+      POSTGRES_PASSWORD: dhis
+      POSTGRES_DB: dhis2
+    volumes:
+      - ./.dhis2-seed/dump.sql.gz:/docker-entrypoint-initdb.d/10-dhis2.sql.gz:ro
+  dhis2-web:
+    image: dhis2/core:2.40.3
+    profiles: ['dhis2']
+    depends_on: [dhis2-db]
+    environment:
+      DHIS2_HOME: /opt/dhis2
+    volumes:
+      - ./scripts/dhis2.conf:/opt/dhis2/dhis.conf:ro
+    ports:
+      - '8085:8080'
