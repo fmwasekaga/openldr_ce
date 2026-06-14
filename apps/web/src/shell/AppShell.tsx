@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { useTheme } from './useTheme';
 import { useSidebar } from './useSidebar';
 import {
-  IconDashboard, IconReports, IconForms, IconUsers, IconAudit,
+  IconDashboard, IconReports, IconDocs, IconForms, IconUsers, IconAudit,
   IconChevronLeft, IconChevronRight, IconSun, IconMoon,
 } from './icons';
 
@@ -12,6 +12,7 @@ type IconCmp = ComponentType<SVGProps<SVGSVGElement>>;
 const NAV: { to: string; label: string; end: boolean; icon: IconCmp }[] = [
   { to: '/', label: 'Dashboard', end: true, icon: IconDashboard },
   { to: '/reports', label: 'Reports', end: false, icon: IconReports },
+  { to: '/docs', label: 'Docs', end: false, icon: IconDocs },
 ];
 const SOON: { label: string; icon: IconCmp }[] = [
   { label: 'Forms', icon: IconForms },
