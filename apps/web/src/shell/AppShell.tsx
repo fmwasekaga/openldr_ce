@@ -33,7 +33,7 @@ export function AppShell({
   const [collapsed, toggleSidebar] = useSidebar();
 
   return (
-    <div className="ui-scope flex min-h-screen">
+    <div className="ui-scope flex h-screen overflow-hidden">
       <aside
         className={cn('flex flex-col border-r border-border transition-[width] duration-200', collapsed ? 'w-14' : 'w-60')}
         style={{ background: 'var(--sidebar)' }}
@@ -51,7 +51,7 @@ export function AppShell({
           </Button>
         </div>
 
-        <nav className="flex flex-1 flex-col gap-1 p-2">
+        <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
           {NAV.map(({ to, label, end, icon: Icon }) => (
             <NavLink
               key={to}
@@ -109,7 +109,7 @@ export function AppShell({
             {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
         </header>
-        <main className={fullBleed ? 'flex min-h-0 flex-1 flex-col' : 'p-6'}>{children}</main>
+        <main className={fullBleed ? 'flex min-h-0 flex-1 flex-col' : 'min-h-0 flex-1 overflow-y-auto p-6'}>{children}</main>
       </div>
     </div>
   );
