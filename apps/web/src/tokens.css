@@ -122,7 +122,24 @@ tr:hover td { background: rgba(70,130,180,0.08); }
   --radius-md: var(--radius);
   --radius-lg: var(--radius-lg);
 }
-/* Minimal base shadcn assumes — scoped, never global, to avoid touching existing pages. */
+/* Minimal base shadcn assumes — we ship Tailwind WITHOUT global preflight (to protect
+   the existing token-CSS pages), so we add back only the control resets shadcn relies
+   on. Without these, native button/input chrome leaks: ghost and icon buttons show the
+   browser's gray/white buttonface background and bevel instead of a flat control.
+   These live in @layer base, which is OUTRANKED both by Tailwind utility classes (the
+   bg and border utilities) and by the existing unlayered .btn and .icon-btn classes,
+   so both still win exactly as before. */
 @layer base {
   .ui-scope, .ui-scope * { border-color: var(--border); }
+  button, [type='button'], [type='reset'], [type='submit'] {
+    -webkit-appearance: none;
+    appearance: none;
+    background-color: transparent;
+    background-image: none;
+    border: 0 solid;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+  }
+  input, select, textarea { font: inherit; color: inherit; }
 }
