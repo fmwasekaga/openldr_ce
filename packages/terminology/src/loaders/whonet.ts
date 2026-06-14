@@ -1,4 +1,4 @@
-import { DatabaseSync } from 'node:sqlite';
+import type { DatabaseSync } from 'node:sqlite';
 import type { ConceptRecord } from '@openldr/db';
 import { OpenLdrError } from '@openldr/core';
 import type { LoaderStore, LoadResult } from './generic';
@@ -25,6 +25,7 @@ function readPair(db: DatabaseSync, fwdTable: string, revTable: string): { code:
 }
 
 export async function loadWhonetAmr(sqlitePath: string, store: LoaderStore): Promise<LoadResult[]> {
+  const { DatabaseSync } = await import('node:sqlite');
   let db: DatabaseSync;
   try { db = new DatabaseSync(sqlitePath, { readOnly: true }); } catch (e) { throw new OpenLdrError(`cannot open WHONET sqlite: ${(e as Error).message}`); }
   const tables = new Set((db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[]).map((r) => r.name));

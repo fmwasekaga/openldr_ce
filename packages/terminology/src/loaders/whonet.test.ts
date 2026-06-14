@@ -1,8 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
-
-// node:sqlite is a Node 24 built-in not known to Vite 5 — mock it so the
-// transform pipeline does not fail when importing the whonet loader module.
-vi.mock('node:sqlite', () => ({ DatabaseSync: class {} }));
+import { describe, it, expect } from 'vitest';
 
 import { joinForwardReverse } from './whonet';
 
