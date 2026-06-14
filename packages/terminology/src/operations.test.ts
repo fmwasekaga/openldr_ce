@@ -76,3 +76,20 @@ describe('validateCode (ValueSet)', () => {
     expect((await ops.validateCode({ valueSetUrl: abxVs.url, code: 'XXX' })).result).toBe(false);
   });
 });
+
+describe('translate', () => {
+  const src = memSource(abx);
+  // override translate for this test
+  src.translate = async (q) => (q.code === 'AMP' ? [{ mapUrl: 'http://x/cm', sourceSystem: q.system, sourceCode: 'AMP', targetSystem: 'http://loinc.org', targetCode: '101477-8', equivalence: 'equivalent' }] : []);
+  const ops = createOperations(src);
+  it('returns mapped targets', async () => {
+    const r = await ops.translate({ system: 'http://whonet.org/fhir/CodeSystem/antibiotic', code: 'AMP' });
+    expect(r.result).toBe(true);
+    expect(r.matches[0].targetCode).toBe('101477-8');
+  });
+  it('empty for unmapped', async () => {
+    const r = await ops.translate({ system: 'http://whonet.org/fhir/CodeSystem/antibiotic', code: 'CIP' });
+    expect(r.result).toBe(false);
+    expect(r.matches).toEqual([]);
+  });
+});

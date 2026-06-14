@@ -1,10 +1,11 @@
 import type { ConceptSource } from './source';
 import { valueSetOf } from './source';
 import type { ValueSet } from '@openldr/fhir';
-import type { ConceptRecord } from '@openldr/db';
+import type { ConceptRecord, MapElement } from '@openldr/db';
 
 export interface LookupResult { found: boolean; system: string; code: string; display: string | null; properties: Record<string, unknown> | null }
 export interface ValidateResult { result: boolean; message: string }
+export interface TranslateResult { result: boolean; matches: MapElement[] }
 export interface ExpandOptions { count?: number; offset?: number; filter?: string }
 
 export class TerminologyError extends Error {
@@ -15,6 +16,7 @@ export interface Operations {
   lookup(system: string, code: string): Promise<LookupResult>;
   validateCode(input: { system: string; code: string } | { valueSetUrl: string; code: string; system?: string }): Promise<ValidateResult>;
   expand(valueSetUrl: string, opts: ExpandOptions): Promise<ValueSet>;
+  translate(input: { mapUrl?: string; system: string; code: string; targetSystem?: string }): Promise<TranslateResult>;
 }
 
 async function includeConcepts(source: ConceptSource, rule: { system?: string; concept?: { code: string }[]; filter?: { property: string; op: string; value: string }[] }, limit: number, offset: number): Promise<{ rows: ConceptRecord[]; total: number }> {
@@ -59,6 +61,10 @@ export function createOperations(source: ConceptSource): Operations {
       return c ? { found: true, system, code, display: c.display, properties: c.properties } : { found: false, system, code, display: null, properties: null };
     },
     expand,
+    async translate(input) {
+      const matches = await source.translate(input);
+      return { result: matches.length > 0, matches };
+    },
     async validateCode(input) {
       if ('valueSetUrl' in input) {
         const vs = await loadValueSet(input.valueSetUrl);
