@@ -16,6 +16,7 @@ function ctxWith(status: 'up' | 'down'): AppContext {
     reporting: {} as never,
     audit: {} as never,
     users: {} as never,
+    terminology: {} as never,
     async close() {},
   };
 }

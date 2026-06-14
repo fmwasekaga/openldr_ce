@@ -11,6 +11,7 @@ import { createAuditStore, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore } from '@openldr/users';
 import { getReport, reportSummaries, type ReportResult, type ReportSummary } from '@openldr/reporting';
 import { selectTargetStore } from './target-store';
+import { createTerminologyContext, type TerminologyContext } from './terminology-context';
 
 export class ReportNotFoundError extends Error {
   constructor(public readonly id: string) {
@@ -34,6 +35,7 @@ export interface AppContext {
   users: UserStore;
   reporting: ReportingApi;
   health: HealthRegistry;
+  terminology: TerminologyContext;
   close(): Promise<void>;
 }
 
@@ -72,6 +74,8 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   health.register({ name: 'eventing', check: () => eventing.healthCheck() });
   health.register({ name: 'target-store', check: () => store.healthCheck() });
 
+  const terminology = await createTerminologyContext(cfg);
+
   return {
     logger,
     auth,
@@ -82,8 +86,9 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     users,
     reporting,
     health,
+    terminology,
     async close() {
-      await Promise.allSettled([eventing.close(), store.close(), internal.close()]);
+      await Promise.allSettled([eventing.close(), store.close(), internal.close(), terminology.close()]);
     },
   };
 }
