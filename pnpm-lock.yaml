@@ -317,6 +317,9 @@ importers:
       '@openldr/ports':
         specifier: workspace:*
         version: link:../ports
+      '@openldr/report-pdf':
+        specifier: workspace:*
+        version: link:../report-pdf
       '@openldr/reporting':
         specifier: workspace:*
         version: link:../reporting
