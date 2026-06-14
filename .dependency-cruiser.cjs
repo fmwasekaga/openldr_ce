@@ -38,6 +38,9 @@ module.exports = {
   ],
   options: {
     doNotFollow: { path: 'node_modules' },
+    // Never analyze build output — minified vendor bundles (e.g. jspdf/docx) contain
+    // internal circular chunks that are not source-level boundary concerns.
+    exclude: { path: '(^|/)dist/' },
     tsConfig: { fileName: 'tsconfig.depcruise.json' },
     tsPreCompilationDeps: true,
     enhancedResolveOptions: {
