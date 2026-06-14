@@ -6,6 +6,7 @@
   "scripts": {
     "e2e": "playwright test --project=smoke",
     "capture": "playwright test --project=capture",
+    "docs:screenshots": "playwright test --project=docs-capture",
     "typecheck": "tsc --noEmit",
     "lint": "echo \"no lint\""
   },
