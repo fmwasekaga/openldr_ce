@@ -10,6 +10,7 @@ import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@
 import { createAuditStore, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore } from '@openldr/users';
 import { getReport, reportSummaries, getEventSource, type ReportResult, type ReportSummary } from '@openldr/reporting';
+import { createDashboardStore, getModel, listModels, runBuilderQuery, runSqlQuery, type DashboardStore, type WidgetQuery } from '@openldr/dashboards';
 import { renderReportPdf } from '@openldr/report-pdf';
 import { selectTargetStore } from './target-store';
 import { createOperations, type Operations } from '@openldr/terminology';
@@ -19,6 +20,16 @@ export class ReportNotFoundError extends Error {
     super(`unknown report: ${id}`);
     this.name = 'ReportNotFoundError';
   }
+}
+
+export class DashboardQueryError extends Error {
+  constructor(msg: string) { super(msg); this.name = 'DashboardQueryError'; }
+}
+
+export interface DashboardsApi {
+  store: DashboardStore;
+  models(): ReturnType<typeof listModels>;
+  query(q: WidgetQuery): Promise<ReportResult>;
 }
 
 export interface ReportingApi {
@@ -39,6 +50,8 @@ export interface AppContext {
   reporting: ReportingApi;
   health: HealthRegistry;
   terminology: { ops: Operations };
+  dashboards: DashboardsApi;
+  cfg: Config;
   close(): Promise<void>;
 }
 
@@ -88,6 +101,23 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     },
   };
 
+  const dashboardStore = createDashboardStore(internal.db);
+  const runDashboardQuery = async (q: WidgetQuery): Promise<ReportResult> => {
+    let data;
+    if (q.mode === 'builder') {
+      const model = getModel(q.model);
+      if (!model) throw new DashboardQueryError(`unknown model: ${q.model}`);
+      data = await runBuilderQuery(reportingDb, model, q);
+    } else {
+      if (!cfg.DASHBOARD_SQL_ENABLED || cfg.TARGET_STORE_ADAPTER !== 'pg') {
+        throw new DashboardQueryError('raw SQL widgets are disabled');
+      }
+      data = await runSqlQuery(reportingDb, q.sql, { timeoutMs: cfg.DASHBOARD_SQL_TIMEOUT_MS, rowCap: cfg.DASHBOARD_SQL_ROW_CAP });
+    }
+    return { ...data, meta: { generatedAt: new Date().toISOString(), rowCount: data.rows.length } };
+  };
+  const dashboards: DashboardsApi = { store: dashboardStore, models: () => listModels(), query: runDashboardQuery };
+
   const health = new HealthRegistry();
   health.register({ name: 'auth', check: () => auth.healthCheck() });
   health.register({ name: 'blob', check: () => blob.healthCheck() });
@@ -117,6 +147,8 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     reporting,
     health,
     terminology,
+    dashboards,
+    cfg,
     async close() {
       await Promise.allSettled([eventing.close(), store.close(), internal.close()]);
     },

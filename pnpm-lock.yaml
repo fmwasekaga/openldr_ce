@@ -350,6 +350,9 @@ importers:
       '@openldr/core':
         specifier: workspace:*
         version: link:../core
+      '@openldr/dashboards':
+        specifier: workspace:*
+        version: link:../dashboards
       '@openldr/db':
         specifier: workspace:*
         version: link:../db
@@ -478,15 +481,15 @@ importers:
         specifier: workspace:*
         version: link:../reporting
       kysely:
-        specifier: 0.27.5
-        version: 0.27.5
+        specifier: ^0.27.5
+        version: 0.27.6
       zod:
         specifier: 3.24.0
         version: 3.24.0
     devDependencies:
       pg-mem:
         specifier: ^3.0.14
-        version: 3.0.14(kysely@0.27.5)
+        version: 3.0.14(kysely@0.27.6)
       tsup:
         specifier: 8.3.5
         version: 8.3.5(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.4)(typescript@5.7.2)
@@ -3674,10 +3677,6 @@ packages:
   kleur@3.0.3:
     resolution: {integrity: sha512-eTIzlVOSUR+JxdDFepEYcBMtZ9Qqdef+rnzWdRZuMbOywu5tO2w2N7rqjoANZ5k9vywhL6Br1VRjUIgTQx4E8w==}
     engines: {node: '>=6'}
-
-  kysely@0.27.5:
-    resolution: {integrity: sha512-s7hZHcQeSNKpzCkHRm8yA+0JPLjncSWnjb+2TIElwS2JAqYr+Kv3Ess+9KFfJS0C1xcQ1i9NkNHpWwCYpHMWsA==}
-    engines: {node: '>=14.0.0'}
 
   kysely@0.27.6:
     resolution: {integrity: sha512-FIyV/64EkKhJmjgC0g2hygpBv5RNWVPyNCqSAD7eTCv6eFWNIi4PN1UvdSJGicN/o35bnevgis4Y0UDC0qi8jQ==}
@@ -8112,8 +8111,6 @@ snapshots:
 
   kleur@3.0.3: {}
 
-  kysely@0.27.5: {}
-
   kysely@0.27.6: {}
 
   lie@3.3.0:
@@ -8730,7 +8727,7 @@ snapshots:
 
   pg-int8@1.0.1: {}
 
-  pg-mem@3.0.14(kysely@0.27.5):
+  pg-mem@3.0.14(kysely@0.27.6):
     dependencies:
       functional-red-black-tree: 1.0.1
       immutable: 4.3.8
@@ -8740,7 +8737,7 @@ snapshots:
       object-hash: 2.2.0
       pgsql-ast-parser: 12.0.2
     optionalDependencies:
-      kysely: 0.27.5
+      kysely: 0.27.6
 
   pg-pool@3.14.0(pg@8.21.0):
     dependencies:
