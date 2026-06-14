@@ -4,6 +4,8 @@ import { AppShell } from '../shell/AppShell';
 import { useReport } from '../reports/useReport';
 import { ReportView } from '../reports/ReportView';
 import { csvUrl } from '../api';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 
 export function ReportDetail() {
   const { id = '' } = useParams();
@@ -17,15 +19,17 @@ export function ReportDetail() {
   const { loading, error, result } = useReport(id, params);
   return (
     <AppShell title={result ? `Report · ${id}` : 'Report'}>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-        <input className="btn-secondary" type="date" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="from" />
-        <input className="btn-secondary" type="date" value={to} onChange={(e) => setTo(e.target.value)} aria-label="to" />
-        <input className="btn-secondary" placeholder="Facility id" value={facility} onChange={(e) => setFacility(e.target.value)} aria-label="facility" />
-        <a className="btn-primary" href={csvUrl(id, params)}>Export CSV</a>
+      <div className="ui-scope">
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <Input type="date" className="w-auto" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="from" />
+          <Input type="date" className="w-auto" value={to} onChange={(e) => setTo(e.target.value)} aria-label="to" />
+          <Input className="w-48" placeholder="Facility id" value={facility} onChange={(e) => setFacility(e.target.value)} aria-label="facility" />
+          <Button asChild><a href={csvUrl(id, params)}>Export CSV</a></Button>
+        </div>
+        {loading ? <div className="text-sm text-muted-foreground">Loading…</div>
+          : error ? <div className="text-sm text-destructive">{error}</div>
+          : result ? <ReportView result={result} /> : null}
       </div>
-      {loading ? <div className="card">Loading…</div>
-        : error ? <div className="card" style={{ color: 'var(--danger)' }}>{error}</div>
-        : result ? <ReportView result={result} /> : null}
     </AppShell>
   );
 }

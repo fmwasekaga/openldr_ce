@@ -1,23 +1,23 @@
-import type { ReactNode, ComponentType, SVGProps } from 'react';
+import type { ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
+import {
+  LayoutDashboard, FileText, BookOpen, FileInput, Users, ShieldCheck,
+  ChevronLeft, ChevronRight, Sun, Moon, type LucideIcon,
+} from 'lucide-react';
 import { useTheme } from './useTheme';
 import { useSidebar } from './useSidebar';
-import {
-  IconDashboard, IconReports, IconDocs, IconForms, IconUsers, IconAudit,
-  IconChevronLeft, IconChevronRight, IconSun, IconMoon,
-} from './icons';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/cn';
 
-type IconCmp = ComponentType<SVGProps<SVGSVGElement>>;
-
-const NAV: { to: string; label: string; end: boolean; icon: IconCmp }[] = [
-  { to: '/', label: 'Dashboard', end: true, icon: IconDashboard },
-  { to: '/reports', label: 'Reports', end: false, icon: IconReports },
-  { to: '/docs', label: 'Docs', end: false, icon: IconDocs },
+const NAV: { to: string; label: string; end: boolean; icon: LucideIcon }[] = [
+  { to: '/', label: 'Dashboard', end: true, icon: LayoutDashboard },
+  { to: '/reports', label: 'Reports', end: false, icon: FileText },
+  { to: '/docs', label: 'Docs', end: false, icon: BookOpen },
 ];
-const SOON: { label: string; icon: IconCmp }[] = [
-  { label: 'Forms', icon: IconForms },
-  { label: 'Users', icon: IconUsers },
-  { label: 'Audit', icon: IconAudit },
+const SOON: { label: string; icon: LucideIcon }[] = [
+  { label: 'Forms', icon: FileInput },
+  { label: 'Users', icon: Users },
+  { label: 'Audit', icon: ShieldCheck },
 ];
 
 export function AppShell({
@@ -27,58 +27,46 @@ export function AppShell({
 }: {
   title: string;
   children: ReactNode;
-  /** When true, the main area has no padding and fills the viewport height so the
-   *  page can render edge-to-edge (the page owns its own spacing). */
   fullBleed?: boolean;
 }) {
   const [theme, toggleTheme] = useTheme();
   const [collapsed, toggleSidebar] = useSidebar();
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
+    <div className="ui-scope flex min-h-screen">
       <aside
-        style={{
-          width: collapsed ? 56 : 240,
-          background: 'var(--sidebar)',
-          borderRight: '1px solid var(--border)',
-          display: 'flex',
-          flexDirection: 'column',
-          transition: 'width 200ms ease',
-        }}
+        className={cn('flex flex-col border-r border-border transition-[width] duration-200', collapsed ? 'w-14' : 'w-60')}
+        style={{ background: 'var(--sidebar)' }}
       >
-        {/* Header: wordmark + collapse toggle */}
-        <div
-          style={{
-            height: 48,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: collapsed ? 'center' : 'space-between',
-            borderBottom: '1px solid var(--border)',
-            padding: collapsed ? 0 : '0 12px',
-          }}
-        >
-          {!collapsed && <span style={{ fontWeight: 600, color: 'var(--brand)', fontSize: 16 }}>OpenLDR</span>}
-          <button
-            className="icon-btn"
+        <div className={cn('flex h-12 shrink-0 items-center border-b border-border', collapsed ? 'justify-center px-0' : 'justify-between px-3')}>
+          {!collapsed && <span className="font-semibold text-primary">OpenLDR</span>}
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={toggleSidebar}
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
-            {collapsed ? <IconChevronRight /> : <IconChevronLeft />}
-          </button>
+            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          </Button>
         </div>
 
-        {/* Navigation */}
-        <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, padding: 8 }}>
+        <nav className="flex flex-1 flex-col gap-1 p-2">
           {NAV.map(({ to, label, end, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
               end={end}
               title={collapsed ? label : undefined}
-              className={({ isActive }) => `nav-item${isActive ? ' active' : ''}${collapsed ? ' collapsed' : ''}`}
+              className={({ isActive }) =>
+                cn(
+                  'flex h-9 items-center gap-3 rounded-md px-3 text-sm font-medium no-underline transition-colors',
+                  collapsed && 'justify-center px-0',
+                  isActive ? 'bg-accent text-primary' : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                )
+              }
             >
-              <Icon />
+              <Icon className="h-4 w-4 shrink-0" />
               {!collapsed && <span>{label}</span>}
             </NavLink>
           ))}
@@ -87,67 +75,41 @@ export function AppShell({
               key={label}
               aria-disabled
               title={collapsed ? `${label} (coming later)` : 'Coming in a later sub-project'}
-              className={`nav-item disabled${collapsed ? ' collapsed' : ''}`}
+              className={cn('flex h-9 items-center gap-3 rounded-md px-3 text-sm font-medium text-muted-foreground opacity-40', collapsed && 'justify-center px-0')}
             >
-              <Icon />
+              <Icon className="h-4 w-4 shrink-0" />
               {!collapsed && <span>{label}</span>}
             </span>
           ))}
         </nav>
 
-        {/* User / avatar area */}
-        <div style={{ borderTop: '1px solid var(--border)', padding: 8 }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: collapsed ? 0 : 8,
-              justifyContent: collapsed ? 'center' : 'flex-start',
-              padding: collapsed ? 0 : '4px 6px',
-            }}
-            title={collapsed ? 'operator' : undefined}
-          >
-            <span className="avatar">O</span>
+        <div className="border-t border-border p-2">
+          <div className={cn('flex items-center gap-2', collapsed ? 'justify-center' : 'px-1')} title={collapsed ? 'operator' : undefined}>
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">O</span>
             {!collapsed && (
-              <div style={{ minWidth: 0, lineHeight: 1.2 }}>
-                <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>operator</div>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>local</div>
+              <div className="min-w-0 leading-tight">
+                <div className="truncate text-xs font-medium text-foreground">operator</div>
+                <div className="text-[10px] text-muted-foreground">local</div>
               </div>
             )}
           </div>
         </div>
       </aside>
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <header
-          style={{
-            height: 48,
-            borderBottom: '1px solid var(--border)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '0 24px',
-          }}
-        >
-          <span style={{ fontWeight: 500 }}>{title}</span>
-          <button
-            className="icon-btn"
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex h-12 shrink-0 items-center justify-between border-b border-border px-6">
+          <span className="font-medium">{title}</span>
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={toggleTheme}
             aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
             title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
           >
-            {theme === 'dark' ? <IconSun /> : <IconMoon />}
-          </button>
+            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </Button>
         </header>
-        <main
-          style={
-            fullBleed
-              ? { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }
-              : { padding: 24 }
-          }
-        >
-          {children}
-        </main>
+        <main className={fullBleed ? 'flex min-h-0 flex-1 flex-col' : 'p-6'}>{children}</main>
       </div>
     </div>
   );
