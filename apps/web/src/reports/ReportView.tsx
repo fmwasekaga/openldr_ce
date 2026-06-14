@@ -2,29 +2,34 @@ import {
   ResponsiveContainer, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
 } from 'recharts';
 import type { ReportResult } from '../api';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
 const PIE_COLORS = ['#4682B4', '#5A9BD6', '#22c55e', '#f59e0b', '#ef4444', '#898989'];
 
 export function ReportView({ result }: { result: ReportResult }) {
   const { columns, rows } = result;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div className="card" style={{ height: 320 }}>
+    <div className="ui-scope flex flex-col gap-4">
+      <div className="h-80 rounded-lg border border-border p-3">
         <Chart result={result} />
       </div>
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <table>
-          <thead><tr>{columns.map((c) => <th key={c.key}>{c.label}</th>)}</tr></thead>
-          <tbody>
+      <div className="overflow-hidden rounded-lg border border-border">
+        <Table>
+          <TableHeader>
+            <TableRow>{columns.map((c) => <TableHead key={c.key}>{c.label}</TableHead>)}</TableRow>
+          </TableHeader>
+          <TableBody>
             {rows.length === 0 ? (
-              <tr><td colSpan={columns.length} style={{ color: 'var(--text-muted)' }}>No data for the selected filters.</td></tr>
+              <TableRow>
+                <TableCell colSpan={columns.length} className="text-muted-foreground">No data for the selected filters.</TableCell>
+              </TableRow>
             ) : rows.map((r, i) => (
-              <tr key={i}>{columns.map((c) => <td key={c.key}>{format(r[c.key], c.kind)}</td>)}</tr>
+              <TableRow key={i}>{columns.map((c) => <TableCell key={c.key}>{format(r[c.key], c.kind)}</TableCell>)}</TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
-      <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>{result.meta.rowCount} rows · generated {result.meta.generatedAt}</div>
+      <div className="text-xs text-muted-foreground">{result.meta.rowCount} rows · generated {result.meta.generatedAt}</div>
     </div>
   );
 }
@@ -39,9 +44,9 @@ function Chart({ result }: { result: ReportResult }) {
   const { chart, rows } = result;
   if (chart.type === 'stat') {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', gap: 8 }}>
-        <div style={{ fontSize: 48, fontWeight: 600, color: 'var(--brand)' }}>{chart.value}</div>
-        <div style={{ color: 'var(--text-muted)' }}>{chart.label}</div>
+      <div className="flex h-full flex-col justify-center gap-2">
+        <div className="text-5xl font-semibold text-primary">{chart.value}</div>
+        <div className="text-muted-foreground">{chart.label}</div>
       </div>
     );
   }
