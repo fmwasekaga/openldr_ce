@@ -1,30 +1,51 @@
 import { z } from 'zod';
 
-export const ConfigSchema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  PORT: z.coerce.number().int().positive().default(3000),
-  LOG_LEVEL: z.string().default('info'),
+export const ConfigSchema = z
+  .object({
+    NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+    PORT: z.coerce.number().int().positive().default(3000),
+    LOG_LEVEL: z.string().default('info'),
 
-  AUTH_ADAPTER: z.enum(['keycloak']).default('keycloak'),
-  BLOB_ADAPTER: z.enum(['minio']).default('minio'),
-  EVENTING_ADAPTER: z.enum(['pg']).default('pg'),
-  TARGET_STORE_ADAPTER: z.enum(['pg']).default('pg'),
+    AUTH_ADAPTER: z.enum(['keycloak']).default('keycloak'),
+    BLOB_ADAPTER: z.enum(['minio']).default('minio'),
+    EVENTING_ADAPTER: z.enum(['pg']).default('pg'),
+    TARGET_STORE_ADAPTER: z.enum(['pg', 'mssql']).default('pg'),
 
-  // Internal operational Postgres (always pg) — used by the event bus.
-  INTERNAL_DATABASE_URL: z.string().url(),
-  // External analytics / target store.
-  TARGET_DATABASE_URL: z.string().url(),
+    // Internal operational Postgres (always pg) — used by the event bus, audit, users, plugins.
+    INTERNAL_DATABASE_URL: z.string().url(),
+    // External analytics / target store (required when TARGET_STORE_ADAPTER=pg).
+    TARGET_DATABASE_URL: z.string().url().optional(),
 
-  // S3 / blob storage.
-  S3_ENDPOINT: z.string().url(),
-  S3_REGION: z.string().default('us-east-1'),
-  S3_ACCESS_KEY_ID: z.string().min(1),
-  S3_SECRET_ACCESS_KEY: z.string().min(1),
-  S3_BUCKET: z.string().min(1),
-  S3_FORCE_PATH_STYLE: z.coerce.boolean().default(true),
+    // SQL Server target store (required when TARGET_STORE_ADAPTER=mssql).
+    MSSQL_HOST: z.string().min(1).optional(),
+    MSSQL_PORT: z.coerce.number().int().positive().default(1433),
+    MSSQL_DATABASE: z.string().min(1).optional(),
+    MSSQL_USER: z.string().min(1).optional(),
+    MSSQL_PASSWORD: z.string().min(1).optional(),
+    MSSQL_ENCRYPT: z.coerce.boolean().default(false),
+    MSSQL_TRUST_SERVER_CERT: z.coerce.boolean().default(true),
 
-  // OIDC issuer (Keycloak realm base URL).
-  OIDC_ISSUER_URL: z.string().url(),
-});
+    // S3 / blob storage.
+    S3_ENDPOINT: z.string().url(),
+    S3_REGION: z.string().default('us-east-1'),
+    S3_ACCESS_KEY_ID: z.string().min(1),
+    S3_SECRET_ACCESS_KEY: z.string().min(1),
+    S3_BUCKET: z.string().min(1),
+    S3_FORCE_PATH_STYLE: z.coerce.boolean().default(true),
+
+    // OIDC issuer (Keycloak realm base URL).
+    OIDC_ISSUER_URL: z.string().url(),
+  })
+  .superRefine((cfg, ctx) => {
+    if (cfg.TARGET_STORE_ADAPTER === 'mssql') {
+      for (const key of ['MSSQL_HOST', 'MSSQL_DATABASE', 'MSSQL_USER', 'MSSQL_PASSWORD'] as const) {
+        if (!cfg[key]) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: [key], message: `${key} is required when TARGET_STORE_ADAPTER=mssql` });
+        }
+      }
+    } else if (!cfg.TARGET_DATABASE_URL) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['TARGET_DATABASE_URL'], message: 'TARGET_DATABASE_URL is required when TARGET_STORE_ADAPTER=pg' });
+    }
+  });
 
 export type Config = z.infer<typeof ConfigSchema>;
