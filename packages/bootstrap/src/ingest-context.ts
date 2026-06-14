@@ -32,6 +32,7 @@ import {
   type PluginRuntime,
 } from '@openldr/plugins';
 import { createAuditStore, safeRecord } from '@openldr/audit';
+import type { EventingPort } from '@openldr/ports';
 import { selectTargetStore } from './target-store';
 
 export interface IngestContext {
@@ -40,6 +41,7 @@ export interface IngestContext {
   startWorker(): { stop(): Promise<void> };
   batches: BatchStore;
   plugins: PluginRuntime;
+  eventing: EventingPort;
   republish(batch: { batch_id: string; blob_key: string; source: string | null; converter: string }): Promise<void>;
   queueStats(): Promise<Record<string, number>>;
   migrateAll(): Promise<void>;
@@ -75,7 +77,14 @@ export async function createIngestContext(cfg: Config): Promise<IngestContext> {
   const resolver = chainResolvers(registryResolver(converters), pluginResolver);
 
   await eventing.subscribe('ingest.received', (event) =>
-    handleIngestEvent({ blob, persist, resolver, batches, logger, audit: (e) => safeRecord(audit, logger, e) }, event),
+    handleIngestEvent(
+      {
+        blob, persist, resolver, batches, logger,
+        audit: (e) => safeRecord(audit, logger, e),
+        onBatchDone: (info) => eventing.publish({ type: 'ingest.batch.done', payload: info }),
+      },
+      event,
+    ),
   );
 
   const internalMigrator = createMigrator(internal.db, internalMigrations);
@@ -86,6 +95,7 @@ export async function createIngestContext(cfg: Config): Promise<IngestContext> {
     drain: () => eventing.drain(),
     startWorker: () => eventing.startWorker(),
     batches,
+    eventing,
     plugins: {
       ...plugins,
       async install(wasm: Uint8Array, rawManifest: unknown) {
