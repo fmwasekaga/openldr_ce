@@ -3,6 +3,7 @@ import { acceptPayload } from './accept';
 import { handleIngestEvent } from './handle';
 import { defaultConverters } from './default-converters';
 import { registryResolver } from './resolver';
+import { ConverterRegistry } from './converter';
 import type { BatchStore } from './batch-store';
 
 const logger = { info: vi.fn(), error: vi.fn() } as never;
@@ -45,5 +46,60 @@ describe('handleIngestEvent', () => {
     const d = deps();
     await expect(handleIngestEvent(d, { type: 'ingest.received', payload: { batchId: 'b1', blobKey: 'k', source: 'test', converter: 'nope' } })).rejects.toThrow();
     expect(d.batches.markFailed).toHaveBeenCalled();
+  });
+});
+
+describe('config threading', () => {
+  it('threads config from acceptPayload through to the converter ctx', async () => {
+    let seenConfig: Record<string, string> | undefined;
+
+    const registry = new ConverterRegistry();
+    registry.register({
+      id: 'rec',
+      version: '1',
+      async convert(_raw: Uint8Array, ctx: { config?: Record<string, string> }) {
+        seenConfig = ctx.config;
+        return [];
+      },
+    });
+    const resolver = registryResolver(registry);
+
+    const events: Array<{ type: string; payload: unknown }> = [];
+    const blob = {
+      put: vi.fn(async () => {}),
+      get: vi.fn(async () => new Uint8Array()),
+      exists: vi.fn(),
+      presign: vi.fn(),
+      healthCheck: vi.fn(),
+    };
+    const eventing = {
+      publish: vi.fn(async (e: { type: string; payload: unknown }) => { events.push(e); }),
+      subscribe: vi.fn(),
+      healthCheck: vi.fn(),
+    };
+    const batches = {
+      create: vi.fn(async () => {}),
+      markProcessing: vi.fn(async () => {}),
+      markDone: vi.fn(async () => {}),
+      markFailed: vi.fn(async () => {}),
+    } as unknown as BatchStore;
+
+    const data = new TextEncoder().encode('{}');
+    await acceptPayload(
+      { blob: blob as never, eventing: eventing as never, batches, logger },
+      { data, source: 's', converter: 'rec', config: { mapping: '{"k":"v"}' } },
+    );
+
+    // drain: handle all published ingest.received events
+    for (const e of events) {
+      if (e.type === 'ingest.received') {
+        await handleIngestEvent(
+          { blob: blob as never, persist: vi.fn(async () => ({ saved: true, flattened: 'written' as const })), resolver, batches, logger },
+          e as never,
+        );
+      }
+    }
+
+    expect(seenConfig).toEqual({ mapping: '{"k":"v"}' });
   });
 });

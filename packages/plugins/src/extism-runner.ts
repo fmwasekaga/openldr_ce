@@ -28,6 +28,7 @@ export function createExtismRunner(): PluginRunner {
         {
           useWasi: opts.wasi,
           runInWorker: false,
+          config: opts.config ?? {},
           functions: {
             'extism:host/user': {
               log(cp: CurrentPlugin, level: bigint, msg: bigint) {

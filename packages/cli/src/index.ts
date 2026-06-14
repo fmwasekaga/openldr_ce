@@ -157,8 +157,9 @@ program
   .option('--source <s>', 'source system identifier', 'cli')
   .option('--converter <id>', 'converter id', 'fhir-bundle')
   .option('--plugin <id>', 'plugin/converter id (alias of --converter)')
+  .option('--config <file>', 'plugin config JSON (e.g. tabular column mapping)')
   .option('--json', 'emit JSON', false)
-  .action(async (file: string, opts: { source: string; converter: string; plugin?: string; json: boolean }) => {
+  .action(async (file: string, opts: { source: string; converter: string; plugin?: string; config?: string; json: boolean }) => {
     if (opts.plugin) opts.converter = opts.plugin;
     try {
       process.exitCode = await runIngest(file, opts);

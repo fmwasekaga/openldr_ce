@@ -1,0 +1,18 @@
+[package]
+name = "hl7v2"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+description = "HL7 v2 (ORU/ORM) -> FHIR R4 ingestion plugin"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+openldr-plugin-sdk = { path = "../openldr-plugin-sdk" }
+serde_json = "1"
+
+# extism-pdk links wasm host imports that don't exist natively; restrict it to the wasm
+# target so `cargo test` (native) builds the pure parser/mapping without it.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+extism-pdk = "1"

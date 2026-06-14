@@ -11,10 +11,11 @@ export interface IngestBatch {
   resource_count: number;
   attempts: number;
   last_error: string | null;
+  config: Record<string, string> | null;
 }
 
 export interface BatchStore {
-  create(b: { batchId: string; source: string; blobKey: string; contentType?: string; converter: string }): Promise<void>;
+  create(b: { batchId: string; source: string; blobKey: string; contentType?: string; converter: string; config?: Record<string, string> }): Promise<void>;
   markProcessing(batchId: string): Promise<void>;
   markDone(batchId: string, resourceCount: number): Promise<void>;
   markFailed(batchId: string, error: string): Promise<void>;
@@ -24,14 +25,15 @@ export interface BatchStore {
   provenanceGaps(): Promise<{ resource_type: string; id: string }[]>;
 }
 
-const COLUMNS = ['batch_id', 'source', 'blob_key', 'content_type', 'converter', 'status', 'resource_count', 'attempts', 'last_error'] as const;
+const COLUMNS = ['batch_id', 'source', 'blob_key', 'content_type', 'converter', 'status', 'resource_count', 'attempts', 'last_error', 'config'] as const;
 
 export function createBatchStore(db: Kysely<InternalSchema>): BatchStore {
   return {
     async create(b) {
       await db
         .insertInto('ingest_batches')
-        .values({ batch_id: b.batchId, source: b.source, blob_key: b.blobKey, content_type: b.contentType ?? null, converter: b.converter, status: 'received' })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .values({ batch_id: b.batchId, source: b.source, blob_key: b.blobKey, content_type: b.contentType ?? null, converter: b.converter, status: 'received', config: (b.config ? JSON.stringify(b.config) : null) as any })
         .execute();
     },
     async markProcessing(batchId) {

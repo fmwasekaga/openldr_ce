@@ -1,0 +1,3 @@
+PatientID,Sex,DOB,SpecimenNo,Specimen,CollectionDate,LocationType,Organism,OrganismCode,AMP,CIP,GEN
+T001,F,1990-04-12,TS001,BLOOD,2026-01-10,I,Escherichia coli,eco,R,S,S
+T002,M,1985-11-30,TS002,URINE,2026-01-11,O,Klebsiella pneumoniae,kpn,R,I,S

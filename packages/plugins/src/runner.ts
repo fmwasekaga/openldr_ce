@@ -9,6 +9,7 @@ export interface RunOptions {
   memoryMb: number;
   timeoutMs: number;
   host: RunnerHostFns;
+  config?: Record<string, string>;
 }
 
 /**

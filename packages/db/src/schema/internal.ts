@@ -38,6 +38,7 @@ export interface IngestBatchesTable {
   resource_count: Generated<number>;
   attempts: Generated<number>;
   last_error: string | null;
+  config: JSONColumnType<Record<string, string>> | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
