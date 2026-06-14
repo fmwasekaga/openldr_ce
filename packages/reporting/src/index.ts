@@ -4,3 +4,5 @@ export * from './catalog';
 export * from './eventsource';
 export * from './amr/types';
 export * from './amr/isolates';
+export * from './amr/aggregate';
+export * from './amr/glass';
