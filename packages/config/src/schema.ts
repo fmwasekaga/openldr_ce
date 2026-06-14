@@ -30,6 +30,10 @@ export const ConfigSchema = z
     DHIS2_BASE_URL: z.string().url().optional(),
     DHIS2_USERNAME: z.string().min(1).optional(),
     DHIS2_PASSWORD: z.string().min(1).optional(),
+    DHIS2_SYNC_ENABLED: z
+      .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
+      .default(true)
+      .transform((v) => v === true || v === 'true' || v === '1'),
 
     // S3 / blob storage.
     S3_ENDPOINT: z.string().url(),

@@ -65,3 +65,12 @@ describe('config reporting-target (dhis2)', () => {
     expect(() => loadConfig({ ...basePg, REPORTING_TARGET_ADAPTER: 'dhis2' } as never)).toThrow(/DHIS2_BASE_URL/);
   });
 });
+
+describe('config DHIS2_SYNC_ENABLED', () => {
+  it('defaults to true', () => {
+    expect(loadConfig({ ...basePg } as never).DHIS2_SYNC_ENABLED).toBe(true);
+  });
+  it('parses false', () => {
+    expect(loadConfig({ ...basePg, DHIS2_SYNC_ENABLED: 'false' } as never).DHIS2_SYNC_ENABLED).toBe(false);
+  });
+});
