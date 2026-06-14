@@ -102,6 +102,20 @@ export interface ConceptMapElementsTable {
   equivalence: string | null;
 }
 
+export interface Dhis2OrgUnitMapTable {
+  facility_id: string;
+  orgunit_id: string;
+  orgunit_name: string | null;
+}
+
+export interface Dhis2MappingsTable {
+  id: string;
+  name: string;
+  definition: JSONColumnType<Record<string, unknown>>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface InternalSchema {
   fhir_resources: FhirResourcesTable;
   outbox_events: OutboxEventsTable;
@@ -112,4 +126,6 @@ export interface InternalSchema {
   terminology_concepts: TerminologyConceptsTable;
   terminology_systems: TerminologySystemsTable;
   concept_map_elements: ConceptMapElementsTable;
+  dhis2_orgunit_map: Dhis2OrgUnitMapTable;
+  dhis2_mappings: Dhis2MappingsTable;
 }

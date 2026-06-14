@@ -166,6 +166,25 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.19.21)(jsdom@25.0.1)
 
+  packages/adapter-dhis2:
+    dependencies:
+      '@openldr/core':
+        specifier: workspace:*
+        version: link:../core
+      '@openldr/ports':
+        specifier: workspace:*
+        version: link:../ports
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.19.21
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.19.21)(jsdom@25.0.1)
+
   packages/adapter-event-bus:
     dependencies:
       '@openldr/core':
@@ -262,6 +281,9 @@ importers:
       '@openldr/adapter-db-store':
         specifier: workspace:*
         version: link:../adapter-db-store
+      '@openldr/adapter-dhis2':
+        specifier: workspace:*
+        version: link:../adapter-dhis2
       '@openldr/adapter-event-bus':
         specifier: workspace:*
         version: link:../adapter-event-bus
@@ -283,6 +305,9 @@ importers:
       '@openldr/db':
         specifier: workspace:*
         version: link:../db
+      '@openldr/dhis2':
+        specifier: workspace:*
+        version: link:../dhis2
       '@openldr/ingest':
         specifier: workspace:*
         version: link:../ingest
@@ -326,6 +351,9 @@ importers:
       '@openldr/db':
         specifier: workspace:*
         version: link:../db
+      '@openldr/dhis2':
+        specifier: workspace:*
+        version: link:../dhis2
       '@openldr/fhir':
         specifier: workspace:*
         version: link:../fhir
@@ -411,6 +439,25 @@ importers:
       '@types/pg':
         specifier: ^8.11.10
         version: 8.20.0
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.19.21)(jsdom@25.0.1)
+
+  packages/dhis2:
+    dependencies:
+      '@openldr/core':
+        specifier: workspace:*
+        version: link:../core
+      '@openldr/ports':
+        specifier: workspace:*
+        version: link:../ports
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.19.21
       typescript:
         specifier: ^5.7.2
         version: 5.9.3

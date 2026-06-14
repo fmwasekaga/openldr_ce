@@ -10,6 +10,7 @@ export const ConfigSchema = z
     BLOB_ADAPTER: z.enum(['minio']).default('minio'),
     EVENTING_ADAPTER: z.enum(['pg']).default('pg'),
     TARGET_STORE_ADAPTER: z.enum(['pg', 'mssql']).default('pg'),
+    REPORTING_TARGET_ADAPTER: z.enum(['none', 'dhis2']).default('none'),
 
     // Internal operational Postgres (always pg) — used by the event bus, audit, users, plugins.
     INTERNAL_DATABASE_URL: z.string().url(),
@@ -24,6 +25,11 @@ export const ConfigSchema = z
     MSSQL_PASSWORD: z.string().min(1).optional(),
     MSSQL_ENCRYPT: z.coerce.boolean().default(false),
     MSSQL_TRUST_SERVER_CERT: z.coerce.boolean().default(true),
+
+    // DHIS2 reporting target (required when REPORTING_TARGET_ADAPTER=dhis2).
+    DHIS2_BASE_URL: z.string().url().optional(),
+    DHIS2_USERNAME: z.string().min(1).optional(),
+    DHIS2_PASSWORD: z.string().min(1).optional(),
 
     // S3 / blob storage.
     S3_ENDPOINT: z.string().url(),
@@ -45,6 +51,11 @@ export const ConfigSchema = z
       }
     } else if (!cfg.TARGET_DATABASE_URL) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['TARGET_DATABASE_URL'], message: 'TARGET_DATABASE_URL is required when TARGET_STORE_ADAPTER=pg' });
+    }
+    if (cfg.REPORTING_TARGET_ADAPTER === 'dhis2') {
+      for (const key of ['DHIS2_BASE_URL', 'DHIS2_USERNAME', 'DHIS2_PASSWORD'] as const) {
+        if (!cfg[key]) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [key], message: `${key} is required when REPORTING_TARGET_ADAPTER=dhis2` });
+      }
     }
   });
 
