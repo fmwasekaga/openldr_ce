@@ -74,3 +74,26 @@ describe('config DHIS2_SYNC_ENABLED', () => {
     expect(loadConfig({ ...basePg, DHIS2_SYNC_ENABLED: 'false' } as never).DHIS2_SYNC_ENABLED).toBe(false);
   });
 });
+
+describe('config S3_FORCE_PATH_STYLE', () => {
+  it('defaults to true', () => {
+    expect(loadConfig({ ...basePg } as never).S3_FORCE_PATH_STYLE).toBe(true);
+  });
+  it('parses the string "false" as false (not coerced to true)', () => {
+    expect(loadConfig({ ...basePg, S3_FORCE_PATH_STYLE: 'false' } as never).S3_FORCE_PATH_STYLE).toBe(false);
+  });
+  it('parses the string "0" as false', () => {
+    expect(loadConfig({ ...basePg, S3_FORCE_PATH_STYLE: '0' } as never).S3_FORCE_PATH_STYLE).toBe(false);
+  });
+});
+
+describe('config MSSQL boolean flags', () => {
+  it('parses MSSQL_ENCRYPT="true" as true (default false)', () => {
+    expect(loadConfig({ ...basePg } as never).MSSQL_ENCRYPT).toBe(false);
+    expect(loadConfig({ ...basePg, MSSQL_ENCRYPT: 'true' } as never).MSSQL_ENCRYPT).toBe(true);
+  });
+  it('parses MSSQL_TRUST_SERVER_CERT="false" as false (default true)', () => {
+    expect(loadConfig({ ...basePg } as never).MSSQL_TRUST_SERVER_CERT).toBe(true);
+    expect(loadConfig({ ...basePg, MSSQL_TRUST_SERVER_CERT: 'false' } as never).MSSQL_TRUST_SERVER_CERT).toBe(false);
+  });
+});

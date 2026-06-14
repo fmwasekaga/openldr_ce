@@ -1,5 +1,14 @@
 import { z } from 'zod';
 
+// Env vars arrive as strings, so `z.coerce.boolean()` (JS `Boolean(value)`) treats
+// any non-empty string — including 'false' and '0' — as `true`. Parse string booleans
+// explicitly instead. Mirrors the DHIS2_SYNC_ENABLED pattern below.
+const envBoolean = (defaultValue: boolean) =>
+  z
+    .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
+    .default(defaultValue)
+    .transform((v) => v === true || v === 'true' || v === '1');
+
 export const ConfigSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -23,8 +32,8 @@ export const ConfigSchema = z
     MSSQL_DATABASE: z.string().min(1).optional(),
     MSSQL_USER: z.string().min(1).optional(),
     MSSQL_PASSWORD: z.string().min(1).optional(),
-    MSSQL_ENCRYPT: z.coerce.boolean().default(false),
-    MSSQL_TRUST_SERVER_CERT: z.coerce.boolean().default(true),
+    MSSQL_ENCRYPT: envBoolean(false),
+    MSSQL_TRUST_SERVER_CERT: envBoolean(true),
 
     // DHIS2 reporting target (required when REPORTING_TARGET_ADAPTER=dhis2).
     DHIS2_BASE_URL: z.string().url().optional(),
@@ -41,7 +50,7 @@ export const ConfigSchema = z
     S3_ACCESS_KEY_ID: z.string().min(1),
     S3_SECRET_ACCESS_KEY: z.string().min(1),
     S3_BUCKET: z.string().min(1),
-    S3_FORCE_PATH_STYLE: z.coerce.boolean().default(true),
+    S3_FORCE_PATH_STYLE: envBoolean(true),
 
     // OIDC issuer (Keycloak realm base URL).
     OIDC_ISSUER_URL: z.string().url(),
