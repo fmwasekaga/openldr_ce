@@ -3,3 +3,4 @@ export * from './auth';
 export * from './blob';
 export * from './eventing';
 export * from './target-store';
+export * from './reporting-target';
