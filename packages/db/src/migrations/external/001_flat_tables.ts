@@ -4,12 +4,15 @@ import { textType, keyType, floatType, timestampType, nowExpr } from './dialect'
 
 function withCommon(b: CreateTableBuilder<string, never>, engine: TargetEngine): CreateTableBuilder<string, never> {
   const text = sql.raw(textType(engine));
-  return b
+  const built = b
     .addColumn('source_system', text)
     .addColumn('plugin_id', text)
     .addColumn('plugin_version', text)
     .addColumn('batch_id', text)
     .addColumn('created_at', sql.raw(timestampType(engine)), (c) => c.notNull().defaultTo(nowExpr(engine)));
+  // SQL Server has no CREATE TABLE ... IF NOT EXISTS; the Kysely migrator already guarantees
+  // each migration runs once, so ifNotExists is only a Postgres convenience.
+  return engine === 'postgres' ? built.ifNotExists() : built;
 }
 
 export async function up(db: Kysely<unknown>, engine: TargetEngine): Promise<void> {
@@ -18,8 +21,7 @@ export async function up(db: Kysely<unknown>, engine: TargetEngine): Promise<voi
   const float = sql.raw(floatType(engine));
 
   await withCommon(
-    db.schema.createTable('patients').ifNotExists()
-      .addColumn('id', key, (c) => c.primaryKey())
+    db.schema.createTable('patients').addColumn('id', key, (c) => c.primaryKey())
       .addColumn('identifier_system', text)
       .addColumn('identifier_value', text)
       .addColumn('family_name', text)
@@ -31,8 +33,7 @@ export async function up(db: Kysely<unknown>, engine: TargetEngine): Promise<voi
   ).execute();
 
   await withCommon(
-    db.schema.createTable('specimens').ifNotExists()
-      .addColumn('id', key, (c) => c.primaryKey())
+    db.schema.createTable('specimens').addColumn('id', key, (c) => c.primaryKey())
       .addColumn('identifier_value', text)
       .addColumn('accession', text)
       .addColumn('status', text)
@@ -45,8 +46,7 @@ export async function up(db: Kysely<unknown>, engine: TargetEngine): Promise<voi
   ).execute();
 
   await withCommon(
-    db.schema.createTable('service_requests').ifNotExists()
-      .addColumn('id', key, (c) => c.primaryKey())
+    db.schema.createTable('service_requests').addColumn('id', key, (c) => c.primaryKey())
       .addColumn('identifier_value', text)
       .addColumn('status', text)
       .addColumn('intent', text)
@@ -59,8 +59,7 @@ export async function up(db: Kysely<unknown>, engine: TargetEngine): Promise<voi
   ).execute();
 
   await withCommon(
-    db.schema.createTable('diagnostic_reports').ifNotExists()
-      .addColumn('id', key, (c) => c.primaryKey())
+    db.schema.createTable('diagnostic_reports').addColumn('id', key, (c) => c.primaryKey())
       .addColumn('identifier_value', text)
       .addColumn('status', text)
       .addColumn('code_code', text)
@@ -73,8 +72,7 @@ export async function up(db: Kysely<unknown>, engine: TargetEngine): Promise<voi
   ).execute();
 
   await withCommon(
-    db.schema.createTable('observations').ifNotExists()
-      .addColumn('id', key, (c) => c.primaryKey())
+    db.schema.createTable('observations').addColumn('id', key, (c) => c.primaryKey())
       .addColumn('identifier_value', text)
       .addColumn('status', text)
       .addColumn('code_code', text)
@@ -91,8 +89,7 @@ export async function up(db: Kysely<unknown>, engine: TargetEngine): Promise<voi
   ).execute();
 
   await withCommon(
-    db.schema.createTable('organizations').ifNotExists()
-      .addColumn('id', key, (c) => c.primaryKey())
+    db.schema.createTable('organizations').addColumn('id', key, (c) => c.primaryKey())
       .addColumn('identifier_value', text)
       .addColumn('name', text)
       .addColumn('type_text', text)
@@ -101,8 +98,7 @@ export async function up(db: Kysely<unknown>, engine: TargetEngine): Promise<voi
   ).execute();
 
   await withCommon(
-    db.schema.createTable('locations').ifNotExists()
-      .addColumn('id', key, (c) => c.primaryKey())
+    db.schema.createTable('locations').addColumn('id', key, (c) => c.primaryKey())
       .addColumn('identifier_value', text)
       .addColumn('status', text)
       .addColumn('name', text)
