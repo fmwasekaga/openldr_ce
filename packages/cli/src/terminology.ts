@@ -33,10 +33,10 @@ export async function runTerminologyValidate(opts: { system?: string; code: stri
   } finally { await ctx.close(); }
 }
 
-export async function runTerminologyExpand(url: string, opts: { filter?: string; count?: string; offset?: string; json: boolean }): Promise<number> {
+export async function runTerminologyExpand(url: string, opts: { count?: string; offset?: string; json: boolean }): Promise<number> {
   const ctx = await createTerminologyContext(loadConfig());
   try {
-    const vs = await ctx.ops.expand(url, { filter: opts.filter, count: opts.count ? Number(opts.count) : undefined, offset: opts.offset ? Number(opts.offset) : undefined });
+    const vs = await ctx.ops.expand(url, { count: opts.count ? Number(opts.count) : undefined, offset: opts.offset ? Number(opts.offset) : undefined });
     out(opts.json, vs, `${vs.expansion?.total ?? 0} total; ${(vs.expansion?.contains ?? []).map((c) => c.code).join(', ')}`); return 0;
   } catch (err) { process.stderr.write(`expand failed: ${errorMessage(err)}\n`); return 1; }
   finally { await ctx.close(); }

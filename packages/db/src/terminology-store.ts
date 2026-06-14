@@ -115,6 +115,8 @@ export function createTerminologyStore(db: Kysely<InternalSchema>, fhirStore: Fh
     },
     async upsertMapElements(rows) {
       if (rows.length === 0) return;
+      const mapUrls = [...new Set(rows.map((r) => r.mapUrl))];
+      await db.deleteFrom('concept_map_elements').where('map_url', 'in', mapUrls).execute();
       await db
         .insertInto('concept_map_elements')
         .values(rows.map((r) => ({ map_url: r.mapUrl, source_system: r.sourceSystem, source_code: r.sourceCode, target_system: r.targetSystem, target_code: r.targetCode, equivalence: r.equivalence })))

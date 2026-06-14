@@ -6,7 +6,7 @@ import type { ConceptRecord, MapElement } from '@openldr/db';
 export interface LookupResult { found: boolean; system: string; code: string; display: string | null; properties: Record<string, unknown> | null }
 export interface ValidateResult { result: boolean; message: string }
 export interface TranslateResult { result: boolean; matches: MapElement[] }
-export interface ExpandOptions { count?: number; offset?: number; filter?: string }
+export interface ExpandOptions { count?: number; offset?: number }
 
 export class TerminologyError extends Error {
   constructor(message: string, public readonly kind: 'not-found' | 'invalid') { super(message); this.name = 'TerminologyError'; }

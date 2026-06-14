@@ -24,10 +24,10 @@ export function registerTerminologyRoutes(app: FastifyInstance<any, any, any, an
   });
 
   app.get('/api/terminology/ValueSet/$expand', async (req, reply) => {
-    const { url, filter, count, offset } = req.query as { url?: string; filter?: string; count?: string; offset?: string };
+    const { url, count, offset } = req.query as { url?: string; count?: string; offset?: string };
     if (!url) { reply.code(400); return { error: 'url required' }; }
     try {
-      return await ops.expand(url, { filter, count: count ? Number(count) : undefined, offset: offset ? Number(offset) : undefined });
+      return await ops.expand(url, { count: count ? Number(count) : undefined, offset: offset ? Number(offset) : undefined });
     } catch (err) { return mapErr(err, reply); }
   });
 

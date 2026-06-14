@@ -123,8 +123,8 @@ term.command('lookup <system> <code>').option('--json', 'emit JSON', false)
   .action(async (system: string, code: string, opts: { json: boolean }) => { process.exitCode = await runTerminologyLookup(system, code, opts); });
 term.command('validate-code').requiredOption('--code <code>').option('--system <system>').option('--valueset <url>').option('--json', 'emit JSON', false)
   .action(async (opts: { system?: string; code: string; valueset?: string; json: boolean }) => { process.exitCode = await runTerminologyValidate(opts); });
-term.command('expand <valueSetUrl>').option('--filter <p=v>').option('--count <n>').option('--offset <n>').option('--json', 'emit JSON', false)
-  .action(async (url: string, opts: { filter?: string; count?: string; offset?: string; json: boolean }) => { process.exitCode = await runTerminologyExpand(url, opts); });
+term.command('expand <valueSetUrl>').option('--count <n>').option('--offset <n>').option('--json', 'emit JSON', false)
+  .action(async (url: string, opts: { count?: string; offset?: string; json: boolean }) => { process.exitCode = await runTerminologyExpand(url, opts); });
 term.command('translate <conceptMapUrl>').requiredOption('--system <system>').requiredOption('--code <code>').option('--json', 'emit JSON', false)
   .action(async (url: string, opts: { system: string; code: string; json: boolean }) => { process.exitCode = await runTerminologyTranslate(url, opts); });
 
