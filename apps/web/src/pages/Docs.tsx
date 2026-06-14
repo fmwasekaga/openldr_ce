@@ -5,6 +5,7 @@ import { useDocLocale } from '../docs/useDocLocale';
 import { list, resolve, LOCALES, type Locale } from '../docs/registry';
 import { buildIndex, searchDocs } from '../docs/search';
 import { DocMarkdown } from '../docs/DocMarkdown';
+import { Lightbox, type LightboxImage } from '../docs/Lightbox';
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from '@/components/ui/select';
@@ -13,6 +14,7 @@ export function Docs() {
   const { slug } = useParams();
   const [locale, setLocale] = useDocLocale();
   const [query, setQuery] = useState('');
+  const [lightbox, setLightbox] = useState<LightboxImage | null>(null);
   const sections = useMemo(() => list(locale), [locale]);
   const index = useMemo(() => buildIndex(sections), [sections]);
   const hits = useMemo(() => searchDocs(index, query), [index, query]);
@@ -76,12 +78,13 @@ export function Docs() {
                 {section.localeUsed !== locale && (
                   <p className="mb-3 text-xs text-muted-foreground">Shown in English — not yet translated.</p>
                 )}
-                <div className="doc-content"><DocMarkdown content={section.content} /></div>
+                <div className="doc-content"><DocMarkdown content={section.content} onImageClick={setLightbox} /></div>
               </>
             )}
           </div>
         </section>
       </div>
+      <Lightbox image={lightbox} onClose={() => setLightbox(null)} />
     </AppShell>
   );
 }
