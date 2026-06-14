@@ -22,6 +22,7 @@ export default defineConfig({
   projects: [
     { name: 'smoke', testDir: 'tests' },
     { name: 'capture', testDir: 'capture' },
+    { name: 'docs-capture', testDir: 'capture-docs' },
   ],
   webServer: {
     command: 'node apps/server/dist/index.js',
