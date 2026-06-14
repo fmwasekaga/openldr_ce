@@ -39,7 +39,7 @@ export async function createDbContext(cfg: Config): Promise<DbContext> {
   const externalDb = externalStore.db as unknown as Kysely<ExternalSchema>;
 
   const fhirStore = createFhirStore(internal.db);
-  const flatWriter = createFlatWriter(externalDb);
+  const flatWriter = createFlatWriter(externalDb, 'postgres');
   const internalMigrator = createMigrator(internal.db, internalMigrations);
   const externalMigrator = createMigrator(externalDb, externalMigrations('postgres'));
 

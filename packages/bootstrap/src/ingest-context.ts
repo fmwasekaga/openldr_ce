@@ -62,7 +62,7 @@ export async function createIngestContext(cfg: Config): Promise<IngestContext> {
   const eventing = createEventBus({ url: cfg.INTERNAL_DATABASE_URL });
 
   const fhirStore = createFhirStore(internal.db);
-  const flatWriter = createFlatWriter(externalDb);
+  const flatWriter = createFlatWriter(externalDb, 'postgres');
   const persist = (resource: unknown, provenance: Provenance) => persistResource({ fhirStore, flatWriter, logger }, resource, provenance);
   const converters = defaultConverters();
   const batches = createBatchStore(internal.db);
