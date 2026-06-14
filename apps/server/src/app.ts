@@ -6,6 +6,7 @@ import fastifyStatic from '@fastify/static';
 import type { AppContext } from '@openldr/bootstrap';
 import { registerReportRoutes } from './reports-routes';
 import { registerTerminologyRoutes } from './terminology-routes';
+import { registerDashboardRoutes } from './dashboards-routes';
 
 export function buildApp(ctx: AppContext) {
   const app = Fastify({ loggerInstance: ctx.logger });
@@ -18,6 +19,7 @@ export function buildApp(ctx: AppContext) {
 
   registerReportRoutes(app, ctx);
   registerTerminologyRoutes(app, ctx);
+  registerDashboardRoutes(app, ctx);
 
   // Serve the built SPA if present (apps/web/dist). API + health are registered first and win.
   const webDist = resolve(dirname(fileURLToPath(import.meta.url)), '../../web/dist');

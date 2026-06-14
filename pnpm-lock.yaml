@@ -47,6 +47,9 @@ importers:
       '@openldr/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@openldr/dashboards':
+        specifier: workspace:*
+        version: link:../../packages/dashboards
       '@openldr/reporting':
         specifier: workspace:*
         version: link:../../packages/reporting
