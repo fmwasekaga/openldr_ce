@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { loadConfig } from '@openldr/config';
 import { createTerminologyContext } from '@openldr/bootstrap';
-import { errorMessage } from '@openldr/core';
+import { redactError } from './redact-error';
 
 function out(json: boolean, obj: unknown, human: string): void {
   process.stdout.write((json ? JSON.stringify(obj, null, 2) : human) + '\n');
@@ -15,7 +15,7 @@ export async function runTerminologyImport(kind: string, path: string, opts: { a
     else if (kind === 'resource') { const r = await ctx.loaders.resource(JSON.parse(readFileSync(path, 'utf8'))); out(opts.json, r, `imported ${r.resourceUrl} (${r.conceptsLoaded} concepts)`); }
     else { process.stderr.write(`unknown import kind '${kind}' (loinc|amr|resource)\n`); return 1; }
     return 0;
-  } catch (err) { process.stderr.write(`terminology import failed: ${errorMessage(err)}\n`); return 1; }
+  } catch (err) { process.stderr.write(`terminology import failed: ${redactError(err)}\n`); return 1; }
   finally { await ctx.close(); }
 }
 
@@ -38,7 +38,7 @@ export async function runTerminologyExpand(url: string, opts: { count?: string; 
   try {
     const vs = await ctx.ops.expand(url, { count: opts.count ? Number(opts.count) : undefined, offset: opts.offset ? Number(opts.offset) : undefined });
     out(opts.json, vs, `${vs.expansion?.total ?? 0} total; ${(vs.expansion?.contains ?? []).map((c) => c.code).join(', ')}`); return 0;
-  } catch (err) { process.stderr.write(`expand failed: ${errorMessage(err)}\n`); return 1; }
+  } catch (err) { process.stderr.write(`expand failed: ${redactError(err)}\n`); return 1; }
   finally { await ctx.close(); }
 }
 

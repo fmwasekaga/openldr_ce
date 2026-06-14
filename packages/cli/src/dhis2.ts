@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { loadConfig } from '@openldr/config';
 import { createDhis2Context, createAppContext } from '@openldr/bootstrap';
-import { errorMessage } from '@openldr/core';
+import { redactError } from './redact-error';
 import type { AggregateMapping } from '@openldr/dhis2';
 
 function out(json: boolean, obj: unknown, human: string): void {
@@ -15,7 +15,7 @@ export async function runDhis2MapImport(file: string, opts: { json: boolean }): 
     await ctx.mappings.upsert({ id: m.id, name: m.name, definition: m as unknown as Record<string, unknown> });
     out(opts.json, { id: m.id }, `imported mapping ${m.id}`);
     return 0;
-  } catch (err) { process.stderr.write(`map import failed: ${errorMessage(err)}\n`); return 1; }
+  } catch (err) { process.stderr.write(`map import failed: ${redactError(err)}\n`); return 1; }
   finally { await ctx.close(); }
 }
 
@@ -32,7 +32,7 @@ export async function runDhis2OrgUnitImport(file: string, opts: { json: boolean 
     await ctx.orgUnits.upsert(entries.map((e) => ({ facilityId: e.facilityId, orgUnitId: e.orgUnitId, orgUnitName: e.orgUnitName ?? null })));
     out(opts.json, { count: entries.length }, `imported ${entries.length} orgUnit mappings`);
     return 0;
-  } catch (err) { process.stderr.write(`orgunit import failed: ${errorMessage(err)}\n`); return 1; }
+  } catch (err) { process.stderr.write(`orgunit import failed: ${redactError(err)}\n`); return 1; }
   finally { await ctx.close(); }
 }
 
@@ -48,7 +48,7 @@ export async function runDhis2PullMetadata(opts: { json: boolean }): Promise<num
     const m = await ctx.pullMetadata();
     out(opts.json, { dataElements: m.dataElements.length, orgUnits: m.orgUnits.length, categoryOptionCombos: m.categoryOptionCombos.length }, `dataElements=${m.dataElements.length} orgUnits=${m.orgUnits.length} coc=${m.categoryOptionCombos.length}`);
     return 0;
-  } catch (err) { process.stderr.write(`pull-metadata failed: ${errorMessage(err)}\n`); return 1; }
+  } catch (err) { process.stderr.write(`pull-metadata failed: ${redactError(err)}\n`); return 1; }
   finally { await ctx.close(); }
 }
 
@@ -58,7 +58,7 @@ export async function runDhis2Validate(mappingId: string, opts: { json: boolean 
     const problems = await ctx.validate(mappingId);
     out(opts.json, { problems }, problems.length ? problems.join('\n') : 'OK');
     return problems.length ? 1 : 0;
-  } catch (err) { process.stderr.write(`validate failed: ${errorMessage(err)}\n`); return 1; }
+  } catch (err) { process.stderr.write(`validate failed: ${redactError(err)}\n`); return 1; }
   finally { await ctx.close(); }
 }
 
@@ -79,7 +79,7 @@ export async function runDhis2Push(mappingId: string, opts: { period: string; dr
     }
     out(opts.json, { kind: outcome.kind, result: outcome.result, skipped: outcome.build.skipped.length }, `pushed (${outcome.kind}): status=${outcome.result?.status} imported=${outcome.result?.imported} updated=${outcome.result?.updated} ignored=${outcome.result?.ignored}`);
     return outcome.result?.status === 'error' ? 1 : 0;
-  } catch (err) { process.stderr.write(`push failed: ${errorMessage(err)}\n`); return 1; }
+  } catch (err) { process.stderr.write(`push failed: ${redactError(err)}\n`); return 1; }
   finally { await ctx.close(); await app.close(); }
 }
 
@@ -90,7 +90,7 @@ export async function runDhis2ScheduleAdd(mappingId: string, opts: { mode: strin
     await ctx.schedules.create({ id, mappingId, mode: opts.mode as 'aggregate' | 'tracker', periodType: opts.periodType as 'monthly' | 'quarterly' | 'yearly', eventDriven: opts.eventDriven });
     out(opts.json, { id }, `created schedule ${id}`);
     return 0;
-  } catch (err) { process.stderr.write(`schedule add failed: ${errorMessage(err)}\n`); return 1; }
+  } catch (err) { process.stderr.write(`schedule add failed: ${redactError(err)}\n`); return 1; }
   finally { await ctx.close(); }
 }
 
