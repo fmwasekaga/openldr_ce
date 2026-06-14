@@ -20,7 +20,17 @@ const SOON: { label: string; icon: IconCmp }[] = [
   { label: 'Audit', icon: IconAudit },
 ];
 
-export function AppShell({ title, children }: { title: string; children: ReactNode }) {
+export function AppShell({
+  title,
+  children,
+  fullBleed = false,
+}: {
+  title: string;
+  children: ReactNode;
+  /** When true, the main area has no padding and fills the viewport height so the
+   *  page can render edge-to-edge (the page owns its own spacing). */
+  fullBleed?: boolean;
+}) {
   const [theme, toggleTheme] = useTheme();
   const [collapsed, toggleSidebar] = useSidebar();
 
@@ -129,7 +139,15 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
             {theme === 'dark' ? <IconSun /> : <IconMoon />}
           </button>
         </header>
-        <main style={{ padding: 24 }}>{children}</main>
+        <main
+          style={
+            fullBleed
+              ? { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }
+              : { padding: 24 }
+          }
+        >
+          {children}
+        </main>
       </div>
     </div>
   );
