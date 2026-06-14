@@ -1,0 +1,15 @@
+{
+  "name": "@openldr/terminology",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit", "test": "vitest run", "lint": "echo \"no lint\"" },
+  "dependencies": {
+    "@openldr/core": "workspace:*",
+    "@openldr/db": "workspace:*",
+    "@openldr/fhir": "workspace:*",
+    "csv-parse": "^5.6.0"
+  },
+  "devDependencies": { "@types/node": "^22.10.0", "typescript": "^5.7.2", "vitest": "^2.1.8" }
+}
