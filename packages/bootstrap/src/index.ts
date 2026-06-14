@@ -10,6 +10,7 @@ import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@
 import { createAuditStore, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore } from '@openldr/users';
 import { getReport, reportSummaries, getEventSource, type ReportResult, type ReportSummary } from '@openldr/reporting';
+import { renderReportPdf } from '@openldr/report-pdf';
 import { selectTargetStore } from './target-store';
 import { createOperations, type Operations } from '@openldr/terminology';
 
@@ -24,6 +25,7 @@ export interface ReportingApi {
   list(): ReportSummary[];
   run(id: string, rawParams: unknown): Promise<ReportResult>;
   runEventSource(id: string, window: { from: string; to: string }): Promise<{ rows: Record<string, unknown>[] }>;
+  renderPdf(id: string, rawParams: unknown): Promise<Buffer>;
 }
 
 export interface AppContext {
@@ -58,19 +60,31 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   const audit = createAuditStore(internal.db);
   const users = createUserStore(internal.db);
   const reportingDb = store.db as unknown as Kysely<ExternalSchema>;
+  const runReport = async (id: string, rawParams: unknown): Promise<ReportResult> => {
+    const def = getReport(id);
+    if (!def) throw new ReportNotFoundError(id);
+    const params = def.params.parse(rawParams);
+    const data = await def.run(reportingDb, params);
+    return { ...data, meta: { generatedAt: new Date().toISOString(), rowCount: data.rows.length } };
+  };
   const reporting: ReportingApi = {
     list: () => reportSummaries(),
-    async run(id, rawParams) {
-      const def = getReport(id);
-      if (!def) throw new ReportNotFoundError(id);
-      const params = def.params.parse(rawParams);
-      const data = await def.run(reportingDb, params);
-      return { ...data, meta: { generatedAt: new Date().toISOString(), rowCount: data.rows.length } };
-    },
+    run: runReport,
     async runEventSource(id, window) {
       const src = getEventSource(id);
       if (!src) throw new ReportNotFoundError(id);
       return src.run(reportingDb, window);
+    },
+    async renderPdf(id, rawParams) {
+      const result = await runReport(id, rawParams);
+      const def = getReport(id)!;
+      return renderReportPdf({
+        title: def.name,
+        generatedAt: result.meta.generatedAt,
+        params: (rawParams ?? {}) as Record<string, unknown>,
+        columns: result.columns.map((c) => ({ key: c.key, label: c.label })),
+        rows: result.rows,
+      });
     },
   };
 

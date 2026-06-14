@@ -19,6 +19,7 @@
       "@openldr/ingest": ["packages/ingest/src/index.ts"],
       "@openldr/plugins": ["packages/plugins/src/index.ts"],
       "@openldr/ports": ["packages/ports/src/index.ts"],
+      "@openldr/report-pdf": ["packages/report-pdf/src/index.ts"],
       "@openldr/reporting": ["packages/reporting/src/index.ts"],
       "@openldr/users": ["packages/users/src/index.ts"],
       "@openldr/server": ["apps/server/src/index.ts"]

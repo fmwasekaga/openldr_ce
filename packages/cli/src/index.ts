@@ -8,7 +8,7 @@ import { runDbMigrate, runDbReset, runDbSeed } from './db';
 import { runFormsExtract } from './forms';
 import { runIngest, runPipelineStatus, runPipelineRetry, runPipelineLogs, runQueueStatus, runProvenanceAudit } from './ingest';
 import { runPluginInstall, runPluginList, runPluginTest, runPluginRun, runPluginRemove } from './plugin';
-import { runReportList, runReportRun } from './report';
+import { runReportList, runReportRun, runReportGlassExport } from './report';
 import { runAuditList } from './audit';
 import { runUserList, runUserShow, runUserCreate, runUserSetRole, runUserSetStatus } from './user';
 import { runExport } from './export';
@@ -237,9 +237,15 @@ report
   .option('--param <kv...>', 'parameter as key=value (repeatable)')
   .option('--json', 'emit JSON', false)
   .option('--csv', 'emit CSV', false)
-  .action(async (id: string, opts: { param?: string[]; json: boolean; csv: boolean }) => {
+  .option('--format <fmt>', 'json|csv|pdf')
+  .option('--out <file>', 'output file (pdf)')
+  .action(async (id: string, opts: { param?: string[]; json: boolean; csv: boolean; format?: string; out?: string }) => {
     try { process.exitCode = await runReportRun(id, opts); } catch (err) { process.stderr.write(`report run failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
   });
+report.command('glass-export').description('Export the GLASS-AMR RIS submission file (CSV)')
+  .requiredOption('--country <iso3>', 'ISO3 country code').requiredOption('--year <yyyy>', 'reporting year')
+  .option('--from <date>', 'window start').option('--to <date>', 'window end').option('--out <file>', 'output CSV file').option('--json', 'emit JSON rows', false)
+  .action(async (o: { country: string; year: string; from?: string; to?: string; out?: string; json: boolean }) => { process.exitCode = await runReportGlassExport(o); });
 
 const audit = program.command('audit').description('Append-only audit log');
 audit

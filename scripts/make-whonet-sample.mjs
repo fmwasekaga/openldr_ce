@@ -14,12 +14,12 @@ db.exec(`
   CREATE TABLE isolates (
     patient_id TEXT, sex TEXT, birth_date TEXT,
     spec_num TEXT, spec_type TEXT, spec_date TEXT,
-    organism TEXT, organism_code TEXT,
+    organism TEXT, organism_code TEXT, location_type TEXT,
     ab_AMP TEXT, ab_CIP TEXT, ab_GEN TEXT
   );
 `);
-const insert = db.prepare('INSERT INTO isolates VALUES (?,?,?,?,?,?,?,?,?,?,?)');
-insert.run('P001', 'F', '1990-04-12', 'S001', 'BLOOD', '2026-01-10', 'Escherichia coli', 'eco', 'R', 'S', 'S');
-insert.run('P002', 'M', '1985-11-30', 'S002', 'URINE', '2026-01-11', 'Klebsiella pneumoniae', 'kpn', 'R', 'I', 'S');
+const insert = db.prepare('INSERT INTO isolates VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
+insert.run('P001', 'F', '1990-04-12', 'S001', 'BLOOD', '2026-01-10', 'Escherichia coli', 'eco', 'i', 'R', 'S', 'S');
+insert.run('P002', 'M', '1985-11-30', 'S002', 'URINE', '2026-01-11', 'Klebsiella pneumoniae', 'kpn', 'o', 'R', 'I', 'S');
 db.close();
 process.stdout.write(`wrote ${path}\n`);
