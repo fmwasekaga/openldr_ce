@@ -10,8 +10,11 @@ mkdirSync(OUT, { recursive: true });
 
 type Shot = { name: string; path: string; theme: 'dark' | 'light'; width: number; height: number; fullPage: boolean; chart: boolean };
 
+// All shots are viewport-only (fullPage:false) so they stay landscape ~16:10 — like
+// corlix's app-window screenshots — instead of tall full-page captures that dominate
+// the doc page and force scrolling. The thumbnail (max-w-2xl) then renders ~420px tall.
 const DOC_SHOTS: Shot[] = [
-  { name: 'dashboard', path: '/', theme: 'dark', width: 1440, height: 900, fullPage: true, chart: true },
+  { name: 'dashboard', path: '/', theme: 'dark', width: 1440, height: 900, fullPage: false, chart: true },
   { name: 'report-amr', path: '/reports/amr-resistance', theme: 'dark', width: 1440, height: 900, fullPage: false, chart: true },
   { name: 'docs', path: '/docs', theme: 'dark', width: 1440, height: 900, fullPage: false, chart: false },
   { name: 'doc-dhis2', path: '/docs/dhis2', theme: 'dark', width: 1440, height: 900, fullPage: false, chart: false },
