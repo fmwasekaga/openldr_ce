@@ -31,4 +31,14 @@ describe('WasmPluginConverter', () => {
     const c = createWasmConverter(manifest, new Uint8Array(), runnerReturning('{"foo":1}\n'), logger);
     await expect(c.convert(enc('x'), { batchId: 'b1' })).rejects.toThrow(/invalid FHIR/);
   });
+
+  it('passes ctx.config through to the runner', async () => {
+    let seen: Record<string, string> | undefined;
+    const runner: PluginRunner = {
+      async run(_wasm, _input, opts) { seen = opts.config; return new TextEncoder().encode(''); },
+    };
+    const conv = createWasmConverter(manifest, new Uint8Array(), runner, logger);
+    await conv.convert(new Uint8Array(), { batchId: 'b1', config: { mapping: '{"x":1}' } });
+    expect(seen).toEqual({ mapping: '{"x":1}' });
+  });
 });

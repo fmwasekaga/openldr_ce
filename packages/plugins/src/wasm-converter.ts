@@ -41,12 +41,13 @@ export function createWasmConverter(
   return {
     id: manifest.id,
     version: manifest.version,
-    async convert(raw: Uint8Array, _ctx: ConvertContext): Promise<FhirResource[]> {
+    async convert(raw: Uint8Array, ctx: ConvertContext): Promise<FhirResource[]> {
       const out = await runner.run(wasm, raw, {
         entrypoint: manifest.entrypoint,
         wasi: manifest.wasi,
         memoryMb: manifest.limits.memoryMb,
         timeoutMs: manifest.limits.timeoutMs,
+        config: ctx.config,
         host,
       });
       return parseNdjson(out);

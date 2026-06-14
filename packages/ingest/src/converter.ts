@@ -3,6 +3,7 @@ import type { FhirResource } from '@openldr/fhir';
 export interface ConvertContext {
   source?: string;
   batchId: string;
+  config?: Record<string, string>;
 }
 
 export interface Converter {
