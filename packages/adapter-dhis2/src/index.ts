@@ -50,19 +50,25 @@ export function createDhis2Target(cfg: Dhis2Config, deps: Dhis2Deps = {}): Dhis2
     },
     async pushAggregate(payload): Promise<PushResult> {
       const res = await doFetch(`${base}/api/dataValueSets.json`, { method: 'POST', headers, body: JSON.stringify(payload) });
-      if (!res.ok) {
-        const text = await res.text().catch(() => '');
+      const text = await res.text();
+      let parsed: ImportSummary | undefined;
+      try { parsed = text ? (JSON.parse(text) as ImportSummary) : undefined; } catch { parsed = undefined; }
+      // DHIS2 returns a full ImportSummary even on HTTP 409 (conflicts). Treat the response as a
+      // hard failure only when it carries no usable import summary (e.g. 401/5xx with a non-JSON body).
+      const hasSummary = !!parsed && typeof parsed === 'object' &&
+        (parsed.status !== undefined || parsed.response !== undefined || parsed.importCount !== undefined);
+      if (!hasSummary) {
         throw new Error(`DHIS2 dataValueSets -> ${res.status}${text ? `: ${text.slice(0, 300)}` : ''}`);
       }
-      const body = (await res.json()) as ImportSummary;
-      const ic = body.importCount ?? body.response?.importCount ?? {};
-      const rawStatus = (body.response?.status ?? body.status ?? '').toUpperCase();
+      const summary = parsed as ImportSummary;
+      const ic = summary.importCount ?? summary.response?.importCount ?? {};
+      const rawStatus = (summary.response?.status ?? summary.status ?? '').toUpperCase();
       const status: PushResult['status'] =
         rawStatus === 'ERROR' ? 'error'
         : rawStatus === 'WARNING' ? 'warning'
         : rawStatus === 'SUCCESS' || rawStatus === 'OK' ? 'success'
         : res.ok ? 'success' : 'error';
-      const conflicts = (body.conflicts ?? body.response?.conflicts ?? []).map((c) => ({ object: c.object ?? '', value: c.value ?? '' }));
+      const conflicts = (summary.conflicts ?? summary.response?.conflicts ?? []).map((c) => ({ object: c.object ?? '', value: c.value ?? '' }));
       return {
         status,
         imported: ic.imported ?? 0,
@@ -70,7 +76,7 @@ export function createDhis2Target(cfg: Dhis2Config, deps: Dhis2Deps = {}): Dhis2
         ignored: ic.ignored ?? 0,
         deleted: ic.deleted ?? 0,
         conflicts,
-        raw: body,
+        raw: summary,
       };
     },
     async close() { /* fetch-based; nothing to close */ },

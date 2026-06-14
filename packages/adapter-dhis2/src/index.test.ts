@@ -49,6 +49,17 @@ describe('createDhis2Target', () => {
     const t = createDhis2Target(cfg, { fetch: fetchMock as unknown as typeof fetch });
     await expect(t.pushAggregate({ dataValues: [] })).rejects.toThrow(/401/);
   });
+  it('pushAggregate returns a structured warning when DHIS2 responds 409 with an import summary', async () => {
+    const summary = { httpStatus: 'Conflict', httpStatusCode: 409, status: 'WARNING', response: { responseType: 'ImportSummary', status: 'WARNING', importCount: { imported: 1, updated: 1, ignored: 6, deleted: 1 }, conflicts: [{ object: 'a57FmdPj3Zl', value: 'Data value is not a valid option' }] } };
+    const fetchMock = vi.fn(async () => ({ ok: false, status: 409, json: async () => summary, text: async () => JSON.stringify(summary) } as Response));
+    const t = createDhis2Target(cfg, { fetch: fetchMock as unknown as typeof fetch });
+    const r = await t.pushAggregate({ dataValues: [] });
+    expect(r.status).toBe('warning');
+    expect(r.imported).toBe(1);
+    expect(r.updated).toBe(1);
+    expect(r.ignored).toBe(6);
+    expect(r.conflicts).toEqual([{ object: 'a57FmdPj3Zl', value: 'Data value is not a valid option' }]);
+  });
   it('pullMetadata maps dataElements/orgUnits/coc', async () => {
     const fetchMock = vi.fn(async (url: string) => {
       if (url.includes('dataElements')) return jsonResponse({ dataElements: [{ id: 'DE1', name: 'd' }] });
