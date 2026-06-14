@@ -1,0 +1,20 @@
+{
+  "mapping": {
+    "patientId": "PatientID",
+    "gender": "Sex",
+    "genderMap": { "M": "male", "F": "female" },
+    "birthDate": "DOB",
+    "specimenId": "SpecimenNo",
+    "specimenType": "Specimen",
+    "collectedDate": "CollectionDate",
+    "origin": "LocationType",
+    "originMap": { "I": "inpatient", "O": "outpatient" },
+    "organism": "Organism",
+    "organismCode": "OrganismCode",
+    "antibiotics": [
+      { "column": "AMP", "code": "AMP" },
+      { "column": "CIP", "code": "CIP" },
+      { "column": "GEN", "code": "GEN" }
+    ]
+  }
+}
