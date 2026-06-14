@@ -1,6 +1,9 @@
 mod mapping;
 mod reader;
 
+#[cfg(test)]
+mod fuzz;
+
 #[cfg(target_arch = "wasm32")]
 mod plugin {
     use crate::{mapping, reader};
