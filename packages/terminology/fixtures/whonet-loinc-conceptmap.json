@@ -1,0 +1,17 @@
+{
+  "resourceType": "ConceptMap",
+  "url": "http://openldr.org/fhir/ConceptMap/whonet-antibiotic-to-loinc",
+  "name": "WHONET antibiotic to LOINC susceptibility",
+  "status": "active",
+  "group": [
+    {
+      "source": "http://whonet.org/fhir/CodeSystem/antibiotic",
+      "target": "http://loinc.org",
+      "element": [
+        { "code": "AMP", "target": [{ "code": "101477-8", "equivalence": "relatedto" }] },
+        { "code": "CIP", "target": [{ "code": "101500-7", "equivalence": "relatedto" }] },
+        { "code": "GEN", "target": [{ "code": "101494-3", "equivalence": "relatedto" }] }
+      ]
+    }
+  ]
+}

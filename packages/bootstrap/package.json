@@ -15,6 +15,7 @@
     "@openldr/adapter-s3-bucket": "workspace:*",
     "@openldr/config": "workspace:*",
     "@openldr/db": "workspace:*",
+    "@openldr/terminology": "workspace:*",
     "@openldr/core": "workspace:*",
     "@openldr/ingest": "workspace:*",
     "@openldr/plugins": "workspace:*",

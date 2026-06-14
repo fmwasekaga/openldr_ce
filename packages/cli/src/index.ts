@@ -13,6 +13,7 @@ import { runAuditList } from './audit';
 import { runUserList, runUserShow, runUserCreate, runUserSetRole, runUserSetStatus } from './user';
 import { runExport } from './export';
 import { runTargetStoreTest } from './target-store';
+import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, runTerminologyExpand, runTerminologyTranslate } from './terminology';
 
 const program = new Command();
 program.name('openldr').description('OpenLDR CE operator CLI');
@@ -114,6 +115,18 @@ targetStore
   .action(async (opts: { engine?: string; json: boolean }) => {
     process.exitCode = await runTargetStoreTest(opts);
   });
+
+const term = program.command('terminology').description('Terminology service (CodeSystem/ValueSet/ConceptMap)');
+term.command('import <kind> <path>').description('import loinc|amr|resource').option('--accept-license', 'accept the LOINC license', false).option('--json', 'emit JSON', false)
+  .action(async (kind: string, path: string, opts: { acceptLicense: boolean; json: boolean }) => { process.exitCode = await runTerminologyImport(kind, path, opts); });
+term.command('lookup <system> <code>').option('--json', 'emit JSON', false)
+  .action(async (system: string, code: string, opts: { json: boolean }) => { process.exitCode = await runTerminologyLookup(system, code, opts); });
+term.command('validate-code').requiredOption('--code <code>').option('--system <system>').option('--valueset <url>').option('--json', 'emit JSON', false)
+  .action(async (opts: { system?: string; code: string; valueset?: string; json: boolean }) => { process.exitCode = await runTerminologyValidate(opts); });
+term.command('expand <valueSetUrl>').option('--count <n>').option('--offset <n>').option('--json', 'emit JSON', false)
+  .action(async (url: string, opts: { count?: string; offset?: string; json: boolean }) => { process.exitCode = await runTerminologyExpand(url, opts); });
+term.command('translate <conceptMapUrl>').requiredOption('--system <system>').requiredOption('--code <code>').option('--json', 'emit JSON', false)
+  .action(async (url: string, opts: { system: string; code: string; json: boolean }) => { process.exitCode = await runTerminologyTranslate(url, opts); });
 
 const forms = program.command('forms').description('FHIR forms (Questionnaire) utilities');
 forms

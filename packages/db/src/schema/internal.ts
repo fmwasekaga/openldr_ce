@@ -78,6 +78,30 @@ export interface UsersTable {
   last_login_at: Date | null;
 }
 
+export interface TerminologyConceptsTable {
+  system: string;
+  code: string;
+  display: string | null;
+  status: string | null;
+  properties: JSONColumnType<Record<string, unknown>> | null;
+}
+
+export interface TerminologySystemsTable {
+  url: string;
+  version: string | null;
+  kind: string;
+  resource_id: string;
+}
+
+export interface ConceptMapElementsTable {
+  map_url: string;
+  source_system: string;
+  source_code: string;
+  target_system: string;
+  target_code: string;
+  equivalence: string | null;
+}
+
 export interface InternalSchema {
   fhir_resources: FhirResourcesTable;
   outbox_events: OutboxEventsTable;
@@ -85,4 +109,7 @@ export interface InternalSchema {
   plugins: PluginsTable;
   audit_events: AuditEventsTable;
   users: UsersTable;
+  terminology_concepts: TerminologyConceptsTable;
+  terminology_systems: TerminologySystemsTable;
+  concept_map_elements: ConceptMapElementsTable;
 }

@@ -5,6 +5,7 @@ import * as m003 from './003_ingest_batches';
 import * as m004 from './004_plugins';
 import * as m005 from './005_audit_events';
 import * as m006 from './006_users';
+import * as m007 from './007_terminology';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -13,4 +14,5 @@ export const internalMigrations: Record<string, Migration> = {
   '004_plugins': { up: m004.up, down: m004.down },
   '005_audit_events': { up: m005.up, down: m005.down },
   '006_users': { up: m006.up, down: m006.down },
+  '007_terminology': { up: m007.up, down: m007.down },
 };

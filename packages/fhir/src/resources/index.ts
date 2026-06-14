@@ -8,3 +8,6 @@ export * from './observation';
 export * from './bundle';
 export * from './questionnaire';
 export * from './questionnaire-response';
+export * from './code-system';
+export * from './value-set';
+export * from './concept-map';
