@@ -6,7 +6,7 @@ function toRow(d: Dashboard) {
   return {
     id: d.id, owner_id: d.ownerId ?? null, name: d.name,
     layout: JSON.stringify(d.layout), widgets: JSON.stringify(d.widgets), filters: JSON.stringify(d.filters),
-    refresh_interval_sec: d.refreshIntervalSec, is_default: d.isDefault ? 1 : 0,
+    refresh_interval_sec: d.refreshIntervalSec, is_default: d.isDefault,
   };
 }
 function fromRow(r: Record<string, unknown>): Dashboard {

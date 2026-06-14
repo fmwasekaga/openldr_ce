@@ -1,17 +1,18 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Kysely, SqliteDialect } from 'kysely';
-import Database from 'better-sqlite3';
+import { Kysely } from 'kysely';
+import { newDb } from 'pg-mem';
 import { createDashboardStore } from './store';
 
 let db: Kysely<any>;
 beforeEach(async () => {
-  db = new Kysely<any>({ dialect: new SqliteDialect({ database: new Database(':memory:') }) });
+  const mem = newDb();
+  db = mem.adapters.createKysely();
   await db.schema.createTable('dashboards')
     .addColumn('id', 'text', (c) => c.primaryKey())
     .addColumn('owner_id', 'text')
     .addColumn('name', 'text')
-    .addColumn('layout', 'text').addColumn('widgets', 'text').addColumn('filters', 'text')
-    .addColumn('refresh_interval_sec', 'integer').addColumn('is_default', 'integer')
+    .addColumn('layout', 'jsonb').addColumn('widgets', 'jsonb').addColumn('filters', 'jsonb')
+    .addColumn('refresh_interval_sec', 'integer').addColumn('is_default', 'boolean')
     .addColumn('created_at', 'text').addColumn('updated_at', 'text').execute();
 });
 
