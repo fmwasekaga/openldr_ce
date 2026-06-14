@@ -1,8 +1,8 @@
 import { Command } from 'commander';
 import { loadConfig } from '@openldr/config';
 import { createAppContext } from '@openldr/bootstrap';
-import { errorMessage } from '@openldr/core';
 import { exitCodeFor, formatHealthTable } from './format';
+import { redactError } from './redact-error';
 import { runFhirValidate, formatFhirValidate } from './fhir';
 import { runDbMigrate, runDbReset, runDbSeed } from './db';
 import { runFormsExtract } from './forms';
@@ -37,9 +37,9 @@ program
       process.exitCode = exitCodeFor(result);
     } catch (err) {
       if (opts.json) {
-        process.stdout.write(JSON.stringify({ status: 'down', error: errorMessage(err) }) + '\n');
+        process.stdout.write(JSON.stringify({ status: 'down', error: redactError(err) }) + '\n');
       } else {
-        process.stderr.write(`health failed: ${errorMessage(err)}\n`);
+        process.stderr.write(`health failed: ${redactError(err)}\n`);
       }
       process.exitCode = 1;
     } finally {
@@ -63,9 +63,9 @@ fhir
       process.exitCode = out.allValid ? 0 : 1;
     } catch (err) {
       if (opts.json) {
-        process.stdout.write(JSON.stringify({ error: errorMessage(err) }) + '\n');
+        process.stdout.write(JSON.stringify({ error: redactError(err) }) + '\n');
       } else {
-        process.stderr.write(`fhir validate failed: ${errorMessage(err)}\n`);
+        process.stderr.write(`fhir validate failed: ${redactError(err)}\n`);
       }
       process.exitCode = 1;
     }
@@ -79,7 +79,7 @@ db.command('migrate')
     try {
       process.exitCode = await runDbMigrate(opts);
     } catch (err) {
-      process.stderr.write(`db migrate failed: ${errorMessage(err)}\n`);
+      process.stderr.write(`db migrate failed: ${redactError(err)}\n`);
       process.exitCode = 1;
     }
   });
@@ -91,7 +91,7 @@ db.command('reset')
     try {
       process.exitCode = await runDbReset(opts);
     } catch (err) {
-      process.stderr.write(`db reset failed: ${errorMessage(err)}\n`);
+      process.stderr.write(`db reset failed: ${redactError(err)}\n`);
       process.exitCode = 1;
     }
   });
@@ -102,7 +102,7 @@ db.command('seed')
     try {
       process.exitCode = await runDbSeed(opts);
     } catch (err) {
-      process.stderr.write(`db seed failed: ${errorMessage(err)}\n`);
+      process.stderr.write(`db seed failed: ${redactError(err)}\n`);
       process.exitCode = 1;
     }
   });
@@ -146,7 +146,7 @@ forms
       }
       process.exitCode = out.invalidCount === 0 ? 0 : 1;
     } catch (err) {
-      process.stderr.write(`forms extract failed: ${errorMessage(err)}\n`);
+      process.stderr.write(`forms extract failed: ${redactError(err)}\n`);
       process.exitCode = 1;
     }
   });
@@ -164,30 +164,30 @@ program
     try {
       process.exitCode = await runIngest(file, opts);
     } catch (err) {
-      process.stderr.write(`ingest failed: ${errorMessage(err)}\n`);
+      process.stderr.write(`ingest failed: ${redactError(err)}\n`);
       process.exitCode = 1;
     }
   });
 
 const pipeline = program.command('pipeline').description('Inspect the ingest pipeline');
 pipeline.command('status').option('--json', 'emit JSON', false).action(async (opts: { json: boolean }) => {
-  try { process.exitCode = await runPipelineStatus(opts); } catch (err) { process.stderr.write(`pipeline status failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+  try { process.exitCode = await runPipelineStatus(opts); } catch (err) { process.stderr.write(`pipeline status failed: ${redactError(err)}\n`); process.exitCode = 1; }
 });
 pipeline.command('retry <batchId>').option('--json', 'emit JSON', false).action(async (batchId: string, opts: { json: boolean }) => {
-  try { process.exitCode = await runPipelineRetry(batchId, opts); } catch (err) { process.stderr.write(`pipeline retry failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+  try { process.exitCode = await runPipelineRetry(batchId, opts); } catch (err) { process.stderr.write(`pipeline retry failed: ${redactError(err)}\n`); process.exitCode = 1; }
 });
 pipeline.command('logs <batchId>').option('--json', 'emit JSON', false).action(async (batchId: string, opts: { json: boolean }) => {
-  try { process.exitCode = await runPipelineLogs(batchId, opts); } catch (err) { process.stderr.write(`pipeline logs failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+  try { process.exitCode = await runPipelineLogs(batchId, opts); } catch (err) { process.stderr.write(`pipeline logs failed: ${redactError(err)}\n`); process.exitCode = 1; }
 });
 
 const queue = program.command('queue').description('Inspect the event queue');
 queue.command('status').option('--json', 'emit JSON', false).action(async (opts: { json: boolean }) => {
-  try { process.exitCode = await runQueueStatus(opts); } catch (err) { process.stderr.write(`queue status failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+  try { process.exitCode = await runQueueStatus(opts); } catch (err) { process.stderr.write(`queue status failed: ${redactError(err)}\n`); process.exitCode = 1; }
 });
 
 const provenance = program.command('provenance').description('Provenance tooling');
 provenance.command('audit').option('--json', 'emit JSON', false).action(async (opts: { json: boolean }) => {
-  try { process.exitCode = await runProvenanceAudit(opts); } catch (err) { process.stderr.write(`provenance audit failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+  try { process.exitCode = await runProvenanceAudit(opts); } catch (err) { process.stderr.write(`provenance audit failed: ${redactError(err)}\n`); process.exitCode = 1; }
 });
 
 const plugin = program.command('plugin').description('Manage WASM ingest plugins');
@@ -197,20 +197,20 @@ plugin
   .option('--manifest <path>', 'manifest path (default: manifest.json next to the wasm)')
   .option('--json', 'emit JSON', false)
   .action(async (wasm: string, opts: { manifest?: string; json: boolean }) => {
-    try { process.exitCode = await runPluginInstall(wasm, opts); } catch (err) { process.stderr.write(`plugin install failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+    try { process.exitCode = await runPluginInstall(wasm, opts); } catch (err) { process.stderr.write(`plugin install failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
 plugin
   .command('list')
   .option('--json', 'emit JSON', false)
   .action(async (opts: { json: boolean }) => {
-    try { process.exitCode = await runPluginList(opts); } catch (err) { process.stderr.write(`plugin list failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+    try { process.exitCode = await runPluginList(opts); } catch (err) { process.stderr.write(`plugin list failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
 plugin
   .command('test <id>')
   .option('--version <v>', 'specific version')
   .option('--json', 'emit JSON', false)
   .action(async (id: string, opts: { version?: string; json: boolean }) => {
-    try { process.exitCode = await runPluginTest(id, opts); } catch (err) { process.stderr.write(`plugin test failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+    try { process.exitCode = await runPluginTest(id, opts); } catch (err) { process.stderr.write(`plugin test failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
 plugin
   .command('run <input>')
@@ -219,19 +219,19 @@ plugin
   .option('--version <v>', 'specific version')
   .option('--json', 'emit JSON', false)
   .action(async (input: string, opts: { plugin: string; version?: string; json: boolean }) => {
-    try { process.exitCode = await runPluginRun(input, opts); } catch (err) { process.stderr.write(`plugin run failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+    try { process.exitCode = await runPluginRun(input, opts); } catch (err) { process.stderr.write(`plugin run failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
 plugin
   .command('remove <id>')
   .option('--version <v>', 'specific version (default: all)')
   .option('--json', 'emit JSON', false)
   .action(async (id: string, opts: { version?: string; json: boolean }) => {
-    try { process.exitCode = await runPluginRemove(id, opts); } catch (err) { process.stderr.write(`plugin remove failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+    try { process.exitCode = await runPluginRemove(id, opts); } catch (err) { process.stderr.write(`plugin remove failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
 
 const report = program.command('report').description('Domain reports over the analytics DB');
 report.command('list').option('--json', 'emit JSON', false).action(async (opts: { json: boolean }) => {
-  try { process.exitCode = await runReportList(opts); } catch (err) { process.stderr.write(`report list failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+  try { process.exitCode = await runReportList(opts); } catch (err) { process.stderr.write(`report list failed: ${redactError(err)}\n`); process.exitCode = 1; }
 });
 report
   .command('run <id>')
@@ -241,7 +241,7 @@ report
   .option('--format <fmt>', 'json|csv|pdf')
   .option('--out <file>', 'output file (pdf)')
   .action(async (id: string, opts: { param?: string[]; json: boolean; csv: boolean; format?: string; out?: string }) => {
-    try { process.exitCode = await runReportRun(id, opts); } catch (err) { process.stderr.write(`report run failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+    try { process.exitCode = await runReportRun(id, opts); } catch (err) { process.stderr.write(`report run failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
 report.command('glass-export').description('Export the GLASS-AMR RIS submission file (CSV)')
   .requiredOption('--country <iso3>', 'ISO3 country code').requiredOption('--year <yyyy>', 'reporting year')
@@ -259,15 +259,15 @@ audit
   .option('--to <iso>', 'occurred at or before (ISO)')
   .option('--json', 'emit JSON', false)
   .action(async (opts: { actor?: string; entityType?: string; entityId?: string; action?: string; from?: string; to?: string; json: boolean }) => {
-    try { process.exitCode = await runAuditList(opts); } catch (err) { process.stderr.write(`audit list failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+    try { process.exitCode = await runAuditList(opts); } catch (err) { process.stderr.write(`audit list failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
 
 const user = program.command('user').description('Local user management (decoupled from the IdP)');
 user.command('list').option('--json', 'emit JSON', false).action(async (opts: { json: boolean }) => {
-  try { process.exitCode = await runUserList(opts); } catch (err) { process.stderr.write(`user list failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+  try { process.exitCode = await runUserList(opts); } catch (err) { process.stderr.write(`user list failed: ${redactError(err)}\n`); process.exitCode = 1; }
 });
 user.command('show <id>').option('--json', 'emit JSON', false).action(async (id: string, opts: { json: boolean }) => {
-  try { process.exitCode = await runUserShow(id, opts); } catch (err) { process.stderr.write(`user show failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+  try { process.exitCode = await runUserShow(id, opts); } catch (err) { process.stderr.write(`user show failed: ${redactError(err)}\n`); process.exitCode = 1; }
 });
 user
   .command('create')
@@ -277,16 +277,16 @@ user
   .option('--role <r...>', 'role (repeatable)')
   .option('--json', 'emit JSON', false)
   .action(async (opts: { username: string; name?: string; email?: string; role?: string[]; json: boolean }) => {
-    try { process.exitCode = await runUserCreate(opts); } catch (err) { process.stderr.write(`user create failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+    try { process.exitCode = await runUserCreate(opts); } catch (err) { process.stderr.write(`user create failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
 user.command('set-role <id> <roles...>').option('--json', 'emit JSON', false).action(async (id: string, roles: string[], opts: { json: boolean }) => {
-  try { process.exitCode = await runUserSetRole(id, roles, opts); } catch (err) { process.stderr.write(`user set-role failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+  try { process.exitCode = await runUserSetRole(id, roles, opts); } catch (err) { process.stderr.write(`user set-role failed: ${redactError(err)}\n`); process.exitCode = 1; }
 });
 user.command('activate <id>').option('--json', 'emit JSON', false).action(async (id: string, opts: { json: boolean }) => {
-  try { process.exitCode = await runUserSetStatus(id, 'active', opts); } catch (err) { process.stderr.write(`user activate failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+  try { process.exitCode = await runUserSetStatus(id, 'active', opts); } catch (err) { process.stderr.write(`user activate failed: ${redactError(err)}\n`); process.exitCode = 1; }
 });
 user.command('deactivate <id>').option('--json', 'emit JSON', false).action(async (id: string, opts: { json: boolean }) => {
-  try { process.exitCode = await runUserSetStatus(id, 'disabled', opts); } catch (err) { process.stderr.write(`user deactivate failed: ${errorMessage(err)}\n`); process.exitCode = 1; }
+  try { process.exitCode = await runUserSetStatus(id, 'disabled', opts); } catch (err) { process.stderr.write(`user deactivate failed: ${redactError(err)}\n`); process.exitCode = 1; }
 });
 
 program
@@ -298,7 +298,7 @@ program
     try {
       process.exitCode = await runExport(opts);
     } catch (err) {
-      process.stderr.write(`export failed: ${errorMessage(err)}\n`);
+      process.stderr.write(`export failed: ${redactError(err)}\n`);
       process.exitCode = 1;
     }
   });
