@@ -4,7 +4,9 @@ import { pino } from 'pino';
 import { redactPaths } from './logger';
 
 // Drive a pino logger with our redact paths into an in-memory stream and assert masking.
-function capture(): { logger: ReturnType<typeof pino>; lines: () => unknown[] } {
+// (Return type is inferred — pino(opts, stream) yields a more specific Logger than the
+// zero-arg ReturnType<typeof pino>, so an explicit annotation would mis-constrain it.)
+function capture() {
   const chunks: string[] = [];
   const stream = new Writable({ write(c, _e, cb) { chunks.push(c.toString()); cb(); } });
   const logger = pino({ redact: { paths: redactPaths, censor: '[redacted]' } }, stream);
