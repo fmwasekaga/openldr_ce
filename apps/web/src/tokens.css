@@ -1,3 +1,9 @@
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
 :root {
   --brand: #4682B4; --link: #5A9BD6; --link-hover: #7BB3D9; --brand-deep: #365F8A;
   --brand-wash: rgba(70,130,180,0.15); --brand-border: rgba(70,130,180,0.3);
@@ -68,3 +74,46 @@ tr:hover td { background: rgba(70,130,180,0.08); }
 .doc-content th, .doc-content td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; font-size: 13px; }
 .doc-content th { background: var(--table-head); }
 .doc-content img { margin: 12px 0; }
+
+/* shadcn token bridge — map shadcn's expected vars onto the existing palette.
+   These reference the existing theme vars, so they auto-switch with data-theme. */
+:root {
+  --background: var(--bg); --foreground: var(--text);
+  --card-foreground: var(--text);
+  --popover: var(--card); --popover-foreground: var(--text);
+  --primary: var(--brand); --primary-foreground: #ffffff;
+  --secondary: var(--sidebar); --secondary-foreground: var(--text);
+  --muted: var(--sidebar); --muted-foreground: var(--text-muted);
+  --accent: var(--brand-wash); --accent-foreground: var(--text);
+  --destructive: var(--danger); --destructive-foreground: #ffffff;
+  --input: var(--border-2); --ring: rgba(70,130,180,0.5);
+}
+/* Map the bridged vars into Tailwind's color/radius utilities. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius-lg);
+}
+/* Minimal base shadcn assumes — scoped, never global, to avoid touching existing pages. */
+@layer base {
+  .ui-scope, .ui-scope * { border-color: var(--border); }
+}

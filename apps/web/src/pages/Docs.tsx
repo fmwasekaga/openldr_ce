@@ -1,67 +1,126 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { AppShell } from '../shell/AppShell';
 import { useDocLocale } from '../docs/useDocLocale';
 import { list, resolve, LOCALES, type Locale } from '../docs/registry';
 import { buildIndex, searchDocs } from '../docs/search';
 import { DocMarkdown } from '../docs/DocMarkdown';
+import { Lightbox, type LightboxImage } from '../docs/Lightbox';
+import {
+  Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
+} from '@/components/ui/select';
+import { Download } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
+  DropdownMenuItem, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
+} from '@/components/ui/dropdown-menu';
+import { exportDocs, type ExportFormat, type ExportScope } from '../docs/export/download';
 
 export function Docs() {
+  const { slug } = useParams();
   const [locale, setLocale] = useDocLocale();
   const [query, setQuery] = useState('');
+  const [lightbox, setLightbox] = useState<LightboxImage | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
   const sections = useMemo(() => list(locale), [locale]);
   const index = useMemo(() => buildIndex(sections), [sections]);
   const hits = useMemo(() => searchDocs(index, query), [index, query]);
-  const overview = resolve(locale, 'overview');
+
+  const activeSlug = slug ?? 'overview';
+  const section = resolve(locale, activeSlug);
+  const navSlugs = query.trim() ? hits.map((h) => h.slug) : sections.map((s) => s.slug);
+  const titleFor = (s: string) => sections.find((x) => x.slug === s)?.title ?? s;
+
+  const onExport = (scope: ExportScope, format: ExportFormat) => {
+    if (!section) return;
+    setExportError(null);
+    exportDocs({ scope, format, active: section, all: sections }).catch(() => {
+      setExportError(`Could not export this page as ${format.toUpperCase()}.`);
+    });
+  };
 
   return (
     <AppShell title="Documentation">
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16 }}>
-        <input
-          className="btn-secondary"
-          placeholder="Search documentation…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          aria-label="Search documentation"
-          style={{ flex: 1 }}
-        />
-        <select
-          className="btn-secondary"
-          value={locale}
-          onChange={(e) => setLocale(e.target.value as Locale)}
-          aria-label="Language"
-        >
-          {LOCALES.map((l) => <option key={l} value={l}>{l.toUpperCase()}</option>)}
-        </select>
-      </div>
-
-      {query.trim() ? (
-        <div className="card">
-          {hits.length === 0 ? (
-            <p>No results for “{query}”.</p>
-          ) : (
-            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-              {hits.map((h) => (
-                <li key={h.slug} style={{ marginBottom: 12 }}>
-                  <Link to={`/docs/${h.slug}`} style={{ fontWeight: 600 }}>{h.title}</Link>
-                  <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>{h.snippet}</div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      ) : (
-        <>
-          <div className="card" style={{ marginBottom: 16 }}>
-            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 8 }}>
-              {sections.map((s) => (
-                <li key={s.slug}><Link to={`/docs/${s.slug}`}>{s.title}</Link></li>
-              ))}
-            </ul>
+      <div className="ui-scope flex h-[calc(100vh-7rem)] gap-4">
+        {/* Inner sidebar */}
+        <aside className="flex w-64 shrink-0 flex-col rounded-lg border border-border bg-card">
+          <div className="border-b border-border p-2">
+            <input
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              placeholder="Search…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              aria-label="Search documentation"
+            />
           </div>
-          {overview && <div className="card doc-content"><DocMarkdown content={overview.content} /></div>}
-        </>
-      )}
+          <nav aria-label="Documentation sections" className="flex flex-1 flex-col overflow-y-auto p-1">
+            {navSlugs.map((s) => (
+              <Link
+                key={s}
+                to={`/docs/${s}`}
+                className={`rounded-md px-3 py-2 text-sm no-underline transition-colors ${
+                  s === activeSlug
+                    ? 'bg-accent text-primary'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                }`}
+              >
+                {titleFor(s)}
+              </Link>
+            ))}
+            {navSlugs.length === 0 && (
+              <p className="px-3 py-2 text-sm text-muted-foreground">No results.</p>
+            )}
+          </nav>
+        </aside>
+
+        {/* Content */}
+        <section className="flex min-w-0 flex-1 flex-col rounded-lg border border-border bg-card">
+          <div className="flex items-center justify-end gap-2 border-b border-border p-2">
+            {exportError && (
+              <span role="status" aria-live="polite" className="mr-auto text-xs text-destructive">{exportError}</span>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label="Download documentation"><Download className="h-4 w-4" /></Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {(['page', 'all'] as ExportScope[]).map((scope) => (
+                  <DropdownMenuSub key={scope}>
+                    <DropdownMenuSubTrigger>{scope === 'page' ? 'This page' : 'All docs'}</DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                      <DropdownMenuItem onSelect={() => onExport(scope, 'md')}>Markdown (.md)</DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => onExport(scope, 'pdf')}>PDF (.pdf)</DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => onExport(scope, 'docx')}>Word (.docx)</DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Select value={locale} onValueChange={(v) => setLocale(v as Locale)}>
+              <SelectTrigger aria-label="Language" className="w-24"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {LOCALES.map((l) => <SelectItem key={l} value={l}>{l.toUpperCase()}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex-1 overflow-y-auto p-6">
+            {!section ? (
+              <p className="text-sm text-muted-foreground">
+                Documentation page not found. <Link to="/docs" className="text-primary">All docs</Link>
+              </p>
+            ) : (
+              <>
+                {section.localeUsed !== locale && (
+                  <p className="mb-3 text-xs text-muted-foreground">Shown in English — not yet translated.</p>
+                )}
+                <div className="doc-content"><DocMarkdown content={section.content} onImageClick={setLightbox} /></div>
+              </>
+            )}
+          </div>
+        </section>
+      </div>
+      <Lightbox image={lightbox} onClose={() => setLightbox(null)} />
     </AppShell>
   );
 }
