@@ -29,16 +29,17 @@ interface IngestPayload {
   blobKey: string;
   source: string;
   converter: string;
+  config?: Record<string, string> | null;
 }
 
 export async function handleIngestEvent(deps: HandleDeps, event: EventEnvelope): Promise<void> {
-  const { batchId, blobKey, source, converter } = event.payload as IngestPayload;
+  const { batchId, blobKey, source, converter, config } = event.payload as IngestPayload;
   await deps.batches.markProcessing(batchId);
   try {
     const raw = await deps.blob.get(blobKey);
     const c = await deps.resolver.resolve(converter);
     if (!c) throw new Error(`unknown converter: ${converter}`);
-    const resources = await c.convert(raw, { source, batchId });
+    const resources = await c.convert(raw, { source, batchId, config: config ?? undefined });
     const provenance: Provenance = { sourceSystem: source, pluginId: c.id, pluginVersion: c.version, batchId };
     for (const resource of resources) {
       await deps.persist(resource, provenance);

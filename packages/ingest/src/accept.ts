@@ -9,6 +9,7 @@ export interface AcceptInput {
   converter: string;
   contentType?: string;
   filename?: string;
+  config?: Record<string, string>;
 }
 
 export interface AcceptDeps {
@@ -22,8 +23,8 @@ export async function acceptPayload(deps: AcceptDeps, input: AcceptInput): Promi
   const batchId = randomUUID();
   const blobKey = `ingest/${batchId}/${input.filename ?? 'payload'}`;
   await deps.blob.put(blobKey, input.data, input.contentType);
-  await deps.batches.create({ batchId, source: input.source, blobKey, contentType: input.contentType, converter: input.converter });
-  await deps.eventing.publish({ type: 'ingest.received', payload: { batchId, blobKey, source: input.source, converter: input.converter } });
+  await deps.batches.create({ batchId, source: input.source, blobKey, contentType: input.contentType, converter: input.converter, config: input.config });
+  await deps.eventing.publish({ type: 'ingest.received', payload: { batchId, blobKey, source: input.source, converter: input.converter, config: input.config ?? null } });
   deps.logger.info({ batchId, source: input.source, converter: input.converter }, 'ingest payload accepted');
   return { batchId, blobKey };
 }

@@ -14,7 +14,7 @@ export interface IngestBatch {
 }
 
 export interface BatchStore {
-  create(b: { batchId: string; source: string; blobKey: string; contentType?: string; converter: string }): Promise<void>;
+  create(b: { batchId: string; source: string; blobKey: string; contentType?: string; converter: string; config?: Record<string, string> }): Promise<void>;
   markProcessing(batchId: string): Promise<void>;
   markDone(batchId: string, resourceCount: number): Promise<void>;
   markFailed(batchId: string, error: string): Promise<void>;
