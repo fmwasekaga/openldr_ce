@@ -19,6 +19,23 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
     }
   });
 
+  app.get('/api/reports/glass/ris.csv', async (req, reply) => {
+    try {
+      const result = await ctx.reporting.run('amr-glass-ris', req.query as Record<string, unknown>);
+      reply.header('content-type', 'text/csv').header('content-disposition', 'attachment; filename="glass-ris.csv"');
+      return toCsv(result.columns, result.rows);
+    } catch (err) { return mapError(err, reply); }
+  });
+
+  app.get('/api/reports/:id.pdf', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+      const buf = await ctx.reporting.renderPdf(id, req.query);
+      reply.header('content-type', 'application/pdf').header('content-disposition', `attachment; filename="${id}.pdf"`);
+      return reply.send(buf);
+    } catch (err) { return mapError(err, reply); }
+  });
+
   app.get('/api/reports/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
     try {
