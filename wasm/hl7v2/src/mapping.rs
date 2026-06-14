@@ -28,6 +28,18 @@ fn origin_from_pv1(class: &str) -> Option<&'static str> {
     match class.to_ascii_uppercase().as_str() { "I" => Some("inpatient"), "O" => Some("outpatient"), "" => None, _ => Some("unknown") }
 }
 
+/// Convert an HL7 v2 datetime (YYYY[MM[DD[HHMMSS]]][+/-ZZZZ]) to a FHIR date (YYYY-MM-DD,
+/// or a valid partial date YYYY / YYYY-MM). Returns None when no leading digits are present.
+fn hl7_date(s: &str) -> Option<String> {
+    let digits: String = s.chars().take_while(|c| c.is_ascii_digit()).collect();
+    match digits.len() {
+        0 => None,
+        1..=4 => Some(digits.chars().take(4).collect()),
+        5..=6 => Some(format!("{}-{}", &digits[0..4], &digits[4..6])),
+        _ => Some(format!("{}-{}-{}", &digits[0..4], &digits[4..6], &digits[6..8])),
+    }
+}
+
 /// Map one parsed message (segments) to FHIR resources.
 pub fn map_message(segs: &[Segment], cfg: &Config, seq: usize) -> Vec<Value> {
     let mut out = Vec::new();
@@ -45,13 +57,13 @@ pub fn map_message(segs: &[Segment], cfg: &Config, seq: usize) -> Vec<Value> {
     if let Some(p) = pid {
         let family = p.component(5, 1);
         let given = p.component(5, 2);
-        let birth = p.value(7);
+        let birth = hl7_date(&p.value(7));
         out.push(fhir::patient(
             &format!("hl7-{patient_id}"),
             if family.is_empty() { None } else { Some(family.as_str()) },
             if given.is_empty() { None } else { Some(given.as_str()) },
             sex(&p.value(8)),
-            if birth.is_empty() { None } else { Some(birth.as_str()) },
+            birth.as_deref(),
         ));
     } else {
         out.push(fhir::patient(&format!("hl7-{patient_id}"), None, None, None, None));
@@ -77,11 +89,11 @@ pub fn map_message(segs: &[Segment], cfg: &Config, seq: usize) -> Vec<Value> {
     let spec_id = format!("hl7-spec-{key}");
     let spec_ref = format!("Specimen/{spec_id}");
     let spec_type = spm.map(|s| s.component(4, 1)).unwrap_or_default();
-    let spec_date = spm.map(|s| s.value(17)).unwrap_or_default();
+    let spec_date = hl7_date(&spm.map(|s| s.value(17)).unwrap_or_default());
     out.push(fhir::specimen(
         &spec_id, &pid_ref,
         if spec_type.is_empty() { None } else { Some(spec_type.as_str()) },
-        if spec_date.is_empty() { None } else { Some(spec_date.as_str()) },
+        spec_date.as_deref(),
         origin,
     ));
     out.push(fhir::diagnostic_report(

@@ -69,7 +69,9 @@ function buildPure(crate, id, description) {
   const staged = join(dir, 'plugin.wasm');
   copyFileSync(built, staged);
   const sha = createHash('sha256').update(readFileSync(staged)).digest('hex');
-  const manifest = { id, version: ver, entrypoint: 'convert', wasmSha256: sha, description, license: 'Apache-2.0', wasi: false, limits: { memoryMb: 256, timeoutMs: 30000 } };
+  // wasm32-wasip1's std imports wasi_snapshot_preview1 (clock/random/fd) even for in-memory
+  // plugins, so the sandbox must enable WASI (isolation stays default-deny fs/net).
+  const manifest = { id, version: ver, entrypoint: 'convert', wasmSha256: sha, description, license: 'Apache-2.0', wasi: true, limits: { memoryMb: 256, timeoutMs: 30000 } };
   writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
   process.stdout.write(`staged ${staged} (sha256 ${sha}) + manifest.json\n`);
 }
