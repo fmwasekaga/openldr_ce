@@ -11,6 +11,7 @@ import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
@@ -42,29 +43,29 @@ export function Docs() {
   };
 
   return (
-    <AppShell title="Documentation">
-      {/* One light frame for the whole region; everything inside is separated by
-          borders (no per-panel cards) — matching the corlix docs layout. */}
-      <div className="ui-scope flex h-[calc(100vh-6rem)] overflow-hidden rounded-lg border border-border">
+    <AppShell title="Documentation" fullBleed>
+      {/* Edge-to-edge: no outer frame or padding — structure comes only from the
+          sidebar border-r and the matching h-12 header separators (corlix style). */}
+      <div className="ui-scope flex min-h-0 flex-1 overflow-hidden">
         {/* Inner sidebar — a border-r column (not a card), collapsible. */}
         <aside
           className={`flex shrink-0 flex-col border-r border-border transition-[width] duration-200 ease-in-out ${
             collapsed ? 'w-12' : 'w-64'
           }`}
         >
-          <div className="flex items-center gap-2 border-b border-border p-2">
-            <button
-              type="button"
+          <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-2">
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={() => setCollapsed((c) => !c)}
               aria-label={collapsed ? 'Expand documentation sidebar' : 'Collapse documentation sidebar'}
               title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
               {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-            </button>
+            </Button>
             {!collapsed && (
-              <input
-                className="h-8 w-full min-w-0 rounded-md border border-input bg-transparent px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              <Input
+                className="min-w-0"
                 placeholder="Search…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -95,9 +96,10 @@ export function Docs() {
           )}
         </aside>
 
-        {/* Content — borderless; only a thin toolbar separator above it. */}
+        {/* Content — borderless; the toolbar matches the sidebar header height (h-12)
+            so the two bottom borders line up across the page. */}
         <section className="flex min-w-0 flex-1 flex-col">
-          <div className="flex items-center justify-end gap-2 border-b border-border p-2">
+          <div className="flex h-12 shrink-0 items-center justify-end gap-2 border-b border-border px-2">
             {exportError && (
               <span role="status" aria-live="polite" className="mr-auto text-xs text-destructive">{exportError}</span>
             )}

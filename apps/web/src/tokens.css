@@ -41,6 +41,15 @@ td { padding: 12px 16px; border-top: 1px solid var(--rule); }
 tr:hover td { background: rgba(70,130,180,0.08); }
 :focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(70,130,180,0.5); }
 
+/* Themed scrollbars — replace the default white/gray OS scrollbar so it matches the
+   (dark by default) theme. Colors are theme vars, so they switch with data-theme. */
+* { scrollbar-width: thin; scrollbar-color: var(--border-2) transparent; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+::-webkit-scrollbar-corner { background: transparent; }
+
 /* Sidebar nav items */
 .nav-item { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: var(--radius); color: var(--text-muted); font-weight: 500; text-decoration: none; white-space: nowrap; overflow: hidden; }
 .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
