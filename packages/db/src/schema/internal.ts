@@ -79,6 +79,19 @@ export interface UsersTable {
   last_login_at: Date | null;
 }
 
+export interface DashboardsTable {
+  id: string;
+  owner_id: string | null;
+  name: string;
+  layout: JSONColumnType<unknown[]>;
+  widgets: JSONColumnType<unknown[]>;
+  filters: JSONColumnType<unknown[]>;
+  refresh_interval_sec: Generated<number>;
+  is_default: Generated<boolean>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface TerminologyConceptsTable {
   system: string;
   code: string;
@@ -143,4 +156,5 @@ export interface InternalSchema {
   dhis2_orgunit_map: Dhis2OrgUnitMapTable;
   dhis2_mappings: Dhis2MappingsTable;
   dhis2_schedules: Dhis2SchedulesTable;
+  dashboards: DashboardsTable;
 }
