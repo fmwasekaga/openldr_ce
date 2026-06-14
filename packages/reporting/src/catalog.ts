@@ -3,8 +3,11 @@ import { amrResistance } from './reports/amr-resistance';
 import { testVolume } from './reports/test-volume';
 import { patientDemographics } from './reports/patient-demographics';
 import { turnaroundTime } from './reports/turnaround-time';
+import { amrAntibiogram } from './reports/amr-antibiogram';
+import { amrFirstIsolateSummary } from './reports/amr-first-isolate-summary';
+import { amrGlassRis } from './reports/amr-glass-ris';
 
-const REPORTS: ReportDefinition[] = [amrResistance, testVolume, patientDemographics, turnaroundTime] as ReportDefinition[];
+const REPORTS: ReportDefinition[] = [amrResistance, testVolume, patientDemographics, turnaroundTime, amrAntibiogram, amrFirstIsolateSummary, amrGlassRis] as ReportDefinition[];
 
 export function reportCatalog(): ReportDefinition[] {
   return REPORTS;
