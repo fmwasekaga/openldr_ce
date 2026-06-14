@@ -18,6 +18,8 @@ async function upsertMssql(
   row: Record<string, unknown>,
   updateRow: Record<string, unknown>,
 ): Promise<void> {
+  // `table` and `cols` are trusted internal identifiers from flattenResource()'s closed schema
+  // (never user input), so sql.raw on the column list is injection-safe; values are parameterized.
   const cols = Object.keys(row);
   const valuesTuple = sql.join(cols.map((c) => sql`${row[c]}`));
   const sourceCols = sql.raw(cols.join(', '));

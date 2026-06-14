@@ -47,4 +47,8 @@ describe('config target-store engine', () => {
   it('rejects mssql adapter without MSSQL connection fields', () => {
     expect(() => loadConfig({ ...basePg, TARGET_STORE_ADAPTER: 'mssql' } as never)).toThrow(/MSSQL_HOST/);
   });
+  it('rejects pg adapter without TARGET_DATABASE_URL', () => {
+    const { TARGET_DATABASE_URL: _omit, ...noUrl } = basePg;
+    expect(() => loadConfig({ ...noUrl } as never)).toThrow(/TARGET_DATABASE_URL/);
+  });
 });
