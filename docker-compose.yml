@@ -47,3 +47,14 @@ services:
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
     ports:
       - '8080:8080'
+
+  # Optional SQL Server target store. Off by default; start with:
+  #   docker compose --profile mssql up -d
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    profiles: ['mssql']
+    environment:
+      ACCEPT_EULA: 'Y'
+      MSSQL_SA_PASSWORD: ${MSSQL_PASSWORD:-Openldr_Local_2026!}
+    ports:
+      - '1433:1433'

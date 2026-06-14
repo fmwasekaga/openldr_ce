@@ -12,6 +12,7 @@ import { runReportList, runReportRun } from './report';
 import { runAuditList } from './audit';
 import { runUserList, runUserShow, runUserCreate, runUserSetRole, runUserSetStatus } from './user';
 import { runExport } from './export';
+import { runTargetStoreTest } from './target-store';
 
 const program = new Command();
 program.name('openldr').description('OpenLDR CE operator CLI');
@@ -102,6 +103,16 @@ db.command('seed')
       process.stderr.write(`db seed failed: ${errorMessage(err)}\n`);
       process.exitCode = 1;
     }
+  });
+
+const targetStore = program.command('target-store').description('Target warehouse (Postgres/SQL Server) tools');
+targetStore
+  .command('test')
+  .description('Probe the target store connection')
+  .option('--engine <engine>', 'postgres|mssql (defaults to TARGET_STORE_ADAPTER)')
+  .option('--json', 'emit machine-readable JSON', false)
+  .action(async (opts: { engine?: string; json: boolean }) => {
+    process.exitCode = await runTargetStoreTest(opts);
   });
 
 const forms = program.command('forms').description('FHIR forms (Questionnaire) utilities');

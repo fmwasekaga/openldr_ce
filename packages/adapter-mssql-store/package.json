@@ -1,0 +1,16 @@
+{
+  "name": "@openldr/adapter-mssql-store",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit", "test": "vitest run", "lint": "echo \"no lint\"" },
+  "dependencies": {
+    "@openldr/core": "workspace:*",
+    "@openldr/ports": "workspace:*",
+    "kysely": "^0.27.5",
+    "tarn": "^3.0.2",
+    "tedious": "^18.6.1"
+  },
+  "devDependencies": { "typescript": "^5.7.2", "vitest": "^2.1.8" }
+}

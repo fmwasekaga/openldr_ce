@@ -1,6 +1,5 @@
 import { Kysely } from 'kysely';
 import { createAuth } from '@openldr/adapter-auth';
-import { createDbStore } from '@openldr/adapter-db-store';
 import { createEventBus } from '@openldr/adapter-event-bus';
 import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import type { Config } from '@openldr/config';
@@ -11,6 +10,7 @@ import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@
 import { createAuditStore, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore } from '@openldr/users';
 import { getReport, reportSummaries, type ReportResult, type ReportSummary } from '@openldr/reporting';
+import { selectTargetStore } from './target-store';
 
 export class ReportNotFoundError extends Error {
   constructor(public readonly id: string) {
@@ -50,7 +50,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     forcePathStyle: cfg.S3_FORCE_PATH_STYLE,
   });
   const eventing = createEventBus({ url: cfg.INTERNAL_DATABASE_URL });
-  const store = createDbStore({ url: cfg.TARGET_DATABASE_URL });
+  const { store } = selectTargetStore(cfg);
   const internal = createInternalDb(cfg.INTERNAL_DATABASE_URL);
   const audit = createAuditStore(internal.db);
   const users = createUserStore(internal.db);
@@ -90,3 +90,4 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
 
 export * from './db-context';
 export * from './ingest-context';
+export * from './target-store';

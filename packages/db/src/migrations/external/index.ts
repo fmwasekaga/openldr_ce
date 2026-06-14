@@ -1,6 +1,9 @@
 import type { Migration } from 'kysely';
+import type { TargetEngine } from '../../engine';
 import * as m001 from './001_flat_tables';
 
-export const externalMigrations: Record<string, Migration> = {
-  '001_flat_tables': { up: m001.up, down: m001.down },
-};
+export function externalMigrations(engine: TargetEngine): Record<string, Migration> {
+  return {
+    '001_flat_tables': { up: (db) => m001.up(db, engine), down: m001.down },
+  };
+}

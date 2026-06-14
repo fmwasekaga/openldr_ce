@@ -1,115 +1,111 @@
 import { type Kysely, type CreateTableBuilder, sql } from 'kysely';
+import type { TargetEngine } from '../../engine';
+import { textType, keyType, floatType, timestampType, nowExpr } from './dialect';
 
-function withCommon(b: CreateTableBuilder<string, never>): CreateTableBuilder<string, never> {
-  return b
-    .addColumn('source_system', 'text')
-    .addColumn('plugin_id', 'text')
-    .addColumn('plugin_version', 'text')
-    .addColumn('batch_id', 'text')
-    .addColumn('created_at', 'timestamptz', (c) => c.notNull().defaultTo(sql`now()`));
+function withCommon(b: CreateTableBuilder<string, never>, engine: TargetEngine): CreateTableBuilder<string, never> {
+  const text = sql.raw(textType(engine));
+  const built = b
+    .addColumn('source_system', text)
+    .addColumn('plugin_id', text)
+    .addColumn('plugin_version', text)
+    .addColumn('batch_id', text)
+    .addColumn('created_at', sql.raw(timestampType(engine)), (c) => c.notNull().defaultTo(nowExpr(engine)));
+  // SQL Server has no CREATE TABLE ... IF NOT EXISTS; the Kysely migrator already guarantees
+  // each migration runs once, so ifNotExists is only a Postgres convenience.
+  return engine === 'postgres' ? built.ifNotExists() : built;
 }
 
-export async function up(db: Kysely<unknown>): Promise<void> {
+export async function up(db: Kysely<unknown>, engine: TargetEngine): Promise<void> {
+  const text = sql.raw(textType(engine));
+  const key = sql.raw(keyType(engine));
+  const float = sql.raw(floatType(engine));
+
   await withCommon(
-    db.schema
-      .createTable('patients')
-      .ifNotExists()
-      .addColumn('id', 'text', (c) => c.primaryKey())
-      .addColumn('identifier_system', 'text')
-      .addColumn('identifier_value', 'text')
-      .addColumn('family_name', 'text')
-      .addColumn('given_name', 'text')
-      .addColumn('gender', 'text')
-      .addColumn('birth_date', 'text')
-      .addColumn('managing_organization', 'text'),
+    db.schema.createTable('patients').addColumn('id', key, (c) => c.primaryKey())
+      .addColumn('identifier_system', text)
+      .addColumn('identifier_value', text)
+      .addColumn('family_name', text)
+      .addColumn('given_name', text)
+      .addColumn('gender', text)
+      .addColumn('birth_date', text)
+      .addColumn('managing_organization', text),
+    engine,
   ).execute();
 
   await withCommon(
-    db.schema
-      .createTable('specimens')
-      .ifNotExists()
-      .addColumn('id', 'text', (c) => c.primaryKey())
-      .addColumn('identifier_value', 'text')
-      .addColumn('accession', 'text')
-      .addColumn('status', 'text')
-      .addColumn('type_code', 'text')
-      .addColumn('type_text', 'text')
-      .addColumn('subject_ref', 'text')
-      .addColumn('parent_ref', 'text')
-      .addColumn('received_time', 'text'),
+    db.schema.createTable('specimens').addColumn('id', key, (c) => c.primaryKey())
+      .addColumn('identifier_value', text)
+      .addColumn('accession', text)
+      .addColumn('status', text)
+      .addColumn('type_code', text)
+      .addColumn('type_text', text)
+      .addColumn('subject_ref', text)
+      .addColumn('parent_ref', text)
+      .addColumn('received_time', text),
+    engine,
   ).execute();
 
   await withCommon(
-    db.schema
-      .createTable('service_requests')
-      .ifNotExists()
-      .addColumn('id', 'text', (c) => c.primaryKey())
-      .addColumn('identifier_value', 'text')
-      .addColumn('status', 'text')
-      .addColumn('intent', 'text')
-      .addColumn('priority', 'text')
-      .addColumn('code_code', 'text')
-      .addColumn('code_text', 'text')
-      .addColumn('subject_ref', 'text')
-      .addColumn('authored_on', 'text'),
+    db.schema.createTable('service_requests').addColumn('id', key, (c) => c.primaryKey())
+      .addColumn('identifier_value', text)
+      .addColumn('status', text)
+      .addColumn('intent', text)
+      .addColumn('priority', text)
+      .addColumn('code_code', text)
+      .addColumn('code_text', text)
+      .addColumn('subject_ref', text)
+      .addColumn('authored_on', text),
+    engine,
   ).execute();
 
   await withCommon(
-    db.schema
-      .createTable('diagnostic_reports')
-      .ifNotExists()
-      .addColumn('id', 'text', (c) => c.primaryKey())
-      .addColumn('identifier_value', 'text')
-      .addColumn('status', 'text')
-      .addColumn('code_code', 'text')
-      .addColumn('code_text', 'text')
-      .addColumn('subject_ref', 'text')
-      .addColumn('effective_date_time', 'text')
-      .addColumn('issued', 'text')
-      .addColumn('conclusion', 'text'),
+    db.schema.createTable('diagnostic_reports').addColumn('id', key, (c) => c.primaryKey())
+      .addColumn('identifier_value', text)
+      .addColumn('status', text)
+      .addColumn('code_code', text)
+      .addColumn('code_text', text)
+      .addColumn('subject_ref', text)
+      .addColumn('effective_date_time', text)
+      .addColumn('issued', text)
+      .addColumn('conclusion', text),
+    engine,
   ).execute();
 
   await withCommon(
-    db.schema
-      .createTable('observations')
-      .ifNotExists()
-      .addColumn('id', 'text', (c) => c.primaryKey())
-      .addColumn('identifier_value', 'text')
-      .addColumn('status', 'text')
-      .addColumn('code_code', 'text')
-      .addColumn('code_text', 'text')
-      .addColumn('subject_ref', 'text')
-      .addColumn('specimen_ref', 'text')
-      .addColumn('value_quantity', 'double precision')
-      .addColumn('value_unit', 'text')
-      .addColumn('value_code', 'text')
-      .addColumn('value_text', 'text')
-      .addColumn('interpretation_code', 'text')
-      .addColumn('effective_date_time', 'text'),
+    db.schema.createTable('observations').addColumn('id', key, (c) => c.primaryKey())
+      .addColumn('identifier_value', text)
+      .addColumn('status', text)
+      .addColumn('code_code', text)
+      .addColumn('code_text', text)
+      .addColumn('subject_ref', text)
+      .addColumn('specimen_ref', text)
+      .addColumn('value_quantity', float)
+      .addColumn('value_unit', text)
+      .addColumn('value_code', text)
+      .addColumn('value_text', text)
+      .addColumn('interpretation_code', text)
+      .addColumn('effective_date_time', text),
+    engine,
   ).execute();
 
   await withCommon(
-    db.schema
-      .createTable('organizations')
-      .ifNotExists()
-      .addColumn('id', 'text', (c) => c.primaryKey())
-      .addColumn('identifier_value', 'text')
-      .addColumn('name', 'text')
-      .addColumn('type_text', 'text')
-      .addColumn('part_of_ref', 'text'),
+    db.schema.createTable('organizations').addColumn('id', key, (c) => c.primaryKey())
+      .addColumn('identifier_value', text)
+      .addColumn('name', text)
+      .addColumn('type_text', text)
+      .addColumn('part_of_ref', text),
+    engine,
   ).execute();
 
   await withCommon(
-    db.schema
-      .createTable('locations')
-      .ifNotExists()
-      .addColumn('id', 'text', (c) => c.primaryKey())
-      .addColumn('identifier_value', 'text')
-      .addColumn('status', 'text')
-      .addColumn('name', 'text')
-      .addColumn('type_text', 'text')
-      .addColumn('managing_organization', 'text')
-      .addColumn('part_of_ref', 'text'),
+    db.schema.createTable('locations').addColumn('id', key, (c) => c.primaryKey())
+      .addColumn('identifier_value', text)
+      .addColumn('status', text)
+      .addColumn('name', text)
+      .addColumn('type_text', text)
+      .addColumn('managing_organization', text)
+      .addColumn('part_of_ref', text),
+    engine,
   ).execute();
 }
 

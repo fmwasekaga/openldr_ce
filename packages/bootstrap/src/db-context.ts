@@ -1,9 +1,9 @@
 import { Kysely } from 'kysely';
 import type { MigrationResultSet } from 'kysely';
-import { createDbStore } from '@openldr/adapter-db-store';
 import type { Config } from '@openldr/config';
 import { createLogger, ConfigError } from '@openldr/core';
 import type { TargetStorePort } from '@openldr/ports';
+import { selectTargetStore } from './target-store';
 import {
   createInternalDb,
   createFhirStore,
@@ -35,13 +35,13 @@ export interface DbContext {
 export async function createDbContext(cfg: Config): Promise<DbContext> {
   const logger = createLogger({ level: cfg.LOG_LEVEL });
   const internal = createInternalDb(cfg.INTERNAL_DATABASE_URL);
-  const externalStore = createDbStore({ url: cfg.TARGET_DATABASE_URL });
+  const { store: externalStore, engine } = selectTargetStore(cfg);
   const externalDb = externalStore.db as unknown as Kysely<ExternalSchema>;
 
   const fhirStore = createFhirStore(internal.db);
-  const flatWriter = createFlatWriter(externalDb);
+  const flatWriter = createFlatWriter(externalDb, engine);
   const internalMigrator = createMigrator(internal.db, internalMigrations);
-  const externalMigrator = createMigrator(externalDb, externalMigrations);
+  const externalMigrator = createMigrator(externalDb, externalMigrations(engine));
 
   return {
     internalDb: internal.db,
