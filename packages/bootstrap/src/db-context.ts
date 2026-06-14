@@ -41,7 +41,7 @@ export async function createDbContext(cfg: Config): Promise<DbContext> {
   const fhirStore = createFhirStore(internal.db);
   const flatWriter = createFlatWriter(externalDb);
   const internalMigrator = createMigrator(internal.db, internalMigrations);
-  const externalMigrator = createMigrator(externalDb, externalMigrations);
+  const externalMigrator = createMigrator(externalDb, externalMigrations('postgres'));
 
   return {
     internalDb: internal.db,

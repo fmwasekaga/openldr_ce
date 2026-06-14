@@ -79,7 +79,7 @@ export async function createIngestContext(cfg: Config): Promise<IngestContext> {
   );
 
   const internalMigrator = createMigrator(internal.db, internalMigrations);
-  const externalMigrator = createMigrator(externalDb, externalMigrations);
+  const externalMigrator = createMigrator(externalDb, externalMigrations('postgres'));
 
   return {
     accept: (input) => acceptPayload({ blob, eventing, batches, logger }, input),

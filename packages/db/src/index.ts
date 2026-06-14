@@ -1,6 +1,7 @@
 export * from './provenance';
 export * from './schema/internal';
 export * from './schema/external';
+export * from './engine';
 export * from './flatten/index';
 export * from './migrations/internal/index';
 export * from './migrations/external/index';

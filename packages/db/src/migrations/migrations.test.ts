@@ -11,8 +11,9 @@ describe('migration maps', () => {
     }
   });
   it('external has the flat_tables migration with up/down', () => {
-    expect(Object.keys(externalMigrations)).toEqual(['001_flat_tables']);
-    expect(typeof externalMigrations['001_flat_tables'].up).toBe('function');
-    expect(typeof externalMigrations['001_flat_tables'].down).toBe('function');
+    const ext = externalMigrations('postgres');
+    expect(Object.keys(ext)).toEqual(['001_flat_tables']);
+    expect(typeof ext['001_flat_tables'].up).toBe('function');
+    expect(typeof ext['001_flat_tables'].down).toBe('function');
   });
 });
