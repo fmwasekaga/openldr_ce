@@ -49,4 +49,14 @@ describe('DocsLayout', () => {
     renderAt('/docs');
     expect(screen.getByRole('button', { name: 'Download documentation' })).toBeInTheDocument();
   });
+
+  it('collapses and expands the sidebar', () => {
+    renderAt('/docs');
+    expect(screen.getByRole('navigation', { name: 'Documentation sections' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse documentation sidebar' }));
+    expect(screen.queryByRole('navigation', { name: 'Documentation sections' })).toBeNull();
+    expect(screen.queryByLabelText('Search documentation')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Expand documentation sidebar' }));
+    expect(screen.getByRole('navigation', { name: 'Documentation sections' })).toBeInTheDocument();
+  });
 });

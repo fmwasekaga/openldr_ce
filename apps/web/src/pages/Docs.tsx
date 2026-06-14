@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { AppShell } from '../shell/AppShell';
 import { useDocLocale } from '../docs/useDocLocale';
 import { list, resolve, LOCALES, type Locale } from '../docs/registry';
@@ -9,7 +10,6 @@ import { Lightbox, type LightboxImage } from '../docs/Lightbox';
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from '@/components/ui/select';
-import { Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
@@ -21,6 +21,7 @@ export function Docs() {
   const { slug } = useParams();
   const [locale, setLocale] = useDocLocale();
   const [query, setQuery] = useState('');
+  const [collapsed, setCollapsed] = useState(false);
   const [lightbox, setLightbox] = useState<LightboxImage | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const sections = useMemo(() => list(locale), [locale]);
@@ -42,40 +43,60 @@ export function Docs() {
 
   return (
     <AppShell title="Documentation">
-      <div className="ui-scope flex h-[calc(100vh-7rem)] gap-4">
-        {/* Inner sidebar */}
-        <aside className="flex w-64 shrink-0 flex-col rounded-lg border border-border bg-card">
-          <div className="border-b border-border p-2">
-            <input
-              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder="Search…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              aria-label="Search documentation"
-            />
-          </div>
-          <nav aria-label="Documentation sections" className="flex flex-1 flex-col overflow-y-auto p-1">
-            {navSlugs.map((s) => (
-              <Link
-                key={s}
-                to={`/docs/${s}`}
-                className={`rounded-md px-3 py-2 text-sm no-underline transition-colors ${
-                  s === activeSlug
-                    ? 'bg-accent text-primary'
-                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-                }`}
-              >
-                {titleFor(s)}
-              </Link>
-            ))}
-            {navSlugs.length === 0 && (
-              <p className="px-3 py-2 text-sm text-muted-foreground">No results.</p>
+      {/* One light frame for the whole region; everything inside is separated by
+          borders (no per-panel cards) — matching the corlix docs layout. */}
+      <div className="ui-scope flex h-[calc(100vh-6rem)] overflow-hidden rounded-lg border border-border">
+        {/* Inner sidebar — a border-r column (not a card), collapsible. */}
+        <aside
+          className={`flex shrink-0 flex-col border-r border-border transition-[width] duration-200 ease-in-out ${
+            collapsed ? 'w-12' : 'w-64'
+          }`}
+        >
+          <div className="flex items-center gap-2 border-b border-border p-2">
+            <button
+              type="button"
+              onClick={() => setCollapsed((c) => !c)}
+              aria-label={collapsed ? 'Expand documentation sidebar' : 'Collapse documentation sidebar'}
+              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+            </button>
+            {!collapsed && (
+              <input
+                className="h-8 w-full min-w-0 rounded-md border border-input bg-transparent px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                placeholder="Search…"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                aria-label="Search documentation"
+              />
             )}
-          </nav>
+          </div>
+          {!collapsed && (
+            <nav aria-label="Documentation sections" className="flex flex-1 flex-col overflow-y-auto py-1">
+              {navSlugs.map((s) => (
+                <Link
+                  key={s}
+                  to={`/docs/${s}`}
+                  aria-current={s === activeSlug ? 'page' : undefined}
+                  className={`border-l-2 px-3 py-2 text-sm no-underline transition-colors ${
+                    s === activeSlug
+                      ? 'border-primary bg-accent text-primary'
+                      : 'border-transparent text-muted-foreground hover:bg-accent hover:text-foreground'
+                  }`}
+                >
+                  {titleFor(s)}
+                </Link>
+              ))}
+              {navSlugs.length === 0 && (
+                <p className="px-3 py-2 text-sm text-muted-foreground">No results.</p>
+              )}
+            </nav>
+          )}
         </aside>
 
-        {/* Content */}
-        <section className="flex min-w-0 flex-1 flex-col rounded-lg border border-border bg-card">
+        {/* Content — borderless; only a thin toolbar separator above it. */}
+        <section className="flex min-w-0 flex-1 flex-col">
           <div className="flex items-center justify-end gap-2 border-b border-border p-2">
             {exportError && (
               <span role="status" aria-live="polite" className="mr-auto text-xs text-destructive">{exportError}</span>

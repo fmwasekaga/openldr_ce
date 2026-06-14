@@ -49,7 +49,9 @@ export function Lightbox({ image, onClose }: { image: LightboxImage | null; onCl
             </Button>
           </div>
         </div>
-        <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto bg-black/90">
+        {/* Image backdrop is hardcoded near-black (not a theme token) so the viewer
+            reads correctly in any theme — the same approach corlix's lightbox uses. */}
+        <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto bg-[#0d0d0d]">
           <img
             src={image.url}
             alt={image.alt}
