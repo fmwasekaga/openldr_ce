@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createOperations } from './operations';
 import type { ConceptSource } from './source';
 import type { ConceptRecord } from '@openldr/db';
+import type { ValueSet } from '@openldr/fhir';
 
 function memSource(concepts: ConceptRecord[], resources: Record<string, unknown> = {}): ConceptSource {
   const has = (system: string, code: string) => concepts.find((c) => c.system === system && c.code === code) ?? null;
@@ -44,5 +45,34 @@ describe('validateCode (CodeSystem)', () => {
   });
   it('false for a missing code', async () => {
     expect((await ops.validateCode({ system: 'http://loinc.org', code: 'x' })).result).toBe(false);
+  });
+});
+
+const abx: ConceptRecord[] = [
+  { system: 'http://whonet.org/fhir/CodeSystem/antibiotic', code: 'AMP', display: 'Ampicillin', status: null, properties: null },
+  { system: 'http://whonet.org/fhir/CodeSystem/antibiotic', code: 'CIP', display: 'Ciprofloxacin', status: null, properties: null },
+  { system: 'http://whonet.org/fhir/CodeSystem/antibiotic', code: 'GEN', display: 'Gentamicin', status: null, properties: null },
+];
+const abxVs: ValueSet = { resourceType: 'ValueSet', url: 'http://whonet.org/fhir/ValueSet/antibiotics', status: 'active', compose: { include: [{ system: 'http://whonet.org/fhir/CodeSystem/antibiotic' }] } };
+
+describe('expand', () => {
+  const ops = createOperations(memSource(abx, { [abxVs.url]: abxVs }));
+  it('expands a whole-system include, paginated', async () => {
+    const vs = await ops.expand('http://whonet.org/fhir/ValueSet/antibiotics', { count: 2, offset: 0 });
+    expect(vs.expansion?.total).toBe(3);
+    expect(vs.expansion?.contains?.map((c) => c.code)).toEqual(['AMP', 'CIP']);
+  });
+  it('404s an unknown ValueSet', async () => {
+    await expect(ops.expand('http://x/nope', {})).rejects.toThrow(/not found/i);
+  });
+});
+
+describe('validateCode (ValueSet)', () => {
+  const ops = createOperations(memSource(abx, { [abxVs.url]: abxVs }));
+  it('true when the code is in the ValueSet', async () => {
+    expect((await ops.validateCode({ valueSetUrl: abxVs.url, code: 'AMP' })).result).toBe(true);
+  });
+  it('false when not', async () => {
+    expect((await ops.validateCode({ valueSetUrl: abxVs.url, code: 'XXX' })).result).toBe(false);
   });
 });
