@@ -1,5 +1,4 @@
 import { Kysely } from 'kysely';
-import { createDbStore } from '@openldr/adapter-db-store';
 import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import { createEventBus } from '@openldr/adapter-event-bus';
 import type { Config } from '@openldr/config';
@@ -33,6 +32,7 @@ import {
   type PluginRuntime,
 } from '@openldr/plugins';
 import { createAuditStore, safeRecord } from '@openldr/audit';
+import { selectTargetStore } from './target-store';
 
 export interface IngestContext {
   accept(input: AcceptInput): Promise<{ batchId: string; blobKey: string }>;
@@ -49,7 +49,7 @@ export interface IngestContext {
 export async function createIngestContext(cfg: Config): Promise<IngestContext> {
   const logger = createLogger({ level: cfg.LOG_LEVEL });
   const internal = createInternalDb(cfg.INTERNAL_DATABASE_URL);
-  const externalStore = createDbStore({ url: cfg.TARGET_DATABASE_URL! });
+  const { store: externalStore, engine } = selectTargetStore(cfg);
   const externalDb = externalStore.db as unknown as Kysely<ExternalSchema>;
   const blob = createS3Bucket({
     endpoint: cfg.S3_ENDPOINT,
@@ -62,7 +62,7 @@ export async function createIngestContext(cfg: Config): Promise<IngestContext> {
   const eventing = createEventBus({ url: cfg.INTERNAL_DATABASE_URL });
 
   const fhirStore = createFhirStore(internal.db);
-  const flatWriter = createFlatWriter(externalDb, 'postgres');
+  const flatWriter = createFlatWriter(externalDb, engine);
   const persist = (resource: unknown, provenance: Provenance) => persistResource({ fhirStore, flatWriter, logger }, resource, provenance);
   const converters = defaultConverters();
   const batches = createBatchStore(internal.db);
@@ -79,7 +79,7 @@ export async function createIngestContext(cfg: Config): Promise<IngestContext> {
   );
 
   const internalMigrator = createMigrator(internal.db, internalMigrations);
-  const externalMigrator = createMigrator(externalDb, externalMigrations('postgres'));
+  const externalMigrator = createMigrator(externalDb, externalMigrations(engine));
 
   return {
     accept: (input) => acceptPayload({ blob, eventing, batches, logger }, input),

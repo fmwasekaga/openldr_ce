@@ -262,6 +262,9 @@ importers:
       '@openldr/adapter-event-bus':
         specifier: workspace:*
         version: link:../adapter-event-bus
+      '@openldr/adapter-mssql-store':
+        specifier: workspace:*
+        version: link:../adapter-mssql-store
       '@openldr/adapter-s3-bucket':
         specifier: workspace:*
         version: link:../adapter-s3-bucket
