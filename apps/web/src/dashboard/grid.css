@@ -2,21 +2,24 @@
    react-resizable defaults, which are imported before this file. */
 
 /* The default resize glyph is a low-contrast SVG that disappears on the dark
-   theme. Hide it and draw a theme-aware corner so the handle is findable. */
+   theme. Hide it, enlarge the grab target, and draw a clearly visible,
+   brand-colored corner so the handle is easy to find and grab. */
 .dash-grid .react-resizable-handle {
-  z-index: 20;
+  z-index: 30;
+  width: 28px;
+  height: 28px;
   background-image: none;
 }
 .dash-grid .react-resizable-handle-se::after {
   content: '';
   position: absolute;
-  right: 4px;
-  bottom: 4px;
-  width: 9px;
-  height: 9px;
-  border-right: 2px solid var(--text-muted, #8a8a8a);
-  border-bottom: 2px solid var(--text-muted, #8a8a8a);
-  border-bottom-right-radius: 2px;
+  right: 5px;
+  bottom: 5px;
+  width: 13px;
+  height: 13px;
+  border-right: 3px solid var(--brand, #4682b4);
+  border-bottom: 3px solid var(--brand, #4682b4);
+  border-bottom-right-radius: 3px;
 }
 
 /* Dotted-grid background, shown only while editing, like corlix. */

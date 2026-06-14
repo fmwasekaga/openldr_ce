@@ -49,6 +49,7 @@ export function DashboardGrid({ filterValues, onEdit }: { filterValues: Record<s
         isDraggable={editing}
         isResizable={editing}
         draggableHandle=".drag-handle"
+        draggableCancel=".no-drag"
         compactType="vertical"
         margin={[16, 16]}
         onLayoutChange={onLayoutChange}
@@ -56,16 +57,19 @@ export function DashboardGrid({ filterValues, onEdit }: { filterValues: Record<s
         onResizeStop={() => setResizing(null)}
       >
           {current.widgets.map((w) => (
-            <div key={w.id} className="relative flex flex-col rounded-lg border border-border bg-card">
+            <div
+              key={w.id}
+              className={`relative flex flex-col rounded-lg border border-border bg-card ${editing ? 'drag-handle cursor-move' : ''}`}
+            >
               <div className="flex items-center justify-between border-b border-border px-2 py-1 text-sm">
-                <span className={`flex items-center gap-1 font-medium ${editing ? 'drag-handle cursor-move' : ''}`}>
+                <span className="flex items-center gap-1 font-medium">
                   {editing && <GripVertical className="h-4 w-4 text-muted-foreground" />}
                   {w.title}
                 </span>
                 {editing && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button size="icon" variant="ghost" aria-label="Widget menu" className="h-7 w-7">
+                      <Button size="icon" variant="ghost" aria-label="Widget menu" className="no-drag h-7 w-7">
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>

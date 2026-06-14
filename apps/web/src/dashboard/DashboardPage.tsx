@@ -1,8 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { AppShell } from '../shell/AppShell';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
-import { Plus, Pencil, Save, SlidersHorizontal, MoreHorizontal } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
+import { Plus, Pencil, Check, SlidersHorizontal, MoreHorizontal } from 'lucide-react';
 import { listDashboards, createDashboard, saveDashboard, fetchClientConfig, type Dashboard, type WidgetConfig } from '../api';
 import { useDashboardStore } from './store';
 import { DashboardGrid } from './DashboardGrid';
@@ -122,57 +130,55 @@ export function DashboardPage() {
       <div className="ui-scope">
         {error && <div className="mb-3 text-sm text-destructive">{error}</div>}
         <div className="mb-4 flex items-center justify-between">
-          <select
-            aria-label="Dashboard"
-            className="rounded border border-border bg-background p-2"
-            value={current.id}
-            onChange={(e) => setCurrent(all.find((d) => d.id === e.target.value)!)}
-          >
-            {all.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
+          <Select value={current.id} onValueChange={(id) => setCurrent(all.find((d) => d.id === id)!)}>
+            <SelectTrigger aria-label="Dashboard" className="w-56">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {all.map((d) => (
+                <SelectItem key={d.id} value={d.id}>
+                  {d.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <div className="flex gap-2">
             {editing ? (
-              <>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button size="icon" variant="outline" aria-label="Dashboard menu">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      onSelect={() => {
-                        setEditingWidget(undefined);
-                        setEditorOpen(true);
-                      }}
-                    >
-                      <Plus className="mr-2 h-4 w-4" />
-                      Add widget
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setFilterEditorOpen(true)}>
-                      <SlidersHorizontal className="mr-2 h-4 w-4" />
-                      Edit filters
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    if (current)
-                      saveDashboard(current).then(() => {
-                        markClean();
-                        setEditing(false);
-                      });
-                  }}
-                >
-                  <Save className="mr-1 h-4 w-4" />
-                  Done
-                </Button>
-              </>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="icon" variant="outline" aria-label="Dashboard menu">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      setEditingWidget(undefined);
+                      setEditorOpen(true);
+                    }}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add widget
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setFilterEditorOpen(true)}>
+                    <SlidersHorizontal className="mr-2 h-4 w-4" />
+                    Edit filters
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      if (current)
+                        saveDashboard(current).then(() => {
+                          markClean();
+                          setEditing(false);
+                        });
+                    }}
+                  >
+                    <Check className="mr-2 h-4 w-4" />
+                    Done
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             ) : (
               <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
                 <Pencil className="mr-1 h-4 w-4" />
@@ -181,6 +187,7 @@ export function DashboardPage() {
             )}
           </div>
         </div>
+        <Separator className="mb-4" />
         <DashboardFilterBar filters={current.filters} values={values} onChange={setValues} />
         <DashboardGrid
           filterValues={values}
