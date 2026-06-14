@@ -50,7 +50,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     forcePathStyle: cfg.S3_FORCE_PATH_STYLE,
   });
   const eventing = createEventBus({ url: cfg.INTERNAL_DATABASE_URL });
-  const store = createDbStore({ url: cfg.TARGET_DATABASE_URL });
+  const store = createDbStore({ url: cfg.TARGET_DATABASE_URL! });
   const internal = createInternalDb(cfg.INTERNAL_DATABASE_URL);
   const audit = createAuditStore(internal.db);
   const users = createUserStore(internal.db);

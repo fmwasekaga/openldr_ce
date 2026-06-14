@@ -35,7 +35,7 @@ export interface DbContext {
 export async function createDbContext(cfg: Config): Promise<DbContext> {
   const logger = createLogger({ level: cfg.LOG_LEVEL });
   const internal = createInternalDb(cfg.INTERNAL_DATABASE_URL);
-  const externalStore = createDbStore({ url: cfg.TARGET_DATABASE_URL });
+  const externalStore = createDbStore({ url: cfg.TARGET_DATABASE_URL! });
   const externalDb = externalStore.db as unknown as Kysely<ExternalSchema>;
 
   const fhirStore = createFhirStore(internal.db);

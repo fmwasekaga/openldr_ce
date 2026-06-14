@@ -49,7 +49,7 @@ export interface IngestContext {
 export async function createIngestContext(cfg: Config): Promise<IngestContext> {
   const logger = createLogger({ level: cfg.LOG_LEVEL });
   const internal = createInternalDb(cfg.INTERNAL_DATABASE_URL);
-  const externalStore = createDbStore({ url: cfg.TARGET_DATABASE_URL });
+  const externalStore = createDbStore({ url: cfg.TARGET_DATABASE_URL! });
   const externalDb = externalStore.db as unknown as Kysely<ExternalSchema>;
   const blob = createS3Bucket({
     endpoint: cfg.S3_ENDPOINT,
