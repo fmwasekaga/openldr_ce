@@ -54,8 +54,12 @@ export function createS3Bucket(cfg: S3BucketConfig, deps: S3BucketDeps = {}): Bl
       try {
         await client.send(new HeadObjectCommand({ Bucket: cfg.bucket, Key: key }));
         return true;
-      } catch {
-        return false;
+      } catch (err) {
+        const e = err as { name?: string; $metadata?: { httpStatusCode?: number } };
+        if (e?.name === 'NotFound' || e?.name === 'NoSuchKey' || e?.$metadata?.httpStatusCode === 404) {
+          return false;
+        }
+        throw err; // propagate credential / permission / network errors instead of masking them
       }
     },
     async presign(key, expiresInSeconds = 900) {

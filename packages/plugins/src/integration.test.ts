@@ -29,7 +29,7 @@ describe('plugin → handleIngestEvent (hermetic)', () => {
   it('resolves a plugin converter and persists its resources with plugin provenance', async () => {
     const runtime = createPluginRuntime({ blob, store, runner, logger });
     const resolver = chainResolvers(registryResolver(new ConverterRegistry()), { resolve: (id) => runtime.load(id) });
-    const persist = vi.fn(async () => ({ saved: true, flattened: 'written' as const }));
+    const persist = vi.fn(async (rs: unknown[]) => rs.map(() => ({ saved: true, flattened: 'written' as const })));
     const batches = { markProcessing: vi.fn(), markDone: vi.fn(), markFailed: vi.fn() } as unknown as BatchStore;
 
     await handleIngestEvent(
@@ -37,11 +37,12 @@ describe('plugin → handleIngestEvent (hermetic)', () => {
       { type: 'ingest.received', payload: { batchId: 'b1', blobKey: 'k', source: 'lab', converter: 'whonet-sqlite' } },
     );
 
-    expect(persist).toHaveBeenCalledTimes(2);
+    expect(persist).toHaveBeenCalledTimes(1);
     expect(persist).toHaveBeenCalledWith(
-      expect.objectContaining({ resourceType: 'Patient' }),
+      expect.arrayContaining([expect.objectContaining({ resourceType: 'Patient' })]),
       expect.objectContaining({ pluginId: 'whonet-sqlite', pluginVersion: '0.1.0', sourceSystem: 'lab', batchId: 'b1' }),
     );
+    expect((persist.mock.calls[0][0] as unknown[]).length).toBe(2);
     expect(batches.markDone).toHaveBeenCalledWith('b1', 2);
   });
 });

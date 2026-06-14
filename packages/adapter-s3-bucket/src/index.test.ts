@@ -30,4 +30,28 @@ describe('createS3Bucket', () => {
     expect(r.status).toBe('down');
     expect(r.detail).toContain('NoSuchBucket');
   });
+
+  describe('exists', () => {
+    it('returns true when HeadObject succeeds', async () => {
+      const client = fakeClient(async () => ({}));
+      const blob = createS3Bucket(cfg, { client: client as never });
+      expect(await blob.exists('some/key')).toBe(true);
+    });
+
+    it('returns false on a genuine 404 NotFound', async () => {
+      const client = fakeClient(async () => {
+        throw { name: 'NotFound', $metadata: { httpStatusCode: 404 } };
+      });
+      const blob = createS3Bucket(cfg, { client: client as never });
+      expect(await blob.exists('missing/key')).toBe(false);
+    });
+
+    it('rethrows non-404 errors (e.g. 403 AccessDenied) instead of masking as absent', async () => {
+      const client = fakeClient(async () => {
+        throw { name: 'AccessDenied', $metadata: { httpStatusCode: 403 } };
+      });
+      const blob = createS3Bucket(cfg, { client: client as never });
+      await expect(blob.exists('forbidden/key')).rejects.toMatchObject({ name: 'AccessDenied' });
+    });
+  });
 });

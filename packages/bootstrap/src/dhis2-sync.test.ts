@@ -45,4 +45,34 @@ describe('dhis2 sync handler logic', () => {
     await fire({ type: 'dhis2.sync.due', payload: { scheduleId: 'off' } });
     expect(published).toHaveLength(2); // disabled → no re-enqueue
   });
+
+  it('logs (does not silently swallow) when a sync fails before runMapping can audit', async () => {
+    // Mirrors the production catch in dhis2-context registerSync: a throw from
+    // loadMapping/orgUnits.getMap()/build bypasses runMapping's own audit, so the
+    // outer handler must emit logger.error rather than swallow the failure.
+    const logger = { error: vi.fn() };
+    const runMapping = vi.fn(async () => { throw new Error('DB down in loadMapping'); });
+    const { bus, handlers, published } = fakeEventing();
+
+    await bus.subscribe('dhis2.sync.due', async (event) => {
+      const { scheduleId } = event.payload as { scheduleId: string };
+      const sched = { id: scheduleId, mappingId: 'm1', enabled: true };
+      if (!sched.enabled) return;
+      const period = '2026Q1';
+      try { await runMapping(); }
+      catch (err) { logger.error({ err, scheduleId, mappingId: sched.mappingId, period }, 'dhis2 scheduled sync failed'); }
+      await bus.publish({ type: 'dhis2.sync.due', payload: { scheduleId } }, { availableAt: new Date(Date.now() + 1000) });
+    });
+
+    const fire = handlers.get('dhis2.sync.due')!;
+    await fire({ type: 'dhis2.sync.due', payload: { scheduleId: 'sched-1' } });
+
+    expect(runMapping).toHaveBeenCalledTimes(1);
+    expect(logger.error).toHaveBeenCalledTimes(1);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ scheduleId: 'sched-1', mappingId: 'm1' }),
+      'dhis2 scheduled sync failed',
+    );
+    expect(published).toHaveLength(1); // still re-enqueued despite the failure
+  });
 });

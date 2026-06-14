@@ -1,6 +1,6 @@
 import { loadConfig } from '@openldr/config';
 import { selectTargetStore } from '@openldr/bootstrap';
-import { errorMessage } from '@openldr/core';
+import { redactError } from './redact-error';
 import type { TargetEngine } from '@openldr/db';
 
 export async function runTargetStoreTest(opts: { engine?: string; json: boolean }): Promise<number> {
@@ -26,8 +26,8 @@ export async function runTargetStoreTest(opts: { engine?: string; json: boolean 
     }
     return result.status === 'up' ? 0 : 1;
   } catch (err) {
-    if (opts.json) process.stdout.write(JSON.stringify({ status: 'down', error: errorMessage(err) }) + '\n');
-    else process.stderr.write(`target-store test failed: ${errorMessage(err)}\n`);
+    if (opts.json) process.stdout.write(JSON.stringify({ status: 'down', error: redactError(err) }) + '\n');
+    else process.stderr.write(`target-store test failed: ${redactError(err)}\n`);
     return 1;
   } finally {
     await store?.close();

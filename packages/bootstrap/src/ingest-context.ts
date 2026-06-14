@@ -8,7 +8,7 @@ import {
   createFhirStore,
   createFlatWriter,
   createMigrator,
-  persistResource,
+  persistResources,
   internalMigrations,
   externalMigrations,
   type ExternalSchema,
@@ -65,7 +65,7 @@ export async function createIngestContext(cfg: Config): Promise<IngestContext> {
 
   const fhirStore = createFhirStore(internal.db);
   const flatWriter = createFlatWriter(externalDb, engine);
-  const persist = (resource: unknown, provenance: Provenance) => persistResource({ fhirStore, flatWriter, logger }, resource, provenance);
+  const persist = (resources: unknown[], provenance: Provenance) => persistResources({ fhirStore, flatWriter, logger }, resources, provenance);
   const converters = defaultConverters();
   const batches = createBatchStore(internal.db);
   const audit = createAuditStore(internal.db);
