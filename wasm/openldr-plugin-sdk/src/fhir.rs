@@ -15,14 +15,17 @@ pub fn patient(id: &str, family: Option<&str>, given: Option<&str>, gender: Opti
     p
 }
 
-/// A Specimen referencing a subject, with an optional type code and collection date.
-pub fn specimen(id: &str, subject_ref: &str, type_code: Option<&str>, collected: Option<&str>) -> Value {
+/// A Specimen referencing a subject, with optional type code, collection date, and origin.
+pub fn specimen(id: &str, subject_ref: &str, type_code: Option<&str>, collected: Option<&str>, origin: Option<&str>) -> Value {
     let mut s = json!({ "resourceType": "Specimen", "id": id, "subject": { "reference": subject_ref } });
     if let Some(t) = type_code {
         s["type"] = json!({ "coding": [{ "code": t }] });
     }
     if let Some(c) = collected {
         s["collection"] = json!({ "collectedDateTime": c });
+    }
+    if let Some(o) = origin {
+        s["extension"] = json!([{ "url": "https://openldr.org/fhir/StructureDefinition/specimen-origin", "valueCode": o }]);
     }
     s
 }

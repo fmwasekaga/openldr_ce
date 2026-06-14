@@ -18,7 +18,19 @@ pub fn map_isolates(conn: &Connection) -> rusqlite::Result<Vec<Value>> {
         cols
     };
 
-    let base = "patient_id, sex, birth_date, spec_num, spec_type, spec_date, organism, organism_code";
+    let has_location: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(isolates)")?;
+        let rows = stmt.query_map([], |r| r.get::<_, String>(1))?;
+        let mut found = false;
+        for name in rows { if name? == "location_type" { found = true; } }
+        found
+    };
+
+    let base = if has_location {
+        "patient_id, sex, birth_date, spec_num, spec_type, spec_date, organism, organism_code, location_type"
+    } else {
+        "patient_id, sex, birth_date, spec_num, spec_type, spec_date, organism, organism_code"
+    };
     // Discovered ab_* names come from the (untrusted) input DB schema; quote them as
     // SQLite identifiers (doubling any embedded quote) so an unusual column name can
     // neither break nor inject into the query.
@@ -44,6 +56,13 @@ pub fn map_isolates(conn: &Connection) -> rusqlite::Result<Vec<Value>> {
         let spec_date: Option<String> = row.get(5)?;
         let organism: Option<String> = row.get(6)?;
         let organism_code: Option<String> = row.get(7)?;
+        let location_type: Option<String> = if has_location { row.get(8)? } else { None };
+        let origin = location_type.as_deref().map(|l| match l.to_ascii_lowercase().as_str() {
+            "i" | "in" | "inpatient" => "inpatient",
+            "o" | "out" | "outpatient" => "outpatient",
+            _ => "unknown",
+        });
+        let ab_base = if has_location { 9 } else { 8 };
 
         let pid = format!("whonet-pat-{patient_id}");
         let sid = format!("whonet-spec-{spec_num}");
@@ -57,7 +76,7 @@ pub fn map_isolates(conn: &Connection) -> rusqlite::Result<Vec<Value>> {
         });
 
         out.push(fhir::patient(&pid, None, None, gender, birth_date.as_deref()));
-        out.push(fhir::specimen(&sid, &patient_ref, spec_type.as_deref(), spec_date.as_deref()));
+        out.push(fhir::specimen(&sid, &patient_ref, spec_type.as_deref(), spec_date.as_deref(), origin));
 
         if let Some(org) = organism.as_deref() {
             out.push(fhir::observation_organism(
@@ -70,7 +89,7 @@ pub fn map_isolates(conn: &Connection) -> rusqlite::Result<Vec<Value>> {
         }
 
         for (i, col) in ab_cols.iter().enumerate() {
-            let val: Option<String> = row.get(8 + i)?;
+            let val: Option<String> = row.get(ab_base + i)?;
             if let Some(v) = val {
                 let v = v.trim();
                 if v == "S" || v == "I" || v == "R" {
