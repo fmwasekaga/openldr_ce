@@ -125,7 +125,7 @@ export async function createDhis2Context(cfg: Config): Promise<Dhis2Context> {
         const now = new Date();
         const period = previousPeriod(sched.periodType, now);
         try { await runMapping({ mappingId: sched.mappingId, period, dryRun: false, trigger: 'scheduled', ...cb }); }
-        catch { /* audited inside runMapping; still re-schedule the next period */ }
+        catch (err) { logger.error({ err, scheduleId, mappingId: sched.mappingId, period }, 'dhis2 scheduled sync failed'); }
         await schedules.markRun(scheduleId, now);
         const due = nextPeriodBoundary(sched.periodType, now);
         await schedules.setNextDue(scheduleId, due);
@@ -136,7 +136,7 @@ export async function createDhis2Context(cfg: Config): Promise<Dhis2Context> {
         const all = await schedules.list();
         for (const s of all.filter((x: ScheduleRecord) => x.enabled && x.mode === 'tracker' && x.eventDriven)) {
           try { await runMapping({ mappingId: s.mappingId, period: currentPeriod(s.periodType, now), dryRun: false, trigger: 'ingest-event', ...cb }); }
-          catch { /* audited inside */ }
+          catch (err) { logger.error({ err, scheduleId: s.id, mappingId: s.mappingId }, 'dhis2 ingest-driven tracker push failed'); }
         }
       });
     },
