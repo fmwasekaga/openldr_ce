@@ -54,6 +54,11 @@ export const ConfigSchema = z
 
     // OIDC issuer (Keycloak realm base URL).
     OIDC_ISSUER_URL: z.string().url(),
+
+    // Custom dashboards — gated raw-SQL widget escape hatch (Postgres warehouse only).
+    DASHBOARD_SQL_ENABLED: envBoolean(false),
+    DASHBOARD_SQL_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+    DASHBOARD_SQL_ROW_CAP: z.coerce.number().int().positive().default(10000),
   })
   .superRefine((cfg, ctx) => {
     if (cfg.TARGET_STORE_ADAPTER === 'mssql') {

@@ -4,7 +4,7 @@ import { externalMigrations } from './external/index';
 
 describe('migration maps', () => {
   it('internal has the six migrations with up/down', () => {
-    expect(Object.keys(internalMigrations)).toEqual(['001_fhir_resources', '002_outbox', '003_ingest_batches', '004_plugins', '005_audit_events', '006_users', '007_terminology', '008_dhis2', '009_dhis2_schedules', '010_ingest_batch_config']);
+    expect(Object.keys(internalMigrations)).toEqual(['001_fhir_resources', '002_outbox', '003_ingest_batches', '004_plugins', '005_audit_events', '006_users', '007_terminology', '008_dhis2', '009_dhis2_schedules', '010_ingest_batch_config', '011_dashboards']);
     for (const m of Object.values(internalMigrations)) {
       expect(typeof m.up).toBe('function');
       expect(typeof m.down).toBe('function');

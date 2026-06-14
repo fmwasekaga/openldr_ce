@@ -12,6 +12,15 @@ if (typeof Blob !== 'undefined' && typeof Blob.prototype.text !== 'function') {
   };
 }
 
+// recharts ResponsiveContainer uses ResizeObserver which jsdom lacks.
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
+
 // Radix UI (Select/Dialog/Dropdown) uses pointer-capture + scrollIntoView, which jsdom lacks.
 if (typeof Element !== 'undefined') {
   if (!Element.prototype.hasPointerCapture) Element.prototype.hasPointerCapture = () => false;
