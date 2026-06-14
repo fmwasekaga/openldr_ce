@@ -1,14 +1,7 @@
-import type { Kysely } from 'kysely';
-import type { ExternalSchema } from '@openldr/db';
 import { amrIsolates } from './reports/amr-isolates';
+import type { EventSource } from './eventsource-types';
 
-export interface EventWindow { from: string; to: string }
-
-export interface EventSource {
-  id: string;
-  name: string;
-  run(db: Kysely<ExternalSchema>, window: EventWindow, params?: Record<string, string>): Promise<{ rows: Record<string, unknown>[] }>;
-}
+export * from './eventsource-types';
 
 const SOURCES: EventSource[] = [amrIsolates];
 

@@ -1,4 +1,4 @@
-import type { EventSource } from '../eventsource';
+import type { EventSource } from '../eventsource-types';
 import { endOfDay } from '../helpers';
 
 export const amrIsolates: EventSource = {
