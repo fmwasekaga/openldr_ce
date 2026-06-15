@@ -89,6 +89,7 @@ export const DashboardFilterDefSchema = z.object({
   defaultValue: z.union([z.string(), z.number()]).nullable().optional(),
   defaultRange: z.object({ from: z.string(), to: z.string() }).nullable().optional(),
   options: z.array(z.string()).optional(),
+  optionsSql: z.string().optional(),
 });
 export type DashboardFilterDef = z.infer<typeof DashboardFilterDefSchema>;
 

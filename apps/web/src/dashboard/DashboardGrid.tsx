@@ -61,7 +61,7 @@ export function DashboardGrid({ filterValues, onEdit }: { filterValues: Record<s
               key={w.id}
               className={`relative flex flex-col rounded-lg border border-border bg-card ${editing ? 'drag-handle cursor-move' : ''}`}
             >
-              <div className="flex items-center justify-between border-b border-border px-2 py-1 text-sm">
+              <div className="flex items-center justify-between px-2 py-1 text-sm">
                 <span className="flex items-center gap-1 font-medium">
                   {editing && <GripVertical className="h-4 w-4 text-muted-foreground" />}
                   {w.title}

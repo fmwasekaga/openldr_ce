@@ -50,7 +50,7 @@ export interface WidgetConfig {
   id: string; type: string; title: string; query: WidgetQuery; refreshIntervalSec: number; visual: Record<string, unknown>;
 }
 export interface LayoutItem { i: string; x: number; y: number; w: number; h: number; minW?: number; minH?: number }
-export interface DashboardFilterDef { id: string; label: string; type: 'text' | 'number' | 'date' | 'date-range'; defaultValue?: string | number | null; defaultRange?: { from: string; to: string } | null; options?: string[] }
+export interface DashboardFilterDef { id: string; label: string; type: 'text' | 'number' | 'date' | 'date-range'; defaultValue?: string | number | null; defaultRange?: { from: string; to: string } | null; options?: string[]; optionsSql?: string }
 export interface Dashboard {
   id: string; ownerId: string | null; name: string; layout: LayoutItem[]; widgets: WidgetConfig[];
   filters: DashboardFilterDef[]; refreshIntervalSec: number; isDefault: boolean; createdAt?: string; updatedAt?: string;

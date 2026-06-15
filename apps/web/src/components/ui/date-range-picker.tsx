@@ -6,15 +6,21 @@ import { Popover, PopoverContent, PopoverTrigger } from './popover';
 import { Button } from './button';
 import { cn } from '@/lib/cn';
 
+export interface DateRangePreset {
+  label: string;
+  range: { from: string; to: string };
+}
+
 interface DateRangePickerProps {
   value: { from: string; to: string } | null;
   onChange: (value: { from: string; to: string } | null) => void;
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  presets?: DateRangePreset[];
 }
 
-export function DateRangePicker({ value, onChange, placeholder = 'Pick a date range', disabled, className }: DateRangePickerProps) {
+export function DateRangePicker({ value, onChange, placeholder = 'Pick a date range', disabled, className, presets }: DateRangePickerProps) {
   const [open, setOpen] = React.useState(false);
   const dateRange: DateRange | undefined =
     value?.from || value?.to ? { from: value.from ? new Date(value.from) : undefined, to: value.to ? new Date(value.to) : undefined } : undefined;
@@ -44,7 +50,27 @@ export function DateRangePicker({ value, onChange, placeholder = 'Pick a date ra
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
-        <Calendar mode="range" selected={dateRange} onSelect={handleSelect} numberOfMonths={2} />
+        <div className="flex">
+          {presets && presets.length > 0 && (
+            <div className="flex flex-col gap-1 border-r border-border p-2">
+              {presets.map((p) => (
+                <Button
+                  key={p.label}
+                  variant="ghost"
+                  size="sm"
+                  className="justify-start text-xs font-normal"
+                  onClick={() => {
+                    onChange(p.range);
+                    setOpen(false);
+                  }}
+                >
+                  {p.label}
+                </Button>
+              ))}
+            </div>
+          )}
+          <Calendar mode="range" selected={dateRange} onSelect={handleSelect} numberOfMonths={2} />
+        </div>
         <div className="flex items-center justify-between gap-2 border-t border-border px-3 py-2">
           <Button variant="ghost" size="sm" onClick={handleClear} className="text-xs text-muted-foreground">
             Clear

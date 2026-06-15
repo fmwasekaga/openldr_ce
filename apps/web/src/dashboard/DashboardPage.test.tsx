@@ -31,6 +31,6 @@ describe('DashboardPage', () => {
       return Promise.resolve(new Response('{}', { status: 200 }));
     });
     const { findByText } = render(<MemoryRouter><DashboardPage /></MemoryRouter>);
-    expect(await findByText('Overview')).toBeTruthy();
+    expect(await findByText('Lab Overview (Sample)')).toBeTruthy();
   });
 });

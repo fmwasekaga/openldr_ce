@@ -11,70 +11,36 @@ import {
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/cn';
-import { Plus, Pencil, Check, SlidersHorizontal, MoreHorizontal } from 'lucide-react';
-import { listDashboards, createDashboard, saveDashboard, fetchClientConfig, type Dashboard, type WidgetConfig } from '../api';
+import { Plus, Pencil, Check, SlidersHorizontal, MoreHorizontal, Download, Upload } from 'lucide-react';
+import { listDashboards, createDashboard, saveDashboard, fetchClientConfig, type Dashboard, type DashboardFilterDef, type WidgetConfig } from '../api';
 import { useDashboardStore } from './store';
 import { DashboardGrid } from './DashboardGrid';
 import { DashboardFilterBar } from './filters/DashboardFilterBar';
 import { DashboardFilterEditor } from './filters/DashboardFilterEditor';
+import { exportDashboard, importDashboard } from './io';
+import sampleGeneral from './samples/openldr-general.json';
 import { WidgetEditorDialog } from './editor/WidgetEditorDialog';
 
-const DEFAULT_SEED: Dashboard = {
+// The default dashboard is the bundled "Lab Overview (Sample)" — a full corlix-style board
+// (KPIs, gauge, charts, funnel, table) driven by the Period/Test/Priority filters.
+const DEFAULT_SEED = {
   id: 'default',
   ownerId: null,
-  name: 'Overview',
-  refreshIntervalSec: 0,
   isDefault: true,
-  filters: [],
-  widgets: [
-    {
-      id: 'w-orders',
-      type: 'kpi',
-      title: 'Total Orders',
-      refreshIntervalSec: 0,
-      visual: {},
-      query: {
-        mode: 'builder',
-        model: 'service_requests',
-        metric: { key: 'count', label: 'Orders', agg: 'count' },
-        filters: [],
-      },
-    },
-    {
-      id: 'w-trend',
-      type: 'line-chart',
-      title: 'Orders by Month',
-      refreshIntervalSec: 0,
-      visual: { xAxisKey: 'label', yAxisKey: 'value' },
-      query: {
-        mode: 'builder',
-        model: 'service_requests',
-        metric: { key: 'count', label: 'Orders', agg: 'count' },
-        dimension: { key: 'authored_on', grain: 'month' },
-        filters: [],
-      },
-    },
-    {
-      id: 'w-cat',
-      type: 'bar-chart',
-      title: 'Orders by Test',
-      refreshIntervalSec: 0,
-      visual: { xAxisKey: 'label', yAxisKey: 'value' },
-      query: {
-        mode: 'builder',
-        model: 'service_requests',
-        metric: { key: 'count', label: 'Orders', agg: 'count' },
-        dimension: { key: 'code_text' },
-        filters: [],
-      },
-    },
-  ],
-  layout: [
-    { i: 'w-orders', x: 0, y: 0, w: 3, h: 2 },
-    { i: 'w-trend', x: 3, y: 0, w: 6, h: 4 },
-    { i: 'w-cat', x: 0, y: 2, w: 6, h: 4 },
-  ],
-};
+  ...sampleGeneral,
+} as unknown as Dashboard;
+
+function defaultsFor(filters: DashboardFilterDef[]): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const f of filters) {
+    if (f.type === 'date-range') {
+      if (f.defaultRange?.from || f.defaultRange?.to) out[f.id] = f.defaultRange;
+    } else if (f.defaultValue != null && f.defaultValue !== '') {
+      out[f.id] = f.defaultValue;
+    }
+  }
+  return out;
+}
 
 export function DashboardPage() {
   const { current, editing, dirty, setCurrent, setEditing, markClean, addWidget, updateWidget, removeWidget } = useDashboardStore();
@@ -86,6 +52,37 @@ export function DashboardPage() {
   const [sqlEnabled, setSqlEnabled] = useState(false);
   const [error, setError] = useState<string>();
   const saveTimer = useRef<ReturnType<typeof setTimeout>>();
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  const handleExport = () => {
+    if (!current) return;
+    const blob = new Blob([exportDashboard(current)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${current.name.replace(/[^a-z0-9-_]+/gi, '_')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importAndSelect = async (raw: unknown) => {
+    try {
+      const imported = importDashboard(raw, all.map((d) => d.name));
+      const created = await createDashboard(imported);
+      setAll((prev) => [...prev, created]);
+      setCurrent(created);
+    } catch (e) {
+      setError(`Import failed: ${String((e as Error).message ?? e)}`);
+    }
+  };
+
+  const handleImportFile = async (file: File) => {
+    try {
+      await importAndSelect(JSON.parse(await file.text()));
+    } catch (e) {
+      setError(`Import failed: ${String((e as Error).message ?? e)}`);
+    }
+  };
 
   useEffect(() => {
     fetchClientConfig()
@@ -99,12 +96,28 @@ export function DashboardPage() {
         if (list.length === 0) {
           const seeded = await createDashboard(DEFAULT_SEED);
           list = [seeded];
+        } else {
+          // One-time migration: replace the legacy 3-widget "Overview" seed (ids w-orders/
+          // w-trend/w-cat) with the new sample board. Self-clearing once migrated.
+          const stale = list.find((d) => d.id === 'default' && d.widgets.some((w) => w.id === 'w-orders'));
+          if (stale) {
+            const migrated = await saveDashboard({ ...DEFAULT_SEED, id: stale.id });
+            list = list.map((d) => (d.id === stale.id ? migrated : d));
+          }
         }
         setAll(list);
         setCurrent(list[0]);
       })
       .catch((e) => setError(String(e.message ?? e)));
   }, []);
+
+  // Seed filter values from each filter's default whenever the active dashboard or its
+  // filter set changes, so SQL widgets render with the default-bound values on first load.
+  useEffect(() => {
+    if (!current) return;
+    setValues(defaultsFor(current.filters));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current?.id, JSON.stringify(current?.filters)]);
 
   // Debounced auto-save while editing.
   useEffect(() => {
@@ -185,14 +198,37 @@ export function DashboardPage() {
                   Edit
                 </DropdownMenuItem>
               )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={handleExport}>
+                <Download className="mr-2 h-4 w-4" />
+                Export dashboard
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => fileInput.current?.click()}>
+                <Upload className="mr-2 h-4 w-4" />
+                Import dashboard…
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          <input
+            ref={fileInput}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleImportFile(f);
+              e.target.value = '';
+            }}
+          />
         </div>
         <Separator />
         {current.filters.length > 0 && (
-          <div className="px-4 pt-3">
-            <DashboardFilterBar filters={current.filters} values={values} onChange={setValues} />
-          </div>
+          <>
+            <div className="px-4 py-3">
+              <DashboardFilterBar filters={current.filters} values={values} onChange={setValues} />
+            </div>
+            <Separator />
+          </>
         )}
         <div className={cn('flex-1', editing && 'dash-edit-bg')}>
           <DashboardGrid

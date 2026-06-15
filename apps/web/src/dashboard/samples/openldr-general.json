@@ -1,0 +1,188 @@
+{
+  "name": "Lab Overview (Sample)",
+  "refreshIntervalSec": 0,
+  "filters": [
+    { "id": "period", "label": "Period", "type": "date-range", "defaultRange": null },
+    { "id": "test", "label": "Test", "type": "text", "optionsSql": "SELECT DISTINCT code_text FROM service_requests WHERE code_text IS NOT NULL ORDER BY code_text" },
+    { "id": "priority", "label": "Priority", "type": "text", "options": ["routine", "urgent", "asap", "stat"] }
+  ],
+  "layout": [
+    { "i": "s1", "x": 0, "y": 0, "w": 3, "h": 2 },
+    { "i": "s2", "x": 3, "y": 0, "w": 3, "h": 2 },
+    { "i": "s3", "x": 6, "y": 0, "w": 3, "h": 2 },
+    { "i": "s4", "x": 9, "y": 0, "w": 3, "h": 3 },
+    { "i": "s5", "x": 0, "y": 2, "w": 6, "h": 4 },
+    { "i": "s6", "x": 6, "y": 3, "w": 6, "h": 4 },
+    { "i": "s7", "x": 0, "y": 6, "w": 4, "h": 4 },
+    { "i": "s8", "x": 4, "y": 6, "w": 4, "h": 4 },
+    { "i": "s9", "x": 8, "y": 7, "w": 4, "h": 4 },
+    { "i": "s10", "x": 0, "y": 10, "w": 3, "h": 2 },
+    { "i": "s11", "x": 3, "y": 10, "w": 5, "h": 4 },
+    { "i": "s12", "x": 8, "y": 11, "w": 4, "h": 4 },
+    { "i": "s13", "x": 0, "y": 14, "w": 12, "h": 4 }
+  ],
+  "widgets": [
+    {
+      "id": "s1",
+      "type": "kpi",
+      "title": "Total Orders",
+      "refreshIntervalSec": 60,
+      "visual": { "yAxisKey": "value" },
+      "query": {
+        "mode": "sql",
+        "sql": "SELECT COUNT(*) AS value FROM service_requests\nWHERE 1=1\n[[AND substring(authored_on,1,10) >= {{period_from}}]]\n[[AND substring(authored_on,1,10) <= {{period_to}}]]\n[[AND code_text = {{test}}]]\n[[AND priority = {{priority}}]]",
+        "variableBindings": { "period": "period", "test": "test", "priority": "priority" }
+      }
+    },
+    {
+      "id": "s2",
+      "type": "kpi",
+      "title": "Distinct Patients",
+      "refreshIntervalSec": 60,
+      "visual": { "yAxisKey": "value" },
+      "query": {
+        "mode": "sql",
+        "sql": "SELECT COUNT(DISTINCT subject_ref) AS value FROM service_requests\nWHERE 1=1\n[[AND substring(authored_on,1,10) >= {{period_from}}]]\n[[AND substring(authored_on,1,10) <= {{period_to}}]]\n[[AND code_text = {{test}}]]\n[[AND priority = {{priority}}]]",
+        "variableBindings": { "period": "period", "test": "test", "priority": "priority" }
+      }
+    },
+    {
+      "id": "s3",
+      "type": "kpi",
+      "title": "Results Recorded",
+      "refreshIntervalSec": 60,
+      "visual": { "yAxisKey": "value" },
+      "query": {
+        "mode": "sql",
+        "sql": "SELECT COUNT(*) AS value FROM observations\nWHERE 1=1\n[[AND substring(effective_date_time,1,10) >= {{period_from}}]]\n[[AND substring(effective_date_time,1,10) <= {{period_to}}]]\n[[AND code_text = {{test}}]]",
+        "variableBindings": { "period": "period", "test": "test" }
+      }
+    },
+    {
+      "id": "s4",
+      "type": "gauge",
+      "title": "Result Finalisation %",
+      "refreshIntervalSec": 300,
+      "visual": { "yAxisKey": "value", "suffix": "%", "minValue": 0, "maxValue": 100, "greenThreshold": 80, "amberThreshold": 60 },
+      "query": {
+        "mode": "sql",
+        "sql": "SELECT CASE WHEN COUNT(*) > 0\n  THEN ROUND(SUM(CASE WHEN status IN ('final','amended') THEN 1 ELSE 0 END) * 100.0 / COUNT(*))\n  ELSE 100 END AS value\nFROM observations"
+      }
+    },
+    {
+      "id": "s5",
+      "type": "bar-chart",
+      "title": "Orders by Test",
+      "refreshIntervalSec": 300,
+      "visual": { "xAxisKey": "label", "yAxisKey": "value", "color": "#10b981" },
+      "query": {
+        "mode": "sql",
+        "sql": "SELECT code_text AS label, COUNT(*) AS value FROM service_requests\nWHERE code_text IS NOT NULL\n[[AND substring(authored_on,1,10) >= {{period_from}}]]\n[[AND substring(authored_on,1,10) <= {{period_to}}]]\n[[AND priority = {{priority}}]]\nGROUP BY code_text\nORDER BY value DESC\nLIMIT 15",
+        "variableBindings": { "period": "period", "priority": "priority" }
+      }
+    },
+    {
+      "id": "s6",
+      "type": "area-chart",
+      "title": "Orders Trend (30 days)",
+      "refreshIntervalSec": 300,
+      "visual": { "xAxisKey": "label", "yAxisKey": "value", "color": "#3b82f6" },
+      "query": {
+        "mode": "sql",
+        "sql": "SELECT substring(authored_on,1,10) AS label, COUNT(*) AS value FROM service_requests\nWHERE authored_on >= to_char(now() - interval '30 days', 'YYYY-MM-DD')\n[[AND code_text = {{test}}]]\n[[AND priority = {{priority}}]]\nGROUP BY substring(authored_on,1,10)\nORDER BY label",
+        "variableBindings": { "test": "test", "priority": "priority" }
+      }
+    },
+    {
+      "id": "s7",
+      "type": "pie-chart",
+      "title": "Orders by Status",
+      "refreshIntervalSec": 300,
+      "visual": { "xAxisKey": "label", "yAxisKey": "value", "innerRadius": 40 },
+      "query": {
+        "mode": "sql",
+        "sql": "SELECT status AS label, COUNT(*) AS value FROM service_requests\nWHERE 1=1\n[[AND substring(authored_on,1,10) >= {{period_from}}]]\n[[AND substring(authored_on,1,10) <= {{period_to}}]]\n[[AND code_text = {{test}}]]\n[[AND priority = {{priority}}]]\nGROUP BY status\nORDER BY value DESC",
+        "variableBindings": { "period": "period", "test": "test", "priority": "priority" }
+      }
+    },
+    {
+      "id": "s8",
+      "type": "row-chart",
+      "title": "Orders by Priority",
+      "refreshIntervalSec": 300,
+      "visual": { "xAxisKey": "label", "yAxisKey": "value", "color": "#f59e0b" },
+      "query": {
+        "mode": "sql",
+        "sql": "SELECT priority AS label, COUNT(*) AS value FROM service_requests\nWHERE priority IS NOT NULL\n[[AND substring(authored_on,1,10) >= {{period_from}}]]\n[[AND substring(authored_on,1,10) <= {{period_to}}]]\n[[AND code_text = {{test}}]]\nGROUP BY priority\nORDER BY value DESC",
+        "variableBindings": { "period": "period", "test": "test" }
+      }
+    },
+    {
+      "id": "s9",
+      "type": "funnel",
+      "title": "Order → Report Pipeline",
+      "refreshIntervalSec": 300,
+      "visual": { "xAxisKey": "label", "yAxisKey": "value" },
+      "query": {
+        "mode": "sql",
+        "sql": "SELECT 'Ordered' AS label, COUNT(*) AS value FROM service_requests\nUNION ALL SELECT 'Specimen Received', COUNT(*) FROM specimens WHERE received_time IS NOT NULL\nUNION ALL SELECT 'Result Recorded', COUNT(*) FROM observations\nUNION ALL SELECT 'Report Issued', COUNT(*) FROM diagnostic_reports WHERE issued IS NOT NULL"
+      }
+    },
+    {
+      "id": "s10",
+      "type": "traffic-light",
+      "title": "Abnormal Results",
+      "refreshIntervalSec": 300,
+      "visual": { "yAxisKey": "value", "greenThreshold": 10, "amberThreshold": 50 },
+      "query": {
+        "mode": "sql",
+        "sql": "SELECT COUNT(*) AS value FROM observations\nWHERE interpretation_code IN ('H','HH','L','LL','A','AA')\n[[AND substring(effective_date_time,1,10) >= {{period_from}}]]\n[[AND substring(effective_date_time,1,10) <= {{period_to}}]]",
+        "variableBindings": { "period": "period" }
+      }
+    },
+    {
+      "id": "s11",
+      "type": "line-chart",
+      "title": "Results Trend (30 days)",
+      "refreshIntervalSec": 300,
+      "visual": { "xAxisKey": "label", "yAxisKey": "value", "color": "#8b5cf6" },
+      "query": {
+        "mode": "sql",
+        "sql": "SELECT substring(effective_date_time,1,10) AS label, COUNT(*) AS value FROM observations\nWHERE effective_date_time >= to_char(now() - interval '30 days', 'YYYY-MM-DD')\n[[AND code_text = {{test}}]]\nGROUP BY substring(effective_date_time,1,10)\nORDER BY label",
+        "variableBindings": { "test": "test" }
+      }
+    },
+    {
+      "id": "s12",
+      "type": "scatter-plot",
+      "title": "Analyte Volume vs Avg Value",
+      "refreshIntervalSec": 300,
+      "visual": { "xAxisKey": "x", "yAxisKey": "y", "sizeKey": "y" },
+      "query": {
+        "mode": "sql",
+        "sql": "SELECT code_text AS label, COUNT(*) AS x, ROUND(AVG(value_quantity)::numeric, 2) AS y\nFROM observations\nWHERE value_quantity IS NOT NULL AND code_text IS NOT NULL\nGROUP BY code_text\nORDER BY x DESC\nLIMIT 30"
+      }
+    },
+    {
+      "id": "s13",
+      "type": "table",
+      "title": "Recent Orders",
+      "refreshIntervalSec": 0,
+      "visual": {
+        "columns": [
+          { "key": "order_id", "label": "Order" },
+          { "key": "test", "label": "Test" },
+          { "key": "status", "label": "Status" },
+          { "key": "priority", "label": "Priority" },
+          { "key": "authored", "label": "Authored" }
+        ],
+        "pageSize": 10
+      },
+      "query": {
+        "mode": "sql",
+        "sql": "SELECT identifier_value AS order_id, code_text AS test, status, priority, substring(authored_on,1,10) AS authored\nFROM service_requests\nWHERE 1=1\n[[AND substring(authored_on,1,10) >= {{period_from}}]]\n[[AND substring(authored_on,1,10) <= {{period_to}}]]\n[[AND code_text = {{test}}]]\n[[AND priority = {{priority}}]]\nORDER BY authored_on DESC\nLIMIT 50",
+        "variableBindings": { "period": "period", "test": "test", "priority": "priority" }
+      }
+    }
+  ]
+}
