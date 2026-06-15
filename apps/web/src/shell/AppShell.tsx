@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
-  LayoutDashboard, FileText, BookOpen, FileInput, Users, ShieldCheck,
+  LayoutDashboard, FileText, BookOpen, Library, FileInput, Users, ShieldCheck,
   ChevronLeft, ChevronRight, Sun, Moon, type LucideIcon,
 } from 'lucide-react';
 import { useTheme } from './useTheme';
@@ -12,6 +12,7 @@ import { cn } from '@/lib/cn';
 const NAV: { to: string; label: string; end: boolean; icon: LucideIcon }[] = [
   { to: '/', label: 'Dashboard', end: true, icon: LayoutDashboard },
   { to: '/reports', label: 'Reports', end: false, icon: FileText },
+  { to: '/terminology', label: 'Terminology', end: false, icon: Library },
   { to: '/docs', label: 'Docs', end: false, icon: BookOpen },
 ];
 const SOON: { label: string; icon: LucideIcon }[] = [

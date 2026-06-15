@@ -10,6 +10,7 @@ import * as m008 from './008_dhis2';
 import * as m009 from './009_dhis2_schedules';
 import * as m010 from './010_ingest_batch_config';
 import * as m011 from './011_dashboards';
+import * as m012 from './012_terminology_admin';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -23,4 +24,5 @@ export const internalMigrations: Record<string, Migration> = {
   '009_dhis2_schedules': { up: m009.up, down: m009.down },
   '010_ingest_batch_config': { up: m010.up, down: m010.down },
   '011_dashboards': { up: m011.up, down: m011.down },
+  '012_terminology_admin': { up: m012.up, down: m012.down },
 };

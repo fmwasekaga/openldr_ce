@@ -116,6 +116,28 @@ export interface ConceptMapElementsTable {
   equivalence: string | null;
 }
 
+export interface PublishersTable {
+  id: string;
+  name: string;
+  role: string; // 'local' | 'standard' | 'external'
+  icon: string | null;
+  match_prefixes: JSONColumnType<string[]>;
+  seeded: Generated<boolean>;
+  sort_order: Generated<number>;
+}
+
+export interface CodingSystemsTable {
+  id: string;
+  system_code: string;
+  system_name: string;
+  url: string | null;
+  system_version: string | null;
+  description: string | null;
+  active: Generated<boolean>;
+  publisher_id: string | null;
+  seeded: Generated<boolean>;
+}
+
 export interface Dhis2OrgUnitMapTable {
   facility_id: string;
   orgunit_id: string;
@@ -153,6 +175,8 @@ export interface InternalSchema {
   terminology_concepts: TerminologyConceptsTable;
   terminology_systems: TerminologySystemsTable;
   concept_map_elements: ConceptMapElementsTable;
+  publishers: PublishersTable;
+  coding_systems: CodingSystemsTable;
   dhis2_orgunit_map: Dhis2OrgUnitMapTable;
   dhis2_mappings: Dhis2MappingsTable;
   dhis2_schedules: Dhis2SchedulesTable;

@@ -3,6 +3,71 @@ import { buildApp } from './app';
 import type { AppContext } from '@openldr/bootstrap';
 import { HealthRegistry, createLogger } from '@openldr/core';
 
+type FakeAdmin = AppContext['terminology']['admin'];
+
+/** Minimal in-memory fake admin store for route tests.
+ *  The harness hand-mocks ctx (no pg-mem DB available here), so we use a fake.
+ *  @openldr/db is not a dep of @openldr/server — types are derived from AppContext.
+ *  The LOINC publisher is pre-seeded to satisfy the "LOINC present" assertion. */
+function buildFakeAdmin(): FakeAdmin {
+  type PubRole = 'local' | 'standard' | 'external';
+  type PubRow = { id: string; name: string; role: PubRole; icon: string | null; seeded: boolean; sortOrder: number };
+  const publishers: PubRow[] = [
+    { id: 'pub-loinc', name: 'LOINC', role: 'standard', icon: null, seeded: true, sortOrder: 1 },
+  ];
+  const systems: Array<{ id: string; systemCode: string; systemName: string; url: string | null; systemVersion: string | null; description: string | null; active: boolean; publisherId: string | null; seeded: boolean }> = [];
+  let pubSeq = 0;
+  let sysSeq = 0;
+
+  const adminErr = (msg: string, kind: 'not-found' | 'conflict') =>
+    Object.assign(new Error(msg), { name: 'TerminologyAdminError', kind });
+
+  return {
+    publishers: {
+      async list() { return [...publishers]; },
+      async create(input) {
+        const p = { id: `pub-test-${++pubSeq}`, name: input.name, role: input.role, icon: input.icon ?? null, seeded: false, sortOrder: 100 };
+        publishers.push(p);
+        return p;
+      },
+      async update(id, input) {
+        const p = publishers.find((x) => x.id === id);
+        if (!p) throw adminErr(`not found: ${id}`, 'not-found');
+        Object.assign(p, { name: input.name, role: input.role, icon: input.icon ?? null });
+        return p;
+      },
+      async delete(id) {
+        const idx = publishers.findIndex((x) => x.id === id);
+        if (idx === -1) throw adminErr(`not found: ${id}`, 'not-found');
+        if (publishers[idx].seeded) throw adminErr(`cannot delete seeded publisher: ${id}`, 'conflict');
+        publishers.splice(idx, 1);
+      },
+      async deletionImpact() { return { systemCount: 0, termCount: 0 }; },
+    },
+    codingSystems: {
+      async list(publisherId) { return publisherId ? systems.filter((s) => s.publisherId === publisherId) : [...systems]; },
+      async create(input) {
+        const s = { id: `cs-test-${++sysSeq}`, systemCode: input.systemCode, systemName: input.systemName, url: input.url ?? null, systemVersion: input.systemVersion ?? null, description: input.description ?? null, active: input.active, publisherId: input.publisherId ?? null, seeded: false };
+        systems.push(s);
+        return s;
+      },
+      async update(id, input) {
+        const s = systems.find((x) => x.id === id);
+        if (!s) throw adminErr(`not found: ${id}`, 'not-found');
+        Object.assign(s, { systemName: input.systemName, url: input.url ?? null, systemVersion: input.systemVersion ?? null, description: input.description ?? null, active: input.active, publisherId: input.publisherId ?? null });
+        return s;
+      },
+      async delete(id) {
+        const idx = systems.findIndex((x) => x.id === id);
+        if (idx === -1) throw adminErr(`not found: ${id}`, 'not-found');
+        systems.splice(idx, 1);
+      },
+      async deletionImpact() { return { termCount: 0, mappingCount: 0 }; },
+      async upsertByUrl() { /* no-op in fake */ },
+    },
+  };
+}
+
 function ctxWith(status: 'up' | 'down'): AppContext {
   const health = new HealthRegistry();
   health.register({ name: 'auth', check: async () => ({ status, latencyMs: 1 }) });
@@ -16,7 +81,7 @@ function ctxWith(status: 'up' | 'down'): AppContext {
     reporting: {} as never,
     audit: {} as never,
     users: {} as never,
-    terminology: {} as never,
+    terminology: { ops: {} as never, admin: buildFakeAdmin() },
     dashboards: {} as never,
     cfg: {} as never,
     async close() {},
@@ -37,6 +102,32 @@ describe('GET /health', () => {
     const res = await app.inject({ method: 'GET', url: '/health' });
     expect(res.statusCode).toBe(503);
     expect(res.json().status).toBe('down');
+    await app.close();
+  });
+});
+
+describe('terminology admin routes', () => {
+  it('lists seeded publishers and creates a custom publisher + system', async () => {
+    const app = buildApp(ctxWith('up'));
+
+    const list = await app.inject({ method: 'GET', url: '/api/terminology/publishers' });
+    expect(list.statusCode).toBe(200);
+    expect(JSON.parse(list.body).some((p: { name: string }) => p.name === 'LOINC')).toBe(true);
+
+    const created = await app.inject({ method: 'POST', url: '/api/terminology/publishers', payload: { name: 'My Lab', role: 'local' } });
+    expect(created.statusCode).toBe(201);
+
+    const sys = await app.inject({ method: 'POST', url: '/api/terminology/systems', payload: { systemCode: 'MYX', systemName: 'My X', active: true } });
+    expect(sys.statusCode).toBe(201);
+
+    // 404: delete of unknown publisher id
+    const del404 = await app.inject({ method: 'DELETE', url: '/api/terminology/publishers/ghost-id' });
+    expect(del404.statusCode).toBe(404);
+
+    // 409: delete of seeded publisher (pub-loinc is pre-seeded with seeded=true)
+    const del409 = await app.inject({ method: 'DELETE', url: '/api/terminology/publishers/pub-loinc' });
+    expect(del409.statusCode).toBe(409);
+
     await app.close();
   });
 });

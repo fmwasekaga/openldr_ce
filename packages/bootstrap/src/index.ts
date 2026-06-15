@@ -4,7 +4,7 @@ import { createEventBus } from '@openldr/adapter-event-bus';
 import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import type { Config } from '@openldr/config';
 import { createLogger, HealthRegistry, type Logger } from '@openldr/core';
-import { createInternalDb, createFhirStore, createTerminologyStore } from '@openldr/db';
+import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, type TerminologyAdminStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, type AuditStore } from '@openldr/audit';
@@ -49,7 +49,7 @@ export interface AppContext {
   users: UserStore;
   reporting: ReportingApi;
   health: HealthRegistry;
-  terminology: { ops: Operations };
+  terminology: { ops: Operations; admin: TerminologyAdminStore };
   dashboards: DashboardsApi;
   cfg: Config;
   close(): Promise<void>;
@@ -126,6 +126,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
 
   const termFhirStore = createFhirStore(internal.db as unknown as Kysely<InternalSchema>);
   const termStore = createTerminologyStore(internal.db as unknown as Kysely<InternalSchema>, termFhirStore);
+  const termAdmin = createTerminologyAdminStore(internal.db as unknown as Kysely<InternalSchema>);
   const terminology = {
     ops: createOperations({
       getConcept: (s, c) => termStore.getConcept(s, c),
@@ -134,6 +135,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       getResourceByUrl: (u) => termStore.getResourceByUrl(u),
       translate: (q) => termStore.translate(q),
     }),
+    admin: termAdmin,
   };
 
   return {

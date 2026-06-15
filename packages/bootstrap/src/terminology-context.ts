@@ -1,10 +1,12 @@
 import { Kysely } from 'kysely';
 import type { Config } from '@openldr/config';
-import { createInternalDb, createFhirStore, createTerminologyStore, type InternalSchema } from '@openldr/db';
+import { redact } from '@openldr/core';
+import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, type TerminologyAdminStore, type InternalSchema, resolveSeedPublisherId, deriveSystemCode } from '@openldr/db';
 import { createOperations, type Operations, type LoaderStore, loadLoinc, loadWhonetAmr, importTerminologyResource, type LoadResult } from '@openldr/terminology';
 
 export interface TerminologyContext {
   ops: Operations;
+  admin: TerminologyAdminStore;
   loaders: {
     loinc(dir: string, acceptLicense: boolean): Promise<LoadResult>;
     amr(sqlitePath: string): Promise<LoadResult[]>;
@@ -18,11 +20,32 @@ export async function createTerminologyContext(cfg: Config): Promise<Terminology
   const db = internal.db as unknown as Kysely<InternalSchema>;
   const fhirStore = createFhirStore(db);
   const store = createTerminologyStore(db, fhirStore);
+  const admin = createTerminologyAdminStore(db);
   const loaderStore: LoaderStore = {
     upsertConcepts: (r) => store.upsertConcepts(r),
     upsertMapElements: (r) => store.upsertMapElements(r),
     saveResource: (res) => fhirStore.save(res as never),
-    saveSystem: (url, version, kind, id) => store.saveSystem(url, version, kind, id),
+    saveSystem: async (url, version, kind, id) => {
+      await store.saveSystem(url, version, kind, id);
+      // Best-effort: project CodeSystems into coding_systems so they appear in the
+      // admin UI under their resolved publisher. Never fail the import on this.
+      if (kind === 'CodeSystem') {
+        try {
+          await admin.codingSystems.upsertByUrl({
+            url,
+            systemCode: deriveSystemCode(url),
+            systemName: deriveSystemCode(url),
+            systemVersion: version,
+            publisherId: resolveSeedPublisherId(url),
+          });
+        } catch (e) {
+          // Best-effort projection: the migration backfill also covers it on next
+          // migrate. Log (redacted — the error may carry the DB connection string)
+          // rather than swallow, so a real failure is observable.
+          console.warn('[terminology] coding_systems projection failed:', redact(e instanceof Error ? e.message : String(e)));
+        }
+      }
+    },
   };
   const ops = createOperations({
     getConcept: (s, c) => store.getConcept(s, c),
@@ -33,6 +56,7 @@ export async function createTerminologyContext(cfg: Config): Promise<Terminology
   });
   return {
     ops,
+    admin,
     loaders: {
       loinc: (dir, acceptLicense) => loadLoinc(dir, { acceptLicense }, loaderStore),
       amr: (p) => loadWhonetAmr(p, loaderStore),
