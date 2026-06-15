@@ -132,8 +132,7 @@ export function TermsTable({
     setImportBusy(true);
     try {
       const text = await file.text();
-      const result = await importTerms(systemId, text);
-      console.log(`Imported ${result.imported} term(s) into ${systemId}`);
+      await importTerms(systemId, text);
       setLocalReload((n) => n + 1);
     } catch (err) {
       console.error('Import failed:', err);
