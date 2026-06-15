@@ -89,3 +89,41 @@ export interface ClientConfig { dashboardSqlEnabled: boolean }
 export async function fetchClientConfig(): Promise<ClientConfig> {
   const r = await fetch('/api/config'); if (!r.ok) return { dashboardSqlEnabled: false }; return r.json();
 }
+
+// ── Terminology admin types & client ─────────────────────────────────────────
+export type PublisherRole = 'local' | 'standard' | 'external';
+export interface Publisher { id: string; name: string; role: PublisherRole; icon: string | null; seeded: boolean; sortOrder: number }
+export interface PublisherInput { name: string; role: PublisherRole; icon?: string | null }
+export interface CodingSystem {
+  id: string; systemCode: string; systemName: string; url: string | null;
+  systemVersion: string | null; description: string | null; active: boolean;
+  publisherId: string | null; seeded: boolean;
+}
+export interface CodingSystemInput {
+  systemCode: string; systemName: string; url?: string | null; systemVersion?: string | null;
+  description?: string | null; active: boolean; publisherId?: string | null;
+}
+
+const jbody = (body: unknown, method: string) => ({ method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+async function okJson<T>(res: Response, what: string): Promise<T> {
+  if (!res.ok) throw new Error(`${what} failed: ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
+export const listPublishers = () => fetch('/api/terminology/publishers').then((r) => okJson<Publisher[]>(r, 'list publishers'));
+export const createPublisher = (i: PublisherInput) => fetch('/api/terminology/publishers', jbody(i, 'POST')).then((r) => okJson<Publisher>(r, 'create publisher'));
+export const updatePublisher = (id: string, i: PublisherInput) => fetch(`/api/terminology/publishers/${id}`, jbody(i, 'PUT')).then((r) => okJson<Publisher>(r, 'update publisher'));
+export async function deletePublisher(id: string): Promise<void> {
+  const r = await fetch(`/api/terminology/publishers/${id}`, { method: 'DELETE' });
+  if (!r.ok && r.status !== 204) throw new Error(`delete publisher failed: ${r.status}`);
+}
+export const publisherDeletionImpact = (id: string) => fetch(`/api/terminology/publishers/${id}/deletion-impact`).then((r) => okJson<{ systemCount: number; termCount: number }>(r, 'impact'));
+
+export const listCodingSystems = (publisher?: string) => fetch(`/api/terminology/systems${publisher ? `?publisher=${encodeURIComponent(publisher)}` : ''}`).then((r) => okJson<CodingSystem[]>(r, 'list systems'));
+export const createCodingSystem = (i: CodingSystemInput) => fetch('/api/terminology/systems', jbody(i, 'POST')).then((r) => okJson<CodingSystem>(r, 'create system'));
+export const updateCodingSystem = (id: string, i: CodingSystemInput) => fetch(`/api/terminology/systems/${id}`, jbody(i, 'PUT')).then((r) => okJson<CodingSystem>(r, 'update system'));
+export async function deleteCodingSystem(id: string): Promise<void> {
+  const r = await fetch(`/api/terminology/systems/${id}`, { method: 'DELETE' });
+  if (!r.ok && r.status !== 204) throw new Error(`delete system failed: ${r.status}`);
+}
+export const systemDeletionImpact = (id: string) => fetch(`/api/terminology/systems/${id}/deletion-impact`).then((r) => okJson<{ termCount: number; mappingCount: number }>(r, 'impact'));
