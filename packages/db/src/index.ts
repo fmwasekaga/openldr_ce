@@ -12,6 +12,7 @@ export * from './flat-writer';
 export * from './persist';
 export * from './export-data';
 export * from './terminology-store';
+export * from './terminology-admin-store';
 export * from './resolve-publisher';
 export * from './seed-publishers';
 export * from './dhis2-store';
