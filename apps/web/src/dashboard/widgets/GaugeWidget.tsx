@@ -1,6 +1,8 @@
 import type { ReportResult, WidgetConfig } from '../../api';
 export function GaugeWidget({ config, result }: { config: WidgetConfig; result: ReportResult }) {
-  const value = Number(result.rows[0]?.value ?? 0);
+  const yKey = (config.visual.yAxisKey as string) ?? 'value';
+  const row = result.rows?.[0] ?? {};
+  const value = Number(row[yKey] ?? Object.values(row)[0] ?? 0);
   const min = Number(config.visual.minValue ?? 0); const max = Number(config.visual.maxValue ?? 100);
   const pct = Math.max(0, Math.min(1, (value - min) / (max - min || 1)));
   const angle = -90 + pct * 180;

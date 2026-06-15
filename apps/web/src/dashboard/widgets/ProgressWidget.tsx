@@ -1,6 +1,8 @@
 import type { ReportResult, WidgetConfig } from '../../api';
 export function ProgressWidget({ config, result }: { config: WidgetConfig; result: ReportResult }) {
-  const value = Number(result.rows[0]?.value ?? 0);
+  const yKey = (config.visual.yAxisKey as string) ?? 'value';
+  const row = result.rows?.[0] ?? {};
+  const value = Number(row[yKey] ?? Object.values(row)[0] ?? 0);
   const goal = Number(config.visual.goalValue ?? 100);
   const pct = Math.max(0, Math.min(100, (value / (goal || 1)) * 100));
   return (

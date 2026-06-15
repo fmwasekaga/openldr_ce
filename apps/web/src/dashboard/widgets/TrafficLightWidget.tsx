@@ -1,6 +1,8 @@
 import type { ReportResult, WidgetConfig } from '../../api';
 export function TrafficLightWidget({ config, result }: { config: WidgetConfig; result: ReportResult }) {
-  const value = Number(result.rows[0]?.value ?? 0);
+  const yKey = (config.visual.yAxisKey as string) ?? 'value';
+  const row = result.rows?.[0] ?? {};
+  const value = Number(row[yKey] ?? Object.values(row)[0] ?? 0);
   const green = Number(config.visual.greenThreshold ?? 90); const amber = Number(config.visual.amberThreshold ?? 70);
   const color = value >= green ? '#22c55e' : value >= amber ? '#f59e0b' : '#ef4444';
   return (
