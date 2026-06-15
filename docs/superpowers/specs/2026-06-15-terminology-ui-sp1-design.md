@@ -57,6 +57,10 @@ New internal migration `012_terminology_admin`:
   - `name` text not null
   - `role` text not null — `local` | `standard` | `external`
   - `icon` text null
+  - `match_prefixes` text[] not null default `{}` — canonical-URL prefixes that bind
+    a code system to this publisher (mirrors corlix `terminology_publishers.match_prefixes`).
+    A real Postgres `text[]` (not jsonb) so a JS array binds correctly — this is NOT
+    the jsonb-array coercion trap.
   - `seeded` boolean not null default false
   - `sort_order` int not null default 0
 - `coding_systems`
@@ -75,22 +79,42 @@ New internal migration `012_terminology_admin`:
 (a system's terms = concepts where `system = coding_systems.url`). This keeps the
 4 read ops + ingest path keyed on system URL, byte-for-byte unchanged.
 
+**Seeded publishers (mirror corlix's set + `match_prefixes`, longest-prefix wins):**
+
+| name | role | sort_order | match_prefixes |
+|------|------|-----------:|----------------|
+| System | local | 0 | `{}` (the fallback home for custom + unmatched systems) |
+| HL7 FHIR | standard | 1 | `http://hl7.org/fhir/`, `http://terminology.hl7.org/` |
+| LOINC | external | 2 | `http://loinc.org` |
+| SNOMED CT | external | 3 | `http://snomed.info/` |
+| WHO · ICD-10 | external | 4 | `http://hl7.org/fhir/sid/icd-10` |
+| WHO · ICD-11 | external | 5 | `http://id.who.int/icd/`, `http://hl7.org/fhir/sid/icd-11` |
+
+(Names/roles/prefixes taken verbatim from corlix `migrations/index.ts` line 2252–;
+corlix's `'Your Lab'` local default was later renamed `'System'` — we seed `System`.)
+
+**Publisher resolution helper** — port corlix's `resolvePublisher(url, publishers)`
+(`apps/desktop/src/main/terminologyPublishers.ts`) as a pure, unit-tested function
+in `packages/db` (or `packages/terminology`): **longest-prefix match** over
+`match_prefixes`; returns null → caller falls back to the `System` (local) publisher.
+
 **Backfill (in the migration's `up`):**
-1. Insert a seeded publisher `{ name: 'Standards', role: 'standard', seeded: true,
-   sort_order: 0 }`.
-2. Insert one `coding_systems` row per distinct value of
-   `terminology_concepts.system` ∪ `terminology_systems.url`, with `seeded=true`,
-   `publisher_id = Standards`, `url = <that url>`, `system_code` derived (last URL
+1. Insert the six seeded publishers above (`seeded=true`).
+2. For each distinct value of `terminology_concepts.system` ∪ `terminology_systems.url`,
+   insert one `coding_systems` row with `seeded=true`, `url = <that url>`,
+   `publisher_id = resolvePublisher(url) ?? System`, `system_code` derived (last URL
    path segment upper-cased, or the url if no segment), `system_name = system_code`
    as a starting label (editable later). Idempotent (skip urls already present).
 
-This makes the already-loaded LOINC (~109k) + WHONET systems appear in the UI
-immediately under the Standards publisher.
+So `http://loinc.org` lands under **LOINC**; WHONET-AMR's CE-specific system URLs
+(which match no standard prefix) land under **System** — faithful to corlix's
+mechanism (corlix likewise has no WHONET publisher; non-standard URLs fall to local).
 
 **Loaders updated:** the LOINC / WHONET-AMR / FHIR-resource loaders
-(`packages/bootstrap/src/terminology-context.ts`) upsert a `coding_systems` row
-(+ Standards publisher binding) for each system they load, so future imports also
-surface in the UI. `system_name`/`version` taken from the source where available.
+(`packages/bootstrap/src/terminology-context.ts`) upsert a `coding_systems` row for
+each system they load, binding the publisher via the same `resolvePublisher(url)`
+(fallback `System`), so future imports also surface under the right publisher.
+`system_name`/`version` taken from the source where available.
 
 **Why project-into over replace:** replacing `terminology_concepts` with
 FK-to-`coding_systems` terms would force a rewrite of `$lookup`/`$expand`/`$translate`
@@ -216,9 +240,10 @@ and the 5 system equivalents), following the existing `json()` helper pattern.
 
 1. **IPC → HTTP** — `window.api.terminology.*` → `fetch('/api/terminology/…')`.
    Platform difference; unavoidable.
-2. **Synthesized "Standards" publisher + backfill** — CE's pre-loaded LOINC/WHONET
-   concepts have no publisher entity; we synthesize one so existing data is visible.
-   Corlix authors everything in-app; CE pre-loads via CLI.
+2. **Seeded publishers + backfill** — CE's pre-loaded concepts have no publisher
+   entity; we seed corlix's publisher set (System/HL7 FHIR/LOINC/SNOMED CT/ICD-10/
+   ICD-11) and backfill existing systems under them by longest-prefix URL match (the
+   same mechanism corlix uses). Corlix authors everything in-app; CE pre-loads via CLI.
 3. **Role `standard` is seed-only** — identical to corlix (create form offers only
    local/external); CE also tags the backfill publisher `standard`.
 4. **Term / Value-set / Ontology menu items deferred** — present but disabled or
@@ -228,17 +253,19 @@ and the 5 system equivalents), following the existing `json()` helper pattern.
 ## Testing & acceptance (TDD)
 
 - **db store** (pg-mem): publishers + coding_systems CRUD; deletion-impact counts;
-  backfill projection (existing concepts → one coding_systems row under Standards);
-  seeded rows reject delete.
+  backfill projection (existing concepts → one coding_systems row each, publisher
+  resolved by prefix: `http://loinc.org` → LOINC, unmatched → System);
+  `resolvePublisher` longest-prefix unit tests; seeded rows reject delete.
 - **routes** (`app.test.ts`): CRUD happy-path + 404 + 409 (duplicate, seeded-delete).
 - **web** (vitest + existing Radix jsdom polyfills): rail renders sections; code-
   systems table renders + paginates; PublisherDialog + CodingSystemDialog save;
   DangerConfirmDialog requires the typed name.
-- **e2e** (`e2e/tests/terminology.spec.ts`): nav to /terminology → Standards
-  publisher in rail → drill shows backfilled systems → create a local publisher and
+- **e2e** (`e2e/tests/terminology.spec.ts`): nav to /terminology → LOINC publisher
+  in rail → drill shows the backfilled LOINC system → create a local publisher and
   a code system via the `⋯` sheets → both appear.
 - **Live acceptance** (seeded Postgres): `db migrate` runs the backfill;
-  /terminology shows LOINC + WHONET under Standards; create local publisher + code
+  /terminology shows LOINC under the LOINC publisher and WHONET under System; create
+  a local publisher + code
   system; delete shows impact and removes; the 4 read ops + a WHONET ingest pass
   un-regressed; docs screenshots regenerated.
 - **Gates**: turbo typecheck/lint/test/build + depcruise (DP-1 unaffected — no new
