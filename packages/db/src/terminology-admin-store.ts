@@ -231,6 +231,7 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>): Termino
         if (q.statuses && q.statuses.length) base = base.where('status', 'in', q.statuses);
         const rows = await base.selectAll().orderBy('code').limit(q.limit).offset(q.offset).execute();
         const totalRow = await base.select((eb) => eb.fn.countAll<number>().as('n')).executeTakeFirst();
+        // N+1 count per row (parallel, fine for a ~25-row page). TODO: lateral join if page sizes grow.
         const out = await Promise.all(rows.map(async (r) => termRow(r, await mappingCountFor(r.system, r.code))));
         return { rows: out, total: Number(totalRow?.n ?? 0) };
       },

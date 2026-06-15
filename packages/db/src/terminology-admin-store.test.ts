@@ -103,6 +103,13 @@ describe('terminology admin store', () => {
       await s.terms.delete('http://x', 'AMP');
       expect((await s.terms.search('http://x', { limit: 10, offset: 0 })).total).toBe(0);
     });
+    it('throws not-found on update/delete of a missing term', async () => {
+      const { s } = await store();
+      await expect(
+        s.terms.update('http://x', 'NOPE', { system: 'http://x', code: 'NOPE', display: 'x', status: 'ACTIVE', shortName: null, class: null, unit: null, replacedBy: null, metadata: null }),
+      ).rejects.toMatchObject({ kind: 'not-found' });
+      await expect(s.terms.delete('http://x', 'NOPE')).rejects.toMatchObject({ kind: 'not-found' });
+    });
     it('search filters by text and status', async () => {
       const { s } = await store();
       await s.terms.create({ system: 'http://x', code: 'AMP', display: 'Ampicillin', status: 'ACTIVE', shortName: null, class: null, unit: null, replacedBy: null, metadata: null });
