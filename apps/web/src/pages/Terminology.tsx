@@ -1,16 +1,24 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { Library, MoreHorizontal, ChevronRight } from 'lucide-react';
 import { AppShell } from '../shell/AppShell';
 import {
   listPublishers,
   listCodingSystems,
+  listValueSets,
+  getValueSet,
   deletePublisher,
   deleteCodingSystem,
+  deleteValueSet,
+  duplicateValueSet,
+  importValueSet,
+  valueSetExportUrl,
   publisherDeletionImpact,
   systemDeletionImpact,
   type Publisher,
   type CodingSystem,
   type Term,
+  type ValueSet,
+  type ValueSetSummary,
 } from '../api';
 import { TermsTable } from '../terminology/TermsTable';
 import { publisherSections } from '../terminology/publisherSections';
@@ -20,6 +28,9 @@ import { DangerConfirmDialog } from '../terminology/DangerConfirmDialog';
 import { TermDialog } from '../terminology/TermDialog';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,6 +50,7 @@ import {
   TableRow,
 } from '../components/ui/table';
 import { TablePagination } from '../components/ui/table-pagination';
+import { ValueSetBuilder } from '../terminology/ValueSetBuilder';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -64,11 +76,15 @@ export function Terminology(): JSX.Element {
   // ── data ────────────────────────────────────────────────────────────────────
   const [publishers, setPublishers] = useState<Publisher[]>([]);
   const [codingSystems, setCodingSystems] = useState<CodingSystem[]>([]);
+  const [valueSets, setValueSets] = useState<ValueSetSummary[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   // ── navigation ──────────────────────────────────────────────────────────────
   const [selectedPublisherId, setSelectedPublisherId] = useState('');
   const [selectedSystemId, setSelectedSystemId] = useState('');
+  const [paneTab, setPaneTab] = useState<'systems' | 'valuesets'>('systems');
+  const [vsSearch, setVsSearch] = useState('');
+  const [vsSystem, setVsSystem] = useState('__all__');
 
   // ── pagination ──────────────────────────────────────────────────────────────
   const [systemPage, setSystemPage] = useState(0);
@@ -84,6 +100,9 @@ export function Terminology(): JSX.Element {
   const [editingTerm, setEditingTerm] = useState<Term | null>(null);
   const [termDialogOpen, setTermDialogOpen] = useState(false);
   const [termsReloadKey, setTermsReloadKey] = useState(0);
+  const [editingValueSet, setEditingValueSet] = useState<ValueSet | null>(null);
+  const [valueSetEditorOpen, setValueSetEditorOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── danger confirm ──────────────────────────────────────────────────────────
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
@@ -94,10 +113,11 @@ export function Terminology(): JSX.Element {
   // ── load ────────────────────────────────────────────────────────────────────
   // Stable across renders in practice — only calls module-level API fns + setState.
   const reload = (): Promise<void> =>
-    Promise.all([listPublishers(), listCodingSystems()])
-      .then(([p, s]) => {
+    Promise.all([listPublishers(), listCodingSystems(), listValueSets()])
+      .then(([p, s, v]) => {
         setPublishers(p);
         setCodingSystems(s);
+        setValueSets(v);
       })
       .catch((e: unknown) => {
         setLoadError(e instanceof Error ? e.message : String(e));
@@ -110,27 +130,39 @@ export function Terminology(): JSX.Element {
   // Default-select the first publisher once data arrives.
   useEffect(() => {
     if (selectedPublisherId === '' && publishers.length > 0) {
-      const sections = publisherSections(publishers, codingSystems);
+      const sections = publisherSections(publishers, codingSystems, valueSets);
       if (sections.length > 0) {
         setSelectedPublisherId(sections[0].publisher.id);
       }
     }
-  }, [publishers, codingSystems, selectedPublisherId]);
+  }, [publishers, codingSystems, valueSets, selectedPublisherId]);
 
   // Reset drill + page when publisher changes.
   useEffect(() => {
     setSelectedSystemId('');
     setSystemPage(0);
+    setPaneTab('systems');
+    setVsSearch('');
+    setVsSystem('__all__');
     setToast(null);
   }, [selectedPublisherId]);
 
   // ── derived ─────────────────────────────────────────────────────────────────
-  const sections = publisherSections(publishers, codingSystems);
+  const sections = publisherSections(publishers, codingSystems, valueSets);
   const activeSection = sections.find((s) => s.publisher.id === selectedPublisherId) ?? null;
   const selectedSystem = codingSystems.find((s) => s.id === selectedSystemId) ?? null;
   const pagedSystems = activeSection
     ? activeSection.systems.slice(systemPage * systemPageSize, systemPage * systemPageSize + systemPageSize)
     : [];
+  const bothKinds = !!activeSection && activeSection.systems.length > 0 && activeSection.valueSets.length > 0;
+  const filteredValueSets = (activeSection?.valueSets ?? []).filter((vs) => {
+    if (vsSystem !== '__all__' && vs.primarySystem !== vsSystem) return false;
+    const q = vsSearch.trim().toLowerCase();
+    if (!q) return true;
+    return (vs.title ?? '').toLowerCase().includes(q) || vs.url.toLowerCase().includes(q) || (vs.name ?? '').toLowerCase().includes(q);
+  });
+  const vsSystemOptions = Array.from(new Set((activeSection?.valueSets ?? []).map((v) => v.primarySystem).filter((s): s is string => !!s)));
+  const systemLabel = (url: string): string => codingSystems.find((s) => s.url === url)?.systemCode ?? url.split('/').pop() ?? url;
 
   // ── delete flows ─────────────────────────────────────────────────────────────
   const handlePublisherDelete = async (pub: Publisher): Promise<void> => {
@@ -195,10 +227,66 @@ export function Terminology(): JSX.Element {
     }
   };
 
+  // ── value-set flows ──────────────────────────────────────────────────────────
+  const openValueSet = async (id: string): Promise<void> => {
+    try {
+      setEditingValueSet(await getValueSet(id));
+      setValueSetEditorOpen(true);
+    } catch (e: unknown) {
+      setToast({ kind: 'error', text: e instanceof Error ? e.message : String(e) });
+    }
+  };
+
+  const handleValueSetDuplicate = async (id: string): Promise<void> => {
+    try {
+      const dup = await duplicateValueSet(id);
+      await reload();
+      setEditingValueSet(dup);
+      setValueSetEditorOpen(true);
+    } catch (e: unknown) {
+      setToast({ kind: 'error', text: e instanceof Error ? e.message : String(e) });
+    }
+  };
+
+  const handleValueSetDelete = (vs: ValueSetSummary): void => {
+    setConfirm({
+      title: 'Delete value set',
+      confirmName: vs.title ?? vs.url,
+      confirmLabel: 'Delete',
+      summary: <span>Permanently delete &ldquo;{vs.title ?? vs.url}&rdquo;? This cannot be undone.</span>,
+      onConfirm: async () => {
+        try {
+          await deleteValueSet(vs.id);
+          setConfirm(null);
+          await reload();
+          setToast({ kind: 'ok', text: 'Value set deleted.' });
+        } catch (e: unknown) {
+          setConfirm(null);
+          setToast({ kind: 'error', text: e instanceof Error ? e.message : String(e) });
+        }
+      },
+    });
+  };
+
+  const handleVsImportFile = async (e: ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    try {
+      const json = JSON.parse(await file.text());
+      const saved = await importValueSet(json);
+      await reload();
+      setToast({ kind: 'ok', text: `Imported value set "${saved.title ?? saved.url}".` });
+    } catch (err: unknown) {
+      setToast({ kind: 'error', text: err instanceof Error ? err.message : String(err) });
+    }
+  };
+
   // ── render ───────────────────────────────────────────────────────────────────
   return (
     <AppShell title="Terminology" fullBleed>
       <div className="ui-scope flex h-full flex-col">
+        <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={(e) => void handleVsImportFile(e)} />
         {loadError && (
           <div className="mx-3 mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
             {loadError}
@@ -257,6 +345,25 @@ export function Terminology(): JSX.Element {
                       <ChevronRight className="h-3 w-3" />
                       <span className="text-foreground">{selectedSystem.systemCode}</span>
                     </>
+                  )}
+
+                  {bothKinds && !selectedSystemId && (
+                    <div className="ml-3 inline-flex items-center gap-0.5 rounded-md border border-border p-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setPaneTab('systems')}
+                        className={`rounded px-2 py-0.5 text-[11px] ${paneTab === 'systems' ? 'bg-[rgba(70,130,180,0.16)] text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                      >
+                        Code systems
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPaneTab('valuesets')}
+                        className={`rounded px-2 py-0.5 text-[11px] ${paneTab === 'valuesets' ? 'bg-[rgba(70,130,180,0.16)] text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                      >
+                        Value sets
+                      </button>
+                    </div>
                   )}
 
                   <div className="flex-1" />
@@ -352,6 +459,53 @@ export function Terminology(): JSX.Element {
                           </DropdownMenuItem>
                         </DropdownMenuSubContent>
                       </DropdownMenuSub>
+
+                      {/* Term sub-menu - acts on the open code system */}
+                      <DropdownMenuSub>
+                        <DropdownMenuSubTrigger>Term</DropdownMenuSubTrigger>
+                        <DropdownMenuSubContent>
+                          {activeSection.publisher.role !== 'external' && (
+                            <DropdownMenuItem
+                              disabled={!selectedSystem}
+                              onClick={() => {
+                                if (selectedSystem) {
+                                  setEditingTerm(null);
+                                  setTermDialogOpen(true);
+                                }
+                              }}
+                            >
+                              New
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem
+                            disabled={!selectedSystem}
+                            onClick={() => {
+                              if (selectedSystem) setSelectedSystemId(selectedSystem.id);
+                            }}
+                          >
+                            Import...
+                          </DropdownMenuItem>
+                          <DropdownMenuItem disabled={!selectedSystem} asChild>
+                            <a href={selectedSystem ? `/api/terminology/systems/${selectedSystem.id}/terms/template.csv` : '#'} download>Download template</a>
+                          </DropdownMenuItem>
+                        </DropdownMenuSubContent>
+                      </DropdownMenuSub>
+
+                      {/* Value set sub-menu */}
+                      <DropdownMenuSub>
+                        <DropdownMenuSubTrigger>Value set</DropdownMenuSubTrigger>
+                        <DropdownMenuSubContent>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setEditingValueSet(null);
+                              setValueSetEditorOpen(true);
+                            }}
+                          >
+                            New
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>Import...</DropdownMenuItem>
+                        </DropdownMenuSubContent>
+                      </DropdownMenuSub>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
@@ -370,14 +524,14 @@ export function Terminology(): JSX.Element {
                 )}
 
                 {/* Empty publisher hint */}
-                {!selectedSystemId && activeSection.systems.length === 0 && (
+                {!selectedSystemId && activeSection.systems.length === 0 && activeSection.valueSets.length === 0 && (
                   <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-muted-foreground">
                     No code systems or value sets yet. Use the ⋯ menu to add one.
                   </div>
                 )}
 
                 {/* Code-systems table */}
-                {activeSection.systems.length > 0 && !selectedSystemId && (
+                {activeSection.systems.length > 0 && !selectedSystemId && (!bothKinds || paneTab === 'systems') && (
                   <div className="flex flex-1 flex-col overflow-hidden">
                     <div className="flex-1 overflow-auto">
                       <Table>
@@ -481,6 +635,61 @@ export function Terminology(): JSX.Element {
                   </div>
                 )}
 
+                {activeSection.valueSets.length > 0 && !selectedSystemId && (!bothKinds || paneTab === 'valuesets') && (
+                  <div className="flex flex-1 flex-col overflow-hidden">
+                    <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+                      <Select value={vsSystem} onValueChange={setVsSystem}>
+                        <SelectTrigger className="h-8 w-56 text-sm"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__all__">All systems</SelectItem>
+                          {vsSystemOptions.map((u) => <SelectItem key={u} value={u}><span className="font-mono text-xs">{systemLabel(u)}</span></SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <Input value={vsSearch} onChange={(e) => setVsSearch(e.target.value)} placeholder="Search value sets..." className="h-8 max-w-md text-sm" />
+                    </div>
+                    <div className="flex-1 overflow-auto">
+                      <Table>
+                        <TableHeader className="sticky top-0 z-10 bg-background">
+                          <TableRow>
+                            <TableHead className="text-xs uppercase tracking-wide">Title</TableHead>
+                            <TableHead className="text-xs uppercase tracking-wide">URL</TableHead>
+                            <TableHead className="w-32 text-xs uppercase tracking-wide">System</TableHead>
+                            <TableHead className="w-24 text-xs uppercase tracking-wide">Source</TableHead>
+                            <TableHead className="w-20 text-right text-xs uppercase tracking-wide">Codes</TableHead>
+                            <TableHead className="w-24 text-xs uppercase tracking-wide">Status</TableHead>
+                            <TableHead className="w-12" />
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody className="[&_tr:last-child]:border-b">
+                          {filteredValueSets.length === 0 ? (
+                            <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">No value sets found.</TableCell></TableRow>
+                          ) : filteredValueSets.map((vs) => (
+                            <TableRow key={vs.id} className="cursor-pointer transition-colors hover:bg-[rgba(70,130,180,0.08)]" onClick={() => void openValueSet(vs.id)}>
+                              <TableCell className="text-foreground">{vs.title ?? vs.name ?? '-'}</TableCell>
+                              <TableCell className="font-mono text-[11px] text-muted-foreground">{vs.url}</TableCell>
+                              <TableCell className="font-mono text-xs text-muted-foreground">{vs.primarySystem ? systemLabel(vs.primarySystem) : '-'}</TableCell>
+                              <TableCell>{vs.category ? <Badge variant="secondary">{vs.category}</Badge> : <span className="text-muted-foreground">-</span>}</TableCell>
+                              <TableCell className="text-right font-mono text-xs">{vs.codeCount}</TableCell>
+                              <TableCell><Badge variant="outline" className="text-[10px] uppercase">{vs.status}</Badge></TableCell>
+                              <TableCell onClick={(e) => e.stopPropagation()}>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Actions"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => void openValueSet(vs.id)}>{vs.immutable ? 'View' : 'Edit'}</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => void handleValueSetDuplicate(vs.id)}>Duplicate</DropdownMenuItem>
+                                    <DropdownMenuItem asChild><a href={valueSetExportUrl(vs.id)} download>Export</a></DropdownMenuItem>
+                                    {!vs.immutable && (<><DropdownMenuSeparator /><DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleValueSetDelete(vs)}>Delete</DropdownMenuItem></>)}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
+
                 {/* Drilled terms pane */}
                 {selectedSystemId && (
                   <div className="flex flex-1 flex-col overflow-hidden">
@@ -530,6 +739,35 @@ export function Terminology(): JSX.Element {
             void reload();
           }}
         />
+
+        <Sheet open={valueSetEditorOpen} onOpenChange={(o) => { if (!o) { setValueSetEditorOpen(false); setEditingValueSet(null); } }}>
+          <SheetContent aria-describedby={undefined} className="w-full overflow-y-auto p-0 sm:max-w-2xl">
+            <SheetHeader className="border-b border-border px-3 py-2">
+              <SheetTitle className="text-sm">{editingValueSet?.title ?? editingValueSet?.url ?? 'New value set'}</SheetTitle>
+            </SheetHeader>
+            {valueSetEditorOpen && (
+              <ValueSetBuilder
+                key={editingValueSet?.id ?? 'new'}
+                valueSet={editingValueSet}
+                systems={codingSystems}
+                defaultPublisherId={selectedPublisherId}
+                onSaved={() => void reload()}
+                onCancel={() => {
+                  setValueSetEditorOpen(false);
+                  setEditingValueSet(null);
+                }}
+                onExport={(id) => {
+                  window.location.href = valueSetExportUrl(id);
+                }}
+                onDelete={(id) => {
+                  const vs = valueSets.find((v) => v.id === id);
+                  if (vs) handleValueSetDelete(vs);
+                }}
+                onDuplicate={(id) => void handleValueSetDuplicate(id)}
+              />
+            )}
+          </SheetContent>
+        </Sheet>
 
         {confirm && (
           <DangerConfirmDialog

@@ -48,8 +48,8 @@ describe('012_terminology_admin', () => {
       .values({ id: 'cs1', system_code: 'LOCAL', system_name: 'Local System', publisher_id: 'pub1' })
       .execute();
 
-    const rows = await db.selectFrom('coding_systems').selectAll().execute();
-    expect(rows[0].publisher_id).toBe('pub1');
+    const row = await db.selectFrom('coding_systems').selectAll().where('id', '=', 'cs1').executeTakeFirstOrThrow();
+    expect(row.publisher_id).toBe('pub1');
 
     await db.destroy();
   });

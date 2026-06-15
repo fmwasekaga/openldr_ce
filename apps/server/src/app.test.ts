@@ -24,9 +24,16 @@ function buildFakeAdmin(): FakeAdmin {
   ];
   type MappingRow = { id: string; fromSystem: string; fromCode: string; toSystem: string; toCode: string; toDisplay: string | null; mapType: string; relationship: string | null; owner: string | null; isActive: boolean };
   const mappings: MappingRow[] = [];
+  type ValueSetRow = {
+    id: string; url: string; version: string | null; name: string | null; title: string | null;
+    status: string; experimental: boolean; description: string | null; compose: { include?: Array<{ system?: string; concept?: Array<{ code: string; display?: string }> }> };
+    immutable: boolean; category: string | null; publisherId: string | null;
+  };
+  const valueSets: ValueSetRow[] = [];
   let pubSeq = 0;
   let sysSeq = 0;
   let tmSeq = 0;
+  let vsSeq = 0;
 
   const adminErr = (msg: string, kind: 'not-found' | 'conflict') =>
     Object.assign(new Error(msg), { name: 'TerminologyAdminError', kind });
@@ -145,6 +152,88 @@ function buildFakeAdmin(): FakeAdmin {
         mappings.splice(idx, 1);
       },
     },
+    valueSets: {
+      async list(publisherId) {
+        return valueSets.filter((v) => !publisherId || v.publisherId === publisherId).map((v) => ({
+          id: v.id, url: v.url, name: v.name, title: v.title, version: v.version, status: v.status,
+          immutable: v.immutable, publisherId: v.publisherId, category: v.category,
+          codeCount: v.compose.include?.flatMap((i) => i.concept ?? []).length ?? 0,
+          primarySystem: v.compose.include?.find((i) => i.system)?.system ?? null,
+        })) as never[];
+      },
+      async get(id) {
+        const v = valueSets.find((x) => x.id === id);
+        if (!v) throw adminErr(`value set not found: ${id}`, 'not-found');
+        return v as never;
+      },
+      async getByUrl(url) {
+        const v = valueSets.find((x) => x.url === url);
+        if (!v) return null;
+        return {
+          id: v.id, url: v.url, name: v.name, title: v.title, version: v.version, status: v.status,
+          immutable: v.immutable, publisherId: v.publisherId, category: v.category,
+          codeCount: v.compose.include?.flatMap((i) => i.concept ?? []).length ?? 0,
+          primarySystem: v.compose.include?.find((i) => i.system)?.system ?? null,
+        } as never;
+      },
+      async save(input) {
+        const existing = valueSets.find((x) => x.url === input.url);
+        const v: ValueSetRow = existing ?? {
+          id: `vs-test-${++vsSeq}`,
+          url: input.url,
+          version: null,
+          name: null,
+          title: null,
+          status: input.status,
+          experimental: false,
+          description: null,
+          compose: { include: [] },
+          immutable: false,
+          category: null,
+          publisherId: null,
+        };
+        Object.assign(v, {
+          version: input.version ?? null,
+          name: input.name ?? null,
+          title: input.title ?? null,
+          status: input.status,
+          experimental: input.experimental ?? false,
+          description: input.description ?? null,
+          compose: input.compose,
+          category: input.category ?? null,
+          publisherId: input.publisherId ?? null,
+        });
+        if (!existing) valueSets.push(v);
+        return v as never;
+      },
+      async duplicate(id) {
+        const src = valueSets.find((x) => x.id === id);
+        if (!src) throw adminErr(`value set not found: ${id}`, 'not-found');
+        const dup: ValueSetRow = { ...src, id: `vs-test-${++vsSeq}`, url: `${src.url}-copy`, immutable: false };
+        valueSets.push(dup);
+        return dup as never;
+      },
+      async delete(id) {
+        const idx = valueSets.findIndex((x) => x.id === id);
+        if (idx === -1) throw adminErr(`value set not found: ${id}`, 'not-found');
+        valueSets.splice(idx, 1);
+      },
+      async expand(id) {
+        const v = valueSets.find((x) => x.id === id);
+        if (!v) throw adminErr(`value set not found: ${id}`, 'not-found');
+        const codes = (v.compose.include ?? []).flatMap((i) => (i.concept ?? []).map((c) => ({ system: i.system ?? 's1', code: c.code, display: c.display ?? null })));
+        return { codes, total: codes.length };
+      },
+      async importFhir(resource) {
+        const r = resource as { url?: string; title?: string; status?: string; compose?: ValueSetRow['compose'] };
+        return this.save({ url: r.url ?? 'urn:test:imported', title: r.title ?? null, status: r.status ?? 'draft', compose: r.compose ?? { include: [] } }) as never;
+      },
+      async exportFhir(id) {
+        const v = valueSets.find((x) => x.id === id);
+        if (!v) throw adminErr(`value set not found: ${id}`, 'not-found');
+        return { resourceType: 'ValueSet', id: v.id, url: v.url, status: v.status, compose: v.compose };
+      },
+    },
   };
 }
 
@@ -227,6 +316,37 @@ describe('terminology admin routes', () => {
     const template = await app.inject({ method: 'GET', url: '/api/terminology/systems/sys1/terms/template.csv' });
     expect(template.statusCode).toBe(200);
     expect(template.body).toContain('code,display');
+
+    await app.close();
+  });
+
+  it('creates, lists, expands, and exports value sets', async () => {
+    const app = buildApp(ctxWith('up'));
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/terminology/valuesets',
+      payload: {
+        url: 'urn:test:vs',
+        title: 'Test VS',
+        status: 'active',
+        compose: { include: [{ system: 's1', concept: [{ code: 'A', display: 'Alpha' }] }] },
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const id = JSON.parse(created.body).id;
+
+    const list = await app.inject({ method: 'GET', url: '/api/terminology/valuesets' });
+    expect(list.statusCode).toBe(200);
+    expect(JSON.parse(list.body)[0].url).toBe('urn:test:vs');
+
+    const expanded = await app.inject({ method: 'GET', url: `/api/terminology/valuesets/${id}/expand` });
+    expect(expanded.statusCode).toBe(200);
+    expect(JSON.parse(expanded.body).total).toBe(1);
+
+    const exported = await app.inject({ method: 'GET', url: `/api/terminology/valuesets/${id}/export` });
+    expect(exported.statusCode).toBe(200);
+    expect(exported.headers['content-type']).toContain('application/fhir+json');
 
     await app.close();
   });

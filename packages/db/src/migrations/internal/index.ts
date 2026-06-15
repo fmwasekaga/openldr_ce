@@ -12,6 +12,7 @@ import * as m010 from './010_ingest_batch_config';
 import * as m011 from './011_dashboards';
 import * as m012 from './012_terminology_admin';
 import * as m013 from './013_term_mappings';
+import * as m014 from './014_value_sets';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -27,4 +28,5 @@ export const internalMigrations: Record<string, Migration> = {
   '011_dashboards': { up: m011.up, down: m011.down },
   '012_terminology_admin': { up: m012.up, down: m012.down },
   '013_term_mappings': { up: m013.up, down: m013.down },
+  '014_value_sets': { up: m014.up, down: m014.down },
 };

@@ -176,4 +176,63 @@ describe('terminology admin store', () => {
       ).rejects.toMatchObject({ kind: 'not-found' });
     });
   });
+
+  describe('valueSets namespace', () => {
+    it('saves (insert), expands enumerated concepts, and lists with codeCount', async () => {
+      const { s: admin, db } = await store();
+      await db.insertInto('terminology_concepts').values([
+        { system: 's1', code: 'A', display: 'Alpha', status: 'ACTIVE', properties: null },
+        { system: 's1', code: 'B', display: 'Beta', status: 'ACTIVE', properties: null },
+      ] as never).execute();
+
+      const saved = await admin.valueSets.save({
+        url: 'urn:test:vs', version: null, name: null, title: 'My set', status: 'active',
+        experimental: false, description: null, publisherId: 'pub-test',
+        compose: { include: [{ system: 's1', concept: [{ code: 'A' }, { code: 'B' }] }] },
+      });
+      expect(saved.id).toMatch(/^vs-/);
+
+      const list = await admin.valueSets.list('pub-test');
+      expect(list).toHaveLength(1);
+      expect(list[0]!.codeCount).toBe(2);
+      expect(list[0]!.primarySystem).toBe('s1');
+    });
+
+    it('updates by url (no duplicate row) and rejects immutable edits', async () => {
+      const { s: admin, db } = await store();
+      const a = await admin.valueSets.save({ url: 'urn:test:vs', version: null, name: null, title: 'v1', status: 'draft', experimental: false, description: null, compose: { include: [] } });
+      const b = await admin.valueSets.save({ url: 'urn:test:vs', version: null, name: null, title: 'v2', status: 'draft', experimental: false, description: null, compose: { include: [] } });
+      expect(b.id).toBe(a.id);
+      expect(await admin.valueSets.getByUrl('urn:test:vs')).toMatchObject({ id: a.id });
+
+      await db.updateTable('value_sets').set({ immutable: true }).where('id', '=', a.id).execute();
+      await expect(admin.valueSets.save({ url: 'urn:test:vs', version: null, name: null, title: 'v3', status: 'draft', experimental: false, description: null, compose: { include: [] } }))
+        .rejects.toMatchObject({ kind: 'conflict' });
+    });
+
+    it('duplicates into an editable copy', async () => {
+      const { s: admin } = await store();
+      const a = await admin.valueSets.save({ url: 'urn:test:vs', version: null, name: null, title: 'orig', status: 'active', experimental: false, description: null, compose: { include: [] } });
+      const dup = await admin.valueSets.duplicate(a.id);
+      expect(dup.id).not.toBe(a.id);
+      expect(dup.url).toBe('urn:test:vs-copy');
+      expect(dup.immutable).toBe(false);
+    });
+
+    it('deletes (cascades the expansion cache)', async () => {
+      const { s: admin, db } = await store();
+      await db.insertInto('terminology_concepts').values([{ system: 's1', code: 'A', display: 'Alpha', status: 'ACTIVE', properties: null }] as never).execute();
+      const a = await admin.valueSets.save({ url: 'urn:test:vs', version: null, name: null, title: 't', status: 'active', experimental: false, description: null, compose: { include: [{ system: 's1', concept: [{ code: 'A' }] }] } });
+      await admin.valueSets.delete(a.id);
+      await expect(admin.valueSets.get(a.id)).rejects.toMatchObject({ kind: 'not-found' });
+      const exp = await db.selectFrom('valueset_expansions').selectAll().where('value_set_id', '=', a.id).execute();
+      expect(exp).toHaveLength(0);
+    });
+
+    it('throws not-found on get/delete of a missing id', async () => {
+      const { s: admin } = await store();
+      await expect(admin.valueSets.get('vs-nope')).rejects.toMatchObject({ kind: 'not-found' });
+      await expect(admin.valueSets.delete('vs-nope')).rejects.toMatchObject({ kind: 'not-found' });
+    });
+  });
 });

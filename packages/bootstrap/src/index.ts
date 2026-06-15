@@ -124,9 +124,22 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   health.register({ name: 'eventing', check: () => eventing.healthCheck() });
   health.register({ name: 'target-store', check: () => store.healthCheck() });
 
-  const termFhirStore = createFhirStore(internal.db as unknown as Kysely<InternalSchema>);
-  const termStore = createTerminologyStore(internal.db as unknown as Kysely<InternalSchema>, termFhirStore);
-  const termAdmin = createTerminologyAdminStore(internal.db as unknown as Kysely<InternalSchema>);
+  const termDb = internal.db as unknown as Kysely<InternalSchema>;
+  const termFhirStore = createFhirStore(termDb);
+  const termStore = createTerminologyStore(termDb, termFhirStore);
+  const termProjection = {
+    async saveValueSetResource(resource: Record<string, unknown>): Promise<string> {
+      const saved = await termFhirStore.save(resource as never);
+      return (saved as { id?: string })?.id ?? String((resource as { id?: string }).id ?? '');
+    },
+    async registerSystem(url: string, version: string | null, kind: string, resourceId: string): Promise<void> {
+      await termStore.saveSystem(url, version, kind, resourceId);
+    },
+    async deleteValueSetResource(url: string): Promise<void> {
+      await termDb.deleteFrom('terminology_systems').where('url', '=', url).execute();
+    },
+  };
+  const termAdmin = createTerminologyAdminStore(termDb, termProjection);
   const terminology = {
     ops: createOperations({
       getConcept: (s, c) => termStore.getConcept(s, c),
