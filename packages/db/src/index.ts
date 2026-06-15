@@ -13,5 +13,6 @@ export * from './persist';
 export * from './export-data';
 export * from './terminology-store';
 export * from './resolve-publisher';
+export * from './seed-publishers';
 export * from './dhis2-store';
 export * from './dhis2-schedule-store';
