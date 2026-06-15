@@ -55,6 +55,16 @@ describe('012_terminology_admin', () => {
     await db.destroy();
   });
 
+  it('rejects a coding_system with an unknown publisher_id', async () => {
+    const db = await makeMigratedDb();
+    await expect(
+      db.insertInto('coding_systems')
+        .values({ id: 'x', system_code: 'X', system_name: 'X', publisher_id: 'no-such' })
+        .execute(),
+    ).rejects.toThrow();
+    await db.destroy();
+  });
+
   it('enforces unique url via index', async () => {
     const db = await makeMigratedDb();
 

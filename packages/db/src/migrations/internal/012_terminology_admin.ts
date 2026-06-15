@@ -27,16 +27,16 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .addColumn('seeded', 'boolean', (c) => c.notNull().defaultTo(false))
     .execute();
 
-  // Plain unique index on url (not partial) — pg-mem does not support partial indexes
-  // reliably. Postgres treats multiple NULLs as distinct in a regular unique index on a
-  // nullable column (NULLS NOT DISTINCT is off by default), so this is safe in practice.
-  // Backfill is added in a later task.
+  // Partial unique index: enforce uniqueness only on non-NULL urls so multiple
+  // draft/internal systems (url = NULL) can coexist. pg-mem ignores the WHERE
+  // predicate, but it is correct and explicit on real Postgres.
   await db.schema
     .createIndex('coding_systems_url_uq')
     .ifNotExists()
     .unique()
     .on('coding_systems')
     .column('url')
+    .where('url', 'is not', null)
     .execute();
 }
 
