@@ -128,7 +128,7 @@ export function DashboardPage() {
 
   return (
     <AppShell title="Dashboard" fullBleed>
-      <div className={cn('ui-scope flex min-h-full flex-col overflow-y-auto', editing && 'dash-edit-bg')}>
+      <div className="ui-scope flex min-h-full flex-col overflow-y-auto">
         {error && <div className="px-4 pt-3 text-sm text-destructive">{error}</div>}
         <div className="flex items-center justify-between px-4 py-3">
           <Select value={current.id} onValueChange={(id) => setCurrent(all.find((d) => d.id === id)!)}>
@@ -194,7 +194,7 @@ export function DashboardPage() {
             <DashboardFilterBar filters={current.filters} values={values} onChange={setValues} />
           </div>
         )}
-        <div className="flex-1">
+        <div className={cn('flex-1', editing && 'dash-edit-bg')}>
           <DashboardGrid
             filterValues={values}
             onEdit={(id) => {
