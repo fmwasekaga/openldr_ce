@@ -20,7 +20,7 @@ export interface ExpandDeps {
   resolveValueSetCompose(url: string): Promise<VsCompose | null>;
 }
 
-export interface ExpandOptions { activeOnly?: boolean; seedUrls?: string[] }
+export interface ExpandComposeOptions { activeOnly?: boolean; seedUrls?: string[] }
 
 const keyOf = (c: { system: string; code: string }): string => `${c.system}|${c.code}`;
 const MAX_IMPORT_DEPTH = 16;
@@ -88,7 +88,7 @@ async function expandInner(compose: VsCompose, deps: ExpandDeps, activeOnly: boo
 }
 
 /** Resolve a ValueSet.compose into a flat, deduped code list. */
-export async function expandCompose(compose: VsCompose, deps: ExpandDeps, opts: ExpandOptions = {}): Promise<{ codes: ExpandedConcept[]; total: number }> {
+export async function expandCompose(compose: VsCompose, deps: ExpandDeps, opts: ExpandComposeOptions = {}): Promise<{ codes: ExpandedConcept[]; total: number }> {
   const activeOnly = opts.activeOnly !== false;
   const visited = new Set<string>(opts.seedUrls ?? []);
   return expandInner(compose, deps, activeOnly, visited, 0);
