@@ -153,6 +153,33 @@ export interface TermMappingsTable {
   updated_at: Generated<Date>;
 }
 
+export interface ValueSetsTable {
+  id: string;
+  url: string;
+  version: string | null;
+  name: string | null;
+  title: string | null;
+  status: Generated<string>;
+  experimental: Generated<boolean>;
+  description: string | null;
+  compose: JSONColumnType<Record<string, unknown>>;
+  source_json: JSONColumnType<Record<string, unknown>> | null;
+  immutable: Generated<boolean>;
+  category: string | null;
+  publisher_id: string | null;
+  expanded_at: Date | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface ValuesetExpansionsTable {
+  value_set_id: string;
+  system_url: string;
+  code: string;
+  display: string | null;
+  inactive: Generated<boolean>;
+}
+
 export interface Dhis2OrgUnitMapTable {
   facility_id: string;
   orgunit_id: string;
@@ -193,6 +220,8 @@ export interface InternalSchema {
   publishers: PublishersTable;
   coding_systems: CodingSystemsTable;
   term_mappings: TermMappingsTable;
+  value_sets: ValueSetsTable;
+  valueset_expansions: ValuesetExpansionsTable;
   dhis2_orgunit_map: Dhis2OrgUnitMapTable;
   dhis2_mappings: Dhis2MappingsTable;
   dhis2_schedules: Dhis2SchedulesTable;
