@@ -169,5 +169,11 @@ describe('terminology admin store', () => {
       expect(proj[0].target_code).toBe('Z2');
       expect(proj[0].equivalence).toBe('NARROWER-THAN');
     });
+    it('throws not-found on update of a missing mapping', async () => {
+      const { s } = await store();
+      await expect(
+        s.termMappings.update('no-such', { fromSystem: 'http://x', fromCode: 'A', toSystem: 'http://y', toCode: 'B', toDisplay: null, mapType: 'SAME-AS', relationship: null, owner: null, isActive: true }),
+      ).rejects.toMatchObject({ kind: 'not-found' });
+    });
   });
 });

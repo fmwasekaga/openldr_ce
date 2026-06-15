@@ -345,6 +345,7 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>): Termino
           await trx.updateTable('term_mappings').set({
             to_system: input.toSystem, to_code: input.toCode, to_display: input.toDisplay, map_type: input.mapType,
             relationship: input.relationship ?? null, owner: input.owner ?? null, is_active: input.isActive,
+            updated_at: sql`now()`,
           }).where('id', '=', id).execute();
           await trx.insertInto('concept_map_elements').values({
             map_url: LOCAL_MAP_URL, source_system: input.fromSystem, source_code: input.fromCode,
