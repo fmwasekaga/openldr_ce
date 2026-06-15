@@ -17,6 +17,7 @@ import { publisherSections } from '../terminology/publisherSections';
 import { PublisherDialog } from '../terminology/PublisherDialog';
 import { CodingSystemDialog } from '../terminology/CodingSystemDialog';
 import { DangerConfirmDialog } from '../terminology/DangerConfirmDialog';
+import { TermDialog } from '../terminology/TermDialog';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import {
@@ -541,6 +542,23 @@ export function Terminology(): JSX.Element {
             confirmLabel={confirm.confirmLabel}
             summary={confirm.summary}
             onConfirm={confirm.onConfirm}
+          />
+        )}
+
+        {termDialogOpen && selectedSystem && (
+          <TermDialog
+            open
+            system={selectedSystem}
+            term={editingTerm}
+            onOpenChange={setTermDialogOpen}
+            onSaved={() => {
+              setTermDialogOpen(false);
+              setTermsReloadKey((k) => k + 1);
+            }}
+            onDeleted={() => {
+              setTermDialogOpen(false);
+              setTermsReloadKey((k) => k + 1);
+            }}
           />
         )}
       </div>
