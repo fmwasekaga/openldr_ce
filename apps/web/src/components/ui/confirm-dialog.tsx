@@ -37,8 +37,10 @@ export function ConfirmDialog({
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
-          {description != null && (
+          {description != null ? (
             <AlertDialogDescription>{description}</AlertDialogDescription>
+          ) : (
+            <AlertDialogDescription aria-hidden className="sr-only" />
           )}
         </AlertDialogHeader>
         <AlertDialogFooter>

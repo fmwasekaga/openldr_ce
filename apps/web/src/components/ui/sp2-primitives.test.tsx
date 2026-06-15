@@ -73,6 +73,20 @@ describe('ConfirmDialog', () => {
     );
     expect(screen.getByText('Go back')).toBeInTheDocument();
   });
+
+  it('applies destructive styling to the action when destructive', () => {
+    render(
+      <ConfirmDialog
+        open
+        onOpenChange={() => {}}
+        title="Delete X"
+        confirmLabel="Delete"
+        destructive
+        onConfirm={() => {}}
+      />,
+    );
+    expect(screen.getByText('Delete').className).toContain('bg-destructive');
+  });
 });
 
 describe('Tooltip', () => {
