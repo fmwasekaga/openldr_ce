@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { Terminology } from './Terminology';
 import * as api from '../api';
@@ -34,6 +34,7 @@ describe('Terminology page', () => {
     vi.spyOn(api, 'listCodingSystems').mockResolvedValue([
       sys('cs1', 'LOINC', 'pub-loinc'),
     ] as never);
+    vi.spyOn(api, 'listValueSets').mockResolvedValue([] as never);
   });
 
   it('shows the empty prompt when there are no publishers', async () => {
@@ -56,5 +57,47 @@ describe('Terminology page', () => {
 
     // "LOINC" appears both as a rail publisher and a system code, so tolerate multiple.
     expect(screen.getAllByText('LOINC').length).toBeGreaterThan(0);
+  });
+
+  it('toggles to value sets and opens one in the builder sheet', async () => {
+    vi.spyOn(api, 'listValueSets').mockResolvedValue([
+      {
+        id: 'vs-yn',
+        url: 'urn:openldr:vs:yes-no',
+        name: 'YesNo',
+        title: 'Yes/No',
+        version: null,
+        status: 'active',
+        immutable: false,
+        publisherId: 'pub-loinc',
+        category: 'local',
+        codeCount: 2,
+        primarySystem: 'http://LOINC.org',
+      },
+    ] as never);
+    vi.spyOn(api, 'getValueSet').mockResolvedValue({
+      id: 'vs-yn',
+      url: 'urn:openldr:vs:yes-no',
+      version: null,
+      name: 'YesNo',
+      title: 'Yes/No',
+      status: 'active',
+      experimental: false,
+      description: null,
+      compose: { include: [] },
+      immutable: false,
+      category: 'local',
+      publisherId: 'pub-loinc',
+    } as never);
+    vi.spyOn(api, 'expandValueSet').mockResolvedValue({ codes: [], total: 0 });
+
+    render(<MemoryRouter><Terminology /></MemoryRouter>);
+
+    fireEvent.click(await screen.findByRole('button', { name: /value sets/i }));
+    expect(screen.getByText('urn:openldr:vs:yes-no')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Yes/No'));
+
+    await waitFor(() => expect(api.getValueSet).toHaveBeenCalledWith('vs-yn'));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
   });
 });
