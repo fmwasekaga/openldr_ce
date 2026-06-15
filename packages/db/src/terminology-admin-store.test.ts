@@ -131,4 +131,43 @@ describe('terminology admin store', () => {
       expect((await s.terms.search('http://x', { statuses: ['ACTIVE'], limit: 10, offset: 0 })).rows.map((r) => r.code)).toEqual(['AMP']);
     });
   });
+
+  describe('termMappings', () => {
+    it('creates a mapping, projects into concept_map_elements, and auto-creates a DRAFT target concept', async () => {
+      const { db, s } = await store();
+      await s.terms.create({ system: 'http://x', code: 'AMP', display: 'Ampicillin', status: 'ACTIVE', shortName: null, class: null, unit: null, replacedBy: null, metadata: null });
+      const res = await s.termMappings.create({ fromSystem: 'http://x', fromCode: 'AMP', toSystem: 'http://loinc.org', toCode: '101477-8', toDisplay: 'Ampicillin susceptibility', mapType: 'SAME-AS', relationship: null, owner: null, isActive: true });
+      expect(res.draftCreated).toBe(true);
+      const proj = await db.selectFrom('concept_map_elements').selectAll().where('source_system', '=', 'http://x').where('source_code', '=', 'AMP').execute();
+      expect(proj).toHaveLength(1);
+      expect(proj[0].target_code).toBe('101477-8');
+      expect(proj[0].equivalence).toBe('SAME-AS');
+      const draft = await db.selectFrom('terminology_concepts').selectAll().where('system', '=', 'http://loinc.org').where('code', '=', '101477-8').executeTakeFirst();
+      expect(draft?.status).toBe('DRAFT');
+      expect(await s.termMappings.listOutgoing('http://x', 'AMP')).toHaveLength(1);
+      expect(await s.termMappings.listReverse('http://loinc.org', '101477-8')).toHaveLength(1);
+    });
+    it('does not create a draft when the target concept already exists', async () => {
+      const { s } = await store();
+      await s.terms.create({ system: 'http://y', code: 'Z', display: 'Zed', status: 'ACTIVE', shortName: null, class: null, unit: null, replacedBy: null, metadata: null });
+      const res = await s.termMappings.create({ fromSystem: 'http://x', fromCode: 'AMP', toSystem: 'http://y', toCode: 'Z', toDisplay: 'Zed', mapType: 'RELATED-TO', relationship: null, owner: null, isActive: true });
+      expect(res.draftCreated).toBe(false);
+    });
+    it('delete removes the mapping and its projection', async () => {
+      const { db, s } = await store();
+      const res = await s.termMappings.create({ fromSystem: 'http://x', fromCode: 'AMP', toSystem: 'http://y', toCode: 'Z', toDisplay: null, mapType: 'RELATED-TO', relationship: null, owner: null, isActive: true });
+      await s.termMappings.delete(res.mapping.id);
+      expect(await db.selectFrom('concept_map_elements').selectAll().where('source_code', '=', 'AMP').execute()).toHaveLength(0);
+      expect(await db.selectFrom('term_mappings').selectAll().execute()).toHaveLength(0);
+    });
+    it('update repoints the projection', async () => {
+      const { db, s } = await store();
+      const res = await s.termMappings.create({ fromSystem: 'http://x', fromCode: 'AMP', toSystem: 'http://y', toCode: 'Z', toDisplay: null, mapType: 'SAME-AS', relationship: null, owner: null, isActive: true });
+      await s.termMappings.update(res.mapping.id, { fromSystem: 'http://x', fromCode: 'AMP', toSystem: 'http://y', toCode: 'Z2', toDisplay: 'Z2', mapType: 'NARROWER-THAN', relationship: null, owner: null, isActive: true });
+      const proj = await db.selectFrom('concept_map_elements').selectAll().where('source_code', '=', 'AMP').execute();
+      expect(proj).toHaveLength(1);
+      expect(proj[0].target_code).toBe('Z2');
+      expect(proj[0].equivalence).toBe('NARROWER-THAN');
+    });
+  });
 });

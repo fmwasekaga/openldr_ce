@@ -35,6 +35,16 @@ export interface CodingSystemInput {
   publisherId?: string | null;
 }
 
+export type MapType = 'SAME-AS' | 'NARROWER-THAN' | 'BROADER-THAN' | 'RELATED-TO' | 'UNMAPPED-FROM';
+export interface TermMapping {
+  id: string; fromSystem: string; fromCode: string; toSystem: string; toCode: string;
+  toDisplay: string | null; mapType: MapType; relationship: string | null; owner: string | null; isActive: boolean;
+}
+export interface TermMappingInput {
+  fromSystem: string; fromCode: string; toSystem: string; toCode: string; toDisplay: string | null;
+  mapType: MapType; relationship?: string | null; owner?: string | null; isActive: boolean;
+}
+
 export type TermStatus = 'ACTIVE' | 'DRAFT' | 'DEPRECATED' | 'DISABLED';
 export interface Term {
   system: string; code: string; display: string | null; status: string;
@@ -58,6 +68,8 @@ function newId(prefix: string): string {
   return `${prefix}-${randomUUID()}`;
 }
 
+const LOCAL_MAP_URL = 'urn:openldr:terminology:local-map';
+
 export interface TerminologyAdminStore {
   publishers: {
     list(): Promise<Publisher[]>;
@@ -80,6 +92,13 @@ export interface TerminologyAdminStore {
     update(system: string, code: string, input: TermInput): Promise<Term>;
     delete(system: string, code: string): Promise<void>;
     importRows(rows: { system: string; code: string; display: string | null; status: string; properties: Record<string, unknown> | null }[]): Promise<{ imported: number }>;
+  };
+  termMappings: {
+    listOutgoing(system: string, code: string): Promise<TermMapping[]>;
+    listReverse(system: string, code: string): Promise<TermMapping[]>;
+    create(input: TermMappingInput): Promise<{ mapping: TermMapping; draftCreated: boolean }>;
+    update(id: string, input: TermMappingInput): Promise<TermMapping>;
+    delete(id: string): Promise<void>;
   };
 }
 
@@ -110,6 +129,11 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>): Termino
       metadata: (p.meta as Record<string, unknown>) ?? null, mappingCount,
     };
   }
+  const tmRow = (r: { id: string; from_system: string; from_code: string; to_system: string; to_code: string; to_display: string | null; map_type: string; relationship: string | null; owner: string | null; is_active: boolean }): TermMapping => ({
+    id: r.id, fromSystem: r.from_system, fromCode: r.from_code, toSystem: r.to_system, toCode: r.to_code,
+    toDisplay: r.to_display, mapType: r.map_type as MapType, relationship: r.relationship, owner: r.owner, isActive: r.is_active,
+  });
+
   async function mappingCountFor(system: string, code: string): Promise<number> {
     const r = await db.selectFrom('term_mappings').select((eb) => eb.fn.countAll<number>().as('n'))
       .where((eb) => eb.or([
@@ -276,6 +300,69 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>): Termino
           display: eb.ref('excluded.display'), status: eb.ref('excluded.status'), properties: eb.ref('excluded.properties'),
         }))).execute();
         return { imported: rows.length };
+      },
+    },
+    termMappings: {
+      async listOutgoing(system, code) {
+        const rows = await db.selectFrom('term_mappings').selectAll().where('from_system', '=', system).where('from_code', '=', code).orderBy('created_at').execute();
+        return rows.map(tmRow);
+      },
+      async listReverse(system, code) {
+        const rows = await db.selectFrom('term_mappings').selectAll().where('to_system', '=', system).where('to_code', '=', code).orderBy('created_at').execute();
+        return rows.map(tmRow);
+      },
+      async create(input) {
+        const id = newId('tm');
+        let draftCreated = false;
+        await db.transaction().execute(async (trx) => {
+          await trx.insertInto('term_mappings').values({
+            id, from_system: input.fromSystem, from_code: input.fromCode, to_system: input.toSystem, to_code: input.toCode,
+            to_display: input.toDisplay, map_type: input.mapType, relationship: input.relationship ?? null, owner: input.owner ?? null, is_active: input.isActive,
+          }).execute();
+          await trx.deleteFrom('concept_map_elements')
+            .where('map_url', '=', LOCAL_MAP_URL).where('source_system', '=', input.fromSystem).where('source_code', '=', input.fromCode)
+            .where('target_system', '=', input.toSystem).where('target_code', '=', input.toCode).execute();
+          await trx.insertInto('concept_map_elements').values({
+            map_url: LOCAL_MAP_URL, source_system: input.fromSystem, source_code: input.fromCode,
+            target_system: input.toSystem, target_code: input.toCode, equivalence: input.mapType,
+          }).execute();
+          const existing = await trx.selectFrom('terminology_concepts').select(['code']).where('system', '=', input.toSystem).where('code', '=', input.toCode).executeTakeFirst();
+          if (!existing) {
+            await trx.insertInto('terminology_concepts').values({ system: input.toSystem, code: input.toCode, display: input.toDisplay, status: 'DRAFT', properties: null }).execute();
+            draftCreated = true;
+          }
+        });
+        const row = await db.selectFrom('term_mappings').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
+        return { mapping: tmRow(row), draftCreated };
+      },
+      async update(id, input) {
+        const existing = await db.selectFrom('term_mappings').selectAll().where('id', '=', id).executeTakeFirst();
+        if (!existing) throw new TerminologyAdminError(`mapping not found: ${id}`, 'not-found');
+        await db.transaction().execute(async (trx) => {
+          await trx.deleteFrom('concept_map_elements').where('map_url', '=', LOCAL_MAP_URL)
+            .where('source_system', '=', existing.from_system).where('source_code', '=', existing.from_code)
+            .where('target_system', '=', existing.to_system).where('target_code', '=', existing.to_code).execute();
+          await trx.updateTable('term_mappings').set({
+            to_system: input.toSystem, to_code: input.toCode, to_display: input.toDisplay, map_type: input.mapType,
+            relationship: input.relationship ?? null, owner: input.owner ?? null, is_active: input.isActive,
+          }).where('id', '=', id).execute();
+          await trx.insertInto('concept_map_elements').values({
+            map_url: LOCAL_MAP_URL, source_system: input.fromSystem, source_code: input.fromCode,
+            target_system: input.toSystem, target_code: input.toCode, equivalence: input.mapType,
+          }).execute();
+        });
+        const row = await db.selectFrom('term_mappings').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
+        return tmRow(row);
+      },
+      async delete(id) {
+        const existing = await db.selectFrom('term_mappings').selectAll().where('id', '=', id).executeTakeFirst();
+        if (!existing) throw new TerminologyAdminError(`mapping not found: ${id}`, 'not-found');
+        await db.transaction().execute(async (trx) => {
+          await trx.deleteFrom('concept_map_elements').where('map_url', '=', LOCAL_MAP_URL)
+            .where('source_system', '=', existing.from_system).where('source_code', '=', existing.from_code)
+            .where('target_system', '=', existing.to_system).where('target_code', '=', existing.to_code).execute();
+          await trx.deleteFrom('term_mappings').where('id', '=', id).execute();
+        });
       },
     },
   };
