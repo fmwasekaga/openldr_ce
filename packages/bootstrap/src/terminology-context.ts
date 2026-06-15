@@ -1,5 +1,6 @@
 import { Kysely } from 'kysely';
 import type { Config } from '@openldr/config';
+import { redact } from '@openldr/core';
 import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, type TerminologyAdminStore, type InternalSchema, resolveSeedPublisherId, deriveSystemCode } from '@openldr/db';
 import { createOperations, type Operations, type LoaderStore, loadLoinc, loadWhonetAmr, importTerminologyResource, type LoadResult } from '@openldr/terminology';
 
@@ -37,8 +38,11 @@ export async function createTerminologyContext(cfg: Config): Promise<Terminology
             systemVersion: version,
             publisherId: resolveSeedPublisherId(url),
           });
-        } catch {
-          /* projection is best-effort; the migration backfill also covers it on next migrate */
+        } catch (e) {
+          // Best-effort projection: the migration backfill also covers it on next
+          // migrate. Log (redacted — the error may carry the DB connection string)
+          // rather than swallow, so a real failure is observable.
+          console.warn('[terminology] coding_systems projection failed:', redact(e instanceof Error ? e.message : String(e)));
         }
       }
     },
