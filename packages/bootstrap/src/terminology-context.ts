@@ -20,7 +20,19 @@ export async function createTerminologyContext(cfg: Config): Promise<Terminology
   const db = internal.db as unknown as Kysely<InternalSchema>;
   const fhirStore = createFhirStore(db);
   const store = createTerminologyStore(db, fhirStore);
-  const admin = createTerminologyAdminStore(db);
+  const projection = {
+    async saveValueSetResource(resource: Record<string, unknown>): Promise<string> {
+      const saved = await fhirStore.save(resource as never);
+      return (saved as { id?: string })?.id ?? String((resource as { id?: string }).id ?? '');
+    },
+    async registerSystem(url: string, version: string | null, kind: string, resourceId: string): Promise<void> {
+      await store.saveSystem(url, version, kind, resourceId);
+    },
+    async deleteValueSetResource(url: string): Promise<void> {
+      await db.deleteFrom('terminology_systems').where('url', '=', url).execute();
+    },
+  };
+  const admin = createTerminologyAdminStore(db, projection);
   const loaderStore: LoaderStore = {
     upsertConcepts: (r) => store.upsertConcepts(r),
     upsertMapElements: (r) => store.upsertMapElements(r),
