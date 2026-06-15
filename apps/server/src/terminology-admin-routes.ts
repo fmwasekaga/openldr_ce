@@ -170,6 +170,74 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
     try { await admin.termMappings.delete((req.params as IdParam).id); reply.code(204); return null; }
     catch (e) { return mapErr(e, reply); }
   });
+
+  // Value Sets
+  const composeClause = z.object({
+    system: z.string().optional(),
+    version: z.string().optional(),
+    concept: z.array(z.object({ code: z.string(), display: z.string().optional() })).optional(),
+    filter: z.array(z.object({ property: z.string(), op: z.string(), value: z.string() })).optional(),
+    valueSet: z.array(z.string()).optional(),
+  });
+  const valueSetInput = z.object({
+    url: z.string().min(1),
+    version: z.string().nullish(),
+    name: z.string().nullish(),
+    title: z.string().nullish(),
+    status: z.enum(['draft', 'active', 'retired']),
+    experimental: z.boolean().optional(),
+    description: z.string().nullish(),
+    compose: z.object({ include: z.array(composeClause).optional(), exclude: z.array(composeClause).optional() }),
+    publisherId: z.string().nullish(),
+    category: z.string().nullish(),
+  });
+
+  app.get('/api/terminology/valuesets', async (req) => {
+    const { publisherId } = req.query as { publisherId?: string };
+    return admin.valueSets.list(publisherId);
+  });
+  app.post('/api/terminology/valuesets', async (req, reply) => {
+    const parsed = valueSetInput.safeParse(req.body);
+    if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
+    try { const saved = await admin.valueSets.save(parsed.data); reply.code(201); return saved; }
+    catch (e) { return mapErr(e, reply); }
+  });
+  app.get('/api/terminology/valuesets/:id', async (req, reply) => {
+    try { return await admin.valueSets.get((req.params as IdParam).id); }
+    catch (e) { return mapErr(e, reply); }
+  });
+  app.put('/api/terminology/valuesets/:id', async (req, reply) => {
+    const parsed = valueSetInput.safeParse(req.body);
+    if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
+    try { return await admin.valueSets.save(parsed.data); }
+    catch (e) { return mapErr(e, reply); }
+  });
+  app.delete('/api/terminology/valuesets/:id', async (req, reply) => {
+    try { await admin.valueSets.delete((req.params as IdParam).id); reply.code(204); return null; }
+    catch (e) { return mapErr(e, reply); }
+  });
+  app.post('/api/terminology/valuesets/:id/duplicate', async (req, reply) => {
+    try { const dup = await admin.valueSets.duplicate((req.params as IdParam).id); reply.code(201); return dup; }
+    catch (e) { return mapErr(e, reply); }
+  });
+  app.get('/api/terminology/valuesets/:id/expand', async (req, reply) => {
+    try {
+      const { activeOnly } = req.query as { activeOnly?: string };
+      return await admin.valueSets.expand((req.params as IdParam).id, activeOnly !== 'false');
+    } catch (e) { return mapErr(e, reply); }
+  });
+  app.post('/api/terminology/valuesets/import', async (req, reply) => {
+    try { const saved = await admin.valueSets.importFhir(req.body); reply.code(201); return saved; }
+    catch (e) { return mapErr(e, reply); }
+  });
+  app.get('/api/terminology/valuesets/:id/export', async (req, reply) => {
+    try {
+      const resource = await admin.valueSets.exportFhir((req.params as IdParam).id);
+      reply.header('content-type', 'application/fhir+json');
+      reply.header('content-disposition', `attachment; filename="${(req.params as IdParam).id}.json"`);
+      return resource;
+    } catch (e) { return mapErr(e, reply); }
+  });
 }
 
 // Duck-type guard rather than `instanceof TerminologyAdminError`: that class lives in
