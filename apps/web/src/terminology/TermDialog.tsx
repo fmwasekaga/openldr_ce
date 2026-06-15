@@ -43,6 +43,7 @@ import {
 } from '../components/ui/table';
 import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import { cn } from '../lib/cn';
+import { TermMappingDialog } from './TermMappingDialog';
 
 // ── runtime constants ─────────────────────────────────────────────────────────
 
@@ -168,12 +169,9 @@ export function TermDialog({
   const [mappingsLoading, setMappingsLoading] = useState(false);
   const [draftNotice, setDraftNotice] = useState<string | null>(null);
 
-  // ── T13 state (TermMappingDialog — mounted in T13) ───────────────────────────
+  // ── T13 state (TermMappingDialog) ────────────────────────────────────────────
   const [mappingDialogOpen, setMappingDialogOpen] = useState(false);
   const [editingMapping, setEditingMapping] = useState<TermMapping | null>(null);
-  // Suppress unused-variable warnings; these are wired by T13.
-  void mappingDialogOpen;
-  void editingMapping;
 
   // ── seed form on open ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -562,7 +560,21 @@ export function TermDialog({
         </SheetContent>
       </Sheet>
 
-      {/* TermMappingDialog mounted in T13 */}
+      {term && (
+        <TermMappingDialog
+          open={mappingDialogOpen}
+          onOpenChange={(o) => { setMappingDialogOpen(o); if (!o) setEditingMapping(null); }}
+          fromTerm={{ system: system.url ?? '', code: term.code, display: term.display, systemCode: system.systemCode }}
+          systems={[system]}
+          mapping={editingMapping}
+          onSaved={(_m, draftCreated) => {
+            void loadMappings();
+            if (draftCreated) setDraftNotice('A draft term was created in the target system for the new mapping.');
+            setMappingDialogOpen(false);
+            setEditingMapping(null);
+          }}
+        />
+      )}
 
       <ConfirmDialog
         open={confirmState !== null}
