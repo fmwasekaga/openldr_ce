@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
 import { z } from 'zod';
+import { parseTermsCsv, TERMS_CSV_TEMPLATE } from '@openldr/terminology';
 
 const publisherInput = z.object({
   name: z.string().min(1),
@@ -67,6 +68,105 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
   });
   app.get('/api/terminology/systems/:id/deletion-impact', async (req, reply) => {
     try { return await admin.codingSystems.deletionImpact((req.params as IdParam).id); }
+    catch (e) { return mapErr(e, reply); }
+  });
+
+  // ── Terms ────────────────────────────────────────────────────────────────
+  const termInput = z.object({
+    code: z.string().min(1), display: z.string().min(1),
+    status: z.enum(['ACTIVE', 'DRAFT', 'DEPRECATED', 'DISABLED']),
+    shortName: z.string().nullish(), class: z.string().nullish(), unit: z.string().nullish(),
+    replacedBy: z.string().nullish(), metadata: z.record(z.unknown()).nullish(),
+  });
+
+  async function systemUrl(id: string): Promise<string> {
+    const sys = (await admin.codingSystems.list()).find((s) => s.id === id);
+    if (!sys || !sys.url) {
+      throw Object.assign(new Error(`coding system has no url: ${id}`), { name: 'TerminologyAdminError', kind: 'not-found' as const });
+    }
+    return sys.url;
+  }
+
+  app.get('/api/terminology/systems/:id/terms', async (req, reply) => {
+    try {
+      const url = await systemUrl((req.params as IdParam).id);
+      const { q, status, limit, offset } = req.query as { q?: string; status?: string; limit?: string; offset?: string };
+      return await admin.terms.search(url, { query: q, statuses: status ? [status] : undefined, limit: Number(limit ?? 50), offset: Number(offset ?? 0) });
+    } catch (e) { return mapErr(e, reply); }
+  });
+  app.post('/api/terminology/systems/:id/terms', async (req, reply) => {
+    const parsed = termInput.safeParse(req.body);
+    if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
+    try {
+      const url = await systemUrl((req.params as IdParam).id);
+      reply.code(201);
+      return await admin.terms.create({ system: url, ...parsed.data });
+    } catch (e) { return mapErr(e, reply); }
+  });
+  app.put('/api/terminology/systems/:id/terms/:code', async (req, reply) => {
+    const parsed = termInput.safeParse(req.body);
+    if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
+    try {
+      const url = await systemUrl((req.params as IdParam).id);
+      const code = decodeURIComponent((req.params as { id: string; code: string }).code);
+      return await admin.terms.update(url, code, { system: url, ...parsed.data });
+    } catch (e) { return mapErr(e, reply); }
+  });
+  app.delete('/api/terminology/systems/:id/terms/:code', async (req, reply) => {
+    try {
+      const url = await systemUrl((req.params as IdParam).id);
+      await admin.terms.delete(url, decodeURIComponent((req.params as { id: string; code: string }).code));
+      reply.code(204); return null;
+    } catch (e) { return mapErr(e, reply); }
+  });
+  app.post('/api/terminology/systems/:id/terms/import', async (req, reply) => {
+    try {
+      const url = await systemUrl((req.params as IdParam).id);
+      const rawRows = parseTermsCsv(String((req.body as { csv?: string }).csv ?? ''), url);
+      const rows = rawRows.map((r) => ({ ...r, status: r.status ?? 'ACTIVE' }));
+      return await admin.terms.importRows(rows);
+    } catch (e) { return mapErr(e, reply); }
+  });
+  app.get('/api/terminology/systems/:id/terms/template.csv', async (_req, reply) => {
+    reply.header('content-type', 'text/csv');
+    return TERMS_CSV_TEMPLATE;
+  });
+
+  // ── Term Mappings ─────────────────────────────────────────────────────────
+  const mappingInput = z.object({
+    toSystem: z.string().min(1), toCode: z.string().min(1), toDisplay: z.string().nullish(),
+    mapType: z.enum(['SAME-AS', 'NARROWER-THAN', 'BROADER-THAN', 'RELATED-TO', 'UNMAPPED-FROM']),
+    relationship: z.string().nullish(), owner: z.string().nullish(), isActive: z.boolean(),
+  });
+
+  app.get('/api/terminology/terms/:system/:code/mappings', async (req, reply) => {
+    try {
+      const system = decodeURIComponent((req.params as { system: string; code: string }).system);
+      const code = decodeURIComponent((req.params as { system: string; code: string }).code);
+      const [outgoing, reverse] = await Promise.all([admin.termMappings.listOutgoing(system, code), admin.termMappings.listReverse(system, code)]);
+      return { outgoing, reverse };
+    } catch (e) { return mapErr(e, reply); }
+  });
+  app.post('/api/terminology/terms/:system/:code/mappings', async (req, reply) => {
+    const parsed = mappingInput.safeParse(req.body);
+    if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
+    try {
+      const system = decodeURIComponent((req.params as { system: string; code: string }).system);
+      const code = decodeURIComponent((req.params as { system: string; code: string }).code);
+      reply.code(201);
+      return await admin.termMappings.create({ fromSystem: system, fromCode: code, ...parsed.data, toDisplay: parsed.data.toDisplay ?? null });
+    } catch (e) { return mapErr(e, reply); }
+  });
+  app.put('/api/terminology/mappings/:id', async (req, reply) => {
+    const parsed = mappingInput.safeParse(req.body);
+    if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
+    const from = req.body as { fromSystem?: string; fromCode?: string };
+    if (!from.fromSystem || !from.fromCode) { reply.code(400); return { error: 'fromSystem and fromCode required' }; }
+    try { return await admin.termMappings.update((req.params as IdParam).id, { fromSystem: from.fromSystem, fromCode: from.fromCode, ...parsed.data, toDisplay: parsed.data.toDisplay ?? null }); }
+    catch (e) { return mapErr(e, reply); }
+  });
+  app.delete('/api/terminology/mappings/:id', async (req, reply) => {
+    try { await admin.termMappings.delete((req.params as IdParam).id); reply.code(204); return null; }
     catch (e) { return mapErr(e, reply); }
   });
 }

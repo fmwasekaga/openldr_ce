@@ -15,9 +15,18 @@ function buildFakeAdmin(): FakeAdmin {
   const publishers: PubRow[] = [
     { id: 'pub-loinc', name: 'LOINC', role: 'standard', icon: null, seeded: true, sortOrder: 1 },
   ];
-  const systems: Array<{ id: string; systemCode: string; systemName: string; url: string | null; systemVersion: string | null; description: string | null; active: boolean; publisherId: string | null; seeded: boolean }> = [];
+  const systems: Array<{ id: string; systemCode: string; systemName: string; url: string | null; systemVersion: string | null; description: string | null; active: boolean; publisherId: string | null; seeded: boolean }> = [
+    { id: 'sys1', systemCode: 'X', systemName: 'Test System', url: 'http://x', systemVersion: null, description: null, active: true, publisherId: null, seeded: false },
+  ];
+  type TermRow = { system: string; code: string; display: string | null; status: string; shortName: string | null; class: string | null; unit: string | null; replacedBy: string | null; metadata: Record<string, unknown> | null; mappingCount: number };
+  const terms: TermRow[] = [
+    { system: 'http://x', code: 'AMP', display: 'Ampicillin', status: 'ACTIVE', shortName: null, class: null, unit: null, replacedBy: null, metadata: null, mappingCount: 0 },
+  ];
+  type MappingRow = { id: string; fromSystem: string; fromCode: string; toSystem: string; toCode: string; toDisplay: string | null; mapType: string; relationship: string | null; owner: string | null; isActive: boolean };
+  const mappings: MappingRow[] = [];
   let pubSeq = 0;
   let sysSeq = 0;
+  let tmSeq = 0;
 
   const adminErr = (msg: string, kind: 'not-found' | 'conflict') =>
     Object.assign(new Error(msg), { name: 'TerminologyAdminError', kind });
@@ -64,6 +73,77 @@ function buildFakeAdmin(): FakeAdmin {
       },
       async deletionImpact() { return { termCount: 0, mappingCount: 0 }; },
       async upsertByUrl() { /* no-op in fake */ },
+    },
+    terms: {
+      async search(systemUrl, q) {
+        let rows = terms.filter((t) => t.system === systemUrl);
+        if (q.query && q.query.trim()) {
+          const lower = q.query.trim().toLowerCase();
+          rows = rows.filter((t) => t.code.toLowerCase().includes(lower) || (t.display ?? '').toLowerCase().includes(lower));
+        }
+        if (q.statuses && q.statuses.length) rows = rows.filter((t) => q.statuses!.includes(t.status));
+        const total = rows.length;
+        return { rows: rows.slice(q.offset, q.offset + q.limit), total };
+      },
+      async create(input) {
+        const t: TermRow = {
+          system: input.system, code: input.code, display: input.display ?? null, status: input.status,
+          shortName: input.shortName ?? null, class: input.class ?? null, unit: input.unit ?? null,
+          replacedBy: input.replacedBy ?? null, metadata: input.metadata ?? null, mappingCount: 0,
+        };
+        terms.push(t);
+        return t;
+      },
+      async update(system, code, input) {
+        const t = terms.find((x) => x.system === system && x.code === code);
+        if (!t) throw adminErr(`term not found: ${system}|${code}`, 'not-found');
+        Object.assign(t, { display: input.display ?? null, status: input.status, shortName: input.shortName ?? null, class: input.class ?? null, unit: input.unit ?? null, replacedBy: input.replacedBy ?? null, metadata: input.metadata ?? null });
+        return t;
+      },
+      async delete(system, code) {
+        const idx = terms.findIndex((x) => x.system === system && x.code === code);
+        if (idx === -1) throw adminErr(`term not found: ${system}|${code}`, 'not-found');
+        terms.splice(idx, 1);
+      },
+      async importRows(rows) {
+        for (const r of rows) {
+          const existing = terms.find((t) => t.system === r.system && t.code === r.code);
+          if (existing) {
+            Object.assign(existing, { display: r.display, status: r.status });
+          } else {
+            terms.push({ system: r.system, code: r.code, display: r.display, status: r.status, shortName: null, class: null, unit: null, replacedBy: null, metadata: null, mappingCount: 0 });
+          }
+        }
+        return { imported: rows.length };
+      },
+    },
+    termMappings: {
+      async listOutgoing(system, code) {
+        return mappings.filter((m) => m.fromSystem === system && m.fromCode === code) as never[];
+      },
+      async listReverse(system, code) {
+        return mappings.filter((m) => m.toSystem === system && m.toCode === code) as never[];
+      },
+      async create(input) {
+        const m: MappingRow = {
+          id: `tm-test-${++tmSeq}`, fromSystem: input.fromSystem, fromCode: input.fromCode,
+          toSystem: input.toSystem, toCode: input.toCode, toDisplay: input.toDisplay ?? null,
+          mapType: input.mapType, relationship: input.relationship ?? null, owner: input.owner ?? null, isActive: input.isActive,
+        };
+        mappings.push(m);
+        return { mapping: m as never, draftCreated: false };
+      },
+      async update(id, input) {
+        const m = mappings.find((x) => x.id === id);
+        if (!m) throw adminErr(`mapping not found: ${id}`, 'not-found');
+        Object.assign(m, { toSystem: input.toSystem, toCode: input.toCode, toDisplay: input.toDisplay ?? null, mapType: input.mapType, relationship: input.relationship ?? null, owner: input.owner ?? null, isActive: input.isActive });
+        return m as never;
+      },
+      async delete(id) {
+        const idx = mappings.findIndex((x) => x.id === id);
+        if (idx === -1) throw adminErr(`mapping not found: ${id}`, 'not-found');
+        mappings.splice(idx, 1);
+      },
     },
   };
 }
@@ -127,6 +207,26 @@ describe('terminology admin routes', () => {
     // 409: delete of seeded publisher (pub-loinc is pre-seeded with seeded=true)
     const del409 = await app.inject({ method: 'DELETE', url: '/api/terminology/publishers/pub-loinc' });
     expect(del409.statusCode).toBe(409);
+
+    await app.close();
+  });
+
+  it('searches terms and creates a mapping', async () => {
+    const app = buildApp(ctxWith('up'));
+
+    const list = await app.inject({ method: 'GET', url: '/api/terminology/systems/sys1/terms?q=amp' });
+    expect(list.statusCode).toBe(200);
+    expect(JSON.parse(list.body).total).toBeGreaterThanOrEqual(0);
+
+    const created = await app.inject({ method: 'POST', url: '/api/terminology/systems/sys1/terms', payload: { code: 'NEW', display: 'New term', status: 'ACTIVE' } });
+    expect(created.statusCode).toBe(201);
+
+    const map = await app.inject({ method: 'POST', url: '/api/terminology/terms/http%3A%2F%2Fx/AMP/mappings', payload: { toSystem: 'http://loinc.org', toCode: '1', toDisplay: 'x', mapType: 'SAME-AS', isActive: true } });
+    expect(map.statusCode).toBe(201);
+
+    const template = await app.inject({ method: 'GET', url: '/api/terminology/systems/sys1/terms/template.csv' });
+    expect(template.statusCode).toBe(200);
+    expect(template.body).toContain('code,display');
 
     await app.close();
   });
