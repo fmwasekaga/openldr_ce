@@ -23,12 +23,12 @@ function ReportCard({ summary }: { summary: ReportSummary }) {
   );
 }
 
-export function Dashboard() {
+export function Reports() {
   const [reports, setReports] = useState<ReportSummary[]>([]);
   const [error, setError] = useState<string>();
   useEffect(() => { fetchReports().then(setReports).catch((e) => setError(String(e))); }, []);
   return (
-    <AppShell title="Dashboard">
+    <AppShell title="Reports">
       <div className="ui-scope">
         {error && <div className="mb-4 text-sm text-destructive">{error}</div>}
         <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))' }}>

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { Dashboard } from './Dashboard';
+import { Reports } from './Reports';
 
 beforeAll(() => {
   Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, value: 600 });
@@ -22,9 +22,9 @@ beforeEach(() => {
   }));
 });
 
-describe('Dashboard', () => {
+describe('Reports', () => {
   it('lists report cards from the API', async () => {
-    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+    render(<MemoryRouter><Reports /></MemoryRouter>);
     await waitFor(() => expect(screen.getByText('AMR Resistance Rate')).toBeInTheDocument());
   });
 });

@@ -1,5 +1,5 @@
 import { Routes, Route } from 'react-router-dom';
-import { Dashboard } from './pages/Dashboard';
+import { Reports } from './pages/Reports';
 import { ReportDetail } from './pages/ReportDetail';
 import { Docs } from './pages/Docs';
 import { AppShell } from './shell/AppShell';
@@ -9,7 +9,7 @@ export function App() {
   return (
     <Routes>
       <Route path="/" element={<DashboardPage />} />
-      <Route path="/reports" element={<Dashboard />} />
+      <Route path="/reports" element={<Reports />} />
       <Route path="/reports/:id" element={<ReportDetail />} />
       <Route path="/docs" element={<Docs />} />
       <Route path="/docs/:slug" element={<Docs />} />
