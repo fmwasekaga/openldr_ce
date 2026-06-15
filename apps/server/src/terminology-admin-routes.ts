@@ -99,8 +99,9 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
     try {
       const url = await systemUrl((req.params as IdParam).id);
+      const created = await admin.terms.create({ system: url, ...parsed.data });
       reply.code(201);
-      return await admin.terms.create({ system: url, ...parsed.data });
+      return created;
     } catch (e) { return mapErr(e, reply); }
   });
   app.put('/api/terminology/systems/:id/terms/:code', async (req, reply) => {
@@ -153,8 +154,9 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
     try {
       const system = decodeURIComponent((req.params as { system: string; code: string }).system);
       const code = decodeURIComponent((req.params as { system: string; code: string }).code);
+      const created = await admin.termMappings.create({ fromSystem: system, fromCode: code, ...parsed.data, toDisplay: parsed.data.toDisplay ?? null });
       reply.code(201);
-      return await admin.termMappings.create({ fromSystem: system, fromCode: code, ...parsed.data, toDisplay: parsed.data.toDisplay ?? null });
+      return created;
     } catch (e) { return mapErr(e, reply); }
   });
   app.put('/api/terminology/mappings/:id', async (req, reply) => {

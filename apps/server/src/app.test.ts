@@ -216,7 +216,7 @@ describe('terminology admin routes', () => {
 
     const list = await app.inject({ method: 'GET', url: '/api/terminology/systems/sys1/terms?q=amp' });
     expect(list.statusCode).toBe(200);
-    expect(JSON.parse(list.body).total).toBeGreaterThanOrEqual(0);
+    expect(JSON.parse(list.body).total).toBeGreaterThanOrEqual(1);
 
     const created = await app.inject({ method: 'POST', url: '/api/terminology/systems/sys1/terms', payload: { code: 'NEW', display: 'New term', status: 'ACTIVE' } });
     expect(created.statusCode).toBe(201);
