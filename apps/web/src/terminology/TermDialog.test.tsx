@@ -84,4 +84,22 @@ describe('TermDialog', () => {
     );
     expect(screen.getByRole('button', { name: /mappings/i })).toBeDisabled();
   });
+
+  it('blocks save when metadata is invalid JSON', async () => {
+    vi.spyOn(api, 'createTerm').mockResolvedValue({} as never);
+    render(<TermDialog open system={system as never} term={null} onOpenChange={() => {}} onSaved={() => {}} onDeleted={() => {}} />);
+    fireEvent.change(screen.getByLabelText(/^code$/i), { target: { value: 'X' } });
+    fireEvent.change(screen.getByLabelText(/display name/i), { target: { value: 'X term' } });
+    fireEvent.change(screen.getByLabelText(/metadata/i), { target: { value: '{bad json' } });
+    const actionsBtn2 = screen.getByRole('button', { name: /actions/i });
+    fireEvent.pointerDown(actionsBtn2, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menuitem', { name: /create/i })) {
+      fireEvent.keyDown(actionsBtn2, { key: 'Enter' });
+    }
+    const createItem2 = await screen.findByRole('menuitem', { name: /create/i });
+    fireEvent.pointerMove(createItem2);
+    fireEvent.click(createItem2);
+    await waitFor(() => expect(screen.getByText(/invalid json/i)).toBeInTheDocument());
+    expect(api.createTerm).not.toHaveBeenCalled();
+  });
 });

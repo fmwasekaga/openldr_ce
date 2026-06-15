@@ -108,7 +108,6 @@ const L = {
   create: 'Create',
   cancel: 'Cancel',
   delete: 'Delete',
-  deleteFailed: 'Delete failed.',
   cannotBeUndone: 'This action cannot be undone.',
   actions: 'Actions',
   loading: 'Loading…',
@@ -190,6 +189,9 @@ export function TermDialog({
     setMetadataText(term?.metadata ? JSON.stringify(term.metadata, null, 2) : '');
     setError(null);
     setDraftNotice(null);
+    setOutgoing([]);
+    setReverse([]);
+    setMappingsLoading(false);
   }, [open, term]);
 
   // ── load mappings ────────────────────────────────────────────────────────────
@@ -251,8 +253,8 @@ export function TermDialog({
         replacedBy: replacedBy.trim() || null,
         metadata,
       };
-      if (editing) {
-        await updateTerm(system.id, term!.code, input);
+      if (editing && term) {
+        await updateTerm(system.id, term.code, input);
       } else {
         await createTerm(system.id, input);
       }
@@ -304,6 +306,7 @@ export function TermDialog({
     try {
       await deleteTermMapping(m.id);
       setOutgoing((prev) => prev.filter((x) => x.id !== m.id));
+      setReverse((prev) => prev.filter((x) => x.id !== m.id));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -477,12 +480,12 @@ export function TermDialog({
                 </h3>
                 <div className="-mx-6 border-b border-border" />
                 <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3 py-4">
-                  <Label className="whitespace-nowrap">{L.termStatus}</Label>
+                  <Label htmlFor="termStatus" className="whitespace-nowrap">{L.termStatus}</Label>
                   <Select
                     value={status}
                     onValueChange={(v) => setStatus(v as TermStatus)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="termStatus">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
