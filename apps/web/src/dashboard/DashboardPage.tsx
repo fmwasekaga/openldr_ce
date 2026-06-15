@@ -209,6 +209,7 @@ export function DashboardPage() {
           open
           initial={editingWidget}
           sqlEnabled={sqlEnabled}
+          dashboardFilters={current.filters}
           onClose={() => {
             setEditorOpen(false);
             setEditingWidget(undefined);
