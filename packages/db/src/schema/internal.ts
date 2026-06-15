@@ -138,6 +138,21 @@ export interface CodingSystemsTable {
   seeded: Generated<boolean>;
 }
 
+export interface TermMappingsTable {
+  id: string;
+  from_system: string;
+  from_code: string;
+  to_system: string;
+  to_code: string;
+  to_display: string | null;
+  map_type: string;
+  relationship: string | null;
+  owner: string | null;
+  is_active: Generated<boolean>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface Dhis2OrgUnitMapTable {
   facility_id: string;
   orgunit_id: string;
@@ -177,6 +192,7 @@ export interface InternalSchema {
   concept_map_elements: ConceptMapElementsTable;
   publishers: PublishersTable;
   coding_systems: CodingSystemsTable;
+  term_mappings: TermMappingsTable;
   dhis2_orgunit_map: Dhis2OrgUnitMapTable;
   dhis2_mappings: Dhis2MappingsTable;
   dhis2_schedules: Dhis2SchedulesTable;

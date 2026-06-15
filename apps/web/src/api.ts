@@ -127,3 +127,38 @@ export async function deleteCodingSystem(id: string): Promise<void> {
   if (!r.ok && r.status !== 204) throw new Error(`delete system failed: ${r.status}`);
 }
 export const systemDeletionImpact = (id: string) => fetch(`/api/terminology/systems/${id}/deletion-impact`).then((r) => okJson<{ termCount: number; mappingCount: number }>(r, 'impact'));
+
+// ── Terms + mappings (SP2) ───────────────────────────────────────────────────
+export type TermStatus = 'ACTIVE' | 'DRAFT' | 'DEPRECATED' | 'DISABLED';
+export type MapType = 'SAME-AS' | 'NARROWER-THAN' | 'BROADER-THAN' | 'RELATED-TO' | 'UNMAPPED-FROM';
+export interface Term { system: string; code: string; display: string | null; status: string; shortName: string | null; class: string | null; unit: string | null; replacedBy: string | null; metadata: Record<string, unknown> | null; mappingCount: number }
+export interface TermInput { code: string; display: string; status: TermStatus; shortName?: string | null; class?: string | null; unit?: string | null; replacedBy?: string | null; metadata?: Record<string, unknown> | null }
+export interface TermMapping { id: string; fromSystem: string; fromCode: string; toSystem: string; toCode: string; toDisplay: string | null; mapType: MapType; relationship: string | null; owner: string | null; isActive: boolean }
+export interface TermMappingInput { fromSystem: string; fromCode: string; toSystem: string; toCode: string; toDisplay: string | null; mapType: MapType; relationship?: string | null; owner?: string | null; isActive: boolean }
+
+export const searchTerms = (systemId: string, p: { q?: string; status?: string; limit?: number; offset?: number }) => {
+  const qs = new URLSearchParams();
+  if (p.q) qs.set('q', p.q);
+  if (p.status) qs.set('status', p.status);
+  qs.set('limit', String(p.limit ?? 50));
+  qs.set('offset', String(p.offset ?? 0));
+  return fetch(`/api/terminology/systems/${systemId}/terms?${qs}`).then((r) => okJson<{ rows: Term[]; total: number }>(r, 'search terms'));
+};
+export const createTerm = (systemId: string, i: TermInput) => fetch(`/api/terminology/systems/${systemId}/terms`, jbody(i, 'POST')).then((r) => okJson<Term>(r, 'create term'));
+export const updateTerm = (systemId: string, code: string, i: TermInput) => fetch(`/api/terminology/systems/${systemId}/terms/${encodeURIComponent(code)}`, jbody(i, 'PUT')).then((r) => okJson<Term>(r, 'update term'));
+export async function deleteTerm(systemId: string, code: string): Promise<void> {
+  const r = await fetch(`/api/terminology/systems/${systemId}/terms/${encodeURIComponent(code)}`, { method: 'DELETE' });
+  if (!r.ok && r.status !== 204) throw new Error(`delete term failed: ${r.status}`);
+}
+export const importTerms = (systemId: string, csv: string) => fetch(`/api/terminology/systems/${systemId}/terms/import`, jbody({ csv }, 'POST')).then((r) => okJson<{ imported: number }>(r, 'import terms'));
+export const termsTemplateUrl = (systemId: string) => `/api/terminology/systems/${systemId}/terms/template.csv`;
+
+export const listTermMappings = (system: string, code: string) =>
+  fetch(`/api/terminology/terms/${encodeURIComponent(system)}/${encodeURIComponent(code)}/mappings`).then((r) => okJson<{ outgoing: TermMapping[]; reverse: TermMapping[] }>(r, 'list mappings'));
+export const createTermMapping = (system: string, code: string, i: Omit<TermMappingInput, 'fromSystem' | 'fromCode'>) =>
+  fetch(`/api/terminology/terms/${encodeURIComponent(system)}/${encodeURIComponent(code)}/mappings`, jbody(i, 'POST')).then((r) => okJson<{ mapping: TermMapping; draftCreated: boolean }>(r, 'create mapping'));
+export const updateTermMapping = (id: string, i: TermMappingInput) => fetch(`/api/terminology/mappings/${id}`, jbody(i, 'PUT')).then((r) => okJson<TermMapping>(r, 'update mapping'));
+export async function deleteTermMapping(id: string): Promise<void> {
+  const r = await fetch(`/api/terminology/mappings/${id}`, { method: 'DELETE' });
+  if (!r.ok && r.status !== 204) throw new Error(`delete mapping failed: ${r.status}`);
+}

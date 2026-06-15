@@ -89,3 +89,14 @@ export async function runSystemCreate(code: string, name: string, opts: { url?: 
   } catch (err) { process.stderr.write(`terminology system create failed: ${redactError(err)}\n`); return 1; }
   finally { await ctx.close(); }
 }
+
+export async function runTermList(systemUrl: string, opts: { q?: string; json?: boolean }): Promise<number> {
+  const ctx = await createTerminologyContext(loadConfig());
+  try {
+    const page = await ctx.admin.terms.search(systemUrl, { query: opts.q, limit: 100, offset: 0 });
+    if (opts.json) console.log(JSON.stringify(page, null, 2));
+    else for (const t of page.rows) console.log(`${t.code}\t${t.display ?? ''}\t${t.status}`);
+    return 0;
+  } catch (err) { process.stderr.write(`terminology term list failed: ${redactError(err)}\n`); return 1; }
+  finally { await ctx.close(); }
+}
