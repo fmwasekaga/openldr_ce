@@ -22,11 +22,12 @@
   border-bottom-right-radius: 3px;
 }
 
-/* Dotted-grid background, shown only while editing, like corlix. */
-.dash-grid-editing {
-  background-image: radial-gradient(var(--border, #2a2a2a) 1.25px, transparent 1.25px);
-  background-size: 16px 16px;
-  background-position: -1px -1px;
+/* Dotted-grid background, shown only while editing, like corlix. Applied to the
+   full-height page container so it fills the whole content area, not just the
+   widget bounds. */
+.dash-edit-bg {
+  background-image: radial-gradient(circle, var(--text-muted, #555) 1px, transparent 1px);
+  background-size: 20px 20px;
 }
 
 /* Subtle drop placeholder while dragging/resizing. */

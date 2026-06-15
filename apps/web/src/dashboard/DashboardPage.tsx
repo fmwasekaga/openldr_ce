@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/cn';
 import { Plus, Pencil, Check, SlidersHorizontal, MoreHorizontal } from 'lucide-react';
 import { listDashboards, createDashboard, saveDashboard, fetchClientConfig, type Dashboard, type WidgetConfig } from '../api';
 import { useDashboardStore } from './store';
@@ -126,10 +127,10 @@ export function DashboardPage() {
   }
 
   return (
-    <AppShell title="Dashboard">
-      <div className="ui-scope">
-        {error && <div className="mb-3 text-sm text-destructive">{error}</div>}
-        <div className="mb-4 flex items-center justify-between">
+    <AppShell title="Dashboard" fullBleed>
+      <div className={cn('ui-scope flex min-h-full flex-col overflow-y-auto', editing && 'dash-edit-bg')}>
+        {error && <div className="px-4 pt-3 text-sm text-destructive">{error}</div>}
+        <div className="flex items-center justify-between px-4 py-3">
           <Select value={current.id} onValueChange={(id) => setCurrent(all.find((d) => d.id === id)!)}>
             <SelectTrigger aria-label="Dashboard" className="w-56">
               <SelectValue />
@@ -142,15 +143,15 @@ export function DashboardPage() {
               ))}
             </SelectContent>
           </Select>
-          <div className="flex gap-2">
-            {editing ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="icon" variant="outline" aria-label="Dashboard menu">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="icon" variant="ghost" aria-label="Dashboard menu" className="h-8 w-8">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {editing ? (
+                <>
                   <DropdownMenuItem
                     onSelect={() => {
                       setEditingWidget(undefined);
@@ -177,25 +178,31 @@ export function DashboardPage() {
                     <Check className="mr-2 h-4 w-4" />
                     Done
                   </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : (
-              <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
-                <Pencil className="mr-1 h-4 w-4" />
-                Edit
-              </Button>
-            )}
-          </div>
+                </>
+              ) : (
+                <DropdownMenuItem onSelect={() => setEditing(true)}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Edit
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-        <Separator className="mb-4" />
-        <DashboardFilterBar filters={current.filters} values={values} onChange={setValues} />
-        <DashboardGrid
-          filterValues={values}
-          onEdit={(id) => {
-            setEditingWidget(current.widgets.find((w) => w.id === id));
-            setEditorOpen(true);
-          }}
-        />
+        <Separator />
+        {current.filters.length > 0 && (
+          <div className="px-4 pt-3">
+            <DashboardFilterBar filters={current.filters} values={values} onChange={setValues} />
+          </div>
+        )}
+        <div className="flex-1">
+          <DashboardGrid
+            filterValues={values}
+            onEdit={(id) => {
+              setEditingWidget(current.widgets.find((w) => w.id === id));
+              setEditorOpen(true);
+            }}
+          />
+        </div>
       </div>
       {editorOpen && (
         <WidgetEditorDialog

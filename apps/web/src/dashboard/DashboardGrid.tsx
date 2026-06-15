@@ -39,7 +39,7 @@ export function DashboardGrid({ filterValues, onEdit }: { filterValues: Record<s
   };
 
   return (
-    <div ref={containerRef} className={`dash-grid min-h-[400px] w-full rounded-lg ${editing ? 'dash-grid-editing' : ''}`}>
+    <div ref={containerRef} className="dash-grid w-full">
       <GridLayout
         className="layout"
         layout={layout}
@@ -86,7 +86,7 @@ export function DashboardGrid({ filterValues, onEdit }: { filterValues: Record<s
                   </DropdownMenu>
                 )}
               </div>
-              <div className="min-h-0 flex-1 overflow-hidden rounded-b-lg">
+              <div className={`min-h-0 flex-1 overflow-hidden rounded-b-lg ${editing ? 'pointer-events-none select-none' : ''}`}>
                 <DashboardWidget config={w} filterValues={filterValues} />
               </div>
               {resizing?.i === w.id && (
