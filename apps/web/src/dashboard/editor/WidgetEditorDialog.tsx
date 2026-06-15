@@ -7,15 +7,12 @@ import { Play, MoreHorizontal, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { DatePicker } from '@/components/ui/date-picker';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
 import {
   listModels,
   runWidgetQuery,
@@ -23,6 +20,7 @@ import {
   type DashboardFilterDef,
   type WidgetConfig,
   type WidgetQuery,
+  type WidgetVariableDef,
   type ReportResult,
 } from '../../api';
 import { renderWidget } from '../widgets';
@@ -49,21 +47,67 @@ function extractVariables(s: string): string[] {
   return m ? [...new Set(m.map((x) => x.slice(2, -2)))] : [];
 }
 
-/** Replace {{var}} with a quoted test value (or NULL) so a parameterised query can preview. */
-function substituteVars(s: string, vals: Record<string, string>): string {
-  return s.replace(/\{\{(\w+)\}\}/g, (_, name) => {
-    const v = vals[name];
-    return v == null || v === '' ? 'NULL' : `'${String(v).replace(/'/g, "''")}'`;
+/** Collapse _from/_to of a date-range variable into its logical parent. */
+function extractLogicalVariables(s: string, defs: Record<string, WidgetVariableDef>): string[] {
+  const logical = new Set<string>();
+  for (const v of extractVariables(s)) {
+    if (v.endsWith('_from') || v.endsWith('_to')) {
+      const base = v.replace(/_(from|to)$/, '');
+      if (defs[base]?.type === 'date-range') {
+        logical.add(base);
+        continue;
+      }
+    }
+    logical.add(v);
+  }
+  return [...logical];
+}
+
+/** Resolve local test values into the flat key set the SQL template references. */
+function resolveTestValues(testValues: Record<string, unknown>): Record<string, string | number | null> {
+  const resolved: Record<string, string | number | null> = {};
+  for (const [name, val] of Object.entries(testValues)) {
+    if (val && typeof val === 'object' && 'from' in (val as Record<string, unknown>)) {
+      const r = val as { from: string; to: string };
+      resolved[`${name}_from`] = r.from || null;
+      resolved[`${name}_to`] = r.to || null;
+    } else {
+      resolved[name] = (val as string | number | null) ?? null;
+    }
+  }
+  return resolved;
+}
+
+/** Apply [[ ... {{var}} ... ]] conditional clauses + {{var}} substitution (parameterised preview). */
+function applyTemplate(sql: string, resolved: Record<string, string | number | null>): string {
+  const isSet = (v: string | number | null | undefined) => v !== null && v !== undefined && v !== '';
+  const withClauses = sql.replace(/\[\[([\s\S]*?)\]\]/g, (_, clause: string) => {
+    const vars = (clause.match(/\{\{(\w+)\}\}/g) ?? []).map((m) => m.slice(2, -2));
+    return vars.every((v) => isSet(resolved[v])) ? clause : '';
+  });
+  return withClauses.replace(/\{\{(\w+)\}\}/g, (_, name: string) => {
+    const v = resolved[name];
+    if (!isSet(v)) return 'NULL';
+    return typeof v === 'number' ? String(v) : `'${String(v).replace(/'/g, "''")}'`;
   });
 }
 
-/** Label-over-control row for the config panel. */
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block space-y-1 text-xs">
       <span className="text-muted-foreground">{label}</span>
       {children}
     </label>
+  );
+}
+
+/** Label-left / control-right row for the variable config grid. */
+function VarRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <>
+      <Label className="self-center whitespace-nowrap text-xs text-muted-foreground">{label}</Label>
+      <div className="min-w-0">{children}</div>
+    </>
   );
 }
 
@@ -109,23 +153,11 @@ function ConfigPanel({
     <div className="space-y-3">
       {hasXY && (
         <>
-          <ColumnSelect
-            label={widgetType === 'scatter-plot' ? 'X Column' : 'Category Column'}
-            value={xKey}
-            columns={columns}
-            onChange={(v) => onVisualChange({ ...visual, xAxisKey: v })}
-          />
-          <ColumnSelect
-            label={widgetType === 'scatter-plot' ? 'Y Column' : 'Value Column'}
-            value={yKey}
-            columns={columns}
-            onChange={(v) => onVisualChange({ ...visual, yAxisKey: v })}
-          />
+          <ColumnSelect label={widgetType === 'scatter-plot' ? 'X Column' : 'Category Column'} value={xKey} columns={columns} onChange={(v) => onVisualChange({ ...visual, xAxisKey: v })} />
+          <ColumnSelect label={widgetType === 'scatter-plot' ? 'Y Column' : 'Value Column'} value={yKey} columns={columns} onChange={(v) => onVisualChange({ ...visual, yAxisKey: v })} />
         </>
       )}
-      {valueOnly && (
-        <ColumnSelect label="Value Column" value={yKey} columns={columns} onChange={(v) => onVisualChange({ ...visual, yAxisKey: v })} />
-      )}
+      {valueOnly && <ColumnSelect label="Value Column" value={yKey} columns={columns} onChange={(v) => onVisualChange({ ...visual, yAxisKey: v })} />}
       {widgetType === 'pie-chart' && (
         <Field label="Inner radius (0 = pie, >0 = donut)">
           <Input type="number" className="h-8 text-xs" value={num('innerRadius', 0)} min={0} max={80} onChange={(e) => onVisualChange({ ...visual, innerRadius: Number(e.target.value) })} />
@@ -206,13 +238,16 @@ export function WidgetEditorDialog({
 }) {
   const initialSql = initial?.query.mode === 'sql' ? initial.query.sql : 'select 1 as value';
   const initialBindings = (initial?.query.mode === 'sql' && initial.query.variableBindings) || {};
+  const initialDefs = (initial?.query.mode === 'sql' && initial.query.variables) || {};
 
   const [title, setTitle] = useState(initial?.title ?? 'New widget');
   const [type, setType] = useState(initial?.type ?? 'kpi');
   const [sqlText, setSqlText] = useState(initialSql);
   const [visual, setVisual] = useState<Visual>(initial?.visual ?? {});
   const [bindings, setBindings] = useState<Record<string, string>>(initialBindings);
-  const [testValues, setTestValues] = useState<Record<string, string>>({});
+  const [varDefs, setVarDefs] = useState<Record<string, WidgetVariableDef>>(initialDefs);
+  const [testValues, setTestValues] = useState<Record<string, unknown>>({});
+  const [dynamicVarOptions, setDynamicVarOptions] = useState<Record<string, string[]>>({});
   const [preview, setPreview] = useState<ReportResult>();
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string>();
@@ -225,14 +260,40 @@ export function WidgetEditorDialog({
   const view = useRef<EditorView>();
   const sqlRef = useRef(sqlText);
   sqlRef.current = sqlText;
+  const testValuesRef = useRef(testValues);
+  testValuesRef.current = testValues;
 
   useEffect(() => {
     listModels().then(setModels).catch(() => {});
   }, []);
 
-  // CodeMirror init via a callback ref. A top-level [] effect runs before Radix's
-  // Dialog portal attaches the editor node, so the node is null there; a callback ref
-  // fires exactly when the node mounts/unmounts.
+  // Load dynamic options for variables that define an optionsSql query.
+  useEffect(() => {
+    const toLoad = Object.entries(varDefs).filter(([, d]) => d.optionsSql);
+    if (toLoad.length === 0) return;
+    let alive = true;
+    (async () => {
+      const results: Record<string, string[]> = {};
+      for (const [name, def] of toLoad) {
+        try {
+          const r = await runWidgetQuery({ mode: 'sql', sql: def.optionsSql! });
+          if (r.rows.length) {
+            const key = r.columns[0]?.key ?? Object.keys(r.rows[0])[0];
+            results[name] = r.rows.map((row) => String(row[key] ?? ''));
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      if (alive) setDynamicVarOptions(results);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [JSON.stringify(varDefs)]);
+
+  // CodeMirror init via a callback ref (Radix's Dialog portal attaches the node after the
+  // parent's effect runs, so a top-level [] effect sees a null ref).
   const onEditorMount = useCallback((node: HTMLDivElement | null) => {
     if (node && !view.current) {
       try {
@@ -260,14 +321,13 @@ export function WidgetEditorDialog({
   }, []);
 
   const run = () => {
-    // Substitute {{var}} test values client-side so a parameterised query can preview.
-    const q: WidgetQuery = { mode: 'sql', sql: substituteVars(sqlRef.current, testValues), variableBindings: bindings };
+    const resolved = resolveTestValues(testValuesRef.current);
+    const q: WidgetQuery = { mode: 'sql', sql: applyTemplate(sqlRef.current, resolved), variableBindings: bindings };
     setRunning(true);
     runWidgetQuery(q)
       .then((r) => {
         setPreview(r);
         setError(undefined);
-        // Default axis keys to the first columns so the chart renders for arbitrary SQL.
         const cols = r.columns.map((c) => c.key);
         setVisual((v) => ({ ...v, xAxisKey: v.xAxisKey ?? cols[0], yAxisKey: v.yAxisKey ?? cols[1] ?? cols[0] }));
       })
@@ -275,7 +335,6 @@ export function WidgetEditorDialog({
       .finally(() => setRunning(false));
   };
 
-  // Run once on open if editing an existing widget.
   useEffect(() => {
     if (initial?.query.mode === 'sql') run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -283,7 +342,7 @@ export function WidgetEditorDialog({
 
   const save = () => {
     const id = initial?.id ?? (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `w-${Math.round(performance.now())}`);
-    const query: WidgetQuery = { mode: 'sql', sql: sqlText, variableBindings: bindings };
+    const query: WidgetQuery = { mode: 'sql', sql: sqlText, variableBindings: bindings, variables: varDefs };
     onSave({ id, type, title, query, refreshIntervalSec: initial?.refreshIntervalSec ?? 0, visual });
   };
 
@@ -291,13 +350,13 @@ export function WidgetEditorDialog({
   const xKey = String(visual.xAxisKey ?? columns[0] ?? 'label');
   const yKey = String(visual.yAxisKey ?? columns[1] ?? 'value');
   const errorMsg = error;
-  const variables = extractVariables(sqlText);
+  const detectedVars = extractLogicalVariables(sqlText, varDefs);
   const previewConfig: WidgetConfig = { id: 'preview', type, title, query: { mode: 'sql', sql: sqlText }, refreshIntervalSec: 0, visual };
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="flex h-[92vh] w-[95vw] max-w-[95vw] flex-col gap-0 p-0">
-        {/* Header: editable title + actions */}
+        {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-4 py-2">
           <DialogTitle asChild>
             <input
@@ -312,23 +371,23 @@ export function WidgetEditorDialog({
           </Button>
         </div>
 
-        {/* Body: 4 sections (editor | preview / results | config) */}
+        {/* Body: 4 sections */}
         <div className="flex min-h-0 flex-1 flex-col gap-0 p-3">
-          {/* Top half */}
           <div className="flex min-h-0 h-1/2 gap-3">
-            {/* editor + action bar */}
             <div className="flex min-w-0 flex-[3] flex-col rounded-t-md border border-border">
-              {variables.length > 0 && (
+              {detectedVars.length > 0 && (
                 <div className="flex flex-wrap items-center gap-1 border-b border-border px-2 py-1.5">
-                  {variables.map((v) => {
-                    const bound = !!bindings[v];
+                  {detectedVars.map((v) => {
+                    const def = varDefs[v];
+                    const configured = !!def;
                     return (
                       <button
                         key={v}
                         onClick={() => setShowVariables(true)}
-                        className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 font-mono text-[11px] transition-colors ${bound ? 'border-primary/30 bg-primary/10 text-primary' : 'border-border bg-muted text-muted-foreground'}`}
+                        className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 font-mono text-[11px] transition-colors ${configured ? 'border-primary/30 bg-primary/10 text-primary' : 'border-border bg-muted text-muted-foreground'}`}
                       >
-                        {`{{${v}}}`}
+                        <span>{`{{${v}}}`}</span>
+                        <span className={`text-[9px] uppercase ${configured ? 'text-primary/70' : 'text-muted-foreground/60'}`}>{def?.type ?? '?'}</span>
                       </button>
                     );
                   })}
@@ -369,15 +428,12 @@ export function WidgetEditorDialog({
                 </div>
               </div>
             </div>
-            {/* preview */}
             <div className="min-w-0 flex-[2] overflow-hidden rounded-t-md border border-border p-3">
               {errorMsg ? <div className="text-sm text-destructive">{errorMsg}</div> : preview && preview.rows.length ? renderWidget(previewConfig, preview) : <EmptyPanel text="Run a query to see preview" />}
             </div>
           </div>
 
-          {/* Bottom half */}
           <div className="flex min-h-0 h-1/2 gap-3">
-            {/* results table */}
             <div className="min-w-0 flex-[3] overflow-auto rounded-b-md border border-t-0 border-border">
               {errorMsg ? (
                 <div className="p-3 text-sm text-destructive">{errorMsg}</div>
@@ -408,7 +464,6 @@ export function WidgetEditorDialog({
                 <EmptyPanel text="Run a query to see results" />
               )}
             </div>
-            {/* config */}
             <div className="min-w-0 flex-[2] overflow-y-auto rounded-b-md border border-t-0 border-border p-3">
               {columns.length > 0 ? (
                 <ConfigPanel widgetType={type} columns={columns} visual={visual} onVisualChange={setVisual} xKey={xKey} yKey={yKey} />
@@ -419,7 +474,7 @@ export function WidgetEditorDialog({
           </div>
         </div>
 
-        {/* Charts sheet — visualization type picker */}
+        {/* Charts sheet */}
         <Sheet open={showCharts} onOpenChange={setShowCharts}>
           <SheetContent>
             <SheetHeader>
@@ -442,7 +497,7 @@ export function WidgetEditorDialog({
           </SheetContent>
         </Sheet>
 
-        {/* Tables sheet — model/schema browser */}
+        {/* Tables sheet */}
         <Sheet open={showTables} onOpenChange={setShowTables}>
           <SheetContent>
             <SheetHeader>
@@ -472,57 +527,157 @@ export function WidgetEditorDialog({
           </SheetContent>
         </Sheet>
 
-        {/* Variables sheet — bind {{vars}} to dashboard filters */}
+        {/* Variables sheet (corlix parity) */}
         <Sheet open={showVariables} onOpenChange={setShowVariables}>
-          <SheetContent>
-            <SheetHeader>
+          <SheetContent className="flex w-[440px] max-w-[90vw] flex-col px-0 sm:w-[440px]">
+            <SheetHeader className="px-6">
               <SheetTitle>Variables</SheetTitle>
             </SheetHeader>
-            {variables.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No {'{{variables}}'} in the query. Add a placeholder like <code className="font-mono">{'{{ward}}'}</code> to your SQL to create one.
-              </p>
-            ) : (
-              <div className="space-y-4">
-                <p className="text-xs text-muted-foreground">Give each variable a test value to preview the query, and optionally bind it to a dashboard filter.</p>
-                {variables.map((v) => (
-                  <div key={v} className="space-y-1">
-                    <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{`{{${v}}}`}</code>
-                    <Field label="Test value (for preview)">
-                      <Input
-                        className="h-8 text-xs"
-                        value={testValues[v] ?? ''}
-                        onChange={(e) => setTestValues((t) => ({ ...t, [v]: e.target.value }))}
-                        placeholder="value used when you Run"
-                      />
-                    </Field>
-                    <Field label="Dashboard filter">
-                      <Select
-                        value={bindings[v] ?? '__local__'}
-                        onValueChange={(val) =>
-                          setBindings((b) => {
-                            const next = { ...b };
-                            if (val === '__local__') delete next[v];
-                            else next[v] = val;
-                            return next;
-                          })
-                        }
-                      >
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__local__">Local only</SelectItem>
-                          {dashboardFilters.map((f) => (
-                            <SelectItem key={f.id} value={f.id}>
-                              {f.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                  </div>
-                ))}
+            <div className="min-h-0 flex-1 overflow-y-auto px-6">
+              {detectedVars.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No {'{{variables}}'} detected. Add a placeholder like <code className="font-mono">{'{{ward}}'}</code> to your SQL to create one.
+                </p>
+              ) : (
+                detectedVars.map((v) => {
+                  const def = varDefs[v] ?? { type: 'text' as const, label: v };
+                  const boundFilterId = bindings[v];
+                  const updateDef = (patch: Partial<WidgetVariableDef>) => setVarDefs((d) => ({ ...d, [v]: { ...def, ...patch } }));
+                  return (
+                    <div key={v}>
+                      <div className="-mx-6 border-b border-border" />
+                      <div className="flex items-center py-3">
+                        <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{`{{${v}}}`}</code>
+                      </div>
+                      <div className="-mx-6 border-b border-border" />
+                      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-3 py-4">
+                        <VarRow label="Type">
+                          <Select value={def.type} onValueChange={(t) => updateDef({ type: t as WidgetVariableDef['type'] })}>
+                            <SelectTrigger className="h-7 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="text">Text</SelectItem>
+                              <SelectItem value="number">Number</SelectItem>
+                              <SelectItem value="date">Date</SelectItem>
+                              <SelectItem value="date-range">Date Range</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </VarRow>
+
+                        <VarRow label="Label">
+                          <Input value={def.label} onChange={(e) => updateDef({ label: e.target.value })} className="h-7 text-xs" placeholder="Display name" />
+                        </VarRow>
+
+                        {def.type === 'text' && (
+                          <>
+                            <VarRow label="Options">
+                              <Input
+                                value={def.options?.join(', ') ?? ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  updateDef({ options: val ? val.split(',').map((s) => s.trim()).filter(Boolean) : undefined });
+                                }}
+                                className="h-7 text-xs"
+                                placeholder="e.g. OPD, ICU, Emergency"
+                              />
+                            </VarRow>
+                            <VarRow label="Options SQL">
+                              <Input
+                                value={def.optionsSql ?? ''}
+                                onChange={(e) => updateDef({ optionsSql: e.target.value || undefined })}
+                                className="h-7 font-mono text-xs"
+                                placeholder="SELECT DISTINCT ward FROM ..."
+                              />
+                            </VarRow>
+                          </>
+                        )}
+
+                        <VarRow label="Dashboard Filter">
+                          <Select
+                            value={boundFilterId ?? '__local__'}
+                            onValueChange={(val) =>
+                              setBindings((b) => {
+                                const next = { ...b };
+                                if (val && val !== '__local__') next[v] = val;
+                                else delete next[v];
+                                return next;
+                              })
+                            }
+                          >
+                            <SelectTrigger className="h-7 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__local__">Local only</SelectItem>
+                              {dashboardFilters.map((f) => (
+                                <SelectItem key={f.id} value={f.id}>
+                                  {f.label} ({f.id})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </VarRow>
+
+                        <div className="col-span-2 -mx-6 border-b border-border" />
+
+                        <VarRow label="Test Value">
+                          {def.type === 'date-range' ? (
+                            <DateRangePicker
+                              value={(testValues[v] as { from: string; to: string } | null) ?? null}
+                              onChange={(val) => setTestValues((p) => ({ ...p, [v]: val }))}
+                              placeholder="Pick date range"
+                              className="h-7 w-full text-xs"
+                            />
+                          ) : def.type === 'date' ? (
+                            <DatePicker
+                              value={(testValues[v] as string) ?? null}
+                              onChange={(val) => setTestValues((p) => ({ ...p, [v]: val }))}
+                              placeholder="Pick a date"
+                              className="h-7 text-xs"
+                            />
+                          ) : def.type === 'number' ? (
+                            <Input
+                              type="number"
+                              value={testValues[v] != null ? String(testValues[v]) : ''}
+                              onChange={(e) => setTestValues((p) => ({ ...p, [v]: e.target.value ? Number(e.target.value) : null }))}
+                              className="h-7 text-xs"
+                              placeholder="Enter test value"
+                            />
+                          ) : (def.options?.length ?? 0) > 0 || (dynamicVarOptions[v]?.length ?? 0) > 0 ? (
+                            <Select value={(testValues[v] as string) ?? '__all__'} onValueChange={(val) => setTestValues((p) => ({ ...p, [v]: val === '__all__' ? null : val }))}>
+                              <SelectTrigger className="h-7 text-xs">
+                                <SelectValue placeholder="All" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__all__">All</SelectItem>
+                                {(def.options ?? dynamicVarOptions[v] ?? []).map((o) => (
+                                  <SelectItem key={o} value={o}>
+                                    {o}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Input
+                              value={(testValues[v] as string) ?? ''}
+                              onChange={(e) => setTestValues((p) => ({ ...p, [v]: e.target.value || null }))}
+                              className="h-7 text-xs"
+                              placeholder="Enter test value"
+                            />
+                          )}
+                        </VarRow>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            {detectedVars.length > 0 && (
+              <div className="border-t border-border px-6 pt-3">
+                <Button variant="ghost" size="sm" className="text-xs" onClick={() => setTestValues({})}>
+                  Clear Test Values
+                </Button>
               </div>
             )}
           </SheetContent>

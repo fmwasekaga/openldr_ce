@@ -30,6 +30,16 @@ export const QueryFilterSchema = z.object({
 });
 export type QueryFilter = z.infer<typeof QueryFilterSchema>;
 
+export const WidgetVariableDefSchema = z.object({
+  type: z.enum(['text', 'number', 'date', 'date-range']),
+  label: z.string(),
+  options: z.array(z.string()).optional(),
+  optionsSql: z.string().optional(),
+  defaultValue: z.union([z.string(), z.number()]).nullable().optional(),
+  defaultRange: z.object({ from: z.string(), to: z.string() }).nullable().optional(),
+});
+export type WidgetVariableDef = z.infer<typeof WidgetVariableDefSchema>;
+
 export const WidgetQuerySchema = z.discriminatedUnion('mode', [
   z.object({
     mode: z.literal('builder'),
@@ -43,6 +53,7 @@ export const WidgetQuerySchema = z.discriminatedUnion('mode', [
     mode: z.literal('sql'),
     sql: z.string(),
     variableBindings: z.record(z.string()).optional(),
+    variables: z.record(WidgetVariableDefSchema).optional(),
   }),
 ]);
 export type WidgetQuery = z.infer<typeof WidgetQuerySchema>;
