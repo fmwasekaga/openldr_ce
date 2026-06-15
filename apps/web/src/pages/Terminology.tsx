@@ -84,6 +84,7 @@ export function Terminology(): JSX.Element {
   const [toast, setToast] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
 
   // ── load ────────────────────────────────────────────────────────────────────
+  // Stable across renders in practice — only calls module-level API fns + setState.
   const reload = (): Promise<void> =>
     Promise.all([listPublishers(), listCodingSystems()])
       .then(([p, s]) => {
@@ -112,6 +113,7 @@ export function Terminology(): JSX.Element {
   useEffect(() => {
     setSelectedSystemId('');
     setSystemPage(0);
+    setToast(null);
   }, [selectedPublisherId]);
 
   // ── derived ─────────────────────────────────────────────────────────────────

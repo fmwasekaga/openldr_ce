@@ -36,6 +36,13 @@ describe('Terminology page', () => {
     ] as never);
   });
 
+  it('shows the empty prompt when there are no publishers', async () => {
+    vi.spyOn(api, 'listPublishers').mockResolvedValue([] as never);
+    vi.spyOn(api, 'listCodingSystems').mockResolvedValue([] as never);
+    render(<MemoryRouter><Terminology /></MemoryRouter>);
+    await waitFor(() => expect(screen.getByText(/Select a publisher to browse/i)).toBeInTheDocument());
+  });
+
   it('renders the publisher rail and a code-system', async () => {
     render(
       <MemoryRouter>
