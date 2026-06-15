@@ -57,10 +57,11 @@ New internal migration `012_terminology_admin`:
   - `name` text not null
   - `role` text not null — `local` | `standard` | `external`
   - `icon` text null
-  - `match_prefixes` text[] not null default `{}` — canonical-URL prefixes that bind
-    a code system to this publisher (mirrors corlix `terminology_publishers.match_prefixes`).
-    A real Postgres `text[]` (not jsonb) so a JS array binds correctly — this is NOT
-    the jsonb-array coercion trap.
+  - `match_prefixes` jsonb not null default `'[]'` (typed `JSONColumnType<string[]>`)
+    — canonical-URL prefixes that bind a code system to this publisher (mirrors corlix
+    `terminology_publishers.match_prefixes`). jsonb (not `text[]`) for pg-mem test
+    compatibility; seed-only writes are explicitly `JSON.stringify`'d, so the
+    jsonb-JS-array coercion trap does not apply.
   - `seeded` boolean not null default false
   - `sort_order` int not null default 0
 - `coding_systems`
