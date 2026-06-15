@@ -1,7 +1,8 @@
 import type { ConceptSource } from './source';
 import { valueSetOf } from './source';
+import { expandCompose, type ExpandDeps, type VsCompose } from './expander';
 import type { ValueSet } from '@openldr/fhir';
-import type { ConceptRecord, MapElement } from '@openldr/db';
+import type { MapElement } from '@openldr/db';
 
 export interface LookupResult { found: boolean; system: string; code: string; display: string | null; properties: Record<string, unknown> | null }
 export interface ValidateResult { result: boolean; message: string }
@@ -19,23 +20,29 @@ export interface Operations {
   translate(input: { mapUrl?: string; system: string; code: string; targetSystem?: string }): Promise<TranslateResult>;
 }
 
-async function includeConcepts(source: ConceptSource, rule: { system?: string; concept?: { code: string }[]; filter?: { property: string; op: string; value: string }[] }, limit: number, offset: number): Promise<{ rows: ConceptRecord[]; total: number }> {
-  if (!rule.system) throw new TerminologyError('compose.include without system is unsupported', 'invalid');
-  if (rule.concept) {
-    const codes = rule.concept.map((c) => c.code);
-    const rows = await source.findConcepts({ system: rule.system, codes, limit, offset });
-    const total = await source.countConcepts({ system: rule.system, codes });
-    return { rows, total };
-  }
-  let property: { name: string; value: string } | undefined;
-  if (rule.filter && rule.filter.length > 0) {
-    const f = rule.filter[0];
-    if (f.op !== '=' && f.op !== 'equals') throw new TerminologyError(`filter op '${f.op}' unsupported`, 'invalid');
-    property = { name: f.property, value: f.value };
-  }
-  const rows = await source.findConcepts({ system: rule.system, property, limit, offset });
-  const total = await source.countConcepts({ system: rule.system, property });
-  return { rows, total };
+function makeDeps(source: ConceptSource): ExpandDeps {
+  return {
+    async listSystemConcepts(system, activeOnly) {
+      const rows = await source.findConcepts({ system, limit: 10_000, offset: 0 });
+      return rows.filter((r) => !activeOnly || r.status === 'ACTIVE' || r.status == null)
+        .map((r) => ({ system: r.system, code: r.code, display: r.display }));
+    },
+    async filterConcepts(system, filters, activeOnly) {
+      const f = filters[0];
+      if (!f || (f.op !== '=' && f.op !== 'equals')) throw new TerminologyError(`filter op '${f?.op}' unsupported`, 'invalid');
+      const rows = await source.findConcepts({ system, property: { name: f.property, value: f.value }, limit: 10_000, offset: 0 });
+      return rows.filter((r) => !activeOnly || r.status === 'ACTIVE' || r.status == null)
+        .map((r) => ({ system: r.system, code: r.code, display: r.display }));
+    },
+    async resolveDisplay(system, code) {
+      const c = await source.getConcept(system, code);
+      return c?.display ?? null;
+    },
+    async resolveValueSetCompose(url) {
+      const vs = valueSetOf(await source.getResourceByUrl(url));
+      return (vs?.compose as VsCompose | undefined) ?? null;
+    },
+  };
 }
 
 export function createOperations(source: ConceptSource): Operations {
@@ -47,12 +54,11 @@ export function createOperations(source: ConceptSource): Operations {
 
   async function expand(url: string, opts: ExpandOptions): Promise<ValueSet> {
     const vs = await loadValueSet(url);
-    const includes = vs.compose?.include ?? [];
-    if (includes.length !== 1) throw new TerminologyError('Slice A supports exactly one compose.include', 'invalid');
+    const { codes, total } = await expandCompose((vs.compose ?? { include: [] }) as VsCompose, makeDeps(source), { seedUrls: [url] });
     const count = opts.count ?? 100;
     const offset = opts.offset ?? 0;
-    const { rows, total } = await includeConcepts(source, includes[0], count, offset);
-    return { ...vs, expansion: { total, offset, contains: rows.map((r) => ({ system: r.system, code: r.code, display: r.display ?? undefined })) } };
+    const page = codes.slice(offset, offset + count);
+    return { ...vs, expansion: { total, offset, contains: page.map((c) => ({ system: c.system, code: c.code, display: c.display ?? undefined })) } };
   }
 
   return {
@@ -68,11 +74,8 @@ export function createOperations(source: ConceptSource): Operations {
     async validateCode(input) {
       if ('valueSetUrl' in input) {
         const vs = await loadValueSet(input.valueSetUrl);
-        const rule = vs.compose?.include?.[0];
-        if (!rule?.system) throw new TerminologyError('ValueSet has no resolvable include', 'invalid');
-        const c = await source.getConcept(rule.system, input.code);
-        const inExplicit = rule.concept ? rule.concept.some((x) => x.code === input.code) : true;
-        const ok = !!c && inExplicit;
+        const { codes } = await expandCompose((vs.compose ?? { include: [] }) as VsCompose, makeDeps(source), { seedUrls: [input.valueSetUrl] });
+        const ok = codes.some((c) => c.code === input.code && (!input.system || c.system === input.system));
         return { result: ok, message: ok ? `${input.code} is in ${input.valueSetUrl}` : `${input.code} not in ${input.valueSetUrl}` };
       }
       const c = await source.getConcept(input.system, input.code);

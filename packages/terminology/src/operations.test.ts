@@ -62,6 +62,21 @@ describe('expand', () => {
     expect(vs.expansion?.total).toBe(3);
     expect(vs.expansion?.contains?.map((c) => c.code)).toEqual(['AMP', 'CIP']);
   });
+  it('expands a multi-include ValueSet with an exclude', async () => {
+    const source = memSource([
+      { system: 's1', code: 'A', display: 'Alpha', status: 'ACTIVE', properties: null },
+      { system: 's1', code: 'B', display: 'Beta', status: 'ACTIVE', properties: null },
+      { system: 's2', code: 'Z', display: 'Zeta', status: 'ACTIVE', properties: null },
+    ], {
+      'urn:vs:multi': {
+        resourceType: 'ValueSet', url: 'urn:vs:multi', status: 'active',
+        compose: { include: [{ system: 's1' }, { system: 's2' }], exclude: [{ system: 's1', concept: [{ code: 'B' }] }] },
+      },
+    });
+    const multiOps = createOperations(source);
+    const vs = await multiOps.expand('urn:vs:multi', {});
+    expect(vs.expansion?.contains?.map((c) => c.code)).toEqual(['A', 'Z']);
+  });
   it('404s an unknown ValueSet', async () => {
     await expect(ops.expand('http://x/nope', {})).rejects.toThrow(/not found/i);
   });
