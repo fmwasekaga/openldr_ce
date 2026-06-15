@@ -191,6 +191,41 @@ describe('TermMappingDialog', () => {
     expect(screen.getByText('Owner')).toBeTruthy();
   });
 
+  it('disables Create until a manual target code is entered', async () => {
+    vi.spyOn(api, 'createTermMapping').mockResolvedValue({
+      mapping: stubMapping,
+      draftCreated: false,
+    });
+    render(
+      <TermMappingDialog
+        open
+        fromTerm={fromTerm}
+        systems={[system as never]}
+        mapping={null}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+    // Switch to manual mode (code field is empty → canSave=false)
+    fireEvent.click(screen.getByRole('button', { name: /manual/i }));
+
+    // Open the Actions dropdown (same technique as the create/update tests above)
+    const actionsBtn = screen.getByRole('button', { name: /actions/i });
+    fireEvent.pointerDown(actionsBtn, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Create')) {
+      fireEvent.keyDown(actionsBtn, { key: 'Enter' });
+    }
+
+    // Find the Create menu item — Radix sets data-disabled on a disabled DropdownMenuItem
+    const createItem = await screen.findByText('Create');
+    const menuItem = createItem.closest('[role="menuitem"]') ?? createItem;
+    expect(menuItem).toHaveAttribute('data-disabled');
+
+    // Clicking it must NOT invoke the API
+    fireEvent.click(createItem);
+    expect(api.createTermMapping).not.toHaveBeenCalled();
+  });
+
   it('shows the status section with is-active checkbox checked by default', () => {
     render(
       <TermMappingDialog

@@ -194,7 +194,7 @@ export function TermMappingDialog({
       const toSystemUrl =
         mode === 'search'
           ? (picked!.system)
-          : (manualTargetSystem?.url ?? manualTargetSystem?.url ?? '');
+          : (manualTargetSystem?.url ?? '');
       const toCode = mode === 'search' ? picked!.code : manualCode.trim();
       const toDisplay = mode === 'search' ? picked!.display : manualDisplay.trim() || null;
 

@@ -567,9 +567,9 @@ export function TermDialog({
           fromTerm={{ system: system.url ?? '', code: term.code, display: term.display, systemCode: system.systemCode }}
           systems={[system]}
           mapping={editingMapping}
-          onSaved={(_m, draftCreated) => {
+          onSaved={(m, draftCreated) => {
             void loadMappings();
-            if (draftCreated) setDraftNotice('A draft term was created in the target system for the new mapping.');
+            if (draftCreated) setDraftNotice(L.draftCreatedNotice(m.toSystem, m.toCode));
             setMappingDialogOpen(false);
             setEditingMapping(null);
           }}
