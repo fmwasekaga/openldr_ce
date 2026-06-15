@@ -2,7 +2,7 @@ import { type Kysely, sql } from 'kysely';
 import { SEED_PUBLISHERS } from '../../seed-publishers';
 import { resolvePublisher } from '../../resolve-publisher';
 
-const SYSTEM_PUBLISHER_ID = 'pub-system';
+const SYSTEM_PUBLISHER_ID = SEED_PUBLISHERS[0].id; // the 'System' (local) publisher
 
 /** Derive a short system code from a canonical URL: last non-empty path segment
  * upper-cased; falls back to the host's first label; finally the whole url. */
@@ -10,7 +10,7 @@ export function deriveSystemCode(url: string): string {
   try {
     const u = new URL(url);
     const seg = u.pathname.split('/').filter(Boolean).pop();
-    return (seg ?? u.hostname.split('.')[0] ?? url).toUpperCase();
+    return (seg || u.hostname.split('.')[0] || url).toUpperCase();
   } catch {
     return url.toUpperCase();
   }
@@ -25,6 +25,14 @@ export interface BackfillRow {
   publisherName: string; // for tests only; not stored
 }
 
+/**
+ * Project canonical URLs into coding_systems seed rows. The id scheme
+ * `cs-<CODE>-<PUB>` hashes (last-path-segment, publisher), NOT the full url — so two
+ * distinct URLs that share the same last segment under the same publisher collide on
+ * id and the second is silently skipped by `ON CONFLICT (id) DO NOTHING`. Acceptable
+ * for this display-only backfill (the underlying terminology_concepts rows are
+ * unaffected); standard terminology URLs (LOINC/SNOMED/ICD/HL7) do not collide.
+ */
 export function computeBackfill(urls: string[]): BackfillRow[] {
   const pubs = SEED_PUBLISHERS.map((p) => ({ id: p.id, name: p.name, matchPrefixes: p.matchPrefixes }));
   return urls.map((url) => {
