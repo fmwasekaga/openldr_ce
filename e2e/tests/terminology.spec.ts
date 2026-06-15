@@ -19,6 +19,50 @@ test('terminology page lists seeded publishers and creates a publisher', async (
   await expect(page.getByRole('button', { name: `E2E Lab ${RUN}` })).toBeVisible();
 });
 
+test('terminology SP3: create system -> add term -> author a value set -> preview expands', async ({ page }) => {
+  const SYS_CODE = `VS${RUN}`;
+  const SYS_URL = `http://e2e.test/vs/${RUN}`;
+  const VS_URL = `urn:e2e:valueset:${RUN}`;
+
+  await page.goto('/terminology');
+  await page.getByRole('button', { name: 'System' }).first().click();
+
+  await page.getByRole('button', { name: 'Actions' }).first().click();
+  await page.getByRole('menuitem', { name: 'Code system' }).click();
+  await page.getByRole('menuitem', { name: 'New' }).first().click();
+  await page.getByLabel('System code').fill(SYS_CODE);
+  await page.getByLabel('System name').fill('E2E VS System');
+  await page.getByLabel('Canonical URL').fill(SYS_URL);
+  await page.getByRole('button', { name: 'Create' }).click();
+  await expect(page.getByText(SYS_CODE)).toBeVisible();
+
+  await page.getByText(SYS_CODE).click();
+  await page.getByRole('button', { name: 'New term' }).click();
+  await page.locator('#termCode').fill('T1');
+  await page.locator('#termDisplay').fill('Test term');
+  await page.locator('[role="dialog"]').getByRole('button', { name: 'Actions' }).click();
+  await page.getByRole('menuitem', { name: 'Create' }).click();
+  await expect(page.getByText('T1')).toBeVisible();
+
+  await page.getByRole('button', { name: '← Code systems' }).click();
+  await page.getByRole('button', { name: 'Actions' }).first().click();
+  await page.getByRole('menuitem', { name: 'Value set' }).click();
+  await page.getByRole('menuitem', { name: 'New' }).first().click();
+
+  await page.getByLabel('Canonical URL').fill(VS_URL);
+  await page.getByLabel('Title').fill(`E2E VS ${RUN}`);
+  // Radix Select's placeholder is not exposed consistently in headless Chromium;
+  // the include-clause system picker is the last combobox in this sheet.
+  await page.locator('[role="dialog"]').getByRole('combobox').last().click();
+  await page.getByRole('option', { name: new RegExp(SYS_CODE) }).click();
+  await page.getByRole('button', { name: 'Add concept' }).first().click();
+  await page.locator('[role="dialog"] input[placeholder="code"]').first().fill('T1');
+  await page.locator('[role="dialog"]').getByRole('button', { name: 'Actions' }).click();
+  await page.getByRole('menuitem', { name: 'Save' }).click();
+
+  await expect(page.locator('[role="dialog"]').getByText('T1')).toBeVisible();
+});
+
 test('terminology SP2: create system → drill → create term', async ({ page }) => {
   // Unique system code for this run — must be a valid code (uppercase, no spaces).
   const SYS_CODE = `E2E${RUN}`;
