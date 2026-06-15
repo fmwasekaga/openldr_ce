@@ -8,13 +8,13 @@ test('health endpoint is up', async ({ request }) => {
   expect(body.status).not.toBe('down');
 });
 
-test('dashboard renders report cards from live data', async ({ page }) => {
-  await page.goto('/');
+test('reports page renders report cards from live data', async ({ page }) => {
+  await page.goto('/reports');
   await expect(page.getByRole('heading', { name: 'AMR Resistance Rate' })).toBeVisible();
 });
 
 test('AMR report shows 100% resistance on AMP', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/reports');
   await page.getByRole('link').filter({ hasText: 'AMR Resistance Rate' }).click();
   await expect(page).toHaveURL(/\/reports\/amr-resistance/);
   const ampRow = page.getByRole('row').filter({ hasText: 'AMP' });

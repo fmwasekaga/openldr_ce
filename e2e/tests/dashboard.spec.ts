@@ -1,19 +1,30 @@
 import { test, expect } from '@playwright/test';
 
-test('dashboard renders the seeded Overview and edit mode adds a widget', async ({ page }) => {
+test('dashboard renders the seeded sample board and edit mode adds a widget', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('combobox', { name: 'Dashboard' })).toBeVisible();
-  await expect(page.getByText('Total Orders')).toBeVisible();
+  // A KPI widget renders its title twice (card header + value label), so scope to the first.
+  await expect(page.getByText('Total Orders').first()).toBeVisible();
 
-  await page.getByRole('button', { name: 'Edit' }).click();
-  await page.getByRole('button', { name: 'Widget' }).click();
-  await expect(page.getByLabel('Source')).toBeVisible();
-  await page.getByLabel('Title').fill('E2E KPI');
-  await page.getByRole('button', { name: 'Save' }).click();
-  await expect(page.getByText('E2E KPI')).toBeVisible();
+  // Enter edit mode via the dashboard ⋯ menu.
+  await page.getByRole('button', { name: 'Dashboard menu' }).click();
+  await page.getByRole('menuitem', { name: 'Edit' }).click();
 
-  // Persist + reload.
-  await page.getByRole('button', { name: 'Done' }).click();
+  // Add a widget via the ⋯ menu (only present in edit mode).
+  await page.getByRole('button', { name: 'Dashboard menu' }).click();
+  await page.getByRole('menuitem', { name: 'Add widget' }).click();
+
+  // Widget editor dialog: set a title and Save (Save lives in the editor's ⋯ menu).
+  const titleInput = page.getByRole('textbox', { name: 'Title' });
+  await expect(titleInput).toBeVisible();
+  await titleInput.fill('E2E KPI');
+  await page.getByRole('button', { name: 'Editor menu' }).click();
+  await page.getByRole('menuitem', { name: 'Save' }).click();
+  await expect(page.getByText('E2E KPI').first()).toBeVisible();
+
+  // Persist via Done, then reload to confirm it was saved to the backend.
+  await page.getByRole('button', { name: 'Dashboard menu' }).click();
+  await page.getByRole('menuitem', { name: 'Done' }).click();
   await page.reload();
-  await expect(page.getByText('E2E KPI')).toBeVisible();
+  await expect(page.getByText('E2E KPI').first()).toBeVisible();
 });
