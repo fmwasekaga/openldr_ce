@@ -128,6 +128,46 @@ export async function deleteCodingSystem(id: string): Promise<void> {
 }
 export const systemDeletionImpact = (id: string) => fetch(`/api/terminology/systems/${id}/deletion-impact`).then((r) => okJson<{ termCount: number; mappingCount: number }>(r, 'impact'));
 
+// Value sets (SP3)
+export interface ValueSetComposeConcept { code: string; display?: string }
+export interface ValueSetComposeClause {
+  system?: string; version?: string;
+  concept?: ValueSetComposeConcept[];
+  filter?: { property: string; op: string; value: string }[];
+  valueSet?: string[];
+}
+export interface ValueSetCompose { include?: ValueSetComposeClause[]; exclude?: ValueSetComposeClause[] }
+export interface ValueSet {
+  id: string; url: string; version: string | null; name: string | null; title: string | null;
+  status: string; experimental: boolean; description: string | null; compose: ValueSetCompose;
+  immutable: boolean; category: string | null; publisherId: string | null;
+}
+export interface ValueSetSummary {
+  id: string; url: string; name: string | null; title: string | null; version: string | null;
+  status: string; immutable: boolean; publisherId: string | null; category: string | null;
+  codeCount: number; primarySystem: string | null;
+}
+export interface ValueSetInput {
+  url: string; version?: string | null; name?: string | null; title?: string | null;
+  status: string; experimental?: boolean; description?: string | null; compose: ValueSetCompose;
+  publisherId?: string | null; category?: string | null;
+}
+export interface ExpandedCode { system: string; code: string; display: string | null }
+
+export const listValueSets = (publisherId?: string): Promise<ValueSetSummary[]> =>
+  fetch(`/api/terminology/valuesets${publisherId ? `?publisherId=${encodeURIComponent(publisherId)}` : ''}`).then((r) => okJson<ValueSetSummary[]>(r, 'list value sets'));
+export const getValueSet = (id: string): Promise<ValueSet> => fetch(`/api/terminology/valuesets/${id}`).then((r) => okJson<ValueSet>(r, 'get value set'));
+export const saveValueSet = (input: ValueSetInput): Promise<ValueSet> => fetch('/api/terminology/valuesets', jbody(input, 'POST')).then((r) => okJson<ValueSet>(r, 'save value set'));
+export async function deleteValueSet(id: string): Promise<void> {
+  const r = await fetch(`/api/terminology/valuesets/${id}`, { method: 'DELETE' });
+  if (!r.ok && r.status !== 204) throw new Error(`delete value set failed: ${r.status}`);
+}
+export const duplicateValueSet = (id: string): Promise<ValueSet> => fetch(`/api/terminology/valuesets/${id}/duplicate`, jbody({}, 'POST')).then((r) => okJson<ValueSet>(r, 'duplicate value set'));
+export const expandValueSet = (id: string, activeOnly = true): Promise<{ codes: ExpandedCode[]; total: number }> =>
+  fetch(`/api/terminology/valuesets/${id}/expand?activeOnly=${activeOnly}`).then((r) => okJson<{ codes: ExpandedCode[]; total: number }>(r, 'expand value set'));
+export const importValueSet = (resource: unknown): Promise<ValueSet> => fetch('/api/terminology/valuesets/import', jbody(resource, 'POST')).then((r) => okJson<ValueSet>(r, 'import value set'));
+export const valueSetExportUrl = (id: string): string => `/api/terminology/valuesets/${id}/export`;
+
 // ── Terms + mappings (SP2) ───────────────────────────────────────────────────
 export type TermStatus = 'ACTIVE' | 'DRAFT' | 'DEPRECATED' | 'DISABLED';
 export type MapType = 'SAME-AS' | 'NARROWER-THAN' | 'BROADER-THAN' | 'RELATED-TO' | 'UNMAPPED-FROM';

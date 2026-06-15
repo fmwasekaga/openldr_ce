@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { runWidgetQuery, listDashboards } from './api';
+import { runWidgetQuery, listDashboards, listValueSets, saveValueSet, expandValueSet, valueSetExportUrl } from './api';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -13,5 +13,24 @@ describe('dashboard api client', () => {
   it('GETs dashboards', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('[]', { status: 200 }));
     expect(await listDashboards()).toEqual([]);
+  });
+});
+
+describe('terminology value-set api client', () => {
+  it('wires list/save/expand/export requests', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response('[]', { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: 'vs1' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ codes: [], total: 0 }), { status: 200 }));
+
+    await expect(listValueSets('pub one')).resolves.toEqual([]);
+    expect(spy).toHaveBeenNthCalledWith(1, '/api/terminology/valuesets?publisherId=pub%20one');
+
+    await saveValueSet({ url: 'urn:test', status: 'draft', compose: { include: [] } });
+    expect(spy).toHaveBeenNthCalledWith(2, '/api/terminology/valuesets', expect.objectContaining({ method: 'POST' }));
+
+    await expandValueSet('vs1', false);
+    expect(spy).toHaveBeenNthCalledWith(3, '/api/terminology/valuesets/vs1/expand?activeOnly=false');
+    expect(valueSetExportUrl('vs1')).toBe('/api/terminology/valuesets/vs1/export');
   });
 });
