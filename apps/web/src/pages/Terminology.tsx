@@ -10,7 +10,9 @@ import {
   systemDeletionImpact,
   type Publisher,
   type CodingSystem,
+  type Term,
 } from '../api';
+import { TermsTable } from '../terminology/TermsTable';
 import { publisherSections } from '../terminology/publisherSections';
 import { PublisherDialog } from '../terminology/PublisherDialog';
 import { CodingSystemDialog } from '../terminology/CodingSystemDialog';
@@ -76,6 +78,11 @@ export function Terminology(): JSX.Element {
   const [editingPublisher, setEditingPublisher] = useState<Publisher | null>(null);
   const [systemDialogOpen, setSystemDialogOpen] = useState(false);
   const [editingSystem, setEditingSystem] = useState<CodingSystem | null>(null);
+
+  // ── term dialog state (T12 will mount TermDialog consuming these) ────────────
+  const [editingTerm, setEditingTerm] = useState<Term | null>(null);
+  const [termDialogOpen, setTermDialogOpen] = useState(false);
+  const [termsReloadKey, setTermsReloadKey] = useState(0);
 
   // ── danger confirm ──────────────────────────────────────────────────────────
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
@@ -473,7 +480,7 @@ export function Terminology(): JSX.Element {
                   </div>
                 )}
 
-                {/* Drilled placeholder pane (SP2 will replace with real terms table) */}
+                {/* Drilled terms pane */}
                 {selectedSystemId && (
                   <div className="flex flex-1 flex-col overflow-hidden">
                     <div className="flex items-center gap-2 border-b border-border px-3 py-2">
@@ -486,9 +493,14 @@ export function Terminology(): JSX.Element {
                         ← Code systems
                       </Button>
                     </div>
-                    <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-                      Terms — coming in the next update.
-                    </div>
+                    <TermsTable
+                      systemId={selectedSystem!.id}
+                      reloadKey={termsReloadKey}
+                      onOpenTerm={(t) => {
+                        setEditingTerm(t);
+                        setTermDialogOpen(true);
+                      }}
+                    />
                   </div>
                 )}
               </>
