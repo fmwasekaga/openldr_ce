@@ -24,6 +24,7 @@ import {
   type ReportResult,
 } from '../../api';
 import { renderWidget } from '../widgets';
+import { resolveValues, applyTemplate } from '../template';
 
 const WIDGET_TYPES: { value: string; label: string }[] = [
   { value: 'kpi', label: 'Number' },
@@ -61,35 +62,6 @@ function extractLogicalVariables(s: string, defs: Record<string, WidgetVariableD
     logical.add(v);
   }
   return [...logical];
-}
-
-/** Resolve local test values into the flat key set the SQL template references. */
-function resolveTestValues(testValues: Record<string, unknown>): Record<string, string | number | null> {
-  const resolved: Record<string, string | number | null> = {};
-  for (const [name, val] of Object.entries(testValues)) {
-    if (val && typeof val === 'object' && 'from' in (val as Record<string, unknown>)) {
-      const r = val as { from: string; to: string };
-      resolved[`${name}_from`] = r.from || null;
-      resolved[`${name}_to`] = r.to || null;
-    } else {
-      resolved[name] = (val as string | number | null) ?? null;
-    }
-  }
-  return resolved;
-}
-
-/** Apply [[ ... {{var}} ... ]] conditional clauses + {{var}} substitution (parameterised preview). */
-function applyTemplate(sql: string, resolved: Record<string, string | number | null>): string {
-  const isSet = (v: string | number | null | undefined) => v !== null && v !== undefined && v !== '';
-  const withClauses = sql.replace(/\[\[([\s\S]*?)\]\]/g, (_, clause: string) => {
-    const vars = (clause.match(/\{\{(\w+)\}\}/g) ?? []).map((m) => m.slice(2, -2));
-    return vars.every((v) => isSet(resolved[v])) ? clause : '';
-  });
-  return withClauses.replace(/\{\{(\w+)\}\}/g, (_, name: string) => {
-    const v = resolved[name];
-    if (!isSet(v)) return 'NULL';
-    return typeof v === 'number' ? String(v) : `'${String(v).replace(/'/g, "''")}'`;
-  });
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -321,7 +293,7 @@ export function WidgetEditorDialog({
   }, []);
 
   const run = () => {
-    const resolved = resolveTestValues(testValuesRef.current);
+    const resolved = resolveValues(testValuesRef.current);
     const q: WidgetQuery = { mode: 'sql', sql: applyTemplate(sqlRef.current, resolved), variableBindings: bindings };
     setRunning(true);
     runWidgetQuery(q)

@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { runWidgetQuery, type ReportResult, type WidgetConfig, type WidgetQuery } from '../api';
 import { renderWidget } from './widgets';
+import { resolveValues, applyTemplate } from './template';
 
 function bindQuery(q: WidgetQuery, filterValues: Record<string, unknown>): WidgetQuery {
-  if (!q.variableBindings) return q;
   if (q.mode === 'builder') {
+    if (!q.variableBindings) return q;
     const filters = [...q.filters];
     for (const [varName, filterId] of Object.entries(q.variableBindings)) {
       const v = filterValues[filterId];
@@ -12,12 +13,13 @@ function bindQuery(q: WidgetQuery, filterValues: Record<string, unknown>): Widge
     }
     return { ...q, filters };
   }
-  let sqlText = q.sql;
-  for (const [varName, filterId] of Object.entries(q.variableBindings)) {
-    const v = filterValues[filterId];
-    sqlText = sqlText.replaceAll(`{{${varName}}}`, v == null ? 'NULL' : `'${String(v).replace(/'/g, "''")}'`);
+  // SQL mode: always apply the shared template so {{var}} / [[ ... ]] never reach the DB raw,
+  // resolving bound dashboard-filter values (date-ranges split into _from/_to).
+  const values: Record<string, unknown> = {};
+  for (const [varName, filterId] of Object.entries(q.variableBindings ?? {})) {
+    values[varName] = filterValues[filterId];
   }
-  return { ...q, sql: sqlText };
+  return { ...q, sql: applyTemplate(q.sql, resolveValues(values)) };
 }
 
 export function DashboardWidget({ config, filterValues }: { config: WidgetConfig; filterValues: Record<string, unknown> }) {
