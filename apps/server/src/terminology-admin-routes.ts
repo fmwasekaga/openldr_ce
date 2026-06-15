@@ -21,6 +21,7 @@ const systemInput = z.object({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
   const admin = ctx.terminology.admin;
+  type IdParam = { id: string };
 
   app.get('/api/terminology/publishers', async () => admin.publishers.list());
   app.post('/api/terminology/publishers', async (req, reply) => {
@@ -32,15 +33,15 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
   app.put('/api/terminology/publishers/:id', async (req, reply) => {
     const parsed = publisherInput.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
-    try { return await admin.publishers.update((req.params as { id: string }).id, parsed.data); }
+    try { return await admin.publishers.update((req.params as IdParam).id, parsed.data); }
     catch (e) { return mapErr(e, reply); }
   });
   app.delete('/api/terminology/publishers/:id', async (req, reply) => {
-    try { await admin.publishers.delete((req.params as { id: string }).id); reply.code(204); return null; }
+    try { await admin.publishers.delete((req.params as IdParam).id); reply.code(204); return null; }
     catch (e) { return mapErr(e, reply); }
   });
   app.get('/api/terminology/publishers/:id/deletion-impact', async (req, reply) => {
-    try { return await admin.publishers.deletionImpact((req.params as { id: string }).id); }
+    try { return await admin.publishers.deletionImpact((req.params as IdParam).id); }
     catch (e) { return mapErr(e, reply); }
   });
 
@@ -51,26 +52,30 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
   app.post('/api/terminology/systems', async (req, reply) => {
     const parsed = systemInput.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
-    try { reply.code(201); return await admin.codingSystems.create(parsed.data); }
+    try { const created = await admin.codingSystems.create(parsed.data); reply.code(201); return created; }
     catch (e) { return mapErr(e, reply); }
   });
   app.put('/api/terminology/systems/:id', async (req, reply) => {
     const parsed = systemInput.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
-    try { return await admin.codingSystems.update((req.params as { id: string }).id, parsed.data); }
+    try { return await admin.codingSystems.update((req.params as IdParam).id, parsed.data); }
     catch (e) { return mapErr(e, reply); }
   });
   app.delete('/api/terminology/systems/:id', async (req, reply) => {
-    try { await admin.codingSystems.delete((req.params as { id: string }).id); reply.code(204); return null; }
+    try { await admin.codingSystems.delete((req.params as IdParam).id); reply.code(204); return null; }
     catch (e) { return mapErr(e, reply); }
   });
   app.get('/api/terminology/systems/:id/deletion-impact', async (req, reply) => {
-    try { return await admin.codingSystems.deletionImpact((req.params as { id: string }).id); }
+    try { return await admin.codingSystems.deletionImpact((req.params as IdParam).id); }
     catch (e) { return mapErr(e, reply); }
   });
 }
 
-/** Duck-type check for TerminologyAdminError — avoids importing @openldr/db in the server package. */
+// Duck-type guard rather than `instanceof TerminologyAdminError`: that class lives in
+// @openldr/db, which apps/server intentionally does NOT depend on (it would couple the
+// server build to the full Kysely/migrations DB layer). The real class sets
+// name='TerminologyAdminError', so checking name + kind is reliable. (Follow-up: move
+// TerminologyAdminError into @openldr/terminology, alongside TerminologyError.)
 function isAdminError(err: unknown): err is { message: string; kind: 'not-found' | 'conflict' } {
   return (
     typeof err === 'object' &&

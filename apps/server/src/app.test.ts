@@ -19,6 +19,9 @@ function buildFakeAdmin(): FakeAdmin {
   let pubSeq = 0;
   let sysSeq = 0;
 
+  const adminErr = (msg: string, kind: 'not-found' | 'conflict') =>
+    Object.assign(new Error(msg), { name: 'TerminologyAdminError', kind });
+
   return {
     publishers: {
       async list() { return [...publishers]; },
@@ -29,13 +32,14 @@ function buildFakeAdmin(): FakeAdmin {
       },
       async update(id, input) {
         const p = publishers.find((x) => x.id === id);
-        if (!p) throw Object.assign(new Error(`not found: ${id}`), { kind: 'not-found' });
+        if (!p) throw adminErr(`not found: ${id}`, 'not-found');
         Object.assign(p, { name: input.name, role: input.role, icon: input.icon ?? null });
         return p;
       },
       async delete(id) {
         const idx = publishers.findIndex((x) => x.id === id);
-        if (idx === -1) throw Object.assign(new Error(`not found: ${id}`), { kind: 'not-found' });
+        if (idx === -1) throw adminErr(`not found: ${id}`, 'not-found');
+        if (publishers[idx].seeded) throw adminErr(`cannot delete seeded publisher: ${id}`, 'conflict');
         publishers.splice(idx, 1);
       },
       async deletionImpact() { return { systemCount: 0, termCount: 0 }; },
@@ -49,13 +53,13 @@ function buildFakeAdmin(): FakeAdmin {
       },
       async update(id, input) {
         const s = systems.find((x) => x.id === id);
-        if (!s) throw Object.assign(new Error(`not found: ${id}`), { kind: 'not-found' });
+        if (!s) throw adminErr(`not found: ${id}`, 'not-found');
         Object.assign(s, { systemName: input.systemName, url: input.url ?? null, systemVersion: input.systemVersion ?? null, description: input.description ?? null, active: input.active, publisherId: input.publisherId ?? null });
         return s;
       },
       async delete(id) {
         const idx = systems.findIndex((x) => x.id === id);
-        if (idx === -1) throw Object.assign(new Error(`not found: ${id}`), { kind: 'not-found' });
+        if (idx === -1) throw adminErr(`not found: ${id}`, 'not-found');
         systems.splice(idx, 1);
       },
       async deletionImpact() { return { termCount: 0, mappingCount: 0 }; },
@@ -115,6 +119,14 @@ describe('terminology admin routes', () => {
 
     const sys = await app.inject({ method: 'POST', url: '/api/terminology/systems', payload: { systemCode: 'MYX', systemName: 'My X', active: true } });
     expect(sys.statusCode).toBe(201);
+
+    // 404: delete of unknown publisher id
+    const del404 = await app.inject({ method: 'DELETE', url: '/api/terminology/publishers/ghost-id' });
+    expect(del404.statusCode).toBe(404);
+
+    // 409: delete of seeded publisher (pub-loinc is pre-seeded with seeded=true)
+    const del409 = await app.inject({ method: 'DELETE', url: '/api/terminology/publishers/pub-loinc' });
+    expect(del409.statusCode).toBe(409);
 
     await app.close();
   });
