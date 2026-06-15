@@ -47,3 +47,45 @@ export async function runTerminologyTranslate(url: string, opts: { system: strin
   try { const r = await ctx.ops.translate({ mapUrl: url, system: opts.system, code: opts.code }); out(opts.json, r, r.matches.map((m) => `${m.targetSystem}|${m.targetCode}`).join('\n') || '(no matches)'); return r.result ? 0 : 1; }
   finally { await ctx.close(); }
 }
+
+export async function runPublisherList(opts: { json?: boolean }): Promise<number> {
+  const ctx = await createTerminologyContext(loadConfig());
+  try {
+    const rows = await ctx.admin.publishers.list();
+    if (opts.json) console.log(JSON.stringify(rows, null, 2));
+    else for (const p of rows) console.log(`${p.id}\t${p.name}\t${p.role}${p.seeded ? '\t(seeded)' : ''}`);
+    return 0;
+  } catch (err) { process.stderr.write(`terminology publisher list failed: ${redactError(err)}\n`); return 1; }
+  finally { await ctx.close(); }
+}
+
+export async function runPublisherCreate(name: string, opts: { role?: 'local' | 'external'; icon?: string; json?: boolean }): Promise<number> {
+  const ctx = await createTerminologyContext(loadConfig());
+  try {
+    const p = await ctx.admin.publishers.create({ name, role: opts.role ?? 'local', icon: opts.icon ?? null });
+    out(opts.json ?? false, p, `created publisher ${p.id} (${p.name})`);
+    return 0;
+  } catch (err) { process.stderr.write(`terminology publisher create failed: ${redactError(err)}\n`); return 1; }
+  finally { await ctx.close(); }
+}
+
+export async function runSystemList(opts: { publisher?: string; json?: boolean }): Promise<number> {
+  const ctx = await createTerminologyContext(loadConfig());
+  try {
+    const rows = await ctx.admin.codingSystems.list(opts.publisher);
+    if (opts.json) console.log(JSON.stringify(rows, null, 2));
+    else for (const s of rows) console.log(`${s.systemCode}\t${s.systemName}\t${s.url ?? '—'}`);
+    return 0;
+  } catch (err) { process.stderr.write(`terminology system list failed: ${redactError(err)}\n`); return 1; }
+  finally { await ctx.close(); }
+}
+
+export async function runSystemCreate(code: string, name: string, opts: { url?: string; version?: string; publisher?: string; json?: boolean }): Promise<number> {
+  const ctx = await createTerminologyContext(loadConfig());
+  try {
+    const s = await ctx.admin.codingSystems.create({ systemCode: code, systemName: name, url: opts.url ?? null, systemVersion: opts.version ?? null, active: true, publisherId: opts.publisher ?? null });
+    out(opts.json ?? false, s, `created code system ${s.id} (${s.systemCode})`);
+    return 0;
+  } catch (err) { process.stderr.write(`terminology system create failed: ${redactError(err)}\n`); return 1; }
+  finally { await ctx.close(); }
+}

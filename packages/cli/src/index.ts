@@ -13,7 +13,7 @@ import { runAuditList } from './audit';
 import { runUserList, runUserShow, runUserCreate, runUserSetRole, runUserSetStatus } from './user';
 import { runExport } from './export';
 import { runTargetStoreTest } from './target-store';
-import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, runTerminologyExpand, runTerminologyTranslate } from './terminology';
+import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, runTerminologyExpand, runTerminologyTranslate, runPublisherList, runPublisherCreate, runSystemList, runSystemCreate } from './terminology';
 import { runDhis2MapImport, runDhis2MapList, runDhis2OrgUnitImport, runDhis2OrgUnitList, runDhis2PullMetadata, runDhis2Validate, runDhis2Push, runDhis2Status, runDhis2ScheduleAdd, runDhis2ScheduleList, runDhis2ScheduleRemove } from './dhis2';
 
 const program = new Command();
@@ -128,6 +128,26 @@ term.command('expand <valueSetUrl>').option('--count <n>').option('--offset <n>'
   .action(async (url: string, opts: { count?: string; offset?: string; json: boolean }) => { process.exitCode = await runTerminologyExpand(url, opts); });
 term.command('translate <conceptMapUrl>').requiredOption('--system <system>').requiredOption('--code <code>').option('--json', 'emit JSON', false)
   .action(async (url: string, opts: { system: string; code: string; json: boolean }) => { process.exitCode = await runTerminologyTranslate(url, opts); });
+
+const tpub = term.command('publisher').description('Manage terminology publishers');
+tpub.command('list').description('List all publishers').option('--json', 'emit JSON', false)
+  .action(async (opts: { json: boolean }) => {
+    try { process.exitCode = await runPublisherList(opts); } catch (err) { process.stderr.write(`terminology publisher list failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+tpub.command('create <name>').description('Create a new publisher').option('--role <r>', 'local|external', 'local').option('--icon <i>', 'icon name').option('--json', 'emit JSON', false)
+  .action(async (name: string, opts: { role?: 'local' | 'external'; icon?: string; json: boolean }) => {
+    try { process.exitCode = await runPublisherCreate(name, opts); } catch (err) { process.stderr.write(`terminology publisher create failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+
+const tsys = term.command('system').description('Manage coding systems');
+tsys.command('list').description('List all coding systems').option('--publisher <id>', 'filter by publisher id').option('--json', 'emit JSON', false)
+  .action(async (opts: { publisher?: string; json: boolean }) => {
+    try { process.exitCode = await runSystemList(opts); } catch (err) { process.stderr.write(`terminology system list failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+tsys.command('create <code> <name>').description('Create a new coding system').option('--url <u>', 'canonical URL').option('--version <v>', 'system version').option('--publisher <id>', 'publisher id').option('--json', 'emit JSON', false)
+  .action(async (code: string, name: string, opts: { url?: string; version?: string; publisher?: string; json: boolean }) => {
+    try { process.exitCode = await runSystemCreate(code, name, opts); } catch (err) { process.stderr.write(`terminology system create failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
 
 const forms = program.command('forms').description('FHIR forms (Questionnaire) utilities');
 forms
