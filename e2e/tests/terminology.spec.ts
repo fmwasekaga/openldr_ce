@@ -1,22 +1,14 @@
 import { test, expect } from '@playwright/test';
 
-test('terminology page renders the publisher rail', async ({ page }) => {
+test('terminology page lists seeded publishers and creates a publisher', async ({ page }) => {
   await page.goto('/terminology');
-
-  // The rail header says exactly 'Publishers' — use exact match to avoid the
-  // strict-mode violation from partial matching against 'No publishers yet.'.
   await expect(page.getByText('Publishers', { exact: true })).toBeVisible();
-
-  // publisherSections() filters seeded publishers that have no attached coding
-  // systems. In the e2e environment the systems table is empty (no FHIR/HL7 data
-  // has been imported), so all 6 seeded publishers are filtered out and the rail
-  // shows the empty state. This confirms the page mounted and fetched successfully.
-  //
-  // The create-publisher flow (Actions → Publisher → New) requires a publisher
-  // already selected in the rail (the Actions kebab only appears when activeSection
-  // is non-null). Because no seeded publisher clears the filter, the full create
-  // flow can only run once the DB has at least one publisher with a coding system
-  // attached — that is covered by the Task 17 live-acceptance run (pnpm e2e:seed +
-  // full FHIR import populates the systems table).
-  await expect(page.getByText('No publishers yet.')).toBeVisible();
+  // Seeded publishers are always shown; select one so the Actions menu appears.
+  await page.getByRole('button', { name: 'System' }).first().click();
+  await page.getByRole('button', { name: 'Actions' }).click();
+  await page.getByRole('menuitem', { name: 'Publisher' }).click();
+  await page.getByRole('menuitem', { name: 'New' }).first().click();
+  await page.getByLabel('Name').fill('E2E Lab');
+  await page.getByRole('button', { name: /create/i }).click();
+  await expect(page.getByRole('button', { name: 'E2E Lab' })).toBeVisible();
 });

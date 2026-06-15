@@ -39,9 +39,9 @@ describe('012_terminology_admin', () => {
     const pubs = await db.selectFrom('publishers').selectAll().execute();
     const systems = await db.selectFrom('coding_systems').selectAll().execute();
 
-    // 6 seeded publishers + 1 manually inserted = 7
+    // 8 seeded publishers + 1 manually inserted = 9
     expect(pubs.some((p: any) => p.id === 'p1')).toBe(true);
-    expect(pubs.length).toBeGreaterThanOrEqual(7);
+    expect(pubs.length).toBeGreaterThanOrEqual(9);
     expect(systems.some((s: any) => s.id === 'c1')).toBe(true);
 
     await db.destroy();
@@ -96,9 +96,9 @@ describe('012_terminology_admin', () => {
 });
 
 describe('012 backfill projection (pure)', () => {
-  it('seeds the six corlix publishers in order', () => {
+  it('seeds the eight corlix publishers in order', () => {
     expect(SEED_PUBLISHERS.map((p) => p.name)).toEqual([
-      'System', 'HL7 FHIR', 'LOINC', 'SNOMED CT', 'WHO · ICD-10', 'WHO · ICD-11',
+      'System', 'HL7 FHIR', 'LOINC', 'SNOMED CT', 'WHO · ICD-10', 'WHO · ICD-11', 'UCUM', 'RxNorm',
     ]);
   });
   it('derives a system code from a URL', () => {
