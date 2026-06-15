@@ -3,7 +3,7 @@ import { EditorView } from '@codemirror/view';
 import { sql as sqlLang } from '@codemirror/lang-sql';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { basicSetup } from 'codemirror';
-import { Play, MoreHorizontal } from 'lucide-react';
+import { Play, MoreHorizontal, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,6 +47,14 @@ type Visual = Record<string, unknown>;
 function extractVariables(s: string): string[] {
   const m = s.match(/\{\{(\w+)\}\}/g);
   return m ? [...new Set(m.map((x) => x.slice(2, -2)))] : [];
+}
+
+/** Replace {{var}} with a quoted test value (or NULL) so a parameterised query can preview. */
+function substituteVars(s: string, vals: Record<string, string>): string {
+  return s.replace(/\{\{(\w+)\}\}/g, (_, name) => {
+    const v = vals[name];
+    return v == null || v === '' ? 'NULL' : `'${String(v).replace(/'/g, "''")}'`;
+  });
 }
 
 /** Label-over-control row for the config panel. */
@@ -163,7 +171,19 @@ function ConfigPanel({
 }
 
 function EmptyPanel({ text }: { text: string }) {
-  return <div className="flex h-full items-center justify-center p-3 text-xs text-muted-foreground">{text}</div>;
+  return (
+    <div className="relative flex h-full w-full items-center justify-center overflow-hidden">
+      <svg className="absolute inset-0 h-full w-full stroke-foreground/10" fill="none" aria-hidden="true">
+        <defs>
+          <pattern id="emptyHatch" x="0" y="0" width="10" height="10" patternUnits="userSpaceOnUse">
+            <path d="M-3 13 15-5M-5 5l18-18M-1 21 17 3" />
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#emptyHatch)" stroke="none" />
+      </svg>
+      <span className="relative text-xs text-muted-foreground">{text}</span>
+    </div>
+  );
 }
 
 export function WidgetEditorDialog({
@@ -174,6 +194,7 @@ export function WidgetEditorDialog({
   dashboardFilters = [],
   onClose,
   onSave,
+  onDelete,
 }: {
   open: boolean;
   initial?: WidgetConfig;
@@ -181,6 +202,7 @@ export function WidgetEditorDialog({
   dashboardFilters?: DashboardFilterDef[];
   onClose: () => void;
   onSave: (w: WidgetConfig) => void;
+  onDelete?: () => void;
 }) {
   const initialSql = initial?.query.mode === 'sql' ? initial.query.sql : 'select 1 as value';
   const initialBindings = (initial?.query.mode === 'sql' && initial.query.variableBindings) || {};
@@ -190,6 +212,7 @@ export function WidgetEditorDialog({
   const [sqlText, setSqlText] = useState(initialSql);
   const [visual, setVisual] = useState<Visual>(initial?.visual ?? {});
   const [bindings, setBindings] = useState<Record<string, string>>(initialBindings);
+  const [testValues, setTestValues] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<ReportResult>();
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string>();
@@ -237,7 +260,8 @@ export function WidgetEditorDialog({
   }, []);
 
   const run = () => {
-    const q: WidgetQuery = { mode: 'sql', sql: sqlRef.current, variableBindings: bindings };
+    // Substitute {{var}} test values client-side so a parameterised query can preview.
+    const q: WidgetQuery = { mode: 'sql', sql: substituteVars(sqlRef.current, testValues), variableBindings: bindings };
     setRunning(true);
     runWidgetQuery(q)
       .then((r) => {
@@ -280,17 +304,12 @@ export function WidgetEditorDialog({
               aria-label="Title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-72 bg-transparent text-base font-semibold text-foreground outline-none focus:border-b focus:border-primary"
+              className="w-80 border-0 bg-transparent px-0 text-base font-semibold text-foreground outline-none focus:border-b focus:border-primary"
             />
           </DialogTitle>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button size="sm" onClick={save}>
-              Save
-            </Button>
-          </div>
+          <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Close" onClick={onClose}>
+            <X className="h-4 w-4" />
+          </Button>
         </div>
 
         {/* Body: 4 sections (editor | preview / results | config) */}
@@ -337,6 +356,14 @@ export function WidgetEditorDialog({
                       <DropdownMenuItem onSelect={() => setShowVariables(true)}>Filters</DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onSelect={save}>Save</DropdownMenuItem>
+                      {initial && onDelete && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => onDelete()}>
+                            Delete
+                          </DropdownMenuItem>
+                        </>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
@@ -452,12 +479,23 @@ export function WidgetEditorDialog({
               <SheetTitle>Variables</SheetTitle>
             </SheetHeader>
             {variables.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No {'{{variables}}'} detected in the SQL query.</p>
+              <p className="text-sm text-muted-foreground">
+                No {'{{variables}}'} in the query. Add a placeholder like <code className="font-mono">{'{{ward}}'}</code> to your SQL to create one.
+              </p>
             ) : (
               <div className="space-y-4">
+                <p className="text-xs text-muted-foreground">Give each variable a test value to preview the query, and optionally bind it to a dashboard filter.</p>
                 {variables.map((v) => (
                   <div key={v} className="space-y-1">
                     <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{`{{${v}}}`}</code>
+                    <Field label="Test value (for preview)">
+                      <Input
+                        className="h-8 text-xs"
+                        value={testValues[v] ?? ''}
+                        onChange={(e) => setTestValues((t) => ({ ...t, [v]: e.target.value }))}
+                        placeholder="value used when you Run"
+                      />
+                    </Field>
                     <Field label="Dashboard filter">
                       <Select
                         value={bindings[v] ?? '__local__'}

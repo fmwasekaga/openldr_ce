@@ -77,7 +77,7 @@ const DEFAULT_SEED: Dashboard = {
 };
 
 export function DashboardPage() {
-  const { current, editing, dirty, setCurrent, setEditing, markClean, addWidget, updateWidget } = useDashboardStore();
+  const { current, editing, dirty, setCurrent, setEditing, markClean, addWidget, updateWidget, removeWidget } = useDashboardStore();
   const [all, setAll] = useState<Dashboard[]>([]);
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [editorOpen, setEditorOpen] = useState(false);
@@ -220,6 +220,15 @@ export function DashboardPage() {
             setEditorOpen(false);
             setEditingWidget(undefined);
           }}
+          onDelete={
+            editingWidget
+              ? () => {
+                  removeWidget(editingWidget.id);
+                  setEditorOpen(false);
+                  setEditingWidget(undefined);
+                }
+              : undefined
+          }
         />
       )}
       {filterEditorOpen && current && (
