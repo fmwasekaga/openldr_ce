@@ -35,11 +35,27 @@ export interface TranslateQuery {
   targetSystem?: string;
 }
 
+export interface ConceptSearchQuery {
+  systemUrl: string;
+  query?: string;
+  statuses?: string[];
+  limit: number;
+  offset: number;
+}
+
+export interface ConceptSearchCountQuery {
+  systemUrl: string;
+  query?: string;
+  statuses?: string[];
+}
+
 export interface TerminologyStore {
   upsertConcepts(rows: ConceptRecord[]): Promise<void>;
   getConcept(system: string, code: string): Promise<ConceptRecord | null>;
   findConcepts(q: ConceptQuery): Promise<ConceptRecord[]>;
   countConcepts(q: Omit<ConceptQuery, 'limit' | 'offset'>): Promise<number>;
+  searchConcepts(q: ConceptSearchQuery): Promise<ConceptRecord[]>;
+  countConceptsSearch(q: ConceptSearchCountQuery): Promise<number>;
   saveSystem(url: string, version: string | null, kind: string, resourceId: string): Promise<void>;
   getResourceByUrl(url: string): Promise<FhirResource | null>;
   upsertMapElements(rows: MapElement[]): Promise<void>;
@@ -47,6 +63,23 @@ export interface TerminologyStore {
 }
 
 export function createTerminologyStore(db: Kysely<InternalSchema>, fhirStore: FhirStore): TerminologyStore {
+  function applySearch<T>(qb: T, q: ConceptSearchCountQuery): T {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let b = qb as any;
+    b = b.where('system', '=', q.systemUrl);
+    if (q.query && q.query.trim()) {
+      const like = `%${q.query.trim().toLowerCase()}%`;
+      b = b.where((eb: any) =>
+        eb.or([
+          eb(sql`lower(code)`, 'like', like),
+          eb(sql`lower(display)`, 'like', like),
+        ]),
+      );
+    }
+    if (q.statuses && q.statuses.length) b = b.where('status', 'in', q.statuses);
+    return b as T;
+  }
+
   function applyConceptFilter<T>(qb: T, q: ConceptQuery | Omit<ConceptQuery, 'limit' | 'offset'>): T {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let b = qb as any;
@@ -98,6 +131,18 @@ export function createTerminologyStore(db: Kysely<InternalSchema>, fhirStore: Fh
     async countConcepts(q) {
       let qb = db.selectFrom('terminology_concepts').select((eb) => eb.fn.countAll<number>().as('n'));
       qb = applyConceptFilter(qb, q);
+      const row = await qb.executeTakeFirst();
+      return Number(row?.n ?? 0);
+    },
+    async searchConcepts(q) {
+      let qb = db.selectFrom('terminology_concepts').selectAll();
+      qb = applySearch(qb, q);
+      const rows = await qb.orderBy('code').limit(q.limit).offset(q.offset).execute();
+      return rows.map((r) => ({ ...r, properties: r.properties as Record<string, unknown> | null }));
+    },
+    async countConceptsSearch(q) {
+      let qb = db.selectFrom('terminology_concepts').select((eb) => eb.fn.countAll<number>().as('n'));
+      qb = applySearch(qb, q);
       const row = await qb.executeTakeFirst();
       return Number(row?.n ?? 0);
     },
