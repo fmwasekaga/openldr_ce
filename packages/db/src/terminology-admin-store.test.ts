@@ -110,6 +110,19 @@ describe('terminology admin store', () => {
       ).rejects.toMatchObject({ kind: 'not-found' });
       await expect(s.terms.delete('http://x', 'NOPE')).rejects.toMatchObject({ kind: 'not-found' });
     });
+    it('importRows upserts (re-import updates)', async () => {
+      const { s } = await store();
+      await s.terms.importRows([
+        { system: 'http://x', code: 'AMP', display: 'Ampicillin', status: 'ACTIVE', properties: { class: 'ABX' } },
+        { system: 'http://x', code: 'CIP', display: 'Cipro', status: 'ACTIVE', properties: null },
+      ]);
+      expect((await s.terms.search('http://x', { limit: 10, offset: 0 })).total).toBe(2);
+      await s.terms.importRows([{ system: 'http://x', code: 'AMP', display: 'Ampicillin (updated)', status: 'DRAFT', properties: null }]);
+      const page = await s.terms.search('http://x', { query: 'amp', limit: 10, offset: 0 });
+      expect(page.total).toBe(1);
+      expect(page.rows[0].display).toBe('Ampicillin (updated)');
+      expect(page.rows[0].status).toBe('DRAFT');
+    });
     it('search filters by text and status', async () => {
       const { s } = await store();
       await s.terms.create({ system: 'http://x', code: 'AMP', display: 'Ampicillin', status: 'ACTIVE', shortName: null, class: null, unit: null, replacedBy: null, metadata: null });

@@ -79,6 +79,7 @@ export interface TerminologyAdminStore {
     create(input: TermInput): Promise<Term>;
     update(system: string, code: string, input: TermInput): Promise<Term>;
     delete(system: string, code: string): Promise<void>;
+    importRows(rows: { system: string; code: string; display: string | null; status: string; properties: Record<string, unknown> | null }[]): Promise<{ imported: number }>;
   };
 }
 
@@ -265,6 +266,16 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>): Termino
           .where('system', '=', system).where('code', '=', code).executeTakeFirst();
         if (!existing) throw new TerminologyAdminError(`term not found: ${system}|${code}`, 'not-found');
         await db.deleteFrom('terminology_concepts').where('system', '=', system).where('code', '=', code).execute();
+      },
+      async importRows(rows) {
+        if (!rows.length) return { imported: 0 };
+        await db.insertInto('terminology_concepts').values(rows.map((r) => ({
+          system: r.system, code: r.code, display: r.display, status: r.status,
+          properties: r.properties === null ? null : (JSON.stringify(r.properties) as never),
+        }))).onConflict((oc) => oc.columns(['system', 'code']).doUpdateSet((eb) => ({
+          display: eb.ref('excluded.display'), status: eb.ref('excluded.status'), properties: eb.ref('excluded.properties'),
+        }))).execute();
+        return { imported: rows.length };
       },
     },
   };
