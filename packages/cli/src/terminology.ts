@@ -100,3 +100,14 @@ export async function runTermList(systemUrl: string, opts: { q?: string; json?: 
   } catch (err) { process.stderr.write(`terminology term list failed: ${redactError(err)}\n`); return 1; }
   finally { await ctx.close(); }
 }
+
+export async function runValueSetList(opts: { publisher?: string; json?: boolean }): Promise<number> {
+  const ctx = await createTerminologyContext(loadConfig());
+  try {
+    const rows = await ctx.admin.valueSets.list(opts.publisher);
+    if (opts.json) console.log(JSON.stringify(rows, null, 2));
+    else for (const v of rows) console.log(`${v.url}\t${v.title ?? v.name ?? 'â€”'}\t${v.status}\t${v.codeCount} codes`);
+    return 0;
+  } catch (err) { process.stderr.write(`terminology valueset list failed: ${redactError(err)}\n`); return 1; }
+  finally { await ctx.close(); }
+}

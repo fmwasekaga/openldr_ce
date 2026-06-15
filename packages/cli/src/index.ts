@@ -13,7 +13,7 @@ import { runAuditList } from './audit';
 import { runUserList, runUserShow, runUserCreate, runUserSetRole, runUserSetStatus } from './user';
 import { runExport } from './export';
 import { runTargetStoreTest } from './target-store';
-import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, runTerminologyExpand, runTerminologyTranslate, runPublisherList, runPublisherCreate, runSystemList, runSystemCreate, runTermList } from './terminology';
+import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, runTerminologyExpand, runTerminologyTranslate, runPublisherList, runPublisherCreate, runSystemList, runSystemCreate, runTermList, runValueSetList } from './terminology';
 import { runDhis2MapImport, runDhis2MapList, runDhis2OrgUnitImport, runDhis2OrgUnitList, runDhis2PullMetadata, runDhis2Validate, runDhis2Push, runDhis2Status, runDhis2ScheduleAdd, runDhis2ScheduleList, runDhis2ScheduleRemove } from './dhis2';
 
 const program = new Command();
@@ -153,6 +153,12 @@ const tterm = term.command('term').description('Manage terms');
 tterm.command('list <systemUrl>').description('List terms in a coding system').option('--q <query>', 'filter by code/display text').option('--json', 'output JSON', false)
   .action(async (systemUrl: string, opts: { q?: string; json: boolean }) => {
     try { process.exitCode = await runTermList(systemUrl, opts); } catch (err) { process.stderr.write(`terminology term list failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+
+const tvs = term.command('valueset').description('Manage value sets');
+tvs.command('list').description('List value sets').option('--publisher <id>', 'filter by publisher id').option('--json', 'output JSON', false)
+  .action(async (opts: { publisher?: string; json: boolean }) => {
+    try { process.exitCode = await runValueSetList(opts); } catch (err) { process.stderr.write(`terminology valueset list failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
 
 const forms = program.command('forms').description('FHIR forms (Questionnaire) utilities');
