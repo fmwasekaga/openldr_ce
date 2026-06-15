@@ -82,4 +82,33 @@ describe('terminology admin store', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].systemName).toBe('LOINC v2');
   });
+
+  describe('terms', () => {
+    it('creates a term with structured properties and reads them back', async () => {
+      const { s } = await store();
+      const t = await s.terms.create({ system: 'http://x', code: 'AMP', display: 'Ampicillin', status: 'ACTIVE', shortName: 'Amp', class: 'ABX', unit: null, replacedBy: null, metadata: { rxnorm: '1' } });
+      expect(t.shortName).toBe('Amp');
+      expect(t.class).toBe('ABX');
+      const page = await s.terms.search('http://x', { limit: 10, offset: 0 });
+      expect(page.total).toBe(1);
+      expect(page.rows[0].metadata).toEqual({ rxnorm: '1' });
+      expect(page.rows[0].mappingCount).toBe(0);
+    });
+    it('updates and deletes a term', async () => {
+      const { s } = await store();
+      await s.terms.create({ system: 'http://x', code: 'AMP', display: 'A', status: 'ACTIVE', shortName: null, class: null, unit: null, replacedBy: null, metadata: null });
+      const u = await s.terms.update('http://x', 'AMP', { system: 'http://x', code: 'AMP', display: 'Ampicillin', status: 'DRAFT', shortName: null, class: null, unit: null, replacedBy: null, metadata: null });
+      expect(u.display).toBe('Ampicillin');
+      expect(u.status).toBe('DRAFT');
+      await s.terms.delete('http://x', 'AMP');
+      expect((await s.terms.search('http://x', { limit: 10, offset: 0 })).total).toBe(0);
+    });
+    it('search filters by text and status', async () => {
+      const { s } = await store();
+      await s.terms.create({ system: 'http://x', code: 'AMP', display: 'Ampicillin', status: 'ACTIVE', shortName: null, class: null, unit: null, replacedBy: null, metadata: null });
+      await s.terms.create({ system: 'http://x', code: 'CIP', display: 'Ciprofloxacin', status: 'DRAFT', shortName: null, class: null, unit: null, replacedBy: null, metadata: null });
+      expect((await s.terms.search('http://x', { query: 'cipro', limit: 10, offset: 0 })).rows.map((r) => r.code)).toEqual(['CIP']);
+      expect((await s.terms.search('http://x', { statuses: ['ACTIVE'], limit: 10, offset: 0 })).rows.map((r) => r.code)).toEqual(['AMP']);
+    });
+  });
 });
