@@ -12,5 +12,6 @@ export * from './flat-writer';
 export * from './persist';
 export * from './export-data';
 export * from './terminology-store';
+export * from './resolve-publisher';
 export * from './dhis2-store';
 export * from './dhis2-schedule-store';
