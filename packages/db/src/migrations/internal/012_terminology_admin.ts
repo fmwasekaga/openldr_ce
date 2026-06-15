@@ -77,16 +77,17 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .addColumn('seeded', 'boolean', (c) => c.notNull().defaultTo(false))
     .execute();
 
-  // Partial unique index: enforce uniqueness only on non-NULL urls so multiple
-  // draft/internal systems (url = NULL) can coexist. pg-mem ignores the WHERE
-  // predicate, but it is correct and explicit on real Postgres.
+  // Plain unique index on url. Postgres defaults to NULLS DISTINCT, so multiple
+  // rows with url = NULL (draft/internal systems) are still allowed; meanwhile a
+  // plain (non-partial) unique index is a valid ON CONFLICT (url) arbiter, which
+  // the admin store's upsertByUrl relies on (a partial index can't be inferred by
+  // ON CONFLICT on real Postgres).
   await db.schema
     .createIndex('coding_systems_url_uq')
     .ifNotExists()
     .unique()
     .on('coding_systems')
     .column('url')
-    .where('url', 'is not', null)
     .execute();
 
   // Seed publishers (idempotent on the text pk).
