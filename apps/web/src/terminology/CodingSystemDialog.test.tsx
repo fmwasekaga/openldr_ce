@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { CodingSystemDialog } from './CodingSystemDialog';
 import * as api from '../api';
 
@@ -40,7 +40,7 @@ describe('CodingSystemDialog', () => {
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith(created));
   });
 
-  it('disables the System code field when editing', () => {
+  it('disables the System code field when editing', async () => {
     vi.spyOn(api, 'listPublishers').mockResolvedValue([]);
     const sys = {
       id: 'c1',
@@ -61,7 +61,18 @@ describe('CodingSystemDialog', () => {
         onSaved={() => {}}
       />,
     );
+    await act(async () => {});
     expect(screen.getByLabelText('System code')).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+  });
+
+  it('populates the publisher select from listPublishers', async () => {
+    vi.spyOn(api, 'listPublishers').mockResolvedValue([
+      { id: 'p1', name: 'WHO', role: 'external', icon: null, seeded: true, sortOrder: 0 },
+    ] as never);
+    render(<CodingSystemDialog open system={null} onOpenChange={() => {}} onSaved={() => {}} />);
+    await waitFor(() => expect(api.listPublishers).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('combobox'));
+    expect(await screen.findByRole('option', { name: 'WHO' })).toBeInTheDocument();
   });
 });
