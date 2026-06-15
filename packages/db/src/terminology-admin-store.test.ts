@@ -187,12 +187,12 @@ describe('terminology admin store', () => {
 
       const saved = await admin.valueSets.save({
         url: 'urn:test:vs', version: null, name: null, title: 'My set', status: 'active',
-        experimental: false, description: null, publisherId: 'pub-system',
+        experimental: false, description: null, publisherId: 'pub-test',
         compose: { include: [{ system: 's1', concept: [{ code: 'A' }, { code: 'B' }] }] },
       });
       expect(saved.id).toMatch(/^vs-/);
 
-      const list = await admin.valueSets.list('pub-system');
+      const list = await admin.valueSets.list('pub-test');
       expect(list).toHaveLength(1);
       expect(list[0]!.codeCount).toBe(2);
       expect(list[0]!.primarySystem).toBe('s1');
@@ -203,7 +203,7 @@ describe('terminology admin store', () => {
       const a = await admin.valueSets.save({ url: 'urn:test:vs', version: null, name: null, title: 'v1', status: 'draft', experimental: false, description: null, compose: { include: [] } });
       const b = await admin.valueSets.save({ url: 'urn:test:vs', version: null, name: null, title: 'v2', status: 'draft', experimental: false, description: null, compose: { include: [] } });
       expect(b.id).toBe(a.id);
-      expect((await admin.valueSets.list()).length).toBe(1);
+      expect(await admin.valueSets.getByUrl('urn:test:vs')).toMatchObject({ id: a.id });
 
       await db.updateTable('value_sets').set({ immutable: true }).where('id', '=', a.id).execute();
       await expect(admin.valueSets.save({ url: 'urn:test:vs', version: null, name: null, title: 'v3', status: 'draft', experimental: false, description: null, compose: { include: [] } }))
@@ -224,7 +224,7 @@ describe('terminology admin store', () => {
       await db.insertInto('terminology_concepts').values([{ system: 's1', code: 'A', display: 'Alpha', status: 'ACTIVE', properties: null }] as never).execute();
       const a = await admin.valueSets.save({ url: 'urn:test:vs', version: null, name: null, title: 't', status: 'active', experimental: false, description: null, compose: { include: [{ system: 's1', concept: [{ code: 'A' }] }] } });
       await admin.valueSets.delete(a.id);
-      expect(await admin.valueSets.list()).toHaveLength(0);
+      await expect(admin.valueSets.get(a.id)).rejects.toMatchObject({ kind: 'not-found' });
       const exp = await db.selectFrom('valueset_expansions').selectAll().where('value_set_id', '=', a.id).execute();
       expect(exp).toHaveLength(0);
     });

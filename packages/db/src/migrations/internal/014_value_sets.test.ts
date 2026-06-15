@@ -19,3 +19,22 @@ describe('014_value_sets', () => {
     await db.destroy();
   });
 });
+
+describe('014_value_sets seeds', () => {
+  it('seeds the local code system, concepts, and six value sets with expansions', async () => {
+    const db = await makeMigratedDb();
+    const sets = await db.selectFrom('value_sets').select(['url', 'status']).execute();
+    const urls = sets.map((s) => s.url);
+    expect(urls).toContain('urn:openldr:valueset:yes-no');
+    expect(urls).toContain('urn:openldr:valueset:hiv-result');
+    expect(sets).toHaveLength(6);
+
+    const yn = await db.selectFrom('value_sets').select('id').where('url', '=', 'urn:openldr:valueset:yes-no').executeTakeFirstOrThrow();
+    const exp = await db.selectFrom('valueset_expansions').select(['code']).where('value_set_id', '=', yn.id).orderBy('code').execute();
+    expect(exp.map((e) => e.code)).toEqual(['N', 'Y']);
+
+    const sys = await db.selectFrom('terminology_systems').select(['kind']).where('url', '=', 'urn:openldr:valueset:yes-no').executeTakeFirst();
+    expect(sys?.kind).toBe('ValueSet');
+    await db.destroy();
+  });
+});
