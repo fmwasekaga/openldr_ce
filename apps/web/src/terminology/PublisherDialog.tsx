@@ -65,10 +65,10 @@ export function PublisherDialog({ open, onOpenChange, publisher, onSaved }: Prop
       const saved = editing
         ? await updatePublisher(publisher!.id, input)
         : await createPublisher(input);
-      onSaved(saved);
+      if (saved) onSaved(saved);
       onOpenChange(false);
     } catch (e) {
-      setError(String((e as Error).message ?? e));
+      setError(String(e instanceof Error ? e.message : e));
     } finally {
       setSaving(false);
     }
