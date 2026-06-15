@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { type Kysely } from 'kysely';
 import type { InternalSchema } from './schema/internal';
 
@@ -41,11 +42,8 @@ export class TerminologyAdminError extends Error {
   }
 }
 
-let counter = 0;
 function newId(prefix: string): string {
-  // A module counter (no Date.now/Math.random) is enough: the store runs per-process.
-  counter += 1;
-  return `${prefix}-${counter}-${process.pid}`;
+  return `${prefix}-${randomUUID()}`;
 }
 
 export interface TerminologyAdminStore {
@@ -129,8 +127,11 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>): Termino
             system_version: input.systemVersion ?? null, description: input.description ?? null,
             active: input.active, publisher_id: input.publisherId ?? null, seeded: false,
           }).execute();
-        } catch {
-          throw new TerminologyAdminError(`duplicate code system url: ${input.url}`, 'conflict');
+        } catch (err) {
+          const e = err as { code?: string; message?: string };
+          const isUnique = e.code === '23505' || /unique|duplicate/i.test(e.message ?? '');
+          if (isUnique) throw new TerminologyAdminError(`duplicate code system url: ${input.url}`, 'conflict');
+          throw err;
         }
         return csRow(await db.selectFrom('coding_systems').selectAll().where('id', '=', id).executeTakeFirstOrThrow());
       },
@@ -161,6 +162,9 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>): Termino
         return { termCount: Number(t?.n ?? 0), mappingCount: Number(m?.n ?? 0) };
       },
       async upsertByUrl(input) {
+        // Idempotency key is `url` (ON CONFLICT), not id: a row seeded by the migration
+        // backfill (id `cs-<CODE>-<pub>`) is updated in place here; only when upsertByUrl
+        // inserts first does the `cs-url-<code>` id appear. Either way one row per url.
         await db.insertInto('coding_systems').values({
           id: `cs-url-${input.systemCode}`, system_code: input.systemCode, system_name: input.systemName,
           url: input.url, system_version: input.systemVersion ?? null, active: true, publisher_id: input.publisherId, seeded: true,

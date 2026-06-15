@@ -43,7 +43,24 @@ describe('terminology admin store', () => {
   it('refuses to delete a seeded publisher', async () => {
     const { s } = await store();
     const loinc = (await s.publishers.list()).find((p) => p.name === 'LOINC')!;
-    await expect(s.publishers.delete(loinc.id)).rejects.toBeInstanceOf(TerminologyAdminError);
+    await expect(s.publishers.delete(loinc.id)).rejects.toMatchObject({ kind: 'conflict' });
+  });
+
+  it('rejects a duplicate code-system url with a conflict', async () => {
+    const { s } = await store();
+    await s.codingSystems.create({ systemCode: 'A', systemName: 'A', url: 'http://dup.org', active: true, publisherId: null });
+    await expect(
+      s.codingSystems.create({ systemCode: 'B', systemName: 'B', url: 'http://dup.org', active: true, publisherId: null }),
+    ).rejects.toMatchObject({ kind: 'conflict' });
+  });
+
+  it('updates a code system but keeps system_code immutable, and 404s on missing', async () => {
+    const { s } = await store();
+    const sys = await s.codingSystems.create({ systemCode: 'ORIG', systemName: 'orig', active: true, publisherId: null });
+    const u = await s.codingSystems.update(sys.id, { systemCode: 'IGNORED', systemName: 'renamed', url: 'http://u.org', active: false, publisherId: null });
+    expect(u.systemCode).toBe('ORIG'); // immutable
+    expect(u.systemName).toBe('renamed');
+    await expect(s.codingSystems.update('no-such', { systemCode: 'X', systemName: 'X', active: true, publisherId: null })).rejects.toMatchObject({ kind: 'not-found' });
   });
 
   it('creates a code system and reports deletion impact', async () => {
