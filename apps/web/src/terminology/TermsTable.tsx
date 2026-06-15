@@ -78,6 +78,9 @@ export function TermsTable({
   // ── delete confirm state ─────────────────────────────────────────────────────
   const [confirmDelete, setConfirmDelete] = useState<Term | null>(null);
 
+  // ── action error banner ───────────────────────────────────────────────────────
+  const [actionError, setActionError] = useState<string | null>(null);
+
   // ── import busy state + hidden file input ────────────────────────────────────
   const [importBusy, setImportBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -129,13 +132,15 @@ export function TermsTable({
     if (!file) return;
     // reset so the same file can be selected again
     e.target.value = '';
+    setActionError(null);
     setImportBusy(true);
     try {
       const text = await file.text();
       await importTerms(systemId, text);
+      setActionError(null);
       setLocalReload((n) => n + 1);
     } catch (err) {
-      console.error('Import failed:', err);
+      setActionError(err instanceof Error ? err.message : String(err));
     } finally {
       setImportBusy(false);
     }
@@ -146,11 +151,13 @@ export function TermsTable({
     if (!confirmDelete) return;
     const code = confirmDelete.code;
     setConfirmDelete(null);
+    setActionError(null);
     try {
       await deleteTerm(systemId, code);
+      setActionError(null);
       setLocalReload((n) => n + 1);
     } catch (err) {
-      console.error('Delete term failed:', err);
+      setActionError(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -225,6 +232,13 @@ export function TermsTable({
           New term
         </Button>
       </div>
+
+      {/* Action error banner */}
+      {actionError && (
+        <div className="mx-3 mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          {actionError}
+        </div>
+      )}
 
       {/* Table */}
       <div className="flex-1 overflow-auto">

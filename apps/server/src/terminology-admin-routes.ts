@@ -139,6 +139,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
     mapType: z.enum(['SAME-AS', 'NARROWER-THAN', 'BROADER-THAN', 'RELATED-TO', 'UNMAPPED-FROM']),
     relationship: z.string().nullish(), owner: z.string().nullish(), isActive: z.boolean(),
   });
+  const mappingUpdateInput = mappingInput.extend({ fromSystem: z.string().min(1), fromCode: z.string().min(1) });
 
   app.get('/api/terminology/terms/:system/:code/mappings', async (req, reply) => {
     try {
@@ -160,11 +161,9 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
     } catch (e) { return mapErr(e, reply); }
   });
   app.put('/api/terminology/mappings/:id', async (req, reply) => {
-    const parsed = mappingInput.safeParse(req.body);
+    const parsed = mappingUpdateInput.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
-    const from = req.body as { fromSystem?: string; fromCode?: string };
-    if (!from.fromSystem || !from.fromCode) { reply.code(400); return { error: 'fromSystem and fromCode required' }; }
-    try { return await admin.termMappings.update((req.params as IdParam).id, { fromSystem: from.fromSystem, fromCode: from.fromCode, ...parsed.data, toDisplay: parsed.data.toDisplay ?? null }); }
+    try { return await admin.termMappings.update((req.params as IdParam).id, { ...parsed.data, toDisplay: parsed.data.toDisplay ?? null }); }
     catch (e) { return mapErr(e, reply); }
   });
   app.delete('/api/terminology/mappings/:id', async (req, reply) => {

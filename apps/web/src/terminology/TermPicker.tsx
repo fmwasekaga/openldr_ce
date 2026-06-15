@@ -20,7 +20,7 @@ export function TermPicker({ value, onChange, systemId, statuses }: {
   const search = useCallback(async (q: string) => {
     const trimmed = q.trim();
     if (!trimmed) { setResults([]); return; }
-    const res = await searchTerms(systemId, { q: trimmed, status: statuses?.[0], limit: 20 });
+    const res = await searchTerms(systemId, { q: trimmed, status: statuses && statuses.length === 1 ? statuses[0] : undefined, limit: 20 });
     setResults(res.rows);
   }, [systemId, statuses]);
 
