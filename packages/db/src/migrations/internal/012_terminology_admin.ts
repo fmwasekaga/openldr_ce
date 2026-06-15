@@ -1,20 +1,8 @@
 import { type Kysely, sql } from 'kysely';
-import { SEED_PUBLISHERS } from '../../seed-publishers';
+import { SEED_PUBLISHERS, deriveSystemCode } from '../../seed-publishers';
 import { resolvePublisher } from '../../resolve-publisher';
 
 const SYSTEM_PUBLISHER_ID = SEED_PUBLISHERS[0].id; // the 'System' (local) publisher
-
-/** Derive a short system code from a canonical URL: last non-empty path segment
- * upper-cased; falls back to the host's first label; finally the whole url. */
-export function deriveSystemCode(url: string): string {
-  try {
-    const u = new URL(url);
-    const seg = u.pathname.split('/').filter(Boolean).pop();
-    return (seg || u.hostname.split('.')[0] || url).toUpperCase();
-  } catch {
-    return url.toUpperCase();
-  }
-}
 
 export interface BackfillRow {
   id: string;

@@ -1,5 +1,17 @@
 import { resolvePublisher } from './resolve-publisher';
 
+/** Derive a short system code from a canonical URL: last non-empty path segment
+ * upper-cased; falls back to the host's first label; finally the whole url. */
+export function deriveSystemCode(url: string): string {
+  try {
+    const u = new URL(url);
+    const seg = u.pathname.split('/').filter(Boolean).pop();
+    return (seg || u.hostname.split('.')[0] || url).toUpperCase();
+  } catch {
+    return url.toUpperCase();
+  }
+}
+
 export interface SeedPublisher {
   id: string;
   name: string;

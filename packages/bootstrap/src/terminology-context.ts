@@ -1,6 +1,6 @@
 import { Kysely } from 'kysely';
 import type { Config } from '@openldr/config';
-import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, type TerminologyAdminStore, type InternalSchema } from '@openldr/db';
+import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, type TerminologyAdminStore, type InternalSchema, resolveSeedPublisherId, deriveSystemCode } from '@openldr/db';
 import { createOperations, type Operations, type LoaderStore, loadLoinc, loadWhonetAmr, importTerminologyResource, type LoadResult } from '@openldr/terminology';
 
 export interface TerminologyContext {
@@ -24,7 +24,24 @@ export async function createTerminologyContext(cfg: Config): Promise<Terminology
     upsertConcepts: (r) => store.upsertConcepts(r),
     upsertMapElements: (r) => store.upsertMapElements(r),
     saveResource: (res) => fhirStore.save(res as never),
-    saveSystem: (url, version, kind, id) => store.saveSystem(url, version, kind, id),
+    saveSystem: async (url, version, kind, id) => {
+      await store.saveSystem(url, version, kind, id);
+      // Best-effort: project CodeSystems into coding_systems so they appear in the
+      // admin UI under their resolved publisher. Never fail the import on this.
+      if (kind === 'CodeSystem') {
+        try {
+          await admin.codingSystems.upsertByUrl({
+            url,
+            systemCode: deriveSystemCode(url),
+            systemName: deriveSystemCode(url),
+            systemVersion: version,
+            publisherId: resolveSeedPublisherId(url),
+          });
+        } catch {
+          /* projection is best-effort; the migration backfill also covers it on next migrate */
+        }
+      }
+    },
   };
   const ops = createOperations({
     getConcept: (s, c) => store.getConcept(s, c),

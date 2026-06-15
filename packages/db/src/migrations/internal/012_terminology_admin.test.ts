@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { Kysely } from 'kysely';
 import { newDb } from 'pg-mem';
 import { internalMigrations } from './index';
-import { computeBackfill, deriveSystemCode } from './012_terminology_admin';
+import { computeBackfill } from './012_terminology_admin';
+import { deriveSystemCode } from '../../seed-publishers';
 import { SEED_PUBLISHERS } from '../../seed-publishers';
 
 // pg-mem does not support the regex operator (!~) used by Kysely's Migrator introspection.
