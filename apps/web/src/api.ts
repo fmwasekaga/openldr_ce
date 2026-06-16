@@ -149,6 +149,48 @@ export const updateUser = (id: string, i: { displayName?: string | null; email?:
 export const setUserStatus = (id: string, status: 'active' | 'disabled'): Promise<User> =>
   fetch(`/api/users/${id}/status`, jbody({ status }, 'POST')).then((r) => okJson<User>(r, 'set user status'));
 
+// Forms
+export type FormStatus = 'draft' | 'published' | 'archived';
+export interface FormSummary {
+  id: string;
+  name: string;
+  versionLabel: string | null;
+  status: FormStatus;
+  active: boolean;
+  fhirResourceType: string | null;
+  fieldCount: number;
+  updatedAt: string;
+}
+export interface FormDefinition {
+  id: string;
+  name: string;
+  versionLabel: string | null;
+  fhirResourceType: string | null;
+  status: FormStatus;
+  active: boolean;
+  schema: unknown;
+  targetPages: string[] | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface CreateFormInput {
+  name: string;
+  schema: unknown;
+  fhirResourceType?: string | null;
+  versionLabel?: string | null;
+  targetPages?: string[] | null;
+}
+export const listForms = (): Promise<FormSummary[]> => apiGet('/api/forms', 'list forms');
+export const getForm = (id: string): Promise<FormDefinition> => apiGet(`/api/forms/${id}`, 'get form');
+export const createForm = (i: CreateFormInput): Promise<FormDefinition> =>
+  fetch('/api/forms', jbody(i, 'POST')).then((r) => okJson<FormDefinition>(r, 'create form'));
+export const setFormStatus = (id: string, status: FormStatus): Promise<FormDefinition> =>
+  fetch(`/api/forms/${id}/status`, jbody({ status }, 'POST')).then((r) => okJson<FormDefinition>(r, 'set form status'));
+export const deleteForm = (id: string): Promise<void> => apiDelete(`/api/forms/${id}`, 'delete form');
+export const formQuestionnaireUrl = (id: string): string => `/api/forms/${id}/questionnaire`;
+export const submitFormResponse = (id: string, answers: unknown): Promise<unknown> =>
+  fetch(`/api/forms/${id}/responses`, jbody({ answers }, 'POST')).then((r) => okJson<unknown>(r, 'submit form response'));
+
 // ── Terminology admin types & client ─────────────────────────────────────────
 export type PublisherRole = 'local' | 'standard' | 'external';
 export interface Publisher { id: string; name: string; role: PublisherRole; icon: string | null; seeded: boolean; sortOrder: number }

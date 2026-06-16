@@ -7,6 +7,7 @@ import { AppShell } from './shell/AppShell';
 import { DashboardPage } from './dashboard/DashboardPage';
 import { Audit } from './pages/Audit';
 import { Users } from './pages/Users';
+import { Forms } from './pages/Forms';
 
 export function App() {
   return (
@@ -17,6 +18,7 @@ export function App() {
       <Route path="/terminology" element={<Terminology />} />
       <Route path="/users" element={<Users />} />
       <Route path="/audit" element={<Audit />} />
+      <Route path="/forms" element={<Forms />} />
       <Route path="/docs" element={<Docs />} />
       <Route path="/docs/:slug" element={<Docs />} />
       <Route path="*" element={<AppShell title="Not found"><div className="card">Page not found.</div></AppShell>} />
