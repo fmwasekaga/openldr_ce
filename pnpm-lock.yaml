@@ -629,13 +629,22 @@ importers:
 
   packages/forms:
     dependencies:
+      '@openldr/db':
+        specifier: workspace:*
+        version: link:../db
       '@openldr/fhir':
         specifier: workspace:*
         version: link:../fhir
+      kysely:
+        specifier: ^0.27.5
+        version: 0.27.6
       zod:
         specifier: ^3.24.1
         version: 3.25.76
     devDependencies:
+      pg-mem:
+        specifier: ^3.0.14
+        version: 3.0.14(kysely@0.27.6)
       typescript:
         specifier: ^5.7.2
         version: 5.9.3

@@ -10,8 +10,10 @@
     "lint": "echo \"no lint\""
   },
   "dependencies": {
+    "@openldr/db": "workspace:*",
     "@openldr/fhir": "workspace:*",
+    "kysely": "^0.27.5",
     "zod": "^3.24.1"
   },
-  "devDependencies": { "typescript": "^5.7.2", "vitest": "^2.1.8" }
+  "devDependencies": { "pg-mem": "^3.0.14", "typescript": "^5.7.2", "vitest": "^2.1.8" }
 }

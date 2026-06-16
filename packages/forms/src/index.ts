@@ -10,3 +10,4 @@ export * from './from-questionnaire';
 export * from './to-bundle';
 export * from './extract/index';
 export * from './samples/forms';
+export * from './store';
