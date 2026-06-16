@@ -13,12 +13,10 @@ const NAV: { to: string; label: string; end: boolean; icon: LucideIcon }[] = [
   { to: '/', label: 'Dashboard', end: true, icon: LayoutDashboard },
   { to: '/reports', label: 'Reports', end: false, icon: FileText },
   { to: '/terminology', label: 'Terminology', end: false, icon: Library },
+  { to: '/forms', label: 'Forms', end: false, icon: FileInput },
+  { to: '/users', label: 'Users', end: false, icon: Users },
+  { to: '/audit', label: 'Audit', end: false, icon: ShieldCheck },
   { to: '/docs', label: 'Docs', end: false, icon: BookOpen },
-];
-const SOON: { label: string; icon: LucideIcon }[] = [
-  { label: 'Forms', icon: FileInput },
-  { label: 'Users', icon: Users },
-  { label: 'Audit', icon: ShieldCheck },
 ];
 
 export function AppShell({
@@ -70,17 +68,6 @@ export function AppShell({
               <Icon className="h-4 w-4 shrink-0" />
               {!collapsed && <span>{label}</span>}
             </NavLink>
-          ))}
-          {SOON.map(({ label, icon: Icon }) => (
-            <span
-              key={label}
-              aria-disabled
-              title={collapsed ? `${label} (coming later)` : 'Coming in a later sub-project'}
-              className={cn('flex h-9 items-center gap-3 rounded-md px-3 text-sm font-medium text-muted-foreground opacity-40', collapsed && 'justify-center px-0')}
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              {!collapsed && <span>{label}</span>}
-            </span>
           ))}
         </nav>
 

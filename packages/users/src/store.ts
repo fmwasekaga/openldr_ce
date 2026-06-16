@@ -21,12 +21,18 @@ export interface CreateUserInput {
   roles?: string[];
 }
 
+export interface UpdateUserInput {
+  displayName?: string | null;
+  email?: string | null;
+}
+
 export interface UserStore {
   create(input: CreateUserInput): Promise<User>;
   get(id: string): Promise<User | undefined>;
   getBySubject(subject: string): Promise<User | undefined>;
   getByUsername(username: string): Promise<User | undefined>;
   list(): Promise<User[]>;
+  update(id: string, input: UpdateUserInput): Promise<void>;
   setRoles(id: string, roles: string[]): Promise<void>;
   setStatus(id: string, status: 'active' | 'disabled'): Promise<void>;
   /**
@@ -100,6 +106,12 @@ export function createUserStore(db: Kysely<InternalSchema>): UserStore {
     async list() {
       const rows = await db.selectFrom('users').select(COLS).orderBy('username').execute();
       return rows.map((r) => toUser(r as unknown as Row));
+    },
+    async update(id, input) {
+      const set: { display_name?: string | null; email?: string | null; updated_at: Date } = { updated_at: new Date() };
+      if ('displayName' in input) set.display_name = input.displayName ?? null;
+      if ('email' in input) set.email = input.email ?? null;
+      await db.updateTable('users').set(set).where('id', '=', id).execute();
     },
     async setRoles(id, roles) {
       await db.updateTable('users').set({ roles: JSON.stringify(roles) as never, updated_at: new Date() }).where('id', '=', id).execute();

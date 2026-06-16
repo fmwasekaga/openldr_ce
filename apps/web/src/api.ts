@@ -90,6 +90,107 @@ export async function fetchClientConfig(): Promise<ClientConfig> {
   const r = await fetch('/api/config'); if (!r.ok) return { dashboardSqlEnabled: false }; return r.json();
 }
 
+// Audit
+export interface AuditEvent {
+  id: string;
+  occurredAt: string;
+  actorType: 'user' | 'system';
+  actorId: string | null;
+  actorName: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  before?: unknown;
+  after?: unknown;
+  metadata?: Record<string, unknown>;
+}
+export interface AuditQuery {
+  action?: string;
+  entityType?: string;
+  entityId?: string;
+  actorId?: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+  offset?: number;
+}
+export const queryAudit = (q: AuditQuery): Promise<{ events: AuditEvent[]; total: number }> => {
+  const p = new URLSearchParams();
+  for (const [k, v] of Object.entries(q)) {
+    if (v != null && v !== '') p.set(k, String(v));
+  }
+  return apiGet(`/api/audit?${p.toString()}`, 'query audit');
+};
+export const getAuditEvent = (id: string): Promise<AuditEvent> => apiGet(`/api/audit/${id}`, 'get audit event');
+
+// Users
+export interface User {
+  id: string;
+  subject: string | null;
+  username: string;
+  displayName: string | null;
+  email: string | null;
+  roles: string[];
+  status: 'active' | 'disabled';
+  lastLoginAt: string | null;
+}
+export interface CreateUserInput {
+  username: string;
+  displayName?: string | null;
+  email?: string | null;
+  roles?: string[];
+}
+export const USER_ROLES = ['lab_admin', 'lab_manager', 'lab_technician', 'data_analyst', 'system_auditor'] as const;
+export const listUsers = (): Promise<User[]> => apiGet('/api/users', 'list users');
+export const createUser = (i: CreateUserInput): Promise<User> =>
+  fetch('/api/users', jbody(i, 'POST')).then((r) => okJson<User>(r, 'create user'));
+export const updateUser = (id: string, i: { displayName?: string | null; email?: string | null; roles?: string[] }): Promise<User> =>
+  fetch(`/api/users/${id}`, jbody(i, 'PUT')).then((r) => okJson<User>(r, 'update user'));
+export const setUserStatus = (id: string, status: 'active' | 'disabled'): Promise<User> =>
+  fetch(`/api/users/${id}/status`, jbody({ status }, 'POST')).then((r) => okJson<User>(r, 'set user status'));
+
+// Forms
+export type FormStatus = 'draft' | 'published' | 'archived';
+export interface FormSummary {
+  id: string;
+  name: string;
+  versionLabel: string | null;
+  status: FormStatus;
+  active: boolean;
+  fhirResourceType: string | null;
+  fieldCount: number;
+  updatedAt: string;
+}
+export interface FormDefinition {
+  id: string;
+  name: string;
+  versionLabel: string | null;
+  fhirResourceType: string | null;
+  status: FormStatus;
+  active: boolean;
+  schema: unknown;
+  targetPages: string[] | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface CreateFormInput {
+  name: string;
+  schema: unknown;
+  fhirResourceType?: string | null;
+  versionLabel?: string | null;
+  targetPages?: string[] | null;
+}
+export const listForms = (): Promise<FormSummary[]> => apiGet('/api/forms', 'list forms');
+export const getForm = (id: string): Promise<FormDefinition> => apiGet(`/api/forms/${id}`, 'get form');
+export const createForm = (i: CreateFormInput): Promise<FormDefinition> =>
+  fetch('/api/forms', jbody(i, 'POST')).then((r) => okJson<FormDefinition>(r, 'create form'));
+export const setFormStatus = (id: string, status: FormStatus): Promise<FormDefinition> =>
+  fetch(`/api/forms/${id}/status`, jbody({ status }, 'POST')).then((r) => okJson<FormDefinition>(r, 'set form status'));
+export const deleteForm = (id: string): Promise<void> => apiDelete(`/api/forms/${id}`, 'delete form');
+export const formQuestionnaireUrl = (id: string): string => `/api/forms/${id}/questionnaire`;
+export const submitFormResponse = (id: string, answers: unknown): Promise<unknown> =>
+  fetch(`/api/forms/${id}/responses`, jbody({ answers }, 'POST')).then((r) => okJson<unknown>(r, 'submit form response'));
+
 // ── Terminology admin types & client ─────────────────────────────────────────
 export type PublisherRole = 'local' | 'standard' | 'external';
 export interface Publisher { id: string; name: string; role: PublisherRole; icon: string | null; seeded: boolean; sortOrder: number }

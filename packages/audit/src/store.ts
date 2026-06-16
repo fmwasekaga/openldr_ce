@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { type Kysely } from 'kysely';
+import { type Kysely, type ExpressionBuilder } from 'kysely';
 import type { Logger } from '@openldr/core';
 import type { InternalSchema } from '@openldr/db';
 
@@ -28,11 +28,13 @@ export interface AuditFilter {
   from?: string;
   to?: string;
   limit?: number;
+  offset?: number;
 }
 
 export interface AuditStore {
   record(e: AuditEventInput): Promise<AuditEvent>;
   list(filter?: AuditFilter): Promise<AuditEvent[]>;
+  count(filter?: AuditFilter): Promise<number>;
   get(id: string): Promise<AuditEvent | undefined>;
 }
 
@@ -67,6 +69,19 @@ function toEvent(r: Row): AuditEvent {
 }
 
 export function createAuditStore(db: Kysely<InternalSchema>): AuditStore {
+  function filterExpressions(eb: ExpressionBuilder<InternalSchema, 'audit_events'>, filter: AuditFilter) {
+    const expressions = [];
+    if (filter.actorId) expressions.push(eb('actor_id', '=', filter.actorId));
+    if (filter.entityType) expressions.push(eb('entity_type', '=', filter.entityType));
+    if (filter.entityId) expressions.push(eb('entity_id', '=', filter.entityId));
+    if (filter.action) expressions.push(eb('action', '=', filter.action));
+    const from = filter.from ? new Date(filter.from) : undefined;
+    const to = filter.to ? new Date(filter.to) : undefined;
+    if (from && !Number.isNaN(from.getTime())) expressions.push(eb('occurred_at', '>=', from));
+    if (to && !Number.isNaN(to.getTime())) expressions.push(eb('occurred_at', '<=', to));
+    return expressions;
+  }
+
   return {
     async record(e) {
       const id = randomUUID();
@@ -89,17 +104,23 @@ export function createAuditStore(db: Kysely<InternalSchema>): AuditStore {
       return toEvent(row as unknown as Row);
     },
     async list(filter = {}) {
-      let q = db.selectFrom('audit_events').selectAll().orderBy('occurred_at', 'desc');
-      if (filter.actorId) q = q.where('actor_id', '=', filter.actorId);
-      if (filter.entityType) q = q.where('entity_type', '=', filter.entityType);
-      if (filter.entityId) q = q.where('entity_id', '=', filter.entityId);
-      if (filter.action) q = q.where('action', '=', filter.action);
-      const from = filter.from ? new Date(filter.from) : undefined;
-      const to = filter.to ? new Date(filter.to) : undefined;
-      if (from && !Number.isNaN(from.getTime())) q = q.where('occurred_at', '>=', from);
-      if (to && !Number.isNaN(to.getTime())) q = q.where('occurred_at', '<=', to);
-      const rows = await q.limit(filter.limit ?? 100).execute();
+      const rows = await db
+        .selectFrom('audit_events')
+        .selectAll()
+        .where((eb) => eb.and(filterExpressions(eb, filter)))
+        .orderBy('occurred_at', 'desc')
+        .limit(filter.limit ?? 100)
+        .offset(filter.offset ?? 0)
+        .execute();
       return rows.map((r) => toEvent(r as unknown as Row));
+    },
+    async count(filter = {}) {
+      const r = await db
+        .selectFrom('audit_events')
+        .select((eb) => eb.fn.countAll<number>().as('n'))
+        .where((eb) => eb.and(filterExpressions(eb, filter)))
+        .executeTakeFirst();
+      return Number(r?.n ?? 0);
     },
     async get(id) {
       const r = await db.selectFrom('audit_events').selectAll().where('id', '=', id).executeTakeFirst();
