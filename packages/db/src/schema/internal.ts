@@ -261,6 +261,19 @@ export interface Dhis2SchedulesTable {
   updated_at: Generated<Date>;
 }
 
+export interface FormDefinitionsTable {
+  id: string;
+  name: string;
+  version_label: string | null;
+  fhir_resource_type: string | null;
+  status: string;
+  active: boolean;
+  schema: unknown;
+  target_pages: unknown | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface InternalSchema {
   fhir_resources: FhirResourcesTable;
   outbox_events: OutboxEventsTable;
@@ -286,4 +299,5 @@ export interface InternalSchema {
   dhis2_mappings: Dhis2MappingsTable;
   dhis2_schedules: Dhis2SchedulesTable;
   dashboards: DashboardsTable;
+  form_definitions: FormDefinitionsTable;
 }
