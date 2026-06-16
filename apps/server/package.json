@@ -17,6 +17,7 @@
     "@openldr/bootstrap": "workspace:*",
     "@openldr/config": "workspace:*",
     "@openldr/core": "workspace:*",
+    "@openldr/forms": "workspace:*",
     "@openldr/reporting": "workspace:*",
     "@openldr/terminology": "workspace:*",
     "@openldr/dashboards": "workspace:*",

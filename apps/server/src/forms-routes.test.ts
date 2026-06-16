@@ -1,0 +1,137 @@
+import { describe, expect, it } from 'vitest';
+import Fastify from 'fastify';
+import type { AppContext } from '@openldr/bootstrap';
+import type { FormDefinition, FormInput } from '@openldr/forms';
+import { registerFormsRoutes } from './forms-routes';
+
+const sampleSchema = {
+  id: 'specimen-intake',
+  name: 'Specimen intake',
+  title: { en: 'Specimen intake' },
+  status: 'active',
+  languages: ['en'],
+  sections: [
+    {
+      id: 'main',
+      title: { en: 'Main' },
+      fields: [{ id: 'patientId', type: 'string', label: { en: 'Patient ID' }, required: true }],
+    },
+  ],
+} satisfies FormInput['schema'];
+
+function fakeCtx() {
+  const forms: FormDefinition[] = [];
+  let seq = 0;
+  const now = '2026-01-01T00:00:00.000Z';
+
+  return {
+    forms: {
+      create: async (input: FormInput) => {
+        const form: FormDefinition = {
+          id: `form-${++seq}`,
+          name: input.name,
+          versionLabel: input.versionLabel ?? null,
+          fhirResourceType: input.fhirResourceType ?? null,
+          status: input.status ?? 'draft',
+          active: input.active ?? true,
+          schema: input.schema,
+          targetPages: input.targetPages ?? null,
+          createdAt: now,
+          updatedAt: now,
+        };
+        forms.push(form);
+        return form;
+      },
+      list: async () =>
+        forms.map((form) => ({
+          id: form.id,
+          name: form.name,
+          versionLabel: form.versionLabel,
+          status: form.status,
+          active: form.active,
+          fhirResourceType: form.fhirResourceType,
+          fieldCount: form.schema.sections.reduce((total, section) => total + section.fields.length, 0),
+          updatedAt: form.updatedAt,
+        })),
+      listPublished: async (targetPage?: string) =>
+        forms
+          .filter((form) => form.status === 'published' && form.active && (!targetPage || form.targetPages?.includes(targetPage)))
+          .map((form) => ({
+            id: form.id,
+            name: form.name,
+            versionLabel: form.versionLabel,
+            status: form.status,
+            active: form.active,
+            fhirResourceType: form.fhirResourceType,
+            fieldCount: form.schema.sections.reduce((total, section) => total + section.fields.length, 0),
+            updatedAt: form.updatedAt,
+          })),
+      get: async (id: string) => forms.find((form) => form.id === id) ?? null,
+      update: async (id: string, input: FormInput) => {
+        const form = forms.find((item) => item.id === id);
+        if (!form) throw new Error('not found');
+        Object.assign(form, {
+          name: input.name,
+          versionLabel: input.versionLabel ?? null,
+          fhirResourceType: input.fhirResourceType ?? null,
+          schema: input.schema,
+          targetPages: input.targetPages ?? null,
+        });
+        return form;
+      },
+      setStatus: async (id: string, status: 'draft' | 'published' | 'archived') => {
+        const form = forms.find((item) => item.id === id);
+        if (!form) throw new Error('not found');
+        form.status = status;
+        return form;
+      },
+      delete: async (id: string) => {
+        const index = forms.findIndex((item) => item.id === id);
+        if (index >= 0) forms.splice(index, 1);
+      },
+    },
+  } as unknown as AppContext;
+}
+
+describe('forms routes', () => {
+  it('creates, lists, publishes, exports questionnaires, and validates responses', async () => {
+    const app = Fastify();
+    registerFormsRoutes(app, fakeCtx());
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/forms',
+      payload: {
+        name: 'Specimen intake',
+        versionLabel: 'v1',
+        fhirResourceType: 'Questionnaire',
+        schema: sampleSchema,
+        targetPages: ['forms'],
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const id = created.json().id as string;
+
+    const list = await app.inject({ method: 'GET', url: '/api/forms' });
+    expect(list.json()).toMatchObject([{ id, name: 'Specimen intake', fieldCount: 1 }]);
+
+    const published = await app.inject({ method: 'POST', url: `/api/forms/${id}/status`, payload: { status: 'published' } });
+    expect(published.statusCode).toBe(200);
+    expect(published.json()).toMatchObject({ status: 'published' });
+
+    const publishedList = await app.inject({ method: 'GET', url: '/api/forms/published?targetPage=forms' });
+    expect(publishedList.json()).toMatchObject([{ id, status: 'published' }]);
+
+    const questionnaire = await app.inject({ method: 'GET', url: `/api/forms/${id}/questionnaire` });
+    expect(questionnaire.statusCode).toBe(200);
+    expect(questionnaire.json()).toMatchObject({ resourceType: 'Questionnaire', name: 'Specimen intake', item: [{ linkId: 'main' }] });
+
+    const response = await app.inject({ method: 'POST', url: `/api/forms/${id}/responses`, payload: { answers: { patientId: 'P-100' } } });
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({ resourceType: 'QuestionnaireResponse', status: 'completed' });
+
+    const invalid = await app.inject({ method: 'POST', url: `/api/forms/${id}/responses`, payload: { answers: {} } });
+    expect(invalid.statusCode).toBe(422);
+    expect(invalid.json()).toMatchObject({ resourceType: 'OperationOutcome' });
+  });
+});

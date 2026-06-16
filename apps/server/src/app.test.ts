@@ -314,6 +314,7 @@ function ctxWith(status: 'up' | 'down'): AppContext {
     reporting: {} as never,
     audit: {} as never,
     users: {} as never,
+    forms: {} as never,
     terminology: { ops: {} as never, admin: buildFakeAdmin(), ontology: buildFakeOntology() },
     dashboards: {} as never,
     cfg: {} as never,
