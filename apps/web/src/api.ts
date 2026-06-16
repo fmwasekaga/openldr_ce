@@ -90,6 +90,39 @@ export async function fetchClientConfig(): Promise<ClientConfig> {
   const r = await fetch('/api/config'); if (!r.ok) return { dashboardSqlEnabled: false }; return r.json();
 }
 
+// Audit
+export interface AuditEvent {
+  id: string;
+  occurredAt: string;
+  actorType: 'user' | 'system';
+  actorId: string | null;
+  actorName: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  before?: unknown;
+  after?: unknown;
+  metadata?: Record<string, unknown>;
+}
+export interface AuditQuery {
+  action?: string;
+  entityType?: string;
+  entityId?: string;
+  actorId?: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+  offset?: number;
+}
+export const queryAudit = (q: AuditQuery): Promise<{ events: AuditEvent[]; total: number }> => {
+  const p = new URLSearchParams();
+  for (const [k, v] of Object.entries(q)) {
+    if (v != null && v !== '') p.set(k, String(v));
+  }
+  return apiGet(`/api/audit?${p.toString()}`, 'query audit');
+};
+export const getAuditEvent = (id: string): Promise<AuditEvent> => apiGet(`/api/audit/${id}`, 'get audit event');
+
 // ── Terminology admin types & client ─────────────────────────────────────────
 export type PublisherRole = 'local' | 'standard' | 'external';
 export interface Publisher { id: string; name: string; role: PublisherRole; icon: string | null; seeded: boolean; sortOrder: number }
