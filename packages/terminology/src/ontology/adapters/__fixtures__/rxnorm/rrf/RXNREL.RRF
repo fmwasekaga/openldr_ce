@@ -1,0 +1,8 @@
+315936||CUI|RO|4450||CUI|ingredient_of|1||RXNORM|||||
+197698||CUI|RO|315936||CUI|constitutes|2||RXNORM|||||
+315936||CUI|RO|197698||CUI|consists_of|3||RXNORM|||||
+4450||CUI|RO|315936||CUI|has_ingredient|4||RXNORM|||||
+317541||CUI|RO|197698||CUI|has_dose_form|5||RXNORM|||||
+216325||CUI|RO|197698||CUI|has_tradename|6||RXNORM|||||
+197698||CUI|RO|216325||CUI|tradename_of|7||RXNORM|||||
+203150||CUI|RO|4450||CUI|has_tradename|8||RXNORM|||||
