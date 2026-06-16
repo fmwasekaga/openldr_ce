@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildOntology, listOntologyDistributions, ontologyChildren } from './api';
+import { buildOntology, importLoincDistribution, listOntologyDistributions, ontologyChildren } from './api';
 
 class FakeEventSource {
   static instances: FakeEventSource[] = [];
@@ -55,5 +55,24 @@ describe('ontology api client', () => {
     await expect(promise).resolves.toMatchObject({ codingSystemId: 'cs-1', indexStatus: 'ready' });
     expect(onProgress).toHaveBeenCalledWith({ codingSystemId: 'cs-1', phase: 'done', processed: 1, total: 1 });
     expect(source.closed).toBe(true);
+  });
+
+  it('posts LOINC distribution imports with a server-side path and license acceptance', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ system: 'http://loinc.org', conceptsLoaded: 2, resourceUrl: 'http://loinc.org' }),
+    })) as unknown as typeof fetch;
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(importLoincDistribution('D:\\terminology\\Loinc\\2.82', true)).resolves.toMatchObject({
+      system: 'http://loinc.org',
+      conceptsLoaded: 2,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/terminology/import/loinc', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ path: 'D:\\terminology\\Loinc\\2.82', acceptLicense: true }),
+    });
   });
 });

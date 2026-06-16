@@ -141,4 +141,68 @@ describe('Terminology page', () => {
     fireEvent.click(await screen.findByText(/Ontology distribution/));
     expect(await screen.findByText('Distribution mock LOINC')).toBeInTheDocument();
   });
+
+  it('imports generic term CSV from a code-system row action', async () => {
+    const importSpy = vi.spyOn(api, 'importTerms').mockResolvedValue({ imported: 1 });
+
+    render(<MemoryRouter><Terminology /></MemoryRouter>);
+
+    const rowActions = (await screen.findAllByRole('button', { name: /actions/i }))[1];
+    fireEvent.pointerDown(rowActions, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Import terms...')) fireEvent.keyDown(rowActions, { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Import terms...'));
+
+    const input = await screen.findByTestId('term-import-input');
+    const file = new File(['code,display,status\nA,Alpha,ACTIVE\n'], 'terms.csv', { type: 'text/csv' });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => expect(importSpy).toHaveBeenCalledWith('cs1', 'code,display,status\nA,Alpha,ACTIVE\n'));
+    expect(await screen.findByText('Imported 1 term(s) into LOINC.')).toBeInTheDocument();
+  });
+
+  it('imports a LOINC distribution from a server-side path', async () => {
+    const importSpy = vi.spyOn(api, 'importLoincDistribution').mockResolvedValue({
+      system: 'http://loinc.org',
+      conceptsLoaded: 2,
+      resourceUrl: 'http://loinc.org',
+    });
+
+    render(<MemoryRouter><Terminology /></MemoryRouter>);
+
+    const rowActions = (await screen.findAllByRole('button', { name: /actions/i }))[1];
+    fireEvent.pointerDown(rowActions, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Import LOINC distribution...')) fireEvent.keyDown(rowActions, { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Import LOINC distribution...'));
+
+    fireEvent.change(await screen.findByLabelText('Server path'), { target: { value: 'D:\\terminology\\Loinc\\2.82' } });
+    fireEvent.click(await screen.findByLabelText('I have accepted the LOINC license for this distribution.'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Import LOINC' }));
+
+    await waitFor(() => expect(importSpy).toHaveBeenCalledWith('D:\\terminology\\Loinc\\2.82', true));
+    expect(await screen.findByText('Imported 2 LOINC terms.')).toBeInTheDocument();
+  });
+
+  it('imports a LOINC distribution from the LOINC publisher actions when the row is missing', async () => {
+    vi.spyOn(api, 'listCodingSystems').mockResolvedValue([] as never);
+    const importSpy = vi.spyOn(api, 'importLoincDistribution').mockResolvedValue({
+      system: 'http://loinc.org',
+      conceptsLoaded: 2,
+      resourceUrl: 'http://loinc.org',
+    });
+
+    render(<MemoryRouter><Terminology /></MemoryRouter>);
+
+    await screen.findByText(/No code systems or value sets yet/i);
+    const actions = await screen.findByRole('button', { name: /actions/i });
+    fireEvent.pointerDown(actions, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Import LOINC distribution...')) fireEvent.keyDown(actions, { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Import LOINC distribution...'));
+
+    fireEvent.change(await screen.findByLabelText('Server path'), { target: { value: 'D:\\terminology\\Loinc\\2.82' } });
+    fireEvent.click(await screen.findByLabelText('I have accepted the LOINC license for this distribution.'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Import LOINC' }));
+
+    await waitFor(() => expect(importSpy).toHaveBeenCalledWith('D:\\terminology\\Loinc\\2.82', true));
+    expect(await screen.findByText('Imported 2 LOINC terms.')).toBeInTheDocument();
+  });
 });

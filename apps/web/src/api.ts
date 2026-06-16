@@ -259,6 +259,7 @@ export interface ValueSetInput {
   publisherId?: string | null; category?: string | null;
 }
 export interface ExpandedCode { system: string; code: string; display: string | null }
+export interface TerminologyLoadResult { system: string; conceptsLoaded: number; resourceUrl: string }
 
 export const listValueSets = (publisherId?: string): Promise<ValueSetSummary[]> =>
   fetch(`/api/terminology/valuesets${publisherId ? `?publisherId=${encodeURIComponent(publisherId)}` : ''}`).then((r) => okJson<ValueSetSummary[]>(r, 'list value sets'));
@@ -273,6 +274,8 @@ export const expandValueSet = (id: string, activeOnly = true): Promise<{ codes: 
   fetch(`/api/terminology/valuesets/${id}/expand?activeOnly=${activeOnly}`).then((r) => okJson<{ codes: ExpandedCode[]; total: number }>(r, 'expand value set'));
 export const importValueSet = (resource: unknown): Promise<ValueSet> => fetch('/api/terminology/valuesets/import', jbody(resource, 'POST')).then((r) => okJson<ValueSet>(r, 'import value set'));
 export const valueSetExportUrl = (id: string): string => `/api/terminology/valuesets/${id}/export`;
+export const importLoincDistribution = (path: string, acceptLicense: boolean): Promise<TerminologyLoadResult> =>
+  fetch('/api/terminology/import/loinc', jbody({ path, acceptLicense }, 'POST')).then((r) => okJson<TerminologyLoadResult>(r, 'import LOINC distribution'));
 
 // ── Terms + mappings (SP2) ───────────────────────────────────────────────────
 export type TermStatus = 'ACTIVE' | 'DRAFT' | 'DEPRECATED' | 'DISABLED';

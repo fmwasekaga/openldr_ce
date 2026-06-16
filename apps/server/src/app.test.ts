@@ -5,6 +5,7 @@ import { HealthRegistry, createLogger } from '@openldr/core';
 
 type FakeAdmin = AppContext['terminology']['admin'];
 type FakeOntology = AppContext['terminology']['ontology'];
+type FakeLoaders = AppContext['terminology']['loaders'];
 
 /** Minimal in-memory fake admin store for route tests.
  *  The harness hand-mocks ctx (no pg-mem DB available here), so we use a fake.
@@ -301,6 +302,21 @@ function buildFakeOntology(): FakeOntology {
   };
 }
 
+function buildFakeLoaders(): FakeLoaders {
+  return {
+    async loinc(dir, acceptLicense) {
+      if (!acceptLicense) throw new Error('LOINC import requires accepting the LOINC license (--accept-license)');
+      return { system: 'http://loinc.org', conceptsLoaded: dir.includes('empty') ? 0 : 2, resourceUrl: 'http://loinc.org' };
+    },
+    async amr() {
+      return [];
+    },
+    async resource() {
+      return { system: 'urn:test', conceptsLoaded: 0, resourceUrl: 'urn:test' };
+    },
+  };
+}
+
 function ctxWith(status: 'up' | 'down'): AppContext {
   const health = new HealthRegistry();
   health.register({ name: 'auth', check: async () => ({ status, latencyMs: 1 }) });
@@ -315,7 +331,7 @@ function ctxWith(status: 'up' | 'down'): AppContext {
     audit: {} as never,
     users: {} as never,
     forms: {} as never,
-    terminology: { ops: {} as never, admin: buildFakeAdmin(), ontology: buildFakeOntology() },
+    terminology: { ops: {} as never, admin: buildFakeAdmin(), ontology: buildFakeOntology(), loaders: buildFakeLoaders() },
     dashboards: {} as never,
     cfg: {} as never,
     async close() {},
@@ -381,6 +397,27 @@ describe('terminology admin routes', () => {
     const template = await app.inject({ method: 'GET', url: '/api/terminology/systems/sys1/terms/template.csv' });
     expect(template.statusCode).toBe(200);
     expect(template.body).toContain('code,display');
+
+    await app.close();
+  });
+
+  it('imports a LOINC distribution through the terminology loader', async () => {
+    const app = buildApp(ctxWith('up'));
+
+    const missingLicense = await app.inject({
+      method: 'POST',
+      url: '/api/terminology/import/loinc',
+      payload: { path: 'D:\\terminology\\Loinc\\2.82', acceptLicense: false },
+    });
+    expect(missingLicense.statusCode).toBe(400);
+
+    const imported = await app.inject({
+      method: 'POST',
+      url: '/api/terminology/import/loinc',
+      payload: { path: 'D:\\terminology\\Loinc\\2.82', acceptLicense: true },
+    });
+    expect(imported.statusCode).toBe(200);
+    expect(JSON.parse(imported.body)).toMatchObject({ system: 'http://loinc.org', conceptsLoaded: 2 });
 
     await app.close();
   });

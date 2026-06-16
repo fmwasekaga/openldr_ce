@@ -10,8 +10,11 @@ import {
   deleteCodingSystem,
   deleteValueSet,
   duplicateValueSet,
+  importLoincDistribution,
+  importTerms,
   importValueSet,
   listOntologyDistributions,
+  termsTemplateUrl,
   valueSetExportUrl,
   publisherDeletionImpact,
   systemDeletionImpact,
@@ -32,7 +35,10 @@ import { OntologyDistributionDialog } from '../terminology/ontology/OntologyDist
 import { OntologyPickerDialog } from '../terminology/ontology/OntologyPickerDialog';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
+import { Checkbox } from '../components/ui/checkbox';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
 import {
@@ -62,6 +68,14 @@ function roleLabel(role: string): string {
   if (role === 'local') return 'Local';
   if (role === 'standard') return 'Standard';
   return 'External';
+}
+
+function isLoincSystem(system: CodingSystem | null | undefined): boolean {
+  return system?.url === 'http://loinc.org' || system?.systemCode.toUpperCase() === 'LOINC';
+}
+
+function isLoincPublisher(publisher: Publisher | null | undefined): boolean {
+  return publisher?.name.toUpperCase() === 'LOINC';
 }
 
 // ── confirm-state shape ───────────────────────────────────────────────────────
@@ -102,6 +116,8 @@ export function Terminology(): JSX.Element {
   const [editingSystem, setEditingSystem] = useState<CodingSystem | null>(null);
   const [browseSystem, setBrowseSystem] = useState<CodingSystem | null>(null);
   const [distDialogSystem, setDistDialogSystem] = useState<CodingSystem | null>(null);
+  const [termImportSystem, setTermImportSystem] = useState<CodingSystem | null>(null);
+  const [loincImportOpen, setLoincImportOpen] = useState(false);
 
   // ── term dialog state (T12 will mount TermDialog consuming these) ────────────
   const [editingTerm, setEditingTerm] = useState<Term | null>(null);
@@ -110,6 +126,7 @@ export function Terminology(): JSX.Element {
   const [editingValueSet, setEditingValueSet] = useState<ValueSet | null>(null);
   const [valueSetEditorOpen, setValueSetEditorOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const termImportFileRef = useRef<HTMLInputElement>(null);
 
   // ── danger confirm ──────────────────────────────────────────────────────────
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
@@ -291,10 +308,46 @@ export function Terminology(): JSX.Element {
   };
 
   // ── render ───────────────────────────────────────────────────────────────────
+  const openTermImport = (system: CodingSystem): void => {
+    setTermImportSystem(system);
+    termImportFileRef.current?.click();
+  };
+
+  const handleTermImportFile = async (e: ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const file = e.target.files?.[0];
+    const system = termImportSystem;
+    e.target.value = '';
+    if (!file || !system) return;
+    try {
+      const result = await importTerms(system.id, await file.text());
+      setTermImportSystem(null);
+      setTermsReloadKey((k) => k + 1);
+      await reload();
+      setToast({ kind: 'ok', text: `Imported ${result.imported} term(s) into ${system.systemName}.` });
+    } catch (err: unknown) {
+      setTermImportSystem(null);
+      setToast({ kind: 'error', text: err instanceof Error ? err.message : String(err) });
+    }
+  };
+
+  const handleLoincImported = async (count: number): Promise<void> => {
+    setLoincImportOpen(false);
+    await reload();
+    setToast({ kind: 'ok', text: `Imported ${count} LOINC terms.` });
+  };
+
   return (
     <AppShell title="Terminology" fullBleed>
       <div className="ui-scope flex h-full flex-col">
         <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={(e) => void handleVsImportFile(e)} />
+        <input
+          ref={termImportFileRef}
+          data-testid="term-import-input"
+          type="file"
+          accept=".csv"
+          className="hidden"
+          onChange={(e) => void handleTermImportFile(e)}
+        />
         {loadError && (
           <div className="mx-3 mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
             {loadError}
@@ -424,6 +477,15 @@ export function Terminology(): JSX.Element {
                         </DropdownMenuSubContent>
                       </DropdownMenuSub>
 
+                      {isLoincPublisher(activeSection.publisher) && !selectedSystem && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => setLoincImportOpen(true)}>
+                            Import LOINC distribution...
+                          </DropdownMenuItem>
+                        </>
+                      )}
+
                       {/* Code system sub-menu */}
                       <DropdownMenuSub>
                         <DropdownMenuSubTrigger>Code system</DropdownMenuSubTrigger>
@@ -498,13 +560,18 @@ export function Terminology(): JSX.Element {
                           <DropdownMenuItem
                             disabled={!selectedSystem}
                             onClick={() => {
-                              if (selectedSystem) setSelectedSystemId(selectedSystem.id);
+                              if (selectedSystem) openTermImport(selectedSystem);
                             }}
                           >
-                            Import...
+                            Import terms...
                           </DropdownMenuItem>
+                          {(isLoincSystem(selectedSystem) || (!selectedSystem && isLoincPublisher(activeSection.publisher))) && (
+                            <DropdownMenuItem onClick={() => setLoincImportOpen(true)}>
+                              Import LOINC distribution...
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem disabled={!selectedSystem} asChild>
-                            <a href={selectedSystem ? `/api/terminology/systems/${selectedSystem.id}/terms/template.csv` : '#'} download>Download template</a>
+                            <a href={selectedSystem ? termsTemplateUrl(selectedSystem.id) : '#'} download>Download template</a>
                           </DropdownMenuItem>
                         </DropdownMenuSubContent>
                       </DropdownMenuSub>
@@ -608,6 +675,18 @@ export function Terminology(): JSX.Element {
                                     >
                                       Edit coding system
                                     </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={() => openTermImport(s)}>
+                                      Import terms...
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem asChild>
+                                      <a href={termsTemplateUrl(s.id)} download>Download terms template</a>
+                                    </DropdownMenuItem>
+                                    {isLoincSystem(s) && (
+                                      <DropdownMenuItem onClick={() => setLoincImportOpen(true)}>
+                                        Import LOINC distribution...
+                                      </DropdownMenuItem>
+                                    )}
                                     <DropdownMenuSeparator />
                                     {/* Ontology items */}
                                     <DropdownMenuItem
@@ -813,6 +892,12 @@ export function Terminology(): JSX.Element {
           onChanged={() => void reload()}
         />
 
+        <LoincImportDialog
+          open={loincImportOpen}
+          onOpenChange={setLoincImportOpen}
+          onImported={(count) => void handleLoincImported(count)}
+        />
+
         {confirm && (
           <DangerConfirmDialog
             open
@@ -847,5 +932,93 @@ export function Terminology(): JSX.Element {
         )}
       </div>
     </AppShell>
+  );
+}
+
+function LoincImportDialog({
+  open,
+  onOpenChange,
+  onImported,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onImported: (count: number) => void;
+}): JSX.Element {
+  const [path, setPath] = useState('');
+  const [accepted, setAccepted] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setPath('');
+      setAccepted(false);
+      setBusy(false);
+      setError(null);
+    }
+  }, [open]);
+
+  const canImport = path.trim().length > 0 && accepted && !busy;
+
+  const handleImport = async (): Promise<void> => {
+    if (!canImport) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await importLoincDistribution(path.trim(), accepted);
+      onImported(result.conceptsLoaded);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent aria-describedby={undefined} className="w-full p-0 sm:max-w-lg">
+        <div className="border-b border-border px-4 py-3">
+          <DialogTitle className="text-sm">Import LOINC distribution</DialogTitle>
+          <DialogDescription className="mt-1 text-xs text-muted-foreground">
+            Import LOINC terms from an extracted server-side distribution folder.
+          </DialogDescription>
+        </div>
+        <div className="space-y-4 px-4 py-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="loincImportPath">Server path</Label>
+            <Input
+              id="loincImportPath"
+              value={path}
+              onChange={(e) => setPath(e.target.value)}
+              placeholder="D:\\Projects\\Repositories\\corlix\\fixtures\\Loinc\\2.82"
+              className="font-mono text-xs"
+            />
+          </div>
+          <div className="flex items-start gap-2">
+            <Checkbox
+              id="loincLicenseAccepted"
+              checked={accepted}
+              onCheckedChange={(v) => setAccepted(v === true)}
+            />
+            <Label htmlFor="loincLicenseAccepted" className="text-xs leading-4">
+              I have accepted the LOINC license for this distribution.
+            </Label>
+          </div>
+          {error && (
+            <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              {error}
+            </div>
+          )}
+        </div>
+        <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={busy}>
+            Cancel
+          </Button>
+          <Button size="sm" onClick={() => void handleImport()} disabled={!canImport}>
+            {busy ? 'Importing...' : 'Import LOINC'}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

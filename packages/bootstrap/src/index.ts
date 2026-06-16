@@ -3,8 +3,8 @@ import { createAuth } from '@openldr/adapter-auth';
 import { createEventBus } from '@openldr/adapter-event-bus';
 import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import type { Config } from '@openldr/config';
-import { createLogger, HealthRegistry, type Logger } from '@openldr/core';
-import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, type TerminologyAdminStore, type OntologyStore } from '@openldr/db';
+import { createLogger, HealthRegistry, redact, type Logger } from '@openldr/core';
+import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, deriveSystemCode, resolveSeedPublisherId, type TerminologyAdminStore, type OntologyStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, type AuditStore } from '@openldr/audit';
@@ -14,7 +14,7 @@ import { getReport, reportSummaries, getEventSource, type ReportResult, type Rep
 import { createDashboardStore, getModel, listModels, runBuilderQuery, runSqlQuery, type DashboardStore, type WidgetQuery } from '@openldr/dashboards';
 import { renderReportPdf } from '@openldr/report-pdf';
 import { selectTargetStore } from './target-store';
-import { buildOntologyDistribution, createOperations, stalenessReason, type OntologyBuildProgress, type OntologyManifest, type Operations } from '@openldr/terminology';
+import { buildOntologyDistribution, createOperations, importTerminologyResource, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type LoadResult, type OntologyBuildProgress, type OntologyManifest, type Operations } from '@openldr/terminology';
 
 export class ReportNotFoundError extends Error {
   constructor(public readonly id: string) {
@@ -77,7 +77,16 @@ export interface AppContext {
   forms: FormStore;
   reporting: ReportingApi;
   health: HealthRegistry;
-  terminology: { ops: Operations; admin: TerminologyAdminStore; ontology: ReturnType<typeof createOntologyApi> };
+  terminology: {
+    ops: Operations;
+    admin: TerminologyAdminStore;
+    ontology: ReturnType<typeof createOntologyApi>;
+    loaders: {
+      loinc(dir: string, acceptLicense: boolean): Promise<LoadResult>;
+      amr(sqlitePath: string): Promise<LoadResult[]>;
+      resource(json: unknown): Promise<LoadResult>;
+    };
+  };
   dashboards: DashboardsApi;
   cfg: Config;
   close(): Promise<void>;
@@ -170,7 +179,28 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   };
   const termAdmin = createTerminologyAdminStore(termDb, termProjection);
   const termOntology = createOntologyApi(createOntologyStore(termDb));
-  const terminology = {
+  const loaderStore: LoaderStore = {
+    upsertConcepts: (r) => termStore.upsertConcepts(r),
+    upsertMapElements: (r) => termStore.upsertMapElements(r),
+    saveResource: (res) => termFhirStore.save(res as never),
+    saveSystem: async (url, version, kind, id) => {
+      await termStore.saveSystem(url, version, kind, id);
+      if (kind === 'CodeSystem') {
+        try {
+          await termAdmin.codingSystems.upsertByUrl({
+            url,
+            systemCode: deriveSystemCode(url),
+            systemName: deriveSystemCode(url),
+            systemVersion: version,
+            publisherId: resolveSeedPublisherId(url),
+          });
+        } catch (e) {
+          console.warn('[terminology] coding_systems projection failed:', redact(e instanceof Error ? e.message : String(e)));
+        }
+      }
+    },
+  };
+  const terminology: AppContext['terminology'] = {
     ops: createOperations({
       getConcept: (s, c) => termStore.getConcept(s, c),
       findConcepts: (q) => termStore.findConcepts(q),
@@ -180,6 +210,11 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     }),
     admin: termAdmin,
     ontology: termOntology,
+    loaders: {
+      loinc: (dir, acceptLicense) => loadLoinc(dir, { acceptLicense }, loaderStore),
+      amr: (p) => loadWhonetAmr(p, loaderStore),
+      resource: (json) => importTerminologyResource(json, loaderStore),
+    },
   };
 
   return {

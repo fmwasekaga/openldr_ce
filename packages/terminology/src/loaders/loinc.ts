@@ -1,4 +1,4 @@
-import { createReadStream } from 'node:fs';
+import { createReadStream, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'csv-parse';
 import type { ConceptRecord } from '@openldr/db';
@@ -6,6 +6,14 @@ import { OpenLdrError } from '@openldr/core';
 import type { LoaderStore, LoadResult } from './generic';
 
 const LOINC_SYSTEM = 'http://loinc.org';
+
+function resolveLoincCsvPath(loincPath: string): string {
+  const direct = join(loincPath, 'Loinc.csv');
+  if (existsSync(direct)) return direct;
+  const extractedDistribution = join(loincPath, 'LoincTable', 'Loinc.csv');
+  if (existsSync(extractedDistribution)) return extractedDistribution;
+  return direct;
+}
 
 export function loincRowToConcept(row: Record<string, string>): ConceptRecord {
   return {
@@ -32,7 +40,7 @@ export async function loadLoinc(
   if (!opts.acceptLicense) {
     throw new OpenLdrError('LOINC import requires accepting the LOINC license (--accept-license)');
   }
-  const file = join(loincTableDir, 'Loinc.csv');
+  const file = resolveLoincCsvPath(loincTableDir);
   const parser = createReadStream(file).pipe(parse({ columns: true, skip_empty_lines: true }));
   let batch: ConceptRecord[] = [];
   let count = 0;

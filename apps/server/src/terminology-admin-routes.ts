@@ -18,6 +18,10 @@ const systemInput = z.object({
   active: z.boolean(),
   publisherId: z.string().nullish(),
 });
+const loincImportInput = z.object({
+  path: z.string().min(1),
+  acceptLicense: z.boolean(),
+});
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
@@ -72,6 +76,18 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
   });
 
   // ── Terms ────────────────────────────────────────────────────────────────
+  app.post('/api/terminology/import/loinc', async (req, reply) => {
+    const parsed = loincImportInput.safeParse(req.body);
+    if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
+    if (!parsed.data.acceptLicense) {
+      reply.code(400);
+      return { error: 'LOINC import requires accepting the LOINC license.' };
+    }
+    try {
+      return await ctx.terminology.loaders.loinc(parsed.data.path, parsed.data.acceptLicense);
+    } catch (e) { return mapErr(e, reply); }
+  });
+
   const termInput = z.object({
     code: z.string().min(1), display: z.string().min(1),
     status: z.enum(['ACTIVE', 'DRAFT', 'DEPRECATED', 'DISABLED']),
