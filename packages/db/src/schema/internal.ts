@@ -180,6 +180,60 @@ export interface ValuesetExpansionsTable {
   inactive: Generated<boolean>;
 }
 
+export interface OntologyDistributionsTable {
+  coding_system_id: string;
+  ontology_type: string;
+  source_path: string;
+  index_status: string;
+  index_error: string | null;
+  node_count: number | null;
+  edge_count: number | null;
+  manifest: unknown | null;
+  built_at: string | null;
+  updated_at: string;
+}
+
+export interface OntologyNodesTable {
+  coding_system_id: string;
+  code: string;
+  display: string;
+  kind: string | null;
+  extra: unknown | null;
+}
+
+export interface OntologyEdgesTable {
+  coding_system_id: string;
+  parent_code: string;
+  child_code: string;
+  seq: number;
+  label: string | null;
+}
+
+export interface OntologyPanelMembersTable {
+  coding_system_id: string;
+  panel_loinc: string;
+  member_loinc: string;
+  member_name: string;
+  display_name: string;
+  sequence: number;
+  required: boolean;
+}
+
+export interface OntologyAnswerOptionsTable {
+  coding_system_id: string;
+  loinc: string;
+  seq: number;
+  value: string;
+  label: string;
+}
+
+export interface OntologySpecimenMapTable {
+  coding_system_id: string;
+  loinc: string;
+  snomed_code: string;
+  equivalence: string;
+}
+
 export interface Dhis2OrgUnitMapTable {
   facility_id: string;
   orgunit_id: string;
@@ -222,6 +276,12 @@ export interface InternalSchema {
   term_mappings: TermMappingsTable;
   value_sets: ValueSetsTable;
   valueset_expansions: ValuesetExpansionsTable;
+  ontology_distributions: OntologyDistributionsTable;
+  ontology_nodes: OntologyNodesTable;
+  ontology_edges: OntologyEdgesTable;
+  ontology_panel_members: OntologyPanelMembersTable;
+  ontology_answer_options: OntologyAnswerOptionsTable;
+  ontology_specimen_map: OntologySpecimenMapTable;
   dhis2_orgunit_map: Dhis2OrgUnitMapTable;
   dhis2_mappings: Dhis2MappingsTable;
   dhis2_schedules: Dhis2SchedulesTable;
