@@ -1,0 +1,4 @@
+"ParentId","ParentLoinc","ParentName","ID","SEQUENCE","Loinc","LoincName","DisplayNameForForm","ObservationRequiredInPanel","EntryType"
+"100","24331-1","Lipid 1996 panel","100","0","24331-1","Lipid 1996 panel","","","Q"
+"100","24331-1","Lipid 1996 panel","101","1","2093-3","Cholest SerPl-mCnc","Cholesterol","R","Q"
+"100","24331-1","Lipid 1996 panel","102","2","2571-8","Trigl SerPl-mCnc","Triglyceride","","Q"

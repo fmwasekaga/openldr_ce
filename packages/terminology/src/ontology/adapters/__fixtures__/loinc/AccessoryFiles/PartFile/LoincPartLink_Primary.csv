@@ -1,0 +1,3 @@
+"LoincNumber","LongCommonName","PartNumber","PartName","PartCodeSystem","PartTypeName","LinkTypeName","Property"
+"6429-5","HIV culture of Blood","LP7057-5","Bld","http://loinc.org","SYSTEM","Primary","http://loinc.org/property/SYSTEM"
+"6429-5","HIV culture of Blood","LP14086-0","HIV","http://loinc.org","COMPONENT","Primary","http://loinc.org/property/COMPONENT"
