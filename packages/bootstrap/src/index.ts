@@ -9,6 +9,7 @@ import type { ExternalSchema, InternalSchema } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore } from '@openldr/users';
+import { createFormStore, type FormStore } from '@openldr/forms';
 import { getReport, reportSummaries, getEventSource, type ReportResult, type ReportSummary } from '@openldr/reporting';
 import { createDashboardStore, getModel, listModels, runBuilderQuery, runSqlQuery, type DashboardStore, type WidgetQuery } from '@openldr/dashboards';
 import { renderReportPdf } from '@openldr/report-pdf';
@@ -73,6 +74,7 @@ export interface AppContext {
   store: TargetStorePort;
   audit: AuditStore;
   users: UserStore;
+  forms: FormStore;
   reporting: ReportingApi;
   health: HealthRegistry;
   terminology: { ops: Operations; admin: TerminologyAdminStore; ontology: ReturnType<typeof createOntologyApi> };
@@ -98,6 +100,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   const internal = createInternalDb(cfg.INTERNAL_DATABASE_URL);
   const audit = createAuditStore(internal.db);
   const users = createUserStore(internal.db);
+  const forms = createFormStore(internal.db);
   const reportingDb = store.db as unknown as Kysely<ExternalSchema>;
   const runReport = async (id: string, rawParams: unknown): Promise<ReportResult> => {
     const def = getReport(id);
@@ -187,6 +190,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     store,
     audit,
     users,
+    forms,
     reporting,
     health,
     terminology,

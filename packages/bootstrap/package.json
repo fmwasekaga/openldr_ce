@@ -18,6 +18,7 @@
     "@openldr/db": "workspace:*",
     "@openldr/dhis2": "workspace:*",
     "@openldr/terminology": "workspace:*",
+    "@openldr/forms": "workspace:*",
     "@openldr/core": "workspace:*",
     "@openldr/ingest": "workspace:*",
     "@openldr/plugins": "workspace:*",

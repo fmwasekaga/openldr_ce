@@ -423,6 +423,9 @@ importers:
       '@openldr/dhis2':
         specifier: workspace:*
         version: link:../dhis2
+      '@openldr/forms':
+        specifier: workspace:*
+        version: link:../forms
       '@openldr/ingest':
         specifier: workspace:*
         version: link:../ingest
