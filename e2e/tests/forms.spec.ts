@@ -28,4 +28,9 @@ test('forms page imports a form JSON', async ({ page }) => {
   });
 
   await expect(page.getByRole('cell', { name, exact: true })).toBeVisible();
+  await page.getByRole('cell', { name, exact: true }).click();
+  await expect(page.getByLabel('Q1')).toBeVisible();
+  await page.getByLabel('Q1').fill('Captured from e2e');
+  await page.getByRole('button', { name: /^Submit$/ }).click();
+  await expect(page.getByText('Response captured.')).toBeVisible();
 });
