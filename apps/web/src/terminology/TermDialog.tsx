@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { MoreHorizontal } from 'lucide-react';
-import type { CodingSystem, Term, TermInput, TermMapping, TermStatus } from '../api';
+import type { CodingSystem, OntologyDistribution, Term, TermInput, TermMapping, TermStatus } from '../api';
 import {
   createTerm,
   updateTerm,
@@ -133,6 +133,8 @@ export function TermDialog({
   onOpenChange,
   system,
   term,
+  systems,
+  distributions = {},
   onSaved,
   onDeleted,
 }: {
@@ -140,6 +142,8 @@ export function TermDialog({
   onOpenChange: (o: boolean) => void;
   system: CodingSystem;
   term: Term | null;
+  systems?: CodingSystem[];
+  distributions?: Record<string, OntologyDistribution>;
   onSaved: () => void;
   onDeleted: () => void;
 }): JSX.Element {
@@ -216,6 +220,7 @@ export function TermDialog({
   // ── derived ──────────────────────────────────────────────────────────────────
   const canSave = code.trim().length > 0 && displayName.trim().length > 0;
   const totalMappings = outgoing.length + reverse.length;
+  const mappingSystems = systems ?? [system];
 
   // ── save ─────────────────────────────────────────────────────────────────────
   const handleSave = async (): Promise<void> => {
@@ -565,8 +570,9 @@ export function TermDialog({
           open={mappingDialogOpen}
           onOpenChange={(o) => { setMappingDialogOpen(o); if (!o) setEditingMapping(null); }}
           fromTerm={{ system: system.url ?? '', code: term.code, display: term.display, systemCode: system.systemCode }}
-          systems={[system]}
+          systems={mappingSystems}
           mapping={editingMapping}
+          distributions={distributions}
           onSaved={(m, draftCreated) => {
             void loadMappings();
             if (draftCreated) setDraftNotice(L.draftCreatedNotice(m.toSystem, m.toCode));

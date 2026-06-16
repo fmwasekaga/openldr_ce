@@ -1,8 +1,69 @@
 import { test, expect } from '@playwright/test';
+import { config as loadDotenv } from 'dotenv';
+import pg from 'pg';
 
 // Single per-run suffix shared by all creates in this file.
 // Using Date.now() is intentional test code — avoids cross-run DB collisions.
 const RUN = Date.now();
+
+async function seedReadyOntology(systemId: string, systemCode: string, systemUrl: string): Promise<void> {
+  loadDotenv({ path: new URL('../../.env', import.meta.url) });
+  const url = process.env.INTERNAL_DATABASE_URL;
+  if (!url) throw new Error('INTERNAL_DATABASE_URL is required for terminology ontology e2e seed');
+  const pool = new pg.Pool({ connectionString: url });
+  try {
+    // Seed rows directly instead of building through SSE; this keeps headless e2e
+    // deterministic and avoids requiring licensed LOINC source files on CI.
+    await pool.query('delete from term_mappings where from_system = $1 or to_system = $1', [systemUrl]);
+    await pool.query('delete from concept_map_elements where source_system = $1 or target_system = $1', [systemUrl]);
+    await pool.query('delete from terminology_concepts where system = $1', [systemUrl]);
+    await pool.query('delete from ontology_specimen_map where coding_system_id = $1', [systemId]);
+    await pool.query('delete from ontology_answer_options where coding_system_id = $1', [systemId]);
+    await pool.query('delete from ontology_panel_members where coding_system_id = $1', [systemId]);
+    await pool.query('delete from ontology_edges where coding_system_id = $1', [systemId]);
+    await pool.query('delete from ontology_nodes where coding_system_id = $1', [systemId]);
+    await pool.query('delete from ontology_distributions where coding_system_id = $1', [systemId]);
+    await pool.query('delete from coding_systems where id = $1', [systemId]);
+
+    await pool.query(
+      `insert into coding_systems
+       (id, system_code, system_name, url, system_version, description, active, publisher_id, seeded)
+       values ($1, $2, 'E2E Ontology System', $3, null, 'Seeded by terminology SP4 e2e', true, 'pub-system', false)`,
+      [systemId, systemCode, systemUrl],
+    );
+    await pool.query(
+      `insert into terminology_concepts (system, code, display, status, properties)
+       values ($1, 'SRC', 'Source observation', 'ACTIVE', null)`,
+      [systemUrl],
+    );
+    await pool.query(
+      `insert into ontology_nodes (coding_system_id, code, display, kind, extra)
+       values
+         ($1, 'ROOT-LAB', 'Laboratory observations', 'class', null),
+         ($1, '2345-7', 'Blood glucose', 'loinc', '{"component":"Glucose"}'::jsonb)`,
+      [systemId],
+    );
+    await pool.query(
+      `insert into ontology_edges (coding_system_id, parent_code, child_code, seq, label)
+       values
+         ($1, '__ROOT__', 'ROOT-LAB', 1, null),
+         ($1, 'ROOT-LAB', '2345-7', 1, 'Chemistry')`,
+      [systemId],
+    );
+    await pool.query(
+      `insert into ontology_distributions
+       (coding_system_id, ontology_type, source_path, index_status, index_error, node_count, edge_count, manifest, built_at, updated_at)
+       values ($1, 'loinc', 'e2e-seeded', 'ready', null, 2, 2, $2::jsonb, $3, $3)`,
+      [
+        systemId,
+        JSON.stringify({ adapter: 'loinc', generatedAt: new Date().toISOString(), files: [] }),
+        new Date().toISOString(),
+      ],
+    );
+  } finally {
+    await pool.end();
+  }
+}
 
 test('terminology page lists seeded publishers and creates a publisher', async ({ page }) => {
   await page.goto('/terminology');
@@ -61,6 +122,52 @@ test('terminology SP3: create system -> add term -> author a value set -> previe
   await page.getByRole('menuitem', { name: 'Save' }).click();
 
   await expect(page.locator('[role="dialog"]').getByText('T1')).toBeVisible();
+});
+
+test('terminology SP4: browse seeded ontology and use picker for a mapping target', async ({ page }) => {
+  const systemId = `cs-e2e-onto-${RUN}`;
+  const systemCode = `E2EONTO${RUN}`;
+  const systemUrl = `urn:e2e:ontology:${RUN}`;
+
+  await seedReadyOntology(systemId, systemCode, systemUrl);
+
+  await page.goto('/terminology');
+  await page.getByRole('button', { name: 'System' }).first().click();
+  const systemRow = page.getByRole('row', { name: new RegExp(systemCode) });
+  await expect(systemRow).toBeVisible();
+
+  await systemRow.getByRole('button', { name: 'Actions' }).click();
+  await page.getByRole('menuitem', { name: 'Browse ontology' }).click();
+  await expect(page.getByRole('heading', { name: 'Browse E2E Ontology System' })).toBeVisible();
+
+  const root = page.getByRole('button', { name: /Laboratory observations/ });
+  await expect(root).toBeVisible();
+  await root.click({ position: { x: 10, y: 10 } });
+  await expect(page.getByRole('button', { name: /Blood glucose/ })).toBeVisible();
+
+  await page.getByPlaceholder('Search the ontology...').fill('glucose');
+  await page.getByRole('button', { name: /Blood glucose/ }).click();
+  await expect(page.locator('[role="dialog"]').getByText('2345-7').last()).toBeVisible();
+  await page.getByRole('button', { name: 'Close' }).click();
+  await expect(page.getByRole('heading', { name: 'Browse E2E Ontology System' })).not.toBeVisible();
+
+  await page.getByText(systemCode).click();
+  await expect(page.getByText('Source observation')).toBeVisible();
+  await page.getByText('Source observation').click();
+  await page.locator('[role="dialog"]').getByRole('button', { name: 'Mappings' }).click();
+  await page.locator('[role="dialog"]').getByRole('button', { name: 'Actions' }).click();
+  await page.getByRole('menuitem', { name: 'Add mapping' }).click();
+
+  await page.getByText('Enter manually').click();
+  await page.locator('[role="dialog"]').getByRole('combobox').nth(1).click();
+  await page.getByRole('option', { name: systemCode }).click();
+  await page.getByRole('button', { name: `Browse ${systemCode}` }).click();
+  await page.getByPlaceholder('Search the ontology...').fill('glucose');
+  await page.getByRole('button', { name: /Blood glucose/ }).click();
+  await page.getByRole('button', { name: 'Use as target' }).click();
+
+  await expect(page.locator('#mapping-manual-code')).toHaveValue('2345-7');
+  await expect(page.locator('#mapping-manual-display')).toHaveValue('Blood glucose');
 });
 
 test('terminology SP2: create system → drill → create term', async ({ page }) => {

@@ -1,0 +1,4 @@
+"PartNumber","PartName","PartTypeName","ExtCodeId","ExtCodeDisplayName","ExtCodeSystem","Equivalence"
+"LP7057-5","Bld","SYSTEM","119297000","Blood specimen","http://snomed.info/sct","equivalent"
+"LP7057-5","Bld","SYSTEM","122555007","Venous blood specimen","http://snomed.info/sct","narrower"
+"LP7057-5","Bld","SYSTEM","XYZ","Something","http://other.org","equivalent"

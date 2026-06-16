@@ -13,6 +13,7 @@ import * as m011 from './011_dashboards';
 import * as m012 from './012_terminology_admin';
 import * as m013 from './013_term_mappings';
 import * as m014 from './014_value_sets';
+import * as m015 from './015_ontology';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -29,4 +30,5 @@ export const internalMigrations: Record<string, Migration> = {
   '012_terminology_admin': { up: m012.up, down: m012.down },
   '013_term_mappings': { up: m013.up, down: m013.down },
   '014_value_sets': { up: m014.up, down: m014.down },
+  '015_ontology': { up: m015.up, down: m015.down },
 };

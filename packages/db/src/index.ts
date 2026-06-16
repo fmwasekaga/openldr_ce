@@ -13,6 +13,7 @@ export * from './persist';
 export * from './export-data';
 export * from './terminology-store';
 export * from './terminology-admin-store';
+export * from './ontology-store';
 export * from './value-set-expander';
 export { fhirValueSetToInput, valueSetToFhirResource } from './fhir-value-set';
 export type { FhirValueSetInput, ValueSetCore, ValueSetStatus } from './fhir-value-set';
