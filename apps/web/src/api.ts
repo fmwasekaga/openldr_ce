@@ -123,6 +123,32 @@ export const queryAudit = (q: AuditQuery): Promise<{ events: AuditEvent[]; total
 };
 export const getAuditEvent = (id: string): Promise<AuditEvent> => apiGet(`/api/audit/${id}`, 'get audit event');
 
+// Users
+export interface User {
+  id: string;
+  subject: string | null;
+  username: string;
+  displayName: string | null;
+  email: string | null;
+  roles: string[];
+  status: 'active' | 'disabled';
+  lastLoginAt: string | null;
+}
+export interface CreateUserInput {
+  username: string;
+  displayName?: string | null;
+  email?: string | null;
+  roles?: string[];
+}
+export const USER_ROLES = ['lab_admin', 'lab_manager', 'lab_technician', 'data_analyst', 'system_auditor'] as const;
+export const listUsers = (): Promise<User[]> => apiGet('/api/users', 'list users');
+export const createUser = (i: CreateUserInput): Promise<User> =>
+  fetch('/api/users', jbody(i, 'POST')).then((r) => okJson<User>(r, 'create user'));
+export const updateUser = (id: string, i: { displayName?: string | null; email?: string | null; roles?: string[] }): Promise<User> =>
+  fetch(`/api/users/${id}`, jbody(i, 'PUT')).then((r) => okJson<User>(r, 'update user'));
+export const setUserStatus = (id: string, status: 'active' | 'disabled'): Promise<User> =>
+  fetch(`/api/users/${id}/status`, jbody({ status }, 'POST')).then((r) => okJson<User>(r, 'set user status'));
+
 // ── Terminology admin types & client ─────────────────────────────────────────
 export type PublisherRole = 'local' | 'standard' | 'external';
 export interface Publisher { id: string; name: string; role: PublisherRole; icon: string | null; seeded: boolean; sortOrder: number }
