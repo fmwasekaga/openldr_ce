@@ -4,6 +4,7 @@ import type { AppContext } from '@openldr/bootstrap';
 import { HealthRegistry, createLogger } from '@openldr/core';
 
 type FakeAdmin = AppContext['terminology']['admin'];
+type FakeOntology = AppContext['terminology']['ontology'];
 
 /** Minimal in-memory fake admin store for route tests.
  *  The harness hand-mocks ctx (no pg-mem DB available here), so we use a fake.
@@ -237,6 +238,69 @@ function buildFakeAdmin(): FakeAdmin {
   };
 }
 
+function buildFakeOntology(): FakeOntology {
+  const distributions = new Map<string, Awaited<ReturnType<FakeOntology['getDistribution']>>>();
+  distributions.set('sys1', {
+    codingSystemId: 'sys1',
+    ontologyType: 'loinc',
+    sourcePath: 'fixture',
+    indexStatus: 'ready',
+    indexError: null,
+    nodeCount: 2,
+    edgeCount: 1,
+    manifest: null,
+    builtAt: null,
+    updatedAt: new Date().toISOString(),
+    stale: false,
+  });
+  const root = { code: 'ROOT-A', display: 'Root A', kind: 'category', extra: null, childCount: 1, group: null };
+  const child = { code: 'CHILD-1', display: 'Child One', kind: 'term', extra: null, childCount: 0, group: null };
+  return {
+    async listDistributions() {
+      return [...distributions.values()].filter((d): d is NonNullable<typeof d> => d != null);
+    },
+    async getDistribution(id) {
+      return distributions.get(id) ?? null;
+    },
+    async build(id, sourcePath, onProgress) {
+      onProgress({ codingSystemId: id, phase: 'fixture', processed: 1, total: 1 });
+      distributions.set(id, { ...(distributions.get(id) ?? distributions.get('sys1')!), codingSystemId: id, sourcePath, indexStatus: 'ready' });
+    },
+    async rebuild(id, onProgress) {
+      onProgress({ codingSystemId: id, phase: 'fixture', processed: 1, total: 1 });
+    },
+    async unlink(id) {
+      distributions.delete(id);
+    },
+    async roots() {
+      return [root];
+    },
+    async children(_id, parent) {
+      return parent === 'ROOT-A' ? [child] : [];
+    },
+    async node(_id, code) {
+      if (code === root.code) return root;
+      if (code === child.code) return child;
+      return null;
+    },
+    async search(_id, query) {
+      return query.toLowerCase().includes('child') ? [child] : [];
+    },
+    async path(_id, code) {
+      return code === child.code ? [root, child].map((n) => ({ code: n.code, display: n.display })) : [];
+    },
+    async panelMembers() {
+      return [];
+    },
+    async answerOptions() {
+      return [];
+    },
+    async specimenCodes() {
+      return [];
+    },
+  };
+}
+
 function ctxWith(status: 'up' | 'down'): AppContext {
   const health = new HealthRegistry();
   health.register({ name: 'auth', check: async () => ({ status, latencyMs: 1 }) });
@@ -250,7 +314,7 @@ function ctxWith(status: 'up' | 'down'): AppContext {
     reporting: {} as never,
     audit: {} as never,
     users: {} as never,
-    terminology: { ops: {} as never, admin: buildFakeAdmin() },
+    terminology: { ops: {} as never, admin: buildFakeAdmin(), ontology: buildFakeOntology() },
     dashboards: {} as never,
     cfg: {} as never,
     async close() {},
@@ -347,6 +411,26 @@ describe('terminology admin routes', () => {
     const exported = await app.inject({ method: 'GET', url: `/api/terminology/valuesets/${id}/export` });
     expect(exported.statusCode).toBe(200);
     expect(exported.headers['content-type']).toContain('application/fhir+json');
+
+    await app.close();
+  });
+});
+
+describe('ontology routes', () => {
+  it('reads roots/children and streams build completion over SSE', async () => {
+    const app = buildApp(ctxWith('up'));
+
+    const roots = await app.inject({ method: 'GET', url: '/api/terminology/ontology/sys1/roots' });
+    expect(roots.statusCode).toBe(200);
+    expect(JSON.parse(roots.body).map((node: { code: string }) => node.code)).toEqual(['ROOT-A']);
+
+    const children = await app.inject({ method: 'GET', url: '/api/terminology/ontology/sys1/children?parent=ROOT-A' });
+    expect(children.statusCode).toBe(200);
+    expect(JSON.parse(children.body).map((node: { code: string }) => node.code)).toEqual(['CHILD-1']);
+
+    const sse = await app.inject({ method: 'GET', url: '/api/terminology/ontology/sys1/build?path=fixture' });
+    expect(sse.statusCode).toBe(200);
+    expect(sse.body).toContain('event: done');
 
     await app.close();
   });

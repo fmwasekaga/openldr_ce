@@ -8,6 +8,7 @@ import type { AppContext } from '@openldr/bootstrap';
 import { registerReportRoutes } from './reports-routes';
 import { registerTerminologyRoutes } from './terminology-routes';
 import { registerTerminologyAdminRoutes } from './terminology-admin-routes';
+import { registerOntologyRoutes } from './ontology-routes';
 import { registerDashboardRoutes } from './dashboards-routes';
 
 export function registerConfigRoute(
@@ -33,6 +34,7 @@ export function buildApp(ctx: AppContext) {
   registerReportRoutes(app, ctx);
   registerTerminologyRoutes(app, ctx);
   registerTerminologyAdminRoutes(app, ctx);
+  registerOntologyRoutes(app, ctx);
   registerDashboardRoutes(app, ctx);
 
   // Serve the built SPA if present (apps/web/dist). API + health are registered first and win.
