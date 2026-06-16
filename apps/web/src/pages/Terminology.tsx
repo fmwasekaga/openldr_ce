@@ -11,6 +11,7 @@ import {
   deleteValueSet,
   duplicateValueSet,
   importValueSet,
+  listOntologyDistributions,
   valueSetExportUrl,
   publisherDeletionImpact,
   systemDeletionImpact,
@@ -19,6 +20,7 @@ import {
   type Term,
   type ValueSet,
   type ValueSetSummary,
+  type OntologyDistribution,
 } from '../api';
 import { TermsTable } from '../terminology/TermsTable';
 import { publisherSections } from '../terminology/publisherSections';
@@ -26,6 +28,8 @@ import { PublisherDialog } from '../terminology/PublisherDialog';
 import { CodingSystemDialog } from '../terminology/CodingSystemDialog';
 import { DangerConfirmDialog } from '../terminology/DangerConfirmDialog';
 import { TermDialog } from '../terminology/TermDialog';
+import { OntologyDistributionDialog } from '../terminology/ontology/OntologyDistributionDialog';
+import { OntologyPickerDialog } from '../terminology/ontology/OntologyPickerDialog';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -77,6 +81,7 @@ export function Terminology(): JSX.Element {
   const [publishers, setPublishers] = useState<Publisher[]>([]);
   const [codingSystems, setCodingSystems] = useState<CodingSystem[]>([]);
   const [valueSets, setValueSets] = useState<ValueSetSummary[]>([]);
+  const [distributions, setDistributions] = useState<Record<string, OntologyDistribution>>({});
   const [loadError, setLoadError] = useState<string | null>(null);
 
   // ── navigation ──────────────────────────────────────────────────────────────
@@ -95,6 +100,8 @@ export function Terminology(): JSX.Element {
   const [editingPublisher, setEditingPublisher] = useState<Publisher | null>(null);
   const [systemDialogOpen, setSystemDialogOpen] = useState(false);
   const [editingSystem, setEditingSystem] = useState<CodingSystem | null>(null);
+  const [browseSystem, setBrowseSystem] = useState<CodingSystem | null>(null);
+  const [distDialogSystem, setDistDialogSystem] = useState<CodingSystem | null>(null);
 
   // ── term dialog state (T12 will mount TermDialog consuming these) ────────────
   const [editingTerm, setEditingTerm] = useState<Term | null>(null);
@@ -113,11 +120,12 @@ export function Terminology(): JSX.Element {
   // ── load ────────────────────────────────────────────────────────────────────
   // Stable across renders in practice — only calls module-level API fns + setState.
   const reload = (): Promise<void> =>
-    Promise.all([listPublishers(), listCodingSystems(), listValueSets()])
-      .then(([p, s, v]) => {
+    Promise.all([listPublishers(), listCodingSystems(), listValueSets(), listOntologyDistributions()])
+      .then(([p, s, v, d]) => {
         setPublishers(p);
         setCodingSystems(s);
         setValueSets(v);
+        setDistributions(Object.fromEntries(d.map((dist) => [dist.codingSystemId, dist])));
       })
       .catch((e: unknown) => {
         setLoadError(e instanceof Error ? e.message : String(e));
@@ -440,11 +448,21 @@ export function Terminology(): JSX.Element {
                             Edit
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          {/* Ontology items — disabled (SP2+) */}
-                          <DropdownMenuItem disabled>
+                          {/* Ontology items */}
+                          <DropdownMenuItem
+                            disabled={!selectedSystem || distributions[selectedSystem.id]?.indexStatus !== 'ready'}
+                            onClick={() => {
+                              if (selectedSystem) setBrowseSystem(selectedSystem);
+                            }}
+                          >
                             Browse ontology
                           </DropdownMenuItem>
-                          <DropdownMenuItem disabled>
+                          <DropdownMenuItem
+                            disabled={!selectedSystem}
+                            onClick={() => {
+                              if (selectedSystem) setDistDialogSystem(selectedSystem);
+                            }}
+                          >
                             Ontology distribution…
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
@@ -591,11 +609,14 @@ export function Terminology(): JSX.Element {
                                       Edit coding system
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
-                                    {/* Ontology items — disabled (SP2+) */}
-                                    <DropdownMenuItem disabled>
+                                    {/* Ontology items */}
+                                    <DropdownMenuItem
+                                      disabled={distributions[s.id]?.indexStatus !== 'ready'}
+                                      onClick={() => setBrowseSystem(s)}
+                                    >
                                       Browse ontology
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem disabled>
+                                    <DropdownMenuItem onClick={() => setDistDialogSystem(s)}>
                                       Ontology distribution…
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
@@ -768,6 +789,29 @@ export function Terminology(): JSX.Element {
             )}
           </SheetContent>
         </Sheet>
+
+        <OntologyPickerDialog
+          open={!!browseSystem}
+          onOpenChange={(o) => {
+            if (!o) setBrowseSystem(null);
+          }}
+          codingSystemId={browseSystem?.id ?? ''}
+          systemName={browseSystem?.systemName ?? ''}
+          ontologyType={browseSystem ? distributions[browseSystem.id]?.ontologyType : undefined}
+          mode="browse"
+          onPick={() => {}}
+          title={browseSystem ? `Browse ${browseSystem.systemName}` : undefined}
+        />
+
+        <OntologyDistributionDialog
+          open={!!distDialogSystem}
+          onOpenChange={(o) => {
+            if (!o) setDistDialogSystem(null);
+          }}
+          codingSystemId={distDialogSystem?.id ?? ''}
+          systemName={distDialogSystem?.systemName ?? ''}
+          onChanged={() => void reload()}
+        />
 
         {confirm && (
           <DangerConfirmDialog

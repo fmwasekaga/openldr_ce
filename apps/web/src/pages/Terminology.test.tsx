@@ -4,6 +4,16 @@ import { MemoryRouter } from 'react-router-dom';
 import { Terminology } from './Terminology';
 import * as api from '../api';
 
+vi.mock('../terminology/ontology/OntologyPickerDialog', () => ({
+  OntologyPickerDialog: ({ open, systemName }: { open: boolean; systemName: string }) =>
+    open ? <div role="dialog">Browse mock {systemName}</div> : null,
+}));
+
+vi.mock('../terminology/ontology/OntologyDistributionDialog', () => ({
+  OntologyDistributionDialog: ({ open, systemName }: { open: boolean; systemName: string }) =>
+    open ? <div role="dialog">Distribution mock {systemName}</div> : null,
+}));
+
 const pub = (id: string, name: string, seeded = true) => ({
   id,
   name,
@@ -35,6 +45,7 @@ describe('Terminology page', () => {
       sys('cs1', 'LOINC', 'pub-loinc'),
     ] as never);
     vi.spyOn(api, 'listValueSets').mockResolvedValue([] as never);
+    vi.spyOn(api, 'listOntologyDistributions').mockResolvedValue([] as never);
   });
 
   it('shows the empty prompt when there are no publishers', async () => {
@@ -99,5 +110,35 @@ describe('Terminology page', () => {
 
     await waitFor(() => expect(api.getValueSet).toHaveBeenCalledWith('vs-yn'));
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('opens ontology browse and distribution dialogs from a ready code-system row', async () => {
+    vi.spyOn(api, 'listOntologyDistributions').mockResolvedValue([
+      {
+        codingSystemId: 'cs1',
+        ontologyType: 'loinc',
+        sourcePath: 'D:\\terminology\\loinc',
+        indexStatus: 'ready',
+        indexError: null,
+        nodeCount: 10,
+        edgeCount: 9,
+        builtAt: '2026-06-16T00:00:00.000Z',
+        updatedAt: '2026-06-16T00:00:00.000Z',
+        stale: false,
+      },
+    ] as never);
+
+    render(<MemoryRouter><Terminology /></MemoryRouter>);
+
+    const rowActions = (await screen.findAllByRole('button', { name: /actions/i }))[1];
+    fireEvent.pointerDown(rowActions, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Browse ontology')) fireEvent.keyDown(rowActions, { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Browse ontology'));
+    expect(await screen.findByText('Browse mock LOINC')).toBeInTheDocument();
+
+    fireEvent.pointerDown(rowActions, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText(/Ontology distribution/)) fireEvent.keyDown(rowActions, { key: 'Enter' });
+    fireEvent.click(await screen.findByText(/Ontology distribution/));
+    expect(await screen.findByText('Distribution mock LOINC')).toBeInTheDocument();
   });
 });
