@@ -11,6 +11,7 @@ import { registerTerminologyAdminRoutes } from './terminology-admin-routes';
 import { registerOntologyRoutes } from './ontology-routes';
 import { registerDashboardRoutes } from './dashboards-routes';
 import { registerAuditRoutes } from './audit-routes';
+import { registerUsersRoutes } from './users-routes';
 
 export function registerConfigRoute(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -38,6 +39,7 @@ export function buildApp(ctx: AppContext) {
   registerOntologyRoutes(app, ctx);
   registerDashboardRoutes(app, ctx);
   registerAuditRoutes(app, ctx);
+  registerUsersRoutes(app, ctx);
 
   // Serve the built SPA if present (apps/web/dist). API + health are registered first and win.
   const webDist = resolve(dirname(fileURLToPath(import.meta.url)), '../../web/dist');

@@ -1,8 +1,20 @@
 import { describe, it, expect } from 'vitest';
+import { type Kysely } from 'kysely';
+import { newDb } from 'pg-mem';
+import { internalMigrations, type InternalSchema } from '@openldr/db';
 import type { TokenClaims } from '@openldr/ports';
-import type { User } from './store';
+import { createUserStore, type User } from './store';
 
 const mk = (over: Partial<User>): User => ({ id: over.id ?? 'id', subject: over.subject ?? null, username: over.username ?? 'u', displayName: null, email: null, roles: [], status: 'active', lastLoginAt: null });
+
+async function makeMigratedDb(): Promise<Kysely<InternalSchema>> {
+  const mem = newDb();
+  const db = mem.adapters.createKysely() as Kysely<InternalSchema>;
+  for (const migration of Object.values(internalMigrations)) {
+    await migration.up(db);
+  }
+  return db;
+}
 
 // Mirror of createUserStore.syncFromClaims resolution, to lock the by-subject -> by-username-link -> create contract.
 async function resolve(
@@ -42,5 +54,24 @@ describe('syncFromClaims resolution', () => {
     const out = await resolve({ sub: 'kc-7', preferred_username: 'new' } as TokenClaims, { bySubject: () => undefined, byUsername: () => undefined, create: (u) => { created.push(u); return mk({ id: 'n1', username: u }); }, link: () => {} });
     expect(created).toEqual(['new']);
     expect(out.subject).toBe('kc-7');
+  });
+});
+
+describe('createUserStore', () => {
+  it('updates display name and email without changing username or roles', async () => {
+    const db = await makeMigratedDb();
+    const store = createUserStore(db);
+    const created = await store.create({ username: 'ada', displayName: 'Ada', email: 'ada@old.test', roles: ['lab_admin'] });
+
+    await store.update(created.id, { displayName: 'Ada Lovelace', email: 'ada@new.test' });
+
+    const updated = await store.get(created.id);
+    expect(updated).toMatchObject({
+      id: created.id,
+      username: 'ada',
+      displayName: 'Ada Lovelace',
+      email: 'ada@new.test',
+      roles: ['lab_admin'],
+    });
   });
 });
