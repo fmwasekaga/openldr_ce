@@ -109,6 +109,11 @@ async function okJson<T>(res: Response, what: string): Promise<T> {
   if (!res.ok) throw new Error(`${what} failed: ${res.status}`);
   return res.json() as Promise<T>;
 }
+const apiGet = <T>(url: string, what: string): Promise<T> => fetch(url).then((res) => okJson<T>(res, what));
+async function apiDelete(url: string, what: string): Promise<void> {
+  const res = await fetch(url, { method: 'DELETE' });
+  if (!res.ok && res.status !== 204) throw new Error(`${what} failed: ${res.status}`);
+}
 
 export const listPublishers = () => fetch('/api/terminology/publishers').then((r) => okJson<Publisher[]>(r, 'list publishers'));
 export const createPublisher = (i: PublisherInput) => fetch('/api/terminology/publishers', jbody(i, 'POST')).then((r) => okJson<Publisher>(r, 'create publisher'));
@@ -201,4 +206,106 @@ export const updateTermMapping = (id: string, i: TermMappingInput) => fetch(`/ap
 export async function deleteTermMapping(id: string): Promise<void> {
   const r = await fetch(`/api/terminology/mappings/${id}`, { method: 'DELETE' });
   if (!r.ok && r.status !== 204) throw new Error(`delete mapping failed: ${r.status}`);
+}
+
+// Ontology browser (SP4)
+export type OntologyType = 'loinc' | 'snomed' | 'rxnorm';
+export interface OntologyNode {
+  code: string;
+  display: string;
+  kind: string;
+  extra: Record<string, unknown> | null;
+  childCount: number;
+  group: string | null;
+}
+export interface OntologyBreadcrumb {
+  code: string;
+  display: string;
+}
+export interface OntologyDistribution {
+  codingSystemId: string;
+  ontologyType: OntologyType;
+  sourcePath: string;
+  indexStatus: string;
+  indexError: string | null;
+  nodeCount: number | null;
+  edgeCount: number | null;
+  builtAt: string | null;
+  updatedAt: string;
+  stale?: boolean;
+}
+export interface OntologyBuildProgress {
+  codingSystemId: string;
+  phase: string;
+  processed: number;
+  total: number | null;
+}
+export interface PanelMember {
+  panelLoinc: string;
+  memberLoinc: string;
+  memberName: string;
+  displayName: string;
+  sequence: number;
+  required: boolean;
+}
+export interface AnswerOption {
+  value: string;
+  label: string;
+}
+export interface SpecimenCode {
+  snomedCode: string;
+  equivalence: string;
+}
+
+export const listOntologyDistributions = (): Promise<OntologyDistribution[]> =>
+  apiGet('/api/terminology/ontology/distributions', 'list ontology distributions');
+export const getOntologyDistribution = (id: string): Promise<(OntologyDistribution & { stale: boolean }) | null> =>
+  apiGet(`/api/terminology/ontology/distributions/${id}`, 'get ontology distribution');
+export const unlinkOntologyDistribution = (id: string): Promise<void> =>
+  apiDelete(`/api/terminology/ontology/distributions/${id}`, 'unlink ontology distribution');
+export const ontologyRoots = (id: string): Promise<OntologyNode[]> =>
+  apiGet(`/api/terminology/ontology/${id}/roots`, 'ontology roots');
+export const ontologyChildren = (id: string, parent: string): Promise<OntologyNode[]> =>
+  apiGet(`/api/terminology/ontology/${id}/children?parent=${encodeURIComponent(parent)}`, 'ontology children');
+export const ontologyNodeDetail = (id: string, code: string): Promise<OntologyNode | null> =>
+  apiGet(`/api/terminology/ontology/${id}/node?code=${encodeURIComponent(code)}`, 'ontology node');
+export const ontologySearch = (id: string, query: string): Promise<OntologyNode[]> =>
+  apiGet(`/api/terminology/ontology/${id}/search?q=${encodeURIComponent(query)}`, 'ontology search');
+export const ontologyPath = (id: string, code: string): Promise<OntologyBreadcrumb[]> =>
+  apiGet(`/api/terminology/ontology/${id}/path?code=${encodeURIComponent(code)}`, 'ontology path');
+export const ontologyPanelMembers = (id: string, loinc: string): Promise<PanelMember[]> =>
+  apiGet(`/api/terminology/ontology/${id}/panels?loinc=${encodeURIComponent(loinc)}`, 'ontology panel members');
+export const ontologyAnswerOptions = (id: string, loinc: string): Promise<AnswerOption[]> =>
+  apiGet(`/api/terminology/ontology/${id}/answers?loinc=${encodeURIComponent(loinc)}`, 'ontology answer options');
+export const ontologySpecimenCodes = (id: string, loinc: string): Promise<SpecimenCode[]> =>
+  apiGet(`/api/terminology/ontology/${id}/specimens?loinc=${encodeURIComponent(loinc)}`, 'ontology specimen codes');
+
+export function buildOntology(
+  id: string,
+  opts: { path?: string; rebuild?: boolean },
+  onProgress: (progress: OntologyBuildProgress) => void,
+): { promise: Promise<OntologyDistribution>; cancel: () => void } {
+  const url = opts.rebuild
+    ? `/api/terminology/ontology/${id}/rebuild`
+    : `/api/terminology/ontology/${id}/build?path=${encodeURIComponent(opts.path ?? '')}`;
+  const eventSource = new EventSource(url);
+  const promise = new Promise<OntologyDistribution>((resolve, reject) => {
+    eventSource.addEventListener('progress', (event) => {
+      try {
+        onProgress(JSON.parse((event as MessageEvent).data) as OntologyBuildProgress);
+      } catch {
+        // Ignore malformed progress events; the terminal done/error event decides the outcome.
+      }
+    });
+    eventSource.addEventListener('done', (event) => {
+      eventSource.close();
+      resolve(JSON.parse((event as MessageEvent).data) as OntologyDistribution);
+    });
+    eventSource.addEventListener('error', (event) => {
+      const data = (event as MessageEvent).data;
+      eventSource.close();
+      reject(new Error(data ? ((JSON.parse(data) as { message?: string }).message ?? 'build failed') : 'connection lost'));
+    });
+  });
+  return { promise, cancel: () => eventSource.close() };
 }
