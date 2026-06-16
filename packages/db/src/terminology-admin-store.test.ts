@@ -234,5 +234,59 @@ describe('terminology admin store', () => {
       await expect(admin.valueSets.get('vs-nope')).rejects.toMatchObject({ kind: 'not-found' });
       await expect(admin.valueSets.delete('vs-nope')).rejects.toMatchObject({ kind: 'not-found' });
     });
+
+    it('imports a Corlix compact FHIR ValueSet catalog with cached expansions', async () => {
+      const { s: admin, db } = await store();
+      const result = await admin.valueSets.importFhirCatalog({
+        version: 'R4',
+        valueSets: [{
+          url: 'http://hl7.org/fhir/ValueSet/administrative-gender',
+          version: '4.0.1',
+          name: 'AdministrativeGender',
+          title: 'AdministrativeGender',
+          status: 'active',
+          experimental: false,
+          description: 'Gender.',
+          compose: { include: [{ system: 'http://hl7.org/fhir/administrative-gender' }] },
+          expansion: [
+            { system: 'http://hl7.org/fhir/administrative-gender', code: 'male', display: 'Male' },
+            { system: 'http://hl7.org/fhir/administrative-gender', code: 'female', display: 'Female' },
+          ],
+          primarySystem: 'http://hl7.org/fhir/administrative-gender',
+        }],
+        codeSystems: [{
+          url: 'http://hl7.org/fhir/administrative-gender',
+          name: 'AdministrativeGender',
+          title: 'AdministrativeGender',
+        }],
+      });
+
+      expect(result).toMatchObject({ imported: 1, skipped: 0 });
+      const saved = await admin.valueSets.getByUrl('http://hl7.org/fhir/ValueSet/administrative-gender');
+      expect(saved).toMatchObject({
+        title: 'AdministrativeGender',
+        immutable: true,
+        category: 'FHIR R4',
+        publisherId: 'pub-hl7-fhir',
+        codeCount: 2,
+        primarySystem: 'http://hl7.org/fhir/administrative-gender',
+      });
+      const expansions = await db.selectFrom('valueset_expansions').select(['system_url', 'code', 'display']).where('value_set_id', '=', saved!.id).orderBy('code').execute();
+      expect(expansions).toEqual([
+        { system_url: 'http://hl7.org/fhir/administrative-gender', code: 'female', display: 'Female' },
+        { system_url: 'http://hl7.org/fhir/administrative-gender', code: 'male', display: 'Male' },
+      ]);
+      expect((await admin.codingSystems.list()).find((s) => s.url === 'http://hl7.org/fhir/administrative-gender')).toMatchObject({
+        systemName: 'AdministrativeGender',
+        active: false,
+        publisherId: 'pub-hl7-fhir',
+      });
+
+      await expect(admin.valueSets.importFhirCatalog({
+        version: 'R4',
+        valueSets: [{ url: 'http://hl7.org/fhir/ValueSet/administrative-gender', compose: { include: [] } }],
+        codeSystems: [],
+      })).resolves.toMatchObject({ imported: 0, skipped: 1 });
+    });
   });
 });

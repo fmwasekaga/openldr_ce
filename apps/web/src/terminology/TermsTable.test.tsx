@@ -29,6 +29,17 @@ describe('TermsTable', () => {
     expect(screen.getByText('AMP')).toBeInTheDocument();
   });
 
+  it('accepts structured terminology source files for imports', async () => {
+    const spy = vi.spyOn(api, 'searchTerms').mockResolvedValue({ rows: [], total: 0 });
+    render(<TermsTable systemId="sys1" onOpenTerm={() => {}} />);
+
+    const input = document.querySelector('input[type="file"]');
+    expect(input).toHaveAttribute('accept', expect.stringContaining('.txt'));
+    expect(input).toHaveAttribute('accept', expect.stringContaining('.rrf'));
+    expect(input).toHaveAttribute('accept', expect.stringContaining('.jsonl'));
+    await waitFor(() => expect(spy).toHaveBeenCalled());
+  });
+
   it('typing in search refetches with q', async () => {
     const spy = vi
       .spyOn(api, 'searchTerms')

@@ -22,6 +22,7 @@ import {
   type CodingSystem,
   type Term,
   type ValueSet,
+  type ValueSetCatalogImportResult,
   type ValueSetSummary,
   type OntologyDistribution,
 } from '../api';
@@ -76,6 +77,10 @@ function isLoincSystem(system: CodingSystem | null | undefined): boolean {
 
 function isLoincPublisher(publisher: Publisher | null | undefined): boolean {
   return publisher?.name.toUpperCase() === 'LOINC';
+}
+
+function isValueSetCatalogImportResult(value: ValueSet | ValueSetCatalogImportResult): value is ValueSetCatalogImportResult {
+  return typeof (value as ValueSetCatalogImportResult).imported === 'number';
 }
 
 // ── confirm-state shape ───────────────────────────────────────────────────────
@@ -298,10 +303,14 @@ export function Terminology(): JSX.Element {
     if (!file) return;
     e.target.value = '';
     try {
-      const json = JSON.parse(await file.text());
-      const saved = await importValueSet(json);
+      const saved = await importValueSet(file);
       await reload();
-      setToast({ kind: 'ok', text: `Imported value set "${saved.title ?? saved.url}".` });
+      setToast({
+        kind: 'ok',
+        text: isValueSetCatalogImportResult(saved)
+          ? `Imported ${saved.imported} value set(s); skipped ${saved.skipped}.`
+          : `Imported value set "${saved.title ?? saved.url}".`,
+      });
     } catch (err: unknown) {
       setToast({ kind: 'error', text: err instanceof Error ? err.message : String(err) });
     }
@@ -319,7 +328,7 @@ export function Terminology(): JSX.Element {
     e.target.value = '';
     if (!file || !system) return;
     try {
-      const result = await importTerms(system.id, await file.text());
+      const result = await importTerms(system.id, file);
       setTermImportSystem(null);
       setTermsReloadKey((k) => k + 1);
       await reload();
@@ -339,12 +348,12 @@ export function Terminology(): JSX.Element {
   return (
     <AppShell title="Terminology" fullBleed>
       <div className="ui-scope flex h-full flex-col">
-        <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={(e) => void handleVsImportFile(e)} />
+        <input ref={fileInputRef} data-testid="valueset-import-input" type="file" accept=".json,.json.gz,.gz" className="hidden" onChange={(e) => void handleVsImportFile(e)} />
         <input
           ref={termImportFileRef}
           data-testid="term-import-input"
           type="file"
-          accept=".csv"
+          accept=".csv,.txt,.tsv,.rrf,.jsonl,.ndjson,.json"
           className="hidden"
           onChange={(e) => void handleTermImportFile(e)}
         />

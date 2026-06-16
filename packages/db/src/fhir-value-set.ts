@@ -14,6 +14,22 @@ export interface FhirValueSetInput {
   publisherId?: string | null;
   category?: string | null;
 }
+export interface FhirValueSetCatalogValueSet extends FhirValueSetInput {
+  immutable: boolean;
+  expansion: ExpandedConcept[];
+  primarySystem: string | null;
+  sourceJson: Record<string, unknown>;
+}
+export interface FhirValueSetCatalogCodeSystem {
+  url: string;
+  systemCode: string;
+  systemName: string;
+}
+export interface FhirValueSetCatalogInput {
+  version: string;
+  valueSets: FhirValueSetCatalogValueSet[];
+  codeSystems: FhirValueSetCatalogCodeSystem[];
+}
 export interface ValueSetCore {
   id: string; url: string; status: ValueSetStatus; experimental: boolean;
   version: string | null; name: string | null; title: string | null;
@@ -69,6 +85,24 @@ function composeFromExpansion(contains: unknown[]): VsCompose {
   return { include: [...bySystem.entries()].map(([system, concept]) => ({ system, concept })) };
 }
 
+function systemCodeFromUrl(url: string): string {
+  return (url.split('/').filter(Boolean).pop() ?? url).toUpperCase().slice(0, 60);
+}
+
+function expansionFromCatalog(raw: unknown): ExpandedConcept[] {
+  return Array.isArray(raw)
+    ? raw.filter(isObj).map((c) => ({
+      system: str(c.system) ?? '',
+      code: str(c.code) ?? '',
+      display: str(c.display) ?? null,
+    })).filter((c) => c.system && c.code)
+    : [];
+}
+
+export function isFhirValueSetCatalog(resource: unknown): boolean {
+  return isObj(resource) && Array.isArray(resource.valueSets);
+}
+
 /** Map an arbitrary FHIR R4 ValueSet resource (parsed JSON) to ValueSetInput. Throws on invalid input. */
 export function fhirValueSetToInput(resource: unknown): FhirValueSetInput {
   if (!isObj(resource) || resource.resourceType !== 'ValueSet') {
@@ -101,6 +135,53 @@ export function fhirValueSetToInput(resource: unknown): FhirValueSetInput {
     description: str(resource.description) ?? null,
     compose,
   };
+}
+
+/** Map Corlix's compact bundled FHIR ValueSet catalog (`R4.valuesets.json.gz`) to import inputs. */
+export function fhirValueSetCatalogToInputs(resource: unknown): FhirValueSetCatalogInput {
+  if (!isFhirValueSetCatalog(resource)) {
+    throw new Error('Not a FHIR ValueSet catalog (expected valueSets array)');
+  }
+  const catalog = resource as Record<string, unknown>;
+  const version = str(catalog.version) ?? 'FHIR';
+  const category = `FHIR ${version}`;
+  const valueSets = (catalog.valueSets as unknown[])
+    .filter(isObj)
+    .map((raw): FhirValueSetCatalogValueSet | null => {
+      const url = str(raw.url);
+      if (!url) return null;
+      const compose = isObj(raw.compose) ? raw.compose as VsCompose : { include: [] };
+      return {
+        url,
+        version: str(raw.version) ?? null,
+        name: str(raw.name) ?? null,
+        title: str(raw.title) ?? null,
+        status: mapStatus(raw.status),
+        experimental: raw.experimental === true,
+        description: str(raw.description) ?? null,
+        compose,
+        publisherId: 'pub-hl7-fhir',
+        category,
+        immutable: true,
+        expansion: expansionFromCatalog(raw.expansion),
+        primarySystem: str(raw.primarySystem) ?? null,
+        sourceJson: raw,
+      };
+    })
+    .filter((v): v is FhirValueSetCatalogValueSet => v !== null);
+  const codeSystems = (Array.isArray(catalog.codeSystems) ? catalog.codeSystems : [])
+    .filter(isObj)
+    .map((raw): FhirValueSetCatalogCodeSystem | null => {
+      const url = str(raw.url);
+      if (!url) return null;
+      return {
+        url,
+        systemCode: systemCodeFromUrl(url),
+        systemName: str(raw.title) ?? str(raw.name) ?? url,
+      };
+    })
+    .filter((v): v is FhirValueSetCatalogCodeSystem => v !== null);
+  return { version, valueSets, codeSystems };
 }
 
 /** Emit a ValueSet (+ optional cached expansion) as a FHIR R4 ValueSet resource. */

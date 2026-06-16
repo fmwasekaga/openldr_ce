@@ -248,6 +248,11 @@ export interface ValueSet {
   status: string; experimental: boolean; description: string | null; compose: ValueSetCompose;
   immutable: boolean; category: string | null; publisherId: string | null;
 }
+export interface ValueSetCatalogImportResult {
+  imported: number;
+  skipped: number;
+  valueSet: ValueSet | null;
+}
 export interface ValueSetSummary {
   id: string; url: string; name: string | null; title: string | null; version: string | null;
   status: string; immutable: boolean; publisherId: string | null; category: string | null;
@@ -272,7 +277,16 @@ export async function deleteValueSet(id: string): Promise<void> {
 export const duplicateValueSet = (id: string): Promise<ValueSet> => fetch(`/api/terminology/valuesets/${id}/duplicate`, jbody({}, 'POST')).then((r) => okJson<ValueSet>(r, 'duplicate value set'));
 export const expandValueSet = (id: string, activeOnly = true): Promise<{ codes: ExpandedCode[]; total: number }> =>
   fetch(`/api/terminology/valuesets/${id}/expand?activeOnly=${activeOnly}`).then((r) => okJson<{ codes: ExpandedCode[]; total: number }>(r, 'expand value set'));
-export const importValueSet = (resource: unknown): Promise<ValueSet> => fetch('/api/terminology/valuesets/import', jbody(resource, 'POST')).then((r) => okJson<ValueSet>(r, 'import value set'));
+export const importValueSet = (resource: unknown | Blob): Promise<ValueSet | ValueSetCatalogImportResult> => {
+  const init = resource instanceof Blob
+    ? {
+      method: 'POST',
+      headers: { 'content-type': 'name' in resource && typeof resource.name === 'string' && resource.name.endsWith('.gz') ? 'application/gzip' : 'application/fhir+json' },
+      body: resource,
+    }
+    : jbody(resource, 'POST');
+  return fetch('/api/terminology/valuesets/import', init).then((r) => okJson<ValueSet | ValueSetCatalogImportResult>(r, 'import value set'));
+};
 export const valueSetExportUrl = (id: string): string => `/api/terminology/valuesets/${id}/export`;
 export const importLoincDistribution = (path: string, acceptLicense: boolean): Promise<TerminologyLoadResult> =>
   fetch('/api/terminology/import/loinc', jbody({ path, acceptLicense }, 'POST')).then((r) => okJson<TerminologyLoadResult>(r, 'import LOINC distribution'));
@@ -299,7 +313,12 @@ export async function deleteTerm(systemId: string, code: string): Promise<void> 
   const r = await fetch(`/api/terminology/systems/${systemId}/terms/${encodeURIComponent(code)}`, { method: 'DELETE' });
   if (!r.ok && r.status !== 204) throw new Error(`delete term failed: ${r.status}`);
 }
-export const importTerms = (systemId: string, csv: string) => fetch(`/api/terminology/systems/${systemId}/terms/import`, jbody({ csv }, 'POST')).then((r) => okJson<{ imported: number }>(r, 'import terms'));
+export const importTerms = (systemId: string, source: string | Blob) => {
+  const init = source instanceof Blob
+    ? { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: source }
+    : jbody({ text: source }, 'POST');
+  return fetch(`/api/terminology/systems/${systemId}/terms/import`, init).then((r) => okJson<{ imported: number }>(r, 'import terms'));
+};
 export const termsTemplateUrl = (systemId: string) => `/api/terminology/systems/${systemId}/terms/template.csv`;
 
 export const listTermMappings = (system: string, code: string) =>

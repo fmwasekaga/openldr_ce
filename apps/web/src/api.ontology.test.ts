@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildOntology, importLoincDistribution, listOntologyDistributions, ontologyChildren } from './api';
+import { buildOntology, importLoincDistribution, importTerms, importValueSet, listOntologyDistributions, ontologyChildren } from './api';
 
 class FakeEventSource {
   static instances: FakeEventSource[] = [];
@@ -73,6 +73,33 @@ describe('ontology api client', () => {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ path: 'D:\\terminology\\Loinc\\2.82', acceptLicense: true }),
+    });
+  });
+
+  it('uploads terminology and FHIR ValueSet files as raw request bodies', async () => {
+    const fetchMock = vi.fn(async (url: RequestInfo | URL) => ({
+      ok: true,
+      json: async () => String(url).includes('/valuesets/import')
+        ? { id: 'vs1', url: 'urn:test', status: 'active', compose: { include: [] } }
+        : { imported: 1 },
+    })) as unknown as typeof fetch;
+    vi.stubGlobal('fetch', fetchMock);
+
+    const termsFile = new File(['RXNCONSO'], 'RXNCONSO.RRF');
+    const valueSetFile = new File(['compressed bytes'], 'R4.valuesets.json.gz');
+
+    await importTerms('sys1', termsFile);
+    await importValueSet(valueSetFile);
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/terminology/systems/sys1/terms/import', {
+      method: 'POST',
+      headers: { 'content-type': 'application/octet-stream' },
+      body: termsFile,
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/terminology/valuesets/import', {
+      method: 'POST',
+      headers: { 'content-type': 'application/gzip' },
+      body: valueSetFile,
     });
   });
 });

@@ -1,8 +1,9 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
+import { gunzipSync } from 'node:zlib';
 import type { AppContext } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
 import { z } from 'zod';
-import { parseTermsCsv, TERMS_CSV_TEMPLATE } from '@openldr/terminology';
+import { isFhirValueSetCatalog, parseTerminologyTerms, parseTerminologyTermsStream, terminologyImportTemplate } from '@openldr/terminology';
 
 const publisherInput = z.object({
   name: z.string().min(1),
@@ -27,6 +28,19 @@ const loincImportInput = z.object({
 export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
   const admin = ctx.terminology.admin;
   type IdParam = { id: string };
+
+  app.addContentTypeParser('application/octet-stream', (_req, payload, done) => {
+    done(null, payload);
+  });
+  app.addContentTypeParser('application/fhir+json', (_req, payload, done) => {
+    done(null, payload);
+  });
+  app.addContentTypeParser('application/gzip', (_req, payload, done) => {
+    done(null, payload);
+  });
+  app.addContentTypeParser('application/x-gzip', (_req, payload, done) => {
+    done(null, payload);
+  });
 
   app.get('/api/terminology/publishers', async () => admin.publishers.list());
   app.post('/api/terminology/publishers', async (req, reply) => {
@@ -95,12 +109,27 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
     replacedBy: z.string().nullish(), metadata: z.record(z.unknown()).nullish(),
   });
 
-  async function systemUrl(id: string): Promise<string> {
+  async function systemInfo(id: string): Promise<{ url: string; systemCode: string }> {
     const sys = (await admin.codingSystems.list()).find((s) => s.id === id);
     if (!sys || !sys.url) {
       throw Object.assign(new Error(`coding system has no url: ${id}`), { name: 'TerminologyAdminError', kind: 'not-found' as const });
     }
-    return sys.url;
+    return { url: sys.url, systemCode: sys.systemCode };
+  }
+
+  async function systemUrl(id: string): Promise<string> {
+    return (await systemInfo(id)).url;
+  }
+
+  async function importTermRowsInBatches(rows: ReturnType<typeof parseTerminologyTerms>): Promise<{ imported: number }> {
+    const batchSize = 1000;
+    let imported = 0;
+    for (let i = 0; i < rows.length; i += batchSize) {
+      const batch = rows.slice(i, i + batchSize).map((r) => ({ ...r, status: r.status ?? 'ACTIVE' }));
+      const result = await admin.terms.importRows(batch);
+      imported += result.imported;
+    }
+    return { imported };
   }
 
   app.get('/api/terminology/systems/:id/terms', async (req, reply) => {
@@ -138,15 +167,27 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
   });
   app.post('/api/terminology/systems/:id/terms/import', async (req, reply) => {
     try {
-      const url = await systemUrl((req.params as IdParam).id);
-      const rawRows = parseTermsCsv(String((req.body as { csv?: string }).csv ?? ''), url);
-      const rows = rawRows.map((r) => ({ ...r, status: r.status ?? 'ACTIVE' }));
-      return await admin.terms.importRows(rows);
+      const system = await systemInfo((req.params as IdParam).id);
+      if (isReadableBody(req.body)) {
+        const rows = await parseTerminologyTermsStream(req.body, system.url, system.systemCode);
+        return await importTermRowsInBatches(rows);
+      }
+      const rawBody = req.body;
+      const raw = rawBody && typeof rawBody === 'object' && !Buffer.isBuffer(rawBody)
+        ? rawBody as { csv?: string; text?: string }
+        : { text: await bodyToText(rawBody) };
+      const rawRows = parseTerminologyTerms(String(raw.text ?? raw.csv ?? ''), system.url, system.systemCode);
+      return await importTermRowsInBatches(rawRows);
     } catch (e) { return mapErr(e, reply); }
   });
-  app.get('/api/terminology/systems/:id/terms/template.csv', async (_req, reply) => {
-    reply.header('content-type', 'text/csv');
-    return TERMS_CSV_TEMPLATE;
+  app.get('/api/terminology/systems/:id/terms/template.csv', async (req, reply) => {
+    try {
+      const system = await systemInfo((req.params as IdParam).id);
+      const template = terminologyImportTemplate(system.systemCode);
+      reply.header('content-type', template.contentType);
+      reply.header('content-disposition', `attachment; filename="${template.filename}"`);
+      return template.body;
+    } catch (e) { return mapErr(e, reply); }
   });
 
   // ── Term Mappings ─────────────────────────────────────────────────────────
@@ -243,7 +284,17 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
     } catch (e) { return mapErr(e, reply); }
   });
   app.post('/api/terminology/valuesets/import', async (req, reply) => {
-    try { const saved = await admin.valueSets.importFhir(req.body); reply.code(201); return saved; }
+    try {
+      const resource = await parseJsonUpload(req.body);
+      if (isFhirValueSetCatalog(resource)) {
+        const result = await admin.valueSets.importFhirCatalog(resource);
+        reply.code(201);
+        return result;
+      }
+      const saved = await admin.valueSets.importFhir(resource);
+      reply.code(201);
+      return saved;
+    }
     catch (e) { return mapErr(e, reply); }
   });
   app.get('/api/terminology/valuesets/:id/export', async (req, reply) => {
@@ -254,6 +305,41 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
       return resource;
     } catch (e) { return mapErr(e, reply); }
   });
+}
+
+function isReadableBody(body: unknown): body is NodeJS.ReadableStream {
+  return !!body && typeof body === 'object' && typeof (body as { pipe?: unknown }).pipe === 'function';
+}
+
+async function bodyToText(body: unknown): Promise<string> {
+  if (typeof body === 'string') return body;
+  if (Buffer.isBuffer(body)) return body.toString('utf8');
+  if (isReadableBody(body)) {
+    let text = '';
+    for await (const chunk of body as AsyncIterable<Buffer | string>) text += chunk.toString();
+    return text;
+  }
+  return '';
+}
+
+async function bodyToBuffer(body: unknown): Promise<Buffer> {
+  if (Buffer.isBuffer(body)) return body;
+  if (typeof body === 'string') return Buffer.from(body, 'utf8');
+  if (isReadableBody(body)) {
+    const chunks: Buffer[] = [];
+    for await (const chunk of body as AsyncIterable<Buffer | string>) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
+  }
+  return Buffer.alloc(0);
+}
+
+async function parseJsonUpload(body: unknown): Promise<unknown> {
+  if (body && typeof body === 'object' && !Buffer.isBuffer(body) && !isReadableBody(body)) return body;
+  let bytes = await bodyToBuffer(body);
+  if (bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b) bytes = gunzipSync(bytes);
+  return JSON.parse(bytes.toString('utf8'));
 }
 
 // Duck-type guard rather than `instanceof TerminologyAdminError`: that class lives in

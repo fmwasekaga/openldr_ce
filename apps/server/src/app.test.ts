@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { gzipSync } from 'node:zlib';
 import { buildApp } from './app';
 import type { AppContext } from '@openldr/bootstrap';
 import { HealthRegistry, createLogger } from '@openldr/core';
@@ -117,10 +118,20 @@ function buildFakeAdmin(): FakeAdmin {
       async importRows(rows) {
         for (const r of rows) {
           const existing = terms.find((t) => t.system === r.system && t.code === r.code);
+          const props = r.properties ?? {};
           if (existing) {
-            Object.assign(existing, { display: r.display, status: r.status });
+            Object.assign(existing, {
+              display: r.display, status: r.status, shortName: (props.shortName as string) ?? null,
+              class: (props.class as string) ?? null, unit: (props.unit as string) ?? null,
+              metadata: (props.metadata as Record<string, unknown>) ?? null,
+            });
           } else {
-            terms.push({ system: r.system, code: r.code, display: r.display, status: r.status, shortName: null, class: null, unit: null, replacedBy: null, metadata: null, mappingCount: 0 });
+            terms.push({
+              system: r.system, code: r.code, display: r.display, status: r.status,
+              shortName: (props.shortName as string) ?? null, class: (props.class as string) ?? null,
+              unit: (props.unit as string) ?? null, replacedBy: null,
+              metadata: (props.metadata as Record<string, unknown>) ?? null, mappingCount: 0,
+            });
           }
         }
         return { imported: rows.length };
@@ -229,6 +240,26 @@ function buildFakeAdmin(): FakeAdmin {
       async importFhir(resource) {
         const r = resource as { url?: string; title?: string; status?: string; compose?: ValueSetRow['compose'] };
         return this.save({ url: r.url ?? 'urn:test:imported', title: r.title ?? null, status: r.status ?? 'draft', compose: r.compose ?? { include: [] } }) as never;
+      },
+      async importFhirCatalog(resource) {
+        const r = resource as { valueSets?: Array<{ url: string; title?: string | null; name?: string | null; status?: string; compose?: ValueSetRow['compose'] }> };
+        let imported = 0;
+        let skipped = 0;
+        let valueSet: ValueSetRow | null = null;
+        for (const entry of r.valueSets ?? []) {
+          if (valueSets.some((v) => v.url === entry.url)) {
+            skipped += 1;
+            continue;
+          }
+          valueSet = await this.save({
+            url: entry.url,
+            title: entry.title ?? entry.name ?? null,
+            status: entry.status ?? 'draft',
+            compose: entry.compose ?? { include: [] },
+          }) as never;
+          imported += 1;
+        }
+        return { imported, skipped, valueSet: valueSet as never };
       },
       async exportFhir(id) {
         const v = valueSets.find((x) => x.id === id);
@@ -396,7 +427,74 @@ describe('terminology admin routes', () => {
 
     const template = await app.inject({ method: 'GET', url: '/api/terminology/systems/sys1/terms/template.csv' });
     expect(template.statusCode).toBe(200);
-    expect(template.body).toContain('code,display');
+    expect(template.body).toContain('"code"');
+
+    await app.close();
+  });
+
+  it('imports structured terminology source files and serves system-specific templates', async () => {
+    const app = buildApp(ctxWith('up'));
+
+    const snomedSystem = await app.inject({
+      method: 'POST',
+      url: '/api/terminology/systems',
+      payload: { systemCode: 'SNOMED-CT', systemName: 'SNOMED CT', url: 'http://snomed.info/sct', active: true },
+    });
+    const snomedId = JSON.parse(snomedSystem.body).id as string;
+    const importRes = await app.inject({
+      method: 'POST',
+      url: `/api/terminology/systems/${snomedId}/terms/import`,
+      payload: {
+        csv: [
+          'id\teffectiveTime\tactive\tmoduleId\tconceptId\tlanguageCode\ttypeId\tterm\tcaseSignificanceId',
+          'd1\t20250131\t1\t900000000000207008\t119297000\ten\t900000000000003001\tBlood specimen (specimen)\t900000000000448009',
+          'd2\t20250131\t1\t900000000000207008\t119297000\ten\t900000000000013009\tBlood specimen\t900000000000448009',
+        ].join('\n'),
+      },
+    });
+    expect(importRes.statusCode).toBe(200);
+    expect(JSON.parse(importRes.body)).toMatchObject({ imported: 1 });
+
+    const terms = await app.inject({ method: 'GET', url: `/api/terminology/systems/${snomedId}/terms?q=119297000` });
+    expect(JSON.parse(terms.body).rows[0]).toMatchObject({ code: '119297000', display: 'Blood specimen', class: 'SNOMED CT' });
+
+    const loincTemplate = await app.inject({ method: 'GET', url: '/api/terminology/systems/sys-loinc/terms/template.csv' });
+    expect(loincTemplate.statusCode).toBe(404);
+
+    const rxnormSystem = await app.inject({
+      method: 'POST',
+      url: '/api/terminology/systems',
+      payload: { systemCode: 'RxNorm', systemName: 'RxNorm', url: 'http://www.nlm.nih.gov/research/umls/rxnorm', active: true },
+    });
+    const rxnormTemplate = await app.inject({ method: 'GET', url: `/api/terminology/systems/${JSON.parse(rxnormSystem.body).id}/terms/template.csv` });
+    expect(rxnormTemplate.body).toContain('RXNORM|SCD');
+    expect(rxnormTemplate.headers['content-disposition']).toContain('RXNCONSO-template.RRF');
+
+    await app.close();
+  });
+
+  it('imports raw uploaded terminology files without JSON wrapping', async () => {
+    const app = buildApp(ctxWith('up'));
+
+    const snomedSystem = await app.inject({
+      method: 'POST',
+      url: '/api/terminology/systems',
+      payload: { systemCode: 'SNOMED-CT', systemName: 'SNOMED CT', url: 'http://snomed.info/sct', active: true },
+    });
+    const snomedId = JSON.parse(snomedSystem.body).id as string;
+    const imported = await app.inject({
+      method: 'POST',
+      url: `/api/terminology/systems/${snomedId}/terms/import`,
+      headers: { 'content-type': 'application/octet-stream' },
+      payload: [
+        'id\teffectiveTime\tactive\tmoduleId\tconceptId\tlanguageCode\ttypeId\tterm\tcaseSignificanceId',
+        'd1\t20250131\t1\t900000000000207008\t119297000\ten\t900000000000013009\tBlood specimen\t900000000000448009',
+        ...Array.from({ length: 12_000 }, (_, i) => `x${i}\t20250131\t0\t900000000000207008\t900${String(i).padStart(15, '0')}\ten\t900000000000013009\tInactive filler ${i}\t900000000000448009`),
+      ].join('\n'),
+    });
+
+    expect(imported.statusCode).toBe(200);
+    expect(JSON.parse(imported.body)).toMatchObject({ imported: 1 });
 
     await app.close();
   });
@@ -449,6 +547,57 @@ describe('terminology admin routes', () => {
     const exported = await app.inject({ method: 'GET', url: `/api/terminology/valuesets/${id}/export` });
     expect(exported.statusCode).toBe(200);
     expect(exported.headers['content-type']).toContain('application/fhir+json');
+
+    await app.close();
+  });
+
+  it('imports raw FHIR ValueSet JSON uploads', async () => {
+    const app = buildApp(ctxWith('up'));
+
+    const imported = await app.inject({
+      method: 'POST',
+      url: '/api/terminology/valuesets/import',
+      headers: { 'content-type': 'application/fhir+json' },
+      payload: JSON.stringify({
+        resourceType: 'ValueSet',
+        url: 'urn:test:raw-vs',
+        title: 'Raw VS',
+        status: 'active',
+        compose: { include: [{ system: 's1', concept: [{ code: 'A', display: 'Alpha' }] }] },
+      }),
+    });
+
+    expect(imported.statusCode).toBe(201);
+    expect(JSON.parse(imported.body)).toMatchObject({ url: 'urn:test:raw-vs', title: 'Raw VS' });
+
+    await app.close();
+  });
+
+  it('imports a gzipped Corlix FHIR ValueSet catalog upload', async () => {
+    const app = buildApp(ctxWith('up'));
+
+    const imported = await app.inject({
+      method: 'POST',
+      url: '/api/terminology/valuesets/import',
+      headers: { 'content-type': 'application/gzip' },
+      payload: gzipSync(JSON.stringify({
+        version: 'R4',
+        valueSets: [{
+          url: 'http://hl7.org/fhir/ValueSet/administrative-gender',
+          version: '4.0.1',
+          name: 'AdministrativeGender',
+          title: 'AdministrativeGender',
+          status: 'active',
+          compose: { include: [{ system: 'http://hl7.org/fhir/administrative-gender' }] },
+          expansion: [],
+          primarySystem: 'http://hl7.org/fhir/administrative-gender',
+        }],
+        codeSystems: [],
+      })),
+    });
+
+    expect(imported.statusCode).toBe(201);
+    expect(JSON.parse(imported.body)).toMatchObject({ imported: 1, skipped: 0 });
 
     await app.close();
   });

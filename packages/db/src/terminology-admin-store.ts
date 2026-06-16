@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { type Kysely, sql } from 'kysely';
 import type { InternalSchema } from './schema/internal';
-import { fhirValueSetToInput, valueSetToFhirResource } from './fhir-value-set';
+import { fhirValueSetCatalogToInputs, fhirValueSetToInput, valueSetToFhirResource } from './fhir-value-set';
 import { expandCompose, type ExpandedConcept, type ExpandDeps, type VsCompose } from './value-set-expander';
 
 export type PublisherRole = 'local' | 'standard' | 'external';
@@ -133,6 +133,7 @@ export interface TerminologyAdminStore {
     delete(id: string): Promise<void>;
     expand(id: string, activeOnly?: boolean): Promise<{ codes: ExpandedConcept[]; total: number }>;
     importFhir(resource: unknown): Promise<ValueSet>;
+    importFhirCatalog(resource: unknown): Promise<{ imported: number; skipped: number; valueSet: ValueSet | null }>;
     exportFhir(id: string): Promise<Record<string, unknown>>;
   };
 }
@@ -243,6 +244,20 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
       }))).execute();
     }
     await db.updateTable('value_sets').set({ expanded_at: sql`now()` }).where('id', '=', id).execute();
+  }
+
+  async function insertExpansionRows(dbLike: Kysely<InternalSchema>, id: string, codes: ExpandedConcept[]): Promise<void> {
+    const batchSize = 1000;
+    for (let i = 0; i < codes.length; i += batchSize) {
+      const batch = codes.slice(i, i + batchSize).map((c) => ({
+        value_set_id: id, system_url: c.system, code: c.code, display: c.display, inactive: false,
+      }));
+      if (batch.length) {
+        await dbLike.insertInto('valueset_expansions').values(batch as never)
+          .onConflict((oc) => oc.columns(['value_set_id', 'system_url', 'code']).doNothing())
+          .execute();
+      }
+    }
   }
 
   async function refreshCacheAndProject(vs: ValueSet): Promise<void> {
@@ -558,6 +573,46 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
         const saved = await saveValueSet(input);
         await db.updateTable('value_sets').set({ source_json: JSON.stringify(resource) as never }).where('id', '=', saved.id).execute();
         return saved;
+      },
+      async importFhirCatalog(resource) {
+        const catalog = fhirValueSetCatalogToInputs(resource);
+        let imported = 0;
+        let skipped = 0;
+        let lastId: string | null = null;
+        await db.transaction().execute(async (trx) => {
+          for (const vs of catalog.valueSets) {
+            const existing = await trx.selectFrom('value_sets').select(['id']).where('url', '=', vs.url).executeTakeFirst();
+            if (existing) {
+              skipped += 1;
+              continue;
+            }
+            const id = newId('vs');
+            await trx.insertInto('value_sets').values({
+              id, url: vs.url, version: vs.version, name: vs.name, title: vs.title, status: vs.status,
+              experimental: vs.experimental, description: vs.description,
+              compose: JSON.stringify(vs.compose) as never,
+              source_json: JSON.stringify(vs.sourceJson) as never,
+              immutable: vs.immutable, category: vs.category ?? null, publisher_id: vs.publisherId ?? null,
+              expanded_at: vs.expansion.length ? sql`now()` : null,
+            } as never).execute();
+            await insertExpansionRows(trx, id, vs.expansion);
+            imported += 1;
+            lastId = id;
+          }
+          for (const cs of catalog.codeSystems) {
+            const existing = await trx.selectFrom('coding_systems').select(['id'])
+              .where((eb) => eb.or([eb('url', '=', cs.url), eb('system_code', '=', cs.systemCode)]))
+              .executeTakeFirst();
+            if (existing) continue;
+            await trx.insertInto('coding_systems').values({
+              id: newId('cs'), system_code: cs.systemCode, system_name: cs.systemName,
+              url: cs.url, system_version: `FHIR ${catalog.version}`,
+              description: `FHIR ${catalog.version} reference system`, active: false,
+              publisher_id: 'pub-hl7-fhir', seeded: true,
+            } as never).execute();
+          }
+        });
+        return { imported, skipped, valueSet: lastId ? await getValueSet(lastId) : null };
       },
       async exportFhir(id) {
         const vs = await getValueSet(id);

@@ -135,8 +135,7 @@ export function TermsTable({
     setActionError(null);
     setImportBusy(true);
     try {
-      const text = await file.text();
-      await importTerms(systemId, text);
+      await importTerms(systemId, file);
       setActionError(null);
       setLocalReload((n) => n + 1);
     } catch (err) {
@@ -191,11 +190,11 @@ export function TermsTable({
 
         <div className="flex-1" />
 
-        {/* Hidden file input for CSV import */}
+        {/* Hidden file input for source terminology imports */}
         <input
           ref={fileRef}
           type="file"
-          accept=".csv"
+          accept=".csv,.txt,.tsv,.rrf,.jsonl,.ndjson,.json"
           className="hidden"
           onChange={(e) => void handleFileChange(e)}
         />

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fhirValueSetToInput, valueSetToFhirResource } from './fhirValueSet';
+import { fhirValueSetCatalogToInputs, fhirValueSetToInput, valueSetToFhirResource } from './fhirValueSet';
 
 describe('fhirValueSet', () => {
   it('maps a FHIR ValueSet resource to input', () => {
@@ -36,5 +36,44 @@ describe('fhirValueSet', () => {
     );
     expect(res.resourceType).toBe('ValueSet');
     expect((res.expansion as { total: number }).total).toBe(1);
+  });
+
+  it('maps a Corlix compact FHIR ValueSet catalog to import inputs', () => {
+    const catalog = fhirValueSetCatalogToInputs({
+      version: 'R4',
+      valueSets: [{
+        url: 'http://hl7.org/fhir/ValueSet/administrative-gender',
+        version: '4.0.1',
+        name: 'AdministrativeGender',
+        title: 'AdministrativeGender',
+        status: 'active',
+        experimental: false,
+        description: 'Gender.',
+        compose: { include: [{ system: 'http://hl7.org/fhir/administrative-gender' }] },
+        expansion: [
+          { system: 'http://hl7.org/fhir/administrative-gender', code: 'male', display: 'Male' },
+        ],
+        primarySystem: 'http://hl7.org/fhir/administrative-gender',
+      }],
+      codeSystems: [{
+        url: 'http://hl7.org/fhir/administrative-gender',
+        name: 'AdministrativeGender',
+        title: 'AdministrativeGender',
+      }],
+    });
+
+    expect(catalog.version).toBe('R4');
+    expect(catalog.valueSets[0]).toMatchObject({
+      url: 'http://hl7.org/fhir/ValueSet/administrative-gender',
+      status: 'active',
+      category: 'FHIR R4',
+      publisherId: 'pub-hl7-fhir',
+      immutable: true,
+      expansion: [{ system: 'http://hl7.org/fhir/administrative-gender', code: 'male', display: 'Male' }],
+    });
+    expect(catalog.codeSystems[0]).toMatchObject({
+      url: 'http://hl7.org/fhir/administrative-gender',
+      systemName: 'AdministrativeGender',
+    });
   });
 });

@@ -153,11 +153,34 @@ describe('Terminology page', () => {
     fireEvent.click(await screen.findByText('Import terms...'));
 
     const input = await screen.findByTestId('term-import-input');
+    expect(input).toHaveAttribute('accept', expect.stringContaining('.rrf'));
+    expect(input).toHaveAttribute('accept', expect.stringContaining('.jsonl'));
     const file = new File(['code,display,status\nA,Alpha,ACTIVE\n'], 'terms.csv', { type: 'text/csv' });
     fireEvent.change(input, { target: { files: [file] } });
 
-    await waitFor(() => expect(importSpy).toHaveBeenCalledWith('cs1', 'code,display,status\nA,Alpha,ACTIVE\n'));
+    await waitFor(() => expect(importSpy).toHaveBeenCalledWith('cs1', file));
     expect(await screen.findByText('Imported 1 term(s) into LOINC.')).toBeInTheDocument();
+  });
+
+  it('imports a gzipped FHIR ValueSet catalog from the page actions', async () => {
+    const importSpy = vi.spyOn(api, 'importValueSet').mockResolvedValue({ imported: 672, skipped: 0, valueSet: null });
+
+    render(<MemoryRouter><Terminology /></MemoryRouter>);
+
+    const pageActions = (await screen.findAllByRole('button', { name: /actions/i }))[0];
+    fireEvent.pointerDown(pageActions, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Value set')) fireEvent.keyDown(pageActions, { key: 'Enter' });
+    fireEvent.pointerMove(await screen.findByText('Value set'));
+    fireEvent.keyDown(await screen.findByText('Value set'), { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Import...'));
+
+    const input = await screen.findByTestId('valueset-import-input');
+    expect(input).toHaveAttribute('accept', expect.stringContaining('.json.gz'));
+    const file = new File(['gz bytes'], 'R4.valuesets.json.gz', { type: 'application/gzip' });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => expect(importSpy).toHaveBeenCalledWith(file));
+    expect(await screen.findByText('Imported 672 value set(s); skipped 0.')).toBeInTheDocument();
   });
 
   it('imports a LOINC distribution from a server-side path', async () => {
