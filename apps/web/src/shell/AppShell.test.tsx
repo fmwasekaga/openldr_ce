@@ -30,6 +30,13 @@ describe('AppShell', () => {
     expect(screen.getByText('operator')).toBeInTheDocument();
   });
 
+  it('renders Forms, Users, and Audit as active navigation links', () => {
+    renderShell();
+    expect(screen.getByRole('link', { name: 'Forms' })).toHaveAttribute('href', '/forms');
+    expect(screen.getByRole('link', { name: 'Users' })).toHaveAttribute('href', '/users');
+    expect(screen.getByRole('link', { name: 'Audit' })).toHaveAttribute('href', '/audit');
+  });
+
   it('toggles theme via the navbar icon button', () => {
     renderShell();
     fireEvent.click(screen.getByLabelText('Switch to light mode'));
