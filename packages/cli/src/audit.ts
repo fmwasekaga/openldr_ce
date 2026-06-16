@@ -3,6 +3,7 @@ import { loadConfig } from '@openldr/config';
 
 interface ListOpts {
   actor?: string;
+  entity?: string;
   entityType?: string;
   entityId?: string;
   action?: string;
@@ -16,7 +17,7 @@ export async function runAuditList(opts: ListOpts): Promise<number> {
   try {
     const rows = await ctx.audit.list({
       actorId: opts.actor,
-      entityType: opts.entityType,
+      entityType: opts.entityType ?? opts.entity,
       entityId: opts.entityId,
       action: opts.action,
       from: opts.from,
@@ -25,8 +26,8 @@ export async function runAuditList(opts: ListOpts): Promise<number> {
     if (opts.json) {
       process.stdout.write(JSON.stringify(rows, null, 2) + '\n');
     } else {
-      const lines = rows.map((r) => `  ${r.occurredAt}  ${r.actorName.padEnd(10)} ${r.action.padEnd(22)} ${r.entityType}/${r.entityId}`);
-      process.stdout.write((lines.length ? lines.join('\n') : '  (no events)') + '\n');
+      const lines = rows.map((r) => `${r.occurredAt}\t${r.actorName}\t${r.action}\t${r.entityType}\t${r.entityId}`);
+      process.stdout.write((lines.length ? lines.join('\n') : '(no events)') + '\n');
     }
     return 0;
   } finally {

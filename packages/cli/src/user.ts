@@ -10,13 +10,17 @@ function emit(json: boolean, payload: unknown, human: string): void {
 }
 
 export async function runUserList(opts: JsonOpt): Promise<number> {
+  return runUsersList(opts);
+}
+
+export async function runUsersList(opts: JsonOpt): Promise<number> {
   const ctx = await createAppContext(loadConfig());
   try {
     const users = await ctx.users.list();
     emit(
       opts.json,
       users,
-      users.map((u) => `  ${u.id.slice(0, 8)}  ${u.username.padEnd(16)} ${u.status.padEnd(9)} [${u.roles.join(', ')}]${u.subject ? ' sub=' + u.subject : ''}`).join('\n') || '  (no users)',
+      users.map((u) => `${u.id}\t${u.username}\t${u.displayName ?? ''}\t${u.email ?? ''}\t${u.status}\t${u.roles.join(',')}\t${u.subject ?? ''}`).join('\n') || '(no users)',
     );
     return 0;
   } finally {

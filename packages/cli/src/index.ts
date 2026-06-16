@@ -5,12 +5,12 @@ import { exitCodeFor, formatHealthTable } from './format';
 import { redactError } from './redact-error';
 import { runFhirValidate, formatFhirValidate } from './fhir';
 import { runDbMigrate, runDbReset, runDbSeed } from './db';
-import { runFormsExtract } from './forms';
+import { runFormsExtract, runFormsList } from './forms';
 import { runIngest, runPipelineStatus, runPipelineRetry, runPipelineLogs, runQueueStatus, runProvenanceAudit } from './ingest';
 import { runPluginInstall, runPluginList, runPluginTest, runPluginRun, runPluginRemove } from './plugin';
 import { runReportList, runReportRun, runReportGlassExport } from './report';
 import { runAuditList } from './audit';
-import { runUserList, runUserShow, runUserCreate, runUserSetRole, runUserSetStatus } from './user';
+import { runUserList, runUsersList, runUserShow, runUserCreate, runUserSetRole, runUserSetStatus } from './user';
 import { runExport } from './export';
 import { runTargetStoreTest } from './target-store';
 import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, runTerminologyExpand, runTerminologyTranslate, runPublisherList, runPublisherCreate, runSystemList, runSystemCreate, runTermList, runValueSetList, runOntologyBuild, runOntologyRebuild, runOntologyList, runOntologyUnlink } from './terminology';
@@ -180,6 +180,9 @@ tont.command('unlink <systemId>').description('Unlink and delete an ontology ind
   });
 
 const forms = program.command('forms').description('FHIR forms (Questionnaire) utilities');
+forms.command('list').description('List persisted form definitions').option('--json', 'emit JSON', false).action(async (opts: { json: boolean }) => {
+  try { process.exitCode = await runFormsList(opts); } catch (err) { process.stderr.write(`forms list failed: ${redactError(err)}\n`); process.exitCode = 1; }
+});
 forms
   .command('extract <questionnaire> <response>')
   .description('Extract FHIR resources from a filled QuestionnaireResponse')
@@ -302,15 +305,21 @@ const audit = program.command('audit').description('Append-only audit log');
 audit
   .command('list')
   .option('--actor <id>', 'filter by actor id')
+  .option('--entity <t>', 'filter by entity type')
   .option('--entity-type <t>', 'filter by entity type')
   .option('--entity-id <id>', 'filter by entity id')
   .option('--action <a>', 'filter by action')
   .option('--from <iso>', 'occurred at or after (ISO)')
   .option('--to <iso>', 'occurred at or before (ISO)')
   .option('--json', 'emit JSON', false)
-  .action(async (opts: { actor?: string; entityType?: string; entityId?: string; action?: string; from?: string; to?: string; json: boolean }) => {
+  .action(async (opts: { actor?: string; entity?: string; entityType?: string; entityId?: string; action?: string; from?: string; to?: string; json: boolean }) => {
     try { process.exitCode = await runAuditList(opts); } catch (err) { process.stderr.write(`audit list failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
+
+const users = program.command('users').description('Local user management');
+users.command('list').option('--json', 'emit JSON', false).action(async (opts: { json: boolean }) => {
+  try { process.exitCode = await runUsersList(opts); } catch (err) { process.stderr.write(`users list failed: ${redactError(err)}\n`); process.exitCode = 1; }
+});
 
 const user = program.command('user').description('Local user management (decoupled from the IdP)');
 user.command('list').option('--json', 'emit JSON', false).action(async (opts: { json: boolean }) => {
