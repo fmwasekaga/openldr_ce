@@ -29,6 +29,7 @@ describe('createAppContext', () => {
     ctx = await createAppContext(cfg);
     const out = await ctx.health.runAll();
     expect(Object.keys(out.checks).sort()).toEqual(['auth', 'blob', 'eventing', 'target-store']);
+    expect(typeof ctx.terminology.ontology.listDistributions).toBe('function');
     // Nothing reachable in this test → overall down, but no crash.
     expect(out.status).toBe('down');
   }, 20000);

@@ -4,7 +4,7 @@ import { createEventBus } from '@openldr/adapter-event-bus';
 import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import type { Config } from '@openldr/config';
 import { createLogger, HealthRegistry, type Logger } from '@openldr/core';
-import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, type TerminologyAdminStore } from '@openldr/db';
+import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, type TerminologyAdminStore, type OntologyStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, type AuditStore } from '@openldr/audit';
@@ -13,7 +13,7 @@ import { getReport, reportSummaries, getEventSource, type ReportResult, type Rep
 import { createDashboardStore, getModel, listModels, runBuilderQuery, runSqlQuery, type DashboardStore, type WidgetQuery } from '@openldr/dashboards';
 import { renderReportPdf } from '@openldr/report-pdf';
 import { selectTargetStore } from './target-store';
-import { createOperations, type Operations } from '@openldr/terminology';
+import { buildOntologyDistribution, createOperations, stalenessReason, type OntologyBuildProgress, type OntologyManifest, type Operations } from '@openldr/terminology';
 
 export class ReportNotFoundError extends Error {
   constructor(public readonly id: string) {
@@ -39,6 +39,32 @@ export interface ReportingApi {
   renderPdf(id: string, rawParams: unknown): Promise<Buffer>;
 }
 
+function createOntologyApi(ontologyStore: OntologyStore) {
+  return {
+    listDistributions: () => ontologyStore.list(),
+    async getDistribution(systemId: string) {
+      const distribution = await ontologyStore.get(systemId);
+      return distribution ? { ...distribution, stale: stalenessReason(distribution.manifest as OntologyManifest | null) !== null } : null;
+    },
+    build: (systemId: string, sourcePath: string, onProgress: (progress: OntologyBuildProgress) => void) =>
+      buildOntologyDistribution(systemId, sourcePath, ontologyStore, onProgress),
+    async rebuild(systemId: string, onProgress: (progress: OntologyBuildProgress) => void) {
+      const distribution = await ontologyStore.get(systemId);
+      if (!distribution) throw new Error('No distribution linked.');
+      return buildOntologyDistribution(systemId, distribution.sourcePath, ontologyStore, onProgress);
+    },
+    unlink: (systemId: string) => ontologyStore.unlink(systemId),
+    roots: (systemId: string) => ontologyStore.roots(systemId),
+    children: (systemId: string, parent: string) => ontologyStore.children(systemId, parent),
+    node: (systemId: string, code: string) => ontologyStore.node(systemId, code),
+    search: (systemId: string, query: string) => ontologyStore.search(systemId, query),
+    path: (systemId: string, code: string) => ontologyStore.path(systemId, code),
+    panelMembers: (systemId: string, panel: string) => ontologyStore.panelMembers(systemId, panel),
+    answerOptions: (systemId: string, loinc: string) => ontologyStore.answerOptions(systemId, loinc),
+    specimenCodes: (systemId: string, loinc: string) => ontologyStore.specimenCodes(systemId, loinc),
+  };
+}
+
 export interface AppContext {
   logger: Logger;
   auth: AuthPort;
@@ -49,7 +75,7 @@ export interface AppContext {
   users: UserStore;
   reporting: ReportingApi;
   health: HealthRegistry;
-  terminology: { ops: Operations; admin: TerminologyAdminStore };
+  terminology: { ops: Operations; admin: TerminologyAdminStore; ontology: ReturnType<typeof createOntologyApi> };
   dashboards: DashboardsApi;
   cfg: Config;
   close(): Promise<void>;
@@ -140,6 +166,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     },
   };
   const termAdmin = createTerminologyAdminStore(termDb, termProjection);
+  const termOntology = createOntologyApi(createOntologyStore(termDb));
   const terminology = {
     ops: createOperations({
       getConcept: (s, c) => termStore.getConcept(s, c),
@@ -149,6 +176,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       translate: (q) => termStore.translate(q),
     }),
     admin: termAdmin,
+    ontology: termOntology,
   };
 
   return {

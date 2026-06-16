@@ -1,12 +1,39 @@
 import { Kysely } from 'kysely';
 import type { Config } from '@openldr/config';
 import { redact } from '@openldr/core';
-import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, type TerminologyAdminStore, type InternalSchema, resolveSeedPublisherId, deriveSystemCode } from '@openldr/db';
-import { createOperations, type Operations, type LoaderStore, loadLoinc, loadWhonetAmr, importTerminologyResource, type LoadResult } from '@openldr/terminology';
+import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, type TerminologyAdminStore, type InternalSchema, type OntologyStore, resolveSeedPublisherId, deriveSystemCode } from '@openldr/db';
+import { buildOntologyDistribution, createOperations, type Operations, type LoaderStore, loadLoinc, loadWhonetAmr, importTerminologyResource, stalenessReason, type LoadResult, type OntologyBuildProgress, type OntologyManifest } from '@openldr/terminology';
+
+function createOntologyApi(ontologyStore: OntologyStore) {
+  return {
+    listDistributions: () => ontologyStore.list(),
+    async getDistribution(systemId: string) {
+      const distribution = await ontologyStore.get(systemId);
+      return distribution ? { ...distribution, stale: stalenessReason(distribution.manifest as OntologyManifest | null) !== null } : null;
+    },
+    build: (systemId: string, sourcePath: string, onProgress: (progress: OntologyBuildProgress) => void) =>
+      buildOntologyDistribution(systemId, sourcePath, ontologyStore, onProgress),
+    async rebuild(systemId: string, onProgress: (progress: OntologyBuildProgress) => void) {
+      const distribution = await ontologyStore.get(systemId);
+      if (!distribution) throw new Error('No distribution linked.');
+      return buildOntologyDistribution(systemId, distribution.sourcePath, ontologyStore, onProgress);
+    },
+    unlink: (systemId: string) => ontologyStore.unlink(systemId),
+    roots: (systemId: string) => ontologyStore.roots(systemId),
+    children: (systemId: string, parent: string) => ontologyStore.children(systemId, parent),
+    node: (systemId: string, code: string) => ontologyStore.node(systemId, code),
+    search: (systemId: string, query: string) => ontologyStore.search(systemId, query),
+    path: (systemId: string, code: string) => ontologyStore.path(systemId, code),
+    panelMembers: (systemId: string, panel: string) => ontologyStore.panelMembers(systemId, panel),
+    answerOptions: (systemId: string, loinc: string) => ontologyStore.answerOptions(systemId, loinc),
+    specimenCodes: (systemId: string, loinc: string) => ontologyStore.specimenCodes(systemId, loinc),
+  };
+}
 
 export interface TerminologyContext {
   ops: Operations;
   admin: TerminologyAdminStore;
+  ontology: ReturnType<typeof createOntologyApi>;
   loaders: {
     loinc(dir: string, acceptLicense: boolean): Promise<LoadResult>;
     amr(sqlitePath: string): Promise<LoadResult[]>;
@@ -33,6 +60,7 @@ export async function createTerminologyContext(cfg: Config): Promise<Terminology
     },
   };
   const admin = createTerminologyAdminStore(db, projection);
+  const ontology = createOntologyApi(createOntologyStore(db));
   const loaderStore: LoaderStore = {
     upsertConcepts: (r) => store.upsertConcepts(r),
     upsertMapElements: (r) => store.upsertMapElements(r),
@@ -69,6 +97,7 @@ export async function createTerminologyContext(cfg: Config): Promise<Terminology
   return {
     ops,
     admin,
+    ontology,
     loaders: {
       loinc: (dir, acceptLicense) => loadLoinc(dir, { acceptLicense }, loaderStore),
       amr: (p) => loadWhonetAmr(p, loaderStore),
