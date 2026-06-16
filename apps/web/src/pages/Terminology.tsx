@@ -832,6 +832,8 @@ export function Terminology(): JSX.Element {
             open
             system={selectedSystem}
             term={editingTerm}
+            systems={codingSystems}
+            distributions={distributions}
             onOpenChange={setTermDialogOpen}
             onSaved={() => {
               setTermDialogOpen(false);

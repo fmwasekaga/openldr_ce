@@ -3,6 +3,21 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { TermMappingDialog } from './TermMappingDialog';
 import * as api from '../api';
 
+vi.mock('./ontology/OntologyPickerDialog', () => ({
+  OntologyPickerDialog: ({
+    open,
+    onPick,
+  }: {
+    open: boolean;
+    onPick: (node: { code: string; display: string }) => void;
+  }) =>
+    open ? (
+      <button type="button" onClick={() => onPick({ code: '718-7', display: 'Hemoglobin' })}>
+        Pick ontology target
+      </button>
+    ) : null,
+}));
+
 const system: api.CodingSystem = {
   id: 'sys1',
   systemCode: 'LOINC',
@@ -153,12 +168,26 @@ describe('TermMappingDialog', () => {
     });
   });
 
-  it('shows the "Browse LOINC" button disabled in manual mode with a tooltip', () => {
+  it('uses Browse ontology to fill a ready manual target', async () => {
     render(
       <TermMappingDialog
         open
         fromTerm={fromTerm}
         systems={[system]}
+        distributions={{
+          sys1: {
+            codingSystemId: 'sys1',
+            ontologyType: 'loinc',
+            sourcePath: 'D:\\terminology\\loinc',
+            indexStatus: 'ready',
+            indexError: null,
+            nodeCount: 10,
+            edgeCount: 9,
+            builtAt: '2026-06-16T00:00:00.000Z',
+            updatedAt: '2026-06-16T00:00:00.000Z',
+            stale: false,
+          },
+        }}
         mapping={null}
         onOpenChange={() => {}}
         onSaved={() => {}}
@@ -168,10 +197,13 @@ describe('TermMappingDialog', () => {
     // Switch to manual mode
     fireEvent.click(screen.getByRole('button', { name: /manual/i }));
 
-    // Browse button must be present and disabled (system pre-seeded to sys1=LOINC)
     const browseBtn = screen.getByRole('button', { name: /browse loinc/i });
-    expect(browseBtn).toBeTruthy();
-    expect(browseBtn).toBeDisabled();
+    expect(browseBtn).toBeEnabled();
+    fireEvent.click(browseBtn);
+    fireEvent.click(await screen.findByText('Pick ontology target'));
+
+    expect(screen.getByPlaceholderText('441407007')).toHaveValue('718-7');
+    expect(screen.getByPlaceholderText('Human-readable label')).toHaveValue('Hemoglobin');
   });
 
   it('shows general section fields: map-type select, relationship, owner', () => {

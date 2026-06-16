@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Network } from 'lucide-react';
-import type { CodingSystem, MapType, TermMapping, TermMappingInput } from '../api';
+import { MoreHorizontal, Network } from 'lucide-react';
+import type { CodingSystem, MapType, OntologyDistribution, TermMapping, TermMappingInput } from '../api';
 import { createTermMapping, updateTermMapping } from '../api';
 import { Button } from '../components/ui/button';
 import { Checkbox } from '../components/ui/checkbox';
@@ -34,7 +34,7 @@ import {
   DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu';
 import { TermPicker, type PickedTerm } from './TermPicker';
-import { MoreHorizontal } from 'lucide-react';
+import { OntologyPickerDialog } from './ontology/OntologyPickerDialog';
 
 // ── runtime constants ─────────────────────────────────────────────────────────
 
@@ -77,7 +77,7 @@ const L = {
   switchToSearch: 'Search terms',
   isActive: 'Active mapping',
   browseSystem: (name: string) => `Browse ${name}`,
-  browseDisabledHint: 'Available once an ontology index exists (a later update).',
+  browseDisabledHint: 'Available once the target system\'s ontology index is built.',
   // common.*
   save: 'Save',
   saving: 'Saving…',
@@ -97,6 +97,7 @@ export function TermMappingDialog({
   fromTerm,
   systems,
   mapping,
+  distributions = {},
   onSaved,
 }: {
   open: boolean;
@@ -104,6 +105,7 @@ export function TermMappingDialog({
   fromTerm: { system: string; code: string; display: string | null; systemCode: string };
   systems: CodingSystem[];
   mapping: TermMapping | null;
+  distributions?: Record<string, OntologyDistribution>;
   onSaved: (mapping: TermMapping, draftCreated: boolean) => void;
 }): JSX.Element {
   const editing = mapping !== null;
@@ -129,6 +131,7 @@ export function TermMappingDialog({
   // ── ui ────────────────────────────────────────────────────────────────────
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [browseOpen, setBrowseOpen] = useState(false);
 
   // ── derived ───────────────────────────────────────────────────────────────
   const activeSystems = useMemo(() => systems.filter((s) => s.active), [systems]);
@@ -138,6 +141,7 @@ export function TermMappingDialog({
     [activeSystems, manualSystemId],
   );
   const manualTargetSystemCode = manualTargetSystem?.systemCode ?? '';
+  const manualTargetReady = !!manualTargetSystem && distributions[manualTargetSystem.id]?.indexStatus === 'ready';
 
   // For search mode: the system whose terms TermPicker will search
   const searchSystemObj = useMemo(
@@ -232,11 +236,13 @@ export function TermMappingDialog({
     setPicked(null);
     setManualCode('');
     setManualDisplay('');
+    setBrowseOpen(false);
   };
 
   // ── render ────────────────────────────────────────────────────────────────
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <>
+      <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-lg">
         <SheetHeader className="border-b border-border px-6 py-4">
           <SheetTitle>
@@ -401,26 +407,40 @@ export function TermMappingDialog({
                 <div className="col-span-2 flex items-center justify-between gap-2">
                   <p className="text-[11px] text-muted-foreground">{L.manualHint}</p>
                   {manualSystemId && (
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span tabIndex={0} className="shrink-0">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              disabled
-                              className="pointer-events-none h-8 gap-1.5 text-xs"
-                              aria-label={L.browseSystem(manualTargetSystemCode)}
-                            >
-                              <Network className="h-3.5 w-3.5" />
-                              {L.browseSystem(manualTargetSystemCode)}
-                            </Button>
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent>{L.browseDisabledHint}</TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
+                    manualTargetReady ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-1.5 text-xs"
+                        aria-label={L.browseSystem(manualTargetSystemCode)}
+                        onClick={() => setBrowseOpen(true)}
+                      >
+                        <Network className="h-3.5 w-3.5" />
+                        {L.browseSystem(manualTargetSystemCode)}
+                      </Button>
+                    ) : (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span tabIndex={0} className="shrink-0">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled
+                                className="pointer-events-none h-8 gap-1.5 text-xs"
+                                aria-label={L.browseSystem(manualTargetSystemCode)}
+                              >
+                                <Network className="h-3.5 w-3.5" />
+                                {L.browseSystem(manualTargetSystemCode)}
+                              </Button>
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>{L.browseDisabledHint}</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )
                   )}
                 </div>
               </div>
@@ -445,6 +465,22 @@ export function TermMappingDialog({
           </section>
         </div>
       </SheetContent>
-    </Sheet>
+      </Sheet>
+      {manualTargetSystem && (
+        <OntologyPickerDialog
+          open={browseOpen}
+          onOpenChange={setBrowseOpen}
+          codingSystemId={manualTargetSystem.id}
+          systemName={manualTargetSystem.systemName}
+          ontologyType={distributions[manualTargetSystem.id]?.ontologyType}
+          mode="picker"
+          onPick={(node) => {
+            setManualCode(node.code);
+            setManualDisplay(node.display);
+            setBrowseOpen(false);
+          }}
+        />
+      )}
+    </>
   );
 }
