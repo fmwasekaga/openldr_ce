@@ -111,3 +111,78 @@ export async function runValueSetList(opts: { publisher?: string; json?: boolean
   } catch (err) { process.stderr.write(`terminology valueset list failed: ${redactError(err)}\n`); return 1; }
   finally { await ctx.close(); }
 }
+
+export async function runOntologyBuild(systemId: string, dir: string, opts: { json?: boolean }): Promise<number> {
+  const ctx = await createTerminologyContext(loadConfig());
+  try {
+    await ctx.ontology.build(systemId, dir, (progress) => {
+      process.stderr.write(`${progress.phase}: ${progress.processed}${progress.total != null ? `/${progress.total}` : ''}\r`);
+    });
+    const distribution = await ctx.ontology.getDistribution(systemId);
+    out(
+      opts.json ?? false,
+      distribution,
+      `\nbuilt ${distribution?.ontologyType} index: ${distribution?.nodeCount} nodes, ${distribution?.edgeCount} edges`,
+    );
+    return 0;
+  } catch (err) {
+    process.stderr.write(`\nontology build failed: ${redactError(err)}\n`);
+    return 1;
+  } finally {
+    await ctx.close();
+  }
+}
+
+export async function runOntologyRebuild(systemId: string, opts: { json?: boolean }): Promise<number> {
+  const ctx = await createTerminologyContext(loadConfig());
+  try {
+    await ctx.ontology.rebuild(systemId, (progress) => {
+      process.stderr.write(`${progress.phase}: ${progress.processed}${progress.total != null ? `/${progress.total}` : ''}\r`);
+    });
+    const distribution = await ctx.ontology.getDistribution(systemId);
+    out(
+      opts.json ?? false,
+      distribution,
+      `\nrebuilt ${distribution?.ontologyType} index: ${distribution?.nodeCount} nodes, ${distribution?.edgeCount} edges`,
+    );
+    return 0;
+  } catch (err) {
+    process.stderr.write(`\nontology rebuild failed: ${redactError(err)}\n`);
+    return 1;
+  } finally {
+    await ctx.close();
+  }
+}
+
+export async function runOntologyList(opts: { json?: boolean }): Promise<number> {
+  const ctx = await createTerminologyContext(loadConfig());
+  try {
+    const rows = await ctx.ontology.listDistributions();
+    if (opts.json) console.log(JSON.stringify(rows, null, 2));
+    else for (const distribution of rows) {
+      console.log(
+        `${distribution.codingSystemId}\t${distribution.ontologyType}\t${distribution.indexStatus}\t${distribution.nodeCount ?? '-'} nodes\t${distribution.edgeCount ?? '-'} edges`,
+      );
+    }
+    return 0;
+  } catch (err) {
+    process.stderr.write(`ontology list failed: ${redactError(err)}\n`);
+    return 1;
+  } finally {
+    await ctx.close();
+  }
+}
+
+export async function runOntologyUnlink(systemId: string, opts: { json?: boolean }): Promise<number> {
+  const ctx = await createTerminologyContext(loadConfig());
+  try {
+    await ctx.ontology.unlink(systemId);
+    out(opts.json ?? false, { ok: true }, `unlinked ontology index for ${systemId}`);
+    return 0;
+  } catch (err) {
+    process.stderr.write(`ontology unlink failed: ${redactError(err)}\n`);
+    return 1;
+  } finally {
+    await ctx.close();
+  }
+}

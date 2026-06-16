@@ -13,7 +13,7 @@ import { runAuditList } from './audit';
 import { runUserList, runUserShow, runUserCreate, runUserSetRole, runUserSetStatus } from './user';
 import { runExport } from './export';
 import { runTargetStoreTest } from './target-store';
-import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, runTerminologyExpand, runTerminologyTranslate, runPublisherList, runPublisherCreate, runSystemList, runSystemCreate, runTermList, runValueSetList } from './terminology';
+import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, runTerminologyExpand, runTerminologyTranslate, runPublisherList, runPublisherCreate, runSystemList, runSystemCreate, runTermList, runValueSetList, runOntologyBuild, runOntologyRebuild, runOntologyList, runOntologyUnlink } from './terminology';
 import { runDhis2MapImport, runDhis2MapList, runDhis2OrgUnitImport, runDhis2OrgUnitList, runDhis2PullMetadata, runDhis2Validate, runDhis2Push, runDhis2Status, runDhis2ScheduleAdd, runDhis2ScheduleList, runDhis2ScheduleRemove } from './dhis2';
 
 const program = new Command();
@@ -159,6 +159,24 @@ const tvs = term.command('valueset').description('Manage value sets');
 tvs.command('list').description('List value sets').option('--publisher <id>', 'filter by publisher id').option('--json', 'output JSON', false)
   .action(async (opts: { publisher?: string; json: boolean }) => {
     try { process.exitCode = await runValueSetList(opts); } catch (err) { process.stderr.write(`terminology valueset list failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+
+const tont = term.command('ontology').description('Manage ontology indexes');
+tont.command('build <systemId> <dir>').description('Build an ontology index from a server-side distribution directory').option('--json', 'output JSON', false)
+  .action(async (systemId: string, dir: string, opts: { json: boolean }) => {
+    try { process.exitCode = await runOntologyBuild(systemId, dir, opts); } catch (err) { process.stderr.write(`terminology ontology build failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+tont.command('rebuild <systemId>').description('Rebuild an ontology index from its recorded distribution path').option('--json', 'output JSON', false)
+  .action(async (systemId: string, opts: { json: boolean }) => {
+    try { process.exitCode = await runOntologyRebuild(systemId, opts); } catch (err) { process.stderr.write(`terminology ontology rebuild failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+tont.command('list').description('List ontology indexes').option('--json', 'output JSON', false)
+  .action(async (opts: { json: boolean }) => {
+    try { process.exitCode = await runOntologyList(opts); } catch (err) { process.stderr.write(`terminology ontology list failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+tont.command('unlink <systemId>').description('Unlink and delete an ontology index').option('--json', 'output JSON', false)
+  .action(async (systemId: string, opts: { json: boolean }) => {
+    try { process.exitCode = await runOntologyUnlink(systemId, opts); } catch (err) { process.stderr.write(`terminology ontology unlink failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
 
 const forms = program.command('forms').description('FHIR forms (Questionnaire) utilities');
