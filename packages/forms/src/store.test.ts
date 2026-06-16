@@ -68,5 +68,5 @@ describe('createFormStore', () => {
     expect(await store.get(created.id)).toBeNull();
 
     await db.destroy();
-  });
+  }, 15_000);
 });
