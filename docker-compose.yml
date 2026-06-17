@@ -1,5 +1,5 @@
 # Local dev stack for the OpenLDR CE skeleton (health acceptance).
-# Standard ports. To run alongside another stack that already uses 5432/8080
+# Standard ports. To run alongside another stack that already uses 5431/8070
 # (e.g. a sibling project), create a git-ignored docker-compose.override.yml
 # that remaps the host ports — Docker Compose merges it automatically.
 services:
@@ -10,9 +10,9 @@ services:
       POSTGRES_PASSWORD: openldr
       POSTGRES_DB: openldr
     ports:
-      - '5432:5432'
+      - "5431:5432"
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U openldr']
+      test: ["CMD-SHELL", "pg_isready -U openldr"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -26,8 +26,8 @@ services:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     ports:
-      - '9000:9000'
-      - '9001:9001'
+      - "9000:9000"
+      - "9001:9001"
 
   minio-init:
     image: minio/mc:latest
@@ -46,25 +46,25 @@ services:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
     ports:
-      - '8080:8080'
+      - "8070:8080"
 
   # Optional SQL Server target store. Off by default; start with:
   #   docker compose --profile mssql up -d
   mssql:
     image: mcr.microsoft.com/mssql/server:2022-latest
-    profiles: ['mssql']
+    profiles: ["mssql"]
     environment:
-      ACCEPT_EULA: 'Y'
+      ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: ${MSSQL_PASSWORD:-Openldr_Local_2026!}
     ports:
-      - '1433:1433'
+      - "1433:1433"
 
   # Optional DHIS2 aggregate reporting target. Off by default; start with:
   #   pnpm dhis2:seed   (downloads the SL demo dump once)
   #   docker compose --profile dhis2 up -d
   dhis2-db:
     image: postgis/postgis:14-3.3
-    profiles: ['dhis2']
+    profiles: ["dhis2"]
     environment:
       POSTGRES_USER: dhis
       POSTGRES_PASSWORD: dhis
@@ -73,11 +73,11 @@ services:
       - ./.dhis2-seed/dump.sql.gz:/docker-entrypoint-initdb.d/10-dhis2.sql.gz:ro
   dhis2-web:
     image: dhis2/core:2.40.3
-    profiles: ['dhis2']
+    profiles: ["dhis2"]
     depends_on: [dhis2-db]
     environment:
       DHIS2_HOME: /opt/dhis2
     volumes:
       - ./scripts/dhis2.conf:/opt/dhis2/dhis.conf:ro
     ports:
-      - '8085:8080'
+      - "8085:8080"
