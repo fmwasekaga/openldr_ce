@@ -91,7 +91,7 @@ function compactSystemCode(systemCode: string | null | undefined): string {
 
 function isSnomedSystemCode(systemCode: string | null | undefined): boolean {
   const compact = compactSystemCode(systemCode);
-  return compact === 'SNOMEDCT' || compact === 'SNOMED';
+  return compact === 'SNOMEDCT' || compact === 'SNOMED' || compact === 'SCT';
 }
 
 function parseLoincCsvTerms(text: string): ParsedTerm[] {

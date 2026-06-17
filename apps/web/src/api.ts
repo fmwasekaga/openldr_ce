@@ -206,8 +206,18 @@ export interface CodingSystemInput {
 }
 
 const jbody = (body: unknown, method: string) => ({ method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+async function errorDetail(res: Response): Promise<string> {
+  const contentType = res.headers.get('content-type') ?? '';
+  if (contentType.includes('application/json')) {
+    const body = await res.json().catch(() => null) as { error?: unknown; message?: unknown } | null;
+    const detail = body?.error ?? body?.message;
+    if (typeof detail === 'string' && detail.trim()) return detail.trim();
+  }
+  const text = await res.text().catch(() => '');
+  return text.trim() || String(res.status);
+}
 async function okJson<T>(res: Response, what: string): Promise<T> {
-  if (!res.ok) throw new Error(`${what} failed: ${res.status}`);
+  if (!res.ok) throw new Error(`${what} failed: ${await errorDetail(res)}`);
   return res.json() as Promise<T>;
 }
 const apiGet = <T>(url: string, what: string): Promise<T> => fetch(url).then((res) => okJson<T>(res, what));

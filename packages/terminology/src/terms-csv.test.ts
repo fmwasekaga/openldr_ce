@@ -78,6 +78,21 @@ describe('parseTerminologyTerms', () => {
     ]);
   });
 
+  it('accepts legacy SCT as a SNOMED RF2 system code', () => {
+    const rows = parseTerminologyTerms([
+      'id\teffectiveTime\tactive\tmoduleId\tconceptId\tlanguageCode\ttypeId\tterm\tcaseSignificanceId',
+      'd2\t20250131\t1\t900000000000207008\t119297000\ten\t900000000000013009\tBlood specimen\t900000000000448009',
+    ].join('\n'), 'http://snomed.info/sct', 'SCT');
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        system: 'http://snomed.info/sct',
+        code: '119297000',
+        display: 'Blood specimen',
+      }),
+    ]);
+  });
+
   it('maps active English RXNORM rows from RXNCONSO.RRF', () => {
     const rows = parseTerminologyTerms([
       '1049630|ENG||L0001||S0001|Y|A1||||RXNORM|SCD|1049630|Amoxicillin 500 MG Oral Capsule|0|N|4096|',
@@ -133,6 +148,7 @@ describe('parseTerminologyTerms', () => {
   it('returns a system-specific template', () => {
     expect(terminologyImportTemplate('LOINC')).toMatchObject({ filename: 'loinc-import-template.csv', contentType: 'text/csv' });
     expect(terminologyImportTemplate('SNOMEDCT').body).toContain('conceptId');
+    expect(terminologyImportTemplate('SCT').filename).toBe('snomed-rf2-description-template.txt');
     expect(terminologyImportTemplate('RxNorm').filename).toBe('RXNCONSO-template.RRF');
     expect(terminologyImportTemplate('ICD-10').filename).toBe('terminology-import-template.jsonl');
   });

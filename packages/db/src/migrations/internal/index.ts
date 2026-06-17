@@ -16,6 +16,7 @@ import * as m014 from './014_value_sets';
 import * as m015 from './015_ontology';
 import * as m016 from './016_form_definitions';
 import * as m017 from './017_reference_terminology_seeds';
+import * as m018 from './018_snomed_code_system';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -35,4 +36,5 @@ export const internalMigrations: Record<string, Migration> = {
   '015_ontology': { up: m015.up, down: m015.down },
   '016_form_definitions': { up: m016.up, down: m016.down },
   '017_reference_terminology_seeds': { up: m017.up, down: m017.down },
+  '018_snomed_code_system': { up: m018.up, down: m018.down },
 };

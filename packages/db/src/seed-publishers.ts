@@ -5,6 +5,9 @@ import { resolvePublisher } from './resolve-publisher';
 export function deriveSystemCode(url: string): string {
   try {
     const u = new URL(url);
+    if (u.hostname.toLowerCase() === 'snomed.info' && u.pathname.replace(/\/+$/, '').toLowerCase() === '/sct') {
+      return 'SNOMED-CT';
+    }
     const seg = u.pathname.split('/').filter(Boolean).pop();
     return (seg || u.hostname.split('.')[0] || url).toUpperCase();
   } catch {

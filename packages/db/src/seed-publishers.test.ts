@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveSeedPublisherId } from './seed-publishers';
+import { deriveSystemCode, resolveSeedPublisherId } from './seed-publishers';
 
 describe('resolveSeedPublisherId', () => {
   it('maps loinc → pub-loinc and unknown → pub-system', () => {
@@ -11,5 +11,11 @@ describe('resolveSeedPublisherId', () => {
     expect(resolveSeedPublisherId('http://unitsofmeasure.org')).toBe('pub-ucum');
     expect(resolveSeedPublisherId('http://www.nlm.nih.gov/research/umls/rxnorm')).toBe('pub-rxnorm');
     expect(resolveSeedPublisherId('http://example.org/x')).toBe('pub-system'); // no match → System
+  });
+});
+
+describe('deriveSystemCode', () => {
+  it('uses the SNOMED CT display code for the canonical SCT URL', () => {
+    expect(deriveSystemCode('http://snomed.info/sct')).toBe('SNOMED-CT');
   });
 });
