@@ -6,7 +6,7 @@ function fakeClient(send: () => Promise<unknown>) {
 }
 
 const cfg = {
-  endpoint: 'http://localhost:9000',
+  endpoint: 'http://localhost:9010',
   region: 'us-east-1',
   accessKeyId: 'minio',
   secretAccessKey: 'minio12345',

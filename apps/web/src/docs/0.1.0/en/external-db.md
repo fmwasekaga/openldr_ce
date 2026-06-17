@@ -9,7 +9,7 @@ Set the target store adapter to `mssql` and the connection in your environment:
 ```
 TARGET_STORE_ADAPTER=mssql
 MSSQL_HOST=localhost
-MSSQL_PORT=1433
+MSSQL_PORT=11433
 MSSQL_DATABASE=openldr
 MSSQL_USER=sa
 MSSQL_PASSWORD=Your_Strong_Password1

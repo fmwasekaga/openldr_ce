@@ -4,7 +4,7 @@ import { loadConfig } from './load';
 const valid = {
   INTERNAL_DATABASE_URL: 'postgres://u:p@localhost:5432/openldr',
   TARGET_DATABASE_URL: 'postgres://u:p@localhost:5432/openldr_target',
-  S3_ENDPOINT: 'http://localhost:9000',
+  S3_ENDPOINT: 'http://localhost:9010',
   S3_ACCESS_KEY_ID: 'minio',
   S3_SECRET_ACCESS_KEY: 'minio12345',
   S3_BUCKET: 'openldr',
@@ -27,7 +27,7 @@ describe('loadConfig', () => {
 const basePg = {
   INTERNAL_DATABASE_URL: 'postgres://u:p@localhost:5432/openldr',
   TARGET_DATABASE_URL: 'postgres://u:p@localhost:5432/openldr',
-  S3_ENDPOINT: 'http://localhost:9000', S3_ACCESS_KEY_ID: 'a', S3_SECRET_ACCESS_KEY: 'b', S3_BUCKET: 'openldr',
+  S3_ENDPOINT: 'http://localhost:9010', S3_ACCESS_KEY_ID: 'a', S3_SECRET_ACCESS_KEY: 'b', S3_BUCKET: 'openldr',
   OIDC_ISSUER_URL: 'http://localhost:8080/realms/openldr',
 };
 

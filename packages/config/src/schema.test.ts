@@ -3,7 +3,7 @@ import { ConfigSchema } from './schema';
 
 const base = {
   INTERNAL_DATABASE_URL: 'postgres://u:p@localhost/db', TARGET_DATABASE_URL: 'postgres://u:p@localhost/ext',
-  S3_ENDPOINT: 'http://localhost:9000', S3_ACCESS_KEY_ID: 'k', S3_SECRET_ACCESS_KEY: 's', S3_BUCKET: 'b',
+  S3_ENDPOINT: 'http://localhost:9010', S3_ACCESS_KEY_ID: 'k', S3_SECRET_ACCESS_KEY: 's', S3_BUCKET: 'b',
   OIDC_ISSUER_URL: 'http://localhost:8080/realms/master',
 };
 describe('dashboard SQL config', () => {
