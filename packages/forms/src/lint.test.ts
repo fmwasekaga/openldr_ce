@@ -51,4 +51,31 @@ describe('lintFormSchema', () => {
 
     expect(issues).toEqual([]);
   });
+
+  it('reports section visibility references to missing fields', () => {
+    const issues = lintFormSchema({
+      id: 'f',
+      name: 'F',
+      title: { en: 'F' },
+      status: 'draft',
+      languages: ['en'],
+      sections: [
+        {
+          id: 'conditional-section',
+          title: { en: 'Conditional section' },
+          visibility: { whenField: 'missing', equals: true },
+          fields: [{ id: 'known', type: 'boolean', label: { en: 'Known' } }],
+        },
+      ],
+    });
+
+    expect(issues).toEqual([
+      {
+        severity: 'error',
+        code: 'visibility-missing-field',
+        message: 'Visibility references missing field "missing"',
+        sectionId: 'conditional-section',
+      },
+    ]);
+  });
 });

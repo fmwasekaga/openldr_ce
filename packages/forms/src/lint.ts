@@ -21,11 +21,15 @@ export function lintFormSchema(form: unknown): FormLintIssue[] {
   const seenIds = new Map<string, { sectionId?: string; fieldId?: string }>();
   const fhirPaths = new Map<string, string>();
   const fieldIds = new Set<string>();
-  const visibilityRules: Array<{ sectionId: string; fieldId: string; whenField: string }> = [];
+  const visibilityRules: Array<{ sectionId: string; fieldId?: string; whenField: string }> = [];
 
   for (const section of sectionsOf(form)) {
     const sectionId = stringValue(section.id) ?? '';
     recordId(sectionId, { sectionId });
+    if (isObject(section.visibility)) {
+      const whenField = stringValue(section.visibility.whenField);
+      if (whenField) visibilityRules.push({ sectionId, whenField });
+    }
 
     for (const field of fieldsOf(section)) {
       const fieldId = stringValue(field.id) ?? '';
