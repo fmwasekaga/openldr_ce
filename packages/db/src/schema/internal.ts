@@ -274,6 +274,20 @@ export interface FormDefinitionsTable {
   updated_at: string;
 }
 
+export interface FormVersionsTable {
+  id: string;
+  form_id: string;
+  version: number;
+  version_label: string | null;
+  name: string;
+  fhir_resource_type: string | null;
+  schema: JSONColumnType<Record<string, unknown>>;
+  target_pages: JSONColumnType<string[]> | null;
+  questionnaire: JSONColumnType<Record<string, unknown>>;
+  published_at: Generated<Date>;
+  published_by: string | null;
+}
+
 export interface InternalSchema {
   fhir_resources: FhirResourcesTable;
   outbox_events: OutboxEventsTable;
@@ -300,4 +314,5 @@ export interface InternalSchema {
   dhis2_schedules: Dhis2SchedulesTable;
   dashboards: DashboardsTable;
   form_definitions: FormDefinitionsTable;
+  form_versions: FormVersionsTable;
 }
