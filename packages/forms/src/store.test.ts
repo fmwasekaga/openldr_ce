@@ -69,4 +69,48 @@ describe('createFormStore', () => {
 
     await db.destroy();
   }, 15_000);
+
+  it('publishes immutable version snapshots and lists them newest first', async () => {
+    const db = await makeMigratedDb();
+    const store = createFormStore(db);
+    const sampleForm = schema();
+    const created = await store.create({
+      name: 'Specimen intake',
+      versionLabel: 'v1',
+      fhirResourceType: 'Questionnaire',
+      targetPages: ['forms'],
+      schema: sampleForm,
+    });
+
+    const published = await store.publish(created.id, { actorId: 'u1', versionLabel: 'v1' });
+    expect(published.status).toBe('published');
+
+    await store.update(created.id, {
+      ...created,
+      name: 'Specimen intake revised',
+      schema: { ...sampleForm, title: { en: 'Revised' } },
+    });
+    const republished = await store.publish(created.id, { actorId: 'u1', versionLabel: 'v2' });
+    expect(republished.versionLabel).toBe('v2');
+
+    const versions = await store.listVersions(created.id);
+    expect(versions.map((version) => version.version)).toEqual([2, 1]);
+    expect(versions[0].name).toBe('Specimen intake revised');
+    expect((await store.getVersion(created.id, 1))?.versionLabel).toBe('v1');
+
+    await db.destroy();
+  });
+
+  it('duplicates a form as a draft copy', async () => {
+    const db = await makeMigratedDb();
+    const store = createFormStore(db);
+    const created = await store.create({ name: 'Specimen intake', schema: schema(), targetPages: ['forms'] });
+    const copy = await store.duplicate(created.id);
+    expect(copy.id).not.toBe(created.id);
+    expect(copy.name).toBe('Specimen intake copy');
+    expect(copy.status).toBe('draft');
+    expect(copy.schema).toEqual(created.schema);
+
+    await db.destroy();
+  });
 });
