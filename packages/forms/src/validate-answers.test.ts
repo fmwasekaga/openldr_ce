@@ -38,6 +38,23 @@ describe('validateAnswers', () => {
     const r = validateAnswers(form, { sex: { code: 'male' }, age: 30 });
     expect(r.ok).toBe(true);
   });
+  it('does not flag required fields in a hidden section', () => {
+    const sectionForm: FormSchema = {
+      ...form,
+      sections: [
+        ...form.sections,
+        {
+          id: 'followup-section',
+          title: { en: 'Follow up' },
+          visibility: { whenField: 'sex', equals: 'female' },
+          fields: [{ id: 'followup-note', type: 'string', label: { en: 'Follow up note' }, required: true }],
+        },
+      ],
+    };
+
+    const r = validateAnswers(sectionForm, { sex: { code: 'male' }, age: 30 });
+    expect(r.ok).toBe(true);
+  });
   it('flags a bad choice value', () => {
     const r = validateAnswers(form, { sex: { code: 'other' }, age: 30 });
     expect(r.ok).toBe(false);

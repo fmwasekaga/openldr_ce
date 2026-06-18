@@ -30,4 +30,32 @@ describe('computeVisibility', () => {
     expect(computeVisibility(form, { sex: { code: 'male' } }).get('pregnant')).toBe(false);
     expect(computeVisibility(form, { sex: { code: 'female' } }).get('pregnant')).toBe(true);
   });
+
+  it('hides a section and cascades hidden state to its fields', () => {
+    const sectionForm: FormSchema = {
+      ...form,
+      sections: [
+        ...form.sections,
+        {
+          id: 'followup-section',
+          title: { en: 'Follow up' },
+          visibility: { whenField: 'age', equals: 40 },
+          fields: [
+            { id: 'followup-note', type: 'string', label: { en: 'Follow up note' } },
+            { id: 'followup-confirmed', type: 'boolean', label: { en: 'Confirmed' }, visibility: { whenField: 'sex', equals: 'female' } },
+          ],
+        },
+      ],
+    };
+
+    const hidden = computeVisibility(sectionForm, { age: 39, sex: { code: 'female' } });
+    expect(hidden.get('followup-section')).toBe(false);
+    expect(hidden.get('followup-note')).toBe(false);
+    expect(hidden.get('followup-confirmed')).toBe(false);
+
+    const visible = computeVisibility(sectionForm, { age: 40, sex: { code: 'male' } });
+    expect(visible.get('followup-section')).toBe(true);
+    expect(visible.get('followup-note')).toBe(true);
+    expect(visible.get('followup-confirmed')).toBe(false);
+  });
 });

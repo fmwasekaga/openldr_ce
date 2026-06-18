@@ -5,15 +5,21 @@ import type { Answers } from './answer-value';
 export function computeVisibility(form: FormSchema, answers: Answers): Map<string, boolean> {
   const map = new Map<string, boolean>();
   for (const section of form.sections) {
+    const sectionVisible = section.visibility ? ruleMatches(section.visibility, answers) : true;
+    map.set(section.id, sectionVisible);
     for (const field of section.fields) {
-      if (!field.visibility) {
-        map.set(field.id, true);
+      if (!sectionVisible) {
+        map.set(field.id, false);
         continue;
       }
-      const ctrl = answers[field.visibility.whenField];
-      const value = typeof ctrl === 'object' && ctrl !== null && 'code' in ctrl ? (ctrl as { code: string }).code : ctrl;
-      map.set(field.id, value === field.visibility.equals);
+      map.set(field.id, field.visibility ? ruleMatches(field.visibility, answers) : true);
     }
   }
   return map;
+}
+
+function ruleMatches(rule: { whenField: string; equals: string | number | boolean }, answers: Answers): boolean {
+  const ctrl = answers[rule.whenField];
+  const value = typeof ctrl === 'object' && ctrl !== null && 'code' in ctrl ? (ctrl as { code: string }).code : ctrl;
+  return value === rule.equals;
 }

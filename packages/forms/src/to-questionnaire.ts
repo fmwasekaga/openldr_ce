@@ -29,7 +29,7 @@ function fieldItem(field: FormField): Record<string, unknown> {
 
 function sectionItem(section: FormSection): Record<string, unknown> {
   const { fields, ...meta } = section;
-  return {
+  const item: Record<string, unknown> = {
     linkId: section.id,
     type: 'group',
     text: section.title.en,
@@ -37,6 +37,8 @@ function sectionItem(section: FormSection): Record<string, unknown> {
     extension: [{ url: EXT_OPENLDR_SECTION, valueString: JSON.stringify(meta) }],
     item: fields.map(fieldItem),
   };
+  if (section.visibility) item.enableWhen = [enableWhenOf(section.visibility)];
+  return item;
 }
 
 export function toQuestionnaire(form: FormSchema): Questionnaire {
