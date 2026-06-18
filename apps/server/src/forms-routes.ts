@@ -155,11 +155,11 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
 
   app.get('/api/forms/:id/versions/:version', async (req, reply) => {
     const { id, version } = req.params as { id: string; version: string };
-    const parsedVersion = Number.parseInt(version, 10);
-    if (!Number.isInteger(parsedVersion) || parsedVersion < 1) {
+    if (!/^[1-9]\d*$/.test(version)) {
       reply.code(400);
       return { error: 'version must be a positive integer' };
     }
+    const parsedVersion = Number(version);
     const snapshot = await ctx.forms.getVersion(id, parsedVersion);
     if (!snapshot) {
       reply.code(404);

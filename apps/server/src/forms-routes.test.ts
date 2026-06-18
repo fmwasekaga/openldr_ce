@@ -217,4 +217,23 @@ describe('forms routes', () => {
     expect(duplicate.statusCode).toBe(201);
     expect(duplicate.json()).toMatchObject({ status: 'draft' });
   });
+
+  it('rejects malformed form version route params', async () => {
+    const app = Fastify();
+    registerFormsRoutes(app, fakeCtx());
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/forms',
+      payload: { name: 'Specimen intake', schema: sampleSchema, targetPages: ['forms'] },
+    });
+    const id = created.json().id as string;
+    await app.inject({ method: 'POST', url: `/api/forms/${id}/publish`, payload: { versionLabel: 'v1' } });
+
+    for (const version of ['1abc', '1.5', '0']) {
+      const response = await app.inject({ method: 'GET', url: `/api/forms/${id}/versions/${version}` });
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toMatchObject({ error: 'version must be a positive integer' });
+    }
+  });
 });
