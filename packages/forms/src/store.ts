@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { type Kysely, sql } from 'kysely';
 import type { InternalSchema } from '@openldr/db';
 import type { FormSchema } from './schema/form-schema';
-import { computeNextFormVersion, makeDuplicateName } from './lifecycle';
+import { computeNextFormVersion, formContentChanged, makeDuplicateName } from './lifecycle';
 import { toQuestionnaire } from './to-questionnaire';
 
 export interface FormDefinition {
@@ -144,17 +144,16 @@ export function createFormStore(db: Kysely<InternalSchema>) {
   });
 
   const toVersionSummary = (r: FormVersionRow): FormVersionSummary => {
-    const v = toVersion(r);
     return {
-      id: v.id,
-      formId: v.formId,
-      version: v.version,
-      versionLabel: v.versionLabel,
-      name: v.name,
-      fhirResourceType: v.fhirResourceType,
-      targetPages: v.targetPages,
-      publishedAt: v.publishedAt,
-      publishedBy: v.publishedBy,
+      id: r.id,
+      formId: r.form_id,
+      version: r.version,
+      versionLabel: r.version_label,
+      name: r.name,
+      fhirResourceType: r.fhir_resource_type,
+      targetPages: r.target_pages ? (parseJson(r.target_pages) as string[]) : null,
+      publishedAt: toTimestamp(r.published_at),
+      publishedBy: r.published_by,
     };
   };
 
@@ -204,7 +203,22 @@ export function createFormStore(db: Kysely<InternalSchema>) {
 
   async function update(id: string, input: FormInput): Promise<FormDefinition> {
     const existing = await get(id);
-    const nextStatus = existing?.status === 'published' ? 'draft' : existing?.status;
+    if (!existing) throw new Error('form not found');
+    const contentChanged = formContentChanged(
+      {
+        name: existing.name,
+        fhirResourceType: existing.fhirResourceType,
+        schema: existing.schema,
+        targetPages: existing.targetPages,
+      },
+      {
+        name: input.name,
+        fhirResourceType: input.fhirResourceType ?? null,
+        schema: input.schema,
+        targetPages: input.targetPages ?? null,
+      },
+    );
+    const nextStatus = existing.status === 'published' && contentChanged ? 'draft' : existing.status;
     await db
       .updateTable('form_definitions')
       .set({
@@ -222,6 +236,8 @@ export function createFormStore(db: Kysely<InternalSchema>) {
   }
 
   async function setStatus(id: string, status: 'draft' | 'published' | 'archived'): Promise<FormDefinition> {
+    const existing = await get(id);
+    if (!existing) throw new Error('form not found');
     await db.updateTable('form_definitions').set({ status, updated_at: sql`now()` }).where('id', '=', id).execute();
     return (await get(id))!;
   }
@@ -231,30 +247,33 @@ export function createFormStore(db: Kysely<InternalSchema>) {
   }
 
   async function publish(id: string, input: PublishInput = {}): Promise<FormDefinition> {
-    const form = await get(id);
-    if (!form) throw new Error('form not found');
-    const existing = await db.selectFrom('form_versions').select(['version']).where('form_id', '=', id).execute();
-    const nextVersion = computeNextFormVersion(existing.map((row) => Number(row.version)));
-    await db
-      .insertInto('form_versions')
-      .values({
-        id: `fv-${randomUUID()}`,
-        form_id: id,
-        version: nextVersion,
-        version_label: input.versionLabel ?? form.versionLabel,
-        name: form.name,
-        fhir_resource_type: form.fhirResourceType,
-        schema: JSON.stringify(form.schema) as never,
-        target_pages: form.targetPages ? (JSON.stringify(form.targetPages) as never) : null,
-        questionnaire: JSON.stringify(toQuestionnaire(form.schema)) as never,
-        published_by: input.actorId ?? null,
-      } as never)
-      .execute();
-    await db
-      .updateTable('form_definitions')
-      .set({ status: 'published', version_label: input.versionLabel ?? form.versionLabel, updated_at: sql`now()` })
-      .where('id', '=', id)
-      .execute();
+    await db.transaction().execute(async (trx) => {
+      const row = await trx.selectFrom('form_definitions').selectAll().where('id', '=', id).executeTakeFirst();
+      if (!row) throw new Error('form not found');
+      const form = toDefinition(row as FormRow);
+      const existing = await trx.selectFrom('form_versions').select(['version']).where('form_id', '=', id).execute();
+      const nextVersion = computeNextFormVersion(existing.map((versionRow) => Number(versionRow.version)));
+      await trx
+        .insertInto('form_versions')
+        .values({
+          id: `fv-${randomUUID()}`,
+          form_id: id,
+          version: nextVersion,
+          version_label: input.versionLabel ?? form.versionLabel,
+          name: form.name,
+          fhir_resource_type: form.fhirResourceType,
+          schema: JSON.stringify(form.schema) as never,
+          target_pages: form.targetPages ? (JSON.stringify(form.targetPages) as never) : null,
+          questionnaire: JSON.stringify(toQuestionnaire(form.schema)) as never,
+          published_by: input.actorId ?? null,
+        } as never)
+        .execute();
+      await trx
+        .updateTable('form_definitions')
+        .set({ status: 'published', version_label: input.versionLabel ?? form.versionLabel, updated_at: sql`now()` })
+        .where('id', '=', id)
+        .execute();
+    });
     return (await get(id))!;
   }
 
