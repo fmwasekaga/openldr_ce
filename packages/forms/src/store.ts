@@ -238,6 +238,7 @@ export function createFormStore(db: Kysely<InternalSchema>) {
   async function setStatus(id: string, status: 'draft' | 'published' | 'archived'): Promise<FormDefinition> {
     const existing = await get(id);
     if (!existing) throw new Error('form not found');
+    if (status === 'published') return publish(id);
     await db.updateTable('form_definitions').set({ status, updated_at: sql`now()` }).where('id', '=', id).execute();
     return (await get(id))!;
   }

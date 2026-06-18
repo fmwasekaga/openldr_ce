@@ -116,6 +116,30 @@ describe('createFormStore', () => {
     await db.destroy();
   });
 
+  it('publishes through setStatus with an immutable version snapshot', async () => {
+    const db = await makeMigratedDb();
+    const store = createFormStore(db);
+    const sampleForm = schema();
+    const created = await store.create({
+      name: 'Specimen intake',
+      versionLabel: 'v1',
+      fhirResourceType: 'Questionnaire',
+      schema: sampleForm,
+      targetPages: ['forms'],
+    });
+
+    const published = await store.setStatus(created.id, 'published');
+
+    expect(published.status).toBe('published');
+    const versions = await store.listVersions(created.id);
+    expect(versions.map((version) => version.version)).toEqual([1]);
+    const version = await store.getVersion(created.id, 1);
+    expect(version?.name).toBe('Specimen intake');
+    expect(version?.schema).toEqual(sampleForm);
+
+    await db.destroy();
+  });
+
   it('updates version labels without drafting published forms', async () => {
     const db = await makeMigratedDb();
     const store = createFormStore(db);
