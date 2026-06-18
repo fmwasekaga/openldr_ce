@@ -65,6 +65,7 @@ export function extractResources(
   const resources: FhirResource[] = [];
 
   for (const section of form.sections) {
+    if (visible.get(section.id) === false) continue;
     if (section.resourceType) {
       const resource: Record<string, unknown> = { resourceType: section.resourceType, id: randomUUID() };
       if (ctx.subject && SUBJECT_TYPES.has(section.resourceType)) resource.subject = ctx.subject;

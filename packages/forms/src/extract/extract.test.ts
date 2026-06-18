@@ -51,9 +51,7 @@ describe('extractResources', () => {
     const qr = buildResponse(sectionForm, { 'show-demographics': false, given: 'Jane', sex: { code: 'female' }, temp: 38.5 }, { status: 'completed' });
     const { resources } = extractResources(qr, q, { subject: { reference: 'Patient/1' } });
 
-    const patient = resources.find((r) => r.resourceType === 'Patient') as Record<string, unknown>;
-    expect(patient?.gender).toBeUndefined();
-    expect(patient?.name).toBeUndefined();
+    expect(resources.some((r) => r.resourceType === 'Patient')).toBe(false);
     expect(resources.some((r) => r.resourceType === 'Observation')).toBe(false);
   });
 });
