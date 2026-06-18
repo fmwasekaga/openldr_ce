@@ -6,6 +6,7 @@ dist/
 docker-compose.override.yml
 coverage/
 .superpowers/
+.worktrees/
 openldr-export/
 tmp-export*/
 playwright-report/
