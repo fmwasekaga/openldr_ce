@@ -29,6 +29,12 @@ const Cardinality = z.object({
   min: z.number().int().nonnegative().optional(),
   max: z.number().int().positive().optional(),
 });
+const ValueSetBinding = z.object({
+  valueSetId: z.string().optional(),
+  url: z.string(),
+  strength: z.enum(['required', 'extensible', 'preferred', 'example']).optional(),
+  expandedAt: z.string().optional(),
+});
 
 export const FormField = z
   .object({
@@ -44,10 +50,14 @@ export const FormField = z
     observationExtract: z.boolean().optional(),
     code: FieldCode.optional(),
     unit: z.string().optional(),
+    enabled: z.boolean().optional(),
+    helpText: TranslatableText.optional(),
+    placeholder: TranslatableText.optional(),
+    valueSetBinding: ValueSetBinding.optional(),
   })
   .superRefine((f, ctx) => {
-    if ((f.type === 'choice' || f.type === 'open-choice') && !f.options) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'choice field requires options', path: ['options'] });
+    if ((f.type === 'choice' || f.type === 'open-choice') && !f.options && !f.valueSetBinding) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'choice field requires options or valueSetBinding', path: ['options'] });
     }
     if (f.observationExtract && !f.code) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'observationExtract field requires code', path: ['code'] });
@@ -64,6 +74,7 @@ export const FormSection = z.object({
   title: TranslatableText,
   resourceType: ResourceType.optional(),
   repeats: z.boolean().optional(),
+  visibility: VisibilityRule.optional(),
   fields: z.array(FormField),
 });
 export type FormSection = z.infer<typeof FormSection>;
