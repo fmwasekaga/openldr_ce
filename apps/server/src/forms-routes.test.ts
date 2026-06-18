@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import Fastify from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
-import type { FormDefinition, FormInput } from '@openldr/forms';
+import type { FormDefinition, FormInput, FormVersion, FormVersionSummary } from '@openldr/forms';
 import { registerFormsRoutes } from './forms-routes';
 
 const sampleSchema = {
@@ -21,6 +21,7 @@ const sampleSchema = {
 
 function fakeCtx() {
   const forms: FormDefinition[] = [];
+  const versions = new Map<string, FormVersion[]>();
   let seq = 0;
   const now = '2026-01-01T00:00:00.000Z';
 
@@ -85,10 +86,64 @@ function fakeCtx() {
         form.status = status;
         return form;
       },
+      publish: async (id: string, input?: { versionLabel?: string | null }) => {
+        const form = forms.find((item) => item.id === id);
+        if (!form) throw new Error('not found');
+        const existing = versions.get(id) ?? [];
+        const version = existing.length + 1;
+        form.status = 'published';
+        form.versionLabel = input?.versionLabel ?? null;
+        const snapshot: FormVersion = {
+          id: `fv-${version}`,
+          formId: id,
+          version,
+          versionLabel: form.versionLabel,
+          name: form.name,
+          fhirResourceType: form.fhirResourceType,
+          schema: form.schema,
+          targetPages: form.targetPages,
+          questionnaire: {},
+          publishedAt: now,
+          publishedBy: null,
+        };
+        versions.set(id, [...existing, snapshot]);
+        return form;
+      },
+      duplicate: async (id: string) => {
+        const source = forms.find((item) => item.id === id);
+        if (!source) throw new Error('not found');
+        const copy: FormDefinition = {
+          ...source,
+          id: `form-${++seq}`,
+          name: `${source.name} copy`,
+          status: 'draft',
+          versionLabel: null,
+          createdAt: now,
+          updatedAt: now,
+        };
+        forms.push(copy);
+        return copy;
+      },
+      listVersions: async (id: string): Promise<FormVersionSummary[]> =>
+        (versions.get(id) ?? []).map(({ id: versionId, formId, version, versionLabel, name, fhirResourceType, targetPages, publishedAt, publishedBy }) => ({
+          id: versionId,
+          formId,
+          version,
+          versionLabel,
+          name,
+          fhirResourceType,
+          targetPages,
+          publishedAt,
+          publishedBy,
+        })),
+      getVersion: async (id: string, version: number) => versions.get(id)?.find((item) => item.version === version) ?? null,
       delete: async (id: string) => {
         const index = forms.findIndex((item) => item.id === id);
         if (index >= 0) forms.splice(index, 1);
       },
+    },
+    audit: {
+      safeRecord: async () => {},
     },
   } as unknown as AppContext;
 }
@@ -133,5 +188,33 @@ describe('forms routes', () => {
     const invalid = await app.inject({ method: 'POST', url: `/api/forms/${id}/responses`, payload: { answers: {} } });
     expect(invalid.statusCode).toBe(422);
     expect(invalid.json()).toMatchObject({ resourceType: 'OperationOutcome' });
+  });
+
+  it('publishes, duplicates, and returns form versions', async () => {
+    const app = Fastify();
+    registerFormsRoutes(app, fakeCtx());
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/forms',
+      payload: { name: 'Specimen intake', schema: sampleSchema, targetPages: ['forms'] },
+    });
+    const id = created.json().id as string;
+
+    const published = await app.inject({ method: 'POST', url: `/api/forms/${id}/publish`, payload: { versionLabel: 'v1' } });
+    expect(published.statusCode).toBe(200);
+    expect(published.json()).toMatchObject({ status: 'published', versionLabel: 'v1' });
+
+    const versions = await app.inject({ method: 'GET', url: `/api/forms/${id}/versions` });
+    expect(versions.statusCode).toBe(200);
+    expect(versions.json()).toMatchObject([{ version: 1, versionLabel: 'v1' }]);
+
+    const version = await app.inject({ method: 'GET', url: `/api/forms/${id}/versions/1` });
+    expect(version.statusCode).toBe(200);
+    expect(version.json()).toMatchObject({ version: 1, schema: sampleSchema });
+
+    const duplicate = await app.inject({ method: 'POST', url: `/api/forms/${id}/duplicate` });
+    expect(duplicate.statusCode).toBe(201);
+    expect(duplicate.json()).toMatchObject({ status: 'draft' });
   });
 });
