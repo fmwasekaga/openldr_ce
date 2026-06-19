@@ -72,7 +72,7 @@ export function Users() {
     { id: 'createdAt', labelKey: 'users.created', accessor: (u) => <span className="text-xs text-muted-foreground">{formatDate(u.createdAt)}</span>, type: 'text', defaultVisible: false, sortable: true, filterable: false, headClassName: 'w-40' },
     { id: 'lastLogin', labelKey: 'users.lastLogin', accessor: (u) => <span className="text-xs text-muted-foreground">{formatDate(u.lastLoginAt)}</span>, type: 'text', defaultVisible: true, sortable: true, filterable: false, headClassName: 'w-40' },
     { id: '__actions', labelKey: 'common.actions', accessor: (u) => {
-        const isSelf = me?.id === u.id;
+        const isSelf = !!me && me.id === u.id;
         return (
           <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
             <DropdownMenu>
@@ -125,7 +125,7 @@ export function Users() {
             onResetColumns={table.resetColumns}
             onResetAll={() => { table.resetAll(); setSearch(''); }}
             searchValue={search}
-            onSearchChange={setSearch}
+            onSearchChange={(v) => { setSearch(v); table.setPage(0); }}
             searchPlaceholder={t('users.searchPlaceholder')}
             actions={
               <DropdownMenu>
@@ -152,7 +152,7 @@ export function Users() {
               {loading ? (
                 <TableRow><TableCell colSpan={table.visibleColumns.length} className="py-8 text-center text-muted-foreground">{t('common.loading')}</TableCell></TableRow>
               ) : view.rows.length === 0 ? (
-                <TableRow><TableCell colSpan={table.visibleColumns.length} className="py-8 text-center text-muted-foreground">{effectiveFilters.length > 0 ? t('users.noMatch') : t('users.noUsers')}</TableCell></TableRow>
+                <TableRow><TableCell colSpan={table.visibleColumns.length} className="py-8 text-center text-muted-foreground">{rows.length === 0 ? t('users.noUsers') : t('users.noMatch')}</TableCell></TableRow>
               ) : (
                 view.rows.map((u) => (
                   <TableRow key={u.id} className="cursor-pointer transition-colors hover:bg-[rgba(70,130,180,0.08)]" onClick={() => setEditing(u)}>
