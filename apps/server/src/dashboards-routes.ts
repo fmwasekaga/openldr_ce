@@ -46,7 +46,9 @@ export function registerDashboardRoutes(app: FastifyInstance<any, any, any, any>
     const { id } = req.params as { id: string };
     const before = await ctx.dashboards.store.get(id);
     await ctx.dashboards.store.remove(id);
-    await recordAudit(ctx, req, { action: 'dashboard.delete', entityType: 'dashboard', entityId: id, before, after: null });
+    if (before) {
+      await recordAudit(ctx, req, { action: 'dashboard.delete', entityType: 'dashboard', entityId: id, before, after: null });
+    }
     return { ok: true };
   });
 }

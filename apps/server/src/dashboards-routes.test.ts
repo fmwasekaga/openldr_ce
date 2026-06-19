@@ -63,5 +63,10 @@ describe('dashboard routes', () => {
     const events = (ctx as any).__auditEvents as Array<{ action: string; entityType: string; actorId: string }>;
     expect(events.map((e) => e.action)).toEqual(['dashboard.create', 'dashboard.update', 'dashboard.delete']);
     expect(events.every((e) => e.entityType === 'dashboard' && e.actorId === 'admin1')).toBe(true);
+
+    // no-op delete (non-existent id) must not emit an extra audit event
+    const before = events.length;
+    await app.inject({ method: 'DELETE', url: '/api/dashboards/does-not-exist' });
+    expect(events.length).toBe(before);
   });
 });

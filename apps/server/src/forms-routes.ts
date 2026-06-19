@@ -68,11 +68,11 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
       return { error: p.error.message };
     }
     const id = (req.params as { id: string }).id;
-    if (!(await ctx.forms.get(id))) {
+    const before = await ctx.forms.get(id);
+    if (!before) {
       reply.code(404);
       return { error: 'not found' };
     }
-    const before = await ctx.forms.get(id);
     const after = await ctx.forms.update(id, p.data as never);
     await recordAudit(ctx, req, { action: 'form.update', entityType: 'form', entityId: id, before, after });
     return after;
@@ -85,11 +85,11 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
       return { error: 'status must be draft|published|archived' };
     }
     const id = (req.params as { id: string }).id;
-    if (!(await ctx.forms.get(id))) {
+    const before = await ctx.forms.get(id);
+    if (!before) {
       reply.code(404);
       return { error: 'not found' };
     }
-    const before = await ctx.forms.get(id);
     const after = await ctx.forms.setStatus(id, status);
     await recordAudit(ctx, req, { action: status === 'published' ? 'form.publish' : 'form.status', entityType: 'form', entityId: id, before, after });
     return after;
