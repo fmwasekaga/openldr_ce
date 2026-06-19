@@ -4,6 +4,7 @@ import { OptionsEditor } from './field-editor/OptionsEditor';
 import { CodesEditor } from './field-editor/CodesEditor';
 import { TranslationsEditor } from './field-editor/TranslationsEditor';
 import { MappingEditor } from './field-editor/MappingEditor';
+import { VisibilityRuleEditor } from './field-editor/VisibilityRuleEditor';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -236,7 +237,12 @@ export function FieldEditorSheet({
         {/* ── Mapping / FHIR section ──────────────────────────────── */}
         <MappingEditor field={field} onUpdate={onUpdate} />
 
-        {/* ── TODO Task 6: Visibility / conditions section ─────────── */}
+        {/* ── Visibility / conditions section ─────────────────────── */}
+        <VisibilityRuleEditor
+          field={field}
+          allFields={allFields}
+          onUpdate={onUpdate}
+        />
       </SheetContent>
     </Sheet>
   );
