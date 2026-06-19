@@ -379,6 +379,49 @@ describe('FormRuntime', () => {
     expect(form?.id).toBe('');
   });
 
+  // ── multiselect: cleanAnswers preserves all selected values ─────────────────
+
+  it('non-repeatable multiselect submits ALL selected values (not just first)', async () => {
+    const onSubmit = vi.fn();
+    const multiselectSchema: FormSchema = {
+      ...previewSchema,
+      id: 'ms1',
+      fields: [
+        {
+          id: 'roles',
+          fhirPath: null,
+          displayLabel: 'Roles',
+          description: null,
+          fieldType: 'multiselect',
+          required: false,
+          enabled: true,
+          order: 1,
+          cardinality: { min: 0, max: '*' },
+          valueSetOptions: [
+            { code: 'lab_admin', display: 'Lab Admin' },
+            { code: 'lab_manager', display: 'Lab Manager' },
+            { code: 'lab_technician', display: 'Lab Technician' },
+          ],
+        },
+      ],
+    };
+    render(
+      <FormRuntime
+        schema={multiselectSchema}
+        submitLabel="Submit"
+        onSubmit={onSubmit}
+        initialAnswers={{ roles: ['lab_admin', 'lab_manager'] }}
+      />,
+    );
+    // Submit with two roles pre-seeded via initialAnswers
+    fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
+    await vi.waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    const submitted = onSubmit.mock.calls[0][0] as Record<string, unknown>;
+    expect(Array.isArray(submitted['roles'])).toBe(true);
+    expect((submitted['roles'] as string[]).length).toBe(2);
+    expect(submitted['roles']).toEqual(expect.arrayContaining(['lab_admin', 'lab_manager']));
+  });
+
   // ── Select full-width ────────────────────────────────────────────────────────
 
   it('renders a select field trigger', () => {

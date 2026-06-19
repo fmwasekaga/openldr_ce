@@ -7,6 +7,7 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { createUser, updateUser, listPublishedForms, getForm, type UserSummary } from '@/api';
 import { FormRuntime } from '@/forms-runtime/FormRuntime';
 import type { FormSchema, RuntimeAnswers } from '@/forms-runtime/types';
+import { FormSchema as FormSchemaZ } from '@openldr/forms/pure';
 
 // CORE apiProperty keys that map to Keycloak identity fields.
 const CORE_KEYS = new Set(['firstName', 'lastName', 'email', 'roles']);
@@ -103,8 +104,14 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
         // Use the first published 'users' form
         const summary = summaries[0];
         const def = await getForm(summary.id);
-        // Cast to FormSchema — the server stores the schema as the parsed object
-        const loaded = def.schema as FormSchema;
+        // Validate the server-returned schema with the zod parser before trusting it.
+        const parsed = FormSchemaZ.safeParse(def.schema);
+        if (!parsed.success) {
+          setNoForm(true);
+          setError(`User form schema is invalid: ${parsed.error.issues[0]?.message ?? 'unknown'}`);
+          return;
+        }
+        const loaded = parsed.data as FormSchema;
         setSchema(loaded);
         // Seed answers from the user being edited (if any)
         if (user && loaded) setInitialAnswers(seedAnswers(loaded, user));
@@ -138,6 +145,7 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
         saved = await createUser({
           username: username.trim(),
           ...identity,
+          // password is optional on create: Keycloak account is created; password set later via reset/activation email.
           ...(password ? { password } : {}),
           extras,
           formSchemaId: schema.id,

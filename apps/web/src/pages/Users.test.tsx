@@ -22,8 +22,45 @@ vi.mock('@/auth/AuthProvider', () => ({
   useAuth: () => ({ user: { id: 'me', username: 'me', displayName: null, roles: ['lab_admin'] }, loading: false, hasRole: () => true }),
 }));
 
-import { listUsers, setUserStatus, createUser, sendUserResetEmail, listPublishedForms, getForm, type UserSummary } from '@/api';
+import { listUsers, setUserStatus, createUser, updateUser, sendUserResetEmail, listPublishedForms, getForm, type UserSummary } from '@/api';
 import { Users } from './Users';
+
+// Schema that includes a CORE roles multiselect for round-trip tests
+const rolesSchema = {
+  id: 'form-roles',
+  name: 'Users Form (roles)',
+  version: 1,
+  versionLabel: null,
+  fhirVersion: null,
+  fhirResourceType: null,
+  fhirProfileUrl: null,
+  facilityId: null,
+  fields: [
+    { id: 'f-username', displayLabel: 'Username', description: null, fieldType: 'text', apiProperty: 'username', fhirPath: null, required: false, enabled: true, order: 0, cardinality: { min: 0, max: '1' } },
+    {
+      id: 'f-roles',
+      displayLabel: 'Roles',
+      description: null,
+      fieldType: 'multiselect',
+      apiProperty: 'roles',
+      fhirPath: null,
+      required: false,
+      enabled: true,
+      order: 1,
+      cardinality: { min: 0, max: '*' },
+      valueSetOptions: [
+        { code: 'lab_admin', display: 'Lab Admin' },
+        { code: 'lab_manager', display: 'Lab Manager' },
+      ],
+    },
+  ],
+  sections: [],
+  targetPages: ['users'],
+  active: true,
+  status: 'published',
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-01T00:00:00Z',
+};
 
 // Minimal published form + schema for UserDialog tests
 const minimalSchema = {
@@ -36,8 +73,8 @@ const minimalSchema = {
   fhirProfileUrl: null,
   facilityId: null,
   fields: [
-    { id: 'f-firstName', displayLabel: 'First name', fieldType: 'text', apiProperty: 'firstName', fhirPath: null, required: false, enabled: true, order: 0, cardinality: { min: 0, max: '1' } },
-    { id: 'f-phone', displayLabel: 'Phone', fieldType: 'text', apiProperty: 'phone', fhirPath: null, required: false, enabled: true, order: 1, cardinality: { min: 0, max: '1' } },
+    { id: 'f-firstName', displayLabel: 'First name', description: null, fieldType: 'text', apiProperty: 'firstName', fhirPath: null, required: false, enabled: true, order: 0, cardinality: { min: 0, max: '1' } },
+    { id: 'f-phone', displayLabel: 'Phone', description: null, fieldType: 'text', apiProperty: 'phone', fhirPath: null, required: false, enabled: true, order: 1, cardinality: { min: 0, max: '1' } },
   ],
   sections: [],
   targetPages: ['users'],
@@ -138,6 +175,51 @@ describe('Users page', () => {
 
     await waitFor(() => expect(sendUserResetEmail).toHaveBeenCalledWith('u4'));
     expect(await screen.findByText(/reset email sent to ada/i)).toBeTruthy();
+  });
+
+  it('roles multiselect round-trip: both roles preserved through cleanAnswers → updateUser', async () => {
+    // Use a schema that has a CORE roles multiselect field.
+    (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: 'form-roles', name: 'Users Form (roles)', versionLabel: null, status: 'published', active: true, fhirResourceType: null, fieldCount: 2, updatedAt: '2026-01-01T00:00:00Z' },
+    ]);
+    (getForm as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: 'form-roles', name: 'Users Form (roles)', versionLabel: null, fhirResourceType: null, status: 'published', active: true,
+      schema: rolesSchema, targetPages: ['users'], createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z',
+    });
+
+    // A user with two roles; the edit dialog seeds initialAnswers with both.
+    const twoRoleUser: UserSummary = {
+      id: 'u99', username: 'tworoles', firstName: null, lastName: null, email: 'tr@x',
+      roles: ['lab_admin', 'lab_manager'], enabled: true, createdAt: '2026-01-05T00:00:00Z',
+      extras: {}, formSchemaId: 'form-roles', formVersion: 1,
+    };
+    (listUsers as ReturnType<typeof vi.fn>).mockResolvedValue([...rows, twoRoleUser]);
+
+    (updateUser as ReturnType<typeof vi.fn>).mockResolvedValue({ ...twoRoleUser });
+
+    render(<MemoryRouter><Users /></MemoryRouter>);
+    await waitFor(() => expect(screen.getByText('tworoles')).toBeTruthy());
+
+    // Open the edit dialog for tworoles.
+    const trRow = screen.getByText('tworoles').closest('tr')!;
+    const trigger = within(trRow).getByLabelText(/actions for tworoles/i);
+    openDropdown(trigger);
+    const editItem = await screen.findByText(/^edit$/i);
+    fireEvent.click(editItem);
+
+    // Wait for the dialog sheet to open and the form schema to load.
+    // In edit mode there are no fixed username/password fields; sentinel is the Save button appearing.
+    await screen.findByRole('button', { name: /^save$/i });
+
+    // Submit immediately — initialAnswers are seeded from twoRoleUser.roles (['lab_admin','lab_manager']).
+    // cleanAnswers must preserve the full array for the multiselect field (the bug under test).
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => expect(updateUser).toHaveBeenCalled());
+    const updateCall = (updateUser as ReturnType<typeof vi.fn>).mock.calls[0][1] as Record<string, unknown>;
+    expect(Array.isArray(updateCall['roles'])).toBe(true);
+    expect(updateCall['roles']).toEqual(expect.arrayContaining(['lab_admin', 'lab_manager']));
+    expect((updateCall['roles'] as string[]).length).toBe(2);
   });
 
   it('opens "New user" from the toolbar dropdown, fills username, and calls createUser with CORE + extras split', async () => {
