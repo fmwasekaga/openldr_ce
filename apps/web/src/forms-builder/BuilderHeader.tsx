@@ -81,11 +81,17 @@ export interface BuilderHeaderProps {
   schema: FormSchema;
   issues: FormLintIssue[];
   canPublish: boolean;
+  /** The persisted form id. When null/undefined, lifecycle actions (Archive, Export, Disable, Delete) are disabled. */
+  formId: string | null | undefined;
   onChange: (patch: Partial<FormSchema>) => void;
   onSave: () => void;
   onPublish: () => void;
   onCompare: () => void;
   onAddField: () => void;
+  onArchive: () => void;
+  onDisable: () => void;
+  onDelete: () => void;
+  onExport: () => void;
   /** Globe / language selector mounted by the parent page. */
   languageSlot?: React.ReactNode;
 }
@@ -96,11 +102,16 @@ export function BuilderHeader({
   schema,
   issues,
   canPublish,
+  formId,
   onChange,
   onSave,
   onPublish,
   onCompare,
   onAddField,
+  onArchive,
+  onDisable,
+  onDelete,
+  onExport,
   languageSlot,
 }: BuilderHeaderProps): JSX.Element {
   const targetPages = schema.targetPages ?? [];
@@ -262,25 +273,17 @@ export function BuilderHeader({
                 Compare
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              {/* TODO SP-F: wire Archive */}
-              <DropdownMenuItem disabled onSelect={() => { /* TODO SP-F */ }}>
+              <DropdownMenuItem disabled={!formId} onSelect={() => onArchive()}>
                 Archive
               </DropdownMenuItem>
-              {/* TODO SP-F: wire Export */}
-              <DropdownMenuItem disabled onSelect={() => { /* TODO SP-F */ }}>
+              <DropdownMenuItem disabled={!formId} onSelect={() => onExport()}>
                 Export
               </DropdownMenuItem>
-              {/* TODO SP-F: wire Close */}
-              <DropdownMenuItem disabled onSelect={() => { /* TODO SP-F */ }}>
-                Close
-              </DropdownMenuItem>
               <DropdownMenuSeparator />
-              {/* TODO SP-F: wire Disable */}
-              <DropdownMenuItem disabled onSelect={() => { /* TODO SP-F */ }}>
+              <DropdownMenuItem disabled={!formId} onSelect={() => onDisable()}>
                 Disable
               </DropdownMenuItem>
-              {/* TODO SP-F: wire Delete */}
-              <DropdownMenuItem disabled onSelect={() => { /* TODO SP-F */ }}>
+              <DropdownMenuItem disabled={!formId} onSelect={() => onDelete()}>
                 Delete
               </DropdownMenuItem>
             </DropdownMenuContent>

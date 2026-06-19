@@ -30,20 +30,29 @@ function renderHeader(
   const onPublish = vi.fn();
   const onCompare = vi.fn();
   const onAddField = vi.fn();
+  const onArchive = vi.fn();
+  const onDisable = vi.fn();
+  const onDelete = vi.fn();
+  const onExport = vi.fn();
   const utils = render(
     <BuilderHeader
       schema={BASE_SCHEMA}
       issues={[]}
       canPublish
+      formId="form-123"
       onChange={onChange}
       onSave={onSave}
       onPublish={onPublish}
       onCompare={onCompare}
       onAddField={onAddField}
+      onArchive={onArchive}
+      onDisable={onDisable}
+      onDelete={onDelete}
+      onExport={onExport}
       {...overrides}
     />,
   );
-  return { ...utils, onChange, onSave, onPublish, onCompare, onAddField };
+  return { ...utils, onChange, onSave, onPublish, onCompare, onAddField, onArchive, onDisable, onDelete, onExport };
 }
 
 // Helper: open a DropdownMenu trigger and find/click a menu item by text.
@@ -183,6 +192,84 @@ describe('BuilderHeader', () => {
       const publishItem = screen.getByText('Publish');
       // Radix DropdownMenuItem with disabled renders with aria-disabled
       expect(publishItem.closest('[aria-disabled="true"]') ?? publishItem).toBeTruthy();
+    });
+
+    it('calls onArchive when "Archive" is clicked', () => {
+      const { onArchive } = renderHeader();
+      openMenuAndClick('Builder actions', 'Archive');
+      expect(onArchive).toHaveBeenCalled();
+    });
+
+    it('calls onDisable when "Disable" is clicked', () => {
+      const { onDisable } = renderHeader();
+      openMenuAndClick('Builder actions', 'Disable');
+      expect(onDisable).toHaveBeenCalled();
+    });
+
+    it('calls onDelete when "Delete" is clicked', () => {
+      const { onDelete } = renderHeader();
+      openMenuAndClick('Builder actions', 'Delete');
+      expect(onDelete).toHaveBeenCalled();
+    });
+
+    it('calls onExport when "Export" is clicked', () => {
+      const { onExport } = renderHeader();
+      openMenuAndClick('Builder actions', 'Export');
+      expect(onExport).toHaveBeenCalled();
+    });
+
+    describe('lifecycle items are disabled when formId is null', () => {
+      function openMenu() {
+        const trigger = screen.getByLabelText('Builder actions');
+        fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+        if (!screen.queryByText('Archive')) {
+          fireEvent.keyDown(trigger, { key: 'Enter' });
+        }
+      }
+
+      it('Archive item has aria-disabled when formId is null', () => {
+        renderHeader({ formId: null });
+        openMenu();
+        const item = screen.getByText('Archive');
+        expect(
+          item.closest('[aria-disabled="true"]') ?? item.closest('[data-disabled]'),
+        ).toBeTruthy();
+      });
+
+      it('Disable item has aria-disabled when formId is null', () => {
+        renderHeader({ formId: null });
+        openMenu();
+        const item = screen.getByText('Disable');
+        expect(
+          item.closest('[aria-disabled="true"]') ?? item.closest('[data-disabled]'),
+        ).toBeTruthy();
+      });
+
+      it('Delete item has aria-disabled when formId is null', () => {
+        renderHeader({ formId: null });
+        openMenu();
+        const item = screen.getByText('Delete');
+        expect(
+          item.closest('[aria-disabled="true"]') ?? item.closest('[data-disabled]'),
+        ).toBeTruthy();
+      });
+
+      it('Export item has aria-disabled when formId is null', () => {
+        renderHeader({ formId: null });
+        openMenu();
+        const item = screen.getByText('Export');
+        expect(
+          item.closest('[aria-disabled="true"]') ?? item.closest('[data-disabled]'),
+        ).toBeTruthy();
+      });
+
+      it('onArchive is NOT called when Archive is clicked while formId is null', () => {
+        const { onArchive } = renderHeader({ formId: null });
+        openMenu();
+        const item = screen.getByText('Archive');
+        fireEvent.click(item);
+        expect(onArchive).not.toHaveBeenCalled();
+      });
     });
   });
 });
