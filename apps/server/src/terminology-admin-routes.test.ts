@@ -5,7 +5,7 @@ import { registerTerminologyAdminRoutes } from './terminology-admin-routes';
 import './auth-plugin';
 
 function fakeCtx() {
-  const auditEvents: Array<{ action: string; entityType: string; entityId: string; actorId: string | null }> = [];
+  const auditEvents: Array<{ action: string; entityType: string; entityId: string; actorId: string | null; before?: unknown; after?: unknown; metadata?: unknown }> = [];
   const admin = {
     publishers: {
       create: async (d: any) => ({ id: 'pub1', ...d }),
@@ -23,6 +23,7 @@ function fakeCtx() {
       save: async (d: any) => ({ id: 'vs1', ...d }),
       delete: async () => {},
       duplicate: async (id: string) => ({ id: 'vs2', sourceId: id }),
+      importFhir: async (r: any) => ({ id: 'vs9', url: 'http://imported' }),
     },
   };
   const ctx = {
@@ -63,7 +64,18 @@ describe('terminology admin audit', () => {
     const res = await app.inject({ method: 'PUT', url: '/api/terminology/valuesets/vs1', payload: { url: 'u', status: 'active', compose: {} } });
     expect(res.statusCode).toBe(200);
     expect(auditEvents[0]).toMatchObject({ action: 'value_set.update', entityType: 'value_set', entityId: 'vs1' });
-    expect(auditEvents[0]).toHaveProperty('before');
+    expect(auditEvents[0].before).toEqual({ id: 'vs1', url: 'u' });
+  });
+
+  it('audits a value-set import with counts, not the full entity', async () => {
+    const { ctx, auditEvents } = fakeCtx();
+    const app = appWith(ctx);
+    const res = await app.inject({ method: 'POST', url: '/api/terminology/valuesets/import', headers: { 'content-type': 'application/fhir+json' }, payload: JSON.stringify({ resourceType: 'ValueSet', url: 'http://imported', status: 'active' }) });
+    expect(res.statusCode).toBe(201);
+    const ev = auditEvents.find((e) => e.action === 'value_set.import');
+    expect(ev).toBeTruthy();
+    expect((ev as any).after).toBeNull();
+    expect((ev as any).metadata).toMatchObject({ id: 'vs9' });
   });
 
   it('best-effort: a failing audit recorder does not break the route', async () => {

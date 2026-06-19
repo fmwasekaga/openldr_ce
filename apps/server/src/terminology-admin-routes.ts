@@ -47,10 +47,12 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
   app.post('/api/terminology/publishers', async (req, reply) => {
     const parsed = publisherInput.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
-    const created = await admin.publishers.create(parsed.data);
-    await recordAudit(ctx, req, { action: 'publisher.create', entityType: 'publisher', entityId: created.id, before: null, after: created });
-    reply.code(201);
-    return created;
+    try {
+      const created = await admin.publishers.create(parsed.data);
+      await recordAudit(ctx, req, { action: 'publisher.create', entityType: 'publisher', entityId: created.id, before: null, after: created });
+      reply.code(201);
+      return created;
+    } catch (e) { return mapErr(e, reply); }
   });
   app.put('/api/terminology/publishers/:id', async (req, reply) => {
     const parsed = publisherInput.safeParse(req.body);
@@ -210,7 +212,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
         const rawRows = parseTerminologyTerms(String(raw.text ?? raw.csv ?? ''), system.url, system.systemCode);
         result = await importTermRowsInBatches(rawRows);
       }
-      await recordAudit(ctx, req, { action: 'term.import', entityType: 'term', entityId: (req.params as IdParam).id, before: null, after: null, metadata: { result } });
+      await recordAudit(ctx, req, { action: 'term.import', entityType: 'term', entityId: system.url, before: null, after: null, metadata: { systemId: (req.params as IdParam).id, result } });
       return result;
     } catch (e) { return mapErr(e, reply); }
   });
@@ -247,7 +249,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
       const system = decodeURIComponent((req.params as { system: string; code: string }).system);
       const code = decodeURIComponent((req.params as { system: string; code: string }).code);
       const created = await admin.termMappings.create({ fromSystem: system, fromCode: code, ...parsed.data, toDisplay: parsed.data.toDisplay ?? null });
-      await recordAudit(ctx, req, { action: 'term_mapping.create', entityType: 'term_mapping', entityId: created.mapping.id, before: null, after: created.mapping });
+      await recordAudit(ctx, req, { action: 'term_mapping.create', entityType: 'term_mapping', entityId: created.mapping.id, before: null, after: created.mapping, metadata: { draftCreated: created.draftCreated } });
       reply.code(201);
       return created;
     } catch (e) { return mapErr(e, reply); }
@@ -352,12 +354,12 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
       const resource = await parseJsonUpload(req.body);
       if (isFhirValueSetCatalog(resource)) {
         const result = await admin.valueSets.importFhirCatalog(resource);
-        await recordAudit(ctx, req, { action: 'value_set.import', entityType: 'value_set', entityId: 'catalog', before: null, after: result });
+        await recordAudit(ctx, req, { action: 'value_set.import', entityType: 'value_set', entityId: 'catalog', before: null, after: null, metadata: { imported: result.imported, skipped: result.skipped } });
         reply.code(201);
         return result;
       }
       const saved = await admin.valueSets.importFhir(resource);
-      await recordAudit(ctx, req, { action: 'value_set.import', entityType: 'value_set', entityId: saved.id, before: null, after: saved });
+      await recordAudit(ctx, req, { action: 'value_set.import', entityType: 'value_set', entityId: saved.id, before: null, after: null, metadata: { id: saved.id, url: saved.url } });
       reply.code(201);
       return saved;
     }
