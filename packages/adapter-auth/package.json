@@ -7,7 +7,8 @@
   "scripts": { "typecheck": "tsc --noEmit", "test": "vitest run", "lint": "echo \"no lint\"" },
   "dependencies": {
     "@openldr/core": "workspace:*",
-    "@openldr/ports": "workspace:*"
+    "@openldr/ports": "workspace:*",
+    "jose": "^5.9.6"
   },
   "devDependencies": { "typescript": "^5.7.2", "vitest": "^2.1.8" }
 }
