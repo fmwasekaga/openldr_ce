@@ -38,7 +38,8 @@ const SECTIONS: FormSchema['sections'] = [
 function renderSheet(
   overrides: Partial<Parameters<typeof FieldEditorSheet>[0]> = {},
 ) {
-  const onUpdate = vi.fn();
+  const onSave = vi.fn();
+  const onCancel = vi.fn();
   const onOpenChange = vi.fn();
   const utils = render(
     <FieldEditorSheet
@@ -46,12 +47,13 @@ function renderSheet(
       allFields={[BASE_FIELD, GROUP_FIELD]}
       sections={SECTIONS}
       open={true}
-      onUpdate={onUpdate}
+      onSave={onSave}
+      onCancel={onCancel}
       onOpenChange={onOpenChange}
       {...overrides}
     />,
   );
-  return { ...utils, onUpdate, onOpenChange };
+  return { ...utils, onSave, onCancel, onOpenChange };
 }
 
 describe('FieldEditorSheet', () => {
@@ -65,6 +67,11 @@ describe('FieldEditorSheet', () => {
       renderSheet();
       expect(screen.getByText('Patient name')).toBeTruthy();
     });
+
+    it('has a ⋯ (Field actions) menu trigger', () => {
+      renderSheet();
+      expect(screen.getByRole('button', { name: 'Field actions' })).toBeTruthy();
+    });
   });
 
   describe('null field', () => {
@@ -74,28 +81,112 @@ describe('FieldEditorSheet', () => {
     });
   });
 
-  describe('Display Label input', () => {
+  describe('draft editing — does NOT call onSave immediately', () => {
     it('shows the current displayLabel value', () => {
       renderSheet();
       const input = screen.getByRole('textbox', { name: /display label/i });
       expect((input as HTMLInputElement).value).toBe('Patient name');
     });
 
-    it('calls onUpdate with new displayLabel on change', () => {
-      const { onUpdate } = renderSheet();
+    it('editing Display Label updates the draft but does NOT call onSave', () => {
+      const { onSave } = renderSheet();
       const input = screen.getByRole('textbox', { name: /display label/i });
       fireEvent.change(input, { target: { value: 'Full Name' } });
-      expect(onUpdate).toHaveBeenCalledWith({ displayLabel: 'Full Name' });
+      // onSave must NOT have been called yet
+      expect(onSave).not.toHaveBeenCalled();
+      // The input reflects the draft value
+      expect((input as HTMLInputElement).value).toBe('Full Name');
+    });
+  });
+
+  describe('⋯ menu — Save', () => {
+    it('clicking ⋯ → Save calls onSave with the current draft (including edits)', () => {
+      const { onSave } = renderSheet();
+      // Edit display label in draft
+      const input = screen.getByRole('textbox', { name: /display label/i });
+      fireEvent.change(input, { target: { value: 'Full Name' } });
+
+      // Open the ⋯ menu
+      const trigger = screen.getByRole('button', { name: 'Field actions' });
+      fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+      if (!screen.queryByText('Save')) {
+        fireEvent.keyDown(trigger, { key: 'Enter' });
+      }
+      fireEvent.click(screen.getByText('Save'));
+
+      expect(onSave).toHaveBeenCalledOnce();
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({ displayLabel: 'Full Name' }),
+      );
+    });
+
+    it('⋯ → Save with no edits calls onSave with the original field', () => {
+      const { onSave } = renderSheet();
+      const trigger = screen.getByRole('button', { name: 'Field actions' });
+      fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+      if (!screen.queryByText('Save')) {
+        fireEvent.keyDown(trigger, { key: 'Enter' });
+      }
+      fireEvent.click(screen.getByText('Save'));
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'f-1', displayLabel: 'Patient name' }),
+      );
+    });
+  });
+
+  describe('⋯ menu — Cancel', () => {
+    it('clicking ⋯ → Cancel calls onCancel', () => {
+      const { onCancel } = renderSheet();
+      const trigger = screen.getByRole('button', { name: 'Field actions' });
+      fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+      if (!screen.queryByText('Cancel')) {
+        fireEvent.keyDown(trigger, { key: 'Enter' });
+      }
+      fireEvent.click(screen.getByText('Cancel'));
+      expect(onCancel).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe('sheet close button calls onCancel', () => {
+    it('clicking the X/Close button calls onCancel (not onSave)', () => {
+      const { onSave, onCancel } = renderSheet();
+      const closeBtn = screen.getByText('Close').closest('button') as HTMLElement;
+      fireEvent.click(closeBtn);
+      expect(onCancel).toHaveBeenCalled();
+      expect(onSave).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('draft reset when field prop changes', () => {
+    it('rerendering with a different field resets the shown display label', () => {
+      const { rerender } = renderSheet();
+      // Initially shows BASE_FIELD label
+      expect((screen.getByRole('textbox', { name: /display label/i }) as HTMLInputElement).value).toBe('Patient name');
+
+      // Rerender with a different field
+      const OTHER_FIELD: FormField = { ...BASE_FIELD, id: 'f-2', displayLabel: 'Sample ID' };
+      rerender(
+        <FieldEditorSheet
+          field={OTHER_FIELD}
+          allFields={[OTHER_FIELD, GROUP_FIELD]}
+          sections={SECTIONS}
+          open={true}
+          onSave={vi.fn()}
+          onCancel={vi.fn()}
+          onOpenChange={vi.fn()}
+        />,
+      );
+      expect((screen.getByRole('textbox', { name: /display label/i }) as HTMLInputElement).value).toBe('Sample ID');
     });
   });
 
   describe('Field Type Select', () => {
-    it('changing to "number" calls onUpdate with fieldType number', () => {
-      const { onUpdate } = renderSheet();
+    it('changing to "number" updates the draft (does not call onSave)', () => {
+      const { onSave } = renderSheet();
       const trigger = screen.getByRole('combobox', { name: /field type/i });
       fireEvent.click(trigger);
       fireEvent.click(screen.getByText('number'));
-      expect(onUpdate).toHaveBeenCalledWith({ fieldType: 'number' });
+      expect(onSave).not.toHaveBeenCalled();
     });
   });
 
@@ -104,7 +195,6 @@ describe('FieldEditorSheet', () => {
       renderSheet();
       const trigger = screen.getByRole('combobox', { name: /section/i });
       fireEvent.click(trigger);
-      // getAllByText because the closed trigger also holds the current value text
       expect(screen.getAllByText('No section').length).toBeGreaterThan(0);
     });
 
@@ -115,22 +205,26 @@ describe('FieldEditorSheet', () => {
       expect(screen.getByText('Main')).toBeTruthy();
     });
 
-    it('choosing a section calls onUpdate with the section id', () => {
-      const { onUpdate } = renderSheet();
+    it('choosing a section updates the draft without calling onSave', () => {
+      const { onSave } = renderSheet();
       const trigger = screen.getByRole('combobox', { name: /section/i });
       fireEvent.click(trigger);
       fireEvent.click(screen.getByText('Main'));
-      expect(onUpdate).toHaveBeenCalledWith({ section: 'main' });
+      expect(onSave).not.toHaveBeenCalled();
     });
 
-    it('choosing No section calls onUpdate with section undefined', () => {
-      const { onUpdate } = renderSheet({
-        field: { ...BASE_FIELD, section: 'main' },
-      });
+    it('choosing a section, then Save, emits the section id in the saved field', () => {
+      const { onSave } = renderSheet();
       const trigger = screen.getByRole('combobox', { name: /section/i });
       fireEvent.click(trigger);
-      fireEvent.click(screen.getByText('No section'));
-      expect(onUpdate).toHaveBeenCalledWith({ section: undefined });
+      fireEvent.click(screen.getByText('Main'));
+
+      const menuTrigger = screen.getByRole('button', { name: 'Field actions' });
+      fireEvent.pointerDown(menuTrigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+      if (!screen.queryByText('Save')) fireEvent.keyDown(menuTrigger, { key: 'Enter' });
+      fireEvent.click(screen.getByText('Save'));
+
+      expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ section: 'main' }));
     });
   });
 
@@ -139,7 +233,6 @@ describe('FieldEditorSheet', () => {
       renderSheet();
       const trigger = screen.getByRole('combobox', { name: /group/i });
       fireEvent.click(trigger);
-      // getAllByText because the closed trigger also holds the current value text
       expect(screen.getAllByText('No group').length).toBeGreaterThan(0);
     });
 
@@ -150,22 +243,12 @@ describe('FieldEditorSheet', () => {
       expect(screen.getByText('Demographics')).toBeTruthy();
     });
 
-    it('choosing a group field calls onUpdate with groupId', () => {
-      const { onUpdate } = renderSheet();
+    it('choosing a group field updates the draft (does not call onSave)', () => {
+      const { onSave } = renderSheet();
       const trigger = screen.getByRole('combobox', { name: /group/i });
       fireEvent.click(trigger);
       fireEvent.click(screen.getByText('Demographics'));
-      expect(onUpdate).toHaveBeenCalledWith({ groupId: 'g-1' });
-    });
-
-    it('choosing No group calls onUpdate with groupId undefined', () => {
-      const { onUpdate } = renderSheet({
-        field: { ...BASE_FIELD, groupId: 'g-1' },
-      });
-      const trigger = screen.getByRole('combobox', { name: /group/i });
-      fireEvent.click(trigger);
-      fireEvent.click(screen.getByText('No group'));
-      expect(onUpdate).toHaveBeenCalledWith({ groupId: undefined });
+      expect(onSave).not.toHaveBeenCalled();
     });
 
     it('does not show Group Select when field is a group type', () => {
@@ -175,38 +258,20 @@ describe('FieldEditorSheet', () => {
   });
 
   describe('Placeholder input', () => {
-    it('calls onUpdate with placeholder on change', () => {
-      const { onUpdate } = renderSheet();
+    it('updates the draft but does not call onSave', () => {
+      const { onSave } = renderSheet();
       const input = screen.getByRole('textbox', { name: /placeholder/i });
       fireEvent.change(input, { target: { value: 'Enter name' } });
-      expect(onUpdate).toHaveBeenCalledWith({ placeholder: 'Enter name' });
-    });
-
-    it('calls onUpdate with undefined when placeholder cleared', () => {
-      const { onUpdate } = renderSheet({
-        field: { ...BASE_FIELD, placeholder: 'hint' },
-      });
-      const input = screen.getByRole('textbox', { name: /placeholder/i });
-      fireEvent.change(input, { target: { value: '' } });
-      expect(onUpdate).toHaveBeenCalledWith({ placeholder: undefined });
+      expect(onSave).not.toHaveBeenCalled();
     });
   });
 
   describe('Unit input', () => {
-    it('calls onUpdate with unit on change', () => {
-      const { onUpdate } = renderSheet();
+    it('updates the draft but does not call onSave', () => {
+      const { onSave } = renderSheet();
       const input = screen.getByRole('textbox', { name: /unit/i });
       fireEvent.change(input, { target: { value: 'mg/dL' } });
-      expect(onUpdate).toHaveBeenCalledWith({ unit: 'mg/dL' });
-    });
-
-    it('calls onUpdate with undefined when unit cleared', () => {
-      const { onUpdate } = renderSheet({
-        field: { ...BASE_FIELD, unit: 'mg/dL' },
-      });
-      const input = screen.getByRole('textbox', { name: /unit/i });
-      fireEvent.change(input, { target: { value: '' } });
-      expect(onUpdate).toHaveBeenCalledWith({ unit: undefined });
+      expect(onSave).not.toHaveBeenCalled();
     });
   });
 
@@ -217,36 +282,33 @@ describe('FieldEditorSheet', () => {
       expect((cb as HTMLInputElement).getAttribute('data-state')).toBe('unchecked');
     });
 
-    it('calls onUpdate with required: true when toggled on', () => {
-      const { onUpdate } = renderSheet();
+    it('toggling Required updates the draft (does not call onSave)', () => {
+      const { onSave } = renderSheet();
       const cb = screen.getByRole('checkbox', { name: /required/i });
       fireEvent.click(cb);
-      expect(onUpdate).toHaveBeenCalledWith({ required: true });
+      expect(onSave).not.toHaveBeenCalled();
     });
   });
 
   describe('Enabled checkbox', () => {
-    it('reflects the current enabled state', () => {
+    it('reflects the current enabled state (checked)', () => {
       renderSheet();
       const cb = screen.getByRole('checkbox', { name: /enabled/i });
       expect((cb as HTMLInputElement).getAttribute('data-state')).toBe('checked');
     });
 
-    it('calls onUpdate with enabled: false when toggled off', () => {
-      const { onUpdate } = renderSheet();
+    it('toggling Enabled updates the draft and Save emits enabled: false', () => {
+      const { onSave } = renderSheet();
       const cb = screen.getByRole('checkbox', { name: /enabled/i });
       fireEvent.click(cb);
-      expect(onUpdate).toHaveBeenCalledWith({ enabled: false });
-    });
-  });
+      expect(onSave).not.toHaveBeenCalled();
 
-  describe('sheet close', () => {
-    it('calls onOpenChange(false) when the close button is clicked', () => {
-      const { onOpenChange } = renderSheet();
-      // The SheetContent renders a close button with sr-only "Close" text
-      const closeBtn = screen.getByText('Close').closest('button') as HTMLElement;
-      fireEvent.click(closeBtn);
-      expect(onOpenChange).toHaveBeenCalledWith(false);
+      const menuTrigger = screen.getByRole('button', { name: 'Field actions' });
+      fireEvent.pointerDown(menuTrigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+      if (!screen.queryByText('Save')) fireEvent.keyDown(menuTrigger, { key: 'Enter' });
+      fireEvent.click(screen.getByText('Save'));
+
+      expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ enabled: false }));
     });
   });
 });

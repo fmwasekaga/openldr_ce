@@ -26,6 +26,7 @@ export function FormBuilderPage(): JSX.Element {
   const [formId, setFormId] = useState<string | null>(id ?? null);
   const [schema, setSchema] = useState<FormSchema>(() => createDefaultFormSchema(''));
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [pendingNewFieldId, setPendingNewFieldId] = useState<string | null>(null);
   const [loading, setLoading] = useState(Boolean(id));
   const [error, setError] = useState<string | null>(null);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -91,6 +92,30 @@ export function FormBuilderPage(): JSX.Element {
     field.id = makeUniqueFieldId(field.id, new Set(schema.fields.map((f) => f.id)));
     setSchema((prev) => ({ ...prev, fields: [...prev.fields, field] }));
     setSelectedId(field.id);
+    setPendingNewFieldId(field.id);
+  };
+
+  /** Save handler: commit the edited draft to the schema, then close. */
+  const handleSheetSave = (updated: FormField) => {
+    history.recordEdit();
+    setSchema((prev) => ({
+      ...prev,
+      fields: prev.fields.map((f) => (f.id === updated.id ? updated : f)),
+    }));
+    setPendingNewFieldId(null);
+    setSelectedId(null);
+  };
+
+  /** Cancel handler: if the open field was brand-new (never saved), remove it. */
+  const handleSheetCancel = () => {
+    if (pendingNewFieldId && pendingNewFieldId === selectedId) {
+      setSchema((prev) => ({
+        ...prev,
+        fields: prev.fields.filter((f) => f.id !== pendingNewFieldId),
+      }));
+    }
+    setPendingNewFieldId(null);
+    setSelectedId(null);
   };
 
   const deleteField = (fieldId: string) => {
@@ -288,8 +313,9 @@ export function FormBuilderPage(): JSX.Element {
         sections={schema.sections}
         languages={schema.languages ?? []}
         open={selectedId !== null}
-        onOpenChange={(o) => { if (!o) setSelectedId(null); }}
-        onUpdate={(patch) => { if (selectedId) updateField(selectedId, patch); }}
+        onOpenChange={(o) => { if (!o) handleSheetCancel(); }}
+        onSave={handleSheetSave}
+        onCancel={handleSheetCancel}
       />
 
       <CompareDialog

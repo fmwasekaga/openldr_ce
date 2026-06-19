@@ -1,4 +1,6 @@
 import * as React from 'react';
+import { useState, useEffect } from 'react';
+import { MoreHorizontal } from 'lucide-react';
 import type { FormField, FormSchema } from '@openldr/forms/pure';
 import { OptionsEditor } from './field-editor/OptionsEditor';
 import { CodesEditor } from './field-editor/CodesEditor';
@@ -16,6 +18,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
 
 // All 17 field types in the order they appear in the FieldType enum.
 const FIELD_TYPES: { value: string; label: string }[] = [
@@ -45,7 +54,8 @@ export interface FieldEditorSheetProps {
   languages?: string[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onUpdate: (patch: Partial<FormField>) => void;
+  onSave: (field: FormField) => void;
+  onCancel: () => void;
 }
 
 export function FieldEditorSheet({
@@ -55,30 +65,77 @@ export function FieldEditorSheet({
   languages = [],
   open,
   onOpenChange,
-  onUpdate,
+  onSave,
+  onCancel,
 }: FieldEditorSheetProps) {
+  const [draft, setDraft] = useState<FormField | null>(field);
+
+  // Reset draft whenever the selected field changes or the sheet opens
+  useEffect(() => {
+    setDraft(field);
+  }, [field?.id, open]);
+
   // When field is null, render nothing (keep Sheet closed).
   if (!field) return null;
 
+  const patchDraft = (patch: Partial<FormField>) => {
+    setDraft((d) => (d ? { ...d, ...patch } : d));
+  };
+
+  const handleSave = () => {
+    if (draft) onSave(draft);
+  };
+
+  const handleCancel = () => {
+    onCancel();
+  };
+
+  // Closing via onOpenChange == cancel
+  const handleOpenChange = (o: boolean) => {
+    if (!o) onCancel();
+    else onOpenChange(true);
+  };
+
+  const activeDraft = draft ?? field;
   const groupFields = allFields.filter(
-    (f) => f.fieldType === 'group' && f.id !== field.id,
+    (f) => f.fieldType === 'group' && f.id !== activeDraft.id,
   );
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent>
-        <SheetHeader>
-          <SheetTitle>Edit Field</SheetTitle>
-          <SheetDescription>{field.displayLabel}</SheetDescription>
+    <Sheet open={open} onOpenChange={handleOpenChange}>
+      <SheetContent className="p-0 gap-0 overflow-y-auto">
+        {/* ── Sheet Header ───────────────────────────────────────────── */}
+        <SheetHeader className="flex-row items-center justify-between px-6 py-4 border-b border-border">
+          <div>
+            <SheetTitle>Edit Field</SheetTitle>
+            <SheetDescription>{activeDraft.displayLabel}</SheetDescription>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0"
+                aria-label="Field actions"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleSave}>Save</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleCancel}>Cancel</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </SheetHeader>
 
-        {/* ── General ──────────────────────────────────────────────── */}
-        <section className="mt-4">
-          <h3 className="text-sm font-medium text-foreground pb-2 border-b border-border">
-            General
-          </h3>
+        {/* ── General ──────────────────────────────────────────────────── */}
+        <section>
+          <div className="px-6 py-3">
+            <h3 className="text-sm font-medium text-foreground">General</h3>
+          </div>
+          <div className="border-t border-border" />
 
-          <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-3 py-4">
+          <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-3 px-6 py-4">
 
             {/* Display Label */}
             <Label htmlFor="field-display-label" className="whitespace-nowrap">
@@ -87,8 +144,8 @@ export function FieldEditorSheet({
             <Input
               id="field-display-label"
               aria-label="Display Label"
-              value={field.displayLabel}
-              onChange={(e) => onUpdate({ displayLabel: e.target.value })}
+              value={activeDraft.displayLabel}
+              onChange={(e) => patchDraft({ displayLabel: e.target.value })}
             />
 
             {/* Field Type */}
@@ -96,9 +153,9 @@ export function FieldEditorSheet({
               Field Type
             </Label>
             <Select
-              value={field.fieldType}
+              value={activeDraft.fieldType}
               onValueChange={(v) =>
-                onUpdate({ fieldType: v as FormField['fieldType'] })
+                patchDraft({ fieldType: v as FormField['fieldType'] })
               }
             >
               <SelectTrigger id="field-type-trigger" aria-label="Field Type">
@@ -118,9 +175,9 @@ export function FieldEditorSheet({
               Section
             </Label>
             <Select
-              value={field.section ?? '__none'}
+              value={activeDraft.section ?? '__none'}
               onValueChange={(v) =>
-                onUpdate({ section: v === '__none' ? undefined : v })
+                patchDraft({ section: v === '__none' ? undefined : v })
               }
             >
               <SelectTrigger id="field-section-trigger" aria-label="Section">
@@ -137,15 +194,15 @@ export function FieldEditorSheet({
             </Select>
 
             {/* Group (hidden when the field itself is a group) */}
-            {field.fieldType !== 'group' && (
+            {activeDraft.fieldType !== 'group' && (
               <>
                 <Label htmlFor="field-group-trigger" className="whitespace-nowrap">
                   Group
                 </Label>
                 <Select
-                  value={field.groupId ?? '__none'}
+                  value={activeDraft.groupId ?? '__none'}
                   onValueChange={(v) =>
-                    onUpdate({ groupId: v === '__none' ? undefined : v })
+                    patchDraft({ groupId: v === '__none' ? undefined : v })
                   }
                 >
                   <SelectTrigger id="field-group-trigger" aria-label="Group">
@@ -170,9 +227,9 @@ export function FieldEditorSheet({
             <Input
               id="field-placeholder"
               aria-label="Placeholder"
-              value={field.placeholder ?? ''}
+              value={activeDraft.placeholder ?? ''}
               onChange={(e) =>
-                onUpdate({ placeholder: e.target.value || undefined })
+                patchDraft({ placeholder: e.target.value || undefined })
               }
               placeholder="Hint text"
             />
@@ -184,9 +241,9 @@ export function FieldEditorSheet({
             <Input
               id="field-unit"
               aria-label="Unit"
-              value={field.unit ?? ''}
+              value={activeDraft.unit ?? ''}
               onChange={(e) =>
-                onUpdate({ unit: e.target.value || undefined })
+                patchDraft({ unit: e.target.value || undefined })
               }
               placeholder="e.g. mg/dL"
             />
@@ -197,9 +254,9 @@ export function FieldEditorSheet({
                 <Checkbox
                   id="field-required"
                   aria-label="Required"
-                  checked={field.required}
+                  checked={activeDraft.required}
                   onCheckedChange={(checked) =>
-                    onUpdate({ required: !!checked })
+                    patchDraft({ required: !!checked })
                   }
                 />
                 <Label htmlFor="field-required" className="text-xs">
@@ -210,9 +267,9 @@ export function FieldEditorSheet({
                 <Checkbox
                   id="field-enabled"
                   aria-label="Enabled"
-                  checked={field.enabled}
+                  checked={activeDraft.enabled}
                   onCheckedChange={(checked) =>
-                    onUpdate({ enabled: !!checked })
+                    patchDraft({ enabled: !!checked })
                   }
                 />
                 <Label htmlFor="field-enabled" className="text-xs">
@@ -224,25 +281,72 @@ export function FieldEditorSheet({
         </section>
 
         {/* ── Options / Value-set section ──────────────────────────── */}
-        {(field.fieldType === 'select' || field.fieldType === 'multiselect') && (
-          <OptionsEditor field={field} onUpdate={onUpdate} />
+        {(activeDraft.fieldType === 'select' || activeDraft.fieldType === 'multiselect') && (
+          <>
+            <div className="border-t border-border" />
+            <div className="px-6 py-3">
+              <h3 className="text-sm font-medium text-foreground">Options</h3>
+            </div>
+            <div className="border-t border-border" />
+            <div className="px-6 py-2">
+              <OptionsEditor field={activeDraft} onUpdate={patchDraft} />
+            </div>
+          </>
         )}
 
         {/* ── Codes section ────────────────────────────────────────── */}
-        <CodesEditor field={field} onUpdate={onUpdate} />
+        <div className="border-t border-border" />
+        <div className="px-6 py-3">
+          <h3 className="text-sm font-medium text-foreground">Codes</h3>
+        </div>
+        <div className="border-t border-border" />
+        <div className="px-6 py-2">
+          <CodesEditor field={activeDraft} onUpdate={patchDraft} />
+        </div>
 
         {/* ── Translations section ─────────────────────────────────── */}
-        <TranslationsEditor field={field} languages={languages} onUpdate={onUpdate} />
+        <div className="border-t border-border" />
+        <div className="px-6 py-3">
+          <h3 className="text-sm font-medium text-foreground">Translations</h3>
+        </div>
+        <div className="border-t border-border" />
+        <div className="px-6 py-2">
+          <TranslationsEditor field={activeDraft} languages={languages} onUpdate={patchDraft} />
+        </div>
 
         {/* ── Mapping / FHIR section ──────────────────────────────── */}
-        <MappingEditor field={field} onUpdate={onUpdate} />
+        <div className="border-t border-border" />
+        <div className="px-6 py-3">
+          <h3 className="text-sm font-medium text-foreground">Mapping</h3>
+        </div>
+        <div className="border-t border-border" />
+        <div className="px-6 py-2">
+          <MappingEditor field={activeDraft} onUpdate={patchDraft} />
+        </div>
 
         {/* ── Visibility / conditions section ─────────────────────── */}
-        <VisibilityRuleEditor
-          field={field}
-          allFields={allFields}
-          onUpdate={onUpdate}
-        />
+        <div className="border-t border-border" />
+        <div className="px-6 py-3">
+          <h3 className="text-sm font-medium text-foreground">Visibility</h3>
+        </div>
+        <div className="border-t border-border" />
+        <div className="px-6 py-2">
+          <VisibilityRuleEditor
+            field={activeDraft}
+            allFields={allFields}
+            onUpdate={patchDraft}
+          />
+        </div>
+
+        {/* ── Bottom Save / Cancel buttons ─────────────────────────── */}
+        <div className="border-t border-border px-6 py-4 flex gap-2 justify-end mt-4">
+          <Button variant="outline" size="sm" onClick={handleCancel}>
+            Cancel
+          </Button>
+          <Button size="sm" onClick={handleSave}>
+            Save
+          </Button>
+        </div>
       </SheetContent>
     </Sheet>
   );
