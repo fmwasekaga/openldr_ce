@@ -54,6 +54,16 @@ export const ConfigSchema = z
 
     // OIDC issuer (Keycloak realm base URL).
     OIDC_ISSUER_URL: z.string().url(),
+    OIDC_AUDIENCE: z.string().min(1).optional(),
+
+    // Non-production auth bypass: when on and a request has no bearer token, the
+    // server injects a dev admin actor. MUST be off in production (enforced below).
+    AUTH_DEV_BYPASS: z
+      .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
+      .optional()
+      .transform((v) => (v === undefined ? undefined : v === true || v === 'true' || v === '1')),
+    AUTH_DEV_USERNAME: z.string().min(1).default('dev-admin'),
+    AUTH_DEV_ROLES: z.string().default('lab_admin'),
 
     // Custom dashboards — gated raw-SQL widget escape hatch (Postgres warehouse only).
     DASHBOARD_SQL_ENABLED: envBoolean(false),
@@ -75,6 +85,13 @@ export const ConfigSchema = z
         if (!cfg[key]) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [key], message: `${key} is required when REPORTING_TARGET_ADAPTER=dhis2` });
       }
     }
-  });
+    if (cfg.NODE_ENV === 'production' && cfg.AUTH_DEV_BYPASS === true) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['AUTH_DEV_BYPASS'], message: 'AUTH_DEV_BYPASS must be off in production' });
+    }
+  })
+  .transform((cfg) => ({
+    ...cfg,
+    AUTH_DEV_BYPASS: cfg.AUTH_DEV_BYPASS ?? cfg.NODE_ENV !== 'production',
+  }));
 
 export type Config = z.infer<typeof ConfigSchema>;
