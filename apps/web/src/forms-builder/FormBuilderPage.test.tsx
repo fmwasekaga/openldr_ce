@@ -230,6 +230,69 @@ describe('FormBuilderPage (three-pane shell)', () => {
     expect(await screen.findByText(/Published version|Compare form versions/)).toBeInTheDocument();
   });
 
+  // ── Lifecycle actions (archive / delete / export) ────────────────────────────
+
+  it('Archive: ⋯ → Archive calls setFormStatus(formId, "archived")', async () => {
+    vi.spyOn(api, 'getForm').mockResolvedValue(makeFormDef());
+    vi.spyOn(api, 'setFormStatus').mockResolvedValue({ ...makeFormDef(), status: 'archived' as const });
+
+    render(
+      <MemoryRouter initialEntries={['/forms/form-1/builder']}>
+        <Routes><Route path="/forms/:id/builder" element={<FormBuilderPage />} /></Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByDisplayValue('Specimen intake')).toBeInTheDocument();
+    openBuilderMenu();
+    fireEvent.click(await screen.findByText('Archive'));
+    await waitFor(() =>
+      expect(api.setFormStatus).toHaveBeenCalledWith('form-1', 'archived'),
+    );
+  });
+
+  it('Delete: ⋯ → Delete opens confirm dialog; confirming calls deleteForm and navigates to /forms', async () => {
+    vi.spyOn(api, 'getForm').mockResolvedValue(makeFormDef());
+    vi.spyOn(api, 'deleteForm').mockResolvedValue(undefined);
+
+    render(
+      <MemoryRouter initialEntries={['/forms/form-1/builder']}>
+        <Routes>
+          <Route path="/forms/:id/builder" element={<FormBuilderPage />} />
+          <Route path="/forms" element={<div>Forms list</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByDisplayValue('Specimen intake')).toBeInTheDocument();
+    openBuilderMenu();
+    fireEvent.click(await screen.findByText('Delete'));
+
+    // Confirm dialog should now be visible
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+
+    // Click the confirm/destructive action button
+    const confirmBtn = screen.getByRole('button', { name: /delete/i });
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => expect(api.deleteForm).toHaveBeenCalledWith('form-1'));
+    await waitFor(() => expect(screen.getByText('Forms list')).toBeInTheDocument());
+  });
+
+  it('Export: ⋯ → Export calls formQuestionnaireUrl(formId)', async () => {
+    vi.spyOn(api, 'getForm').mockResolvedValue(makeFormDef());
+    const urlSpy = vi.spyOn(api, 'formQuestionnaireUrl');
+
+    render(
+      <MemoryRouter initialEntries={['/forms/form-1/builder']}>
+        <Routes><Route path="/forms/:id/builder" element={<FormBuilderPage />} /></Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByDisplayValue('Specimen intake')).toBeInTheDocument();
+    openBuilderMenu();
+    fireEvent.click(await screen.findByText('Export'));
+    await waitFor(() =>
+      expect(urlSpy).toHaveBeenCalledWith('form-1'),
+    );
+  });
+
   it('SectionsManager is present — "Add section" button exists and clicking it adds a section header in the field list', async () => {
     render(
       <MemoryRouter initialEntries={['/forms/new']}>

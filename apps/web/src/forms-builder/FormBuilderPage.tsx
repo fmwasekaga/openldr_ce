@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { AppShell } from '@/shell/AppShell';
-import { createForm, getForm, publishForm, updateForm } from '../api';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { createForm, deleteForm, formQuestionnaireUrl, getForm, publishForm, setFormStatus, updateForm } from '../api';
 import { createDefaultFormSchema, newField } from './builderModel';
 import { CompareDialog } from './CompareDialog';
 import { FieldEditorSheet } from './FieldEditorSheet';
@@ -29,6 +30,7 @@ export function FormBuilderPage(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [compareOpen, setCompareOpen] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   const history = useTemplateHistory<FormSchema>(() => schema);
 
@@ -176,6 +178,32 @@ export function FormBuilderPage(): JSX.Element {
     setStatus(published.status);
   };
 
+  const archive = async () => {
+    if (!formId) return;
+    const f = await setFormStatus(formId, 'archived');
+    setStatus(f.status);
+  };
+
+  // NOTE: a dedicated active-toggle endpoint is future work; for now disable maps to archived.
+  const disable = async () => {
+    if (!formId) return;
+    await setFormStatus(formId, 'archived');
+  };
+
+  const handleDelete = async () => {
+    if (!formId) return;
+    await deleteForm(formId);
+    navigate('/forms');
+  };
+
+  const exportForm = () => {
+    if (!formId) return;
+    const a = document.createElement('a');
+    a.href = formQuestionnaireUrl(formId);
+    a.download = `${schema.name || 'form'}.questionnaire.json`;
+    a.click();
+  };
+
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <AppShell title="Form Builder" fullBleed>
@@ -185,11 +213,16 @@ export function FormBuilderPage(): JSX.Element {
           schema={schema}
           issues={issues}
           canPublish={!hasErrors}
+          formId={formId}
           onChange={patchSchema}
           onSave={() => { void save(); }}
           onPublish={() => { void publish(); }}
           onCompare={() => setCompareOpen(true)}
           onAddField={addField}
+          onArchive={() => { void archive(); }}
+          onDisable={() => { void disable(); }}
+          onDelete={() => setConfirmDeleteOpen(true)}
+          onExport={exportForm}
           languageSlot={
             <LanguageControl
               languages={schema.languages ?? []}
@@ -263,6 +296,16 @@ export function FormBuilderPage(): JSX.Element {
         current={schema}
         open={compareOpen}
         onOpenChange={setCompareOpen}
+      />
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        onOpenChange={setConfirmDeleteOpen}
+        title="Delete form?"
+        description="This will permanently delete the form and all its versions. This action cannot be undone."
+        confirmLabel="Delete"
+        destructive
+        onConfirm={() => { void handleDelete(); }}
       />
     </AppShell>
   );
