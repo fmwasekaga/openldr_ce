@@ -10,6 +10,7 @@ import { Users } from './pages/Users';
 import { Forms } from './pages/Forms';
 import { FormCapture } from './pages/FormCapture';
 import { FormBuilderPage } from './forms-builder/FormBuilderPage';
+import { RequireRole } from './auth/RequireRole';
 
 export function App() {
   return (
@@ -18,7 +19,7 @@ export function App() {
       <Route path="/reports" element={<Reports />} />
       <Route path="/reports/:id" element={<ReportDetail />} />
       <Route path="/terminology" element={<Terminology />} />
-      <Route path="/users" element={<Users />} />
+      <Route path="/users" element={<RequireRole role="lab_admin"><Users /></RequireRole>} />
       <Route path="/audit" element={<Audit />} />
       <Route path="/forms" element={<Forms />} />
       <Route path="/forms/new" element={<FormBuilderPage />} />
