@@ -28,7 +28,15 @@ const createInput = z.object({
   formSchemaId: z.string().nullish(),
   formVersion: z.number().nullish(),
 });
-const updateInput = createInput.partial();
+const updateInput = z.object({
+  email: z.string().nullish(),
+  firstName: z.string().nullish(),
+  lastName: z.string().nullish(),
+  roles: z.array(z.string()).optional(),
+  extras: z.record(z.object({ value: z.string(), fhirPath: z.string().nullable().optional().transform((v) => v ?? null) })).optional(),
+  formSchemaId: z.string().nullish(),
+  formVersion: z.number().nullish(),
+});
 
 // ---------------------------------------------------------------------------
 // UserSummary composer
@@ -157,23 +165,20 @@ export function registerUsersRoutes(app: FastifyInstance<any, any, any, any>, ct
     }
     const { username, email, firstName, lastName, roles, password, extras, formSchemaId, formVersion } = p.data;
 
-    if (!ctx.auth.directory) {
-      reply.code(503);
-      return { error: 'identity provider admin client is not configured' };
-    }
     try {
       const du = await ctx.auth.directory.create({ username, email, firstName, lastName, roles, password });
-      await ctx.userProfiles.upsert(du.id, { formSchemaId, formVersion, extras });
-      await recordAudit(ctx, req, {
-        action: 'user.create',
-        entityType: 'user',
-        entityId: du.id,
-        before: null,
-        after: { id: du.id, username, email, firstName, lastName, roles, formSchemaId, formVersion, extras },
-      });
+      try {
+        await ctx.userProfiles.upsert(du.id, { formSchemaId, formVersion, extras });
+      } catch (pe) {
+        // The identity-provider account WAS created; only the local profile write failed.
+        // Surface a recoverable message — the operator can edit the user to set its profile.
+        reply.code(502);
+        return { error: redact(`user created in the identity provider but the local profile write failed; edit the user to set its profile (${pe instanceof Error ? pe.message : String(pe)})`) };
+      }
+      const after = summary(du, await ctx.userProfiles.get(du.id));
+      await recordAudit(ctx, req, { action: 'user.create', entityType: 'user', entityId: du.id, before: null, after });
       reply.code(201);
-      const profile = await ctx.userProfiles.get(du.id);
-      return summary(du, profile);
+      return after;
     } catch (e) {
       if (isNotConfigured(e)) {
         reply.code(503);
@@ -197,25 +202,28 @@ export function registerUsersRoutes(app: FastifyInstance<any, any, any, any>, ct
     const { email, firstName, lastName, roles, extras, formSchemaId, formVersion } = p.data;
 
     try {
+      const beforeDir = await ctx.auth.directory.get(id);
+      if (!beforeDir) {
+        reply.code(404);
+        return { error: 'not found' };
+      }
+      const beforeProfile = await ctx.userProfiles.get(id);
+      const before = summary(beforeDir, beforeProfile);
       await ctx.auth.directory.update(id, { email, firstName, lastName });
       if (roles !== undefined) {
         await ctx.auth.directory.setRoles(id, roles);
       }
       await ctx.userProfiles.upsert(id, { formSchemaId, formVersion, extras });
-      const du = await ctx.auth.directory.get(id);
-      if (!du) {
-        reply.code(404);
-        return { error: 'not found' };
-      }
-      const profile = await ctx.userProfiles.get(id);
+      const afterDir = await ctx.auth.directory.get(id);
+      const after = summary(afterDir!, await ctx.userProfiles.get(id));
       await recordAudit(ctx, req, {
         action: 'user.update',
         entityType: 'user',
         entityId: id,
-        before: null,
-        after: summary(du, profile),
+        before,
+        after,
       });
-      return summary(du, profile);
+      return after;
     } catch (e) {
       if (isNotConfigured(e)) {
         reply.code(503);
@@ -247,22 +255,25 @@ export function registerUsersRoutes(app: FastifyInstance<any, any, any, any>, ct
     }
 
     try {
-      await ctx.auth.directory.update(id, { enabled });
-      const du = await ctx.auth.directory.get(id);
-      if (!du) {
+      const beforeDir = await ctx.auth.directory.get(id);
+      if (!beforeDir) {
         reply.code(404);
         return { error: 'not found' };
       }
-      const profile = await ctx.userProfiles.get(id);
+      const beforeProfile = await ctx.userProfiles.get(id);
+      const before = summary(beforeDir, beforeProfile);
+      await ctx.auth.directory.update(id, { enabled });
+      const afterDir = await ctx.auth.directory.get(id);
+      const after = summary(afterDir!, await ctx.userProfiles.get(id));
       await recordAudit(ctx, req, {
         action: 'user.status',
         entityType: 'user',
         entityId: id,
-        before: null,
-        after: null,
+        before,
+        after,
         metadata: { enabled },
       });
-      return summary(du, profile);
+      return after;
     } catch (e) {
       if (isNotConfigured(e)) {
         reply.code(503);

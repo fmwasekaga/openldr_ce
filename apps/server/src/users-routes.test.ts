@@ -294,6 +294,31 @@ describe('users routes — composed directory + profiles', () => {
     expect(JSON.stringify(events)).not.toContain('secret123');
   });
 
+  it('POST /api/users → 502 with "profile" in error when directory.create succeeds but userProfiles.upsert throws (partial-state)', async () => {
+    const ctx = fakeCtx();
+    // Override userProfiles.upsert to throw only during this test
+    const originalUpsert = ctx.userProfiles.upsert.bind(ctx.userProfiles);
+    let upsertCallCount = 0;
+    (ctx.userProfiles as unknown as { upsert: typeof originalUpsert }).upsert = async (...args) => {
+      upsertCallCount++;
+      throw new Error('DB write failed');
+    };
+
+    const app = adminApp(ctx);
+    const res = await app.inject({
+      method: 'POST', url: '/api/users',
+      payload: { username: 'partial-user', email: 'p@lab.org', roles: [] },
+    });
+
+    expect(res.statusCode).toBe(502);
+    expect(res.json().error).toMatch(/profile/i);
+
+    // The directory user WAS created despite profile failure
+    const dir = (ctx as unknown as { __directory: Map<string, DirectoryUser> }).__directory;
+    expect(dir.size).toBe(1);
+    expect([...dir.values()][0].username).toBe('partial-user');
+  });
+
   it('PUT /api/users/:id calls directory.update + setRoles + userProfiles.upsert; audit user.update', async () => {
     const ctx = fakeCtx();
     const app = adminApp(ctx);
