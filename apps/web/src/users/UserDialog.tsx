@@ -167,7 +167,7 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
         <SheetFooter className="border-t border-border px-6 py-4 sm:justify-end">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>{t('common.cancel')}</Button>
           <Button onClick={() => { void save(); }} disabled={saving || !canSave}>
-            {saving ? t('common.loading') : isEdit ? t('common.save') : t('common.create')}
+            {saving ? t('common.saving') : isEdit ? t('common.save') : t('common.create')}
           </Button>
         </SheetFooter>
       </SheetContent>

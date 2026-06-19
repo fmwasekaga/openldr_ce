@@ -8,6 +8,8 @@ const en = {
     cancel: 'Cancel',
     create: 'Create',
     loading: 'Loading…',
+    actions: 'Actions',
+    saving: 'Saving…',
   },
   table: {
     filter: 'Filter',
