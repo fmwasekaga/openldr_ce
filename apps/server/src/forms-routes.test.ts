@@ -3,6 +3,7 @@ import Fastify from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import type { FormDefinition, FormInput, FormVersion, FormVersionSummary } from '@openldr/forms';
 import { registerFormsRoutes } from './forms-routes';
+import './auth-plugin';
 
 type AuditInput = Parameters<AppContext['audit']['record']>[0];
 
@@ -377,6 +378,25 @@ describe('forms routes', () => {
       after: null,
     });
     expect(ctx.audits.find((event) => event.action === 'form.delete')?.before).toMatchObject({ id });
+  });
+
+  it('records the real request actor (not System) on form events', async () => {
+    const app = Fastify();
+    const ctx = fakeCtx();
+    app.addHook('onRequest', async (req) => {
+      req.user = { id: 'u-forms', username: 'former', displayName: null, roles: ['lab_admin'] };
+    });
+    registerFormsRoutes(app, ctx);
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/forms',
+      payload: { name: 'Specimen intake', schema: sampleSchema, targetPages: ['forms'] },
+    });
+
+    const createEvent = ctx.audits.find((e) => e.action === 'form.create');
+    expect(createEvent).toBeDefined();
+    expect(createEvent).toMatchObject({ actorType: 'user', actorId: 'u-forms', actorName: 'former' });
   });
 
   it('does not audit missing deletes', async () => {
