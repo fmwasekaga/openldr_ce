@@ -69,28 +69,45 @@ describe('FormBuilderPage (three-pane shell)', () => {
     );
     openBuilderMenu();
     fireEvent.click(await screen.findByText('Add field'));
-    // Field card should appear in the field-list pane
-    expect(await screen.findByText('New text field')).toBeInTheDocument();
+    // Field card should appear in the field-list pane (may also appear in sheet description)
+    await waitFor(() =>
+      expect(screen.getAllByText('New text field').length).toBeGreaterThan(0),
+    );
   });
 
-  it('selects a field card and editing Display Label updates the card label', async () => {
+  it('selecting a field opens the FieldEditorSheet with "Edit Field" header', async () => {
     render(
       <MemoryRouter initialEntries={['/forms/new']}>
         <Routes><Route path="/forms/new" element={<FormBuilderPage />} /></Routes>
       </MemoryRouter>,
     );
-    // Add field via menu
+    // Add a field
     openBuilderMenu();
     fireEvent.click(await screen.findByText('Add field'));
-    // The card is auto-selected; the right pane shows the display label input
-    const labelInput = await screen.findByLabelText('Field label');
+    // Sheet is auto-opened (field is auto-selected on add); "Edit Field" heading appears
+    expect(await screen.findByText('Edit Field')).toBeInTheDocument();
+  });
+
+  it('selects a field card and editing Display Label in the sheet updates the card label', async () => {
+    render(
+      <MemoryRouter initialEntries={['/forms/new']}>
+        <Routes><Route path="/forms/new" element={<FormBuilderPage />} /></Routes>
+      </MemoryRouter>,
+    );
+    // Add field via menu — auto-selected, sheet opens
+    openBuilderMenu();
+    fireEvent.click(await screen.findByText('Add field'));
+    // The sheet shows a "Display Label" input
+    const labelInput = await screen.findByLabelText('Display Label');
     expect(labelInput).toBeInTheDocument();
     fireEvent.change(labelInput, { target: { value: 'Patient Name' } });
-    // Card label also updates
-    expect(await screen.findByText('Patient Name')).toBeInTheDocument();
+    // Card label also updates in the field-list pane (may also appear in sheet description)
+    await waitFor(() =>
+      expect(screen.getAllByText('Patient Name').length).toBeGreaterThan(0),
+    );
   });
 
-  it('toggles the Enabled checkbox in the right pane', async () => {
+  it('closing the sheet (onOpenChange false) deselects the field', async () => {
     render(
       <MemoryRouter initialEntries={['/forms/new']}>
         <Routes><Route path="/forms/new" element={<FormBuilderPage />} /></Routes>
@@ -98,6 +115,28 @@ describe('FormBuilderPage (three-pane shell)', () => {
     );
     openBuilderMenu();
     fireEvent.click(await screen.findByText('Add field'));
+    // Sheet is open
+    expect(await screen.findByText('Edit Field')).toBeInTheDocument();
+
+    // Close via the sheet's close button (shadcn renders a ×/close button)
+    const closeBtn = screen.getByRole('button', { name: /close/i });
+    fireEvent.click(closeBtn);
+
+    // "Edit Field" disappears (sheet closed / deselected)
+    await waitFor(() =>
+      expect(screen.queryByText('Edit Field')).not.toBeInTheDocument(),
+    );
+  });
+
+  it('toggles the Enabled checkbox in the sheet', async () => {
+    render(
+      <MemoryRouter initialEntries={['/forms/new']}>
+        <Routes><Route path="/forms/new" element={<FormBuilderPage />} /></Routes>
+      </MemoryRouter>,
+    );
+    openBuilderMenu();
+    fireEvent.click(await screen.findByText('Add field'));
+    // Sheet opens; find the Enabled checkbox inside the sheet
     const enabledCheckbox = await screen.findByLabelText('Enabled');
     // Starts checked (enabled: true)
     expect(enabledCheckbox).toBeChecked();
@@ -113,9 +152,12 @@ describe('FormBuilderPage (three-pane shell)', () => {
     );
     openBuilderMenu();
     fireEvent.click(await screen.findByText('Add field'));
-    expect(await screen.findByText('New text field')).toBeInTheDocument();
+    // Sheet opens automatically (field auto-selected); close it first so the card is accessible
+    const closeBtn = await screen.findByRole('button', { name: /close/i });
+    fireEvent.click(closeBtn);
+    await waitFor(() => expect(screen.queryByText('Edit Field')).not.toBeInTheDocument());
 
-    // Open the field card ⋯ menu
+    // Now the field card ⋯ menu is accessible
     const actionsBtn = screen.getByRole('button', { name: /Actions for New text field/i });
     fireEvent.pointerDown(actionsBtn, { button: 0, ctrlKey: false, pointerType: 'mouse' });
     if (!screen.queryByText('Delete')) {
@@ -123,7 +165,7 @@ describe('FormBuilderPage (three-pane shell)', () => {
     }
     fireEvent.click(await screen.findByText('Delete'));
     await waitFor(() =>
-      expect(screen.queryByText('New text field')).not.toBeInTheDocument(),
+      expect(screen.queryAllByText('New text field')).toHaveLength(0),
     );
   });
 

@@ -1,20 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { AppShell } from '@/shell/AppShell';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { createForm, getForm, publishForm, updateForm } from '../api';
 import { createDefaultFormSchema, newField } from './builderModel';
 import { CompareDialog } from './CompareDialog';
+import { FieldEditorSheet } from './FieldEditorSheet';
 import { useTemplateHistory } from './useTemplateHistory';
 import { useBuilderKeyboard } from './useBuilderKeyboard';
 import { BuilderHeader } from './BuilderHeader';
@@ -23,17 +13,9 @@ import { LanguageControl } from './LanguageControl';
 import {
   lintFormSchema,
   normalizeFormSchema,
-  type FieldType,
   type FormField,
   type FormSchema,
 } from '@openldr/forms/pure';
-
-const FIELD_TYPES: FieldType[] = [
-  'text', 'number', 'date', 'datetime', 'boolean',
-  'select', 'multiselect', 'phone', 'email', 'address',
-  'identifier', 'attachment', 'organism', 'antibiogram',
-  'reference', 'facility', 'group',
-];
 
 export function FormBuilderPage(): JSX.Element {
   const { id } = useParams();
@@ -83,12 +65,11 @@ export function FormBuilderPage(): JSX.Element {
     setSchema((prev) => ({ ...prev, ...patch }));
   };
 
-  const updateField = (updates: Partial<FormField>) => {
-    if (!selectedId) return;
+  const updateField = (id: string, updates: Partial<FormField>) => {
     history.recordEdit();
     setSchema((prev) => ({
       ...prev,
-      fields: prev.fields.map((f) => (f.id === selectedId ? { ...f, ...updates } : f)),
+      fields: prev.fields.map((f) => (f.id === id ? { ...f, ...updates } : f)),
     }));
   };
 
@@ -221,7 +202,7 @@ export function FormBuilderPage(): JSX.Element {
           </span>
         ) : null}
 
-        {/* Three-pane body */}
+        {/* Two-pane body (sheet overlays on field select) */}
         <div className="flex min-h-0 flex-1 overflow-hidden">
           {/* Left: FieldListPane */}
           <div className="w-72 shrink-0 border-r border-border">
@@ -238,79 +219,24 @@ export function FormBuilderPage(): JSX.Element {
             />
           </div>
 
-          {/* Right: inline properties for selected field */}
+          {/* Main area — empty state when no sheet is open */}
           <div className="flex-1 overflow-auto p-4">
-            {selectedField ? (
-              <div className="max-w-md space-y-4">
-                <h2 className="text-sm font-semibold">Field properties</h2>
-
-                {/* Display Label */}
-                <div className="space-y-1">
-                  <Label htmlFor="field-display-label" className="text-xs">Display Label</Label>
-                  <Input
-                    id="field-display-label"
-                    aria-label="Field label"
-                    value={selectedField.displayLabel}
-                    onChange={(e) => updateField({ displayLabel: e.target.value })}
-                  />
-                </div>
-
-                {/* Field Type */}
-                <div className="space-y-1">
-                  <Label className="text-xs">Field Type</Label>
-                  <Select
-                    value={selectedField.fieldType}
-                    onValueChange={(v) => updateField({ fieldType: v as FieldType })}
-                  >
-                    <SelectTrigger aria-label="Field type">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {FIELD_TYPES.map((t) => (
-                        <SelectItem key={t} value={t}>{t}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Required */}
-                <label className="flex items-center gap-2 text-xs">
-                  <Checkbox
-                    aria-label="Required"
-                    checked={selectedField.required}
-                    onCheckedChange={(checked) => updateField({ required: Boolean(checked) })}
-                  />
-                  Required
-                </label>
-
-                {/* Enabled */}
-                <label className="flex items-center gap-2 text-xs">
-                  <Checkbox
-                    aria-label="Enabled"
-                    checked={selectedField.enabled}
-                    onCheckedChange={(checked) => updateField({ enabled: Boolean(checked) })}
-                  />
-                  Enabled
-                </label>
-
-                {/* Delete */}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="border-destructive text-destructive hover:bg-destructive/10"
-                  aria-label="Delete selected field"
-                  onClick={() => deleteField(selectedField.id)}
-                >
-                  Delete field
-                </Button>
-              </div>
-            ) : (
+            {!selectedId && (
               <p className="text-xs text-muted-foreground">Select a field to edit its properties.</p>
             )}
           </div>
         </div>
       </div>
+
+      <FieldEditorSheet
+        field={selectedField}
+        allFields={schema.fields}
+        sections={schema.sections}
+        languages={schema.languages ?? []}
+        open={selectedId !== null}
+        onOpenChange={(o) => { if (!o) setSelectedId(null); }}
+        onUpdate={(patch) => { if (selectedId) updateField(selectedId, patch); }}
+      />
 
       <CompareDialog
         formId={formId}
