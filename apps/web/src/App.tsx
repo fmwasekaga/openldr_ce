@@ -9,6 +9,7 @@ import { Audit } from './pages/Audit';
 import { Users } from './pages/Users';
 import { Forms } from './pages/Forms';
 import { FormCapture } from './pages/FormCapture';
+import { FormBuilderPage } from './forms-builder/FormBuilderPage';
 
 export function App() {
   return (
@@ -20,6 +21,8 @@ export function App() {
       <Route path="/users" element={<Users />} />
       <Route path="/audit" element={<Audit />} />
       <Route path="/forms" element={<Forms />} />
+      <Route path="/forms/new" element={<FormBuilderPage />} />
+      <Route path="/forms/:id/builder" element={<FormBuilderPage />} />
       <Route path="/forms/:id" element={<FormCapture />} />
       <Route path="/docs" element={<Docs />} />
       <Route path="/docs/:slug" element={<Docs />} />

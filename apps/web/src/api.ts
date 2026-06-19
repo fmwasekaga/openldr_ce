@@ -180,10 +180,39 @@ export interface CreateFormInput {
   versionLabel?: string | null;
   targetPages?: string[] | null;
 }
+export type UpdateFormInput = CreateFormInput;
+export interface PublishFormInput {
+  versionLabel?: string | null;
+}
+export interface FormVersionSummary {
+  id: string;
+  formId: string;
+  version: number;
+  versionLabel: string | null;
+  name: string;
+  fhirResourceType: string | null;
+  targetPages: string[] | null;
+  publishedAt: string;
+  publishedBy: string | null;
+}
+export interface FormVersion extends FormVersionSummary {
+  schema: unknown;
+  questionnaire: unknown;
+}
 export const listForms = (): Promise<FormSummary[]> => apiGet('/api/forms', 'list forms');
 export const getForm = (id: string): Promise<FormDefinition> => apiGet(`/api/forms/${id}`, 'get form');
 export const createForm = (i: CreateFormInput): Promise<FormDefinition> =>
   fetch('/api/forms', jbody(i, 'POST')).then((r) => okJson<FormDefinition>(r, 'create form'));
+export const updateForm = (id: string, i: UpdateFormInput): Promise<FormDefinition> =>
+  fetch(`/api/forms/${id}`, jbody(i, 'PUT')).then((r) => okJson<FormDefinition>(r, 'update form'));
+export const publishForm = (id: string, i: PublishFormInput = {}): Promise<FormDefinition> =>
+  fetch(`/api/forms/${id}/publish`, jbody(i, 'POST')).then((r) => okJson<FormDefinition>(r, 'publish form'));
+export const duplicateForm = (id: string): Promise<FormDefinition> =>
+  fetch(`/api/forms/${id}/duplicate`, jbody({}, 'POST')).then((r) => okJson<FormDefinition>(r, 'duplicate form'));
+export const listFormVersions = (id: string): Promise<FormVersionSummary[]> =>
+  apiGet(`/api/forms/${id}/versions`, 'list form versions');
+export const getFormVersion = (id: string, version: number): Promise<FormVersion> =>
+  apiGet(`/api/forms/${id}/versions/${version}`, 'get form version');
 export const setFormStatus = (id: string, status: FormStatus): Promise<FormDefinition> =>
   fetch(`/api/forms/${id}/status`, jbody({ status }, 'POST')).then((r) => okJson<FormDefinition>(r, 'set form status'));
 export const deleteForm = (id: string): Promise<void> => apiDelete(`/api/forms/${id}`, 'delete form');
