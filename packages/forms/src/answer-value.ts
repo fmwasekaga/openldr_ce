@@ -1,60 +1,44 @@
-import type { FieldType } from './schema/form-schema';
+import type { FormField } from './schema/form-schema'
+import type { QuestionnaireResponseItemAnswer } from 'fhir/r4'
 
-export type AnswerValue =
-  | string
-  | number
-  | boolean
-  | { code: string; display?: string; system?: string }
-  | { value?: number; unit?: string };
+/** Filled-in form values, keyed by field id (the app's `values` shape). */
+export type AnswerState = Record<string, unknown>
 
-export type Answers = Record<string, AnswerValue | AnswerValue[]>;
+const isEmpty = (v: unknown): boolean => v === undefined || v === null || v === ''
 
-export function toAnswer(type: FieldType, value: AnswerValue): Record<string, unknown> {
-  switch (type) {
-    case 'string':
-    case 'text':
-      return { valueString: value };
-    case 'integer':
-      return { valueInteger: value };
-    case 'decimal':
-      return { valueDecimal: value };
+/** Encode a single scalar value as a QuestionnaireResponse answer, by field type. */
+export function toAnswer(field: FormField, value: unknown): QuestionnaireResponseItemAnswer | null {
+  if (isEmpty(value)) return null
+  switch (field.fieldType) {
+    case 'number':
+      return { valueDecimal: Number(value) }
     case 'boolean':
-      return { valueBoolean: value };
+      return { valueBoolean: Boolean(value) }
     case 'date':
-      return { valueDate: value };
-    case 'dateTime':
-      return { valueDateTime: value };
-    case 'choice':
-    case 'open-choice': {
-      const c = value as { code: string; display?: string; system?: string };
-      return { valueCoding: { system: c.system, code: c.code, display: c.display } };
-    }
+      return { valueDate: String(value) }
+    case 'datetime':
+      return { valueDateTime: String(value) }
+    case 'select':
+    case 'multiselect':
+      return { valueCoding: { code: String(value) } }
     case 'reference':
-      return { valueReference: { reference: value } };
-    case 'quantity': {
-      const q = value as { value?: number; unit?: string };
-      return { valueQuantity: { value: q.value, unit: q.unit } };
-    }
+    case 'facility':
+      return { valueReference: { reference: String(value) } }
     default:
-      return { valueString: String(value) };
+      // text, phone, email, identifier, address, attachment, organism, antibiogram, group
+      return { valueString: String(value) }
   }
 }
 
-export function readAnswer(answer: Record<string, unknown>): AnswerValue | undefined {
-  if ('valueString' in answer) return answer.valueString as string;
-  if ('valueInteger' in answer) return answer.valueInteger as number;
-  if ('valueDecimal' in answer) return answer.valueDecimal as number;
-  if ('valueBoolean' in answer) return answer.valueBoolean as boolean;
-  if ('valueDate' in answer) return answer.valueDate as string;
-  if ('valueDateTime' in answer) return answer.valueDateTime as string;
-  if ('valueCoding' in answer) {
-    const c = answer.valueCoding as { code: string; display?: string; system?: string };
-    return { code: c.code, display: c.display, system: c.system };
-  }
-  if ('valueReference' in answer) return (answer.valueReference as { reference: string }).reference;
-  if ('valueQuantity' in answer) {
-    const q = answer.valueQuantity as { value?: number; unit?: string };
-    return { value: q.value, unit: q.unit };
-  }
-  return undefined;
+/** Decode a QuestionnaireResponse answer back to a raw value (by which value[x] is present). */
+export function fromAnswer(answer: QuestionnaireResponseItemAnswer): unknown {
+  if (answer.valueDecimal !== undefined) return answer.valueDecimal
+  if (answer.valueInteger !== undefined) return answer.valueInteger
+  if (answer.valueBoolean !== undefined) return answer.valueBoolean
+  if (answer.valueDate !== undefined) return answer.valueDate
+  if (answer.valueDateTime !== undefined) return answer.valueDateTime
+  if (answer.valueCoding !== undefined) return answer.valueCoding.code ?? ''
+  if (answer.valueReference !== undefined) return answer.valueReference.reference
+  if (answer.valueString !== undefined) return answer.valueString
+  return undefined
 }
