@@ -18,6 +18,8 @@ const updateInput = z.object({
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerUsersRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
+  // Read-only listing/detail: any authenticated user (global auth hook). The
+  // lab_admin guard is intentionally applied to mutations only.
   app.get('/api/users', async () => ctx.users.list());
 
   app.get('/api/users/:id', async (req, reply) => {
