@@ -3,11 +3,14 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { VisibilityRuleEditor } from './VisibilityRuleEditor';
+import { ValueSetBindingEditor } from './ValueSetBindingEditor';
 
 const TYPES: FieldType[] = ['string', 'text', 'integer', 'decimal', 'boolean', 'date', 'dateTime', 'choice', 'open-choice', 'reference', 'quantity'];
 
-export function PropertiesSheet({ field, onChange }: { field: FormField | null; onChange: (updates: Partial<FormField>) => void }): JSX.Element {
+export function PropertiesSheet({ field, allFields, onChange }: { field: FormField | null; allFields: FormField[]; onChange: (updates: Partial<FormField>) => void }): JSX.Element {
   if (!field) return <div className="text-xs text-muted-foreground">Select a field to edit properties.</div>;
+  const supportsBinding = field.type === 'choice' || field.type === 'open-choice';
   return (
     <div className="space-y-3">
       <div className="space-y-1">
@@ -41,6 +44,8 @@ export function PropertiesSheet({ field, onChange }: { field: FormField | null; 
         <Label htmlFor="field-unit" className="text-xs">Unit</Label>
         <Input id="field-unit" aria-label="Unit" value={field.unit ?? ''} onChange={(event) => onChange({ unit: event.target.value || undefined })} />
       </div>
+      <VisibilityRuleEditor field={field} fields={allFields} onChange={(visibility) => onChange({ visibility })} />
+      {supportsBinding ? <ValueSetBindingEditor field={field} onChange={onChange} /> : null}
     </div>
   );
 }

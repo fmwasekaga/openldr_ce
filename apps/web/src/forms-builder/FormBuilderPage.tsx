@@ -3,15 +3,18 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { AppShell } from '@/shell/AppShell';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { createForm, getForm, updateForm, type FormDefinition } from '../api';
+import { createForm, getForm, publishForm, updateForm, type FormDefinition } from '../api';
 import { createDefaultFormSchema, newField, newSection } from './builderModel';
 import { LintSummary } from './LintSummary';
 import { FieldPalette } from './FieldPalette';
 import { BuilderCanvas } from './BuilderCanvas';
 import { PropertiesSheet } from './PropertiesSheet';
 import { BulkActionBar } from './BulkActionBar';
+import { CompareDialog } from './CompareDialog';
 import { useTemplateHistory } from './useTemplateHistory';
 import { useBuilderKeyboard } from './useBuilderKeyboard';
+import { FormRuntime } from '@/forms-runtime/FormRuntime';
+import type { RuntimeFormSchema } from '@/forms-runtime/types';
 import { lintFormSchema, normalizeFormSchema, type FieldType, type FormField, type FormSchema } from '@openldr/forms/pure';
 
 function reorder<T>(items: T[], fromId: string, toId: string, idOf: (item: T) => string): T[] {
@@ -36,6 +39,9 @@ export function FormBuilderPage(): JSX.Element {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(Boolean(id));
   const [error, setError] = useState<string | null>(null);
+  const [previewMode, setPreviewMode] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
 
   const history = useTemplateHistory<FormSchema>(() => schema);
 
@@ -50,6 +56,7 @@ export function FormBuilderPage(): JSX.Element {
         setName(loaded.name);
         setVersionLabel(loaded.versionLabel ?? '');
         setTargetPages(loaded.targetPages ?? ['forms']);
+        setStatus(loaded.status);
         setSchema(normalizeFormSchema(loaded.schema));
       })
       .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : String(err)); })
@@ -68,6 +75,8 @@ export function FormBuilderPage(): JSX.Element {
     return null;
   }, [schema, selectedFieldIds]);
 
+  const allFields = useMemo<FormField[]>(() => schema.sections.flatMap((section) => section.fields), [schema]);
+
   const filteredSections = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) return schema.sections;
@@ -85,6 +94,11 @@ export function FormBuilderPage(): JSX.Element {
       return { ...prev, sections: sections.map((section, index) => (index === 0 ? { ...section, fields: [...section.fields, field] } : section)) };
     });
     setSelectedFieldIds(new Set());
+  };
+
+  const addSection = () => {
+    history.pushHistory();
+    setSchema((prev) => ({ ...prev, sections: [...prev.sections, newSection(`Section ${prev.sections.length + 1}`)] }));
   };
 
   const selectField = (field: FormField, event: React.MouseEvent) => {
@@ -169,10 +183,17 @@ export function FormBuilderPage(): JSX.Element {
     const nextSchema = { ...schema, name, title: { ...schema.title, en: name } };
     const payload = { name, versionLabel: versionLabel || null, fhirResourceType: null, targetPages, schema: nextSchema };
     const saved = formId ? await updateForm(formId, payload) : await createForm(payload);
+    setStatus(saved.status);
     if (!formId) {
       setFormId(saved.id);
       navigate(`/forms/${saved.id}/builder`, { replace: true });
     }
+  };
+
+  const publish = async () => {
+    if (!formId) return;
+    const published = await publishForm(formId, { versionLabel: versionLabel || null });
+    setStatus(published.status);
   };
 
   return (
@@ -182,10 +203,14 @@ export function FormBuilderPage(): JSX.Element {
           <Input aria-label="Form name" value={name} onChange={(event) => setName(event.target.value)} className="h-8 w-72 text-sm" />
           <Input aria-label="Version label" value={versionLabel} onChange={(event) => setVersionLabel(event.target.value)} className="h-8 w-32 text-sm" />
           <div className="flex-1" />
+          {status ? <span className="rounded-md border border-border px-2 py-1 text-xs capitalize text-muted-foreground">{status}</span> : null}
+          <Button variant="outline" size="sm" onClick={() => setPreviewMode((value) => !value)}>{previewMode ? 'Edit' : 'Preview'}</Button>
           <Button variant="outline" size="sm" onClick={() => applyHistory(history.undo())} disabled={!history.canUndo}>Undo</Button>
           <Button variant="outline" size="sm" onClick={() => applyHistory(history.redo())} disabled={!history.canRedo}>Redo</Button>
           <Button variant="outline" size="sm" onClick={() => navigate('/forms')}>Back</Button>
           <Button size="sm" onClick={() => { void save(); }} disabled={loading || issues.some((issue) => issue.severity === 'error')}>Save draft</Button>
+          <Button size="sm" variant="outline" onClick={() => { void publish(); }} disabled={!formId || issues.some((issue) => issue.severity === 'error')}>Publish</Button>
+          <Button size="sm" variant="outline" onClick={() => setCompareOpen(true)} disabled={!formId}>Compare</Button>
         </div>
         <div className="flex items-center gap-3 border-b border-border px-3 py-2">
           <LintSummary issues={issues} />
@@ -198,18 +223,25 @@ export function FormBuilderPage(): JSX.Element {
         </div>
         {error ? <div className="m-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div> : null}
         <div className="grid min-h-0 flex-1 grid-cols-[16rem_minmax(0,1fr)_24rem]">
-          <aside className="border-r border-border p-3">
+          <aside className="space-y-3 border-r border-border p-3">
+            <Button type="button" size="sm" variant="outline" className="w-full justify-start text-xs" onClick={addSection}>Add section</Button>
             <FieldPalette search={search} onSearch={setSearch} onAddField={addField} />
           </aside>
           <main className="min-h-0 overflow-auto p-3">
-            <BuilderCanvas
-              sections={filteredSections}
-              selectedFieldIds={selectedFieldIds}
-              onSelectField={selectField}
-              onDuplicateField={(fieldId) => duplicateFieldsByIds(new Set([fieldId]))}
-              onDeleteField={(fieldId) => deleteFieldsByIds(new Set([fieldId]))}
-              onReorderField={reorderField}
-            />
+            {previewMode ? (
+              <div className="mx-auto max-w-2xl">
+                <FormRuntime schema={schema as unknown as RuntimeFormSchema} submitLabel="Preview submit" onSubmit={() => undefined} />
+              </div>
+            ) : (
+              <BuilderCanvas
+                sections={filteredSections}
+                selectedFieldIds={selectedFieldIds}
+                onSelectField={selectField}
+                onDuplicateField={(fieldId) => duplicateFieldsByIds(new Set([fieldId]))}
+                onDeleteField={(fieldId) => deleteFieldsByIds(new Set([fieldId]))}
+                onReorderField={reorderField}
+              />
+            )}
           </main>
           <aside className="space-y-3 border-l border-border p-3">
             <div className="flex items-center justify-between">
@@ -225,10 +257,11 @@ export function FormBuilderPage(): JSX.Element {
                 Delete
               </Button>
             </div>
-            <PropertiesSheet field={selectedField} onChange={updateSelectedField} />
+            <PropertiesSheet field={selectedField} allFields={allFields} onChange={updateSelectedField} />
           </aside>
         </div>
       </div>
+      <CompareDialog formId={formId} current={schema} open={compareOpen} onOpenChange={setCompareOpen} />
     </AppShell>
   );
 }

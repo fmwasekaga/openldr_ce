@@ -39,4 +39,30 @@ describe('FormBuilderPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete selected field' }));
     expect(screen.queryByText('Patient ID')).not.toBeInTheDocument();
   });
+
+  it('publishes and compares against a published version', async () => {
+    vi.spyOn(api, 'getForm').mockResolvedValue({
+      id: 'form-1',
+      name: 'Specimen intake',
+      versionLabel: 'v1',
+      fhirResourceType: null,
+      status: 'draft',
+      active: true,
+      schema: { id: 'specimen-intake', name: 'Specimen intake', title: { en: 'Specimen intake' }, status: 'active', languages: ['en'], sections: [{ id: 'main', title: { en: 'Main' }, fields: [{ id: 'patientId', type: 'string', label: { en: 'Patient ID' } }] }] },
+      targetPages: ['forms'],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    });
+    vi.spyOn(api, 'publishForm').mockResolvedValue(await api.getForm('form-1'));
+    vi.spyOn(api, 'listFormVersions').mockResolvedValue([{ id: 'fv-1', formId: 'form-1', version: 1, versionLabel: 'v1', name: 'Specimen intake', fhirResourceType: null, targetPages: ['forms'], publishedAt: '2026-01-01T00:00:00.000Z', publishedBy: null }]);
+    vi.spyOn(api, 'getFormVersion').mockResolvedValue({ id: 'fv-1', formId: 'form-1', version: 1, versionLabel: 'v1', name: 'Specimen intake', fhirResourceType: null, targetPages: ['forms'], publishedAt: '2026-01-01T00:00:00.000Z', publishedBy: null, schema: { id: 'specimen-intake', name: 'Specimen intake', title: { en: 'Specimen intake' }, status: 'active', languages: ['en'], sections: [] }, questionnaire: {} });
+
+    render(<MemoryRouter initialEntries={['/forms/form-1/builder']}><Routes><Route path="/forms/:id/builder" element={<FormBuilderPage />} /></Routes></MemoryRouter>);
+    expect(await screen.findByDisplayValue('Specimen intake')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /add section/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+    await waitFor(() => expect(api.publishForm).toHaveBeenCalledWith('form-1', expect.objectContaining({ versionLabel: 'v1' })));
+    fireEvent.click(screen.getByRole('button', { name: 'Compare' }));
+    expect(await screen.findByText(/Published version v1/)).toBeInTheDocument();
+  });
 });
