@@ -7,6 +7,9 @@ import { recordAudit } from './audit-helper';
 
 const resetPasswordInput = z.object({ password: z.string().min(1), temporary: z.boolean().optional() });
 
+// Duck-type by name: apps/server intentionally does not depend on @openldr/ports,
+// and name-based detection is robust across module/bundle boundaries. The error
+// class sets this name in its constructor.
 function isNotConfigured(e: unknown): boolean {
   return e instanceof Error && e.name === 'IdentityAdminNotConfiguredError';
 }

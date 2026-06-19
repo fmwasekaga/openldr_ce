@@ -177,6 +177,8 @@ describe('users routes', () => {
     expect(res.statusCode).toBe(204);
     const authCalls = (ctx as unknown as { __authCalls: Array<{ op: string }> }).__authCalls;
     expect(authCalls.some((c) => c.op === 'sendPasswordResetEmail')).toBe(true);
+    const events = (ctx as unknown as { __auditEvents: Array<{ action: string }> }).__auditEvents;
+    expect(events.some((e) => e.action === 'user.send_reset_email')).toBe(true);
   });
 
   it('force-logout: 400 on self, 204 on another user with a subject', async () => {
@@ -190,6 +192,8 @@ describe('users routes', () => {
     (ctx as unknown as { __setSubject: (id: string, s: string) => void }).__setSubject(id, 'kc-sub-1');
     const ok = await app.inject({ method: 'POST', url: `/api/users/${id}/force-logout` });
     expect(ok.statusCode).toBe(204);
+    const events = (ctx as unknown as { __auditEvents: Array<{ action: string }> }).__auditEvents;
+    expect(events.some((e) => e.action === 'user.force_logout')).toBe(true);
   });
 
   it('reset-password: 503 when the provider admin client is not configured', async () => {
