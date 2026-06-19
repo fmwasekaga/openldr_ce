@@ -229,4 +229,29 @@ describe('FormBuilderPage (three-pane shell)', () => {
     fireEvent.click(await screen.findByText('Compare'));
     expect(await screen.findByText(/Published version|Compare form versions/)).toBeInTheDocument();
   });
+
+  it('SectionsManager is present — "Add section" button exists and clicking it adds a section header in the field list', async () => {
+    render(
+      <MemoryRouter initialEntries={['/forms/new']}>
+        <Routes><Route path="/forms/new" element={<FormBuilderPage />} /></Routes>
+      </MemoryRouter>,
+    );
+
+    // The SectionsManager renders an "Add section" button
+    const addSectionBtn = screen.getByRole('button', { name: /Add section/i });
+    expect(addSectionBtn).toBeInTheDocument();
+
+    // Click it — a new section is created
+    fireEvent.click(addSectionBtn);
+
+    // The new section should appear either:
+    // a) as a header in the field-list pane, OR
+    // b) as an item in the Sections dropdown
+    // The SectionsManager renders it in its own section list; also the field-list dropdown updates.
+    // Check for "Section 1" label which is what SectionsManager generates as the first section.
+    await waitFor(() => {
+      const sectionLabel = screen.queryByDisplayValue('Section 1') ?? screen.queryByText('Section 1');
+      expect(sectionLabel).toBeInTheDocument();
+    });
+  });
 });

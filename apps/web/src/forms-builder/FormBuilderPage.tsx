@@ -11,6 +11,7 @@ import { BuilderHeader } from './BuilderHeader';
 import { FieldListPane } from './FieldListPane';
 import { LanguageControl } from './LanguageControl';
 import { PreviewPane } from './PreviewPane';
+import { SectionsManager } from './SectionsManager';
 import {
   lintFormSchema,
   normalizeFormSchema,
@@ -63,6 +64,12 @@ export function FormBuilderPage(): JSX.Element {
 
   // ── Schema helpers ───────────────────────────────────────────────────────────
   const patchSchema = (patch: Partial<FormSchema>) => {
+    setSchema((prev) => ({ ...prev, ...patch }));
+  };
+
+  /** Record an edit in history, then apply a patch to the schema. */
+  const updateSchema = (patch: Partial<FormSchema>) => {
+    history.recordEdit();
     setSchema((prev) => ({ ...prev, ...patch }));
   };
 
@@ -205,19 +212,33 @@ export function FormBuilderPage(): JSX.Element {
 
         {/* Two-pane body (sheet overlays on field select) */}
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          {/* Left: FieldListPane */}
-          <div className="w-72 shrink-0 border-r border-border overflow-y-auto">
-            <FieldListPane
-              fields={schema.fields}
-              selectedFieldId={selectedId}
-              issues={issues}
-              onSelect={(f) => setSelectedId(f.id)}
-              onToggleEnabled={toggleEnabled}
-              onToggleRequired={toggleRequired}
-              onDuplicate={duplicateField}
-              onDelete={deleteField}
-              onReorder={reorderFields}
+          {/* Left: SectionsManager + FieldListPane */}
+          <div className="w-72 shrink-0 border-r border-border overflow-y-auto flex flex-col">
+            <SectionsManager
+              sections={schema.sections}
+              onChange={(sections) => updateSchema({ sections })}
+              onFieldsClearSection={(id) =>
+                updateSchema({
+                  fields: schema.fields.map((f) =>
+                    f.section === id ? { ...f, section: undefined } : f,
+                  ),
+                })
+              }
             />
+            <div className="flex-1 min-h-0 overflow-y-auto border-t border-border">
+              <FieldListPane
+                fields={schema.fields}
+                sections={schema.sections}
+                selectedFieldId={selectedId}
+                issues={issues}
+                onSelect={(f) => setSelectedId(f.id)}
+                onToggleEnabled={toggleEnabled}
+                onToggleRequired={toggleRequired}
+                onDuplicate={duplicateField}
+                onDelete={deleteField}
+                onReorder={reorderFields}
+              />
+            </div>
           </div>
 
           {/* Right: PreviewPane */}
