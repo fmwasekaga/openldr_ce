@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import Fastify from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { registerUsersRoutes } from './users-routes';
+import './auth-plugin';
 
 type User = Awaited<ReturnType<AppContext['users']['create']>>;
 
@@ -53,6 +54,9 @@ function fakeCtx() {
 describe('users routes', () => {
   it('creates, lists, updates roles/profile, disables, and gets a user', async () => {
     const app = Fastify();
+    app.addHook('onRequest', async (req) => {
+      req.user = { id: 'admin', username: 'admin', displayName: null, roles: ['lab_admin'] };
+    });
     registerUsersRoutes(app, fakeCtx());
 
     const created = await app.inject({ method: 'POST', url: '/api/users', payload: { username: 'ada', displayName: 'Ada', roles: ['lab_admin'] } });
@@ -77,6 +81,9 @@ describe('users routes', () => {
 
   it('returns 404 for a missing user and 400 for a bad status', async () => {
     const app = Fastify();
+    app.addHook('onRequest', async (req) => {
+      req.user = { id: 'admin', username: 'admin', displayName: null, roles: ['lab_admin'] };
+    });
     registerUsersRoutes(app, fakeCtx());
 
     const missing = await app.inject({ method: 'GET', url: '/api/users/nope' });

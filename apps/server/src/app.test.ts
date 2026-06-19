@@ -364,7 +364,7 @@ function ctxWith(status: 'up' | 'down'): AppContext {
     forms: {} as never,
     terminology: { ops: {} as never, admin: buildFakeAdmin(), ontology: buildFakeOntology(), loaders: buildFakeLoaders() },
     dashboards: {} as never,
-    cfg: {} as never,
+    cfg: { AUTH_DEV_BYPASS: true } as never,
     async close() {},
   };
 }

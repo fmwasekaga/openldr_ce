@@ -13,6 +13,7 @@ import { registerDashboardRoutes } from './dashboards-routes';
 import { registerAuditRoutes } from './audit-routes';
 import { registerUsersRoutes } from './users-routes';
 import { registerFormsRoutes } from './forms-routes';
+import { registerAuth } from './auth-plugin';
 
 export function registerConfigRoute(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -31,6 +32,16 @@ export function buildApp(ctx: AppContext) {
     const result = await ctx.health.runAll();
     reply.code(result.status === 'down' ? 503 : 200);
     return result;
+  });
+
+  registerAuth(app, ctx);
+
+  app.get('/api/me', async (req, reply) => {
+    if (!req.user) {
+      reply.code(401);
+      return { error: 'authentication required' };
+    }
+    return req.user;
   });
 
   registerConfigRoute(app, ctx);

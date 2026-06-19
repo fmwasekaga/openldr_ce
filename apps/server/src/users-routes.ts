@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
 import { z } from 'zod';
+import { requireRole } from './rbac';
 
 const createInput = z.object({
   username: z.string().min(1),
@@ -28,7 +29,7 @@ export function registerUsersRoutes(app: FastifyInstance<any, any, any, any>, ct
     return u;
   });
 
-  app.post('/api/users', async (req, reply) => {
+  app.post('/api/users', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
     const p = createInput.safeParse(req.body);
     if (!p.success) {
       reply.code(400);
@@ -49,7 +50,7 @@ export function registerUsersRoutes(app: FastifyInstance<any, any, any, any>, ct
     }
   });
 
-  app.put('/api/users/:id', async (req, reply) => {
+  app.put('/api/users/:id', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
     const p = updateInput.safeParse(req.body);
     if (!p.success) {
       reply.code(400);
@@ -65,7 +66,7 @@ export function registerUsersRoutes(app: FastifyInstance<any, any, any, any>, ct
     return ctx.users.get(id);
   });
 
-  app.post('/api/users/:id/status', async (req, reply) => {
+  app.post('/api/users/:id/status', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
     const s = (req.body as { status?: string }).status;
     if (s !== 'active' && s !== 'disabled') {
       reply.code(400);
