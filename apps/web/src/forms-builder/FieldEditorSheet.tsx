@@ -1,6 +1,7 @@
 import * as React from 'react';
 import type { FormField, FormSchema } from '@openldr/forms/pure';
 import { OptionsEditor } from './field-editor/OptionsEditor';
+import { CodesEditor } from './field-editor/CodesEditor';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -222,7 +223,9 @@ export function FieldEditorSheet({
           <OptionsEditor field={field} onUpdate={onUpdate} />
         )}
 
-        {/* ── TODO Task 3: Codes section ───────────────────────────── */}
+        {/* ── Codes section ────────────────────────────────────────── */}
+        <CodesEditor field={field} onUpdate={onUpdate} />
+
         {/* ── TODO Task 4: Translations section ───────────────────── */}
         {/* ── TODO Task 5: Mapping / FHIR section ─────────────────── */}
         {/* ── TODO Task 6: Visibility / conditions section ─────────── */}
