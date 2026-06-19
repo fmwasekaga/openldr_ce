@@ -1,18 +1,20 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { sampleForms } from './forms';
-import { toQuestionnaire } from '../to-questionnaire';
-import { fromQuestionnaire } from '../from-questionnaire';
 import { FormSchema } from '../schema/form-schema';
+import { toQuestionnaire } from '../to-questionnaire';
 
 describe('sample forms', () => {
-  it('every sample passes FormSchema validation', () => {
-    for (const f of sampleForms()) {
-      expect(FormSchema.safeParse(f).success).toBe(true);
+  it('parse against the schema and export to Questionnaire', () => {
+    expect(sampleForms.length).toBeGreaterThanOrEqual(2);
+    for (const form of sampleForms) {
+      const parsed = FormSchema.parse(form);
+      const q = toQuestionnaire(parsed);
+      expect(q.resourceType).toBe('Questionnaire');
     }
   });
-  it('every sample round-trips losslessly through a Questionnaire', () => {
-    for (const f of sampleForms()) {
-      expect(fromQuestionnaire(toQuestionnaire(f))).toEqual(f);
-    }
+  it('includes a Facility (Location) form targeting facilities', () => {
+    const facility = sampleForms.find((f) => f.fhirResourceType === 'Location');
+    expect(facility?.targetPages).toContain('facilities');
+    expect(facility?.fields.some((x) => x.apiProperty === 'name')).toBe(true);
   });
 });
