@@ -239,6 +239,7 @@ export function FormBuilderPage(): JSX.Element {
           issues={issues}
           canPublish={!hasErrors}
           formId={formId}
+          status={status}
           onChange={patchSchema}
           onSave={() => { void save(); }}
           onPublish={() => { void publish(); }}
@@ -260,12 +261,6 @@ export function FormBuilderPage(): JSX.Element {
           <div className="m-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
             {error}
           </div>
-        ) : null}
-
-        {status ? (
-          <span className="mx-3 mt-1 inline-block rounded-md border border-border px-2 py-1 text-xs capitalize text-muted-foreground">
-            {status}
-          </span>
         ) : null}
 
         {/* Two-pane body (sheet overlays on field select) */}

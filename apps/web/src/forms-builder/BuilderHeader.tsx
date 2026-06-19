@@ -17,6 +17,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { PAGE_TARGETS } from '@openldr/forms/pure';
 import type { FormLintIssue, FormSchema } from '@openldr/forms/pure';
 import { LintSummary } from './LintSummary';
@@ -83,6 +89,8 @@ export interface BuilderHeaderProps {
   canPublish: boolean;
   /** The persisted form id. When null/undefined, lifecycle actions (Archive, Export, Disable, Delete) are disabled. */
   formId: string | null | undefined;
+  /** Current form status (draft/published/archived). Shown as a colored dot to the left of the form name. */
+  status?: string | null;
   onChange: (patch: Partial<FormSchema>) => void;
   onSave: () => void;
   onPublish: () => void;
@@ -98,11 +106,25 @@ export interface BuilderHeaderProps {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+// ─── Status dot helpers ───────────────────────────────────────────────────────
+
+function statusDotClass(status: string | null | undefined): string {
+  if (status === 'published') return 'bg-emerald-500';
+  if (status === 'archived') return 'bg-amber-500';
+  return 'bg-muted-foreground/50';
+}
+
+function statusLabel(status: string | null | undefined): string {
+  if (!status) return 'Draft';
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
 export function BuilderHeader({
   schema,
   issues,
   canPublish,
   formId,
+  status,
   onChange,
   onSave,
   onPublish,
@@ -135,16 +157,29 @@ export function BuilderHeader({
     <div>
       {/* Header bar */}
       <div className="flex items-end gap-3 flex-wrap rounded-md border border-border bg-card p-3">
-        {/* Form name */}
+        {/* Form name (with status dot) */}
         <div className="flex-1 min-w-40 space-y-1">
           <Label className="text-xs" htmlFor="builder-name">Form name</Label>
-          <Input
-            id="builder-name"
-            aria-label="Form name"
-            value={schema.name}
-            placeholder="e.g. Patient Registration"
-            onChange={(e) => onChange({ name: e.target.value })}
-          />
+          <div className="flex items-center gap-2">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    className={`h-2.5 w-2.5 rounded-full shrink-0 ${statusDotClass(status)}`}
+                    aria-label={`Status: ${statusLabel(status)}`}
+                  />
+                </TooltipTrigger>
+                <TooltipContent>{statusLabel(status)}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <Input
+              id="builder-name"
+              aria-label="Form name"
+              value={schema.name}
+              placeholder="e.g. Patient Registration"
+              onChange={(e) => onChange({ name: e.target.value })}
+            />
+          </div>
         </div>
 
         {/* Version label */}
@@ -166,7 +201,7 @@ export function BuilderHeader({
             value={schema.fhirVersion ?? '__none'}
             onValueChange={(v) => onChange({ fhirVersion: v === '__none' ? null : v })}
           >
-            <SelectTrigger className="w-36 text-xs" aria-label="FHIR Version">
+            <SelectTrigger className="w-44 text-xs whitespace-nowrap [&>span]:block [&>span]:truncate" aria-label="FHIR Version">
               <SelectValue placeholder="None" />
             </SelectTrigger>
             <SelectContent>
@@ -188,9 +223,9 @@ export function BuilderHeader({
               <button
                 type="button"
                 aria-label="Target pages"
-                className="flex h-9 min-w-40 items-center justify-between gap-2 whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                className="flex h-9 w-44 items-center justify-between gap-2 whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
               >
-                <span className={targetPages.length === 0 ? 'text-muted-foreground' : ''}>
+                <span className={`block truncate ${targetPages.length === 0 ? 'text-muted-foreground' : ''}`}>
                   {targetLabel}
                 </span>
                 <ChevronDown className="h-4 w-4 opacity-50" />
@@ -221,7 +256,7 @@ export function BuilderHeader({
             value={schema.fhirResourceType ?? '__none'}
             onValueChange={(v) => onChange({ fhirResourceType: v === '__none' ? null : v })}
           >
-            <SelectTrigger className="w-44 text-xs" aria-label="Resource Type">
+            <SelectTrigger className="w-44 text-xs whitespace-nowrap [&>span]:block [&>span]:truncate" aria-label="Resource Type">
               <SelectValue placeholder="None" />
             </SelectTrigger>
             <SelectContent className="max-h-72">
