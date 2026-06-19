@@ -10,6 +10,7 @@ import { useBuilderKeyboard } from './useBuilderKeyboard';
 import { BuilderHeader } from './BuilderHeader';
 import { FieldListPane } from './FieldListPane';
 import { LanguageControl } from './LanguageControl';
+import { PreviewPane } from './PreviewPane';
 import {
   lintFormSchema,
   normalizeFormSchema,
@@ -205,7 +206,7 @@ export function FormBuilderPage(): JSX.Element {
         {/* Two-pane body (sheet overlays on field select) */}
         <div className="flex min-h-0 flex-1 overflow-hidden">
           {/* Left: FieldListPane */}
-          <div className="w-72 shrink-0 border-r border-border">
+          <div className="w-72 shrink-0 border-r border-border overflow-y-auto">
             <FieldListPane
               fields={schema.fields}
               selectedFieldId={selectedId}
@@ -219,11 +220,9 @@ export function FormBuilderPage(): JSX.Element {
             />
           </div>
 
-          {/* Main area — empty state when no sheet is open */}
-          <div className="flex-1 overflow-auto p-4">
-            {!selectedId && (
-              <p className="text-xs text-muted-foreground">Select a field to edit its properties.</p>
-            )}
+          {/* Right: PreviewPane */}
+          <div className="flex-1 overflow-y-auto p-4">
+            <PreviewPane schema={schema} />
           </div>
         </div>
       </div>

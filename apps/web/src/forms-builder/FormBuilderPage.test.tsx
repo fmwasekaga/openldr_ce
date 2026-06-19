@@ -61,6 +61,16 @@ describe('FormBuilderPage (three-pane shell)', () => {
     expect(screen.getByLabelText('Form name')).toBeInTheDocument();
   });
 
+  it('renders the Preview pane alongside the field list', () => {
+    render(
+      <MemoryRouter initialEntries={['/forms/new']}>
+        <Routes><Route path="/forms/new" element={<FormBuilderPage />} /></Routes>
+      </MemoryRouter>,
+    );
+    // PreviewPane renders a "Preview" heading
+    expect(screen.getByText('Preview')).toBeInTheDocument();
+  });
+
   it('adds a field via the header ⋯ menu → Add field', async () => {
     render(
       <MemoryRouter initialEntries={['/forms/new']}>
