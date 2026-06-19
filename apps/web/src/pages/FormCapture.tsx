@@ -100,22 +100,20 @@ export function FormCapture() {
           </DropdownMenu>
         </div>
 
-        {/* Edge-to-edge body — scrollbar at pane edge, inner px-6 py-4 */}
+        {/* Edge-to-edge body — scrollbar at pane edge; FormRuntime owns horizontal padding */}
         <div className="min-h-0 flex-1 overflow-auto">
-          <div className="px-6 py-4">
-            {loading ? <div className="py-8 text-center text-muted-foreground">Loading...</div> : null}
-            {error ? <div className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div> : null}
-            {success ? <div className="mb-3 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700">Response captured.</div> : null}
+          {loading ? <div className="px-6 py-8 text-center text-muted-foreground">Loading...</div> : null}
+          {error ? <div className="mx-6 mt-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div> : null}
+          {success ? <div className="mx-6 mt-3 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700">Response captured.</div> : null}
 
-            {schema ? (
-              <FormRuntime
-                schema={schema}
-                formId="form-capture"
-                footer={null}
-                onSubmit={handleSubmit}
-              />
-            ) : null}
-          </div>
+          {schema ? (
+            <FormRuntime
+              schema={schema}
+              formId="form-capture"
+              footer={null}
+              onSubmit={handleSubmit}
+            />
+          ) : null}
         </div>
       </div>
     </AppShell>

@@ -137,31 +137,37 @@ export function FormRuntime({
     <TooltipProvider>
     <form
       id={formId}
-      className="grid gap-6"
+      className="grid gap-0"
       onSubmit={(event) => {
         event.preventDefault();
         void submit();
       }}
     >
       {sectionGroups ? (
-        <div className="grid gap-6">
+        <>
           {sectionGroups.map(({ key, label, fields }) => (
-            <div key={key} className="grid gap-4 border-t border-border pt-4 first:border-t-0 first:pt-0">
+            <div key={key} className="border-t border-border first:border-t-0">
               {label !== null && (
-                <div className="border-b pb-1 mb-1">
+                <div className="px-6 pt-4 pb-1 mb-1 border-b border-border">
                   <span className="text-sm font-semibold text-foreground">{label}</span>
                 </div>
               )}
-              {renderFieldRows(fields)}
+              <div className="grid gap-4 px-6 py-4">
+                {renderFieldRows(fields)}
+              </div>
             </div>
           ))}
-        </div>
+        </>
       ) : (
-        <div className="grid gap-4">
+        <div className="grid gap-4 px-6 py-4">
           {renderFieldRows(topLevelFields)}
         </div>
       )}
-      {footer === undefined ? <Button type="submit">{submitLabel}</Button> : footer}
+      {footer === undefined ? (
+        <div className="px-6 pb-4">
+          <Button type="submit">{submitLabel}</Button>
+        </div>
+      ) : footer}
     </form>
     </TooltipProvider>
   );

@@ -37,15 +37,13 @@ export function PreviewPane({ schema }: { schema: FormSchema }) {
         </div>
       </div>
       <div className="flex-1 overflow-y-auto">
-        <div className="px-6 py-4">
-          <FormRuntime
-            key={remountKey}
-            schema={schema}
-            footer={null}
-            onSubmit={() => {}}
-            initialAnswers={answers}
-          />
-        </div>
+        <FormRuntime
+          key={remountKey}
+          schema={schema}
+          footer={null}
+          onSubmit={() => {}}
+          initialAnswers={answers}
+        />
       </div>
     </div>
   );
