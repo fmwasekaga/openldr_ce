@@ -3,6 +3,7 @@ import type { AppContext } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
 import { toQuestionnaire, toQuestionnaireResponse } from '@openldr/forms';
 import { z } from 'zod';
+import { recordAudit } from './audit-helper';
 
 const formInput = z.object({
   name: z.string().min(1),
@@ -27,25 +28,6 @@ const responseInput = z.object({
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
-  async function audit(action: string, entityId: string, before: unknown, after: unknown, metadata: Record<string, unknown> = {}) {
-    const input = {
-      actorType: 'system' as const,
-      actorId: null,
-      actorName: 'System',
-      action,
-      entityType: 'form',
-      entityId,
-      before: before as Record<string, unknown> | null,
-      after: after as Record<string, unknown> | null,
-      metadata,
-    };
-    try {
-      await ctx.audit.record(input);
-    } catch (e) {
-      ctx.logger.error({ action, error: e instanceof Error ? e.message : String(e) }, 'audit record failed');
-    }
-  }
-
   app.get('/api/forms', async () => ctx.forms.list());
 
   app.get('/api/forms/published', async (req) => {
@@ -70,7 +52,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     }
     try {
       const f = await ctx.forms.create(p.data as never);
-      await audit('form.create', f.id, null, f);
+      await recordAudit(ctx, req, { action: 'form.create', entityType: 'form', entityId: f.id, before: null, after: f });
       reply.code(201);
       return f;
     } catch (e) {
@@ -86,13 +68,13 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
       return { error: p.error.message };
     }
     const id = (req.params as { id: string }).id;
-    if (!(await ctx.forms.get(id))) {
+    const before = await ctx.forms.get(id);
+    if (!before) {
       reply.code(404);
       return { error: 'not found' };
     }
-    const before = await ctx.forms.get(id);
     const after = await ctx.forms.update(id, p.data as never);
-    await audit('form.update', id, before, after);
+    await recordAudit(ctx, req, { action: 'form.update', entityType: 'form', entityId: id, before, after });
     return after;
   });
 
@@ -103,13 +85,13 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
       return { error: 'status must be draft|published|archived' };
     }
     const id = (req.params as { id: string }).id;
-    if (!(await ctx.forms.get(id))) {
+    const before = await ctx.forms.get(id);
+    if (!before) {
       reply.code(404);
       return { error: 'not found' };
     }
-    const before = await ctx.forms.get(id);
     const after = await ctx.forms.setStatus(id, status);
-    await audit(status === 'published' ? 'form.publish' : 'form.status', id, before, after);
+    await recordAudit(ctx, req, { action: status === 'published' ? 'form.publish' : 'form.status', entityType: 'form', entityId: id, before, after });
     return after;
   });
 
@@ -125,8 +107,8 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
       reply.code(404);
       return { error: 'not found' };
     }
-    const after = await ctx.forms.publish(id, { versionLabel: p.data.versionLabel ?? null, actorId: null });
-    await audit('form.publish', id, before, after);
+    const after = await ctx.forms.publish(id, { versionLabel: p.data.versionLabel ?? null, actorId: req.user?.id ?? null });
+    await recordAudit(ctx, req, { action: 'form.publish', entityType: 'form', entityId: id, before, after });
     return after;
   });
 
@@ -137,7 +119,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
       return { error: 'not found' };
     }
     const copy = await ctx.forms.duplicate(id);
-    await audit('form.duplicate', copy.id, null, copy, { sourceFormId: id });
+    await recordAudit(ctx, req, { action: 'form.duplicate', entityType: 'form', entityId: copy.id, before: null, after: copy, metadata: { sourceFormId: id } });
     reply.code(201);
     return copy;
   });
@@ -182,7 +164,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
       return { error: 'not found' };
     }
     await ctx.forms.delete(id);
-    await audit('form.delete', id, before, null);
+    await recordAudit(ctx, req, { action: 'form.delete', entityType: 'form', entityId: id, before, after: null });
     reply.code(204);
     return null;
   });
@@ -214,7 +196,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     }
     try {
       const response = toQuestionnaireResponse(f.schema, p.data.answers as never);
-      await audit('form.response.submit', f.id, null, response, { formId: f.id });
+      await recordAudit(ctx, req, { action: 'form.response.submit', entityType: 'form', entityId: f.id, before: null, after: response, metadata: { formId: f.id } });
       reply.code(201);
       return response;
     } catch (e) {

@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { ZodError } from 'zod';
 import { DashboardQueryError, type AppContext } from '@openldr/bootstrap';
 import { DashboardSchema, WidgetQuerySchema } from '@openldr/dashboards';
+import { recordAudit } from './audit-helper';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerDashboardRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
@@ -24,19 +25,30 @@ export function registerDashboardRoutes(app: FastifyInstance<any, any, any, any>
   });
 
   app.post('/api/dashboards', async (req, reply) => {
-    try { return await ctx.dashboards.store.create(DashboardSchema.parse(req.body)); }
-    catch (err) { return mapError(err, reply); }
+    try {
+      const created = await ctx.dashboards.store.create(DashboardSchema.parse(req.body));
+      await recordAudit(ctx, req, { action: 'dashboard.create', entityType: 'dashboard', entityId: created.id, before: null, after: created });
+      return created;
+    } catch (err) { return mapError(err, reply); }
   });
 
   app.put('/api/dashboards/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
-    try { return await ctx.dashboards.store.update(id, DashboardSchema.parse(req.body)); }
-    catch (err) { return mapError(err, reply); }
+    try {
+      const before = await ctx.dashboards.store.get(id);
+      const updated = await ctx.dashboards.store.update(id, DashboardSchema.parse(req.body));
+      await recordAudit(ctx, req, { action: 'dashboard.update', entityType: 'dashboard', entityId: id, before, after: updated });
+      return updated;
+    } catch (err) { return mapError(err, reply); }
   });
 
   app.delete('/api/dashboards/:id', async (req) => {
     const { id } = req.params as { id: string };
+    const before = await ctx.dashboards.store.get(id);
     await ctx.dashboards.store.remove(id);
+    if (before) {
+      await recordAudit(ctx, req, { action: 'dashboard.delete', entityType: 'dashboard', entityId: id, before, after: null });
+    }
     return { ok: true };
   });
 }

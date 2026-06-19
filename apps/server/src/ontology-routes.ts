@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
+import { recordAudit } from './audit-helper';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerOntologyRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
@@ -11,8 +12,11 @@ export function registerOntologyRoutes(app: FastifyInstance<any, any, any, any>,
   app.get('/api/terminology/ontology/distributions', async () => ontology.listDistributions());
   app.get('/api/terminology/ontology/distributions/:id', async (req) => ontology.getDistribution((req.params as IdParam).id));
   app.delete('/api/terminology/ontology/distributions/:id', async (req, reply) => {
+    const id = (req.params as IdParam).id;
     try {
-      await ontology.unlink((req.params as IdParam).id);
+      const before = await ontology.getDistribution(id).catch(() => null);
+      await ontology.unlink(id);
+      await recordAudit(ctx, req, { action: 'ontology_distribution.delete', entityType: 'ontology_distribution', entityId: id, before, after: null });
       reply.code(204);
       return null;
     } catch (err) {

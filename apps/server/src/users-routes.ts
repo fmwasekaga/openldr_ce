@@ -3,6 +3,7 @@ import type { AppContext } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
 import { z } from 'zod';
 import { requireRole } from './rbac';
+import { recordAudit } from './audit-helper';
 
 const createInput = z.object({
   username: z.string().min(1),
@@ -44,6 +45,7 @@ export function registerUsersRoutes(app: FastifyInstance<any, any, any, any>, ct
         email: p.data.email ?? undefined,
         roles: p.data.roles,
       });
+      await recordAudit(ctx, req, { action: 'user.create', entityType: 'user', entityId: u.id, before: null, after: u });
       reply.code(201);
       return u;
     } catch (e) {
@@ -59,13 +61,16 @@ export function registerUsersRoutes(app: FastifyInstance<any, any, any, any>, ct
       return { error: p.error.message };
     }
     const id = (req.params as { id: string }).id;
-    if (!(await ctx.users.get(id))) {
+    const before = await ctx.users.get(id);
+    if (!before) {
       reply.code(404);
       return { error: 'not found' };
     }
     if (p.data.roles) await ctx.users.setRoles(id, p.data.roles);
     await ctx.users.update(id, { displayName: p.data.displayName ?? undefined, email: p.data.email ?? undefined });
-    return ctx.users.get(id);
+    const after = await ctx.users.get(id);
+    await recordAudit(ctx, req, { action: 'user.update', entityType: 'user', entityId: id, before, after });
+    return after;
   });
 
   app.post('/api/users/:id/status', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
@@ -75,11 +80,14 @@ export function registerUsersRoutes(app: FastifyInstance<any, any, any, any>, ct
       return { error: 'status must be active|disabled' };
     }
     const id = (req.params as { id: string }).id;
-    if (!(await ctx.users.get(id))) {
+    const before = await ctx.users.get(id);
+    if (!before) {
       reply.code(404);
       return { error: 'not found' };
     }
     await ctx.users.setStatus(id, s);
-    return ctx.users.get(id);
+    const after = await ctx.users.get(id);
+    await recordAudit(ctx, req, { action: 'user.status', entityType: 'user', entityId: id, before, after, metadata: { status: s } });
+    return after;
   });
 }

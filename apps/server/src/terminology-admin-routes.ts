@@ -3,6 +3,7 @@ import { gunzipSync } from 'node:zlib';
 import type { AppContext } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
 import { z } from 'zod';
+import { recordAudit } from './audit-helper';
 import { isFhirValueSetCatalog, parseTerminologyTerms, parseTerminologyTermsStream, terminologyImportTemplate } from '@openldr/terminology';
 
 const publisherInput = z.object({
@@ -46,17 +47,29 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
   app.post('/api/terminology/publishers', async (req, reply) => {
     const parsed = publisherInput.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
-    reply.code(201);
-    return admin.publishers.create(parsed.data);
+    try {
+      const created = await admin.publishers.create(parsed.data);
+      await recordAudit(ctx, req, { action: 'publisher.create', entityType: 'publisher', entityId: created.id, before: null, after: created });
+      reply.code(201);
+      return created;
+    } catch (e) { return mapErr(e, reply); }
   });
   app.put('/api/terminology/publishers/:id', async (req, reply) => {
     const parsed = publisherInput.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
-    try { return await admin.publishers.update((req.params as IdParam).id, parsed.data); }
+    try {
+      const updated = await admin.publishers.update((req.params as IdParam).id, parsed.data);
+      await recordAudit(ctx, req, { action: 'publisher.update', entityType: 'publisher', entityId: (req.params as IdParam).id, before: null, after: updated });
+      return updated;
+    }
     catch (e) { return mapErr(e, reply); }
   });
   app.delete('/api/terminology/publishers/:id', async (req, reply) => {
-    try { await admin.publishers.delete((req.params as IdParam).id); reply.code(204); return null; }
+    try {
+      await admin.publishers.delete((req.params as IdParam).id);
+      await recordAudit(ctx, req, { action: 'publisher.delete', entityType: 'publisher', entityId: (req.params as IdParam).id, before: null, after: null });
+      reply.code(204); return null;
+    }
     catch (e) { return mapErr(e, reply); }
   });
   app.get('/api/terminology/publishers/:id/deletion-impact', async (req, reply) => {
@@ -71,17 +84,29 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
   app.post('/api/terminology/systems', async (req, reply) => {
     const parsed = systemInput.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
-    try { const created = await admin.codingSystems.create(parsed.data); reply.code(201); return created; }
+    try {
+      const created = await admin.codingSystems.create(parsed.data);
+      await recordAudit(ctx, req, { action: 'coding_system.create', entityType: 'coding_system', entityId: created.id, before: null, after: created });
+      reply.code(201); return created;
+    }
     catch (e) { return mapErr(e, reply); }
   });
   app.put('/api/terminology/systems/:id', async (req, reply) => {
     const parsed = systemInput.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
-    try { return await admin.codingSystems.update((req.params as IdParam).id, parsed.data); }
+    try {
+      const updated = await admin.codingSystems.update((req.params as IdParam).id, parsed.data);
+      await recordAudit(ctx, req, { action: 'coding_system.update', entityType: 'coding_system', entityId: (req.params as IdParam).id, before: null, after: updated });
+      return updated;
+    }
     catch (e) { return mapErr(e, reply); }
   });
   app.delete('/api/terminology/systems/:id', async (req, reply) => {
-    try { await admin.codingSystems.delete((req.params as IdParam).id); reply.code(204); return null; }
+    try {
+      await admin.codingSystems.delete((req.params as IdParam).id);
+      await recordAudit(ctx, req, { action: 'coding_system.delete', entityType: 'coding_system', entityId: (req.params as IdParam).id, before: null, after: null });
+      reply.code(204); return null;
+    }
     catch (e) { return mapErr(e, reply); }
   });
   app.get('/api/terminology/systems/:id/deletion-impact', async (req, reply) => {
@@ -98,7 +123,9 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
       return { error: 'LOINC import requires accepting the LOINC license.' };
     }
     try {
-      return await ctx.terminology.loaders.loinc(parsed.data.path, parsed.data.acceptLicense);
+      const result = await ctx.terminology.loaders.loinc(parsed.data.path, parsed.data.acceptLicense);
+      await recordAudit(ctx, req, { action: 'coding_system.import', entityType: 'coding_system', entityId: 'loinc', before: null, after: null, metadata: { source: 'loinc', result } });
+      return result;
     } catch (e) { return mapErr(e, reply); }
   });
 
@@ -145,6 +172,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
     try {
       const url = await systemUrl((req.params as IdParam).id);
       const created = await admin.terms.create({ system: url, ...parsed.data });
+      await recordAudit(ctx, req, { action: 'term.create', entityType: 'term', entityId: created.code, before: null, after: created, metadata: { system: url } });
       reply.code(201);
       return created;
     } catch (e) { return mapErr(e, reply); }
@@ -155,29 +183,37 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
     try {
       const url = await systemUrl((req.params as IdParam).id);
       const code = decodeURIComponent((req.params as { id: string; code: string }).code);
-      return await admin.terms.update(url, code, { system: url, ...parsed.data });
+      const updated = await admin.terms.update(url, code, { system: url, ...parsed.data });
+      await recordAudit(ctx, req, { action: 'term.update', entityType: 'term', entityId: code, before: null, after: updated, metadata: { system: url } });
+      return updated;
     } catch (e) { return mapErr(e, reply); }
   });
   app.delete('/api/terminology/systems/:id/terms/:code', async (req, reply) => {
     try {
       const url = await systemUrl((req.params as IdParam).id);
-      await admin.terms.delete(url, decodeURIComponent((req.params as { id: string; code: string }).code));
+      const code = decodeURIComponent((req.params as { id: string; code: string }).code);
+      await admin.terms.delete(url, code);
+      await recordAudit(ctx, req, { action: 'term.delete', entityType: 'term', entityId: code, before: null, after: null, metadata: { system: url } });
       reply.code(204); return null;
     } catch (e) { return mapErr(e, reply); }
   });
   app.post('/api/terminology/systems/:id/terms/import', async (req, reply) => {
     try {
       const system = await systemInfo((req.params as IdParam).id);
+      let result: { imported: number };
       if (isReadableBody(req.body)) {
         const rows = await parseTerminologyTermsStream(req.body, system.url, system.systemCode);
-        return await importTermRowsInBatches(rows);
+        result = await importTermRowsInBatches(rows);
+      } else {
+        const rawBody = req.body;
+        const raw = rawBody && typeof rawBody === 'object' && !Buffer.isBuffer(rawBody)
+          ? rawBody as { csv?: string; text?: string }
+          : { text: await bodyToText(rawBody) };
+        const rawRows = parseTerminologyTerms(String(raw.text ?? raw.csv ?? ''), system.url, system.systemCode);
+        result = await importTermRowsInBatches(rawRows);
       }
-      const rawBody = req.body;
-      const raw = rawBody && typeof rawBody === 'object' && !Buffer.isBuffer(rawBody)
-        ? rawBody as { csv?: string; text?: string }
-        : { text: await bodyToText(rawBody) };
-      const rawRows = parseTerminologyTerms(String(raw.text ?? raw.csv ?? ''), system.url, system.systemCode);
-      return await importTermRowsInBatches(rawRows);
+      await recordAudit(ctx, req, { action: 'term.import', entityType: 'term', entityId: system.url, before: null, after: null, metadata: { systemId: (req.params as IdParam).id, result } });
+      return result;
     } catch (e) { return mapErr(e, reply); }
   });
   app.get('/api/terminology/systems/:id/terms/template.csv', async (req, reply) => {
@@ -213,6 +249,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
       const system = decodeURIComponent((req.params as { system: string; code: string }).system);
       const code = decodeURIComponent((req.params as { system: string; code: string }).code);
       const created = await admin.termMappings.create({ fromSystem: system, fromCode: code, ...parsed.data, toDisplay: parsed.data.toDisplay ?? null });
+      await recordAudit(ctx, req, { action: 'term_mapping.create', entityType: 'term_mapping', entityId: created.mapping.id, before: null, after: created.mapping, metadata: { draftCreated: created.draftCreated } });
       reply.code(201);
       return created;
     } catch (e) { return mapErr(e, reply); }
@@ -220,11 +257,19 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
   app.put('/api/terminology/mappings/:id', async (req, reply) => {
     const parsed = mappingUpdateInput.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
-    try { return await admin.termMappings.update((req.params as IdParam).id, { ...parsed.data, toDisplay: parsed.data.toDisplay ?? null }); }
+    try {
+      const updated = await admin.termMappings.update((req.params as IdParam).id, { ...parsed.data, toDisplay: parsed.data.toDisplay ?? null });
+      await recordAudit(ctx, req, { action: 'term_mapping.update', entityType: 'term_mapping', entityId: (req.params as IdParam).id, before: null, after: updated });
+      return updated;
+    }
     catch (e) { return mapErr(e, reply); }
   });
   app.delete('/api/terminology/mappings/:id', async (req, reply) => {
-    try { await admin.termMappings.delete((req.params as IdParam).id); reply.code(204); return null; }
+    try {
+      await admin.termMappings.delete((req.params as IdParam).id);
+      await recordAudit(ctx, req, { action: 'term_mapping.delete', entityType: 'term_mapping', entityId: (req.params as IdParam).id, before: null, after: null });
+      reply.code(204); return null;
+    }
     catch (e) { return mapErr(e, reply); }
   });
 
@@ -256,7 +301,11 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
   app.post('/api/terminology/valuesets', async (req, reply) => {
     const parsed = valueSetInput.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
-    try { const saved = await admin.valueSets.save(parsed.data); reply.code(201); return saved; }
+    try {
+      const saved = await admin.valueSets.save(parsed.data);
+      await recordAudit(ctx, req, { action: 'value_set.create', entityType: 'value_set', entityId: saved.id, before: null, after: saved });
+      reply.code(201); return saved;
+    }
     catch (e) { return mapErr(e, reply); }
   });
   app.get('/api/terminology/valuesets/:id', async (req, reply) => {
@@ -266,15 +315,32 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
   app.put('/api/terminology/valuesets/:id', async (req, reply) => {
     const parsed = valueSetInput.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
-    try { return await admin.valueSets.save(parsed.data); }
+    try {
+      const id = (req.params as IdParam).id;
+      const before = await admin.valueSets.get(id).catch(() => null);
+      const saved = await admin.valueSets.save(parsed.data);
+      await recordAudit(ctx, req, { action: 'value_set.update', entityType: 'value_set', entityId: id, before, after: saved });
+      return saved;
+    }
     catch (e) { return mapErr(e, reply); }
   });
   app.delete('/api/terminology/valuesets/:id', async (req, reply) => {
-    try { await admin.valueSets.delete((req.params as IdParam).id); reply.code(204); return null; }
+    try {
+      const id = (req.params as IdParam).id;
+      const before = await admin.valueSets.get(id).catch(() => null);
+      await admin.valueSets.delete(id);
+      await recordAudit(ctx, req, { action: 'value_set.delete', entityType: 'value_set', entityId: id, before, after: null });
+      reply.code(204); return null;
+    }
     catch (e) { return mapErr(e, reply); }
   });
   app.post('/api/terminology/valuesets/:id/duplicate', async (req, reply) => {
-    try { const dup = await admin.valueSets.duplicate((req.params as IdParam).id); reply.code(201); return dup; }
+    try {
+      const id = (req.params as IdParam).id;
+      const dup = await admin.valueSets.duplicate(id);
+      await recordAudit(ctx, req, { action: 'value_set.duplicate', entityType: 'value_set', entityId: dup.id, before: null, after: dup, metadata: { sourceId: id } });
+      reply.code(201); return dup;
+    }
     catch (e) { return mapErr(e, reply); }
   });
   app.get('/api/terminology/valuesets/:id/expand', async (req, reply) => {
@@ -288,10 +354,12 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
       const resource = await parseJsonUpload(req.body);
       if (isFhirValueSetCatalog(resource)) {
         const result = await admin.valueSets.importFhirCatalog(resource);
+        await recordAudit(ctx, req, { action: 'value_set.import', entityType: 'value_set', entityId: 'catalog', before: null, after: null, metadata: { imported: result.imported, skipped: result.skipped } });
         reply.code(201);
         return result;
       }
       const saved = await admin.valueSets.importFhir(resource);
+      await recordAudit(ctx, req, { action: 'value_set.import', entityType: 'value_set', entityId: saved.id, before: null, after: null, metadata: { id: saved.id, url: saved.url } });
       reply.code(201);
       return saved;
     }
