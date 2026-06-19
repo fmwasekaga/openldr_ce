@@ -155,6 +155,10 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
       return { error: 'version must be a positive integer' };
     }
     const parsedVersion = Number(version);
+    if (!(await ctx.forms.get(id))) {
+      reply.code(404);
+      return { error: 'not found' };
+    }
     const snapshot = await ctx.forms.getVersion(id, parsedVersion);
     if (!snapshot) {
       reply.code(404);

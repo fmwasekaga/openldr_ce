@@ -347,4 +347,25 @@ describe('forms routes', () => {
     const snapshot = await app.inject({ method: 'GET', url: `/api/forms/${id}/versions/1` });
     expect(snapshot.statusCode).toBe(404);
   });
+
+  it('returns 404 for orphaned version snapshots after the parent form is deleted', async () => {
+    const app = Fastify();
+    const ctx = fakeCtx();
+    registerFormsRoutes(app, ctx);
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/forms',
+      payload: { name: 'Specimen intake', schema: sampleSchema, targetPages: ['forms'] },
+    });
+    const id = created.json().id as string;
+    await app.inject({ method: 'POST', url: `/api/forms/${id}/publish`, payload: { versionLabel: 'v1' } });
+    await app.inject({ method: 'DELETE', url: `/api/forms/${id}` });
+    const auditCount = ctx.audits.length;
+
+    const snapshot = await app.inject({ method: 'GET', url: `/api/forms/${id}/versions/1` });
+    expect(snapshot.statusCode).toBe(404);
+    expect(snapshot.json()).toMatchObject({ error: 'not found' });
+    expect(ctx.audits).toHaveLength(auditCount);
+  });
 });
