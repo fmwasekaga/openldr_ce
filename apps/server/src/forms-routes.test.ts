@@ -4,6 +4,8 @@ import type { AppContext } from '@openldr/bootstrap';
 import type { FormDefinition, FormInput, FormVersion, FormVersionSummary } from '@openldr/forms';
 import { registerFormsRoutes } from './forms-routes';
 
+type AuditInput = Parameters<AppContext['audit']['record']>[0];
+
 const sampleSchema = {
   id: 'specimen-intake',
   name: 'Specimen intake',
@@ -19,13 +21,17 @@ const sampleSchema = {
   ],
 } satisfies FormInput['schema'];
 
-function fakeCtx() {
+function fakeCtx(): AppContext & { audits: AuditInput[] } {
   const forms: FormDefinition[] = [];
   const versions = new Map<string, FormVersion[]>();
+  const audits: AuditInput[] = [];
   let seq = 0;
   const now = '2026-01-01T00:00:00.000Z';
 
   return {
+    logger: {
+      error: () => {},
+    },
     forms: {
       create: async (input: FormInput) => {
         const form: FormDefinition = {
@@ -143,9 +149,16 @@ function fakeCtx() {
       },
     },
     audit: {
-      safeRecord: async () => {},
+      record: async (input: AuditInput) => {
+        audits.push(input);
+        return { ...input, id: `audit-${audits.length}`, occurredAt: now };
+      },
+      list: async () => [],
+      count: async () => 0,
+      get: async () => undefined,
     },
-  } as unknown as AppContext;
+    audits,
+  } as unknown as AppContext & { audits: AuditInput[] };
 }
 
 describe('forms routes', () => {
@@ -235,5 +248,103 @@ describe('forms routes', () => {
       expect(response.statusCode).toBe(400);
       expect(response.json()).toMatchObject({ error: 'version must be a positive integer' });
     }
+  });
+
+  it('records audit events for form lifecycle operations', async () => {
+    const app = Fastify();
+    const ctx = fakeCtx();
+    registerFormsRoutes(app, ctx);
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/forms',
+      payload: { name: 'Specimen intake', schema: sampleSchema, targetPages: ['forms'] },
+    });
+    const id = created.json().id as string;
+
+    await app.inject({
+      method: 'PUT',
+      url: `/api/forms/${id}`,
+      payload: { name: 'Updated intake', schema: sampleSchema, targetPages: ['forms'] },
+    });
+    await app.inject({ method: 'POST', url: `/api/forms/${id}/publish`, payload: { versionLabel: 'v1' } });
+    const duplicate = await app.inject({ method: 'POST', url: `/api/forms/${id}/duplicate` });
+    const duplicateId = duplicate.json().id as string;
+    await app.inject({ method: 'POST', url: `/api/forms/${id}/status`, payload: { status: 'archived' } });
+    await app.inject({ method: 'POST', url: `/api/forms/${id}/responses`, payload: { answers: { patientId: 'P-100' } } });
+    await app.inject({ method: 'DELETE', url: `/api/forms/${id}` });
+
+    expect(ctx.audits.map((event) => event.action)).toEqual([
+      'form.create',
+      'form.update',
+      'form.publish',
+      'form.duplicate',
+      'form.status',
+      'form.response.submit',
+      'form.delete',
+    ]);
+    expect(ctx.audits.find((event) => event.action === 'form.create')).toMatchObject({ entityId: id, before: null });
+    expect(ctx.audits.find((event) => event.action === 'form.create')?.after).toMatchObject({ id });
+    expect(ctx.audits.find((event) => event.action === 'form.duplicate')).toMatchObject({
+      entityId: duplicateId,
+      before: null,
+      metadata: { sourceFormId: id },
+    });
+    expect(ctx.audits.find((event) => event.action === 'form.duplicate')?.after).toMatchObject({ id: duplicateId });
+    expect(ctx.audits.find((event) => event.action === 'form.response.submit')).toMatchObject({
+      entityId: id,
+      before: null,
+      metadata: { formId: id },
+    });
+    expect(ctx.audits.find((event) => event.action === 'form.delete')).toMatchObject({
+      entityId: id,
+      after: null,
+    });
+    expect(ctx.audits.find((event) => event.action === 'form.delete')?.before).toMatchObject({ id });
+  });
+
+  it('does not audit invalid responses or missing deletes', async () => {
+    const app = Fastify();
+    const ctx = fakeCtx();
+    registerFormsRoutes(app, ctx);
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/forms',
+      payload: { name: 'Specimen intake', schema: sampleSchema, targetPages: ['forms'] },
+    });
+    const id = created.json().id as string;
+    ctx.audits.length = 0;
+
+    const invalid = await app.inject({ method: 'POST', url: `/api/forms/${id}/responses`, payload: { answers: {} } });
+    expect(invalid.statusCode).toBe(422);
+
+    const missingDelete = await app.inject({ method: 'DELETE', url: '/api/forms/missing' });
+    expect(missingDelete.statusCode).toBe(404);
+    expect(missingDelete.json()).toMatchObject({ error: 'not found' });
+    expect(ctx.audits).toEqual([]);
+  });
+
+  it('returns 404 for missing lifecycle resources', async () => {
+    const app = Fastify();
+    registerFormsRoutes(app, fakeCtx());
+
+    const publish = await app.inject({ method: 'POST', url: '/api/forms/missing/publish', payload: { versionLabel: 'v1' } });
+    expect(publish.statusCode).toBe(404);
+
+    const duplicate = await app.inject({ method: 'POST', url: '/api/forms/missing/duplicate' });
+    expect(duplicate.statusCode).toBe(404);
+
+    const versions = await app.inject({ method: 'GET', url: '/api/forms/missing/versions' });
+    expect(versions.statusCode).toBe(404);
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/forms',
+      payload: { name: 'Specimen intake', schema: sampleSchema, targetPages: ['forms'] },
+    });
+    const id = created.json().id as string;
+    const snapshot = await app.inject({ method: 'GET', url: `/api/forms/${id}/versions/1` });
+    expect(snapshot.statusCode).toBe(404);
   });
 });

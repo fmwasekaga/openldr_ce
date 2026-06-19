@@ -37,12 +37,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
       metadata,
     };
     try {
-      const auditStore = ctx.audit as typeof ctx.audit & { safeRecord?: typeof ctx.audit.record };
-      if (auditStore.safeRecord) {
-        await auditStore.safeRecord(input);
-        return;
-      }
-      await auditStore.record(input);
+      await ctx.audit.record(input);
     } catch (e) {
       ctx.logger.error({ action, error: e instanceof Error ? e.message : String(e) }, 'audit record failed');
     }
@@ -171,6 +166,10 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
   app.delete('/api/forms/:id', async (req, reply) => {
     const id = (req.params as { id: string }).id;
     const before = await ctx.forms.get(id);
+    if (!before) {
+      reply.code(404);
+      return { error: 'not found' };
+    }
     await ctx.forms.delete(id);
     await audit('form.delete', id, before, null);
     reply.code(204);
