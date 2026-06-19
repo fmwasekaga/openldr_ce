@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { toQuestionnaire, toQuestionnaireResponse, type FormSchema } from '@openldr/forms';
 import { fhirBundleConverter } from './fhir-bundle';
 import { questionnaireResponseConverter } from './questionnaire-response';
 import { defaultConverters } from '../default-converters';
@@ -25,25 +26,19 @@ describe('fhir-bundle converter', () => {
 });
 
 describe('questionnaire-response converter', () => {
-  it('extracts resources from { questionnaire, response }', async () => {
-    const questionnaire = {
-      resourceType: 'Questionnaire',
-      status: 'active',
-      extension: [{ url: 'https://openldr.org/fhir/StructureDefinition/form', valueString: JSON.stringify({ id: 'f', name: 'f', title: { en: 'F' }, status: 'active', languages: ['en'] }) }],
-      item: [
-        {
-          linkId: 'demo',
-          type: 'group',
-          extension: [{ url: 'https://openldr.org/fhir/StructureDefinition/form-section', valueString: JSON.stringify({ id: 'demo', title: { en: 'D' }, resourceType: 'Patient' }) }],
-          item: [
-            { linkId: 'sex', type: 'choice', extension: [{ url: 'https://openldr.org/fhir/StructureDefinition/form-field', valueString: JSON.stringify({ id: 'sex', type: 'choice', label: { en: 'Sex' }, fhirPath: 'gender', options: [{ code: 'female', display: { en: 'F' } }] }) }] },
-          ],
-        },
-      ],
+  it('extracts clinical resources (Observation) from { questionnaire, response }', async () => {
+    // New model: the converter runs the domain extractors over a Questionnaire that
+    // carries the form metadata as extensions (built via the engine's toQuestionnaire).
+    // A field flagged observationExtract yields an Observation.
+    const model: FormSchema = {
+      id: 'f', name: 'F', versionLabel: null, fhirVersion: null, fhirResourceType: null, fhirProfileUrl: null, facilityId: null,
+      fields: [{ id: 'hgb', fhirPath: null, displayLabel: 'Hgb', description: null, fieldType: 'number', required: false, enabled: true, order: 0, cardinality: { min: 0, max: '1' }, observationExtract: true, code: [{ system: 'http://loinc.org', code: '718-7' }] }],
+      sections: [], targetPages: [], version: 1, active: true, status: 'draft', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
     };
-    const response = { resourceType: 'QuestionnaireResponse', status: 'completed', item: [{ linkId: 'demo', item: [{ linkId: 'sex', answer: [{ valueCoding: { code: 'female' } }] }] }] };
+    const questionnaire = toQuestionnaire(model);
+    const response = toQuestionnaireResponse(model, { hgb: 12.5 });
     const out = await questionnaireResponseConverter.convert(enc({ questionnaire, response }), ctx);
-    expect(out.some((r) => r.resourceType === 'Patient')).toBe(true);
+    expect(out.some((r) => r.resourceType === 'Observation')).toBe(true);
   });
 });
 
