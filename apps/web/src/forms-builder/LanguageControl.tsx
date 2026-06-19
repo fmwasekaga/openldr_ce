@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Globe, X } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/cn';
 
 // ─── ISO 639-1 language list ─────────────────────────────────────────────────
@@ -117,23 +116,8 @@ export function LanguageControl({ languages, onChange }: LanguageControlProps): 
   );
 
   return (
-    <div className="flex items-center gap-1.5 flex-wrap">
-      {/* Current language chips */}
-      {languages.map((code) => (
-        <Badge key={code} variant="secondary" className="flex items-center gap-0.5 pr-0.5 text-xs">
-          <span>{code}</span>
-          <button
-            type="button"
-            aria-label={`Remove ${code}`}
-            className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-            onClick={() => remove(code)}
-          >
-            <X className="h-2.5 w-2.5" aria-hidden />
-          </button>
-        </Badge>
-      ))}
-
-      {/* Globe trigger + popover */}
+    <div className="flex items-center">
+      {/* Globe trigger + popover (selected languages are managed inside the popover) */}
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <button
