@@ -5,6 +5,14 @@ export function slugify(label: string): string {
   return s || 'item';
 }
 
+/** Return `base` if unused, else `base-2`, `base-3`, … until unique among `existing`. */
+export function makeUniqueFieldId(base: string, existing: Set<string>): string {
+  if (!existing.has(base)) return base;
+  let n = 2;
+  while (existing.has(`${base}-${n}`)) n += 1;
+  return `${base}-${n}`;
+}
+
 let _orderCounter = 0;
 
 export function createDefaultFormSchema(name: string): FormSchema {

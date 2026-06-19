@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createDefaultFormSchema, newField } from './builderModel';
+import { createDefaultFormSchema, makeUniqueFieldId, newField } from './builderModel';
 
 describe('builderModel', () => {
   it('creates a default form schema with required fields', () => {
@@ -30,5 +30,14 @@ describe('builderModel', () => {
   it('generates slugified ids from display labels', () => {
     expect(newField('Date of Birth', 'date').id).toBe('date-of-birth');
     expect(newField('Lab Result Value', 'number').id).toBe('lab-result-value');
+  });
+
+  it('makeUniqueFieldId disambiguates colliding ids', () => {
+    const existing = new Set<string>();
+    expect(makeUniqueFieldId('new-text-field', existing)).toBe('new-text-field');
+    existing.add('new-text-field');
+    expect(makeUniqueFieldId('new-text-field', existing)).toBe('new-text-field-2');
+    existing.add('new-text-field-2');
+    expect(makeUniqueFieldId('new-text-field', existing)).toBe('new-text-field-3');
   });
 });

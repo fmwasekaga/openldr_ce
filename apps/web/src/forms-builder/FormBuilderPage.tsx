@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { AppShell } from '@/shell/AppShell';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { createForm, deleteForm, formQuestionnaireUrl, getForm, publishForm, setFormStatus, updateForm } from '../api';
-import { createDefaultFormSchema, newField } from './builderModel';
+import { createDefaultFormSchema, makeUniqueFieldId, newField } from './builderModel';
 import { CompareDialog } from './CompareDialog';
 import { FieldEditorSheet } from './FieldEditorSheet';
 import { useTemplateHistory } from './useTemplateHistory';
@@ -88,6 +88,7 @@ export function FormBuilderPage(): JSX.Element {
     const nextOrder = schema.fields.reduce((max, f) => Math.max(max, f.order), -1) + 1;
     const field = newField('New text field', 'text');
     field.order = nextOrder;
+    field.id = makeUniqueFieldId(field.id, new Set(schema.fields.map((f) => f.id)));
     setSchema((prev) => ({ ...prev, fields: [...prev.fields, field] }));
     setSelectedId(field.id);
   };
