@@ -105,33 +105,31 @@ export function FieldEditorSheet({
     <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetContent className="p-0 gap-0 overflow-y-auto">
         {/* ── Sheet Header ───────────────────────────────────────────── */}
-        <SheetHeader className="flex-row items-center justify-between px-6 py-4 border-b border-border">
-          <div>
-            <SheetTitle>Edit Field</SheetTitle>
-            <SheetDescription>{activeDraft.displayLabel}</SheetDescription>
-          </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 shrink-0"
-                aria-label="Field actions"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={handleSave}>Save</DropdownMenuItem>
-              <DropdownMenuItem onClick={handleCancel}>Cancel</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+        <SheetHeader className="px-6 py-4 border-b border-border">
+          <SheetTitle>Edit Field</SheetTitle>
+          <SheetDescription>{activeDraft.displayLabel}</SheetDescription>
         </SheetHeader>
 
         {/* ── General ──────────────────────────────────────────────────── */}
         <section>
-          <div className="px-6 py-3">
+          <div className="flex items-center justify-between px-6 py-3">
             <h3 className="text-sm font-medium text-foreground">General</h3>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 shrink-0"
+                  aria-label="Field actions"
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleSave}>Save</DropdownMenuItem>
+                <DropdownMenuItem onClick={handleCancel}>Cancel</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           <div className="border-t border-border" />
 
@@ -199,24 +197,29 @@ export function FieldEditorSheet({
                 <Label htmlFor="field-group-trigger" className="whitespace-nowrap">
                   Group
                 </Label>
-                <Select
-                  value={activeDraft.groupId ?? '__none'}
-                  onValueChange={(v) =>
-                    patchDraft({ groupId: v === '__none' ? undefined : v })
-                  }
-                >
-                  <SelectTrigger id="field-group-trigger" aria-label="Group">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none">No group</SelectItem>
-                    {groupFields.map((g) => (
-                      <SelectItem key={g.id} value={g.id}>
-                        {g.displayLabel}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex flex-col gap-1">
+                  <Select
+                    value={activeDraft.groupId ?? '__none'}
+                    onValueChange={(v) =>
+                      patchDraft({ groupId: v === '__none' ? undefined : v })
+                    }
+                  >
+                    <SelectTrigger id="field-group-trigger" aria-label="Group">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none">No group</SelectItem>
+                      {groupFields.map((g) => (
+                        <SelectItem key={g.id} value={g.id}>
+                          {g.displayLabel}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Nest this field under a Group field. Create one by setting a field&apos;s Type to Group.
+                  </p>
+                </div>
               </>
             )}
 
@@ -338,15 +341,6 @@ export function FieldEditorSheet({
           />
         </div>
 
-        {/* ── Bottom Save / Cancel buttons ─────────────────────────── */}
-        <div className="border-t border-border px-6 py-4 flex gap-2 justify-end mt-4">
-          <Button variant="outline" size="sm" onClick={handleCancel}>
-            Cancel
-          </Button>
-          <Button size="sm" onClick={handleSave}>
-            Save
-          </Button>
-        </div>
       </SheetContent>
     </Sheet>
   );

@@ -35,11 +35,7 @@ export function TranslationsEditor({
   }
 
   return (
-    <section className="mt-4">
-      <h3 className="text-sm font-medium text-foreground pb-2 border-b border-border">
-        Translations
-      </h3>
-
+    <section className="mt-2">
       {languages.length === 0 ? (
         <p className="text-xs text-muted-foreground py-4">
           No translation languages yet. Add one with the language control in the

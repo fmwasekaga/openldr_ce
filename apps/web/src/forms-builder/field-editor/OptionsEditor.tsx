@@ -27,11 +27,7 @@ export function OptionsEditor({ field, onUpdate }: OptionsEditorProps) {
   }
 
   return (
-    <section className="mt-4">
-      <h3 className="text-sm font-medium text-foreground pb-2 border-b border-border">
-        Options
-      </h3>
-
+    <section className="mt-2">
       <div className="py-3 space-y-2">
         {options.map((opt, i) => (
           <div key={i} className="flex items-center gap-2">

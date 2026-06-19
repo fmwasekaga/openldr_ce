@@ -46,11 +46,7 @@ export function CodesEditor({ field, onUpdate }: CodesEditorProps): JSX.Element 
   }
 
   return (
-    <section className="mt-4">
-      <h3 className="text-sm font-medium text-foreground pb-2 border-b border-border">
-        Codes
-      </h3>
-
+    <section className="mt-2">
       {/* Existing code chips */}
       {codes.length > 0 && (
         <div className="flex flex-wrap gap-2 py-3">

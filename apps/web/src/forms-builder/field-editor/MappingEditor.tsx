@@ -40,11 +40,7 @@ export function MappingEditor({ field, onUpdate }: MappingEditorProps): JSX.Elem
   return (
     <>
       {/* ── Mapping ─────────────────────────────────────────────── */}
-      <section className="mt-4">
-        <h3 className="text-sm font-medium text-foreground pb-2 border-b border-border">
-          Mapping
-        </h3>
-
+      <section className="mt-2">
         <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-3 py-4">
 
           {/* FHIR Path */}

@@ -66,11 +66,7 @@ export function VisibilityRuleEditor({
   };
 
   return (
-    <section className="mt-4">
-      <h3 className="text-sm font-medium text-foreground pb-2 border-b border-border">
-        Visibility
-      </h3>
-
+    <section className="mt-2">
       <div className="py-4 space-y-2">
         {/* Combinator row */}
         <div className="flex items-center gap-2">
