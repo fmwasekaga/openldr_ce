@@ -4,6 +4,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import type { FormField, FormSchema, FormSection, RuntimeAnswers } from './types';
 import { cleanAnswers, fieldLabel, groupChildren, validate, visibleIds } from './runtime';
 
@@ -22,6 +28,7 @@ export function FormRuntime({
   onSubmit: (answers: RuntimeAnswers) => void | Promise<void>;
   footer?: React.ReactNode;
   initialAnswers?: RuntimeAnswers;
+  /** @deprecated No longer used to render markers in preview; kept for API compatibility. */
   fieldWarnings?: Record<string, 'error' | 'warning'>;
 }): JSX.Element {
   const [answers, setAnswers] = useState<RuntimeAnswers>(initialAnswers ?? {});
@@ -120,12 +127,12 @@ export function FormRuntime({
         error={errors[field.id]}
         onChange={setField}
         errors={errors}
-        warning={fieldWarnings?.[field.id]}
       />
     ));
   }
 
   return (
+    <TooltipProvider>
     <form
       className="grid gap-6"
       onSubmit={(event) => {
@@ -153,6 +160,7 @@ export function FormRuntime({
       )}
       {footer === undefined ? <Button type="submit">{submitLabel}</Button> : footer}
     </form>
+    </TooltipProvider>
   );
 }
 
@@ -166,7 +174,6 @@ function FieldRow({
   error,
   onChange,
   errors,
-  warning,
 }: {
   field: FormField;
   schema: FormSchema;
@@ -175,7 +182,6 @@ function FieldRow({
   error?: string;
   onChange: (fieldId: string, value: unknown) => void;
   errors: Record<string, string>;
-  warning?: 'error' | 'warning';
 }) {
   const label = fieldLabel(field);
 
@@ -202,30 +208,37 @@ function FieldRow({
 
   return (
     <div className="grid gap-1.5 md:grid-cols-[12rem_minmax(0,1fr)] md:items-start">
-      <Label htmlFor={field.id} className="pt-2 text-sm">
+      <Label htmlFor={field.id} className="pt-2 text-sm flex items-center gap-1 flex-wrap">
         {label}
-        {field.required ? <span className="ml-0.5 text-destructive">*</span> : null}
-        {warning === 'error' ? (
-          <span
-            className="ml-1 inline-flex size-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground"
-            title={`error: ${label}`}
-            aria-label={`error: ${label}`}
-          >
-            !
-          </span>
-        ) : warning === 'warning' ? (
-          <span
-            className="ml-1 inline-flex size-4 items-center justify-center rounded-full bg-amber-400 text-[10px] font-bold text-white"
-            title={`warning: ${label}`}
-            aria-label={`warning: ${label}`}
-          >
-            ?
-          </span>
+        {field.required && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                className="inline-flex size-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground cursor-default"
+                aria-label="Required"
+              >
+                !
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>Required</TooltipContent>
+          </Tooltip>
+        )}
+        {field.description ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                className="inline-flex size-4 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-muted-foreground cursor-default"
+                aria-label={field.description}
+              >
+                ?
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{field.description}</TooltipContent>
+          </Tooltip>
         ) : null}
       </Label>
       <div>
         <FieldControl field={field} value={answers[field.id]} onChange={(v) => onChange(field.id, v)} />
-        {field.description ? <p className="mt-1 text-xs text-muted-foreground">{field.description}</p> : null}
         {error ? <p className="mt-1 text-xs text-destructive" role="alert">{error}</p> : null}
       </div>
     </div>

@@ -94,6 +94,49 @@ const previewSchema: FormSchema = {
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
 
+// Schema with a required field and a field with description for indicator tests
+const indicatorSchema: FormSchema = {
+  id: 'ind1',
+  name: 'Indicator form',
+  versionLabel: null,
+  fhirVersion: null,
+  fhirResourceType: null,
+  fhirProfileUrl: null,
+  facilityId: null,
+  fields: [
+    {
+      id: 'req-field',
+      fhirPath: null,
+      displayLabel: 'Required Field',
+      description: null,
+      fieldType: 'text',
+      required: true,
+      enabled: true,
+      order: 1,
+      cardinality: { min: 1, max: '1' },
+    },
+    {
+      id: 'desc-field',
+      fhirPath: null,
+      displayLabel: 'Described Field',
+      description: 'Enter the patient age in years',
+      fieldType: 'text',
+      required: false,
+      enabled: true,
+      order: 2,
+      cardinality: { min: 0, max: '1' },
+    },
+  ],
+  sections: [],
+  targetPages: [],
+  languages: ['en'],
+  version: 1,
+  active: true,
+  status: 'draft',
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+};
+
 // Schema with two sections for grouping tests.
 const sectionedSchema: FormSchema = {
   id: 'sectioned',
@@ -203,22 +246,49 @@ describe('FormRuntime', () => {
     expect(input.value).toBe('Seed');
   });
 
-  it('fieldWarnings renders a per-field error marker', () => {
+  it('required field shows a "Required" indicator with aria-label', () => {
     render(
       <FormRuntime
-        schema={previewSchema}
+        schema={indicatorSchema}
         submitLabel=""
         footer={null}
         onSubmit={() => {}}
-        fieldWarnings={{ name: 'error' }}
       />,
     );
-    // Expect an element whose title or aria-label contains 'error', or text content '!'
-    const marker =
-      screen.queryByTitle(/error/i) ??
-      screen.queryByLabelText(/error/i) ??
-      screen.queryByText('!');
-    expect(marker).not.toBeNull();
+    // The "!" span has aria-label="Required"
+    const marker = screen.getByLabelText('Required');
+    expect(marker).toBeTruthy();
+    expect(marker.textContent).toBe('!');
+  });
+
+  it('field with description shows a "?" help indicator with aria-label = description', () => {
+    render(
+      <FormRuntime
+        schema={indicatorSchema}
+        submitLabel=""
+        footer={null}
+        onSubmit={() => {}}
+      />,
+    );
+    // The "?" span has aria-label equal to the description text
+    const marker = screen.getByLabelText('Enter the patient age in years');
+    expect(marker).toBeTruthy();
+    expect(marker.textContent).toBe('?');
+  });
+
+  it('required field does NOT show a "?" help indicator when description is null', () => {
+    render(
+      <FormRuntime
+        schema={indicatorSchema}
+        submitLabel=""
+        footer={null}
+        onSubmit={() => {}}
+      />,
+    );
+    // req-field has no description — only "!" should appear for it, not "?"
+    // Confirm only one "?" in total (for desc-field)
+    const questionMarkers = screen.getAllByText('?');
+    expect(questionMarkers).toHaveLength(1);
   });
 
   // ── Section grouping ─────────────────────────────────────────────────────────

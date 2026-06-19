@@ -18,10 +18,10 @@ const schema: FormSchema = {
       displayLabel: 'Patient name',
       description: null,
       fieldType: 'text',
-      required: false,
+      required: true,
       enabled: true,
       order: 0,
-      cardinality: { min: 0, max: '1' },
+      cardinality: { min: 1, max: '1' },
     },
     {
       id: 'sex',
@@ -76,14 +76,11 @@ describe('PreviewPane', () => {
     expect((screen.getByLabelText('Patient name') as HTMLInputElement).value).toBe('');
   });
 
-  it('shows a per-field warning marker for the Sex field (lint error: choice-missing-options)', () => {
+  it('shows a "Required" indicator for the required Patient name field', () => {
     render(<PreviewPane schema={schema} />);
-    // lintFormSchema flags 'sex' with severity 'error' → FormRuntime renders a '!' marker
-    // with title/aria-label containing 'error' or text content '!'
-    const marker =
-      screen.queryByTitle(/error/i) ??
-      screen.queryByLabelText(/error/i) ??
-      screen.queryByText('!');
-    expect(marker).not.toBeNull();
+    // FormRuntime renders a "!" span with aria-label="Required" for required fields
+    const marker = screen.getByLabelText('Required');
+    expect(marker).toBeTruthy();
+    expect(marker.textContent).toBe('!');
   });
 });
