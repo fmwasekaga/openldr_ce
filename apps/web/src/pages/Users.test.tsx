@@ -5,28 +5,68 @@ import '@/i18n';
 
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
-  return { ...actual, listUsers: vi.fn(), setUserStatus: vi.fn(), createUser: vi.fn(), resetUserPassword: vi.fn(), sendUserResetEmail: vi.fn(), forceUserLogout: vi.fn() };
+  return {
+    ...actual,
+    listUsers: vi.fn(),
+    setUserStatus: vi.fn(),
+    createUser: vi.fn(),
+    updateUser: vi.fn(),
+    resetUserPassword: vi.fn(),
+    sendUserResetEmail: vi.fn(),
+    forceUserLogout: vi.fn(),
+    listPublishedForms: vi.fn(),
+    getForm: vi.fn(),
+  };
 });
 vi.mock('@/auth/AuthProvider', () => ({
   useAuth: () => ({ user: { id: 'me', username: 'me', displayName: null, roles: ['lab_admin'] }, loading: false, hasRole: () => true }),
 }));
 
-import { listUsers, setUserStatus, createUser, sendUserResetEmail, type User } from '@/api';
+import { listUsers, setUserStatus, createUser, sendUserResetEmail, listPublishedForms, getForm, type UserSummary } from '@/api';
 import { Users } from './Users';
 
-const rows: User[] = [
-  { id: 'me', subject: null, username: 'me', displayName: 'Me', email: 'me@x', roles: ['lab_admin'], status: 'active', lastLoginAt: null, createdAt: '2026-01-01T00:00:00Z' },
-  { id: 'u2', subject: null, username: 'bob', displayName: 'Bob', email: 'bob@x', roles: ['lab_technician'], status: 'active', lastLoginAt: null, createdAt: '2026-01-02T00:00:00Z' },
-  { id: 'u3', subject: null, username: 'old', displayName: 'Old', email: 'old@x', roles: [], status: 'disabled', lastLoginAt: null, createdAt: '2026-01-03T00:00:00Z' },
-  { id: 'u4', subject: 'kc-sub-4', username: 'ada', displayName: 'Ada', email: 'ada@x', roles: ['lab_technician'], status: 'active', lastLoginAt: null, createdAt: '2026-01-04T00:00:00Z' },
+// Minimal published form + schema for UserDialog tests
+const minimalSchema = {
+  id: 'form-1',
+  name: 'Users Form',
+  version: 1,
+  versionLabel: null,
+  fhirVersion: null,
+  fhirResourceType: null,
+  fhirProfileUrl: null,
+  facilityId: null,
+  fields: [
+    { id: 'f-firstName', displayLabel: 'First name', fieldType: 'text', apiProperty: 'firstName', fhirPath: null, required: false, enabled: true, order: 0, cardinality: { min: 0, max: '1' } },
+    { id: 'f-phone', displayLabel: 'Phone', fieldType: 'text', apiProperty: 'phone', fhirPath: null, required: false, enabled: true, order: 1, cardinality: { min: 0, max: '1' } },
+  ],
+  sections: [],
+  targetPages: ['users'],
+  active: true,
+  status: 'published',
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-01T00:00:00Z',
+};
+
+const rows: UserSummary[] = [
+  { id: 'me', username: 'me', firstName: 'Me', lastName: null, email: 'me@x', roles: ['lab_admin'], enabled: true, createdAt: '2026-01-01T00:00:00Z', extras: {}, formSchemaId: null, formVersion: null },
+  { id: 'u2', username: 'bob', firstName: 'Bob', lastName: 'Smith', email: 'bob@x', roles: ['lab_technician'], enabled: true, createdAt: '2026-01-02T00:00:00Z', extras: {}, formSchemaId: null, formVersion: null },
+  { id: 'u3', username: 'old', firstName: 'Old', lastName: null, email: 'old@x', roles: [], enabled: false, createdAt: '2026-01-03T00:00:00Z', extras: {}, formSchemaId: null, formVersion: null },
+  { id: 'u4', username: 'ada', firstName: 'Ada', lastName: 'L', email: 'ada@x', roles: ['lab_technician'], enabled: true, createdAt: '2026-01-04T00:00:00Z', extras: { phone: '555-1234' }, formSchemaId: 'form-1', formVersion: 1 },
 ];
 
 beforeEach(() => {
   vi.clearAllMocks();
   (listUsers as ReturnType<typeof vi.fn>).mockResolvedValue(rows);
+  (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([
+    { id: 'form-1', name: 'Users Form', versionLabel: null, status: 'published', active: true, fhirResourceType: null, fieldCount: 2, updatedAt: '2026-01-01T00:00:00Z' },
+  ]);
+  (getForm as ReturnType<typeof vi.fn>).mockResolvedValue({
+    id: 'form-1', name: 'Users Form', versionLabel: null, fhirResourceType: null, status: 'published', active: true,
+    schema: minimalSchema, targetPages: ['users'], createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z',
+  });
   (createUser as ReturnType<typeof vi.fn>).mockResolvedValue({
-    id: 'u4', subject: null, username: 'grace', displayName: 'Grace Hopper', email: 'grace@test.local',
-    roles: ['data_analyst'], status: 'active', lastLoginAt: null, createdAt: '2026-01-04T00:00:00Z',
+    id: 'u5', username: 'grace', firstName: 'Grace', lastName: 'Hopper', email: 'grace@test.local',
+    roles: ['data_analyst'], enabled: true, createdAt: '2026-01-05T00:00:00Z', extras: {}, formSchemaId: 'form-1', formVersion: 1,
   });
 });
 
@@ -46,8 +86,15 @@ describe('Users page', () => {
     expect(screen.getByText('Lab Admin')).toBeTruthy(); // friendly role label, not raw 'lab_admin'
   });
 
+  it('renders full name from firstName + lastName', async () => {
+    render(<MemoryRouter><Users /></MemoryRouter>);
+    await waitFor(() => expect(screen.getByText('bob')).toBeTruthy());
+    // bob has firstName='Bob', lastName='Smith' → full name cell
+    expect(screen.getByText('Bob Smith')).toBeTruthy();
+  });
+
   it('disables another user behind a confirm dialog', async () => {
-    (setUserStatus as ReturnType<typeof vi.fn>).mockResolvedValue({ ...rows[1], status: 'disabled' });
+    (setUserStatus as ReturnType<typeof vi.fn>).mockResolvedValue({ ...rows[1], enabled: false });
     render(<MemoryRouter><Users /></MemoryRouter>);
     await waitFor(() => expect(screen.getByText('bob')).toBeTruthy());
 
@@ -62,7 +109,7 @@ describe('Users page', () => {
     const confirmBtn = await screen.findByRole('button', { name: 'Disable' });
     fireEvent.click(confirmBtn);
 
-    await waitFor(() => expect(setUserStatus).toHaveBeenCalledWith('u2', 'disabled'));
+    await waitFor(() => expect(setUserStatus).toHaveBeenCalledWith('u2', false));
   });
 
   it('blocks disabling your own account (menu item is disabled)', async () => {
@@ -77,25 +124,7 @@ describe('Users page', () => {
     expect(item.getAttribute('aria-disabled')).toBe('true');
   });
 
-  it('action items are disabled for a user with no subject (no linked account)', async () => {
-    render(<MemoryRouter><Users /></MemoryRouter>);
-    await waitFor(() => expect(screen.getByText('bob')).toBeTruthy());
-
-    const bobRow = screen.getByText('bob').closest('tr')!;
-    const trigger = within(bobRow).getByLabelText(/actions for bob/i);
-    openDropdown(trigger);
-
-    const resetItem = (await screen.findByText(/reset password/i)).closest('[role="menuitem"]') as HTMLElement;
-    expect(resetItem.getAttribute('aria-disabled')).toBe('true');
-
-    const sendEmailItem = (await screen.findByText(/send reset email/i)).closest('[role="menuitem"]') as HTMLElement;
-    expect(sendEmailItem.getAttribute('aria-disabled')).toBe('true');
-
-    const forceSignOutItem = (await screen.findByText(/force sign-out/i)).closest('[role="menuitem"]') as HTMLElement;
-    expect(forceSignOutItem.getAttribute('aria-disabled')).toBe('true');
-  });
-
-  it('send reset email calls sendUserResetEmail for a user with a subject', async () => {
+  it('send reset email calls sendUserResetEmail', async () => {
     (sendUserResetEmail as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     render(<MemoryRouter><Users /></MemoryRouter>);
     await waitFor(() => expect(screen.getByText('ada')).toBeTruthy());
@@ -111,7 +140,7 @@ describe('Users page', () => {
     expect(await screen.findByText(/reset email sent to ada/i)).toBeTruthy();
   });
 
-  it('opens "New user" from the toolbar dropdown, fills the dialog, and calls createUser', async () => {
+  it('opens "New user" from the toolbar dropdown, fills username, and calls createUser with CORE + extras split', async () => {
     render(<MemoryRouter><Users /></MemoryRouter>);
     await waitFor(() => expect(screen.getByText('me')).toBeTruthy());
 
@@ -122,17 +151,28 @@ describe('Users page', () => {
     const newUserItem = await screen.findByText('New user');
     fireEvent.click(newUserItem);
 
-    // UserDialog should now be open
+    // Wait for the schema to load and dialog to show fixed fields
     const usernameInput = await screen.findByLabelText('Username');
     fireEvent.change(usernameInput, { target: { value: 'grace' } });
-    fireEvent.change(screen.getByLabelText('Full name'), { target: { value: 'Grace Hopper' } });
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'grace@test.local' } });
-    fireEvent.change(screen.getByLabelText('Add role'), { target: { value: 'data_analyst' } });
-    fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
+
+    // FormRuntime renders the firstName CORE field
+    const firstNameInput = await screen.findByLabelText('First name');
+    fireEvent.change(firstNameInput, { target: { value: 'Grace' } });
+
+    // FormRuntime renders the phone extras field
+    const phoneInput = await screen.findByLabelText('Phone');
+    fireEvent.change(phoneInput, { target: { value: '555-9999' } });
+
+    // Submit via the form's Create button
     fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
 
     await waitFor(() =>
-      expect(createUser).toHaveBeenCalledWith(expect.objectContaining({ username: 'grace' })),
+      expect(createUser).toHaveBeenCalledWith(expect.objectContaining({
+        username: 'grace',
+        firstName: 'Grace',
+        extras: expect.objectContaining({ phone: expect.objectContaining({ value: '555-9999' }) }),
+        formSchemaId: 'form-1',
+      })),
     );
   });
 });

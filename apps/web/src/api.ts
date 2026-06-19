@@ -153,7 +153,43 @@ export interface CreateUserInput {
   roles?: string[];
 }
 export const USER_ROLES = ['lab_admin', 'lab_manager', 'lab_technician', 'data_analyst', 'system_auditor'] as const;
-export const listUsers = (): Promise<User[]> => apiGet('/api/users', 'list users');
+
+/** SP6 composed model: Keycloak identity + local profile extras. */
+export interface UserSummary {
+  id: string;
+  username: string;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  enabled: boolean;
+  roles: string[];
+  createdAt: string | null;
+  extras: Record<string, string>;
+  formSchemaId: string | null;
+  formVersion: number | null;
+}
+
+export type CreateUserPayload = {
+  username: string;
+  email?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  roles?: string[];
+  password?: string;
+  extras?: Record<string, { value: string; fhirPath: string | null }>;
+  formSchemaId?: string | null;
+  formVersion?: number | null;
+};
+
+export const listUsers = (): Promise<UserSummary[]> => apiGet('/api/users', 'list users');
+export const createUser = (i: CreateUserPayload): Promise<UserSummary> =>
+  authFetch('/api/users', jbody(i, 'POST')).then((r) => okJson<UserSummary>(r, 'create user'));
+export const updateUser = (id: string, i: Partial<CreateUserPayload>): Promise<UserSummary> =>
+  authFetch(`/api/users/${id}`, jbody(i, 'PUT')).then((r) => okJson<UserSummary>(r, 'update user'));
+export const setUserStatus = (id: string, enabled: boolean): Promise<UserSummary> =>
+  authFetch(`/api/users/${id}/status`, jbody({ enabled }, 'POST')).then((r) => okJson<UserSummary>(r, 'set user status'));
+export const listPublishedForms = (targetPage: string): Promise<FormSummary[]> =>
+  apiGet(`/api/forms/published?targetPage=${encodeURIComponent(targetPage)}`, 'list published forms');
 
 export interface CurrentUser {
   id: string;
@@ -163,12 +199,6 @@ export interface CurrentUser {
 }
 export const getMe = (): Promise<CurrentUser> =>
   authFetch('/api/me').then((res) => okJson<CurrentUser>(res, 'get current user'));
-export const createUser = (i: CreateUserInput): Promise<User> =>
-  authFetch('/api/users', jbody(i, 'POST')).then((r) => okJson<User>(r, 'create user'));
-export const updateUser = (id: string, i: { displayName?: string | null; email?: string | null; roles?: string[] }): Promise<User> =>
-  authFetch(`/api/users/${id}`, jbody(i, 'PUT')).then((r) => okJson<User>(r, 'update user'));
-export const setUserStatus = (id: string, status: 'active' | 'disabled'): Promise<User> =>
-  authFetch(`/api/users/${id}/status`, jbody({ status }, 'POST')).then((r) => okJson<User>(r, 'set user status'));
 export const resetUserPassword = (id: string, password: string, temporary: boolean): Promise<void> =>
   authFetch(`/api/users/${id}/reset-password`, jbody({ password, temporary }, 'POST')).then((r) => { if (!r.ok) throw new Error(`reset password failed: ${r.status}`); });
 export const sendUserResetEmail = (id: string): Promise<void> =>

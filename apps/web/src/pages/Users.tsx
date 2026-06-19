@@ -12,7 +12,7 @@ import {
   ActiveFilterChips, DataTableToolbar, applyTableState, useTableState, type ColumnDef,
 } from '@/components/data-table';
 import { useAuth } from '@/auth/AuthProvider';
-import { listUsers, setUserStatus, sendUserResetEmail, forceUserLogout, type User } from '@/api';
+import { listUsers, setUserStatus, sendUserResetEmail, forceUserLogout, type UserSummary } from '@/api';
 import { UserDialog } from '@/users/UserDialog';
 import { ResetPasswordDialog } from '@/users/ResetPasswordDialog';
 
@@ -25,14 +25,14 @@ function formatDate(iso: string | null): string {
 export function Users() {
   const { t } = useTranslation();
   const { user: me } = useAuth();
-  const [rows, setRows] = useState<User[]>([]);
+  const [rows, setRows] = useState<UserSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [editing, setEditing] = useState<User | null>(null);
-  const [pendingToggle, setPendingToggle] = useState<User | null>(null);
-  const [resetting, setResetting] = useState<User | null>(null);
-  const [pendingLogout, setPendingLogout] = useState<User | null>(null);
+  const [editing, setEditing] = useState<UserSummary | null>(null);
+  const [pendingToggle, setPendingToggle] = useState<UserSummary | null>(null);
+  const [resetting, setResetting] = useState<UserSummary | null>(null);
+  const [pendingLogout, setPendingLogout] = useState<UserSummary | null>(null);
   const [search, setSearch] = useState('');
 
   const load = useCallback(async () => {
@@ -44,24 +44,24 @@ export function Users() {
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { if (!toast) return; const id = setTimeout(() => setToast(null), 6000); return () => clearTimeout(id); }, [toast]);
 
-  const upsert = (u: User) => setRows((prev) => { const i = prev.findIndex((r) => r.id === u.id); if (i === -1) return [...prev, u]; const c = [...prev]; c[i] = u; return c; });
+  const upsert = (u: UserSummary) => setRows((prev) => { const i = prev.findIndex((r) => r.id === u.id); if (i === -1) return [...prev, u]; const c = [...prev]; c[i] = u; return c; });
 
-  const onSaved = (u: User) => { upsert(u); setToast({ kind: 'ok', text: t('users.savedToast', { username: u.username }) }); };
+  const onSaved = (u: UserSummary) => { upsert(u); setToast({ kind: 'ok', text: t('users.savedToast', { username: u.username }) }); };
 
   const doToggle = async () => {
     if (!pendingToggle) return;
     const u = pendingToggle;
     setPendingToggle(null);
     try {
-      const updated = await setUserStatus(u.id, u.status === 'active' ? 'disabled' : 'active');
+      const updated = await setUserStatus(u.id, !u.enabled);
       upsert(updated);
-      setToast({ kind: 'ok', text: t(updated.status === 'active' ? 'users.enabledToast' : 'users.disabledToast', { username: u.username }) });
+      setToast({ kind: 'ok', text: t(updated.enabled ? 'users.enabledToast' : 'users.disabledToast', { username: u.username }) });
     } catch (e) {
       setToast({ kind: 'err', text: t('users.errorToast', { error: e instanceof Error ? e.message : String(e) }) });
     }
   };
 
-  const doSendResetEmail = useCallback(async (u: User) => {
+  const doSendResetEmail = useCallback(async (u: UserSummary) => {
     try { await sendUserResetEmail(u.id); setToast({ kind: 'ok', text: t('users.sendResetEmailToast', { username: u.username }) }); }
     catch (e) { setToast({ kind: 'err', text: t('users.errorToast', { error: e instanceof Error ? e.message : String(e) }) }); }
   }, [t]);
@@ -72,22 +72,23 @@ export function Users() {
     catch (e) { setToast({ kind: 'err', text: t('users.errorToast', { error: e instanceof Error ? e.message : String(e) }) }); }
   }, [pendingLogout, t]);
 
-  const columns = useMemo<ColumnDef<User>[]>(() => [
+  const columns = useMemo<ColumnDef<UserSummary>[]>(() => [
     { id: 'username', labelKey: 'users.username', accessor: (u) => <span className="font-medium">{u.username}</span>, type: 'text', defaultVisible: true, sortable: true, filterable: true },
-    { id: 'fullName', labelKey: 'users.fullName', accessor: (u) => u.displayName || <span className="text-muted-foreground">-</span>, type: 'text', defaultVisible: true, sortable: true, filterable: true },
+    { id: 'fullName', labelKey: 'users.fullName', accessor: (u) => {
+        const name = [u.firstName, u.lastName].filter(Boolean).join(' ');
+        return name ? name : <span className="text-muted-foreground">-</span>;
+      }, type: 'text', defaultVisible: true, sortable: true, filterable: true },
     { id: 'email', labelKey: 'users.email', accessor: (u) => u.email || <span className="text-muted-foreground">-</span>, type: 'text', defaultVisible: true, sortable: true, filterable: true },
     { id: 'roles', labelKey: 'users.roles', accessor: (u) => (
         <div className="flex flex-wrap gap-1">{u.roles.length === 0 ? <span className="text-muted-foreground">-</span> : u.roles.map((r) => <Badge key={r} variant="outline" className="whitespace-nowrap text-[10px]">{t(`users.roleNames.${r}`, { defaultValue: r })}</Badge>)}</div>
       ), type: 'text', defaultVisible: true, sortable: true, filterable: true },
-    { id: 'status', labelKey: 'users.status', accessor: (u) => u.status === 'active'
+    { id: 'status', labelKey: 'users.status', accessor: (u) => u.enabled
         ? <Badge className="border-transparent bg-emerald-500/15 text-emerald-700">{t('users.statusActive')}</Badge>
         : <Badge variant="outline" className="text-muted-foreground">{t('users.statusDisabled')}</Badge>,
-      type: 'enum', enumOptions: [{ value: 'active', label: 'Active' }, { value: 'disabled', label: 'Disabled' }], defaultVisible: true, sortable: true, filterable: true, headClassName: 'w-24' },
+      type: 'enum', enumOptions: [{ value: 'true', label: 'Active' }, { value: 'false', label: 'Disabled' }], defaultVisible: true, sortable: true, filterable: true, headClassName: 'w-24' },
     { id: 'createdAt', labelKey: 'users.created', accessor: (u) => <span className="text-xs text-muted-foreground">{formatDate(u.createdAt)}</span>, type: 'text', defaultVisible: false, sortable: true, filterable: false, headClassName: 'w-40' },
-    { id: 'lastLogin', labelKey: 'users.lastLogin', accessor: (u) => <span className="text-xs text-muted-foreground">{formatDate(u.lastLoginAt)}</span>, type: 'text', defaultVisible: true, sortable: true, filterable: false, headClassName: 'w-40' },
     { id: '__actions', labelKey: 'common.actions', accessor: (u) => {
         const isSelf = !!me && me.id === u.id;
-        const noAcct = !u.subject;
         return (
           <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
             <DropdownMenu>
@@ -96,16 +97,16 @@ export function Users() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => setEditing(u)}>{t('users.edit')}</DropdownMenuItem>
-                <DropdownMenuItem disabled={isSelf} onClick={() => { if (!isSelf) setPendingToggle(u); }} className={u.status === 'active' ? 'text-destructive focus:text-destructive' : ''}>
-                  {u.status === 'active' ? t('users.disable') : t('users.enable')}{isSelf ? ` (${t('users.selfSuffix')})` : ''}
+                <DropdownMenuItem disabled={isSelf} onClick={() => { if (!isSelf) setPendingToggle(u); }} className={u.enabled ? 'text-destructive focus:text-destructive' : ''}>
+                  {u.enabled ? t('users.disable') : t('users.enable')}{isSelf ? ` (${t('users.selfSuffix')})` : ''}
                 </DropdownMenuItem>
-                <DropdownMenuItem disabled={noAcct} onClick={() => { if (!noAcct) setResetting(u); }}>
-                  {t('users.resetPassword')}{noAcct ? ` (${t('users.noProviderAccount')})` : ''}
+                <DropdownMenuItem onClick={() => { setResetting(u); }}>
+                  {t('users.resetPassword')}
                 </DropdownMenuItem>
-                <DropdownMenuItem disabled={noAcct} onClick={() => { if (!noAcct) void doSendResetEmail(u); }}>
-                  {t('users.sendResetEmail')}{noAcct ? ` (${t('users.noProviderAccount')})` : ''}
+                <DropdownMenuItem onClick={() => { void doSendResetEmail(u); }}>
+                  {t('users.sendResetEmail')}
                 </DropdownMenuItem>
-                <DropdownMenuItem disabled={noAcct || isSelf} onClick={() => { if (!noAcct && !isSelf) setPendingLogout(u); }} className="text-destructive focus:text-destructive">
+                <DropdownMenuItem disabled={isSelf} onClick={() => { if (!isSelf) setPendingLogout(u); }} className="text-destructive focus:text-destructive">
                   {t('users.forceSignOut')}{isSelf ? ` (${t('users.selfSuffix')})` : ''}
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -113,9 +114,9 @@ export function Users() {
           </div>
         );
       }, type: 'text', defaultVisible: true, sortable: false, filterable: false, headClassName: 'w-16' },
-  ], [me?.id, t]);
+  ], [me?.id, t, doSendResetEmail]);
 
-  const table = useTableState({ columns, defaultPageSize: 25, defaultFilters: [{ id: '__active__', column: 'status', operator: 'eq', value: 'active', combine: 'and' }] });
+  const table = useTableState({ columns, defaultPageSize: 25, defaultFilters: [{ id: '__active__', column: 'status', operator: 'eq', value: 'true', combine: 'and' }] });
 
   const effectiveFilters = useMemo(() => {
     if (!search.trim()) return table.filters;
@@ -123,16 +124,28 @@ export function Users() {
   }, [table.filters, search]);
 
   const valueGetters = useMemo(() => ({
-    username: (u: User) => u.username,
-    fullName: (u: User) => u.displayName ?? '',
-    email: (u: User) => u.email ?? '',
-    roles: (u: User) => u.roles.join(', '),
-    status: (u: User) => u.status,
-    createdAt: (u: User) => u.createdAt ?? '',
-    lastLogin: (u: User) => u.lastLoginAt ?? '',
+    username: (u: UserSummary) => u.username,
+    fullName: (u: UserSummary) => [u.firstName, u.lastName].filter(Boolean).join(' '),
+    email: (u: UserSummary) => u.email ?? '',
+    roles: (u: UserSummary) => u.roles.join(', '),
+    status: (u: UserSummary) => String(u.enabled),
+    createdAt: (u: UserSummary) => u.createdAt ?? '',
   }), []);
 
   const view = useMemo(() => applyTableState(rows, { filters: effectiveFilters, sorts: table.sorts, page: table.page, pageSize: table.pageSize }, columns, valueGetters), [rows, effectiveFilters, table.sorts, table.page, table.pageSize, columns, valueGetters]);
+
+  // ResetPasswordDialog needs a minimal user shape; adapt from UserSummary
+  const resetUser = resetting ? {
+    id: resetting.id,
+    username: resetting.username,
+    subject: resetting.id,
+    displayName: [resetting.firstName, resetting.lastName].filter(Boolean).join(' ') || null,
+    email: resetting.email,
+    roles: resetting.roles,
+    status: resetting.enabled ? 'active' as const : 'disabled' as const,
+    lastLoginAt: null,
+    createdAt: resetting.createdAt,
+  } : null;
 
   return (
     <AppShell title="Users" fullBleed>
@@ -195,13 +208,13 @@ export function Users() {
         <ConfirmDialog
           open={pendingToggle !== null}
           onOpenChange={(o) => { if (!o) setPendingToggle(null); }}
-          title={pendingToggle?.status === 'active' ? t('users.disableTitle', { username: pendingToggle?.username ?? '' }) : t('users.enableTitle', { username: pendingToggle?.username ?? '' })}
-          description={pendingToggle?.status === 'active' ? t('users.disableDescription') : t('users.enableDescription')}
-          confirmLabel={pendingToggle?.status === 'active' ? t('users.disable') : t('users.enable')}
-          destructive={pendingToggle?.status === 'active'}
+          title={pendingToggle?.enabled ? t('users.disableTitle', { username: pendingToggle?.username ?? '' }) : t('users.enableTitle', { username: pendingToggle?.username ?? '' })}
+          description={pendingToggle?.enabled ? t('users.disableDescription') : t('users.enableDescription')}
+          confirmLabel={pendingToggle?.enabled ? t('users.disable') : t('users.enable')}
+          destructive={pendingToggle?.enabled ?? false}
           onConfirm={() => { void doToggle(); }}
         />
-        <ResetPasswordDialog open={resetting !== null} onOpenChange={(o) => { if (!o) setResetting(null); }} user={resetting} onDone={(u) => setToast({ kind: 'ok', text: t('users.resetPasswordSavedToast', { username: u.username }) })} />
+        <ResetPasswordDialog open={resetting !== null} onOpenChange={(o) => { if (!o) setResetting(null); }} user={resetUser} onDone={(u) => setToast({ kind: 'ok', text: t('users.resetPasswordSavedToast', { username: u.username }) })} />
         <ConfirmDialog
           open={pendingLogout !== null}
           onOpenChange={(o) => { if (!o) setPendingLogout(null); }}
