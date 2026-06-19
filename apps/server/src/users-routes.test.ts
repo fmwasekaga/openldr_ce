@@ -10,6 +10,7 @@ function fakeCtx() {
   const users: User[] = [];
   let seq = 0;
   const auditEvents: unknown[] = [];
+  const authCalls: Array<{ op: string; args: unknown[] }> = [];
   return {
     users: {
       create: async (input: Parameters<AppContext['users']['create']>[0]) => {
@@ -23,6 +24,7 @@ function fakeCtx() {
           roles: input.roles ?? [],
           status: 'active',
           lastLoginAt: null,
+          createdAt: null,
         };
         users.push(user);
         return user;
@@ -49,9 +51,20 @@ function fakeCtx() {
         throw new Error('not used');
       },
     },
+    auth: {
+      verifyToken: async () => ({ sub: 's' }),
+      resetPassword: async (...args: unknown[]) => { authCalls.push({ op: 'resetPassword', args }); },
+      sendPasswordResetEmail: async (...args: unknown[]) => { authCalls.push({ op: 'sendPasswordResetEmail', args }); },
+      forceLogout: async (...args: unknown[]) => { authCalls.push({ op: 'forceLogout', args }); },
+    },
     audit: { record: async (e: unknown) => { auditEvents.push(e); return e; } },
     logger: { error() {}, warn() {}, info() {} },
     __auditEvents: auditEvents,
+    __authCalls: authCalls,
+    __setSubject: (id: string, subject: string) => {
+      const user = users.find((item) => item.id === id);
+      if (user) user.subject = subject;
+    },
   } as unknown as AppContext;
 }
 
@@ -131,5 +144,77 @@ describe('users routes', () => {
     const actions = events().map((e) => e.action);
     expect(actions).toEqual(['user.create', 'user.update', 'user.status']);
     expect(events().every((e) => e.actorId === 'admin1' && e.entityType === 'user')).toBe(true);
+  });
+
+  it('reset-password: 409 without a subject; 204 + audit (no password) with one', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req) => { req.user = { id: 'admin', username: 'admin', displayName: null, roles: ['lab_admin'] }; });
+    const ctx = fakeCtx();
+    registerUsersRoutes(app, ctx);
+    const id = (await app.inject({ method: 'POST', url: '/api/users', payload: { username: 'bob', roles: [] } })).json().id;
+
+    const noSubj = await app.inject({ method: 'POST', url: `/api/users/${id}/reset-password`, payload: { password: 'pw', temporary: true } });
+    expect(noSubj.statusCode).toBe(409);
+
+    (ctx as unknown as { __setSubject: (id: string, s: string) => void }).__setSubject(id, 'kc-sub-1');
+    const ok = await app.inject({ method: 'POST', url: `/api/users/${id}/reset-password`, payload: { password: 'pw', temporary: true } });
+    expect(ok.statusCode).toBe(204);
+    const authCalls = (ctx as unknown as { __authCalls: Array<{ op: string; args: unknown[] }> }).__authCalls;
+    expect(authCalls).toContainEqual({ op: 'resetPassword', args: ['kc-sub-1', 'pw', true] });
+    const events = (ctx as unknown as { __auditEvents: unknown[] }).__auditEvents;
+    expect(events.some((e) => (e as { action: string }).action === 'user.reset_password')).toBe(true);
+    expect(JSON.stringify(events)).not.toContain('pw'); // password never audited
+  });
+
+  it('send-reset-email: 204 + audit when the user has a subject', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req) => { req.user = { id: 'admin', username: 'admin', displayName: null, roles: ['lab_admin'] }; });
+    const ctx = fakeCtx();
+    registerUsersRoutes(app, ctx);
+    const id = (await app.inject({ method: 'POST', url: '/api/users', payload: { username: 'bob' } })).json().id;
+    (ctx as unknown as { __setSubject: (id: string, s: string) => void }).__setSubject(id, 'kc-sub-1');
+    const res = await app.inject({ method: 'POST', url: `/api/users/${id}/send-reset-email` });
+    expect(res.statusCode).toBe(204);
+    const authCalls = (ctx as unknown as { __authCalls: Array<{ op: string }> }).__authCalls;
+    expect(authCalls.some((c) => c.op === 'sendPasswordResetEmail')).toBe(true);
+    const events = (ctx as unknown as { __auditEvents: Array<{ action: string }> }).__auditEvents;
+    expect(events.some((e) => e.action === 'user.send_reset_email')).toBe(true);
+  });
+
+  it('force-logout: 400 on self, 204 on another user with a subject', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req) => { req.user = { id: 'admin', username: 'admin', displayName: null, roles: ['lab_admin'] }; });
+    const ctx = fakeCtx();
+    registerUsersRoutes(app, ctx);
+    const self = await app.inject({ method: 'POST', url: `/api/users/admin/force-logout` });
+    expect(self.statusCode).toBe(400);
+    const id = (await app.inject({ method: 'POST', url: '/api/users', payload: { username: 'bob' } })).json().id;
+    (ctx as unknown as { __setSubject: (id: string, s: string) => void }).__setSubject(id, 'kc-sub-1');
+    const ok = await app.inject({ method: 'POST', url: `/api/users/${id}/force-logout` });
+    expect(ok.statusCode).toBe(204);
+    const events = (ctx as unknown as { __auditEvents: Array<{ action: string }> }).__auditEvents;
+    expect(events.some((e) => e.action === 'user.force_logout')).toBe(true);
+  });
+
+  it('reset-password: 503 when the provider admin client is not configured', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req) => { req.user = { id: 'admin', username: 'admin', displayName: null, roles: ['lab_admin'] }; });
+    const ctx = fakeCtx();
+    (ctx as unknown as { auth: { resetPassword: () => Promise<void> } }).auth.resetPassword = async () => {
+      const e = new Error('not configured'); e.name = 'IdentityAdminNotConfiguredError'; throw e;
+    };
+    registerUsersRoutes(app, ctx);
+    const id = (await app.inject({ method: 'POST', url: '/api/users', payload: { username: 'bob' } })).json().id;
+    (ctx as unknown as { __setSubject: (id: string, s: string) => void }).__setSubject(id, 'kc-sub-1');
+    const res = await app.inject({ method: 'POST', url: `/api/users/${id}/reset-password`, payload: { password: 'pw' } });
+    expect(res.statusCode).toBe(503);
+  });
+
+  it('admin routes require lab_admin (403 for a non-admin actor)', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req) => { req.user = { id: 'tech', username: 'tech', displayName: null, roles: ['lab_technician'] }; });
+    registerUsersRoutes(app, fakeCtx());
+    const res = await app.inject({ method: 'POST', url: `/api/users/whatever/reset-password`, payload: { password: 'pw' } });
+    expect(res.statusCode).toBe(403);
   });
 });

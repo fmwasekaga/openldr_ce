@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { generateKeyPair, exportJWK, createLocalJWKSet, SignJWT, type JWTVerifyGetKey } from 'jose';
-import { createAuth } from './index';
+import { createAuth, KcError } from './index';
+import { IdentityAdminNotConfiguredError } from '@openldr/ports';
 
 const cfg = { issuerUrl: 'http://localhost:8080/realms/master' };
 
@@ -87,5 +88,93 @@ describe('verifyToken', () => {
     const auth = createAuth({ issuerUrl: issuer, audience: 'openldr-api' }, { keySet });
     const token = await sign({}); // no aud claim
     await expect(auth.verifyToken(token)).rejects.toThrow();
+  });
+});
+
+function adminFetchMock() {
+  const calls: Array<{ url: string; method: string; body?: string; headers: Headers }> = [];
+  const fetchFn = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+    const u = String(url);
+    const headers = new Headers(init?.headers);
+    calls.push({ url: u, method: init?.method ?? 'GET', body: init?.body as string | undefined, headers });
+    if (u.endsWith('/protocol/openid-connect/token')) {
+      return new Response(JSON.stringify({ access_token: 'admin-tok', expires_in: 300 }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    return new Response(null, { status: 204 });
+  }) as unknown as typeof fetch;
+  return { calls, fetchFn };
+}
+
+const adminCfg = { issuerUrl: 'https://kc/realms/openldr', adminClientId: 'svc', adminClientSecret: 'sek' };
+
+describe('identity admin actions', () => {
+  it('throws IdentityAdminNotConfiguredError (no network) when creds are absent', async () => {
+    const { calls, fetchFn } = adminFetchMock();
+    const auth = createAuth({ issuerUrl: 'https://kc/realms/openldr' }, { fetchFn });
+    await expect(auth.resetPassword('u1', 'pw', true)).rejects.toBeInstanceOf(IdentityAdminNotConfiguredError);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('resetPassword fetches a client_credentials token then PUTs reset-password', async () => {
+    const { calls, fetchFn } = adminFetchMock();
+    const auth = createAuth(adminCfg, { fetchFn });
+    await auth.resetPassword('u1', 'secretpw', true);
+    const token = calls.find((c) => c.url.endsWith('/protocol/openid-connect/token'))!;
+    expect(token.method).toBe('POST');
+    expect(token.body).toContain('grant_type=client_credentials');
+    const reset = calls.find((c) => c.url.includes('/admin/realms/openldr/users/u1/reset-password'))!;
+    expect(reset.method).toBe('PUT');
+    expect(reset.headers.get('authorization')).toBe('Bearer admin-tok');
+    expect(JSON.parse(reset.body!)).toEqual({ type: 'password', value: 'secretpw', temporary: true });
+  });
+
+  it('caches the admin token across calls', async () => {
+    const { calls, fetchFn } = adminFetchMock();
+    const auth = createAuth(adminCfg, { fetchFn });
+    await auth.resetPassword('u1', 'pw', true);
+    await auth.forceLogout('u1');
+    expect(calls.filter((c) => c.url.endsWith('/protocol/openid-connect/token'))).toHaveLength(1);
+  });
+
+  it('sendPasswordResetEmail PUTs execute-actions-email with UPDATE_PASSWORD', async () => {
+    const { calls, fetchFn } = adminFetchMock();
+    const auth = createAuth(adminCfg, { fetchFn });
+    await auth.sendPasswordResetEmail('u1');
+    const c = calls.find((x) => x.url.includes('/users/u1/execute-actions-email'))!;
+    expect(c.method).toBe('PUT');
+    expect(JSON.parse(c.body!)).toEqual(['UPDATE_PASSWORD']);
+  });
+
+  it('forceLogout POSTs logout', async () => {
+    const { calls, fetchFn } = adminFetchMock();
+    const auth = createAuth(adminCfg, { fetchFn });
+    await auth.forceLogout('u1');
+    const c = calls.find((x) => x.url.includes('/users/u1/logout'))!;
+    expect(c.method).toBe('POST');
+  });
+
+  it('refreshes the token once on a 401 from an admin call', async () => {
+    let adminCalls = 0;
+    const tokenCalls: number[] = [];
+    const fetchFn = vi.fn(async (url: string | URL, init?: RequestInit) => {
+      const u = String(url);
+      if (u.endsWith('/protocol/openid-connect/token')) { tokenCalls.push(1); return new Response(JSON.stringify({ access_token: `t${tokenCalls.length}`, expires_in: 300 }), { status: 200, headers: { 'content-type': 'application/json' } }); }
+      adminCalls++;
+      return new Response(null, { status: adminCalls === 1 ? 401 : 204 });
+    }) as unknown as typeof fetch;
+    const auth = createAuth(adminCfg, { fetchFn });
+    await auth.forceLogout('u1');
+    expect(tokenCalls.length).toBe(2); // initial + refresh after 401
+    expect(adminCalls).toBe(2);
+  });
+
+  it('throws on a non-2xx admin response', async () => {
+    const fetchFn = vi.fn(async (url: string | URL) => {
+      const u = String(url);
+      if (u.endsWith('/protocol/openid-connect/token')) return new Response(JSON.stringify({ access_token: 't', expires_in: 300 }), { status: 200, headers: { 'content-type': 'application/json' } });
+      return new Response('boom', { status: 500 });
+    }) as unknown as typeof fetch;
+    const auth = createAuth(adminCfg, { fetchFn });
+    await expect(auth.forceLogout('u1')).rejects.toBeInstanceOf(KcError);
   });
 });

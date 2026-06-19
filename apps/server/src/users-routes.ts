@@ -5,6 +5,15 @@ import { z } from 'zod';
 import { requireRole } from './rbac';
 import { recordAudit } from './audit-helper';
 
+const resetPasswordInput = z.object({ password: z.string().min(1), temporary: z.boolean().optional() });
+
+// Duck-type by name: apps/server intentionally does not depend on @openldr/ports,
+// and name-based detection is robust across module/bundle boundaries. The error
+// class sets this name in its constructor.
+function isNotConfigured(e: unknown): boolean {
+  return e instanceof Error && e.name === 'IdentityAdminNotConfiguredError';
+}
+
 const createInput = z.object({
   username: z.string().min(1),
   displayName: z.string().nullish(),
@@ -89,5 +98,53 @@ export function registerUsersRoutes(app: FastifyInstance<any, any, any, any>, ct
     const after = await ctx.users.get(id);
     await recordAudit(ctx, req, { action: 'user.status', entityType: 'user', entityId: id, before, after, metadata: { status: s } });
     return after;
+  });
+
+  app.post('/api/users/:id/reset-password', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const p = resetPasswordInput.safeParse(req.body);
+    if (!p.success) { reply.code(400); return { error: p.error.message }; }
+    const id = (req.params as { id: string }).id;
+    const u = await ctx.users.get(id);
+    if (!u) { reply.code(404); return { error: 'not found' }; }
+    if (!u.subject) { reply.code(409); return { error: 'user has no linked identity-provider account' }; }
+    try {
+      await ctx.auth.resetPassword(u.subject, p.data.password, p.data.temporary ?? true);
+    } catch (e) {
+      if (isNotConfigured(e)) { reply.code(503); return { error: 'identity provider admin client is not configured' }; }
+      reply.code(502); return { error: redact(e instanceof Error ? e.message : String(e)) };
+    }
+    await recordAudit(ctx, req, { action: 'user.reset_password', entityType: 'user', entityId: id, before: null, after: null, metadata: { temporary: p.data.temporary ?? true } });
+    reply.code(204); return null;
+  });
+
+  app.post('/api/users/:id/send-reset-email', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    const u = await ctx.users.get(id);
+    if (!u) { reply.code(404); return { error: 'not found' }; }
+    if (!u.subject) { reply.code(409); return { error: 'user has no linked identity-provider account' }; }
+    try {
+      await ctx.auth.sendPasswordResetEmail(u.subject);
+    } catch (e) {
+      if (isNotConfigured(e)) { reply.code(503); return { error: 'identity provider admin client is not configured' }; }
+      reply.code(502); return { error: redact(e instanceof Error ? e.message : String(e)) };
+    }
+    await recordAudit(ctx, req, { action: 'user.send_reset_email', entityType: 'user', entityId: id, before: null, after: null });
+    reply.code(204); return null;
+  });
+
+  app.post('/api/users/:id/force-logout', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    if (req.user?.id === id) { reply.code(400); return { error: 'cannot force-logout your own account' }; }
+    const u = await ctx.users.get(id);
+    if (!u) { reply.code(404); return { error: 'not found' }; }
+    if (!u.subject) { reply.code(409); return { error: 'user has no linked identity-provider account' }; }
+    try {
+      await ctx.auth.forceLogout(u.subject);
+    } catch (e) {
+      if (isNotConfigured(e)) { reply.code(503); return { error: 'identity provider admin client is not configured' }; }
+      reply.code(502); return { error: redact(e instanceof Error ? e.message : String(e)) };
+    }
+    await recordAudit(ctx, req, { action: 'user.force_logout', entityType: 'user', entityId: id, before: null, after: null });
+    reply.code(204); return null;
   });
 }

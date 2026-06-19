@@ -35,4 +35,13 @@ describe('auth config', () => {
     expect(cfg.AUTH_DEV_USERNAME).toBe('dev-admin');
     expect(cfg.AUTH_DEV_ROLES).toBe('lab_admin');
   });
+  it('accepts optional Keycloak admin client credentials', () => {
+    const cfg = ConfigSchema.parse({ ...base, KEYCLOAK_ADMIN_CLIENT_ID: 'svc', KEYCLOAK_ADMIN_CLIENT_SECRET: 'sek' });
+    expect(cfg.KEYCLOAK_ADMIN_CLIENT_ID).toBe('svc');
+    expect(cfg.KEYCLOAK_ADMIN_CLIENT_SECRET).toBe('sek');
+  });
+  it('leaves admin creds undefined when omitted', () => {
+    const cfg = ConfigSchema.parse({ ...base });
+    expect(cfg.KEYCLOAK_ADMIN_CLIENT_ID).toBeUndefined();
+  });
 });

@@ -1,11 +1,21 @@
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose';
 import { probe } from '@openldr/core';
 import type { AuthPort, TokenClaims } from '@openldr/ports';
+import { IdentityAdminNotConfiguredError } from '@openldr/ports';
 
 export interface AuthConfig {
   issuerUrl: string;
   /** Expected token audience. When unset, the audience check is skipped. */
   audience?: string;
+  adminClientId?: string;
+  adminClientSecret?: string;
+}
+
+export class KcError extends Error {
+  constructor(public status: number, public detail: string) {
+    super(`identity provider responded ${status}`);
+    this.name = 'KcError';
+  }
 }
 
 export interface AuthDeps {
@@ -37,6 +47,44 @@ export function createAuth(cfg: AuthConfig, deps: AuthDeps = {}): AuthPort {
     return keySetPromise;
   }
 
+  const tokenEndpoint = `${cfg.issuerUrl}/protocol/openid-connect/token`;
+  const adminBase = cfg.issuerUrl.replace('/realms/', '/admin/realms/');
+  const adminConfigured = Boolean(cfg.adminClientId && cfg.adminClientSecret);
+  const adminClientId = cfg.adminClientId ?? '';
+  const adminClientSecret = cfg.adminClientSecret ?? '';
+  let adminTokenPromise: Promise<{ token: string; expiresAt: number }> | undefined;
+
+  async function getAdminToken(): Promise<string> {
+    const cached = adminTokenPromise ? await adminTokenPromise.catch(() => undefined) : undefined;
+    if (cached && Date.now() < cached.expiresAt) return cached.token;
+    adminTokenPromise = (async () => {
+      const form = new URLSearchParams({ grant_type: 'client_credentials', client_id: adminClientId, client_secret: adminClientSecret });
+      const res = await fetchFn(tokenEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form.toString() });
+      if (!res.ok) throw new KcError(res.status, 'admin token request failed');
+      const body = (await res.json()) as { access_token: string; expires_in?: number };
+      return { token: body.access_token, expiresAt: Date.now() + ((body.expires_in ?? 300) - 30) * 1000 };
+    })().catch((e) => { adminTokenPromise = undefined; throw e; });
+    return (await adminTokenPromise).token;
+  }
+  async function adminVoid(path: string, init: RequestInit): Promise<void> {
+    if (!adminConfigured) throw new IdentityAdminNotConfiguredError();
+    if (!cfg.issuerUrl.includes('/realms/')) {
+      throw new Error('OIDC_ISSUER_URL must be a Keycloak realm URL (containing /realms/) to use identity-admin actions');
+    }
+    const doFetch = async (tok: string) => {
+      const headers = new Headers(init.headers);
+      headers.set('Authorization', `Bearer ${tok}`);
+      if (init.body !== undefined && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+      return fetchFn(`${adminBase}${path}`, { ...init, headers });
+    };
+    let res = await doFetch(await getAdminToken());
+    if (res.status === 401) { adminTokenPromise = undefined; res = await doFetch(await getAdminToken()); }
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      throw new KcError(res.status, detail.slice(0, 500));
+    }
+  }
+
   return {
     async healthCheck() {
       return probe(async () => {
@@ -62,6 +110,15 @@ export function createAuth(cfg: AuthConfig, deps: AuthDeps = {}): AuthPort {
         throw new Error('token missing sub claim');
       }
       return payload as TokenClaims;
+    },
+    async resetPassword(userId: string, password: string, temporary: boolean): Promise<void> {
+      await adminVoid(`/users/${encodeURIComponent(userId)}/reset-password`, { method: 'PUT', body: JSON.stringify({ type: 'password', value: password, temporary }) });
+    },
+    async sendPasswordResetEmail(userId: string): Promise<void> {
+      await adminVoid(`/users/${encodeURIComponent(userId)}/execute-actions-email`, { method: 'PUT', body: JSON.stringify(['UPDATE_PASSWORD']) });
+    },
+    async forceLogout(userId: string): Promise<void> {
+      await adminVoid(`/users/${encodeURIComponent(userId)}/logout`, { method: 'POST' });
     },
   };
 }

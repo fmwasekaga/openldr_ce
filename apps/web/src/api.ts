@@ -169,6 +169,12 @@ export const updateUser = (id: string, i: { displayName?: string | null; email?:
   authFetch(`/api/users/${id}`, jbody(i, 'PUT')).then((r) => okJson<User>(r, 'update user'));
 export const setUserStatus = (id: string, status: 'active' | 'disabled'): Promise<User> =>
   authFetch(`/api/users/${id}/status`, jbody({ status }, 'POST')).then((r) => okJson<User>(r, 'set user status'));
+export const resetUserPassword = (id: string, password: string, temporary: boolean): Promise<void> =>
+  authFetch(`/api/users/${id}/reset-password`, jbody({ password, temporary }, 'POST')).then((r) => { if (!r.ok) throw new Error(`reset password failed: ${r.status}`); });
+export const sendUserResetEmail = (id: string): Promise<void> =>
+  authFetch(`/api/users/${id}/send-reset-email`, { method: 'POST' }).then((r) => { if (!r.ok) throw new Error(`send reset email failed: ${r.status}`); });
+export const forceUserLogout = (id: string): Promise<void> =>
+  authFetch(`/api/users/${id}/force-logout`, { method: 'POST' }).then((r) => { if (!r.ok) throw new Error(`force logout failed: ${r.status}`); });
 
 // Forms
 export type FormStatus = 'draft' | 'published' | 'archived';
