@@ -1,30 +1,39 @@
-import { describe, it, expect } from 'vitest';
-import { FormField, FormSchema } from './form-schema';
+import { describe, expect, it } from 'vitest';
+import { FormSchema, FormField, FieldType } from './form-schema';
 
-describe('FormSchema model', () => {
-  it('accepts a minimal valid form', () => {
-    const r = FormSchema.safeParse({
-      id: 'f', name: 'f', title: { en: 'F' }, status: 'active', languages: ['en'],
-      sections: [{ id: 's', title: { en: 'S' }, fields: [{ id: 'q', type: 'string', label: { en: 'Q' } }] }],
+const field = {
+  id: 'name', fhirPath: 'name', displayLabel: 'Name', description: null,
+  fieldType: 'text', required: true, enabled: true, order: 0,
+  cardinality: { min: 0, max: '1' },
+};
+
+describe('form-schema (corlix model)', () => {
+  it('accepts the full 17-type union', () => {
+    for (const t of ['text','number','date','datetime','boolean','select','multiselect','phone','email','address','identifier','attachment','organism','antibiogram','reference','facility','group']) {
+      expect(FieldType.parse(t)).toBe(t);
+    }
+  });
+
+  it('parses a flat field with corlix props', () => {
+    const parsed = FormField.parse({ ...field, code: [{ system: 'http://loinc.org', code: '1234-5' }], translations: { fr: { label: 'Nom' } }, visibility: { combinator: 'all', conditions: [{ fieldId: 'x', operator: 'isNotEmpty' }] } });
+    expect(parsed.fieldType).toBe('text');
+    expect(parsed.code?.[0].code).toBe('1234-5');
+    expect(parsed.translations?.fr.label).toBe('Nom');
+    expect(parsed.visibility?.conditions[0].operator).toBe('isNotEmpty');
+  });
+
+  it('parses a flat FormSchema with form-level FHIR metadata', () => {
+    const schema = FormSchema.parse({
+      id: 'facility', name: 'Facility', versionLabel: '1.0.0',
+      fhirVersion: 'R4', fhirResourceType: 'Location', fhirProfileUrl: null, facilityId: null,
+      fields: [field], sections: [], targetPages: ['facilities'], languages: ['fr'],
+      version: 1, active: true, status: 'draft', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
     });
-    expect(r.success).toBe(true);
+    expect(schema.fhirResourceType).toBe('Location');
+    expect(schema.fields[0].id).toBe('name');
   });
-  it('rejects a choice field without options', () => {
-    const r = FormField.safeParse({ id: 'q', type: 'choice', label: { en: 'Q' } });
-    expect(r.success).toBe(false);
-  });
-  it('rejects an observationExtract field without code', () => {
-    const r = FormField.safeParse({ id: 'q', type: 'integer', label: { en: 'Q' }, observationExtract: true });
-    expect(r.success).toBe(false);
-  });
-  it('rejects duplicate field ids', () => {
-    const r = FormSchema.safeParse({
-      id: 'f', name: 'f', title: { en: 'F' }, status: 'active', languages: ['en'],
-      sections: [{ id: 's', title: { en: 'S' }, fields: [
-        { id: 'dup', type: 'string', label: { en: 'A' } },
-        { id: 'dup', type: 'string', label: { en: 'B' } },
-      ] }],
-    });
-    expect(r.success).toBe(false);
+
+  it('rejects an unknown field type', () => {
+    expect(() => FormField.parse({ ...field, fieldType: 'bogus' })).toThrow();
   });
 });
