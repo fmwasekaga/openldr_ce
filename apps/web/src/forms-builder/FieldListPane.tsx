@@ -237,6 +237,7 @@ export function FieldListPane({
                   </div>
 
                   {/* Fields in this section */}
+                  <div className="space-y-1.5">
                   {fieldList.map((field) => (
                     <React.Fragment key={field.id}>
                       <SortableFieldRow
@@ -271,6 +272,7 @@ export function FieldListPane({
                         ))}
                     </React.Fragment>
                   ))}
+                  </div>
                 </div>
               ))
             ) : (

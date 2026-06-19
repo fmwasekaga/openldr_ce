@@ -55,7 +55,7 @@ export function SortableFieldRow({
       ref={setNodeRef}
       style={style}
       data-sortable-card
-      className={`group flex items-center gap-2 px-3 py-1.5 rounded-md border transition-colors cursor-pointer ${
+      className={`group flex items-center gap-2 px-3 py-2 rounded-md border transition-colors cursor-pointer ${
         selected
           ? 'border-primary bg-primary/5'
           : 'border-border hover:border-muted-foreground/30'
@@ -84,14 +84,14 @@ export function SortableFieldRow({
 
       {/* Label region */}
       <div className="flex-1 min-w-0 leading-tight">
-        <p className="text-sm font-medium text-foreground truncate leading-4">
+        <p className="m-0 text-sm font-medium text-foreground truncate leading-5">
           {field.displayLabel}
           {field.required && (
             <span className="text-destructive ml-0.5">*</span>
           )}
         </p>
         {field.fhirPath && (
-          <p className="text-[10px] text-muted-foreground font-mono truncate leading-4">
+          <p className="m-0 text-[10px] text-muted-foreground font-mono truncate leading-4">
             {field.fhirPath}
           </p>
         )}

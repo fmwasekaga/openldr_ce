@@ -157,21 +157,21 @@ export function BuilderHeader({
     <div>
       {/* Header bar */}
       <div className="flex items-end gap-3 flex-wrap rounded-md border border-border bg-card p-3">
-        {/* Form name (with status dot) */}
-        <div className="flex-1 min-w-40 space-y-1">
-          <Label className="text-xs" htmlFor="builder-name">Form name</Label>
-          <div className="flex items-center gap-2">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span
-                    className={`h-2.5 w-2.5 rounded-full shrink-0 ${statusDotClass(status)}`}
-                    aria-label={`Status: ${statusLabel(status)}`}
-                  />
-                </TooltipTrigger>
-                <TooltipContent>{statusLabel(status)}</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+        {/* Form name (status dot sits to the left of the label+input column) */}
+        <div className="flex-1 min-w-40 flex items-end gap-2">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  className={`h-2.5 w-2.5 rounded-full shrink-0 mb-3 ${statusDotClass(status)}`}
+                  aria-label={`Status: ${statusLabel(status)}`}
+                />
+              </TooltipTrigger>
+              <TooltipContent>{statusLabel(status)}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <div className="flex-1 min-w-0 space-y-1">
+            <Label className="text-xs" htmlFor="builder-name">Form name</Label>
             <Input
               id="builder-name"
               aria-label="Form name"
