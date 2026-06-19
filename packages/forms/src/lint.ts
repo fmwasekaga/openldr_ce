@@ -1,103 +1,136 @@
+import type { FormSchema } from './schema/form-schema';
+import { validateTemplateTargets } from './page-targets';
+
 export type FormLintSeverity = 'error' | 'warning';
 
 export interface FormLintIssue {
   severity: FormLintSeverity;
   code:
     | 'duplicate-id'
-    | 'duplicate-fhir-path'
     | 'choice-missing-options'
-    | 'observation-extract-missing-code'
-    | 'cardinality-min-greater-than-max'
-    | 'visibility-missing-field';
+    | 'visibility-missing-field'
+    | 'dangling-group-id'
+    | 'target-contract-violation';
   message: string;
   fieldId?: string;
   sectionId?: string;
 }
 
-type DraftObject = Record<string, unknown>;
-
-export function lintFormSchema(form: unknown): FormLintIssue[] {
+export function lintFormSchema(form: FormSchema): FormLintIssue[] {
   const issues: FormLintIssue[] = [];
-  const seenIds = new Map<string, { sectionId?: string; fieldId?: string }>();
-  const fhirPaths = new Map<string, string>();
-  const fieldIds = new Set<string>();
-  const visibilityRules: Array<{ sectionId: string; fieldId?: string; whenField: string }> = [];
+  const seenFieldIds = new Set<string>();
+  const groupFieldIds = new Set<string>();
 
-  for (const section of sectionsOf(form)) {
-    const sectionId = stringValue(section.id) ?? '';
-    recordId(sectionId, { sectionId });
-    if (isObject(section.visibility)) {
-      const whenField = stringValue(section.visibility.whenField);
-      if (whenField) visibilityRules.push({ sectionId, whenField });
+  // Build the set of all field ids and group-type field ids
+  for (const field of form.fields) {
+    if (field.fieldType === 'group') groupFieldIds.add(field.id);
+  }
+
+  // Check fields
+  for (const field of form.fields) {
+    // Duplicate id
+    if (seenFieldIds.has(field.id)) {
+      issues.push({
+        severity: 'error',
+        code: 'duplicate-id',
+        message: `Duplicate field id "${field.id}"`,
+        fieldId: field.id,
+      });
+    } else {
+      seenFieldIds.add(field.id);
     }
 
-    for (const field of fieldsOf(section)) {
-      const fieldId = stringValue(field.id) ?? '';
-      recordId(fieldId, { sectionId, fieldId });
-      if (fieldId) fieldIds.add(fieldId);
+    // select/multiselect missing options
+    if (field.fieldType === 'select' || field.fieldType === 'multiselect') {
+      const hasOptions = Array.isArray(field.valueSetOptions) && field.valueSetOptions.length > 0;
+      const hasUrl = typeof field.valueSetUrl === 'string' && field.valueSetUrl.length > 0;
+      if (!hasOptions && !hasUrl) {
+        issues.push({
+          severity: 'error',
+          code: 'choice-missing-options',
+          message: `Field "${field.id}" is a ${field.fieldType} but has neither valueSetOptions nor valueSetUrl`,
+          fieldId: field.id,
+        });
+      }
+    }
 
-      const fhirPath = stringValue(field.fhirPath);
-      if (fhirPath) {
-        const firstField = fhirPaths.get(fhirPath);
-        if (firstField) {
-          issues.push({ severity: 'warning', code: 'duplicate-fhir-path', message: `FHIR path "${fhirPath}" is used by multiple fields`, fieldId, sectionId });
-        } else {
-          fhirPaths.set(fhirPath, fieldId);
+    // dangling groupId
+    if (field.groupId !== undefined) {
+      if (!groupFieldIds.has(field.groupId)) {
+        issues.push({
+          severity: 'error',
+          code: 'dangling-group-id',
+          message: `Field "${field.id}" references group "${field.groupId}" which does not exist or is not a group-type field`,
+          fieldId: field.id,
+        });
+      }
+    }
+
+    // dangling visibility condition fieldIds
+    if (field.visibility) {
+      for (const condition of field.visibility.conditions) {
+        if (!seenFieldIds.has(condition.fieldId) && condition.fieldId !== field.id) {
+          // Check against ALL field ids (pre-collected), not just previously seen
+          issues.push({
+            severity: 'error',
+            code: 'visibility-missing-field',
+            message: `Field "${field.id}" visibility condition references missing field "${condition.fieldId}"`,
+            fieldId: field.id,
+          });
+          break; // report once per field
         }
-      }
-
-      const type = stringValue(field.type);
-      const options = Array.isArray(field.options) ? field.options : undefined;
-      const hasValueSetBinding = isObject(field.valueSetBinding) && typeof field.valueSetBinding.url === 'string' && field.valueSetBinding.url.length > 0;
-      if ((type === 'choice' || type === 'open-choice') && (!options || options.length === 0) && !hasValueSetBinding) {
-        issues.push({ severity: 'error', code: 'choice-missing-options', message: 'Choice fields require options or a value set binding', fieldId, sectionId });
-      }
-
-      if (field.observationExtract === true && !isObject(field.code)) {
-        issues.push({ severity: 'error', code: 'observation-extract-missing-code', message: 'Observation extraction requires a code', fieldId, sectionId });
-      }
-
-      if (isObject(field.cardinality) && typeof field.cardinality.min === 'number' && typeof field.cardinality.max === 'number' && field.cardinality.min > field.cardinality.max) {
-        issues.push({ severity: 'error', code: 'cardinality-min-greater-than-max', message: 'Minimum cardinality cannot be greater than maximum cardinality', fieldId, sectionId });
-      }
-
-      if (isObject(field.visibility)) {
-        const whenField = stringValue(field.visibility.whenField);
-        if (whenField) visibilityRules.push({ sectionId, fieldId, whenField });
       }
     }
   }
 
-  for (const rule of visibilityRules) {
-    if (!fieldIds.has(rule.whenField)) {
-      issues.push({ severity: 'error', code: 'visibility-missing-field', message: `Visibility references missing field "${rule.whenField}"`, fieldId: rule.fieldId, sectionId: rule.sectionId });
+  // Re-check visibility with complete field id set (handles forward references)
+  const allFieldIds = new Set(form.fields.map((f) => f.id));
+  // Remove wrongly added visibility issues and redo them with the full set
+  const visibilityIssuesBefore = issues.filter((i) => i.code === 'visibility-missing-field');
+  // Clear the visibility issues we added during the loop (they used partial seenFieldIds)
+  const issuesWithoutVisibility = issues.filter((i) => i.code !== 'visibility-missing-field');
+  issues.length = 0;
+  for (const issue of issuesWithoutVisibility) issues.push(issue);
+
+  // Now re-add correct visibility issues using the full set
+  for (const field of form.fields) {
+    if (field.visibility) {
+      const danglingConditions = field.visibility.conditions.filter((c) => !allFieldIds.has(c.fieldId));
+      if (danglingConditions.length > 0) {
+        issues.push({
+          severity: 'error',
+          code: 'visibility-missing-field',
+          message: `Field "${field.id}" visibility condition references missing field "${danglingConditions[0]!.fieldId}"`,
+          fieldId: field.id,
+        });
+      }
     }
+  }
+
+  // Section visibility
+  for (const section of form.sections) {
+    if (section.visibility) {
+      const danglingConditions = section.visibility.conditions.filter((c) => !allFieldIds.has(c.fieldId));
+      if (danglingConditions.length > 0) {
+        issues.push({
+          severity: 'error',
+          code: 'visibility-missing-field',
+          message: `Section "${section.id}" visibility condition references missing field "${danglingConditions[0]!.fieldId}"`,
+          sectionId: section.id,
+        });
+      }
+    }
+  }
+
+  // Target contract violations
+  const violations = validateTemplateTargets(form.targetPages, form.fields);
+  for (const v of violations) {
+    issues.push({
+      severity: 'error',
+      code: 'target-contract-violation',
+      message: `Page "${v.pageLabel}" requires fields for: ${v.missing.join(', ')}`,
+    });
   }
 
   return issues;
-
-  function recordId(id: string, location: { sectionId?: string; fieldId?: string }): void {
-    if (!id) return;
-    if (seenIds.has(id)) {
-      issues.push({ severity: 'error', code: 'duplicate-id', message: `Duplicate id "${id}"`, ...location });
-      return;
-    }
-    seenIds.set(id, location);
-  }
-}
-
-function sectionsOf(form: unknown): DraftObject[] {
-  return isObject(form) && Array.isArray(form.sections) ? form.sections.filter(isObject) : [];
-}
-
-function fieldsOf(section: DraftObject): DraftObject[] {
-  return Array.isArray(section.fields) ? section.fields.filter(isObject) : [];
-}
-
-function stringValue(value: unknown): string | undefined {
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
-}
-
-function isObject(value: unknown): value is DraftObject {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
 }

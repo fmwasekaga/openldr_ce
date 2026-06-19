@@ -1,4 +1,5 @@
 import { FormSchema, type FormField, type FormSection } from './schema/form-schema';
+import { deriveLanguagesFromTranslations } from './derive-languages';
 
 type DraftObject = Record<string, unknown>;
 
@@ -6,52 +7,83 @@ export function normalizeFormSchema(input: unknown): FormSchema {
   const source = isObject(input) ? input : {};
   const name = stringValue(source.name) ?? stringValue(source.id) ?? 'Untitled form';
   const id = stringValue(source.id) ?? slug(name);
+
+  // Normalize flat fields array
+  const rawFields = Array.isArray(source.fields) ? source.fields : [];
+  const fields = rawFields.map((f, idx) => normalizeField(f, idx));
+
+  // Normalize flat sections array
   const sections = Array.isArray(source.sections) ? source.sections.map(normalizeSection) : [];
 
+  // Derive targetPages default
+  const targetPages = Array.isArray(source.targetPages) ? source.targetPages : [];
+
+  // Derive languages from field translations if not explicitly set
+  const explicitLanguages = Array.isArray(source.languages) && source.languages.length > 0
+    ? (source.languages as string[])
+    : undefined;
+  const derivedLanguages = deriveLanguagesFromTranslations(fields as FormField[]);
+  const languages = explicitLanguages ?? (derivedLanguages.length > 0 ? derivedLanguages : undefined);
+
   return FormSchema.parse({
+    versionLabel: null,
+    fhirVersion: null,
+    fhirResourceType: null,
+    fhirProfileUrl: null,
+    facilityId: null,
+    version: 1,
+    active: true,
+    status: 'draft',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     ...source,
     id,
     name,
-    title: normalizeText(source.title, name),
-    status: source.status ?? 'draft',
-    languages: normalizeLanguages(source.languages),
+    fields,
     sections,
+    targetPages,
+    ...(languages !== undefined ? { languages } : {}),
   });
 }
 
 function normalizeSection(input: unknown): FormSection {
   const source = isObject(input) ? input : {};
   const id = stringValue(source.id) ?? 'section';
-  const fields = Array.isArray(source.fields) ? source.fields.map(normalizeField) : [];
+  const label = stringValue(source.label) ?? id;
+  const order = typeof source.order === 'number' ? source.order : 0;
 
   return {
     ...source,
     id,
-    title: normalizeText(source.title, id),
-    fields,
+    label,
+    order,
   } as FormSection;
 }
 
-function normalizeField(input: unknown): FormField {
+function normalizeField(input: unknown, idx: number): FormField {
   const source = isObject(input) ? input : {};
-  const id = stringValue(source.id) ?? 'field';
+  const id = stringValue(source.id) ?? `field-${idx}`;
+
+  // Apply defaults for required fields not present
+  const order = typeof source.order === 'number' ? source.order : idx;
+  const enabled = typeof source.enabled === 'boolean' ? source.enabled : true;
+  const cardinality = isObject(source.cardinality)
+    ? source.cardinality
+    : { min: 0, max: '1' };
+  const required = typeof source.required === 'boolean' ? source.required : false;
+  const fhirPath = source.fhirPath !== undefined ? source.fhirPath : null;
+  const description = source.description !== undefined ? source.description : null;
 
   return {
     ...source,
     id,
-    type: source.type ?? 'string',
-    label: normalizeText(source.label, id),
+    order,
+    enabled,
+    cardinality,
+    required,
+    fhirPath,
+    description,
   } as FormField;
-}
-
-function normalizeLanguages(value: unknown): string[] {
-  return Array.isArray(value) && value.length > 0 ? value : ['en'];
-}
-
-function normalizeText(value: unknown, fallback: string): { en: string; fr?: string; pt?: string } {
-  if (typeof value === 'string') return { en: value };
-  if (isObject(value)) return { ...value, en: stringValue(value.en) ?? fallback } as { en: string; fr?: string; pt?: string };
-  return { en: fallback };
 }
 
 function stringValue(value: unknown): string | undefined {
