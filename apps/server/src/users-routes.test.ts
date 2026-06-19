@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import Fastify from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { registerUsersRoutes } from './users-routes';
+import './auth-plugin';
 
 type User = Awaited<ReturnType<AppContext['users']['create']>>;
 
@@ -53,6 +54,9 @@ function fakeCtx() {
 describe('users routes', () => {
   it('creates, lists, updates roles/profile, disables, and gets a user', async () => {
     const app = Fastify();
+    app.addHook('onRequest', async (req) => {
+      req.user = { id: 'admin', username: 'admin', displayName: null, roles: ['lab_admin'] };
+    });
     registerUsersRoutes(app, fakeCtx());
 
     const created = await app.inject({ method: 'POST', url: '/api/users', payload: { username: 'ada', displayName: 'Ada', roles: ['lab_admin'] } });
@@ -75,8 +79,28 @@ describe('users routes', () => {
     expect(got.json()).toMatchObject({ id, username: 'ada', status: 'disabled' });
   });
 
+  it('rejects Users mutations without the lab_admin role', async () => {
+    // non-admin actor → 403
+    const app1 = Fastify();
+    app1.addHook('onRequest', async (req) => {
+      req.user = { id: 'tech', username: 'tech', displayName: null, roles: ['lab_technician'] };
+    });
+    registerUsersRoutes(app1, fakeCtx());
+    const forbidden = await app1.inject({ method: 'POST', url: '/api/users', payload: { username: 'x' } });
+    expect(forbidden.statusCode).toBe(403);
+
+    // no actor → 401
+    const app2 = Fastify();
+    registerUsersRoutes(app2, fakeCtx());
+    const unauth = await app2.inject({ method: 'POST', url: '/api/users', payload: { username: 'x' } });
+    expect(unauth.statusCode).toBe(401);
+  });
+
   it('returns 404 for a missing user and 400 for a bad status', async () => {
     const app = Fastify();
+    app.addHook('onRequest', async (req) => {
+      req.user = { id: 'admin', username: 'admin', displayName: null, roles: ['lab_admin'] };
+    });
     registerUsersRoutes(app, fakeCtx());
 
     const missing = await app.inject({ method: 'GET', url: '/api/users/nope' });

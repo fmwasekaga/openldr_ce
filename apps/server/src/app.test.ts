@@ -364,7 +364,7 @@ function ctxWith(status: 'up' | 'down'): AppContext {
     forms: {} as never,
     terminology: { ops: {} as never, admin: buildFakeAdmin(), ontology: buildFakeOntology(), loaders: buildFakeLoaders() },
     dashboards: {} as never,
-    cfg: {} as never,
+    cfg: { AUTH_DEV_BYPASS: true } as never,
     async close() {},
   };
 }
@@ -383,6 +383,18 @@ describe('GET /health', () => {
     const res = await app.inject({ method: 'GET', url: '/health' });
     expect(res.statusCode).toBe(503);
     expect(res.json().status).toBe('down');
+    await app.close();
+  });
+});
+
+describe('auth routes', () => {
+  it('GET /api/me returns the resolved actor under dev bypass', async () => {
+    const app = buildApp(ctxWith('up'));
+    const res = await app.inject({ method: 'GET', url: '/api/me' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(typeof body.username).toBe('string');
+    expect(Array.isArray(body.roles)).toBe(true);
     await app.close();
   });
 });

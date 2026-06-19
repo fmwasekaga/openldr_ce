@@ -1,3 +1,14 @@
+import { getAccessToken } from './auth/token';
+
+/** fetch wrapper that attaches the bearer token when one is present. */
+export function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const token = getAccessToken();
+  if (!token) return init !== undefined ? fetch(input, init) : fetch(input);
+  const headers = new Headers(init?.headers);
+  headers.set('Authorization', `Bearer ${token}`);
+  return fetch(input, { ...init, headers });
+}
+
 export interface ReportSummary { id: string; name: string; description: string }
 export interface ChartHint {
   type: 'bar' | 'line' | 'pie' | 'stat';
@@ -12,14 +23,14 @@ export interface ReportResult {
 }
 
 export async function fetchReports(): Promise<ReportSummary[]> {
-  const res = await fetch('/api/reports');
+  const res = await authFetch('/api/reports');
   if (!res.ok) throw new Error(`reports list failed: ${res.status}`);
   return res.json() as Promise<ReportSummary[]>;
 }
 
 export async function fetchReport(id: string, params: Record<string, string> = {}): Promise<ReportResult> {
   const qs = new URLSearchParams(params).toString();
-  const res = await fetch(`/api/reports/${id}${qs ? `?${qs}` : ''}`);
+  const res = await authFetch(`/api/reports/${id}${qs ? `?${qs}` : ''}`);
   if (!res.ok) throw new Error(`report ${id} failed: ${res.status}`);
   return res.json() as Promise<ReportResult>;
 }
@@ -62,32 +73,32 @@ export interface QueryModel { id: string; label: string; dimensions: ModelDimens
 const json = (body: unknown) => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
 export async function listModels(): Promise<QueryModel[]> {
-  const r = await fetch('/api/dashboards/models'); if (!r.ok) throw new Error(`models failed: ${r.status}`); return r.json();
+  const r = await authFetch('/api/dashboards/models'); if (!r.ok) throw new Error(`models failed: ${r.status}`); return r.json();
 }
 export async function runWidgetQuery(q: WidgetQuery): Promise<ReportResult> {
-  const r = await fetch('/api/dashboards/query', json(q));
+  const r = await authFetch('/api/dashboards/query', json(q));
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `query failed: ${r.status}`);
   return r.json();
 }
 export async function listDashboards(): Promise<Dashboard[]> {
-  const r = await fetch('/api/dashboards'); if (!r.ok) throw new Error(`list failed: ${r.status}`); return r.json();
+  const r = await authFetch('/api/dashboards'); if (!r.ok) throw new Error(`list failed: ${r.status}`); return r.json();
 }
 export async function getDashboard(id: string): Promise<Dashboard> {
-  const r = await fetch(`/api/dashboards/${id}`); if (!r.ok) throw new Error(`get failed: ${r.status}`); return r.json();
+  const r = await authFetch(`/api/dashboards/${id}`); if (!r.ok) throw new Error(`get failed: ${r.status}`); return r.json();
 }
 export async function createDashboard(d: Dashboard): Promise<Dashboard> {
-  const r = await fetch('/api/dashboards', json(d)); if (!r.ok) throw new Error(`create failed: ${r.status}`); return r.json();
+  const r = await authFetch('/api/dashboards', json(d)); if (!r.ok) throw new Error(`create failed: ${r.status}`); return r.json();
 }
 export async function saveDashboard(d: Dashboard): Promise<Dashboard> {
-  const r = await fetch(`/api/dashboards/${d.id}`, { ...json(d), method: 'PUT' }); if (!r.ok) throw new Error(`save failed: ${r.status}`); return r.json();
+  const r = await authFetch(`/api/dashboards/${d.id}`, { ...json(d), method: 'PUT' }); if (!r.ok) throw new Error(`save failed: ${r.status}`); return r.json();
 }
 export async function deleteDashboard(id: string): Promise<void> {
-  const r = await fetch(`/api/dashboards/${id}`, { method: 'DELETE' }); if (!r.ok) throw new Error(`delete failed: ${r.status}`);
+  const r = await authFetch(`/api/dashboards/${id}`, { method: 'DELETE' }); if (!r.ok) throw new Error(`delete failed: ${r.status}`);
 }
 
 export interface ClientConfig { dashboardSqlEnabled: boolean }
 export async function fetchClientConfig(): Promise<ClientConfig> {
-  const r = await fetch('/api/config'); if (!r.ok) return { dashboardSqlEnabled: false }; return r.json();
+  const r = await authFetch('/api/config'); if (!r.ok) return { dashboardSqlEnabled: false }; return r.json();
 }
 
 // Audit
@@ -142,12 +153,21 @@ export interface CreateUserInput {
 }
 export const USER_ROLES = ['lab_admin', 'lab_manager', 'lab_technician', 'data_analyst', 'system_auditor'] as const;
 export const listUsers = (): Promise<User[]> => apiGet('/api/users', 'list users');
+
+export interface CurrentUser {
+  id: string;
+  username: string;
+  displayName: string | null;
+  roles: string[];
+}
+export const getMe = (): Promise<CurrentUser> =>
+  authFetch('/api/me').then((res) => okJson<CurrentUser>(res, 'get current user'));
 export const createUser = (i: CreateUserInput): Promise<User> =>
-  fetch('/api/users', jbody(i, 'POST')).then((r) => okJson<User>(r, 'create user'));
+  authFetch('/api/users', jbody(i, 'POST')).then((r) => okJson<User>(r, 'create user'));
 export const updateUser = (id: string, i: { displayName?: string | null; email?: string | null; roles?: string[] }): Promise<User> =>
-  fetch(`/api/users/${id}`, jbody(i, 'PUT')).then((r) => okJson<User>(r, 'update user'));
+  authFetch(`/api/users/${id}`, jbody(i, 'PUT')).then((r) => okJson<User>(r, 'update user'));
 export const setUserStatus = (id: string, status: 'active' | 'disabled'): Promise<User> =>
-  fetch(`/api/users/${id}/status`, jbody({ status }, 'POST')).then((r) => okJson<User>(r, 'set user status'));
+  authFetch(`/api/users/${id}/status`, jbody({ status }, 'POST')).then((r) => okJson<User>(r, 'set user status'));
 
 // Forms
 export type FormStatus = 'draft' | 'published' | 'archived';
@@ -208,23 +228,23 @@ export interface FormVersion extends FormVersionSummary {
 export const listForms = (): Promise<FormSummary[]> => apiGet('/api/forms', 'list forms');
 export const getForm = (id: string): Promise<FormDefinition> => apiGet(`/api/forms/${id}`, 'get form');
 export const createForm = (i: CreateFormInput): Promise<FormDefinition> =>
-  fetch('/api/forms', jbody(i, 'POST')).then((r) => okJson<FormDefinition>(r, 'create form'));
+  authFetch('/api/forms', jbody(i, 'POST')).then((r) => okJson<FormDefinition>(r, 'create form'));
 export const updateForm = (id: string, i: UpdateFormInput): Promise<FormDefinition> =>
-  fetch(`/api/forms/${id}`, jbody(i, 'PUT')).then((r) => okJson<FormDefinition>(r, 'update form'));
+  authFetch(`/api/forms/${id}`, jbody(i, 'PUT')).then((r) => okJson<FormDefinition>(r, 'update form'));
 export const publishForm = (id: string, i: PublishFormInput = {}): Promise<FormDefinition> =>
-  fetch(`/api/forms/${id}/publish`, jbody(i, 'POST')).then((r) => okJson<FormDefinition>(r, 'publish form'));
+  authFetch(`/api/forms/${id}/publish`, jbody(i, 'POST')).then((r) => okJson<FormDefinition>(r, 'publish form'));
 export const duplicateForm = (id: string): Promise<FormDefinition> =>
-  fetch(`/api/forms/${id}/duplicate`, jbody({}, 'POST')).then((r) => okJson<FormDefinition>(r, 'duplicate form'));
+  authFetch(`/api/forms/${id}/duplicate`, jbody({}, 'POST')).then((r) => okJson<FormDefinition>(r, 'duplicate form'));
 export const listFormVersions = (id: string): Promise<FormVersionSummary[]> =>
   apiGet(`/api/forms/${id}/versions`, 'list form versions');
 export const getFormVersion = (id: string, version: number): Promise<FormVersion> =>
   apiGet(`/api/forms/${id}/versions/${version}`, 'get form version');
 export const setFormStatus = (id: string, status: FormStatus): Promise<FormDefinition> =>
-  fetch(`/api/forms/${id}/status`, jbody({ status }, 'POST')).then((r) => okJson<FormDefinition>(r, 'set form status'));
+  authFetch(`/api/forms/${id}/status`, jbody({ status }, 'POST')).then((r) => okJson<FormDefinition>(r, 'set form status'));
 export const deleteForm = (id: string): Promise<void> => apiDelete(`/api/forms/${id}`, 'delete form');
 export const formQuestionnaireUrl = (id: string): string => `/api/forms/${id}/questionnaire`;
 export const submitFormResponse = (id: string, answers: unknown): Promise<unknown> =>
-  fetch(`/api/forms/${id}/responses`, jbody({ answers }, 'POST')).then((r) => okJson<unknown>(r, 'submit form response'));
+  authFetch(`/api/forms/${id}/responses`, jbody({ answers }, 'POST')).then((r) => okJson<unknown>(r, 'submit form response'));
 
 // ── Terminology admin types & client ─────────────────────────────────────────
 export type PublisherRole = 'local' | 'standard' | 'external';
@@ -255,29 +275,29 @@ async function okJson<T>(res: Response, what: string): Promise<T> {
   if (!res.ok) throw new Error(`${what} failed: ${await errorDetail(res)}`);
   return res.json() as Promise<T>;
 }
-const apiGet = <T>(url: string, what: string): Promise<T> => fetch(url).then((res) => okJson<T>(res, what));
+const apiGet = <T>(url: string, what: string): Promise<T> => authFetch(url).then((res) => okJson<T>(res, what));
 async function apiDelete(url: string, what: string): Promise<void> {
-  const res = await fetch(url, { method: 'DELETE' });
+  const res = await authFetch(url, { method: 'DELETE' });
   if (!res.ok && res.status !== 204) throw new Error(`${what} failed: ${res.status}`);
 }
 
-export const listPublishers = () => fetch('/api/terminology/publishers').then((r) => okJson<Publisher[]>(r, 'list publishers'));
-export const createPublisher = (i: PublisherInput) => fetch('/api/terminology/publishers', jbody(i, 'POST')).then((r) => okJson<Publisher>(r, 'create publisher'));
-export const updatePublisher = (id: string, i: PublisherInput) => fetch(`/api/terminology/publishers/${id}`, jbody(i, 'PUT')).then((r) => okJson<Publisher>(r, 'update publisher'));
+export const listPublishers = () => authFetch('/api/terminology/publishers').then((r) => okJson<Publisher[]>(r, 'list publishers'));
+export const createPublisher = (i: PublisherInput) => authFetch('/api/terminology/publishers', jbody(i, 'POST')).then((r) => okJson<Publisher>(r, 'create publisher'));
+export const updatePublisher = (id: string, i: PublisherInput) => authFetch(`/api/terminology/publishers/${id}`, jbody(i, 'PUT')).then((r) => okJson<Publisher>(r, 'update publisher'));
 export async function deletePublisher(id: string): Promise<void> {
-  const r = await fetch(`/api/terminology/publishers/${id}`, { method: 'DELETE' });
+  const r = await authFetch(`/api/terminology/publishers/${id}`, { method: 'DELETE' });
   if (!r.ok && r.status !== 204) throw new Error(`delete publisher failed: ${r.status}`);
 }
-export const publisherDeletionImpact = (id: string) => fetch(`/api/terminology/publishers/${id}/deletion-impact`).then((r) => okJson<{ systemCount: number; termCount: number }>(r, 'impact'));
+export const publisherDeletionImpact = (id: string) => authFetch(`/api/terminology/publishers/${id}/deletion-impact`).then((r) => okJson<{ systemCount: number; termCount: number }>(r, 'impact'));
 
-export const listCodingSystems = (publisher?: string) => fetch(`/api/terminology/systems${publisher ? `?publisher=${encodeURIComponent(publisher)}` : ''}`).then((r) => okJson<CodingSystem[]>(r, 'list systems'));
-export const createCodingSystem = (i: CodingSystemInput) => fetch('/api/terminology/systems', jbody(i, 'POST')).then((r) => okJson<CodingSystem>(r, 'create system'));
-export const updateCodingSystem = (id: string, i: CodingSystemInput) => fetch(`/api/terminology/systems/${id}`, jbody(i, 'PUT')).then((r) => okJson<CodingSystem>(r, 'update system'));
+export const listCodingSystems = (publisher?: string) => authFetch(`/api/terminology/systems${publisher ? `?publisher=${encodeURIComponent(publisher)}` : ''}`).then((r) => okJson<CodingSystem[]>(r, 'list systems'));
+export const createCodingSystem = (i: CodingSystemInput) => authFetch('/api/terminology/systems', jbody(i, 'POST')).then((r) => okJson<CodingSystem>(r, 'create system'));
+export const updateCodingSystem = (id: string, i: CodingSystemInput) => authFetch(`/api/terminology/systems/${id}`, jbody(i, 'PUT')).then((r) => okJson<CodingSystem>(r, 'update system'));
 export async function deleteCodingSystem(id: string): Promise<void> {
-  const r = await fetch(`/api/terminology/systems/${id}`, { method: 'DELETE' });
+  const r = await authFetch(`/api/terminology/systems/${id}`, { method: 'DELETE' });
   if (!r.ok && r.status !== 204) throw new Error(`delete system failed: ${r.status}`);
 }
-export const systemDeletionImpact = (id: string) => fetch(`/api/terminology/systems/${id}/deletion-impact`).then((r) => okJson<{ termCount: number; mappingCount: number }>(r, 'impact'));
+export const systemDeletionImpact = (id: string) => authFetch(`/api/terminology/systems/${id}/deletion-impact`).then((r) => okJson<{ termCount: number; mappingCount: number }>(r, 'impact'));
 
 // Value sets (SP3)
 export interface ValueSetComposeConcept { code: string; display?: string }
@@ -312,16 +332,16 @@ export interface ExpandedCode { system: string; code: string; display: string | 
 export interface TerminologyLoadResult { system: string; conceptsLoaded: number; resourceUrl: string }
 
 export const listValueSets = (publisherId?: string): Promise<ValueSetSummary[]> =>
-  fetch(`/api/terminology/valuesets${publisherId ? `?publisherId=${encodeURIComponent(publisherId)}` : ''}`).then((r) => okJson<ValueSetSummary[]>(r, 'list value sets'));
-export const getValueSet = (id: string): Promise<ValueSet> => fetch(`/api/terminology/valuesets/${id}`).then((r) => okJson<ValueSet>(r, 'get value set'));
-export const saveValueSet = (input: ValueSetInput): Promise<ValueSet> => fetch('/api/terminology/valuesets', jbody(input, 'POST')).then((r) => okJson<ValueSet>(r, 'save value set'));
+  authFetch(`/api/terminology/valuesets${publisherId ? `?publisherId=${encodeURIComponent(publisherId)}` : ''}`).then((r) => okJson<ValueSetSummary[]>(r, 'list value sets'));
+export const getValueSet = (id: string): Promise<ValueSet> => authFetch(`/api/terminology/valuesets/${id}`).then((r) => okJson<ValueSet>(r, 'get value set'));
+export const saveValueSet = (input: ValueSetInput): Promise<ValueSet> => authFetch('/api/terminology/valuesets', jbody(input, 'POST')).then((r) => okJson<ValueSet>(r, 'save value set'));
 export async function deleteValueSet(id: string): Promise<void> {
-  const r = await fetch(`/api/terminology/valuesets/${id}`, { method: 'DELETE' });
+  const r = await authFetch(`/api/terminology/valuesets/${id}`, { method: 'DELETE' });
   if (!r.ok && r.status !== 204) throw new Error(`delete value set failed: ${r.status}`);
 }
-export const duplicateValueSet = (id: string): Promise<ValueSet> => fetch(`/api/terminology/valuesets/${id}/duplicate`, jbody({}, 'POST')).then((r) => okJson<ValueSet>(r, 'duplicate value set'));
+export const duplicateValueSet = (id: string): Promise<ValueSet> => authFetch(`/api/terminology/valuesets/${id}/duplicate`, jbody({}, 'POST')).then((r) => okJson<ValueSet>(r, 'duplicate value set'));
 export const expandValueSet = (id: string, activeOnly = true): Promise<{ codes: ExpandedCode[]; total: number }> =>
-  fetch(`/api/terminology/valuesets/${id}/expand?activeOnly=${activeOnly}`).then((r) => okJson<{ codes: ExpandedCode[]; total: number }>(r, 'expand value set'));
+  authFetch(`/api/terminology/valuesets/${id}/expand?activeOnly=${activeOnly}`).then((r) => okJson<{ codes: ExpandedCode[]; total: number }>(r, 'expand value set'));
 export const importValueSet = (resource: unknown | Blob): Promise<ValueSet | ValueSetCatalogImportResult> => {
   const init = resource instanceof Blob
     ? {
@@ -330,11 +350,11 @@ export const importValueSet = (resource: unknown | Blob): Promise<ValueSet | Val
       body: resource,
     }
     : jbody(resource, 'POST');
-  return fetch('/api/terminology/valuesets/import', init).then((r) => okJson<ValueSet | ValueSetCatalogImportResult>(r, 'import value set'));
+  return authFetch('/api/terminology/valuesets/import', init).then((r) => okJson<ValueSet | ValueSetCatalogImportResult>(r, 'import value set'));
 };
 export const valueSetExportUrl = (id: string): string => `/api/terminology/valuesets/${id}/export`;
 export const importLoincDistribution = (path: string, acceptLicense: boolean): Promise<TerminologyLoadResult> =>
-  fetch('/api/terminology/import/loinc', jbody({ path, acceptLicense }, 'POST')).then((r) => okJson<TerminologyLoadResult>(r, 'import LOINC distribution'));
+  authFetch('/api/terminology/import/loinc', jbody({ path, acceptLicense }, 'POST')).then((r) => okJson<TerminologyLoadResult>(r, 'import LOINC distribution'));
 
 // ── Terms + mappings (SP2) ───────────────────────────────────────────────────
 export type TermStatus = 'ACTIVE' | 'DRAFT' | 'DEPRECATED' | 'DISABLED';
@@ -350,29 +370,29 @@ export const searchTerms = (systemId: string, p: { q?: string; status?: string; 
   if (p.status) qs.set('status', p.status);
   qs.set('limit', String(p.limit ?? 50));
   qs.set('offset', String(p.offset ?? 0));
-  return fetch(`/api/terminology/systems/${systemId}/terms?${qs}`).then((r) => okJson<{ rows: Term[]; total: number }>(r, 'search terms'));
+  return authFetch(`/api/terminology/systems/${systemId}/terms?${qs}`).then((r) => okJson<{ rows: Term[]; total: number }>(r, 'search terms'));
 };
-export const createTerm = (systemId: string, i: TermInput) => fetch(`/api/terminology/systems/${systemId}/terms`, jbody(i, 'POST')).then((r) => okJson<Term>(r, 'create term'));
-export const updateTerm = (systemId: string, code: string, i: TermInput) => fetch(`/api/terminology/systems/${systemId}/terms/${encodeURIComponent(code)}`, jbody(i, 'PUT')).then((r) => okJson<Term>(r, 'update term'));
+export const createTerm = (systemId: string, i: TermInput) => authFetch(`/api/terminology/systems/${systemId}/terms`, jbody(i, 'POST')).then((r) => okJson<Term>(r, 'create term'));
+export const updateTerm = (systemId: string, code: string, i: TermInput) => authFetch(`/api/terminology/systems/${systemId}/terms/${encodeURIComponent(code)}`, jbody(i, 'PUT')).then((r) => okJson<Term>(r, 'update term'));
 export async function deleteTerm(systemId: string, code: string): Promise<void> {
-  const r = await fetch(`/api/terminology/systems/${systemId}/terms/${encodeURIComponent(code)}`, { method: 'DELETE' });
+  const r = await authFetch(`/api/terminology/systems/${systemId}/terms/${encodeURIComponent(code)}`, { method: 'DELETE' });
   if (!r.ok && r.status !== 204) throw new Error(`delete term failed: ${r.status}`);
 }
 export const importTerms = (systemId: string, source: string | Blob) => {
   const init = source instanceof Blob
     ? { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: source }
     : jbody({ text: source }, 'POST');
-  return fetch(`/api/terminology/systems/${systemId}/terms/import`, init).then((r) => okJson<{ imported: number }>(r, 'import terms'));
+  return authFetch(`/api/terminology/systems/${systemId}/terms/import`, init).then((r) => okJson<{ imported: number }>(r, 'import terms'));
 };
 export const termsTemplateUrl = (systemId: string) => `/api/terminology/systems/${systemId}/terms/template.csv`;
 
 export const listTermMappings = (system: string, code: string) =>
-  fetch(`/api/terminology/terms/${encodeURIComponent(system)}/${encodeURIComponent(code)}/mappings`).then((r) => okJson<{ outgoing: TermMapping[]; reverse: TermMapping[] }>(r, 'list mappings'));
+  authFetch(`/api/terminology/terms/${encodeURIComponent(system)}/${encodeURIComponent(code)}/mappings`).then((r) => okJson<{ outgoing: TermMapping[]; reverse: TermMapping[] }>(r, 'list mappings'));
 export const createTermMapping = (system: string, code: string, i: Omit<TermMappingInput, 'fromSystem' | 'fromCode'>) =>
-  fetch(`/api/terminology/terms/${encodeURIComponent(system)}/${encodeURIComponent(code)}/mappings`, jbody(i, 'POST')).then((r) => okJson<{ mapping: TermMapping; draftCreated: boolean }>(r, 'create mapping'));
-export const updateTermMapping = (id: string, i: TermMappingInput) => fetch(`/api/terminology/mappings/${id}`, jbody(i, 'PUT')).then((r) => okJson<TermMapping>(r, 'update mapping'));
+  authFetch(`/api/terminology/terms/${encodeURIComponent(system)}/${encodeURIComponent(code)}/mappings`, jbody(i, 'POST')).then((r) => okJson<{ mapping: TermMapping; draftCreated: boolean }>(r, 'create mapping'));
+export const updateTermMapping = (id: string, i: TermMappingInput) => authFetch(`/api/terminology/mappings/${id}`, jbody(i, 'PUT')).then((r) => okJson<TermMapping>(r, 'update mapping'));
 export async function deleteTermMapping(id: string): Promise<void> {
-  const r = await fetch(`/api/terminology/mappings/${id}`, { method: 'DELETE' });
+  const r = await authFetch(`/api/terminology/mappings/${id}`, { method: 'DELETE' });
   if (!r.ok && r.status !== 204) throw new Error(`delete mapping failed: ${r.status}`);
 }
 
