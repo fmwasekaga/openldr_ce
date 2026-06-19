@@ -37,17 +37,45 @@ describe('SectionsManager', () => {
     expect(sections[0]).toMatchObject({ id: 'main', label: 'Demographics', order: 0 });
   });
 
-  it('appends a new section when "Add section" is clicked', () => {
+  it('Add button is disabled when the Section name input is empty', () => {
+    renderManager();
+    const addBtn = screen.getByRole('button', { name: /^add$/i });
+    expect((addBtn as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('appends a new section when a name is typed and "Add" is clicked', () => {
     const { onChange } = renderManager();
-    fireEvent.click(screen.getByRole('button', { name: /add section/i }));
+    const nameInput = screen.getByLabelText('Section name');
+    fireEvent.change(nameInput, { target: { value: 'Demographics' } });
+    const addBtn = screen.getByRole('button', { name: /^add$/i });
+    expect((addBtn as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(addBtn);
     expect(onChange).toHaveBeenCalledOnce();
     const [sections] = onChange.mock.calls[0] as [FormSection[]];
     expect(sections).toHaveLength(2);
     expect(sections[0]).toMatchObject({ id: 'main', order: 0 });
+    expect(sections[1].label).toBe('Demographics');
     expect(sections[1].id).toBeTruthy();
     expect(sections[1].id).not.toBe('main');
     expect(sections[1].order).toBe(1);
-    expect(sections[1].label).toBeTruthy();
+  });
+
+  it('clears the input after a successful Add', () => {
+    renderManager();
+    const nameInput = screen.getByLabelText('Section name') as HTMLInputElement;
+    fireEvent.change(nameInput, { target: { value: 'Demographics' } });
+    fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
+    expect(nameInput.value).toBe('');
+  });
+
+  it('appends when Enter is pressed in the Section name input', () => {
+    const { onChange } = renderManager();
+    const nameInput = screen.getByLabelText('Section name');
+    fireEvent.change(nameInput, { target: { value: 'Vitals' } });
+    fireEvent.keyDown(nameInput, { key: 'Enter' });
+    expect(onChange).toHaveBeenCalledOnce();
+    const [sections] = onChange.mock.calls[0] as [FormSection[]];
+    expect(sections[1].label).toBe('Vitals');
   });
 
   it('deletes the section and calls onFieldsClearSection when delete is clicked', () => {

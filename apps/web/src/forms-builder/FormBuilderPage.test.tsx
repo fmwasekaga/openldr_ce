@@ -364,28 +364,31 @@ describe('FormBuilderPage (three-pane shell)', () => {
     );
   });
 
-  it('SectionsManager is present — "Add section" button exists and clicking it adds a section header in the field list', async () => {
+  it('Sections popover: opening the Sections dropdown shows a "Section name…" input; adding a section updates the Sections count', async () => {
     render(
       <MemoryRouter initialEntries={['/forms/new']}>
         <Routes><Route path="/forms/new" element={<FormBuilderPage />} /></Routes>
       </MemoryRouter>,
     );
 
-    // The SectionsManager renders an "Add section" button
-    const addSectionBtn = screen.getByRole('button', { name: /Add section/i });
-    expect(addSectionBtn).toBeInTheDocument();
+    // The Sections trigger button is present showing 0 sections
+    const sectionsTrigger = screen.getByText(/Sections \(0\)/i);
+    expect(sectionsTrigger).toBeInTheDocument();
 
-    // Click it — a new section is created
-    fireEvent.click(addSectionBtn);
+    // Open the Sections popover
+    fireEvent.click(sectionsTrigger);
 
-    // The new section should appear either:
-    // a) as a header in the field-list pane, OR
-    // b) as an item in the Sections dropdown
-    // The SectionsManager renders it in its own section list; also the field-list dropdown updates.
-    // Check for "Section 1" label which is what SectionsManager generates as the first section.
+    // SectionsManager is now visible with its "Section name…" input
+    const nameInput = await screen.findByPlaceholderText('Section name…');
+    expect(nameInput).toBeInTheDocument();
+
+    // Type a name and click Add
+    fireEvent.change(nameInput, { target: { value: 'Demographics' } });
+    fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
+
+    // Sections count in the trigger should now be 1
     await waitFor(() => {
-      const sectionLabel = screen.queryByDisplayValue('Section 1') ?? screen.queryByText('Section 1');
-      expect(sectionLabel).toBeInTheDocument();
+      expect(screen.getByText(/Sections \(1\)/i)).toBeInTheDocument();
     });
   });
 });

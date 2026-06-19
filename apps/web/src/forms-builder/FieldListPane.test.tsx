@@ -56,6 +56,8 @@ function renderPane(overrides: Partial<Parameters<typeof FieldListPane>[0]> = {}
   const onDuplicate = vi.fn();
   const onDelete = vi.fn();
   const onReorder = vi.fn();
+  const onSectionsChange = vi.fn();
+  const onFieldsClearSection = vi.fn();
 
   const utils = render(
     <FieldListPane
@@ -69,11 +71,13 @@ function renderPane(overrides: Partial<Parameters<typeof FieldListPane>[0]> = {}
       onDuplicate={onDuplicate}
       onDelete={onDelete}
       onReorder={onReorder}
+      onSectionsChange={onSectionsChange}
+      onFieldsClearSection={onFieldsClearSection}
       {...overrides}
     />,
   );
 
-  return { ...utils, onSelect, onToggleEnabled, onToggleRequired, onDuplicate, onDelete, onReorder };
+  return { ...utils, onSelect, onToggleEnabled, onToggleRequired, onDuplicate, onDelete, onReorder, onSectionsChange, onFieldsClearSection };
 }
 
 describe('FieldListPane', () => {
@@ -111,47 +115,49 @@ describe('FieldListPane', () => {
     expect(screen.getByText('Notes')).toBeTruthy();
   });
 
-  it('renders a Sections dropdown trigger containing "Sections"', () => {
+  it('renders a Sections button trigger showing the sections count', () => {
     renderPane();
-    // Trigger text should include "Sections" and the count
-    const trigger = screen.getByText(/Sections/i);
+    // Trigger text should include "Sections (2)" (2 sections in SECTIONS)
+    const trigger = screen.getByText(/Sections \(2\)/i);
     expect(trigger).toBeTruthy();
   });
 
-  it('lists distinct sections in the Sections dropdown and filters on selection', () => {
+  it('opening the Sections popover shows the SectionsManager with a "Section name…" input and Add button', () => {
     renderPane();
-    // Open the dropdown using the same pointer sequence Radix expects in jsdom
     const trigger = screen.getByText(/Sections/i);
-    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
-    if (!screen.queryByText('All sections')) {
-      fireEvent.keyDown(trigger, { key: 'Enter' });
-    }
-    // After opening, the dropdown items with section names should appear in the menu
-    const allSections = screen.queryByText('All sections');
-    expect(allSections).toBeTruthy();
-    // Use data-testid items to find section names
-    const mainItem = screen.queryByTestId('section-item-main');
-    const extraItem = screen.queryByTestId('section-item-extra');
-    expect(mainItem).toBeTruthy();
-    expect(extraItem).toBeTruthy();
+    // Open the popover
+    fireEvent.click(trigger);
+    // SectionsManager should be visible: has a "Section name…" placeholder input
+    const nameInput = screen.queryByPlaceholderText('Section name…');
+    expect(nameInput).toBeTruthy();
+    // Add button is present (disabled because input is empty)
+    const addBtn = screen.queryByRole('button', { name: /^add$/i });
+    expect(addBtn).toBeTruthy();
   });
 
-  it('filters to section "extra" when that section is selected', () => {
-    renderPane();
-    // Open dropdown
-    const trigger = screen.getByText(/Sections/i);
-    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
-    if (!screen.queryByTestId('section-item-extra')) {
-      fireEvent.keyDown(trigger, { key: 'Enter' });
-    }
-    // Click the "extra" item
-    const extraItem = screen.queryByTestId('section-item-extra');
-    expect(extraItem).toBeTruthy();
-    if (extraItem) fireEvent.click(extraItem);
-    // Only 'Notes' (section 'extra') should remain
-    expect(screen.queryByText('Notes')).toBeTruthy();
-    expect(screen.queryByText('Patient name')).toBeNull();
-    expect(screen.queryByText('Age')).toBeNull();
+  it('adding a section via the Sections popover calls onSectionsChange', () => {
+    const { onSectionsChange } = renderPane();
+    // Open popover
+    fireEvent.click(screen.getByText(/Sections/i));
+    // Type a name and click Add
+    const nameInput = screen.getByPlaceholderText('Section name…');
+    fireEvent.change(nameInput, { target: { value: 'Vitals' } });
+    fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
+    expect(onSectionsChange).toHaveBeenCalledOnce();
+    const [sections] = onSectionsChange.mock.calls[0] as [FormSection[]];
+    // Should have 3 sections (2 existing + 1 new)
+    expect(sections).toHaveLength(3);
+    expect(sections[sections.length - 1].label).toBe('Vitals');
+  });
+
+  it('deleting a section via the Sections popover calls onSectionsChange and onFieldsClearSection', () => {
+    const { onSectionsChange, onFieldsClearSection } = renderPane();
+    // Open popover
+    fireEvent.click(screen.getByText(/Sections/i));
+    // Delete the "Main Section" row
+    fireEvent.click(screen.getByRole('button', { name: /delete section main section/i }));
+    expect(onSectionsChange).toHaveBeenCalledOnce();
+    expect(onFieldsClearSection).toHaveBeenCalledWith('main');
   });
 
   it('calls onSelect when a card label area is clicked', () => {

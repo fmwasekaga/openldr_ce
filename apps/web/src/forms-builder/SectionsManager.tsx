@@ -1,5 +1,5 @@
-import React from 'react';
-import { ChevronUp, ChevronDown, Trash2, Plus } from 'lucide-react';
+import React, { useState } from 'react';
+import { ChevronUp, ChevronDown, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import type { FormSection } from '@openldr/forms/pure';
@@ -30,21 +30,24 @@ export function SectionsManager({
   onChange,
   onFieldsClearSection,
 }: SectionsManagerProps): JSX.Element {
+  const [newLabel, setNewLabel] = useState('');
+
   // Always work with sections sorted by order
   const sorted = [...sections].sort((a, b) => a.order - b.order);
 
-  function handleLabelChange(id: string, newLabel: string) {
+  function handleLabelChange(id: string, value: string) {
     onChange(
-      sections.map((s) => (s.id === id ? { ...s, label: newLabel } : s)),
+      sections.map((s) => (s.id === id ? { ...s, label: value } : s)),
     );
   }
 
   function handleAdd() {
-    const n = sorted.length;
-    const label = `Section ${n + 1}`;
-    const id = generateId(label, sections);
-    const next: FormSection = { id, label, order: n };
+    const trimmed = newLabel.trim();
+    if (!trimmed) return;
+    const id = generateId(trimmed, sections);
+    const next: FormSection = { id, label: trimmed, order: sorted.length };
     onChange([...sorted, next]);
+    setNewLabel('');
   }
 
   function handleDelete(id: string) {
@@ -59,13 +62,15 @@ export function SectionsManager({
     const swapIndex = direction === 'up' ? index - 1 : index + 1;
     if (swapIndex < 0 || swapIndex >= sorted.length) return;
     const next = sorted.map((s) => ({ ...s }));
-    // Swap order values
     const tempOrder = next[index].order;
     next[index].order = next[swapIndex].order;
     next[swapIndex].order = tempOrder;
-    // Swap positions in array
     [next[index], next[swapIndex]] = [next[swapIndex], next[index]];
     onChange(next);
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter') handleAdd();
   }
 
   return (
@@ -125,16 +130,27 @@ export function SectionsManager({
         ))}
       </div>
 
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="w-full h-8 text-xs gap-1"
-        onClick={handleAdd}
-      >
-        <Plus className="h-3.5 w-3.5" />
-        Add section
-      </Button>
+      {/* Add new section: input + button (Corlix style) */}
+      <div className="flex gap-1">
+        <Input
+          aria-label="Section name"
+          placeholder="Section name…"
+          value={newLabel}
+          onChange={(e) => setNewLabel(e.target.value)}
+          onKeyDown={handleKeyDown}
+          className="h-8 flex-1 text-sm"
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 text-xs px-3 shrink-0"
+          disabled={newLabel.trim() === ''}
+          onClick={handleAdd}
+        >
+          Add
+        </Button>
+      </div>
     </div>
   );
 }

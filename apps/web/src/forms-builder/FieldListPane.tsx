@@ -15,14 +15,13 @@ import { Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import type { FormField, FormLintIssue, FormSection } from '@openldr/forms/pure';
 import { SortableFieldRow } from './SortableFieldRow';
+import { SectionsManager } from './SectionsManager';
 
 export interface FieldListPaneProps {
   fields: FormField[];
@@ -35,6 +34,8 @@ export interface FieldListPaneProps {
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
   onReorder: (activeId: string, overId: string) => void;
+  onSectionsChange?: (sections: FormSection[]) => void;
+  onFieldsClearSection?: (sectionId: string) => void;
 }
 
 export function FieldListPane({
@@ -48,20 +49,12 @@ export function FieldListPane({
   onDuplicate,
   onDelete,
   onReorder,
+  onSectionsChange,
+  onFieldsClearSection,
 }: FieldListPaneProps): JSX.Element {
   const [searchText, setSearchText] = useState('');
-  const [selectedSection, setSelectedSection] = useState<string | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor));
-
-  // Distinct sections derived from all fields (for the filter dropdown)
-  const distinctSections = useMemo(() => {
-    const seen = new Set<string>();
-    for (const f of fields) {
-      if (f.section) seen.add(f.section);
-    }
-    return Array.from(seen);
-  }, [fields]);
 
   // Section label lookup: prefer the sections prop, fall back to the id itself
   const sectionLabelMap = useMemo(() => {
@@ -83,7 +76,6 @@ export function FieldListPane({
     const q = searchText.trim().toLowerCase();
     return fields
       .filter((f) => {
-        if (selectedSection && f.section !== selectedSection) return false;
         if (q) {
           const labelMatch = f.displayLabel.toLowerCase().includes(q);
           const pathMatch = f.fhirPath?.toLowerCase().includes(q) ?? false;
@@ -93,7 +85,7 @@ export function FieldListPane({
       })
       .slice()
       .sort((a, b) => a.order - b.order);
-  }, [fields, searchText, selectedSection]);
+  }, [fields, searchText]);
 
   // Build the set of child field ids (fields that belong to a group)
   const childFieldIds = useMemo(() => {
@@ -173,6 +165,14 @@ export function FieldListPane({
   }
 
   // Show section grouping only when there are sections defined or fields span multiple sections
+  const distinctSections = useMemo(() => {
+    const seen = new Set<string>();
+    for (const f of fields) {
+      if (f.section) seen.add(f.section);
+    }
+    return Array.from(seen);
+  }, [fields]);
+
   const showSectionHeaders = sections.length > 0 || distinctSections.length > 1;
 
   return (
@@ -196,32 +196,22 @@ export function FieldListPane({
           />
         </div>
 
-        {/* Sections dropdown */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+        {/* Sections popover — trigger shows count; content is SectionsManager */}
+        <Popover>
+          <PopoverTrigger asChild>
             <Button variant="outline" size="sm" className="w-full justify-between text-xs h-8">
-              {selectedSection
-                ? `Section: ${selectedSection}`
-                : `Sections (${distinctSections.length})`}
+              {`Sections (${sections.length})`}
               <span className="ml-1 text-muted-foreground">▾</span>
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-48">
-            <DropdownMenuItem onSelect={() => setSelectedSection(null)}>
-              All sections
-            </DropdownMenuItem>
-            {distinctSections.length > 0 && <DropdownMenuSeparator />}
-            {distinctSections.map((section) => (
-              <DropdownMenuItem
-                key={section}
-                data-testid={`section-item-${section}`}
-                onSelect={() => setSelectedSection(section)}
-              >
-                {section}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-72 p-0">
+            <SectionsManager
+              sections={sections}
+              onChange={(s) => onSectionsChange?.(s)}
+              onFieldsClearSection={(sid) => onFieldsClearSection?.(sid)}
+            />
+          </PopoverContent>
+        </Popover>
       </div>
 
       {/* Field list */}
