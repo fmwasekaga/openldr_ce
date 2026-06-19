@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import Fastify from 'fastify';
 import { registerDashboardRoutes } from './dashboards-routes';
+import './auth-plugin';
 
 function fakeCtx() {
   const data: any[] = [];
+  const auditEvents: any[] = [];
   return {
     dashboards: {
       store: {
@@ -19,6 +21,9 @@ function fakeCtx() {
         return { columns: [], rows: [], chart: { type: 'stat', value: '0', label: 'x' }, meta: { generatedAt: 'now', rowCount: 0 } };
       },
     },
+    audit: { record: async (e: any) => { auditEvents.push(e); return e; } },
+    logger: { error() {}, warn() {}, info() {} },
+    __auditEvents: auditEvents,
   } as any;
 }
 
@@ -44,5 +49,19 @@ describe('dashboard routes', () => {
     await app.inject({ method: 'POST', url: '/api/dashboards', payload: { id: 'd1', name: 'M', layout: [], widgets: [], filters: [], refreshIntervalSec: 0, isDefault: false, ownerId: null } });
     const res = await app.inject({ method: 'GET', url: '/api/dashboards' });
     expect(res.json().length).toBe(1);
+  });
+
+  it('audits create/update/delete with the request actor', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = { id: 'admin1', username: 'admin', displayName: null, roles: ['lab_admin'] }; });
+    const ctx = fakeCtx();
+    registerDashboardRoutes(app, ctx);
+    const d = { id: 'd1', name: 'M', layout: [], widgets: [], filters: [], refreshIntervalSec: 0, isDefault: false, ownerId: null };
+    await app.inject({ method: 'POST', url: '/api/dashboards', payload: d });
+    await app.inject({ method: 'PUT', url: '/api/dashboards/d1', payload: d });
+    await app.inject({ method: 'DELETE', url: '/api/dashboards/d1' });
+    const events = (ctx as any).__auditEvents as Array<{ action: string; entityType: string; actorId: string }>;
+    expect(events.map((e) => e.action)).toEqual(['dashboard.create', 'dashboard.update', 'dashboard.delete']);
+    expect(events.every((e) => e.entityType === 'dashboard' && e.actorId === 'admin1')).toBe(true);
   });
 });
