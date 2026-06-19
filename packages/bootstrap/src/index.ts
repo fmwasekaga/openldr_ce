@@ -95,7 +95,7 @@ export interface AppContext {
 export async function createAppContext(cfg: Config): Promise<AppContext> {
   const logger = createLogger({ level: cfg.LOG_LEVEL });
 
-  const auth = createAuth({ issuerUrl: cfg.OIDC_ISSUER_URL });
+  const auth = createAuth({ issuerUrl: cfg.OIDC_ISSUER_URL, audience: cfg.OIDC_AUDIENCE });
   const blob = createS3Bucket({
     endpoint: cfg.S3_ENDPOINT,
     region: cfg.S3_REGION,
