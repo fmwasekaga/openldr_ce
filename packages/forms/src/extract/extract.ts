@@ -1,100 +1,162 @@
-import { randomUUID } from 'node:crypto';
-import { validateResource, type FhirResource, type Questionnaire, type QuestionnaireResponse } from '@openldr/fhir';
-import type { FormField } from '../schema/form-schema';
-import { fromQuestionnaire } from '../from-questionnaire';
-import { parseResponse } from '../response';
-import type { Answers, AnswerValue } from '../answer-value';
-import { setPath } from './set-path';
-import type { ExtractionContext, ExtractionResult } from './context';
-import { computeVisibility } from '../visibility';
+import type {
+  Coding,
+  FhirResource,
+  Observation,
+  Quantity,
+  Questionnaire,
+  QuestionnaireItem,
+  QuestionnaireResponse,
+  QuestionnaireResponseItem,
+  QuestionnaireResponseItemAnswer,
+  Reference,
+  ServiceRequest,
+} from 'fhir/r4'
+import { fromAnswer } from '../answer-value'
+import { EXT_CORLIX_FHIR_PATH, EXT_QUESTIONNAIRE_UNIT, EXT_SDC_OBSERVATION_EXTRACT } from '../extensions'
 
-const SUBJECT_TYPES = new Set(['ServiceRequest', 'Specimen', 'Observation', 'DiagnosticReport']);
+/** Context the extractors need but the form can't supply (e.g. the encounter's subject). */
+export interface ExtractionContext {
+  subject?: Reference
+  authored?: string
+}
 
-function extractValue(field: FormField, v: AnswerValue): unknown {
-  switch (field.type) {
-    case 'choice':
-    case 'open-choice':
-      return (v as { code: string }).code;
-    case 'reference':
-      return { reference: v as string };
-    case 'quantity':
-      return { value: (v as { value?: number }).value, unit: (v as { unit?: string }).unit };
-    default:
-      return v;
+/** Pluggable extraction of discrete FHIR resources from a filled form (PRD §3.2). */
+export interface ResourceExtractor {
+  extract(
+    response: QuestionnaireResponse,
+    questionnaire: Questionnaire,
+    ctx: ExtractionContext,
+  ): FhirResource[]
+}
+
+// ─── Questionnaire indexing ──────────────────────────────────────────────────
+
+interface ItemMeta {
+  observationExtract: boolean
+  code?: Coding[]
+  unit?: string
+  fhirPath?: string
+  answerOptions?: Array<{ code?: string; display?: string }>
+}
+
+function indexItems(questionnaire: Questionnaire): Map<string, ItemMeta> {
+  const map = new Map<string, ItemMeta>()
+  const walk = (items: QuestionnaireItem[] | undefined): void => {
+    for (const item of items ?? []) {
+      map.set(item.linkId, {
+        observationExtract:
+          item.extension?.some((e) => e.url === EXT_SDC_OBSERVATION_EXTRACT && e.valueBoolean === true) === true,
+        code: item.code,
+        unit: item.extension?.find((e) => e.url === EXT_QUESTIONNAIRE_UNIT)?.valueCoding?.code,
+        fhirPath: item.extension?.find((e) => e.url === EXT_CORLIX_FHIR_PATH)?.valueString,
+        answerOptions: item.answerOption?.map((o) => ({ code: o.valueCoding?.code, display: o.valueCoding?.display })),
+      })
+      walk(item.item)
+    }
+  }
+  walk(questionnaire.item)
+  return map
+}
+
+const LOINC = 'http://loinc.org'
+
+function walkResponse(items: QuestionnaireResponseItem[] | undefined, visit: (item: QuestionnaireResponseItem) => void): void {
+  for (const item of items ?? []) {
+    visit(item)
+    walkResponse(item.item, visit)
   }
 }
 
-function observationOf(field: FormField, v: AnswerValue, ctx: ExtractionContext): FhirResource {
-  const obs: Record<string, unknown> = {
-    resourceType: 'Observation',
-    id: randomUUID(),
-    status: 'final',
-    code: { coding: [{ system: field.code?.system, code: field.code?.code, display: field.code?.display }] },
-  };
-  if (ctx.subject) obs.subject = ctx.subject;
-  if (ctx.authored) obs.effectiveDateTime = ctx.authored;
-  switch (field.type) {
-    case 'choice':
-    case 'open-choice':
-      obs.valueCodeableConcept = { coding: [{ code: (v as { code: string }).code, display: (v as { display?: string }).display }] };
-      break;
-    case 'quantity':
-      obs.valueQuantity = { value: (v as { value?: number }).value, unit: (v as { unit?: string }).unit };
-      break;
-    case 'integer':
-    case 'decimal':
-      obs.valueQuantity = { value: v as number, unit: field.unit };
-      break;
-    case 'boolean':
-      obs.valueBoolean = v as boolean;
-      break;
-    default:
-      obs.valueString = String(v);
+// ─── Observation extraction ──────────────────────────────────────────────────
+
+const UCUM = 'http://unitsofmeasure.org'
+
+function observationValue(answer: QuestionnaireResponseItemAnswer, unit?: string): Partial<Observation> {
+  const num = answer.valueDecimal ?? answer.valueInteger
+  if (num !== undefined) {
+    const quantity: Quantity = { value: num }
+    if (unit) {
+      quantity.unit = unit
+      quantity.code = unit
+      quantity.system = UCUM
+    }
+    return { valueQuantity: quantity }
   }
-  return obs as FhirResource;
+  if (answer.valueBoolean !== undefined) return { valueBoolean: answer.valueBoolean }
+  if (answer.valueDate !== undefined) return { valueDateTime: answer.valueDate }
+  if (answer.valueDateTime !== undefined) return { valueDateTime: answer.valueDateTime }
+  if (answer.valueCoding !== undefined) return { valueCodeableConcept: { coding: [answer.valueCoding] } }
+  if (answer.valueString !== undefined) return { valueString: answer.valueString }
+  return {}
 }
 
-export function extractResources(
-  qr: QuestionnaireResponse,
-  questionnaire: Questionnaire,
-  ctx: ExtractionContext = {},
-): ExtractionResult {
-  const form = fromQuestionnaire(questionnaire);
-  const answers: Answers = parseResponse(qr);
-  const visible = computeVisibility(form, answers);
-  const resources: FhirResource[] = [];
-
-  for (const section of form.sections) {
-    if (visible.get(section.id) === false) continue;
-    if (section.resourceType) {
-      const resource: Record<string, unknown> = { resourceType: section.resourceType, id: randomUUID() };
-      if (ctx.subject && SUBJECT_TYPES.has(section.resourceType)) resource.subject = ctx.subject;
-      for (const field of section.fields) {
-        if (visible.get(field.id) === false) continue;
-        if (field.observationExtract) continue;
-        const raw = answers[field.id];
-        if (raw !== undefined && field.fhirPath) {
-          const v = Array.isArray(raw) ? raw[0] : raw;
-          setPath(resource, field.fhirPath, extractValue(field, v));
-        }
+/**
+ * Emit one Observation per answer for items flagged `observationExtract` that
+ * carry a LOINC (or other) `item.code` (PRD §3.5). Repeating-group instances
+ * each yield their own Observation.
+ */
+export const ObservationExtractor: ResourceExtractor = {
+  extract(response, questionnaire, ctx) {
+    const index = indexItems(questionnaire)
+    const out: Observation[] = []
+    walkResponse(response.item, (item) => {
+      const meta = index.get(item.linkId)
+      if (!meta?.observationExtract || !meta.code?.length) return
+      for (const answer of item.answer ?? []) {
+        const observation: Observation = { resourceType: 'Observation', status: 'final', code: { coding: meta.code } }
+        if (ctx.subject) observation.subject = ctx.subject
+        if (ctx.authored) observation.effectiveDateTime = ctx.authored
+        Object.assign(observation, observationValue(answer, meta.unit))
+        out.push(observation)
       }
-      resources.push(resource as FhirResource);
-    }
-    for (const field of section.fields) {
-      if (field.observationExtract && visible.get(field.id) !== false) {
-        const raw = answers[field.id];
-        if (raw !== undefined) {
-          const v = Array.isArray(raw) ? raw[0] : raw;
-          resources.push(observationOf(field, v, ctx));
-        }
-      }
-    }
-  }
+    })
+    return out
+  },
+}
 
-  const invalid: ExtractionResult['invalid'] = [];
-  for (const r of resources) {
-    const res = validateResource(r);
-    if (!res.ok) invalid.push({ resource: r, outcome: res.outcome });
-  }
-  return { resources, invalid };
+// ─── ServiceRequest extraction (requisition domain) ──────────────────────────
+
+/**
+ * Emit a single ServiceRequest for a requisition form, mapping answers whose
+ * field is bound to `ServiceRequest.*` (via the Corlix fhir-path) onto it.
+ */
+export const ServiceRequestExtractor: ResourceExtractor = {
+  extract(response, questionnaire, ctx) {
+    const index = indexItems(questionnaire)
+    const request: ServiceRequest = {
+      resourceType: 'ServiceRequest',
+      status: 'active',
+      intent: 'order',
+      subject: ctx.subject ?? { display: 'Unknown subject' }, // subject is required by FHIR
+    }
+    if (ctx.authored) request.authoredOn = ctx.authored
+
+    const codings: Coding[] = []
+    walkResponse(response.item, (item) => {
+      const meta = index.get(item.linkId)
+      const path = meta?.fhirPath
+      if (path === undefined) return
+
+      // The ordered test(s) → ServiceRequest.code (LOINC). A field bound to
+      // ServiceRequest.code carries the LOINC code as its answer; display comes
+      // from the Questionnaire answerOption.
+      if (path === 'ServiceRequest.code') {
+        for (const answer of item.answer ?? []) {
+          const code = answer.valueCoding?.code ?? answer.valueString
+          if (!code) continue
+          const display = meta?.answerOptions?.find((o) => o.code === code)?.display
+          codings.push({ system: LOINC, code, ...(display ? { display } : {}) })
+        }
+        return
+      }
+
+      const value = item.answer?.[0] ? fromAnswer(item.answer[0]) : undefined
+      if (value === undefined) return
+      if (path === 'ServiceRequest.identifier') request.identifier = [{ value: String(value) }]
+      if (path === 'ServiceRequest.priority') request.priority = String(value) as ServiceRequest['priority']
+    })
+    if (codings.length) request.code = { coding: codings }
+
+    return [request]
+  },
 }
