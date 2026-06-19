@@ -144,6 +144,7 @@ export interface User {
   roles: string[];
   status: 'active' | 'disabled';
   lastLoginAt: string | null;
+  createdAt: string | null;
 }
 export interface CreateUserInput {
   username: string;

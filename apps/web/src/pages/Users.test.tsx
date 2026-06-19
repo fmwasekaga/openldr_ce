@@ -13,6 +13,7 @@ const ada = {
   roles: ['lab_admin'],
   status: 'active' as const,
   lastLoginAt: null,
+  createdAt: null,
 };
 
 describe('Users page', () => {

@@ -5,7 +5,7 @@ import { internalMigrations, type InternalSchema } from '@openldr/db';
 import type { TokenClaims } from '@openldr/ports';
 import { createUserStore, type User } from './store';
 
-const mk = (over: Partial<User>): User => ({ id: over.id ?? 'id', subject: over.subject ?? null, username: over.username ?? 'u', displayName: null, email: null, roles: [], status: 'active', lastLoginAt: null });
+const mk = (over: Partial<User>): User => ({ id: over.id ?? 'id', subject: over.subject ?? null, username: over.username ?? 'u', displayName: null, email: null, roles: [], status: 'active', lastLoginAt: null, createdAt: null });
 
 async function makeMigratedDb(): Promise<Kysely<InternalSchema>> {
   const mem = newDb();
@@ -73,5 +73,13 @@ describe('createUserStore', () => {
       email: 'ada@new.test',
       roles: ['lab_admin'],
     });
+  });
+
+  it('create returns a parseable ISO createdAt', async () => {
+    const db = await makeMigratedDb();
+    const store = createUserStore(db);
+    const created = await store.create({ username: 'turing' });
+    expect(typeof created.createdAt).toBe('string');
+    expect(Number.isNaN(Date.parse(created.createdAt!))).toBe(false);
   });
 });

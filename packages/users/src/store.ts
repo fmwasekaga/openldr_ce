@@ -12,6 +12,7 @@ export interface User {
   roles: string[];
   status: 'active' | 'disabled';
   lastLoginAt: string | null;
+  createdAt: string | null;
 }
 
 export interface CreateUserInput {
@@ -53,6 +54,7 @@ interface Row {
   roles: unknown;
   status: string;
   last_login_at: Date | null;
+  created_at: Date | null;
 }
 
 function toUser(r: Row): User {
@@ -65,10 +67,11 @@ function toUser(r: Row): User {
     roles: Array.isArray(r.roles) ? (r.roles as string[]) : [],
     status: r.status === 'disabled' ? 'disabled' : 'active',
     lastLoginAt: r.last_login_at instanceof Date ? r.last_login_at.toISOString() : (r.last_login_at as string | null),
+    createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : (r.created_at as string | null),
   };
 }
 
-const COLS = ['id', 'subject', 'username', 'display_name', 'email', 'roles', 'status', 'last_login_at'] as const;
+const COLS = ['id', 'subject', 'username', 'display_name', 'email', 'roles', 'status', 'last_login_at', 'created_at'] as const;
 
 export function createUserStore(db: Kysely<InternalSchema>): UserStore {
   async function get(id: string): Promise<User | undefined> {
