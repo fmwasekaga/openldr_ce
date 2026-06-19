@@ -1,34 +1,111 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { FormRuntime } from './FormRuntime';
-import type { RuntimeFormSchema } from './types';
+import type { FormSchema } from './types';
 
-const form: RuntimeFormSchema = {
-  id: 'f',
-  name: 'F',
-  title: { en: 'F' },
-  sections: [{
-    id: 'main',
-    title: { en: 'Main' },
-    fields: [
-      { id: 'patientId', type: 'string', label: { en: 'Patient ID' }, required: true },
-      { id: 'hasNotes', type: 'boolean', label: { en: 'Add notes?' } },
-      { id: 'notes', type: 'text', label: { en: 'Notes' }, visibility: { whenField: 'hasNotes', equals: true } },
-    ],
-  }],
+// New flat-model schema: required text field, a boolean, and a conditional text field.
+const schema: FormSchema = {
+  id: 'f1',
+  name: 'Test form',
+  versionLabel: null,
+  fhirVersion: null,
+  fhirResourceType: null,
+  fhirProfileUrl: null,
+  facilityId: null,
+  fields: [
+    {
+      id: 'patientId',
+      fhirPath: null,
+      displayLabel: 'Patient ID',
+      description: null,
+      fieldType: 'text',
+      required: true,
+      enabled: true,
+      order: 1,
+      cardinality: { min: 1, max: '1' },
+    },
+    {
+      id: 'addNotes',
+      fhirPath: null,
+      displayLabel: 'Add notes?',
+      description: null,
+      fieldType: 'boolean',
+      required: false,
+      enabled: true,
+      order: 2,
+      cardinality: { min: 0, max: '1' },
+    },
+    {
+      id: 'notes',
+      fhirPath: null,
+      displayLabel: 'Notes',
+      description: null,
+      fieldType: 'text',
+      required: false,
+      enabled: true,
+      order: 3,
+      cardinality: { min: 0, max: '1' },
+      // Only visible when addNotes === 'true'
+      visibility: {
+        combinator: 'all',
+        conditions: [{ fieldId: 'addNotes', operator: 'equals', value: 'true' }],
+      },
+    },
+  ],
+  sections: [],
+  targetPages: [],
+  languages: ['en'],
+  version: 1,
+  active: true,
+  status: 'draft',
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
 };
 
 describe('FormRuntime', () => {
-  it('renders fields, applies visibility, and submits cleaned answers', async () => {
+  it('required validation blocks submit and shows error', async () => {
     const onSubmit = vi.fn();
-    render(<FormRuntime schema={form} submitLabel="Submit" onSubmit={onSubmit} />);
+    render(<FormRuntime schema={schema} submitLabel="Submit" onSubmit={onSubmit} />);
+    // Patient ID is rendered
     expect(screen.getByLabelText('Patient ID')).toBeInTheDocument();
+    // Notes is hidden (visibility not satisfied)
     expect(screen.queryByLabelText('Notes')).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Patient ID'), { target: { value: 'P-1' } });
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Add notes?' }));
-    expect(await screen.findByLabelText('Notes')).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Notes'), { target: { value: 'Visible note' } });
+
+    // Submit without filling required field
     fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
-    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ patientId: 'P-1', hasNotes: true, notes: 'Visible note' }));
+    expect(await screen.findByText('field patientId is required')).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('toggling boolean reveals conditional field', async () => {
+    const onSubmit = vi.fn();
+    render(<FormRuntime schema={schema} submitLabel="Submit" onSubmit={onSubmit} />);
+
+    // Notes hidden initially
+    expect(screen.queryByLabelText('Notes')).not.toBeInTheDocument();
+
+    // Toggle the boolean checkbox
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Add notes?' }));
+    // Notes should now be visible
+    expect(await screen.findByLabelText('Notes')).toBeInTheDocument();
+  });
+
+  it('complete submit calls onSubmit with answers keyed by field id', async () => {
+    const onSubmit = vi.fn();
+    render(<FormRuntime schema={schema} submitLabel="Submit" onSubmit={onSubmit} />);
+
+    // Fill Patient ID
+    fireEvent.change(screen.getByLabelText('Patient ID'), { target: { value: 'P-001' } });
+    // Toggle boolean to reveal Notes
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Add notes?' }));
+    // Fill Notes
+    fireEvent.change(await screen.findByLabelText('Notes'), { target: { value: 'Some note' } });
+
+    // Submit
+    fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
+    await vi.waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ patientId: 'P-001', addNotes: true, notes: 'Some note' }),
+    );
   });
 });

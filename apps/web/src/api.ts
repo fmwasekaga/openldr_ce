@@ -166,6 +166,9 @@ export interface FormDefinition {
   name: string;
   versionLabel: string | null;
   fhirResourceType: string | null;
+  fhirVersion?: string | null;
+  fhirProfileUrl?: string | null;
+  facilityId?: string | null;
   status: FormStatus;
   active: boolean;
   schema: unknown;
@@ -177,6 +180,9 @@ export interface CreateFormInput {
   name: string;
   schema: unknown;
   fhirResourceType?: string | null;
+  fhirVersion?: string | null;
+  fhirProfileUrl?: string | null;
+  facilityId?: string | null;
   versionLabel?: string | null;
   targetPages?: string[] | null;
 }

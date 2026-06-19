@@ -5,19 +5,21 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { getForm, submitFormResponse, type FormDefinition } from '@/api';
 import { FormRuntime } from '@/forms-runtime/FormRuntime';
-import type { RuntimeFormSchema } from '@/forms-runtime/types';
+import type { FormSchema } from '@/forms-runtime/types';
 
-function asRuntimeSchema(value: unknown): RuntimeFormSchema | null {
+function asFormSchema(value: unknown): FormSchema | null {
   if (!value || typeof value !== 'object') return null;
-  const form = value as Partial<RuntimeFormSchema>;
-  return typeof form.id === 'string' && typeof form.name === 'string' && Array.isArray(form.sections) ? (form as RuntimeFormSchema) : null;
+  const s = value as Partial<FormSchema>;
+  return typeof s.id === 'string' && typeof s.name === 'string' && Array.isArray(s.fields)
+    ? (s as FormSchema)
+    : null;
 }
 
 export function FormCapture() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [form, setForm] = useState<FormDefinition | null>(null);
-  const [schema, setSchema] = useState<RuntimeFormSchema | null>(null);
+  const [schema, setSchema] = useState<FormSchema | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -29,7 +31,7 @@ export function FormCapture() {
     setError(null);
     void getForm(id ?? '').then((loaded) => {
       if (cancelled) return;
-      const parsed = asRuntimeSchema(loaded.schema);
+      const parsed = asFormSchema(loaded.schema);
       setForm(loaded);
       setSchema(parsed);
       if (!parsed) setError('Form schema is invalid.');
@@ -47,7 +49,7 @@ export function FormCapture() {
         <div className="flex items-center gap-2 border-b border-border px-3 py-2">
           <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => navigate('/forms')}>Back</Button>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate text-sm font-semibold">{schema?.title.en ?? form?.name ?? 'Form'}</h1>
+            <h1 className="truncate text-sm font-semibold">{schema?.name ?? form?.name ?? 'Form'}</h1>
             {form ? <p className="text-xs text-muted-foreground">{form.versionLabel ?? 'No version'} · {form.fhirResourceType ?? 'Custom'}</p> : null}
           </div>
           {form ? <Badge variant="outline">{form.status}</Badge> : null}

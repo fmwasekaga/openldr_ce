@@ -22,8 +22,8 @@ describe('forms api client', () => {
   it('calls the forms endpoints', async () => {
     await listForms();
     await getForm('form-1');
-    await createForm({ name: 'Specimen intake', schema: { sections: [] } });
-    await updateForm('form-1', { name: 'Specimen intake', schema: { sections: [] } });
+    await createForm({ name: 'Specimen intake', schema: { fields: [] }, fhirVersion: '4.0.1', fhirProfileUrl: 'http://example.org/profile', facilityId: 'FAC-1' });
+    await updateForm('form-1', { name: 'Specimen intake', schema: { fields: [] }, fhirVersion: '4.0.1', fhirProfileUrl: 'http://example.org/profile', facilityId: 'FAC-1' });
     await publishForm('form-1', { versionLabel: 'v1' });
     await duplicateForm('form-1');
     await listFormVersions('form-1');
@@ -44,5 +44,34 @@ describe('forms api client', () => {
     expect(fetch).toHaveBeenNthCalledWith(10, '/api/forms/form-1/responses', expect.objectContaining({ method: 'POST' }));
     expect(fetch).toHaveBeenNthCalledWith(11, '/api/forms/form-1', expect.objectContaining({ method: 'DELETE' }));
     expect(formQuestionnaireUrl('form-1')).toBe('/api/forms/form-1/questionnaire');
+  });
+
+  it('create/update payloads include fhirVersion, fhirProfileUrl and facilityId', async () => {
+    await createForm({
+      name: 'Test form',
+      schema: { fields: [] },
+      fhirVersion: '4.0.1',
+      fhirProfileUrl: 'http://example.org/profile',
+      facilityId: 'FAC-42',
+    });
+    const createCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string, { body: string }];
+    const createBody = JSON.parse(createCall[1].body) as Record<string, unknown>;
+    expect(createBody.fhirVersion).toBe('4.0.1');
+    expect(createBody.fhirProfileUrl).toBe('http://example.org/profile');
+    expect(createBody.facilityId).toBe('FAC-42');
+
+    (fetch as ReturnType<typeof vi.fn>).mockClear();
+    await updateForm('form-1', {
+      name: 'Test form',
+      schema: { fields: [] },
+      fhirVersion: '4.0.1',
+      fhirProfileUrl: 'http://example.org/profile',
+      facilityId: 'FAC-42',
+    });
+    const updateCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string, { body: string }];
+    const updateBody = JSON.parse(updateCall[1].body) as Record<string, unknown>;
+    expect(updateBody.fhirVersion).toBe('4.0.1');
+    expect(updateBody.fhirProfileUrl).toBe('http://example.org/profile');
+    expect(updateBody.facilityId).toBe('FAC-42');
   });
 });

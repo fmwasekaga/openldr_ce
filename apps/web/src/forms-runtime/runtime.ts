@@ -1,120 +1,105 @@
-import type { RuntimeAnswers, RuntimeAnswerValue, RuntimeField, RuntimeFormSchema } from './types';
+import { visibleFieldIds as libVisibleFieldIds } from '@openldr/forms/pure';
+import type { FormField, FormSchema, RuntimeAnswers } from './types';
 
-function answerComparable(value: unknown): unknown {
-  return value && typeof value === 'object' && 'code' in value ? (value as { code: string }).code : value;
+// ── Visibility ────────────────────────────────────────────────────────────────
+
+/** Delegate to the library helper (takes the whole schema). */
+export function visibleIds(schema: FormSchema, answers: RuntimeAnswers): Set<string> {
+  return libVisibleFieldIds(schema, answers as Record<string, unknown>);
 }
 
-export function visibleFieldIds(form: RuntimeFormSchema, answers: RuntimeAnswers): Set<string> {
-  const visible = new Set<string>();
-  for (const section of form.sections) {
-    for (const field of section.fields) {
-      if (!field.visibility || answerComparable(answers[field.visibility.whenField]) === field.visibility.equals) {
-        visible.add(field.id);
-      }
-    }
-  }
-  return visible;
+// ── Validation ────────────────────────────────────────────────────────────────
+
+function isEmpty(v: unknown): boolean {
+  return v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0);
 }
 
-function isEmpty(value: unknown): boolean {
-  return value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0);
-}
-
-function typeOk(field: RuntimeField, value: RuntimeAnswerValue): boolean {
-  switch (field.type) {
-    case 'string':
-    case 'text':
-    case 'date':
-    case 'dateTime':
-    case 'reference':
-      return typeof value === 'string';
-    case 'integer':
-    case 'decimal':
-      return typeof value === 'number' && Number.isFinite(value);
-    case 'boolean':
-      return typeof value === 'boolean';
-    case 'choice':
-    case 'open-choice':
-      return typeof value === 'object' && value !== null && 'code' in value;
-    case 'quantity':
-      return typeof value === 'object' && value !== null && 'value' in value;
-    default:
-      return false;
-  }
-}
-
-export function validateClient(form: RuntimeFormSchema, answers: RuntimeAnswers): Record<string, string> {
-  const visible = visibleFieldIds(form, answers);
+/**
+ * Client-side validation. Returns per-field error messages for visible fields
+ * that fail required / cardinality / numeric constraints.
+ */
+export function validate(schema: FormSchema, answers: RuntimeAnswers): Record<string, string> {
+  const visible = visibleIds(schema, answers);
   const errors: Record<string, string> = {};
-  for (const section of form.sections) {
-    for (const field of section.fields) {
-      if (!visible.has(field.id)) continue;
-      const raw = answers[field.id];
-      const values = (raw === undefined ? [] : Array.isArray(raw) ? raw : [raw]).filter((value) => !isEmpty(value));
-      if (field.required && values.length === 0) {
-        errors[field.id] = `field ${field.id} is required`;
+
+  for (const field of schema.fields) {
+    if (!visible.has(field.id)) continue;
+
+    const raw = answers[field.id];
+    const values = (raw === undefined ? [] : Array.isArray(raw) ? raw : [raw]).filter((v) => !isEmpty(v));
+
+    if (field.required && values.length === 0) {
+      errors[field.id] = `field ${field.id} is required`;
+      continue;
+    }
+
+    // Numeric constraints (number fieldType)
+    if (field.fieldType === 'number' && values.length > 0) {
+      const n = Number(values[0]);
+      if (!Number.isFinite(n)) {
+        errors[field.id] = `field ${field.id} must be a number`;
         continue;
       }
-      for (const value of values) {
-        if (!typeOk(field, value)) {
-          errors[field.id] = `field ${field.id} has the wrong type`;
+      if (field.constraints?.min !== undefined && n < field.constraints.min)
+        errors[field.id] = `field ${field.id} must be ≥ ${field.constraints.min}`;
+      if (field.constraints?.max !== undefined && n > field.constraints.max)
+        errors[field.id] = `field ${field.id} must be ≤ ${field.constraints.max}`;
+    }
+
+    // Cardinality (min/max items)
+    const cardMin = field.cardinality?.min;
+    const cardMax = field.cardinality?.max;
+    if (cardMin !== undefined && values.length < cardMin)
+      errors[field.id] = `field ${field.id} requires at least ${cardMin} value(s)`;
+    if (cardMax !== undefined && cardMax !== '*' && values.length > Number(cardMax))
+      errors[field.id] = `field ${field.id} allows at most ${cardMax} value(s)`;
+
+    // select: value must be in valueSetOptions
+    if ((field.fieldType === 'select' || field.fieldType === 'multiselect') && field.valueSetOptions && values.length > 0) {
+      const codes = new Set(field.valueSetOptions.map((o) => o.code));
+      for (const v of values) {
+        if (!codes.has(String(v))) {
+          errors[field.id] = `field ${field.id} value '${String(v)}' not in options`;
           break;
         }
-        if (field.type === 'choice' && field.options) {
-          const code = (value as { code: string }).code;
-          if (!field.options.some((option) => option.code === code)) errors[field.id] = `field ${field.id} value '${code}' not in options`;
-        }
-      }
-      if (field.cardinality) {
-        if (field.cardinality.min !== undefined && values.length < field.cardinality.min) errors[field.id] = `field ${field.id} below min cardinality`;
-        if (field.cardinality.max !== undefined && values.length > field.cardinality.max) errors[field.id] = `field ${field.id} above max cardinality`;
       }
     }
   }
+
   return errors;
 }
 
-export function cleanAnswers(form: RuntimeFormSchema, answers: RuntimeAnswers): RuntimeAnswers {
-  const visible = visibleFieldIds(form, answers);
+// ── Clean answers ─────────────────────────────────────────────────────────────
+
+/**
+ * Drop hidden fields and empty values. Preserves arrays for repeatable fields.
+ */
+export function cleanAnswers(schema: FormSchema, answers: RuntimeAnswers): RuntimeAnswers {
+  const visible = visibleIds(schema, answers);
   const out: RuntimeAnswers = {};
-  for (const section of form.sections) {
-    for (const field of section.fields) {
-      if (!visible.has(field.id)) continue;
-      const raw = answers[field.id];
-      const values = (raw === undefined ? [] : Array.isArray(raw) ? raw : [raw]).filter((value) => !isEmpty(value));
-      if (values.length === 0) continue;
-      out[field.id] = field.repeats ? values : values[0]!;
-    }
+
+  for (const field of schema.fields) {
+    if (!visible.has(field.id)) continue;
+    const raw = answers[field.id];
+    const values = (raw === undefined ? [] : Array.isArray(raw) ? raw : [raw]).filter((v) => !isEmpty(v));
+    if (values.length === 0) continue;
+    out[field.id] = field.repeatable ? values : values[0];
   }
+
   return out;
 }
 
-export function formatFieldValue(field: RuntimeField, value: unknown): string {
-  if (field.type === 'choice' || field.type === 'open-choice') return value && typeof value === 'object' && 'code' in value ? (value as { code: string }).code : '';
-  if (field.type === 'quantity') return value && typeof value === 'object' && 'value' in value ? String((value as { value?: number }).value ?? '') : '';
-  return value == null ? '' : String(value);
+// ── Label helpers ─────────────────────────────────────────────────────────────
+
+/** Resolve a field's display label, optionally checking translations. */
+export function fieldLabel(field: FormField, lang?: string): string {
+  if (lang && field.translations?.[lang]?.label) return field.translations[lang].label!;
+  return field.displayLabel;
 }
 
-export function fieldValue(field: RuntimeField, raw: string | boolean): RuntimeAnswerValue | undefined {
-  if (raw === '') return undefined;
-  switch (field.type) {
-    case 'integer':
-      return Number.parseInt(String(raw), 10);
-    case 'decimal':
-      return Number.parseFloat(String(raw));
-    case 'boolean':
-      return Boolean(raw);
-    case 'choice': {
-      const option = field.options?.find((item) => item.code === raw);
-      return { code: String(raw), display: option?.display.en, system: option?.system };
-    }
-    case 'open-choice': {
-      const option = field.options?.find((item) => item.code === raw);
-      return { code: String(raw), display: option?.display.en ?? String(raw), system: option?.system };
-    }
-    case 'quantity':
-      return { value: Number.parseFloat(String(raw)), unit: field.unit };
-    default:
-      return String(raw);
-  }
+// ── Child field lookup ────────────────────────────────────────────────────────
+
+/** Return the ordered child fields for a group field. */
+export function groupChildren(schema: FormSchema, groupId: string): FormField[] {
+  return schema.fields.filter((f) => f.groupId === groupId).sort((a, b) => a.order - b.order);
 }
