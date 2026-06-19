@@ -15,20 +15,54 @@ async function makeMigratedDb(): Promise<Kysely<InternalSchema>> {
   return db;
 }
 
+const NOW = '2026-01-01T00:00:00.000Z';
+
 const schema = (name = 'Specimen intake'): FormSchema => ({
   id: 'specimen-intake',
   name,
-  title: { en: name },
-  status: 'active',
+  versionLabel: null,
+  fhirVersion: 'R4',
+  fhirResourceType: 'Questionnaire',
+  fhirProfileUrl: null,
+  facilityId: null,
+  status: 'draft',
+  active: true,
+  version: 1,
+  createdAt: NOW,
+  updatedAt: NOW,
+  targetPages: ['forms'],
   languages: ['en'],
   sections: [
     {
       id: 'main',
-      title: { en: 'Main' },
-      fields: [
-        { id: 'q1', type: 'string', label: { en: 'Question 1' } },
-        { id: 'q2', type: 'boolean', label: { en: 'Question 2' } },
-      ],
+      label: 'Main',
+      order: 0,
+    },
+  ],
+  fields: [
+    {
+      id: 'q1',
+      fhirPath: null,
+      displayLabel: 'Question 1',
+      description: null,
+      fieldType: 'text',
+      required: false,
+      enabled: true,
+      order: 0,
+      cardinality: { min: 0, max: '1' },
+      section: 'main',
+    },
+    {
+      id: 'q2',
+      fhirPath: null,
+      displayLabel: 'Question 2',
+      description: null,
+      fieldType: 'boolean',
+      required: false,
+      enabled: true,
+      order: 1,
+      cardinality: { min: 0, max: '1' },
+      section: 'main',
     },
   ],
 });
@@ -42,6 +76,7 @@ describe('createFormStore', () => {
       name: 'Specimen intake',
       versionLabel: 'v1',
       fhirResourceType: 'Questionnaire',
+      fhirVersion: 'R4',
       schema: schema(),
       targetPages: ['forms'],
     });
@@ -52,6 +87,7 @@ describe('createFormStore', () => {
       name: 'Specimen intake updated',
       versionLabel: 'v2',
       fhirResourceType: 'Questionnaire',
+      fhirVersion: 'R4',
       schema: updatedSchema,
       targetPages: ['forms', 'specimens'],
     });
@@ -86,7 +122,7 @@ describe('createFormStore', () => {
     const published = await store.publish(created.id, { actorId: 'u1', versionLabel: 'v1' });
     expect(published.status).toBe('published');
 
-    const revisedSchema = { ...sampleForm, title: { en: 'Revised' } };
+    const revisedSchema = { ...sampleForm, name: 'Specimen intake revised' };
     await store.update(created.id, {
       ...created,
       name: 'Specimen intake revised',
@@ -178,7 +214,7 @@ describe('createFormStore', () => {
           name: 'Specimen intake',
           versionLabel: 'v1',
           fhirResourceType: 'Questionnaire',
-          schema: { ...schema(), title: { en: 'Revised' } },
+          schema: { ...schema(), name: 'Revised' },
           targetPages: ['forms'],
         },
       },
@@ -263,6 +299,30 @@ describe('createFormStore', () => {
     expect(copy.name).toBe('Specimen intake copy');
     expect(copy.status).toBe('draft');
     expect(copy.schema).toEqual(created.schema);
+
+    await db.destroy();
+  });
+
+  it('stores and retrieves fhirVersion, fhirProfileUrl, and facilityId', async () => {
+    const db = await makeMigratedDb();
+    const store = createFormStore(db);
+    const created = await store.create({
+      name: 'FHIR metadata test',
+      fhirVersion: 'R4',
+      fhirProfileUrl: 'http://example.org/StructureDefinition/test',
+      facilityId: 'fac-001',
+      schema: schema(),
+      targetPages: [],
+    });
+
+    expect(created.fhirVersion).toBe('R4');
+    expect(created.fhirProfileUrl).toBe('http://example.org/StructureDefinition/test');
+    expect(created.facilityId).toBe('fac-001');
+
+    const fetched = await store.get(created.id);
+    expect(fetched?.fhirVersion).toBe('R4');
+    expect(fetched?.fhirProfileUrl).toBe('http://example.org/StructureDefinition/test');
+    expect(fetched?.facilityId).toBe('fac-001');
 
     await db.destroy();
   });

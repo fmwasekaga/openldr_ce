@@ -57,9 +57,7 @@ describe('reverseFieldType', () => {
   })
 
   it('falls back to text for unknown item types', () => {
-    // @ts-expect-error — testing unknown type
     expect(reverseFieldType('quantity')).toBe('text')
-    // @ts-expect-error — testing unknown type
     expect(reverseFieldType('reference')).toBe('text')
   })
 })
@@ -113,7 +111,6 @@ describe('fromQStatus', () => {
   })
 
   it('falls back to draft for unknown statuses', () => {
-    // @ts-expect-error — testing unknown status
-    expect(fromQStatus('unknown')).toBe('draft')
+    expect(fromQStatus('unknown' as never)).toBe('draft')
   })
 })

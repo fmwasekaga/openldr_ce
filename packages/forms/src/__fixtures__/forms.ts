@@ -17,7 +17,7 @@ export function makeField(
 
 /** Build a FormSchema with canonical defaults; caller supplies id + name. */
 export function makeSchema(
-  overrides: Partial<FormSchema> & Pick<FormSchema, 'id' | 'name' | 'fields'>,
+  overrides: Partial<FormSchema> & Pick<FormSchema, 'id' | 'name'>,
 ): FormSchema {
   return {
     versionLabel: null,

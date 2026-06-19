@@ -266,6 +266,9 @@ export interface FormDefinitionsTable {
   name: string;
   version_label: string | null;
   fhir_resource_type: string | null;
+  fhir_version: string | null;
+  fhir_profile_url: string | null;
+  facility_id: string | null;
   status: string;
   active: boolean;
   schema: unknown;
@@ -281,6 +284,9 @@ export interface FormVersionsTable {
   version_label: string | null;
   name: string;
   fhir_resource_type: string | null;
+  fhir_version: string | null;
+  fhir_profile_url: string | null;
+  facility_id: string | null;
   schema: JSONColumnType<Record<string, unknown>>;
   target_pages: JSONColumnType<string[]> | null;
   questionnaire: JSONColumnType<Record<string, unknown>>;

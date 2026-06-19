@@ -1,4 +1,4 @@
-import type { BindingStrength, FormField, FormFieldOption, FormFieldType, FormSchema, FormSection, VisibilityRule } from './schema/form-schema'
+import type { BindingStrength, FieldType, FormField, FormFieldOption, FormSchema, FormSection, VisibilityRule } from './schema/form-schema'
 import type { Extension, Questionnaire, QuestionnaireItem } from 'fhir/r4'
 import { fromQStatus, reverseFieldType } from './scalar-types'
 import { hasKeys, parseTranslations } from './translations'
@@ -111,7 +111,7 @@ export function fromQuestionnaire(questionnaire: Questionnaire): FormSchema {
     }
 
     const hint = extString(item.extension, EXT_CORLIX_FIELD_TYPE)
-    const fieldType = (hint as FormFieldType | null) ?? reverseFieldType(item.type)
+    const fieldType = (hint as FieldType | null) ?? reverseFieldType(item.type)
     base.fieldType = fieldType
     if (item.type === 'open-choice') base.allowCustomValue = true
     if (item.repeats && fieldType !== 'multiselect') base.repeatable = true

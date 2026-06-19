@@ -10,6 +10,9 @@ export interface FormDefinition {
   name: string;
   versionLabel: string | null;
   fhirResourceType: string | null;
+  fhirVersion: string | null;
+  fhirProfileUrl: string | null;
+  facilityId: string | null;
   status: string;
   active: boolean;
   schema: FormSchema;
@@ -25,6 +28,9 @@ export interface FormSummary {
   status: string;
   active: boolean;
   fhirResourceType: string | null;
+  fhirVersion: string | null;
+  fhirProfileUrl: string | null;
+  facilityId: string | null;
   fieldCount: number;
   updatedAt: string;
 }
@@ -36,6 +42,9 @@ export interface FormVersionSummary {
   versionLabel: string | null;
   name: string;
   fhirResourceType: string | null;
+  fhirVersion: string | null;
+  fhirProfileUrl: string | null;
+  facilityId: string | null;
   targetPages: string[] | null;
   publishedAt: string;
   publishedBy: string | null;
@@ -55,6 +64,9 @@ export interface FormInput {
   name: string;
   versionLabel?: string | null;
   fhirResourceType?: string | null;
+  fhirVersion?: string | null;
+  fhirProfileUrl?: string | null;
+  facilityId?: string | null;
   status?: string;
   active?: boolean;
   schema: FormSchema;
@@ -66,6 +78,9 @@ type FormRow = {
   name: string;
   version_label: string | null;
   fhir_resource_type: string | null;
+  fhir_version: string | null;
+  fhir_profile_url: string | null;
+  facility_id: string | null;
   status: string;
   active: boolean;
   schema: unknown;
@@ -81,6 +96,9 @@ type FormVersionRow = {
   version_label: string | null;
   name: string;
   fhir_resource_type: string | null;
+  fhir_version: string | null;
+  fhir_profile_url: string | null;
+  facility_id: string | null;
   schema: unknown;
   target_pages: unknown | null;
   questionnaire: unknown;
@@ -97,7 +115,7 @@ function toTimestamp(value: unknown): string {
 }
 
 function countFields(schema: FormSchema): number {
-  return schema.sections.reduce((total, section) => total + section.fields.length, 0);
+  return schema.fields.length;
 }
 
 export function createFormStore(db: Kysely<InternalSchema>) {
@@ -108,6 +126,9 @@ export function createFormStore(db: Kysely<InternalSchema>) {
       name: r.name,
       versionLabel: r.version_label,
       fhirResourceType: r.fhir_resource_type,
+      fhirVersion: r.fhir_version,
+      fhirProfileUrl: r.fhir_profile_url,
+      facilityId: r.facility_id,
       status: r.status,
       active: r.active,
       schema,
@@ -125,6 +146,9 @@ export function createFormStore(db: Kysely<InternalSchema>) {
       status: r.status,
       active: r.active,
       fhirResourceType: r.fhir_resource_type,
+      fhirVersion: r.fhir_version,
+      fhirProfileUrl: r.fhir_profile_url,
+      facilityId: r.facility_id,
       fieldCount: countFields(schema),
       updatedAt: toTimestamp(r.updated_at),
     };
@@ -136,6 +160,9 @@ export function createFormStore(db: Kysely<InternalSchema>) {
     versionLabel: r.version_label,
     name: r.name,
     fhirResourceType: r.fhir_resource_type,
+    fhirVersion: r.fhir_version,
+    fhirProfileUrl: r.fhir_profile_url,
+    facilityId: r.facility_id,
     schema: parseJson(r.schema) as FormSchema,
     targetPages: r.target_pages ? (parseJson(r.target_pages) as string[]) : null,
     questionnaire: parseJson(r.questionnaire),
@@ -151,6 +178,9 @@ export function createFormStore(db: Kysely<InternalSchema>) {
       versionLabel: r.version_label,
       name: r.name,
       fhirResourceType: r.fhir_resource_type,
+      fhirVersion: r.fhir_version,
+      fhirProfileUrl: r.fhir_profile_url,
+      facilityId: r.facility_id,
       targetPages: r.target_pages ? (parseJson(r.target_pages) as string[]) : null,
       publishedAt: toTimestamp(r.published_at),
       publishedBy: r.published_by,
@@ -192,6 +222,9 @@ export function createFormStore(db: Kysely<InternalSchema>) {
         name: input.name,
         version_label: input.versionLabel ?? null,
         fhir_resource_type: input.fhirResourceType ?? null,
+        fhir_version: input.fhirVersion ?? null,
+        fhir_profile_url: input.fhirProfileUrl ?? null,
+        facility_id: input.facilityId ?? null,
         status: input.status ?? 'draft',
         active: input.active ?? true,
         schema: JSON.stringify(input.schema) as never,
@@ -225,6 +258,9 @@ export function createFormStore(db: Kysely<InternalSchema>) {
         name: input.name,
         version_label: input.versionLabel ?? null,
         fhir_resource_type: input.fhirResourceType ?? null,
+        fhir_version: input.fhirVersion ?? null,
+        fhir_profile_url: input.fhirProfileUrl ?? null,
+        facility_id: input.facilityId ?? null,
         status: nextStatus,
         schema: JSON.stringify(input.schema) as never,
         target_pages: input.targetPages ? (JSON.stringify(input.targetPages) as never) : null,
@@ -263,6 +299,9 @@ export function createFormStore(db: Kysely<InternalSchema>) {
           version_label: input.versionLabel ?? form.versionLabel,
           name: form.name,
           fhir_resource_type: form.fhirResourceType,
+          fhir_version: form.fhirVersion,
+          fhir_profile_url: form.fhirProfileUrl,
+          facility_id: form.facilityId,
           schema: JSON.stringify(form.schema) as never,
           target_pages: form.targetPages ? (JSON.stringify(form.targetPages) as never) : null,
           questionnaire: JSON.stringify(toQuestionnaire(form.schema)) as never,
@@ -285,6 +324,9 @@ export function createFormStore(db: Kysely<InternalSchema>) {
       name: makeDuplicateName(form.name),
       versionLabel: form.versionLabel,
       fhirResourceType: form.fhirResourceType,
+      fhirVersion: form.fhirVersion,
+      fhirProfileUrl: form.fhirProfileUrl,
+      facilityId: form.facilityId,
       status: 'draft',
       active: true,
       schema: form.schema,
