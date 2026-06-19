@@ -10,8 +10,8 @@ export function PreviewPane({ schema }: { schema: FormSchema }) {
   const [remountKey, setRemountKey] = useState(0);
 
   return (
-    <div className="flex flex-col gap-4 h-full">
-      <div className="flex items-center justify-between gap-2 px-4">
+    <div className="flex h-full flex-col">
+      <div className="flex items-center justify-between border-b border-border px-6 py-2.5">
         <span className="text-sm font-semibold">Preview</span>
         <div className="flex gap-2">
           <Button
@@ -37,13 +37,15 @@ export function PreviewPane({ schema }: { schema: FormSchema }) {
         </div>
       </div>
       <div className="flex-1 overflow-y-auto">
-        <FormRuntime
-          key={remountKey}
-          schema={schema}
-          footer={null}
-          onSubmit={() => {}}
-          initialAnswers={answers}
-        />
+        <div className="px-6 py-4">
+          <FormRuntime
+            key={remountKey}
+            schema={schema}
+            footer={null}
+            onSubmit={() => {}}
+            initialAnswers={answers}
+          />
+        </div>
       </div>
     </div>
   );

@@ -22,6 +22,7 @@ export function FormRuntime({
   footer,
   initialAnswers,
   fieldWarnings,
+  formId,
 }: {
   schema: FormSchema;
   submitLabel?: string;
@@ -30,6 +31,7 @@ export function FormRuntime({
   initialAnswers?: RuntimeAnswers;
   /** @deprecated No longer used to render markers in preview; kept for API compatibility. */
   fieldWarnings?: Record<string, 'error' | 'warning'>;
+  formId?: string;
 }): JSX.Element {
   const [answers, setAnswers] = useState<RuntimeAnswers>(initialAnswers ?? {});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -134,6 +136,7 @@ export function FormRuntime({
   return (
     <TooltipProvider>
     <form
+      id={formId}
       className="grid gap-6"
       onSubmit={(event) => {
         event.preventDefault();
@@ -143,7 +146,7 @@ export function FormRuntime({
       {sectionGroups ? (
         <div className="grid gap-6">
           {sectionGroups.map(({ key, label, fields }) => (
-            <div key={key} className="grid gap-4">
+            <div key={key} className="grid gap-4 border-t border-border pt-4 first:border-t-0 first:pt-0">
               {label !== null && (
                 <div className="border-b pb-1 mb-1">
                   <span className="text-sm font-semibold text-foreground">{label}</span>
@@ -273,7 +276,7 @@ function FieldControl({
       const current = value != null ? String(value) : '';
       return (
         <Select value={current} onValueChange={(v) => onChange(v)}>
-          <SelectTrigger id={field.id} aria-label={label}>
+          <SelectTrigger id={field.id} className="w-full" aria-label={label}>
             <SelectValue placeholder={field.placeholder ?? 'Select...'} />
           </SelectTrigger>
           <SelectContent>

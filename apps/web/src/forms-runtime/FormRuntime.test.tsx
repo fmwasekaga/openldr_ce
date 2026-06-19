@@ -347,4 +347,71 @@ describe('FormRuntime', () => {
     expect(screen.queryByText('Patient')).toBeNull();
     expect(screen.queryByText('Order Details')).toBeNull();
   });
+
+  // ── formId prop ──────────────────────────────────────────────────────────────
+
+  it('sets the form element id when formId prop is provided', () => {
+    const { container } = render(
+      <FormRuntime
+        schema={previewSchema}
+        submitLabel=""
+        footer={null}
+        onSubmit={() => {}}
+        formId="test-form-id"
+      />,
+    );
+    const form = container.querySelector('form');
+    expect(form).toBeTruthy();
+    expect(form?.id).toBe('test-form-id');
+  });
+
+  it('does not set form id when formId prop is absent', () => {
+    const { container } = render(
+      <FormRuntime
+        schema={previewSchema}
+        submitLabel=""
+        footer={null}
+        onSubmit={() => {}}
+      />,
+    );
+    const form = container.querySelector('form');
+    expect(form).toBeTruthy();
+    expect(form?.id).toBe('');
+  });
+
+  // ── Select full-width ────────────────────────────────────────────────────────
+
+  it('renders a select field trigger', () => {
+    const selectSchema: FormSchema = {
+      ...previewSchema,
+      id: 'sel1',
+      fields: [
+        {
+          id: 'color',
+          fhirPath: null,
+          displayLabel: 'Color',
+          description: null,
+          fieldType: 'select',
+          required: false,
+          enabled: true,
+          order: 1,
+          cardinality: { min: 0, max: '1' },
+          valueSetOptions: [
+            { code: 'red', display: 'Red' },
+            { code: 'blue', display: 'Blue' },
+          ],
+        },
+      ],
+    };
+    render(
+      <FormRuntime
+        schema={selectSchema}
+        submitLabel=""
+        footer={null}
+        onSubmit={() => {}}
+      />,
+    );
+    // The select trigger should be present (aria-label matches field label)
+    expect(screen.getByRole('combobox', { name: 'Color' })).toBeInTheDocument();
+  });
 });
