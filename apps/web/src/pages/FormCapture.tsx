@@ -1,8 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { MoreHorizontal } from 'lucide-react';
 import { AppShell } from '@/shell/AppShell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { getForm, submitFormResponse, type FormDefinition } from '@/api';
 import { FormRuntime } from '@/forms-runtime/FormRuntime';
 import type { FormSchema } from '@/forms-runtime/types';
@@ -43,50 +50,72 @@ export function FormCapture() {
     return () => { cancelled = true; };
   }, [id]);
 
+  const handleSubmit = async (cleaned: Record<string, unknown>) => {
+    if (!id) return;
+    setSubmitting(true);
+    setSuccess(false);
+    try {
+      await submitFormResponse(id, cleaned);
+      setSuccess(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <AppShell title="Forms" fullBleed>
       <div className="flex min-h-0 flex-1 flex-col">
+        {/* Single-line header: status badge + name/meta on left, ⋯ menu on right */}
         <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => navigate('/forms')}>Back</Button>
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-sm font-semibold">{schema?.name ?? form?.name ?? 'Form'}</h1>
-            {form ? <p className="text-xs text-muted-foreground">{form.versionLabel ?? 'No version'} · {form.fhirResourceType ?? 'Custom'}</p> : null}
-          </div>
           {form ? <Badge variant="outline">{form.status}</Badge> : null}
+          <div className="min-w-0 flex-1">
+            <span className="truncate text-sm font-semibold">{schema?.name ?? form?.name ?? 'Form'}</span>
+            {form ? (
+              <span className="ml-2 text-xs text-muted-foreground">
+                {form.versionLabel ?? 'No version'} · {form.fhirResourceType ?? 'Custom'}
+              </span>
+            ) : null}
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Form actions">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                disabled={submitting || !schema}
+                onSelect={() => {
+                  (document.getElementById('form-capture') as HTMLFormElement | null)?.requestSubmit();
+                }}
+              >
+                Submit
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => navigate('/forms')}>
+                Cancel
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-auto px-4 py-4">
-          {loading ? <div className="py-8 text-center text-muted-foreground">Loading...</div> : null}
-          {error ? <div className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div> : null}
-          {success ? <div className="mb-3 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700">Response captured.</div> : null}
+        {/* Edge-to-edge body — scrollbar at pane edge, inner px-6 py-4 */}
+        <div className="min-h-0 flex-1 overflow-auto">
+          <div className="px-6 py-4">
+            {loading ? <div className="py-8 text-center text-muted-foreground">Loading...</div> : null}
+            {error ? <div className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div> : null}
+            {success ? <div className="mb-3 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700">Response captured.</div> : null}
 
-          {schema ? (
-            <div className="mx-auto max-w-4xl">
+            {schema ? (
               <FormRuntime
                 schema={schema}
-                submitLabel="Submit"
-                onSubmit={async (cleaned) => {
-                  if (!id) return;
-                  setSubmitting(true);
-                  setSuccess(false);
-                  try {
-                    await submitFormResponse(id, cleaned);
-                    setSuccess(true);
-                  } catch (err) {
-                    setError(err instanceof Error ? err.message : String(err));
-                  } finally {
-                    setSubmitting(false);
-                  }
-                }}
-                footer={(
-                  <div className="flex justify-end gap-2 border-t border-border pt-4">
-                    <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => navigate('/forms')}>Cancel</Button>
-                    <Button type="submit" size="sm" className="h-8 text-xs" disabled={submitting}>Submit</Button>
-                  </div>
-                )}
+                formId="form-capture"
+                footer={null}
+                onSubmit={handleSubmit}
               />
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
       </div>
     </AppShell>

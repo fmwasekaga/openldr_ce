@@ -73,37 +73,84 @@ const form: api.FormDefinition = {
   },
 };
 
+/**
+ * Open the ⋯ "Form actions" DropdownMenu and click a menu item by text.
+ * Uses the Radix jsdom pattern: pointerDown on trigger, Enter fallback, then
+ * pointerMove + click the item.
+ */
+function clickActionsMenuItem(itemText: string) {
+  const trigger = screen.getByRole('button', { name: /form actions/i });
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+  if (!screen.queryByText(itemText)) {
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+  }
+  const item = screen.getByText(itemText);
+  fireEvent.pointerMove(item);
+  fireEvent.click(item);
+}
+
 describe('FormCapture page', () => {
   beforeEach(() => {
     vi.spyOn(api, 'getForm').mockResolvedValue(form);
     vi.spyOn(api, 'submitFormResponse').mockResolvedValue({ resourceType: 'QuestionnaireResponse' });
   });
 
-  it('renders fields, applies visibility, validates required fields, and submits answers', async () => {
+  it('renders form name, status badge in header, fields, and applies visibility', async () => {
     render(
       <MemoryRouter initialEntries={['/forms/form-1']}>
         <Routes><Route path="/forms/:id" element={<FormCapture />} /></Routes>
       </MemoryRouter>,
     );
 
+    // Form name and status badge appear in header
     expect(await screen.findByText('Specimen intake')).toBeInTheDocument();
+    expect(screen.getByText('draft')).toBeInTheDocument();
+
+    // Fields rendered; Notes hidden by default
     expect(screen.getByLabelText('Patient ID')).toBeInTheDocument();
     expect(screen.queryByLabelText('Notes')).not.toBeInTheDocument();
 
-    // Submit without required field fills
-    fireEvent.click(screen.getByRole('button', { name: /^submit$/i }));
+    // No standalone Back button or bottom Cancel button
+    expect(screen.queryByRole('button', { name: /^back$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^cancel$/i })).not.toBeInTheDocument();
+  });
+
+  it('validates required fields when submitting via the ⋯ menu', async () => {
+    render(
+      <MemoryRouter initialEntries={['/forms/form-1']}>
+        <Routes><Route path="/forms/:id" element={<FormCapture />} /></Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByText('Specimen intake');
+
+    // Submit without filling required field
+    clickActionsMenuItem('Submit');
+
     expect(await screen.findByText('field patientId is required')).toBeInTheDocument();
     expect(api.submitFormResponse).not.toHaveBeenCalled();
+  });
+
+  it('applies visibility, validates required fields, and submits answers via the ⋯ menu', async () => {
+    render(
+      <MemoryRouter initialEntries={['/forms/form-1']}>
+        <Routes><Route path="/forms/:id" element={<FormCapture />} /></Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByText('Specimen intake');
 
     // Fill required field
     fireEvent.change(screen.getByLabelText('Patient ID'), { target: { value: 'P-100' } });
-    // Reveal Notes
+
+    // Reveal Notes via visibility condition
     fireEvent.click(screen.getByRole('checkbox', { name: 'Add notes?' }));
     expect(await screen.findByLabelText('Notes')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Notes'), { target: { value: 'Follow up' } });
 
-    // Submit
-    fireEvent.click(screen.getByRole('button', { name: /^submit$/i }));
+    // Submit via ⋯ menu
+    clickActionsMenuItem('Submit');
+
     await waitFor(() =>
       expect(api.submitFormResponse).toHaveBeenCalledWith(
         'form-1',
