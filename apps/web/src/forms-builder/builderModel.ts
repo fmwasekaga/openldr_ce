@@ -1,4 +1,4 @@
-import type { FormField, FormSchema, FormSection, FieldType } from '@openldr/forms';
+import type { FormField, FormSchema, FormSection, FieldType } from '@openldr/forms/pure';
 
 export function slugify(label: string): string {
   const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');

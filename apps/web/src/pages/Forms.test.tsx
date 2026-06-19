@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { Forms } from './Forms';
 import * as api from '../api';
 
@@ -43,7 +43,7 @@ describe('Forms page', () => {
 
     expect(await screen.findByText('Specimen intake')).toBeInTheDocument();
     expect(screen.getByText('Questionnaire')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /new form/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /new form/i })).toBeEnabled();
 
     const file = new File([JSON.stringify(importedSchema)], 'specimen-intake.json', { type: 'application/json' });
     fireEvent.change(screen.getByLabelText(/import form json/i), { target: { files: [file] } });
@@ -62,5 +62,20 @@ describe('Forms page', () => {
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }));
     fireEvent.click(await screen.findByRole('button', { name: /^delete$/i }));
     await waitFor(() => expect(api.deleteForm).toHaveBeenCalledWith('form-1'));
+  });
+
+  it('opens the builder from the New form button', async () => {
+    render(
+      <MemoryRouter initialEntries={['/forms']}>
+        <Routes>
+          <Route path="/forms" element={<Forms />} />
+          <Route path="/forms/new" element={<div>Builder opened</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Specimen intake')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /new form/i }));
+    expect(await screen.findByText('Builder opened')).toBeInTheDocument();
   });
 });

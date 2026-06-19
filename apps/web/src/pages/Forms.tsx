@@ -9,7 +9,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TablePagination } from '@/components/ui/table-pagination';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { createForm, deleteForm, formQuestionnaireUrl, listForms, setFormStatus, type FormDefinition, type FormStatus, type FormSummary } from '@/api';
 
 function formatDate(iso: string): string {
@@ -149,19 +148,10 @@ export function Forms() {
               aria-label="Search forms"
             />
             <div className="flex-1" />
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span>
-                    <Button size="sm" className="h-8 gap-1.5 text-xs" disabled aria-label="New form">
-                      <Plus className="h-3.5 w-3.5" />
-                      New form
-                    </Button>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>Form builder coming in a later sub-project</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <Button size="sm" className="h-8 gap-1.5 text-xs" aria-label="New form" onClick={() => navigate('/forms/new')}>
+              <Plus className="h-3.5 w-3.5" />
+              New form
+            </Button>
             <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => fileRef.current?.click()}>
               <Upload className="h-3.5 w-3.5" />
               Import form JSON
@@ -228,6 +218,7 @@ export function Forms() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => navigate(`/forms/${form.id}`)}>View/Run</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => navigate(`/forms/${form.id}/builder`)}>Edit builder</DropdownMenuItem>
                           <DropdownMenuItem onClick={() => { void changeStatus(form, 'published'); }} disabled={form.status === 'published'}>Publish</DropdownMenuItem>
                           <DropdownMenuItem onClick={() => { void changeStatus(form, 'archived'); }} disabled={form.status === 'archived'}>Archive</DropdownMenuItem>
                           <DropdownMenuItem asChild>
