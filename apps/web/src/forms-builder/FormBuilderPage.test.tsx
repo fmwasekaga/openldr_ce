@@ -26,4 +26,17 @@ describe('FormBuilderPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     await waitFor(() => expect(api.createForm).toHaveBeenCalledWith(expect.objectContaining({ name: 'Specimen intake' })));
   });
+
+  it('adds, edits, searches, selects, and deletes fields', async () => {
+    render(<MemoryRouter initialEntries={['/forms/new']}><Routes><Route path="/forms/new" element={<FormBuilderPage />} /></Routes></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button', { name: 'Add string field' }));
+    expect(screen.getByText('New string field')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('New string field'));
+    fireEvent.change(screen.getByLabelText('Field label'), { target: { value: 'Patient ID' } });
+    expect(screen.getByText('Patient ID')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Search fields'), { target: { value: 'patient' } });
+    expect(screen.getByText('Patient ID')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete selected field' }));
+    expect(screen.queryByText('Patient ID')).not.toBeInTheDocument();
+  });
 });
