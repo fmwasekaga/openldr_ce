@@ -387,6 +387,18 @@ describe('GET /health', () => {
   });
 });
 
+describe('auth routes', () => {
+  it('GET /api/me returns the resolved actor under dev bypass', async () => {
+    const app = buildApp(ctxWith('up'));
+    const res = await app.inject({ method: 'GET', url: '/api/me' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(typeof body.username).toBe('string');
+    expect(Array.isArray(body.roles)).toBe(true);
+    await app.close();
+  });
+});
+
 describe('terminology admin routes', () => {
   it('lists seeded publishers and creates a custom publisher + system', async () => {
     const app = buildApp(ctxWith('up'));

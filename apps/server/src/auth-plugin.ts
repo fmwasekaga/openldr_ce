@@ -31,7 +31,8 @@ async function devActor(ctx: AppContext): Promise<RequestActor> {
     const existing = await ctx.users.getByUsername(username);
     const u = existing ?? (await ctx.users.create({ username, displayName: 'Dev Admin', roles }));
     return { id: u.id, username: u.username, displayName: u.displayName, roles: u.roles.length > 0 ? u.roles : roles };
-  } catch {
+  } catch (e) {
+    ctx.logger.warn({ error: e instanceof Error ? e.message : String(e) }, 'dev-bypass actor fell back to synthetic (user store unavailable)');
     return { id: `dev:${username}`, username, displayName: 'Dev Admin', roles };
   }
 }
@@ -39,7 +40,7 @@ async function devActor(ctx: AppContext): Promise<RequestActor> {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerAuth(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
   app.addHook('onRequest', async (req: FastifyRequest, reply: FastifyReply) => {
-    const url = req.raw.url ?? '';
+    const url = (req.raw.url ?? '').split('?')[0];
     // Only /api/* is protected. /health and the static SPA stay public.
     if (url !== '/api' && !url.startsWith('/api/')) return;
 
