@@ -50,8 +50,10 @@ export function FormCapture() {
     return () => { cancelled = true; };
   }, [id]);
 
+  const isPublished = form?.status === 'published';
+
   const handleSubmit = async (cleaned: Record<string, unknown>) => {
-    if (!id) return;
+    if (!id || !isPublished) return;
     setSubmitting(true);
     setSuccess(false);
     try {
@@ -86,7 +88,7 @@ export function FormCapture() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem
-                disabled={submitting || !schema}
+                disabled={submitting || !schema || !isPublished}
                 onSelect={() => {
                   (document.getElementById('form-capture') as HTMLFormElement | null)?.requestSubmit();
                 }}
@@ -105,6 +107,7 @@ export function FormCapture() {
           {loading ? <div className="px-6 py-8 text-center text-muted-foreground">Loading...</div> : null}
           {error ? <div className="mx-6 mt-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div> : null}
           {success ? <div className="mx-6 mt-3 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700">Response captured.</div> : null}
+          {form && !isPublished ? <div className="mx-6 mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">This form is not published. Submission is disabled until it is published.</div> : null}
 
           {schema ? (
             <FormRuntime

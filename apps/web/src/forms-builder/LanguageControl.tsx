@@ -128,9 +128,7 @@ export function LanguageControl({ languages, onChange }: LanguageControlProps): 
             )}
           >
             <Globe className="h-3.5 w-3.5" aria-hidden />
-            {languages.length > 0 && (
-              <span className="tabular-nums">{languages.length}</span>
-            )}
+            <span className="tabular-nums">{languages.length}</span>
           </button>
         </PopoverTrigger>
         <PopoverContent align="end" className="w-64 p-2">

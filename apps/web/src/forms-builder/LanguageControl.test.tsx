@@ -13,15 +13,19 @@ function renderControl(
 }
 
 describe('LanguageControl', () => {
-  it('displays current language as a badge', () => {
-    renderControl(['fr']);
-    expect(screen.getByText('fr')).toBeTruthy();
+  it('shows 0 on the globe trigger when no languages are selected', () => {
+    renderControl([]);
+    expect(screen.getByRole('button', { name: 'Languages' })).toHaveTextContent('0');
   });
 
-  it('displays multiple current languages as badges', () => {
+  it('shows the selected count on the globe trigger', () => {
+    renderControl(['fr']);
+    expect(screen.getByRole('button', { name: 'Languages' })).toHaveTextContent('1');
+  });
+
+  it('shows the count for multiple selected languages', () => {
     renderControl(['fr', 'pt']);
-    expect(screen.getByText('fr')).toBeTruthy();
-    expect(screen.getByText('pt')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Languages' })).toHaveTextContent('2');
   });
 
   it('opens popover on globe button click and lists available languages', () => {
@@ -44,15 +48,16 @@ describe('LanguageControl', () => {
     expect(onChange).toHaveBeenCalledWith(['fr', 'pt']);
   });
 
-  it('calls onChange without removed language when clicking remove on a badge', () => {
+  it('calls onChange without the removed language when removing from the popover', () => {
     const { onChange } = renderControl(['fr']);
-    const removeBtn = screen.getByRole('button', { name: 'Remove fr' });
-    fireEvent.click(removeBtn);
+    fireEvent.click(screen.getByRole('button', { name: 'Languages' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove fr' }));
     expect(onChange).toHaveBeenCalledWith([]);
   });
 
   it('removing one of multiple languages leaves the others', () => {
     const { onChange } = renderControl(['fr', 'pt']);
+    fireEvent.click(screen.getByRole('button', { name: 'Languages' }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove fr' }));
     expect(onChange).toHaveBeenCalledWith(['pt']);
   });

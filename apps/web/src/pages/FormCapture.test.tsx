@@ -73,6 +73,9 @@ const form: api.FormDefinition = {
   },
 };
 
+// Same form, but published — submission is only enabled for published forms.
+const publishedForm: api.FormDefinition = { ...form, status: 'published' };
+
 /**
  * Open the ⋯ "Form actions" DropdownMenu and click a menu item by text.
  * Uses the Radix jsdom pattern: pointerDown on trigger, Enter fallback, then
@@ -115,7 +118,23 @@ describe('FormCapture page', () => {
     expect(screen.queryByRole('button', { name: /^cancel$/i })).not.toBeInTheDocument();
   });
 
+  it('disables submission while the form is unpublished (draft)', async () => {
+    render(
+      <MemoryRouter initialEntries={['/forms/form-1']}>
+        <Routes><Route path="/forms/:id" element={<FormCapture />} /></Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByText('Specimen intake');
+
+    // The unpublished banner is shown and Submit is a no-op.
+    expect(screen.getByText(/not published/i)).toBeInTheDocument();
+    clickActionsMenuItem('Submit');
+    expect(api.submitFormResponse).not.toHaveBeenCalled();
+  });
+
   it('validates required fields when submitting via the ⋯ menu', async () => {
+    vi.spyOn(api, 'getForm').mockResolvedValue(publishedForm);
     render(
       <MemoryRouter initialEntries={['/forms/form-1']}>
         <Routes><Route path="/forms/:id" element={<FormCapture />} /></Routes>
@@ -132,6 +151,7 @@ describe('FormCapture page', () => {
   });
 
   it('applies visibility, validates required fields, and submits answers via the ⋯ menu', async () => {
+    vi.spyOn(api, 'getForm').mockResolvedValue(publishedForm);
     render(
       <MemoryRouter initialEntries={['/forms/form-1']}>
         <Routes><Route path="/forms/:id" element={<FormCapture />} /></Routes>
