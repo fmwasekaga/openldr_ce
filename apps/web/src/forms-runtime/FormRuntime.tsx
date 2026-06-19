@@ -11,16 +11,20 @@ import { cleanAnswers, fieldLabel, groupChildren, validate, visibleIds } from '.
 
 export function FormRuntime({
   schema,
-  submitLabel,
+  submitLabel = '',
   onSubmit,
   footer,
+  initialAnswers,
+  fieldWarnings,
 }: {
   schema: FormSchema;
-  submitLabel: string;
+  submitLabel?: string;
   onSubmit: (answers: RuntimeAnswers) => void | Promise<void>;
   footer?: React.ReactNode;
+  initialAnswers?: RuntimeAnswers;
+  fieldWarnings?: Record<string, 'error' | 'warning'>;
 }): JSX.Element {
-  const [answers, setAnswers] = useState<RuntimeAnswers>({});
+  const [answers, setAnswers] = useState<RuntimeAnswers>(initialAnswers ?? {});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const visible = useMemo(() => visibleIds(schema, answers), [schema, answers]);
 
@@ -75,6 +79,7 @@ export function FormRuntime({
             error={errors[field.id]}
             onChange={setField}
             errors={errors}
+            warning={fieldWarnings?.[field.id]}
           />
         ))}
       </div>
@@ -93,6 +98,7 @@ function FieldRow({
   error,
   onChange,
   errors,
+  warning,
 }: {
   field: FormField;
   schema: FormSchema;
@@ -101,6 +107,7 @@ function FieldRow({
   error?: string;
   onChange: (fieldId: string, value: unknown) => void;
   errors: Record<string, string>;
+  warning?: 'error' | 'warning';
 }) {
   const label = fieldLabel(field);
 
@@ -130,6 +137,23 @@ function FieldRow({
       <Label htmlFor={field.id} className="pt-2 text-sm">
         {label}
         {field.required ? <span className="ml-0.5 text-destructive">*</span> : null}
+        {warning === 'error' ? (
+          <span
+            className="ml-1 inline-flex size-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground"
+            title={`error: ${label}`}
+            aria-label={`error: ${label}`}
+          >
+            !
+          </span>
+        ) : warning === 'warning' ? (
+          <span
+            className="ml-1 inline-flex size-4 items-center justify-center rounded-full bg-amber-400 text-[10px] font-bold text-white"
+            title={`warning: ${label}`}
+            aria-label={`warning: ${label}`}
+          >
+            ?
+          </span>
+        ) : null}
       </Label>
       <div>
         <FieldControl field={field} value={answers[field.id]} onChange={(v) => onChange(field.id, v)} />

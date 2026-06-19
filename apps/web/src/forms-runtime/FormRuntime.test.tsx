@@ -62,6 +62,38 @@ const schema: FormSchema = {
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
 
+// Minimal schema for preview-hook tests
+const previewSchema: FormSchema = {
+  id: 'p1',
+  name: 'Preview form',
+  versionLabel: null,
+  fhirVersion: null,
+  fhirResourceType: null,
+  fhirProfileUrl: null,
+  facilityId: null,
+  fields: [
+    {
+      id: 'name',
+      fhirPath: null,
+      displayLabel: 'Name',
+      description: null,
+      fieldType: 'text',
+      required: false,
+      enabled: true,
+      order: 1,
+      cardinality: { min: 0, max: '1' },
+    },
+  ],
+  sections: [],
+  targetPages: [],
+  languages: ['en'],
+  version: 1,
+  active: true,
+  status: 'draft',
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+};
+
 describe('FormRuntime', () => {
   it('required validation blocks submit and shows error', async () => {
     const onSubmit = vi.fn();
@@ -107,5 +139,37 @@ describe('FormRuntime', () => {
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({ patientId: 'P-001', addNotes: true, notes: 'Some note' }),
     );
+  });
+
+  it('initialAnswers pre-fills the field input', () => {
+    render(
+      <FormRuntime
+        schema={previewSchema}
+        submitLabel=""
+        footer={null}
+        onSubmit={() => {}}
+        initialAnswers={{ name: 'Seed' }}
+      />,
+    );
+    const input = screen.getByLabelText('Name') as HTMLInputElement;
+    expect(input.value).toBe('Seed');
+  });
+
+  it('fieldWarnings renders a per-field error marker', () => {
+    render(
+      <FormRuntime
+        schema={previewSchema}
+        submitLabel=""
+        footer={null}
+        onSubmit={() => {}}
+        fieldWarnings={{ name: 'error' }}
+      />,
+    );
+    // Expect an element whose title or aria-label contains 'error', or text content '!'
+    const marker =
+      screen.queryByTitle(/error/i) ??
+      screen.queryByLabelText(/error/i) ??
+      screen.queryByText('!');
+    expect(marker).not.toBeNull();
   });
 });
