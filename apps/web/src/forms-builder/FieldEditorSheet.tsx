@@ -1,5 +1,6 @@
 import * as React from 'react';
 import type { FormField, FormSchema } from '@openldr/forms/pure';
+import { OptionsEditor } from './field-editor/OptionsEditor';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -216,7 +217,11 @@ export function FieldEditorSheet({
           </div>
         </section>
 
-        {/* ── TODO Task 2: Options / Value-set section ─────────────── */}
+        {/* ── Options / Value-set section ──────────────────────────── */}
+        {(field.fieldType === 'select' || field.fieldType === 'multiselect') && (
+          <OptionsEditor field={field} onUpdate={onUpdate} />
+        )}
+
         {/* ── TODO Task 3: Codes section ───────────────────────────── */}
         {/* ── TODO Task 4: Translations section ───────────────────── */}
         {/* ── TODO Task 5: Mapping / FHIR section ─────────────────── */}
