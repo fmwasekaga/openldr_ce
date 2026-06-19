@@ -2,6 +2,7 @@ import * as React from 'react';
 import type { FormField, FormSchema } from '@openldr/forms/pure';
 import { OptionsEditor } from './field-editor/OptionsEditor';
 import { CodesEditor } from './field-editor/CodesEditor';
+import { TranslationsEditor } from './field-editor/TranslationsEditor';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -39,6 +40,7 @@ export interface FieldEditorSheetProps {
   field: FormField | null;
   allFields: FormField[];
   sections: FormSchema['sections'];
+  languages?: string[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onUpdate: (patch: Partial<FormField>) => void;
@@ -48,6 +50,7 @@ export function FieldEditorSheet({
   field,
   allFields,
   sections,
+  languages = [],
   open,
   onOpenChange,
   onUpdate,
@@ -226,7 +229,9 @@ export function FieldEditorSheet({
         {/* ── Codes section ────────────────────────────────────────── */}
         <CodesEditor field={field} onUpdate={onUpdate} />
 
-        {/* ── TODO Task 4: Translations section ───────────────────── */}
+        {/* ── Translations section ─────────────────────────────────── */}
+        <TranslationsEditor field={field} languages={languages} onUpdate={onUpdate} />
+
         {/* ── TODO Task 5: Mapping / FHIR section ─────────────────── */}
         {/* ── TODO Task 6: Visibility / conditions section ─────────── */}
       </SheetContent>
