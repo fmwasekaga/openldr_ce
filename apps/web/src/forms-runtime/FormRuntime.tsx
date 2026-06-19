@@ -83,7 +83,7 @@ export function FormRuntime({
           />
         ))}
       </div>
-      {footer ?? <Button type="submit">{submitLabel}</Button>}
+      {footer === undefined ? <Button type="submit">{submitLabel}</Button> : footer}
     </form>
   );
 }

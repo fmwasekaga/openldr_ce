@@ -140,7 +140,7 @@ export function LanguageControl({ languages, onChange }: LanguageControlProps): 
             type="button"
             aria-label="Languages"
             className={cn(
-              'inline-flex items-center gap-1.5 h-7 px-2 rounded-md border border-input bg-transparent text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors',
+              'inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-input bg-transparent text-xs text-muted-foreground shadow-sm hover:text-foreground hover:bg-accent transition-colors',
             )}
           >
             <Globe className="h-3.5 w-3.5" aria-hidden />
