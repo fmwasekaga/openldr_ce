@@ -1,20 +1,32 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { MoreHorizontal } from 'lucide-react';
 import { AppShell } from '@/shell/AppShell';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { createForm, getForm, publishForm, updateForm } from '../api';
 import { createDefaultFormSchema, newField } from './builderModel';
-import { LintSummary } from './LintSummary';
 import { CompareDialog } from './CompareDialog';
 import { useTemplateHistory } from './useTemplateHistory';
 import { useBuilderKeyboard } from './useBuilderKeyboard';
-import { lintFormSchema, normalizeFormSchema, type FieldType, type FormField, type FormSchema } from '@openldr/forms/pure';
+import { BuilderHeader } from './BuilderHeader';
+import { FieldListPane } from './FieldListPane';
+import { LanguageControl } from './LanguageControl';
+import {
+  lintFormSchema,
+  normalizeFormSchema,
+  type FieldType,
+  type FormField,
+  type FormSchema,
+} from '@openldr/forms/pure';
 
 const FIELD_TYPES: FieldType[] = [
   'text', 'number', 'date', 'datetime', 'boolean',
@@ -27,10 +39,8 @@ export function FormBuilderPage(): JSX.Element {
   const { id } = useParams();
   const navigate = useNavigate();
   const [formId, setFormId] = useState<string | null>(id ?? null);
-  const [name, setName] = useState('');
-  const [versionLabel, setVersionLabel] = useState('');
-  const [schema, setSchema] = useState<FormSchema>(() => createDefaultFormSchema('Untitled form'));
-  const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
+  const [schema, setSchema] = useState<FormSchema>(() => createDefaultFormSchema(''));
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(Boolean(id));
   const [error, setError] = useState<string | null>(null);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -38,6 +48,7 @@ export function FormBuilderPage(): JSX.Element {
 
   const history = useTemplateHistory<FormSchema>(() => schema);
 
+  // ── Load existing form ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
@@ -46,43 +57,93 @@ export function FormBuilderPage(): JSX.Element {
       .then((loaded) => {
         if (cancelled) return;
         setFormId(loaded.id);
-        setName(loaded.name);
-        setVersionLabel(loaded.versionLabel ?? '');
         setStatus(loaded.status);
         setSchema(normalizeFormSchema(loaded.schema));
       })
-      .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : String(err)); })
-      .finally(() => { if (!cancelled) setLoading(false); });
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
     return () => { cancelled = true; };
   }, [id]);
 
+  // ── Derived ─────────────────────────────────────────────────────────────────
   const issues = useMemo(() => lintFormSchema(schema), [schema]);
+  const hasErrors = issues.some((i) => i.severity === 'error');
 
   const selectedField = useMemo<FormField | null>(
-    () => schema.fields.find((f) => f.id === selectedFieldId) ?? null,
-    [schema.fields, selectedFieldId],
+    () => schema.fields.find((f) => f.id === selectedId) ?? null,
+    [schema.fields, selectedId],
   );
 
-  const addField = () => {
-    history.pushHistory();
-    const field = newField('New field', 'text');
-    setSchema((prev) => ({ ...prev, fields: [...prev.fields, field] }));
-    setSelectedFieldId(field.id);
+  // ── Schema helpers ───────────────────────────────────────────────────────────
+  const patchSchema = (patch: Partial<FormSchema>) => {
+    setSchema((prev) => ({ ...prev, ...patch }));
   };
 
   const updateField = (updates: Partial<FormField>) => {
-    if (!selectedFieldId) return;
+    if (!selectedId) return;
     history.recordEdit();
     setSchema((prev) => ({
       ...prev,
-      fields: prev.fields.map((f) => (f.id === selectedFieldId ? { ...f, ...updates } : f)),
+      fields: prev.fields.map((f) => (f.id === selectedId ? { ...f, ...updates } : f)),
     }));
+  };
+
+  const addField = () => {
+    history.pushHistory();
+    const nextOrder = schema.fields.reduce((max, f) => Math.max(max, f.order), -1) + 1;
+    const field = newField('New text field', 'text');
+    field.order = nextOrder;
+    setSchema((prev) => ({ ...prev, fields: [...prev.fields, field] }));
+    setSelectedId(field.id);
   };
 
   const deleteField = (fieldId: string) => {
     history.pushHistory();
     setSchema((prev) => ({ ...prev, fields: prev.fields.filter((f) => f.id !== fieldId) }));
-    if (selectedFieldId === fieldId) setSelectedFieldId(null);
+    if (selectedId === fieldId) setSelectedId(null);
+  };
+
+  const duplicateField = (fieldId: string) => {
+    const src = schema.fields.find((f) => f.id === fieldId);
+    if (!src) return;
+    history.pushHistory();
+    const copy = { ...src, id: `${src.id}-copy-${Date.now()}`, displayLabel: `${src.displayLabel} (copy)`, order: src.order + 0.5 };
+    setSchema((prev) => ({ ...prev, fields: [...prev.fields, copy] }));
+    setSelectedId(copy.id);
+  };
+
+  const toggleEnabled = (fieldId: string) => {
+    history.recordEdit();
+    setSchema((prev) => ({
+      ...prev,
+      fields: prev.fields.map((f) => (f.id === fieldId ? { ...f, enabled: !f.enabled } : f)),
+    }));
+  };
+
+  const toggleRequired = (fieldId: string) => {
+    history.recordEdit();
+    setSchema((prev) => ({
+      ...prev,
+      fields: prev.fields.map((f) => (f.id === fieldId ? { ...f, required: !f.required } : f)),
+    }));
+  };
+
+  const reorderFields = (activeId: string, overId: string) => {
+    history.pushHistory();
+    setSchema((prev) => {
+      const fields = [...prev.fields].sort((a, b) => a.order - b.order);
+      const activeIndex = fields.findIndex((f) => f.id === activeId);
+      const overIndex = fields.findIndex((f) => f.id === overId);
+      if (activeIndex === -1 || overIndex === -1) return prev;
+      const [moved] = fields.splice(activeIndex, 1);
+      fields.splice(overIndex, 0, moved);
+      const reordered = fields.map((f, i) => ({ ...f, order: i }));
+      return { ...prev, fields: reordered };
+    });
   };
 
   const applyHistory = (next: FormSchema | null) => { if (next) setSchema(next); };
@@ -94,17 +155,24 @@ export function FormBuilderPage(): JSX.Element {
     open: () => undefined,
     toggle: () => undefined,
     duplicate: () => undefined,
-    remove: () => { if (selectedFieldId) deleteField(selectedFieldId); },
+    remove: () => { if (selectedId) deleteField(selectedId); },
     selectAll: () => undefined,
     undo: () => applyHistory(history.undo()),
     redo: () => applyHistory(history.redo()),
-    clear: () => setSelectedFieldId(null),
+    clear: () => setSelectedId(null),
   });
 
+  // ── API actions ──────────────────────────────────────────────────────────────
   const save = async () => {
-    const effectiveName = name.trim() || 'Untitled form';
+    const effectiveName = schema.name.trim() || 'Untitled form';
     const nextSchema: FormSchema = { ...schema, name: effectiveName };
-    const payload = { name: effectiveName, versionLabel: versionLabel || null, fhirResourceType: null, targetPages: schema.targetPages, schema: nextSchema };
+    const payload = {
+      name: effectiveName,
+      versionLabel: schema.versionLabel ?? null,
+      fhirResourceType: schema.fhirResourceType ?? null,
+      targetPages: schema.targetPages,
+      schema: nextSchema,
+    };
     const saved = formId ? await updateForm(formId, payload) : await createForm(payload);
     setStatus(saved.status);
     if (!formId) {
@@ -115,62 +183,31 @@ export function FormBuilderPage(): JSX.Element {
 
   const publish = async () => {
     if (!formId) return;
-    const published = await publishForm(formId, { versionLabel: versionLabel || null });
+    const published = await publishForm(formId, { versionLabel: schema.versionLabel ?? null });
     setStatus(published.status);
   };
 
+  // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <AppShell title="Form Builder" fullBleed>
       <div className="flex min-h-0 flex-1 flex-col">
-        {/* Header */}
-        <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-          <Input
-            aria-label="Form name"
-            value={name}
-            placeholder="Untitled form"
-            onChange={(e) => setName(e.target.value)}
-            className="h-8 w-72 text-sm"
-          />
-          <Input
-            aria-label="Version label"
-            value={versionLabel}
-            placeholder="Version (optional)"
-            onChange={(e) => setVersionLabel(e.target.value)}
-            className="h-8 w-40 text-sm"
-          />
-          <div className="flex-1" />
-          <LintSummary issues={issues} />
-          {status ? (
-            <span className="rounded-md border border-border px-2 py-1 text-xs capitalize text-muted-foreground">{status}</span>
-          ) : null}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="h-8 w-8 p-0" aria-label="Builder actions">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => { void save(); }} disabled={loading}>
-                Save draft
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { void publish(); }} disabled={!formId}>
-                Publish
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCompareOpen(true)} disabled={!formId}>
-                Compare
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => applyHistory(history.undo())} disabled={!history.canUndo}>
-                Undo
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => applyHistory(history.redo())} disabled={!history.canRedo}>
-                Redo
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate('/forms')}>Back to forms</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        {/* Top: BuilderHeader */}
+        <BuilderHeader
+          schema={schema}
+          issues={issues}
+          canPublish={!hasErrors}
+          onChange={patchSchema}
+          onSave={() => { void save(); }}
+          onPublish={() => { void publish(); }}
+          onCompare={() => setCompareOpen(true)}
+          onAddField={addField}
+          languageSlot={
+            <LanguageControl
+              languages={schema.languages ?? []}
+              onChange={(langs) => patchSchema({ languages: langs })}
+            />
+          }
+        />
 
         {error ? (
           <div className="m-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
@@ -178,73 +215,47 @@ export function FormBuilderPage(): JSX.Element {
           </div>
         ) : null}
 
-        {/* Two-column body: field list + inline editor */}
+        {status ? (
+          <span className="mx-3 mt-1 inline-block rounded-md border border-border px-2 py-1 text-xs capitalize text-muted-foreground">
+            {status}
+          </span>
+        ) : null}
+
+        {/* Three-pane body */}
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          {/* Field list */}
-          <div className="flex w-72 flex-col border-r border-border">
-            <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-              <span className="flex-1 text-xs font-semibold text-muted-foreground">
-                Fields ({schema.fields.length})
-              </span>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-7 text-xs"
-                onClick={addField}
-                aria-label="Add field"
-              >
-                Add field
-              </Button>
-            </div>
-            <div className="min-h-0 flex-1 overflow-auto">
-              {schema.fields.length === 0 ? (
-                <p className="px-3 py-4 text-xs text-muted-foreground">No fields yet. Click &quot;Add field&quot; to start.</p>
-              ) : (
-                <ul>
-                  {schema.fields.map((field) => (
-                    <li key={field.id}>
-                      <button
-                        type="button"
-                        className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-accent ${selectedFieldId === field.id ? 'bg-accent font-medium' : ''}`}
-                        onClick={() => setSelectedFieldId(field.id)}
-                      >
-                        <span className="flex-1 truncate">{field.displayLabel}</span>
-                        <span className="shrink-0 text-muted-foreground">{field.fieldType}</span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-5 w-5 shrink-0 p-0 text-muted-foreground hover:text-destructive"
-                          aria-label={`Delete field ${field.displayLabel}`}
-                          onClick={(e) => { e.stopPropagation(); deleteField(field.id); }}
-                        >
-                          ×
-                        </Button>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+          {/* Left: FieldListPane */}
+          <div className="w-72 shrink-0 border-r border-border">
+            <FieldListPane
+              fields={schema.fields}
+              selectedFieldId={selectedId}
+              issues={issues}
+              onSelect={(f) => setSelectedId(f.id)}
+              onToggleEnabled={toggleEnabled}
+              onToggleRequired={toggleRequired}
+              onDuplicate={duplicateField}
+              onDelete={deleteField}
+              onReorder={reorderFields}
+            />
           </div>
 
-          {/* Inline field editor */}
+          {/* Right: inline properties for selected field */}
           <div className="flex-1 overflow-auto p-4">
             {selectedField ? (
               <div className="max-w-md space-y-4">
-                <h2 className="text-sm font-semibold">Edit field</h2>
+                <h2 className="text-sm font-semibold">Field properties</h2>
 
+                {/* Display Label */}
                 <div className="space-y-1">
                   <Label htmlFor="field-display-label" className="text-xs">Display Label</Label>
                   <Input
                     id="field-display-label"
-                    aria-label="Display label"
+                    aria-label="Field label"
                     value={selectedField.displayLabel}
                     onChange={(e) => updateField({ displayLabel: e.target.value })}
                   />
                 </div>
 
+                {/* Field Type */}
                 <div className="space-y-1">
                   <Label className="text-xs">Field Type</Label>
                   <Select
@@ -262,22 +273,27 @@ export function FormBuilderPage(): JSX.Element {
                   </Select>
                 </div>
 
+                {/* Required */}
                 <label className="flex items-center gap-2 text-xs">
                   <Checkbox
+                    aria-label="Required"
                     checked={selectedField.required}
                     onCheckedChange={(checked) => updateField({ required: Boolean(checked) })}
                   />
                   Required
                 </label>
 
+                {/* Enabled */}
                 <label className="flex items-center gap-2 text-xs">
                   <Checkbox
+                    aria-label="Enabled"
                     checked={selectedField.enabled}
                     onCheckedChange={(checked) => updateField({ enabled: Boolean(checked) })}
                   />
                   Enabled
                 </label>
 
+                {/* Delete */}
                 <Button
                   type="button"
                   variant="outline"
@@ -296,7 +312,12 @@ export function FormBuilderPage(): JSX.Element {
         </div>
       </div>
 
-      <CompareDialog formId={formId} current={schema} open={compareOpen} onOpenChange={setCompareOpen} />
+      <CompareDialog
+        formId={formId}
+        current={schema}
+        open={compareOpen}
+        onOpenChange={setCompareOpen}
+      />
     </AppShell>
   );
 }
