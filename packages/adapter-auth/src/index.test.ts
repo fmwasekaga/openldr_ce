@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { generateKeyPair, exportJWK, createLocalJWKSet, SignJWT, type JWTVerifyGetKey } from 'jose';
-import { createAuth } from './index';
+import { createAuth, KcError } from './index';
+import { IdentityAdminNotConfiguredError } from '@openldr/ports';
 
 const cfg = { issuerUrl: 'http://localhost:8080/realms/master' };
 
@@ -90,8 +91,6 @@ describe('verifyToken', () => {
   });
 });
 
-import { IdentityAdminNotConfiguredError } from '@openldr/ports';
-
 function adminFetchMock() {
   const calls: Array<{ url: string; method: string; body?: string; headers: Headers }> = [];
   const fetchFn = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
@@ -176,6 +175,6 @@ describe('identity admin actions', () => {
       return new Response('boom', { status: 500 });
     }) as unknown as typeof fetch;
     const auth = createAuth(adminCfg, { fetchFn });
-    await expect(auth.forceLogout('u1')).rejects.toThrow();
+    await expect(auth.forceLogout('u1')).rejects.toBeInstanceOf(KcError);
   });
 });
