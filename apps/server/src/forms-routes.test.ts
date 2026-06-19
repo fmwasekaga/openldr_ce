@@ -243,11 +243,50 @@ describe('forms routes', () => {
     const id = created.json().id as string;
     await app.inject({ method: 'POST', url: `/api/forms/${id}/publish`, payload: { versionLabel: 'v1' } });
 
-    for (const version of ['1abc', '1.5', '0']) {
+    for (const version of ['1abc', '1.5', '0', '2147483648']) {
       const response = await app.inject({ method: 'GET', url: `/api/forms/${id}/versions/${version}` });
       expect(response.statusCode).toBe(400);
       expect(response.json()).toMatchObject({ error: 'version must be a positive integer' });
     }
+  });
+
+  it('audits published status changes as publish events', async () => {
+    const app = Fastify();
+    const ctx = fakeCtx();
+    registerFormsRoutes(app, ctx);
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/forms',
+      payload: { name: 'Specimen intake', schema: sampleSchema, targetPages: ['forms'] },
+    });
+    const id = created.json().id as string;
+    ctx.audits.length = 0;
+
+    const published = await app.inject({ method: 'POST', url: `/api/forms/${id}/status`, payload: { status: 'published' } });
+    expect(published.statusCode).toBe(200);
+    expect(ctx.audits.map((event) => event.action)).toEqual(['form.publish']);
+    expect(ctx.audits[0]).toMatchObject({ entityId: id });
+  });
+
+  it('audits draft and archived status changes as status events', async () => {
+    const app = Fastify();
+    const ctx = fakeCtx();
+    registerFormsRoutes(app, ctx);
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/forms',
+      payload: { name: 'Specimen intake', schema: sampleSchema, targetPages: ['forms'] },
+    });
+    const id = created.json().id as string;
+    ctx.audits.length = 0;
+
+    const archived = await app.inject({ method: 'POST', url: `/api/forms/${id}/status`, payload: { status: 'archived' } });
+    expect(archived.statusCode).toBe(200);
+    const draft = await app.inject({ method: 'POST', url: `/api/forms/${id}/status`, payload: { status: 'draft' } });
+    expect(draft.statusCode).toBe(200);
+    expect(ctx.audits.map((event) => event.action)).toEqual(['form.status', 'form.status']);
   });
 
   it('records audit events for form lifecycle operations', async () => {

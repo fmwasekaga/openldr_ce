@@ -106,7 +106,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     }
     const before = await ctx.forms.get(id);
     const after = await ctx.forms.setStatus(id, status);
-    await audit('form.status', id, before, after);
+    await audit(status === 'published' ? 'form.publish' : 'form.status', id, before, after);
     return after;
   });
 
@@ -155,6 +155,10 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
       return { error: 'version must be a positive integer' };
     }
     const parsedVersion = Number(version);
+    if (!Number.isSafeInteger(parsedVersion) || parsedVersion > 2147483647) {
+      reply.code(400);
+      return { error: 'version must be a positive integer' };
+    }
     if (!(await ctx.forms.get(id))) {
       reply.code(404);
       return { error: 'not found' };
