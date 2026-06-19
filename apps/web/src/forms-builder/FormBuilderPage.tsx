@@ -271,7 +271,7 @@ export function FormBuilderPage(): JSX.Element {
         {/* Two-pane body (sheet overlays on field select) */}
         <div className="flex min-h-0 flex-1 overflow-hidden">
           {/* Left: FieldListPane (sections managed via the Sections popover inside it) */}
-          <div className="w-72 shrink-0 border-r border-border overflow-y-auto flex flex-col">
+          <div className="w-[26rem] shrink-0 border-r border-border overflow-hidden flex flex-col">
             <FieldListPane
               fields={schema.fields}
               sections={schema.sections}
@@ -294,8 +294,8 @@ export function FormBuilderPage(): JSX.Element {
             />
           </div>
 
-          {/* Right: PreviewPane */}
-          <div className="flex-1 overflow-y-auto p-4">
+          {/* Right: PreviewPane (manages its own edge-to-edge scroll) */}
+          <div className="flex-1 min-w-0 overflow-hidden">
             <PreviewPane schema={schema} />
           </div>
         </div>
