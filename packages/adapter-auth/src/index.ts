@@ -66,7 +66,9 @@ export function createAuth(cfg: AuthConfig, deps: AuthDeps = {}): AuthPort {
     })().catch((e) => { adminTokenPromise = undefined; throw e; });
     return (await adminTokenPromise).token;
   }
-  async function adminVoid(path: string, init: RequestInit): Promise<void> {
+  const PROVIDER_DEFAULT_ROLE = (name: string) => name.startsWith('default-roles') || name === 'offline_access' || name === 'uma_authorization';
+
+  async function adminFetchRaw(path: string, init: RequestInit): Promise<Response> {
     if (!adminConfigured) throw new IdentityAdminNotConfiguredError();
     if (!cfg.issuerUrl.includes('/realms/')) {
       throw new Error('OIDC_ISSUER_URL must be a Keycloak realm URL (containing /realms/) to use identity-admin actions');
@@ -79,25 +81,11 @@ export function createAuth(cfg: AuthConfig, deps: AuthDeps = {}): AuthPort {
     };
     let res = await doFetch(await getAdminToken());
     if (res.status === 401) { adminTokenPromise = undefined; res = await doFetch(await getAdminToken()); }
-    if (!res.ok) {
-      const detail = await res.text().catch(() => '');
-      throw new KcError(res.status, detail.slice(0, 500));
-    }
-  }
-
-  const PROVIDER_DEFAULT_ROLE = (name: string) => name.startsWith('default-roles') || name === 'offline_access' || name === 'uma_authorization';
-
-  async function adminFetchRaw(path: string, init: RequestInit): Promise<Response> {
-    if (!adminConfigured) throw new IdentityAdminNotConfiguredError();
-    const doFetch = async (tok: string) => {
-      const headers = new Headers(init.headers);
-      headers.set('Authorization', `Bearer ${tok}`);
-      if (init.body !== undefined && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
-      return fetchFn(`${adminBase}${path}`, { ...init, headers });
-    };
-    let res = await doFetch(await getAdminToken());
-    if (res.status === 401) { adminTokenPromise = undefined; res = await doFetch(await getAdminToken()); }
     return res;
+  }
+  async function adminVoid(path: string, init: RequestInit): Promise<void> {
+    const res = await adminFetchRaw(path, init);
+    if (!res.ok) { const d = await res.text().catch(() => ''); throw new KcError(res.status, d.slice(0, 500)); }
   }
   async function adminJson<T>(path: string, init: RequestInit = {}): Promise<T> {
     const res = await adminFetchRaw(path, init);
@@ -171,7 +159,7 @@ export function createAuth(cfg: AuthConfig, deps: AuthDeps = {}): AuthPort {
         const res = await adminFetchRaw(`/users`, { method: 'POST', body: JSON.stringify({ username: input.username, email: input.email ?? undefined, firstName: input.firstName ?? undefined, lastName: input.lastName ?? undefined, enabled: input.enabled ?? true }) });
         if (!res.ok) { const d = await res.text().catch(() => ''); throw new KcError(res.status, d.slice(0, 500)); }
         const loc = res.headers.get('Location');
-        const id = loc ? loc.split('/').pop()! : '';
+        const id = loc ? (loc.split('/').filter(Boolean).pop() ?? '') : '';
         if (!id) throw new KcError(500, 'provider did not return a user id');
         if (input.roles && input.roles.length > 0) await this.setRoles(id, input.roles);
         if (input.password) await adminVoid(`/users/${encodeURIComponent(id)}/reset-password`, { method: 'PUT', body: JSON.stringify({ type: 'password', value: input.password, temporary: input.temporaryPassword ?? true }) });
