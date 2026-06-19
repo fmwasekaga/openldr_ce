@@ -62,7 +62,7 @@ export function ResetPasswordDialog({ open, onOpenChange, user, onDone }: Props)
           </div>
           <div>
             <Label htmlFor="rp-confirm">{t('users.confirmPassword')}</Label>
-            <Input id="rp-confirm" type="text" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="off" />
+            <Input id="rp-confirm" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="off" />
           </div>
           <p className="text-[11px] text-muted-foreground">{t('users.resetPasswordHint')}</p>
         </div>

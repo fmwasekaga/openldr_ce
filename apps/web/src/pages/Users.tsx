@@ -61,16 +61,16 @@ export function Users() {
     }
   };
 
-  const doSendResetEmail = async (u: User) => {
+  const doSendResetEmail = useCallback(async (u: User) => {
     try { await sendUserResetEmail(u.id); setToast({ kind: 'ok', text: t('users.sendResetEmailToast', { username: u.username }) }); }
     catch (e) { setToast({ kind: 'err', text: t('users.errorToast', { error: e instanceof Error ? e.message : String(e) }) }); }
-  };
-  const doForceLogout = async () => {
+  }, [t]);
+  const doForceLogout = useCallback(async () => {
     if (!pendingLogout) return;
     const u = pendingLogout; setPendingLogout(null);
     try { await forceUserLogout(u.id); setToast({ kind: 'ok', text: t('users.forceSignOutToast', { username: u.username }) }); }
     catch (e) { setToast({ kind: 'err', text: t('users.errorToast', { error: e instanceof Error ? e.message : String(e) }) }); }
-  };
+  }, [pendingLogout, t]);
 
   const columns = useMemo<ColumnDef<User>[]>(() => [
     { id: 'username', labelKey: 'users.username', accessor: (u) => <span className="font-medium">{u.username}</span>, type: 'text', defaultVisible: true, sortable: true, filterable: true },
@@ -103,7 +103,7 @@ export function Users() {
                   {t('users.resetPassword')}{noAcct ? ` (${t('users.noProviderAccount')})` : ''}
                 </DropdownMenuItem>
                 <DropdownMenuItem disabled={noAcct} onClick={() => { if (!noAcct) void doSendResetEmail(u); }}>
-                  {t('users.sendResetEmail')}
+                  {t('users.sendResetEmail')}{noAcct ? ` (${t('users.noProviderAccount')})` : ''}
                 </DropdownMenuItem>
                 <DropdownMenuItem disabled={noAcct || isSelf} onClick={() => { if (!noAcct && !isSelf) setPendingLogout(u); }} className="text-destructive focus:text-destructive">
                   {t('users.forceSignOut')}{isSelf ? ` (${t('users.selfSuffix')})` : ''}

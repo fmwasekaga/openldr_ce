@@ -108,6 +108,7 @@ describe('Users page', () => {
     fireEvent.click(sendEmailItem);
 
     await waitFor(() => expect(sendUserResetEmail).toHaveBeenCalledWith('u4'));
+    expect(await screen.findByText(/reset email sent to ada/i)).toBeTruthy();
   });
 
   it('opens "New user" from the toolbar dropdown, fills the dialog, and calls createUser', async () => {

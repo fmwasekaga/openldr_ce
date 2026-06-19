@@ -33,4 +33,11 @@ describe('ResetPasswordDialog', () => {
     await waitFor(() => expect(resetUserPassword).toHaveBeenCalledWith('u1', 'abc', true));
     expect(onDone).toHaveBeenCalled();
   });
+
+  it('rejects an empty password without calling the api', async () => {
+    render(<ResetPasswordDialog open user={user} onOpenChange={() => {}} onDone={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: /reset password/i }));
+    await waitFor(() => expect(screen.getByText('Password is required.')).toBeTruthy());
+    expect(resetUserPassword).not.toHaveBeenCalled();
+  });
 });
