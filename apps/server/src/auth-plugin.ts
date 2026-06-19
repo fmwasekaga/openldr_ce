@@ -41,7 +41,7 @@ export function registerAuth(app: FastifyInstance<any, any, any, any>, ctx: AppC
   app.addHook('onRequest', async (req: FastifyRequest, reply: FastifyReply) => {
     const url = req.raw.url ?? '';
     // Only /api/* is protected. /health and the static SPA stay public.
-    if (!url.startsWith('/api')) return;
+    if (url !== '/api' && !url.startsWith('/api/')) return;
 
     const token = bearer(req);
     if (!token) {
@@ -53,7 +53,7 @@ export function registerAuth(app: FastifyInstance<any, any, any, any>, ctx: AppC
       return reply.send({ error: 'authentication required' });
     }
 
-    let claims;
+    let claims: Awaited<ReturnType<typeof ctx.auth.verifyToken>>;
     try {
       claims = await ctx.auth.verifyToken(token);
     } catch (e) {

@@ -70,4 +70,20 @@ describe('registerAuth', () => {
     const res = await app.inject({ method: 'GET', url: '/api/probe', headers: { authorization: 'Bearer good' } });
     expect(res.statusCode).toBe(403);
   });
+
+  it('401s when syncFromClaims throws', async () => {
+    const c = ctx({ verify: async () => ({ sub: 's1' }) });
+    // override users.syncFromClaims to throw
+    (c.users as unknown as { syncFromClaims: () => Promise<unknown> }).syncFromClaims = async () => { throw new Error('db down'); };
+    const app = await appWith(c);
+    const res = await app.inject({ method: 'GET', url: '/api/probe', headers: { authorization: 'Bearer good' } });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('does not downgrade a credentialed request when bypass is on', async () => {
+    const app = await appWith(ctx({ bypass: true, verify: async () => ({ sub: 's1' }) }));
+    const res = await app.inject({ method: 'GET', url: '/api/probe', headers: { authorization: 'Bearer good' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().user.username).toBe('ada'); // resolved via verifyToken+syncFromClaims, NOT the dev actor
+  });
 });
