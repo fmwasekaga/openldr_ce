@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -26,6 +27,7 @@ function sortedRoles(roles: string[]): string[] {
 }
 
 export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProps) {
+  const { t } = useTranslation();
   const isEdit = user !== null;
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -90,8 +92,8 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-xl">
         <SheetHeader className="border-b border-border px-6 py-4">
-          <SheetTitle>{isEdit ? 'Edit user' : 'New user'}</SheetTitle>
-          <SheetDescription>{isEdit ? 'Update profile, roles, and status.' : 'Create a local operator account.'}</SheetDescription>
+          <SheetTitle>{isEdit ? t('users.editUserTitle') : t('users.newUserTitle')}</SheetTitle>
+          <SheetDescription>{isEdit ? t('users.editUserDesc') : t('users.newUserDesc')}</SheetDescription>
         </SheetHeader>
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
@@ -163,9 +165,9 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
         </div>
 
         <SheetFooter className="border-t border-border px-6 py-4 sm:justify-end">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>{t('common.cancel')}</Button>
           <Button onClick={() => { void save(); }} disabled={saving || !canSave}>
-            {saving ? 'Saving...' : isEdit ? 'Save' : 'Create'}
+            {saving ? t('common.loading') : isEdit ? t('common.save') : t('common.create')}
           </Button>
         </SheetFooter>
       </SheetContent>
