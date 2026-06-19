@@ -12,8 +12,9 @@ import {
   ActiveFilterChips, DataTableToolbar, applyTableState, useTableState, type ColumnDef,
 } from '@/components/data-table';
 import { useAuth } from '@/auth/AuthProvider';
-import { listUsers, setUserStatus, type User } from '@/api';
+import { listUsers, setUserStatus, sendUserResetEmail, forceUserLogout, type User } from '@/api';
 import { UserDialog } from '@/users/UserDialog';
+import { ResetPasswordDialog } from '@/users/ResetPasswordDialog';
 
 function formatDate(iso: string | null): string {
   if (!iso) return '-';
@@ -30,6 +31,8 @@ export function Users() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
   const [pendingToggle, setPendingToggle] = useState<User | null>(null);
+  const [resetting, setResetting] = useState<User | null>(null);
+  const [pendingLogout, setPendingLogout] = useState<User | null>(null);
   const [search, setSearch] = useState('');
 
   const load = useCallback(async () => {
@@ -58,6 +61,17 @@ export function Users() {
     }
   };
 
+  const doSendResetEmail = async (u: User) => {
+    try { await sendUserResetEmail(u.id); setToast({ kind: 'ok', text: t('users.sendResetEmailToast', { username: u.username }) }); }
+    catch (e) { setToast({ kind: 'err', text: t('users.errorToast', { error: e instanceof Error ? e.message : String(e) }) }); }
+  };
+  const doForceLogout = async () => {
+    if (!pendingLogout) return;
+    const u = pendingLogout; setPendingLogout(null);
+    try { await forceUserLogout(u.id); setToast({ kind: 'ok', text: t('users.forceSignOutToast', { username: u.username }) }); }
+    catch (e) { setToast({ kind: 'err', text: t('users.errorToast', { error: e instanceof Error ? e.message : String(e) }) }); }
+  };
+
   const columns = useMemo<ColumnDef<User>[]>(() => [
     { id: 'username', labelKey: 'users.username', accessor: (u) => <span className="font-medium">{u.username}</span>, type: 'text', defaultVisible: true, sortable: true, filterable: true },
     { id: 'fullName', labelKey: 'users.fullName', accessor: (u) => u.displayName || <span className="text-muted-foreground">-</span>, type: 'text', defaultVisible: true, sortable: true, filterable: true },
@@ -73,6 +87,7 @@ export function Users() {
     { id: 'lastLogin', labelKey: 'users.lastLogin', accessor: (u) => <span className="text-xs text-muted-foreground">{formatDate(u.lastLoginAt)}</span>, type: 'text', defaultVisible: true, sortable: true, filterable: false, headClassName: 'w-40' },
     { id: '__actions', labelKey: 'common.actions', accessor: (u) => {
         const isSelf = !!me && me.id === u.id;
+        const noAcct = !u.subject;
         return (
           <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
             <DropdownMenu>
@@ -83,6 +98,15 @@ export function Users() {
                 <DropdownMenuItem onClick={() => setEditing(u)}>{t('users.edit')}</DropdownMenuItem>
                 <DropdownMenuItem disabled={isSelf} onClick={() => { if (!isSelf) setPendingToggle(u); }} className={u.status === 'active' ? 'text-destructive focus:text-destructive' : ''}>
                   {u.status === 'active' ? t('users.disable') : t('users.enable')}{isSelf ? ` (${t('users.selfSuffix')})` : ''}
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={noAcct} onClick={() => { if (!noAcct) setResetting(u); }}>
+                  {t('users.resetPassword')}{noAcct ? ` (${t('users.noProviderAccount')})` : ''}
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={noAcct} onClick={() => { if (!noAcct) void doSendResetEmail(u); }}>
+                  {t('users.sendResetEmail')}
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={noAcct || isSelf} onClick={() => { if (!noAcct && !isSelf) setPendingLogout(u); }} className="text-destructive focus:text-destructive">
+                  {t('users.forceSignOut')}{isSelf ? ` (${t('users.selfSuffix')})` : ''}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -176,6 +200,16 @@ export function Users() {
           confirmLabel={pendingToggle?.status === 'active' ? t('users.disable') : t('users.enable')}
           destructive={pendingToggle?.status === 'active'}
           onConfirm={() => { void doToggle(); }}
+        />
+        <ResetPasswordDialog open={resetting !== null} onOpenChange={(o) => { if (!o) setResetting(null); }} user={resetting} onDone={(u) => setToast({ kind: 'ok', text: t('users.resetPasswordSavedToast', { username: u.username }) })} />
+        <ConfirmDialog
+          open={pendingLogout !== null}
+          onOpenChange={(o) => { if (!o) setPendingLogout(null); }}
+          title={t('users.forceSignOutTitle', { username: pendingLogout?.username ?? '' })}
+          description={t('users.forceSignOutDescription')}
+          confirmLabel={t('users.forceSignOut')}
+          destructive
+          onConfirm={() => { void doForceLogout(); }}
         />
       </div>
     </AppShell>
