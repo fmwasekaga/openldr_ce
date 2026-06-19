@@ -81,4 +81,11 @@ describe('verifyToken', () => {
     const token = await sign({}, { sub: null });
     await expect(auth.verifyToken(token)).rejects.toThrow(/sub/);
   });
+
+  it('rejects a token with no audience when audience is configured', async () => {
+    const { sign, keySet } = await localKeySet();
+    const auth = createAuth({ issuerUrl: issuer, audience: 'openldr-api' }, { keySet });
+    const token = await sign({}); // no aud claim
+    await expect(auth.verifyToken(token)).rejects.toThrow();
+  });
 });
