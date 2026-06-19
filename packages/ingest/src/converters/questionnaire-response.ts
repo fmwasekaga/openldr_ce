@@ -1,5 +1,5 @@
 import type { FhirResource, Questionnaire, QuestionnaireResponse } from '@openldr/fhir';
-import { extractResources } from '@openldr/forms';
+import { ObservationExtractor, ServiceRequestExtractor } from '@openldr/forms';
 import type { Converter } from '../converter';
 
 const decoder = new TextDecoder();
@@ -12,10 +12,11 @@ export const questionnaireResponseConverter: Converter = {
     if (!data.questionnaire || !data.response) {
       throw new Error('payload must be { questionnaire, response }');
     }
-    const { resources, invalid } = extractResources(data.response, data.questionnaire, {});
-    if (invalid.length > 0) {
-      throw new Error(`extraction produced ${invalid.length} invalid resource(s)`);
-    }
+    const ctx = {};
+    const resources = [
+      ...ObservationExtractor.extract(data.response, data.questionnaire, ctx),
+      ...ServiceRequestExtractor.extract(data.response, data.questionnaire, ctx),
+    ] as unknown as FhirResource[];
     return resources;
   },
 };

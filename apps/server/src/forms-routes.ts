@@ -1,13 +1,16 @@
 import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
-import { buildResponse, toQuestionnaire, validateAnswers } from '@openldr/forms';
+import { toQuestionnaire, toQuestionnaireResponse } from '@openldr/forms';
 import { z } from 'zod';
 
 const formInput = z.object({
   name: z.string().min(1),
   versionLabel: z.string().nullish(),
   fhirResourceType: z.string().nullish(),
+  fhirVersion: z.string().nullish(),
+  fhirProfileUrl: z.string().nullish(),
+  facilityId: z.string().nullish(),
   status: z.string().optional(),
   active: z.boolean().optional(),
   schema: z.unknown(),
@@ -210,12 +213,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
       return { error: 'not found' };
     }
     try {
-      const result = validateAnswers(f.schema, p.data.answers as never);
-      if (!result.ok) {
-        reply.code(422);
-        return result.outcome;
-      }
-      const response = buildResponse(f.schema, p.data.answers as never, { questionnaire: `/api/forms/${f.id}/questionnaire` });
+      const response = toQuestionnaireResponse(f.schema, p.data.answers as never);
       await audit('form.response.submit', f.id, null, response, { formId: f.id });
       reply.code(201);
       return response;

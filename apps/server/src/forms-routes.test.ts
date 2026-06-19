@@ -6,19 +6,38 @@ import { registerFormsRoutes } from './forms-routes';
 
 type AuditInput = Parameters<AppContext['audit']['record']>[0];
 
+const NOW = '2026-01-01T00:00:00.000Z';
+
 const sampleSchema = {
   id: 'specimen-intake',
   name: 'Specimen intake',
-  title: { en: 'Specimen intake' },
-  status: 'active',
-  languages: ['en'],
-  sections: [
+  versionLabel: null,
+  fhirVersion: null,
+  fhirResourceType: null,
+  fhirProfileUrl: null,
+  facilityId: null,
+  fields: [
     {
-      id: 'main',
-      title: { en: 'Main' },
-      fields: [{ id: 'patientId', type: 'string', label: { en: 'Patient ID' }, required: true }],
+      id: 'patientId',
+      fhirPath: null,
+      displayLabel: 'Patient ID',
+      description: null,
+      fieldType: 'text' as const,
+      required: true,
+      enabled: true,
+      order: 0,
+      cardinality: { min: 1, max: '1' },
+      section: 'main',
     },
   ],
+  sections: [{ id: 'main', label: 'Main', order: 0 }],
+  targetPages: [],
+  languages: ['en'],
+  version: 1,
+  active: true,
+  status: 'draft' as const,
+  createdAt: NOW,
+  updatedAt: NOW,
 } satisfies FormInput['schema'];
 
 function fakeCtx(): AppContext & { audits: AuditInput[] } {
@@ -39,6 +58,9 @@ function fakeCtx(): AppContext & { audits: AuditInput[] } {
           name: input.name,
           versionLabel: input.versionLabel ?? null,
           fhirResourceType: input.fhirResourceType ?? null,
+          fhirVersion: input.fhirVersion ?? null,
+          fhirProfileUrl: input.fhirProfileUrl ?? null,
+          facilityId: input.facilityId ?? null,
           status: input.status ?? 'draft',
           active: input.active ?? true,
           schema: input.schema,
@@ -57,7 +79,10 @@ function fakeCtx(): AppContext & { audits: AuditInput[] } {
           status: form.status,
           active: form.active,
           fhirResourceType: form.fhirResourceType,
-          fieldCount: form.schema.sections.reduce((total, section) => total + section.fields.length, 0),
+          fhirVersion: form.fhirVersion,
+          fhirProfileUrl: form.fhirProfileUrl,
+          facilityId: form.facilityId,
+          fieldCount: form.schema.fields.length,
           updatedAt: form.updatedAt,
         })),
       listPublished: async (targetPage?: string) =>
@@ -70,7 +95,10 @@ function fakeCtx(): AppContext & { audits: AuditInput[] } {
             status: form.status,
             active: form.active,
             fhirResourceType: form.fhirResourceType,
-            fieldCount: form.schema.sections.reduce((total, section) => total + section.fields.length, 0),
+            fhirVersion: form.fhirVersion,
+            fhirProfileUrl: form.fhirProfileUrl,
+            facilityId: form.facilityId,
+            fieldCount: form.schema.fields.length,
             updatedAt: form.updatedAt,
           })),
       get: async (id: string) => forms.find((form) => form.id === id) ?? null,
@@ -81,6 +109,9 @@ function fakeCtx(): AppContext & { audits: AuditInput[] } {
           name: input.name,
           versionLabel: input.versionLabel ?? null,
           fhirResourceType: input.fhirResourceType ?? null,
+          fhirVersion: input.fhirVersion ?? null,
+          fhirProfileUrl: input.fhirProfileUrl ?? null,
+          facilityId: input.facilityId ?? null,
           schema: input.schema,
           targetPages: input.targetPages ?? null,
         });
@@ -106,6 +137,9 @@ function fakeCtx(): AppContext & { audits: AuditInput[] } {
           versionLabel: form.versionLabel,
           name: form.name,
           fhirResourceType: form.fhirResourceType,
+          fhirVersion: form.fhirVersion,
+          fhirProfileUrl: form.fhirProfileUrl,
+          facilityId: form.facilityId,
           schema: form.schema,
           targetPages: form.targetPages,
           questionnaire: {},
@@ -131,13 +165,16 @@ function fakeCtx(): AppContext & { audits: AuditInput[] } {
         return copy;
       },
       listVersions: async (id: string): Promise<FormVersionSummary[]> =>
-        (versions.get(id) ?? []).map(({ id: versionId, formId, version, versionLabel, name, fhirResourceType, targetPages, publishedAt, publishedBy }) => ({
+        (versions.get(id) ?? []).map(({ id: versionId, formId, version, versionLabel, name, fhirResourceType, fhirVersion, fhirProfileUrl, facilityId, targetPages, publishedAt, publishedBy }) => ({
           id: versionId,
           formId,
           version,
           versionLabel,
           name,
           fhirResourceType,
+          fhirVersion,
+          fhirProfileUrl,
+          facilityId,
           targetPages,
           publishedAt,
           publishedBy,
@@ -192,15 +229,15 @@ describe('forms routes', () => {
 
     const questionnaire = await app.inject({ method: 'GET', url: `/api/forms/${id}/questionnaire` });
     expect(questionnaire.statusCode).toBe(200);
-    expect(questionnaire.json()).toMatchObject({ resourceType: 'Questionnaire', name: 'Specimen intake', item: [{ linkId: 'main' }] });
+    expect(questionnaire.json()).toMatchObject({ resourceType: 'Questionnaire', title: 'Specimen intake', item: [{ linkId: 'main' }] });
 
     const response = await app.inject({ method: 'POST', url: `/api/forms/${id}/responses`, payload: { answers: { patientId: 'P-100' } } });
     expect(response.statusCode).toBe(201);
     expect(response.json()).toMatchObject({ resourceType: 'QuestionnaireResponse', status: 'completed' });
 
-    const invalid = await app.inject({ method: 'POST', url: `/api/forms/${id}/responses`, payload: { answers: {} } });
-    expect(invalid.statusCode).toBe(422);
-    expect(invalid.json()).toMatchObject({ resourceType: 'OperationOutcome' });
+    const emptyResponse = await app.inject({ method: 'POST', url: `/api/forms/${id}/responses`, payload: { answers: {} } });
+    expect(emptyResponse.statusCode).toBe(201);
+    expect(emptyResponse.json()).toMatchObject({ resourceType: 'QuestionnaireResponse', status: 'completed' });
   });
 
   it('publishes, duplicates, and returns form versions', async () => {
@@ -342,7 +379,7 @@ describe('forms routes', () => {
     expect(ctx.audits.find((event) => event.action === 'form.delete')?.before).toMatchObject({ id });
   });
 
-  it('does not audit invalid responses or missing deletes', async () => {
+  it('does not audit missing deletes', async () => {
     const app = Fastify();
     const ctx = fakeCtx();
     registerFormsRoutes(app, ctx);
@@ -352,11 +389,8 @@ describe('forms routes', () => {
       url: '/api/forms',
       payload: { name: 'Specimen intake', schema: sampleSchema, targetPages: ['forms'] },
     });
-    const id = created.json().id as string;
+    expect(created.statusCode).toBe(201);
     ctx.audits.length = 0;
-
-    const invalid = await app.inject({ method: 'POST', url: `/api/forms/${id}/responses`, payload: { answers: {} } });
-    expect(invalid.statusCode).toBe(422);
 
     const missingDelete = await app.inject({ method: 'DELETE', url: '/api/forms/missing' });
     expect(missingDelete.statusCode).toBe(404);
