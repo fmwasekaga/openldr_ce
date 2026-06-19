@@ -55,6 +55,8 @@ export const ConfigSchema = z
     // OIDC issuer (Keycloak realm base URL).
     OIDC_ISSUER_URL: z.string().url(),
     OIDC_AUDIENCE: z.string().min(1).optional(),
+    KEYCLOAK_ADMIN_CLIENT_ID: z.string().min(1).optional(),
+    KEYCLOAK_ADMIN_CLIENT_SECRET: z.string().min(1).optional(),
 
     // Non-production auth bypass: when on and a request has no bearer token, the
     // server injects a dev admin actor. MUST be off in production (enforced below).

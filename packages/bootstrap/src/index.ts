@@ -95,7 +95,12 @@ export interface AppContext {
 export async function createAppContext(cfg: Config): Promise<AppContext> {
   const logger = createLogger({ level: cfg.LOG_LEVEL });
 
-  const auth = createAuth({ issuerUrl: cfg.OIDC_ISSUER_URL, audience: cfg.OIDC_AUDIENCE });
+  const auth = createAuth({
+    issuerUrl: cfg.OIDC_ISSUER_URL,
+    audience: cfg.OIDC_AUDIENCE,
+    adminClientId: cfg.KEYCLOAK_ADMIN_CLIENT_ID,
+    adminClientSecret: cfg.KEYCLOAK_ADMIN_CLIENT_SECRET,
+  });
   const blob = createS3Bucket({
     endpoint: cfg.S3_ENDPOINT,
     region: cfg.S3_REGION,
