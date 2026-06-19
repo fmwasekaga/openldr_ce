@@ -153,6 +153,15 @@ export interface CreateUserInput {
 }
 export const USER_ROLES = ['lab_admin', 'lab_manager', 'lab_technician', 'data_analyst', 'system_auditor'] as const;
 export const listUsers = (): Promise<User[]> => apiGet('/api/users', 'list users');
+
+export interface CurrentUser {
+  id: string;
+  username: string;
+  displayName: string | null;
+  roles: string[];
+}
+export const getMe = (): Promise<CurrentUser> =>
+  authFetch('/api/me').then((res) => okJson<CurrentUser>(res, 'get current user'));
 export const createUser = (i: CreateUserInput): Promise<User> =>
   authFetch('/api/users', jbody(i, 'POST')).then((r) => okJson<User>(r, 'create user'));
 export const updateUser = (id: string, i: { displayName?: string | null; email?: string | null; roles?: string[] }): Promise<User> =>
