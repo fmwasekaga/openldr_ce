@@ -4,30 +4,24 @@ import { MoreHorizontal } from 'lucide-react';
 import { AppShell } from '@/shell/AppShell';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { createForm, getForm, publishForm, updateForm, type FormDefinition } from '../api';
-import { createDefaultFormSchema, newField, newSection } from './builderModel';
+import { createForm, getForm, publishForm, updateForm } from '../api';
+import { createDefaultFormSchema, newField } from './builderModel';
 import { LintSummary } from './LintSummary';
-import { FieldPalette } from './FieldPalette';
-import { BuilderCanvas } from './BuilderCanvas';
-import { PropertiesSheet } from './PropertiesSheet';
-import { BulkActionBar } from './BulkActionBar';
 import { CompareDialog } from './CompareDialog';
 import { useTemplateHistory } from './useTemplateHistory';
 import { useBuilderKeyboard } from './useBuilderKeyboard';
-import { FormRuntime } from '@/forms-runtime/FormRuntime';
-import type { RuntimeFormSchema } from '@/forms-runtime/types';
 import { lintFormSchema, normalizeFormSchema, type FieldType, type FormField, type FormSchema } from '@openldr/forms/pure';
 
-function reorder<T>(items: T[], fromId: string, toId: string, idOf: (item: T) => string): T[] {
-  const from = items.findIndex((item) => idOf(item) === fromId);
-  const to = items.findIndex((item) => idOf(item) === toId);
-  if (from === -1 || to === -1) return items;
-  const copy = [...items];
-  const [moved] = copy.splice(from, 1);
-  copy.splice(to, 0, moved);
-  return copy;
-}
+const FIELD_TYPES: FieldType[] = [
+  'text', 'number', 'date', 'datetime', 'boolean',
+  'select', 'multiselect', 'phone', 'email', 'address',
+  'identifier', 'attachment', 'organism', 'antibiogram',
+  'reference', 'facility', 'group',
+];
 
 export function FormBuilderPage(): JSX.Element {
   const { id } = useParams();
@@ -35,13 +29,10 @@ export function FormBuilderPage(): JSX.Element {
   const [formId, setFormId] = useState<string | null>(id ?? null);
   const [name, setName] = useState('');
   const [versionLabel, setVersionLabel] = useState('');
-  const [targetPages, setTargetPages] = useState<string[]>(['forms']);
   const [schema, setSchema] = useState<FormSchema>(() => createDefaultFormSchema('Untitled form'));
-  const [selectedFieldIds, setSelectedFieldIds] = useState<Set<string>>(new Set());
-  const [search, setSearch] = useState('');
+  const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
   const [loading, setLoading] = useState(Boolean(id));
   const [error, setError] = useState<string | null>(null);
-  const [previewMode, setPreviewMode] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
@@ -52,12 +43,11 @@ export function FormBuilderPage(): JSX.Element {
     let cancelled = false;
     setLoading(true);
     void getForm(id)
-      .then((loaded: FormDefinition) => {
+      .then((loaded) => {
         if (cancelled) return;
         setFormId(loaded.id);
         setName(loaded.name);
         setVersionLabel(loaded.versionLabel ?? '');
-        setTargetPages(loaded.targetPages ?? ['forms']);
         setStatus(loaded.status);
         setSchema(normalizeFormSchema(loaded.schema));
       })
@@ -68,104 +58,34 @@ export function FormBuilderPage(): JSX.Element {
 
   const issues = useMemo(() => lintFormSchema(schema), [schema]);
 
-  const selectedField = useMemo<FormField | null>(() => {
-    const targetId = [...selectedFieldIds][0];
-    if (!targetId) return null;
-    for (const section of schema.sections) {
-      for (const field of section.fields) if (field.id === targetId) return field;
-    }
-    return null;
-  }, [schema, selectedFieldIds]);
+  const selectedField = useMemo<FormField | null>(
+    () => schema.fields.find((f) => f.id === selectedFieldId) ?? null,
+    [schema.fields, selectedFieldId],
+  );
 
-  const allFields = useMemo<FormField[]>(() => schema.sections.flatMap((section) => section.fields), [schema]);
-
-  const filteredSections = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) return schema.sections;
-    return schema.sections.map((section) => ({
-      ...section,
-      fields: section.fields.filter((field) => field.label.en.toLowerCase().includes(query) || field.id.toLowerCase().includes(query)),
-    }));
-  }, [schema, search]);
-
-  const addField = (type: FieldType) => {
+  const addField = () => {
     history.pushHistory();
-    setSchema((prev) => {
-      const field = newField(`New ${type} field`, type);
-      const sections = prev.sections.length > 0 ? prev.sections : [newSection('Main')];
-      return { ...prev, sections: sections.map((section, index) => (index === 0 ? { ...section, fields: [...section.fields, field] } : section)) };
-    });
-    setSelectedFieldIds(new Set());
+    const field = newField('New field', 'text');
+    setSchema((prev) => ({ ...prev, fields: [...prev.fields, field] }));
+    setSelectedFieldId(field.id);
   };
 
-  const addSection = () => {
-    history.pushHistory();
-    setSchema((prev) => ({ ...prev, sections: [...prev.sections, newSection(`Section ${prev.sections.length + 1}`)] }));
-  };
-
-  const selectField = (field: FormField, event: React.MouseEvent) => {
-    const additive = event.ctrlKey || event.metaKey;
-    setSelectedFieldIds((prev) => {
-      const next = new Set(additive ? prev : []);
-      if (next.has(field.id)) next.delete(field.id);
-      else next.add(field.id);
-      return next;
-    });
-  };
-
-  const updateSelectedField = (updates: Partial<FormField>) => {
-    const selected = [...selectedFieldIds][0];
-    if (!selected) return;
+  const updateField = (updates: Partial<FormField>) => {
+    if (!selectedFieldId) return;
     history.recordEdit();
     setSchema((prev) => ({
       ...prev,
-      sections: prev.sections.map((section) => ({
-        ...section,
-        fields: section.fields.map((field) => (field.id === selected ? { ...field, ...updates } : field)),
-      })),
+      fields: prev.fields.map((f) => (f.id === selectedFieldId ? { ...f, ...updates } : f)),
     }));
-    if (updates.id && updates.id !== selected) setSelectedFieldIds(new Set([updates.id]));
   };
 
-  const deleteFieldsByIds = (ids: Set<string>) => {
-    if (ids.size === 0) return;
+  const deleteField = (fieldId: string) => {
     history.pushHistory();
-    setSchema((prev) => ({
-      ...prev,
-      sections: prev.sections.map((section) => ({ ...section, fields: section.fields.filter((field) => !ids.has(field.id)) })),
-    }));
-    setSelectedFieldIds(new Set());
+    setSchema((prev) => ({ ...prev, fields: prev.fields.filter((f) => f.id !== fieldId) }));
+    if (selectedFieldId === fieldId) setSelectedFieldId(null);
   };
 
-  const duplicateFieldsByIds = (ids: Set<string>) => {
-    if (ids.size === 0) return;
-    history.pushHistory();
-    setSchema((prev) => ({
-      ...prev,
-      sections: prev.sections.map((section) => ({
-        ...section,
-        fields: section.fields.flatMap((field) =>
-          ids.has(field.id) ? [field, { ...field, id: `${field.id}-copy`, label: { ...field.label, en: `${field.label.en} copy` } }] : [field],
-        ),
-      })),
-    }));
-  };
-
-  const reorderField = (activeId: string, overId: string) => {
-    history.pushHistory();
-    setSchema((prev) => ({
-      ...prev,
-      sections: prev.sections.map((section) =>
-        section.fields.some((field) => field.id === activeId) && section.fields.some((field) => field.id === overId)
-          ? { ...section, fields: reorder(section.fields, activeId, overId, (field) => field.id) }
-          : section,
-      ),
-    }));
-  };
-
-  const applyHistory = (next: FormSchema | null) => {
-    if (next) setSchema(next);
-  };
+  const applyHistory = (next: FormSchema | null) => { if (next) setSchema(next); };
 
   useBuilderKeyboard({
     focusSearch: () => document.getElementById('builder-field-search')?.focus(),
@@ -173,18 +93,18 @@ export function FormBuilderPage(): JSX.Element {
     previous: () => undefined,
     open: () => undefined,
     toggle: () => undefined,
-    duplicate: () => duplicateFieldsByIds(selectedFieldIds),
-    remove: () => deleteFieldsByIds(selectedFieldIds),
-    selectAll: () => setSelectedFieldIds(new Set(schema.sections.flatMap((section) => section.fields.map((field) => field.id)))),
+    duplicate: () => undefined,
+    remove: () => { if (selectedFieldId) deleteField(selectedFieldId); },
+    selectAll: () => undefined,
     undo: () => applyHistory(history.undo()),
     redo: () => applyHistory(history.redo()),
-    clear: () => setSelectedFieldIds(new Set()),
+    clear: () => setSelectedFieldId(null),
   });
 
   const save = async () => {
     const effectiveName = name.trim() || 'Untitled form';
-    const nextSchema = { ...schema, name: effectiveName, title: { ...schema.title, en: effectiveName } };
-    const payload = { name: effectiveName, versionLabel: versionLabel || null, fhirResourceType: null, targetPages, schema: nextSchema };
+    const nextSchema: FormSchema = { ...schema, name: effectiveName };
+    const payload = { name: effectiveName, versionLabel: versionLabel || null, fhirResourceType: null, targetPages: schema.targetPages, schema: nextSchema };
     const saved = formId ? await updateForm(formId, payload) : await createForm(payload);
     setStatus(saved.status);
     if (!formId) {
@@ -202,11 +122,27 @@ export function FormBuilderPage(): JSX.Element {
   return (
     <AppShell title="Form Builder" fullBleed>
       <div className="flex min-h-0 flex-1 flex-col">
+        {/* Header */}
         <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-          <Input aria-label="Form name" value={name} placeholder="Untitled form" onChange={(event) => setName(event.target.value)} className="h-8 w-72 text-sm" />
-          <Input aria-label="Version label" value={versionLabel} placeholder="Version (optional)" onChange={(event) => setVersionLabel(event.target.value)} className="h-8 w-40 text-sm" />
+          <Input
+            aria-label="Form name"
+            value={name}
+            placeholder="Untitled form"
+            onChange={(e) => setName(e.target.value)}
+            className="h-8 w-72 text-sm"
+          />
+          <Input
+            aria-label="Version label"
+            value={versionLabel}
+            placeholder="Version (optional)"
+            onChange={(e) => setVersionLabel(e.target.value)}
+            className="h-8 w-40 text-sm"
+          />
           <div className="flex-1" />
-          {status ? <span className="rounded-md border border-border px-2 py-1 text-xs capitalize text-muted-foreground">{status}</span> : null}
+          <LintSummary issues={issues} />
+          {status ? (
+            <span className="rounded-md border border-border px-2 py-1 text-xs capitalize text-muted-foreground">{status}</span>
+          ) : null}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="h-8 w-8 p-0" aria-label="Builder actions">
@@ -214,67 +150,152 @@ export function FormBuilderPage(): JSX.Element {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => { void save(); }} disabled={loading || issues.some((issue) => issue.severity === 'error')}>Save draft</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { void publish(); }} disabled={!formId || issues.some((issue) => issue.severity === 'error')}>Publish</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCompareOpen(true)} disabled={!formId}>Compare</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { void save(); }} disabled={loading}>
+                Save draft
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { void publish(); }} disabled={!formId}>
+                Publish
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setCompareOpen(true)} disabled={!formId}>
+                Compare
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setPreviewMode((value) => !value)}>{previewMode ? 'Edit' : 'Preview'}</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => applyHistory(history.undo())} disabled={!history.canUndo}>Undo</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => applyHistory(history.redo())} disabled={!history.canRedo}>Redo</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => applyHistory(history.undo())} disabled={!history.canUndo}>
+                Undo
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => applyHistory(history.redo())} disabled={!history.canRedo}>
+                Redo
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => navigate('/forms')}>Back to forms</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <div className="flex items-center gap-3 border-b border-border px-3 py-2">
-          <LintSummary issues={issues} />
-          <BulkActionBar
-            count={selectedFieldIds.size}
-            onDelete={() => deleteFieldsByIds(selectedFieldIds)}
-            onDuplicate={() => duplicateFieldsByIds(selectedFieldIds)}
-            onClear={() => setSelectedFieldIds(new Set())}
-          />
-        </div>
-        {error ? <div className="m-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div> : null}
-        <div className="grid min-h-0 flex-1 grid-cols-[16rem_minmax(0,1fr)_24rem]">
-          <aside className="space-y-3 border-r border-border p-3">
-            <Button type="button" size="sm" variant="outline" className="w-full justify-start text-xs" onClick={addSection}>Add section</Button>
-            <FieldPalette search={search} onSearch={setSearch} onAddField={addField} />
-          </aside>
-          <main className="min-h-0 overflow-auto p-3">
-            {previewMode ? (
-              <div className="mx-auto max-w-2xl">
-                <FormRuntime schema={schema as unknown as RuntimeFormSchema} submitLabel="Preview submit" onSubmit={() => undefined} />
-              </div>
-            ) : (
-              <BuilderCanvas
-                sections={filteredSections}
-                selectedFieldIds={selectedFieldIds}
-                onSelectField={selectField}
-                onDuplicateField={(fieldId) => duplicateFieldsByIds(new Set([fieldId]))}
-                onDeleteField={(fieldId) => deleteFieldsByIds(new Set([fieldId]))}
-                onReorderField={reorderField}
-              />
-            )}
-          </main>
-          <aside className="space-y-3 border-l border-border p-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold">Properties</h2>
+
+        {error ? (
+          <div className="m-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            {error}
+          </div>
+        ) : null}
+
+        {/* Two-column body: field list + inline editor */}
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          {/* Field list */}
+          <div className="flex w-72 flex-col border-r border-border">
+            <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+              <span className="flex-1 text-xs font-semibold text-muted-foreground">
+                Fields ({schema.fields.length})
+              </span>
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
-                aria-label="Delete selected field"
-                disabled={selectedFieldIds.size === 0}
-                onClick={() => deleteFieldsByIds(selectedFieldIds)}
+                className="h-7 text-xs"
+                onClick={addField}
+                aria-label="Add field"
               >
-                Delete
+                Add field
               </Button>
             </div>
-            <PropertiesSheet field={selectedField} allFields={allFields} onChange={updateSelectedField} />
-          </aside>
+            <div className="min-h-0 flex-1 overflow-auto">
+              {schema.fields.length === 0 ? (
+                <p className="px-3 py-4 text-xs text-muted-foreground">No fields yet. Click &quot;Add field&quot; to start.</p>
+              ) : (
+                <ul>
+                  {schema.fields.map((field) => (
+                    <li key={field.id}>
+                      <button
+                        type="button"
+                        className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-accent ${selectedFieldId === field.id ? 'bg-accent font-medium' : ''}`}
+                        onClick={() => setSelectedFieldId(field.id)}
+                      >
+                        <span className="flex-1 truncate">{field.displayLabel}</span>
+                        <span className="shrink-0 text-muted-foreground">{field.fieldType}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-5 w-5 shrink-0 p-0 text-muted-foreground hover:text-destructive"
+                          aria-label={`Delete field ${field.displayLabel}`}
+                          onClick={(e) => { e.stopPropagation(); deleteField(field.id); }}
+                        >
+                          ×
+                        </Button>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+
+          {/* Inline field editor */}
+          <div className="flex-1 overflow-auto p-4">
+            {selectedField ? (
+              <div className="max-w-md space-y-4">
+                <h2 className="text-sm font-semibold">Edit field</h2>
+
+                <div className="space-y-1">
+                  <Label htmlFor="field-display-label" className="text-xs">Display Label</Label>
+                  <Input
+                    id="field-display-label"
+                    aria-label="Display label"
+                    value={selectedField.displayLabel}
+                    onChange={(e) => updateField({ displayLabel: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs">Field Type</Label>
+                  <Select
+                    value={selectedField.fieldType}
+                    onValueChange={(v) => updateField({ fieldType: v as FieldType })}
+                  >
+                    <SelectTrigger aria-label="Field type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FIELD_TYPES.map((t) => (
+                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <label className="flex items-center gap-2 text-xs">
+                  <Checkbox
+                    checked={selectedField.required}
+                    onCheckedChange={(checked) => updateField({ required: Boolean(checked) })}
+                  />
+                  Required
+                </label>
+
+                <label className="flex items-center gap-2 text-xs">
+                  <Checkbox
+                    checked={selectedField.enabled}
+                    onCheckedChange={(checked) => updateField({ enabled: Boolean(checked) })}
+                  />
+                  Enabled
+                </label>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="border-destructive text-destructive hover:bg-destructive/10"
+                  aria-label="Delete selected field"
+                  onClick={() => deleteField(selectedField.id)}
+                >
+                  Delete field
+                </Button>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">Select a field to edit its properties.</p>
+            )}
+          </div>
         </div>
       </div>
+
       <CompareDialog formId={formId} current={schema} open={compareOpen} onOpenChange={setCompareOpen} />
     </AppShell>
   );

@@ -1,30 +1,43 @@
-import type { FormField, FormSchema, FormSection, FieldType } from '@openldr/forms/pure';
+import type { FieldType, FormField, FormSchema } from '@openldr/forms/pure';
 
 export function slugify(label: string): string {
-  const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-  return slug || 'item';
+  const s = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  return s || 'item';
 }
 
+let _orderCounter = 0;
+
 export function createDefaultFormSchema(name: string): FormSchema {
-  const id = slugify(name);
+  const now = new Date().toISOString();
   return {
-    id,
+    id: slugify(name),
     name,
-    title: { en: name },
-    status: 'active',
-    languages: ['en'],
-    sections: [{ id: 'main', title: { en: 'Main' }, fields: [] }],
+    versionLabel: null,
+    fhirVersion: null,
+    fhirResourceType: null,
+    fhirProfileUrl: null,
+    facilityId: null,
+    fields: [],
+    sections: [],
+    targetPages: [],
+    version: 1,
+    active: true,
+    status: 'draft',
+    createdAt: now,
+    updatedAt: now,
   };
 }
 
-export function newSection(label: string): FormSection {
-  return { id: slugify(label), title: { en: label }, fields: [] };
-}
-
-export function newField(label: string, type: FieldType): FormField {
-  return { id: slugify(label), type, label: { en: label }, enabled: true };
-}
-
-export function reindexFields<T extends FormField>(fields: T[]): T[] {
-  return fields.map((field) => ({ ...field }));
+export function newField(displayLabel: string, fieldType: FieldType): FormField {
+  return {
+    id: slugify(displayLabel),
+    fhirPath: null,
+    displayLabel,
+    description: null,
+    fieldType,
+    required: false,
+    enabled: true,
+    order: _orderCounter++,
+    cardinality: { min: 0, max: '1' },
+  };
 }

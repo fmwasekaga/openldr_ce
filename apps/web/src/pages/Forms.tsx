@@ -24,8 +24,8 @@ function StatusBadge({ status }: { status: FormStatus }) {
 }
 
 function toSummary(form: FormDefinition): FormSummary {
-  const sections = (form.schema as { sections?: Array<{ fields?: unknown[] }> } | null)?.sections ?? [];
-  const fieldCount = sections.reduce((total, section) => total + (Array.isArray(section.fields) ? section.fields.length : 0), 0);
+  const fields = (form.schema as { fields?: unknown[] } | null)?.fields ?? [];
+  const fieldCount = Array.isArray(fields) ? fields.length : 0;
   return {
     id: form.id,
     name: form.name,
@@ -48,8 +48,8 @@ function upsertForm(rows: FormSummary[], form: FormSummary): FormSummary[] {
 
 function isImportableSchema(value: unknown): value is { name: string; fhirResourceType?: string | null; versionLabel?: string | null; targetPages?: string[] | null } {
   if (!value || typeof value !== 'object') return false;
-  const schema = value as { name?: unknown; sections?: unknown };
-  return typeof schema.name === 'string' && Array.isArray(schema.sections);
+  const schema = value as { name?: unknown };
+  return typeof schema.name === 'string';
 }
 
 export function Forms() {
@@ -93,7 +93,7 @@ export function Forms() {
     try {
       const parsed: unknown = JSON.parse(await file.text());
       if (!isImportableSchema(parsed)) {
-        setActionError('Import JSON must include a name and sections.');
+        setActionError('Import JSON must include a name field.');
         return;
       }
       const created = await createForm({

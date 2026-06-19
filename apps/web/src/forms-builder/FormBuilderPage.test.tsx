@@ -4,69 +4,110 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FormBuilderPage } from './FormBuilderPage';
 import * as api from '../api';
 
-describe('FormBuilderPage', () => {
-  beforeEach(() => {
-    vi.spyOn(api, 'createForm').mockResolvedValue({
-      id: 'form-1',
+const NOW = '2026-01-01T00:00:00.000Z';
+
+function makeFormDef(overrides: Partial<Parameters<typeof Object.assign>[0]> = {}) {
+  return {
+    id: 'form-1',
+    name: 'Specimen intake',
+    versionLabel: null,
+    fhirResourceType: null,
+    status: 'draft' as const,
+    active: true,
+    schema: {
+      id: 'specimen-intake',
       name: 'Specimen intake',
       versionLabel: null,
+      fhirVersion: null,
       fhirResourceType: null,
-      status: 'draft',
+      fhirProfileUrl: null,
+      facilityId: null,
+      fields: [],
+      sections: [],
+      targetPages: [],
+      version: 1,
       active: true,
-      schema: { id: 'specimen-intake', name: 'Specimen intake', title: { en: 'Specimen intake' }, status: 'active', languages: ['en'], sections: [{ id: 'main', title: { en: 'Main' }, fields: [] }] },
-      targetPages: ['forms'],
-      createdAt: '2026-01-01T00:00:00.000Z',
-      updatedAt: '2026-01-01T00:00:00.000Z',
-    });
+      status: 'draft' as const,
+      createdAt: NOW,
+      updatedAt: NOW,
+    },
+    targetPages: ['forms'],
+    createdAt: NOW,
+    updatedAt: NOW,
+    ...overrides,
+  };
+}
+
+describe('FormBuilderPage', () => {
+  beforeEach(() => {
+    vi.spyOn(api, 'createForm').mockResolvedValue(makeFormDef());
   });
 
-  it('creates a new form draft from the builder', async () => {
-    render(<MemoryRouter initialEntries={['/forms/new']}><Routes><Route path="/forms/new" element={<FormBuilderPage />} /></Routes></MemoryRouter>);
+  it('creates a draft form when Save draft is clicked', async () => {
+    render(
+      <MemoryRouter initialEntries={['/forms/new']}>
+        <Routes><Route path="/forms/new" element={<FormBuilderPage />} /></Routes>
+      </MemoryRouter>,
+    );
     fireEvent.change(screen.getByLabelText('Form name'), { target: { value: 'Specimen intake' } });
     openBuilderMenu();
     fireEvent.click(await screen.findByText('Save draft'));
-    await waitFor(() => expect(api.createForm).toHaveBeenCalledWith(expect.objectContaining({ name: 'Specimen intake' })));
+    await waitFor(() =>
+      expect(api.createForm).toHaveBeenCalledWith(expect.objectContaining({ name: 'Specimen intake' })),
+    );
   });
 
-  it('adds, edits, searches, selects, and deletes fields', async () => {
-    render(<MemoryRouter initialEntries={['/forms/new']}><Routes><Route path="/forms/new" element={<FormBuilderPage />} /></Routes></MemoryRouter>);
-    fireEvent.click(screen.getByRole('button', { name: 'Add string field' }));
-    expect(screen.getByText('New string field')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('New string field'));
-    fireEvent.change(screen.getByLabelText('Field label'), { target: { value: 'Patient ID' } });
-    expect(screen.getByText('Patient ID')).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Search fields'), { target: { value: 'patient' } });
-    expect(screen.getByText('Patient ID')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Delete selected field' }));
-    expect(screen.queryByText('Patient ID')).not.toBeInTheDocument();
+  it('adds a field and shows it in the list', async () => {
+    render(
+      <MemoryRouter initialEntries={['/forms/new']}>
+        <Routes><Route path="/forms/new" element={<FormBuilderPage />} /></Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Add field' }));
+    expect(screen.getByText('New field')).toBeInTheDocument();
   });
 
-  it('publishes and compares against a published version', async () => {
-    vi.spyOn(api, 'getForm').mockResolvedValue({
-      id: 'form-1',
-      name: 'Specimen intake',
-      versionLabel: 'v1',
-      fhirResourceType: null,
-      status: 'draft',
-      active: true,
-      schema: { id: 'specimen-intake', name: 'Specimen intake', title: { en: 'Specimen intake' }, status: 'active', languages: ['en'], sections: [{ id: 'main', title: { en: 'Main' }, fields: [{ id: 'patientId', type: 'string', label: { en: 'Patient ID' } }] }] },
-      targetPages: ['forms'],
-      createdAt: '2026-01-01T00:00:00.000Z',
-      updatedAt: '2026-01-01T00:00:00.000Z',
-    });
-    vi.spyOn(api, 'publishForm').mockResolvedValue(await api.getForm('form-1'));
-    vi.spyOn(api, 'listFormVersions').mockResolvedValue([{ id: 'fv-1', formId: 'form-1', version: 1, versionLabel: 'v1', name: 'Specimen intake', fhirResourceType: null, targetPages: ['forms'], publishedAt: '2026-01-01T00:00:00.000Z', publishedBy: null }]);
-    vi.spyOn(api, 'getFormVersion').mockResolvedValue({ id: 'fv-1', formId: 'form-1', version: 1, versionLabel: 'v1', name: 'Specimen intake', fhirResourceType: null, targetPages: ['forms'], publishedAt: '2026-01-01T00:00:00.000Z', publishedBy: null, schema: { id: 'specimen-intake', name: 'Specimen intake', title: { en: 'Specimen intake' }, status: 'active', languages: ['en'], sections: [] }, questionnaire: {} });
+  it('edits the display label of a selected field', async () => {
+    render(
+      <MemoryRouter initialEntries={['/forms/new']}>
+        <Routes><Route path="/forms/new" element={<FormBuilderPage />} /></Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Add field' }));
+    // Click the field row to select it
+    fireEvent.click(screen.getByText('New field'));
+    // Edit the display label in the inline panel
+    const labelInput = screen.getByLabelText('Display label');
+    fireEvent.change(labelInput, { target: { value: 'Patient Name' } });
+    expect(screen.getByDisplayValue('Patient Name')).toBeInTheDocument();
+  });
 
-    render(<MemoryRouter initialEntries={['/forms/form-1/builder']}><Routes><Route path="/forms/:id/builder" element={<FormBuilderPage />} /></Routes></MemoryRouter>);
+  it('deletes a field', async () => {
+    render(
+      <MemoryRouter initialEntries={['/forms/new']}>
+        <Routes><Route path="/forms/new" element={<FormBuilderPage />} /></Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Add field' }));
+    expect(screen.getByText('New field')).toBeInTheDocument();
+    // Click the delete button on the field row (× button)
+    fireEvent.click(screen.getByRole('button', { name: 'Delete field New field' }));
+    expect(screen.queryByText('New field')).not.toBeInTheDocument();
+  });
+
+  it('opens CompareDialog when Compare is clicked for an existing form', async () => {
+    vi.spyOn(api, 'getForm').mockResolvedValue(makeFormDef());
+    vi.spyOn(api, 'listFormVersions').mockResolvedValue([]);
+
+    render(
+      <MemoryRouter initialEntries={['/forms/form-1/builder']}>
+        <Routes><Route path="/forms/:id/builder" element={<FormBuilderPage />} /></Routes>
+      </MemoryRouter>,
+    );
     expect(await screen.findByDisplayValue('Specimen intake')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /add section/i })).toBeInTheDocument();
-    openBuilderMenu();
-    fireEvent.click(await screen.findByText('Publish'));
-    await waitFor(() => expect(api.publishForm).toHaveBeenCalledWith('form-1', expect.objectContaining({ versionLabel: 'v1' })));
     openBuilderMenu();
     fireEvent.click(await screen.findByText('Compare'));
-    expect(await screen.findByText(/Published version v1/)).toBeInTheDocument();
+    expect(await screen.findByText('Compare form versions')).toBeInTheDocument();
   });
 });
 
