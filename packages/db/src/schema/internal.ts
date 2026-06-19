@@ -277,6 +277,14 @@ export interface FormDefinitionsTable {
   updated_at: string;
 }
 
+export interface UserProfilesTable {
+  user_id: string;
+  form_schema_id: string | null;
+  form_version: number | null;
+  extras: unknown;
+  updated_at: Date;
+}
+
 export interface FormVersionsTable {
   id: string;
   form_id: string;
@@ -321,4 +329,5 @@ export interface InternalSchema {
   dashboards: DashboardsTable;
   form_definitions: FormDefinitionsTable;
   form_versions: FormVersionsTable;
+  user_profiles: UserProfilesTable;
 }

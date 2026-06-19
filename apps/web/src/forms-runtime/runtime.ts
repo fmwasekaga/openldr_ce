@@ -83,7 +83,7 @@ export function cleanAnswers(schema: FormSchema, answers: RuntimeAnswers): Runti
     const raw = answers[field.id];
     const values = (raw === undefined ? [] : Array.isArray(raw) ? raw : [raw]).filter((v) => !isEmpty(v));
     if (values.length === 0) continue;
-    out[field.id] = field.repeatable ? values : values[0];
+    out[field.id] = (field.repeatable || field.fieldType === 'multiselect') ? values : values[0];
   }
 
   return out;

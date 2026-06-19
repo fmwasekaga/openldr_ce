@@ -5,6 +5,40 @@ export interface TokenClaims {
   [claim: string]: unknown;
 }
 
+export interface DirectoryUser {
+  id: string;                 // provider subject id
+  username: string;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  enabled: boolean;
+  roles: string[];            // realm roles, provider defaults filtered out
+  createdAt: string | null;   // ISO
+}
+export interface DirectoryCreateInput {
+  username: string;
+  email?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  enabled?: boolean;
+  roles?: string[];
+  password?: string;
+  temporaryPassword?: boolean;
+}
+export interface DirectoryUpdateInput {
+  email?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  enabled?: boolean;
+}
+export interface DirectoryPort {
+  list(opts?: { search?: string; max?: number }): Promise<DirectoryUser[]>;
+  get(id: string): Promise<DirectoryUser | null>;
+  create(input: DirectoryCreateInput): Promise<DirectoryUser>;
+  update(id: string, patch: DirectoryUpdateInput): Promise<void>;
+  setRoles(id: string, roles: string[]): Promise<void>;
+}
+
 export interface AuthPort {
   healthCheck(): Promise<HealthResult>;
   verifyToken(token: string): Promise<TokenClaims>;
@@ -14,6 +48,7 @@ export interface AuthPort {
   sendPasswordResetEmail(userId: string): Promise<void>;
   /** Terminate all of the user's provider sessions. */
   forceLogout(userId: string): Promise<void>;
+  directory: DirectoryPort;
 }
 
 /** Thrown by AuthPort admin methods when the provider admin client is not configured. */

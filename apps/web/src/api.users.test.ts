@@ -8,9 +8,9 @@ describe('users api client', () => {
 
   it('calls the users endpoints', async () => {
     await listUsers();
-    await createUser({ username: 'ada', displayName: 'Ada', roles: ['lab_admin'] });
-    await updateUser('u1', { displayName: 'Ada Lovelace', roles: ['system_auditor'] });
-    await setUserStatus('u1', 'disabled');
+    await createUser({ username: 'ada', firstName: 'Ada', lastName: 'Lovelace', roles: ['lab_admin'] });
+    await updateUser('u1', { firstName: 'Ada', lastName: 'Lovelace', roles: ['system_auditor'] });
+    await setUserStatus('u1', false);
 
     expect(fetch).toHaveBeenNthCalledWith(1, '/api/users');
     expect(fetch).toHaveBeenNthCalledWith(2, '/api/users', expect.objectContaining({ method: 'POST' }));

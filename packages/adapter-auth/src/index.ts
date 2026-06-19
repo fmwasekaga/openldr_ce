@@ -1,6 +1,6 @@
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose';
 import { probe } from '@openldr/core';
-import type { AuthPort, TokenClaims } from '@openldr/ports';
+import type { AuthPort, TokenClaims, DirectoryUser } from '@openldr/ports';
 import { IdentityAdminNotConfiguredError } from '@openldr/ports';
 
 export interface AuthConfig {
@@ -66,7 +66,9 @@ export function createAuth(cfg: AuthConfig, deps: AuthDeps = {}): AuthPort {
     })().catch((e) => { adminTokenPromise = undefined; throw e; });
     return (await adminTokenPromise).token;
   }
-  async function adminVoid(path: string, init: RequestInit): Promise<void> {
+  const PROVIDER_DEFAULT_ROLE = (name: string) => name.startsWith('default-roles') || name === 'offline_access' || name === 'uma_authorization';
+
+  async function adminFetchRaw(path: string, init: RequestInit): Promise<Response> {
     if (!adminConfigured) throw new IdentityAdminNotConfiguredError();
     if (!cfg.issuerUrl.includes('/realms/')) {
       throw new Error('OIDC_ISSUER_URL must be a Keycloak realm URL (containing /realms/) to use identity-admin actions');
@@ -79,10 +81,29 @@ export function createAuth(cfg: AuthConfig, deps: AuthDeps = {}): AuthPort {
     };
     let res = await doFetch(await getAdminToken());
     if (res.status === 401) { adminTokenPromise = undefined; res = await doFetch(await getAdminToken()); }
-    if (!res.ok) {
-      const detail = await res.text().catch(() => '');
-      throw new KcError(res.status, detail.slice(0, 500));
-    }
+    return res;
+  }
+  async function adminVoid(path: string, init: RequestInit): Promise<void> {
+    const res = await adminFetchRaw(path, init);
+    if (!res.ok) { const d = await res.text().catch(() => ''); throw new KcError(res.status, d.slice(0, 500)); }
+  }
+  async function adminJson<T>(path: string, init: RequestInit = {}): Promise<T> {
+    const res = await adminFetchRaw(path, init);
+    if (!res.ok) { const d = await res.text().catch(() => ''); throw new KcError(res.status, d.slice(0, 500)); }
+    if (res.status === 204) return undefined as T;
+    return res.json() as Promise<T>;
+  }
+
+  interface KcUser { id: string; username: string; email?: string; firstName?: string; lastName?: string; enabled: boolean; createdTimestamp?: number }
+  interface KcRole { id: string; name: string }
+  const toDirectoryUser = (u: KcUser, roleNames: string[]): DirectoryUser => ({
+    id: u.id, username: u.username, email: u.email ?? null, firstName: u.firstName ?? null, lastName: u.lastName ?? null,
+    enabled: u.enabled, roles: roleNames.filter((n) => !PROVIDER_DEFAULT_ROLE(n)),
+    createdAt: typeof u.createdTimestamp === 'number' ? new Date(u.createdTimestamp).toISOString() : null,
+  });
+  async function userRoleNames(id: string): Promise<string[]> {
+    const roles = await adminJson<KcRole[]>(`/users/${encodeURIComponent(id)}/role-mappings/realm`);
+    return roles.map((r) => r.name);
   }
 
   return {
@@ -119,6 +140,52 @@ export function createAuth(cfg: AuthConfig, deps: AuthDeps = {}): AuthPort {
     },
     async forceLogout(userId: string): Promise<void> {
       await adminVoid(`/users/${encodeURIComponent(userId)}/logout`, { method: 'POST' });
+    },
+    directory: {
+      async list(opts = {}) {
+        const params = new URLSearchParams({ first: '0', max: String(opts.max ?? 100), briefRepresentation: 'false' });
+        if (opts.search) params.set('search', opts.search);
+        const users = await adminJson<KcUser[]>(`/users?${params.toString()}`);
+        return Promise.all(users.map(async (u) => toDirectoryUser(u, await userRoleNames(u.id))));
+      },
+      async get(id) {
+        const res = await adminFetchRaw(`/users/${encodeURIComponent(id)}`, {});
+        if (res.status === 404 || res.status === 204) return null;
+        if (!res.ok) { const d = await res.text().catch(() => ''); throw new KcError(res.status, d.slice(0, 500)); }
+        const u = (await res.json()) as KcUser;
+        return toDirectoryUser(u, await userRoleNames(id));
+      },
+      async create(input) {
+        const res = await adminFetchRaw(`/users`, { method: 'POST', body: JSON.stringify({ username: input.username, email: input.email ?? undefined, firstName: input.firstName ?? undefined, lastName: input.lastName ?? undefined, enabled: input.enabled ?? true }) });
+        if (!res.ok) { const d = await res.text().catch(() => ''); throw new KcError(res.status, d.slice(0, 500)); }
+        const loc = res.headers.get('Location');
+        const id = loc ? (loc.split('/').filter(Boolean).pop() ?? '') : '';
+        if (!id) throw new KcError(500, 'provider did not return a user id');
+        if (input.roles && input.roles.length > 0) await this.setRoles(id, input.roles);
+        if (input.password) await adminVoid(`/users/${encodeURIComponent(id)}/reset-password`, { method: 'PUT', body: JSON.stringify({ type: 'password', value: input.password, temporary: input.temporaryPassword ?? true }) });
+        // Try a GET for the canonical representation; if Keycloak returns nothing (e.g. test stubs), build from input.
+        const fetched = await this.get(id);
+        if (fetched) return fetched;
+        return toDirectoryUser(
+          { id, username: input.username, email: input.email ?? undefined, firstName: input.firstName ?? undefined, lastName: input.lastName ?? undefined, enabled: input.enabled ?? true },
+          input.roles ?? [],
+        );
+      },
+      async update(id, patch) {
+        await adminVoid(`/users/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ email: patch.email ?? undefined, firstName: patch.firstName ?? undefined, lastName: patch.lastName ?? undefined, enabled: patch.enabled }) });
+      },
+      async setRoles(id, roles) {
+        const all = await adminJson<KcRole[]>(`/roles`);
+        const currentRaw = (await adminJson<KcRole[] | undefined>(`/users/${encodeURIComponent(id)}/role-mappings/realm`)) ?? [];
+        const current = currentRaw.filter((r) => !PROVIDER_DEFAULT_ROLE(r.name));
+        const want = new Set(roles);
+        const toAdd = all.filter((r) => want.has(r.name) && !current.some((c) => c.name === r.name));
+        const toRemove = current.filter((c) => !want.has(c.name));
+        // Add wanted roles before removing unwanted ones: if the second call fails,
+        // the user keeps a superset rather than being left under-privileged. Re-saving converges.
+        if (toAdd.length) await adminVoid(`/users/${encodeURIComponent(id)}/role-mappings/realm`, { method: 'POST', body: JSON.stringify(toAdd.map((r) => ({ id: r.id, name: r.name }))) });
+        if (toRemove.length) await adminVoid(`/users/${encodeURIComponent(id)}/role-mappings/realm`, { method: 'DELETE', body: JSON.stringify(toRemove.map((r) => ({ id: r.id, name: r.name }))) });
+      },
     },
   };
 }

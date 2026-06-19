@@ -178,3 +178,71 @@ describe('identity admin actions', () => {
     await expect(auth.forceLogout('u1')).rejects.toBeInstanceOf(KcError);
   });
 });
+
+function dirMock() {
+  const calls: Array<{ url: string; method: string; body?: string }> = [];
+  const kcUser = { id: 'u1', username: 'ada', email: 'a@x', firstName: 'Ada', lastName: 'L', enabled: true, createdTimestamp: 1700000000000 };
+  const fetchFn = vi.fn(async (url: string | URL, init?: RequestInit) => {
+    const u = String(url); const method = init?.method ?? 'GET';
+    calls.push({ url: u, method, body: init?.body as string | undefined });
+    if (u.endsWith('/protocol/openid-connect/token')) return new Response(JSON.stringify({ access_token: 't', expires_in: 300 }), { status: 200, headers: { 'content-type': 'application/json' } });
+    if (/\/users\/u1\/role-mappings\/realm$/.test(u) && method === 'GET') return new Response(JSON.stringify([{ id: 'r1', name: 'lab_admin' }, { id: 'rd', name: 'default-roles-openldr' }]), { status: 200, headers: { 'content-type': 'application/json' } });
+    if (/\/users\/u1$/.test(u) && method === 'GET') return new Response(JSON.stringify(kcUser), { status: 200, headers: { 'content-type': 'application/json' } });
+    if (/\/users(\?|$)/.test(u) && method === 'GET') return new Response(JSON.stringify([kcUser]), { status: 200, headers: { 'content-type': 'application/json' } });
+    if (/\/roles$/.test(u) && method === 'GET') return new Response(JSON.stringify([{ id: 'r1', name: 'lab_admin' }, { id: 'r2', name: 'lab_manager' }]), { status: 200, headers: { 'content-type': 'application/json' } });
+    if (/\/users$/.test(u) && method === 'POST') return new Response(null, { status: 201, headers: { Location: 'http://kc/admin/realms/openldr/users/new-id' } });
+    return new Response(null, { status: 204 });
+  }) as unknown as typeof fetch;
+  return { calls, fetchFn };
+}
+const dcfg = { issuerUrl: 'https://kc/realms/openldr', adminClientId: 'svc', adminClientSecret: 'sek' };
+
+describe('directory', () => {
+  it('list maps users + filters provider-default roles', async () => {
+    const { fetchFn } = dirMock();
+    const auth = createAuth(dcfg, { fetchFn });
+    const users = await auth.directory.list();
+    expect(users[0]).toMatchObject({ id: 'u1', username: 'ada', firstName: 'Ada', enabled: true });
+    expect(users[0].roles).toEqual(['lab_admin']); // default-roles-* filtered out
+    expect(users[0].createdAt).toContain('20'); // ISO
+  });
+  it('get returns null on 404', async () => {
+    const fetchFn = vi.fn(async (url: string | URL) => String(url).endsWith('/protocol/openid-connect/token')
+      ? new Response(JSON.stringify({ access_token: 't', expires_in: 300 }), { status: 200, headers: { 'content-type': 'application/json' } })
+      : new Response(null, { status: 404 })) as unknown as typeof fetch;
+    const auth = createAuth(dcfg, { fetchFn });
+    expect(await auth.directory.get('missing')).toBeNull();
+  });
+  it('create posts the user, reads Location id, assigns roles', async () => {
+    const { calls, fetchFn } = dirMock();
+    const auth = createAuth(dcfg, { fetchFn });
+    const created = await auth.directory.create({ username: 'bob', firstName: 'Bob', email: 'b@x', roles: ['lab_manager'], password: 'pw' });
+    expect(created.id).toBe('new-id');
+    expect(calls.some((c) => c.method === 'POST' && /\/users$/.test(c.url))).toBe(true);
+    expect(calls.some((c) => /\/users\/new-id\/role-mappings\/realm$/.test(c.url) && c.method === 'POST')).toBe(true);
+    expect(calls.some((c) => /\/users\/new-id\/reset-password$/.test(c.url))).toBe(true);
+  });
+  it('not configured → throws with no network', async () => {
+    const { calls, fetchFn } = dirMock();
+    const auth = createAuth({ issuerUrl: 'https://kc/realms/openldr' }, { fetchFn });
+    await expect(auth.directory.list()).rejects.toBeInstanceOf((await import('@openldr/ports')).IdentityAdminNotConfiguredError);
+    expect(calls).toHaveLength(0);
+  });
+  it('setRoles adds the wanted role and removes the unwanted one', async () => {
+    const calls: Array<{ url: string; method: string; body?: string }> = [];
+    const fetchFn = vi.fn(async (url: string | URL, init?: RequestInit) => {
+      const u = String(url); const method = init?.method ?? 'GET';
+      calls.push({ url: u, method, body: init?.body as string | undefined });
+      if (u.endsWith('/protocol/openid-connect/token')) return new Response(JSON.stringify({ access_token: 't', expires_in: 300 }), { status: 200, headers: { 'content-type': 'application/json' } });
+      if (/\/users\/u1\/role-mappings\/realm$/.test(u) && method === 'GET') return new Response(JSON.stringify([{ id: 'r1', name: 'lab_admin' }, { id: 'rd', name: 'default-roles-openldr' }]), { status: 200, headers: { 'content-type': 'application/json' } });
+      if (/\/roles$/.test(u) && method === 'GET') return new Response(JSON.stringify([{ id: 'r1', name: 'lab_admin' }, { id: 'r2', name: 'lab_manager' }]), { status: 200, headers: { 'content-type': 'application/json' } });
+      return new Response(null, { status: 204 });
+    }) as unknown as typeof fetch;
+    const auth = createAuth({ issuerUrl: 'https://kc/realms/openldr', adminClientId: 'svc', adminClientSecret: 'sek' }, { fetchFn });
+    await auth.directory.setRoles('u1', ['lab_manager']);
+    const add = calls.find((c) => /\/users\/u1\/role-mappings\/realm$/.test(c.url) && c.method === 'POST');
+    const del = calls.find((c) => /\/users\/u1\/role-mappings\/realm$/.test(c.url) && c.method === 'DELETE');
+    expect(add).toBeTruthy(); expect(add!.body).toContain('lab_manager');
+    expect(del).toBeTruthy(); expect(del!.body).toContain('lab_admin');
+  });
+});

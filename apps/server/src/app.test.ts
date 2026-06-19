@@ -353,14 +353,30 @@ function ctxWith(status: 'up' | 'down'): AppContext {
   health.register({ name: 'auth', check: async () => ({ status, latencyMs: 1 }) });
   return {
     logger: createLogger({ level: 'silent' }),
-    auth: {} as never,
+    auth: {
+      directory: {
+        async list() { const e = new Error('admin not configured'); e.name = 'IdentityAdminNotConfiguredError'; throw e; },
+        async get() { const e = new Error('admin not configured'); e.name = 'IdentityAdminNotConfiguredError'; throw e; },
+        async create() { const e = new Error('admin not configured'); e.name = 'IdentityAdminNotConfiguredError'; throw e; },
+        async update() { const e = new Error('admin not configured'); e.name = 'IdentityAdminNotConfiguredError'; throw e; },
+        async setRoles() { const e = new Error('admin not configured'); e.name = 'IdentityAdminNotConfiguredError'; throw e; },
+      },
+    } as never,
     blob: {} as never,
     eventing: {} as never,
     store: {} as never,
     health,
     reporting: {} as never,
     audit: {} as never,
-    users: {} as never,
+    users: {
+      list: async () => [],
+      get: async () => undefined,
+    } as never,
+    userProfiles: {
+      get: async () => undefined,
+      list: async () => new Map(),
+      upsert: async () => undefined,
+    } as never,
     forms: {} as never,
     terminology: { ops: {} as never, admin: buildFakeAdmin(), ontology: buildFakeOntology(), loaders: buildFakeLoaders() },
     dashboards: {} as never,
