@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { MoreHorizontal } from 'lucide-react';
 import { AppShell } from '@/shell/AppShell';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { createForm, getForm, publishForm, updateForm, type FormDefinition } from '../api';
 import { createDefaultFormSchema, newField, newSection } from './builderModel';
 import { LintSummary } from './LintSummary';
@@ -31,7 +33,7 @@ export function FormBuilderPage(): JSX.Element {
   const { id } = useParams();
   const navigate = useNavigate();
   const [formId, setFormId] = useState<string | null>(id ?? null);
-  const [name, setName] = useState('Untitled form');
+  const [name, setName] = useState('');
   const [versionLabel, setVersionLabel] = useState('');
   const [targetPages, setTargetPages] = useState<string[]>(['forms']);
   const [schema, setSchema] = useState<FormSchema>(() => createDefaultFormSchema('Untitled form'));
@@ -180,8 +182,9 @@ export function FormBuilderPage(): JSX.Element {
   });
 
   const save = async () => {
-    const nextSchema = { ...schema, name, title: { ...schema.title, en: name } };
-    const payload = { name, versionLabel: versionLabel || null, fhirResourceType: null, targetPages, schema: nextSchema };
+    const effectiveName = name.trim() || 'Untitled form';
+    const nextSchema = { ...schema, name: effectiveName, title: { ...schema.title, en: effectiveName } };
+    const payload = { name: effectiveName, versionLabel: versionLabel || null, fhirResourceType: null, targetPages, schema: nextSchema };
     const saved = formId ? await updateForm(formId, payload) : await createForm(payload);
     setStatus(saved.status);
     if (!formId) {
@@ -200,17 +203,28 @@ export function FormBuilderPage(): JSX.Element {
     <AppShell title="Form Builder" fullBleed>
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-          <Input aria-label="Form name" value={name} onChange={(event) => setName(event.target.value)} className="h-8 w-72 text-sm" />
-          <Input aria-label="Version label" value={versionLabel} onChange={(event) => setVersionLabel(event.target.value)} className="h-8 w-32 text-sm" />
+          <Input aria-label="Form name" value={name} placeholder="Untitled form" onChange={(event) => setName(event.target.value)} className="h-8 w-72 text-sm" />
+          <Input aria-label="Version label" value={versionLabel} placeholder="Version (optional)" onChange={(event) => setVersionLabel(event.target.value)} className="h-8 w-40 text-sm" />
           <div className="flex-1" />
           {status ? <span className="rounded-md border border-border px-2 py-1 text-xs capitalize text-muted-foreground">{status}</span> : null}
-          <Button variant="outline" size="sm" onClick={() => setPreviewMode((value) => !value)}>{previewMode ? 'Edit' : 'Preview'}</Button>
-          <Button variant="outline" size="sm" onClick={() => applyHistory(history.undo())} disabled={!history.canUndo}>Undo</Button>
-          <Button variant="outline" size="sm" onClick={() => applyHistory(history.redo())} disabled={!history.canRedo}>Redo</Button>
-          <Button variant="outline" size="sm" onClick={() => navigate('/forms')}>Back</Button>
-          <Button size="sm" onClick={() => { void save(); }} disabled={loading || issues.some((issue) => issue.severity === 'error')}>Save draft</Button>
-          <Button size="sm" variant="outline" onClick={() => { void publish(); }} disabled={!formId || issues.some((issue) => issue.severity === 'error')}>Publish</Button>
-          <Button size="sm" variant="outline" onClick={() => setCompareOpen(true)} disabled={!formId}>Compare</Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 w-8 p-0" aria-label="Builder actions">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => { void save(); }} disabled={loading || issues.some((issue) => issue.severity === 'error')}>Save draft</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { void publish(); }} disabled={!formId || issues.some((issue) => issue.severity === 'error')}>Publish</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setCompareOpen(true)} disabled={!formId}>Compare</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setPreviewMode((value) => !value)}>{previewMode ? 'Edit' : 'Preview'}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => applyHistory(history.undo())} disabled={!history.canUndo}>Undo</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => applyHistory(history.redo())} disabled={!history.canRedo}>Redo</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => navigate('/forms')}>Back to forms</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
         <div className="flex items-center gap-3 border-b border-border px-3 py-2">
           <LintSummary issues={issues} />

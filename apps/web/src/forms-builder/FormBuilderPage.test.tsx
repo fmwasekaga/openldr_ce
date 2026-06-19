@@ -23,7 +23,8 @@ describe('FormBuilderPage', () => {
   it('creates a new form draft from the builder', async () => {
     render(<MemoryRouter initialEntries={['/forms/new']}><Routes><Route path="/forms/new" element={<FormBuilderPage />} /></Routes></MemoryRouter>);
     fireEvent.change(screen.getByLabelText('Form name'), { target: { value: 'Specimen intake' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    openBuilderMenu();
+    fireEvent.click(await screen.findByText('Save draft'));
     await waitFor(() => expect(api.createForm).toHaveBeenCalledWith(expect.objectContaining({ name: 'Specimen intake' })));
   });
 
@@ -60,9 +61,17 @@ describe('FormBuilderPage', () => {
     render(<MemoryRouter initialEntries={['/forms/form-1/builder']}><Routes><Route path="/forms/:id/builder" element={<FormBuilderPage />} /></Routes></MemoryRouter>);
     expect(await screen.findByDisplayValue('Specimen intake')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /add section/i })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+    openBuilderMenu();
+    fireEvent.click(await screen.findByText('Publish'));
     await waitFor(() => expect(api.publishForm).toHaveBeenCalledWith('form-1', expect.objectContaining({ versionLabel: 'v1' })));
-    fireEvent.click(screen.getByRole('button', { name: 'Compare' }));
+    openBuilderMenu();
+    fireEvent.click(await screen.findByText('Compare'));
     expect(await screen.findByText(/Published version v1/)).toBeInTheDocument();
   });
 });
+
+function openBuilderMenu(): void {
+  const trigger = screen.getByRole('button', { name: 'Builder actions' });
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+  if (!screen.queryByText('Save draft')) fireEvent.keyDown(trigger, { key: 'Enter' });
+}

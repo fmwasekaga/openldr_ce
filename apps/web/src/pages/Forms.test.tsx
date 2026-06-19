@@ -44,7 +44,7 @@ describe('Forms page', () => {
 
     expect(await screen.findByText('Specimen intake')).toBeInTheDocument();
     expect(screen.getByText('Questionnaire')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /new form/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Form actions' })).toBeEnabled();
 
     const file = new File([JSON.stringify(importedSchema)], 'specimen-intake.json', { type: 'application/json' });
     fireEvent.change(screen.getByLabelText(/import form json/i), { target: { files: [file] } });
@@ -65,7 +65,7 @@ describe('Forms page', () => {
     await waitFor(() => expect(api.deleteForm).toHaveBeenCalledWith('form-1'));
   });
 
-  it('opens the builder from the New form button', async () => {
+  it('opens the builder from the New menu action', async () => {
     render(
       <MemoryRouter initialEntries={['/forms']}>
         <Routes>
@@ -76,7 +76,9 @@ describe('Forms page', () => {
     );
 
     expect(await screen.findByText('Specimen intake')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /new form/i }));
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Form actions' }), { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('New')) fireEvent.keyDown(screen.getByRole('button', { name: 'Form actions' }), { key: 'Enter' });
+    fireEvent.click(await screen.findByText('New'));
     expect(await screen.findByText('Builder opened')).toBeInTheDocument();
   });
 
