@@ -181,6 +181,8 @@ export function createAuth(cfg: AuthConfig, deps: AuthDeps = {}): AuthPort {
         const want = new Set(roles);
         const toAdd = all.filter((r) => want.has(r.name) && !current.some((c) => c.name === r.name));
         const toRemove = current.filter((c) => !want.has(c.name));
+        // Add wanted roles before removing unwanted ones: if the second call fails,
+        // the user keeps a superset rather than being left under-privileged. Re-saving converges.
         if (toAdd.length) await adminVoid(`/users/${encodeURIComponent(id)}/role-mappings/realm`, { method: 'POST', body: JSON.stringify(toAdd.map((r) => ({ id: r.id, name: r.name }))) });
         if (toRemove.length) await adminVoid(`/users/${encodeURIComponent(id)}/role-mappings/realm`, { method: 'DELETE', body: JSON.stringify(toRemove.map((r) => ({ id: r.id, name: r.name }))) });
       },

@@ -215,7 +215,8 @@ export function registerUsersRoutes(app: FastifyInstance<any, any, any, any>, ct
       }
       await ctx.userProfiles.upsert(id, { formSchemaId, formVersion, extras });
       const afterDir = await ctx.auth.directory.get(id);
-      const after = summary(afterDir!, await ctx.userProfiles.get(id));
+      if (!afterDir) { reply.code(404); return { error: 'not found' }; }
+      const after = summary(afterDir, await ctx.userProfiles.get(id));
       await recordAudit(ctx, req, {
         action: 'user.update',
         entityType: 'user',
@@ -264,7 +265,8 @@ export function registerUsersRoutes(app: FastifyInstance<any, any, any, any>, ct
       const before = summary(beforeDir, beforeProfile);
       await ctx.auth.directory.update(id, { enabled });
       const afterDir = await ctx.auth.directory.get(id);
-      const after = summary(afterDir!, await ctx.userProfiles.get(id));
+      if (!afterDir) { reply.code(404); return { error: 'not found' }; }
+      const after = summary(afterDir, await ctx.userProfiles.get(id));
       await recordAudit(ctx, req, {
         action: 'user.status',
         entityType: 'user',
