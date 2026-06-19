@@ -1,0 +1,65 @@
+{
+  "realm": "openldr",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "roles": {
+    "realm": [
+      { "name": "lab_admin", "description": "Lab administrator" },
+      { "name": "lab_manager", "description": "Lab manager" },
+      { "name": "lab_technician", "description": "Lab technician" },
+      { "name": "data_analyst", "description": "Data analyst" },
+      { "name": "system_auditor", "description": "System auditor" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "openldr-web",
+      "name": "OpenLDR Web",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": ["http://localhost:5173/*", "http://localhost:3000/*", "http://localhost:8180/*"],
+      "webOrigins": ["+"],
+      "attributes": { "pkce.code.challenge.method": "S256" }
+    },
+    {
+      "clientId": "openldr-api",
+      "name": "OpenLDR API audience",
+      "enabled": true,
+      "bearerOnly": true
+    },
+    {
+      "clientId": "openldr-admin",
+      "name": "OpenLDR Admin (service account)",
+      "enabled": true,
+      "publicClient": false,
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "secret": "openldr-admin-dev-secret",
+      "attributes": { "use.refresh.tokens": "false" }
+    }
+  ],
+  "users": [
+    {
+      "username": "labadmin",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "labadmin@openldr.local",
+      "firstName": "Lab",
+      "lastName": "Admin",
+      "credentials": [{ "type": "password", "value": "labadmin", "temporary": false }],
+      "realmRoles": ["lab_admin"]
+    },
+    {
+      "username": "service-account-openldr-admin",
+      "enabled": true,
+      "serviceAccountClientId": "openldr-admin",
+      "clientRoles": {
+        "realm-management": ["manage-users", "view-users", "query-users", "view-realm"]
+      }
+    }
+  ]
+}
