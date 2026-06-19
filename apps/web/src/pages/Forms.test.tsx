@@ -35,6 +35,7 @@ describe('Forms page', () => {
     vi.spyOn(api, 'listForms').mockResolvedValue([form]);
     vi.spyOn(api, 'createForm').mockResolvedValue({ ...form, schema: importedSchema, targetPages: ['forms'], createdAt: form.updatedAt });
     vi.spyOn(api, 'setFormStatus').mockImplementation(async (_id, status) => ({ ...form, status, schema: importedSchema, targetPages: ['forms'], createdAt: form.updatedAt }));
+    vi.spyOn(api, 'publishForm').mockResolvedValue({ ...form, status: 'published', schema: importedSchema, targetPages: ['forms'], createdAt: form.updatedAt });
     vi.spyOn(api, 'deleteForm').mockResolvedValue();
   });
 
@@ -53,7 +54,7 @@ describe('Forms page', () => {
     fireEvent.pointerDown(screen.getByRole('button', { name: /actions for specimen intake/i }), { button: 0, ctrlKey: false, pointerType: 'mouse' });
     if (!screen.queryByText('Publish')) fireEvent.keyDown(screen.getByRole('button', { name: /actions for specimen intake/i }), { key: 'Enter' });
     fireEvent.click(await screen.findByText('Publish'));
-    await waitFor(() => expect(api.setFormStatus).toHaveBeenCalledWith('form-1', 'published'));
+    await waitFor(() => expect(api.publishForm).toHaveBeenCalledWith('form-1', expect.objectContaining({ versionLabel: 'v1' })));
 
     fireEvent.pointerDown(screen.getByRole('button', { name: /actions for specimen intake/i }), { button: 0, ctrlKey: false, pointerType: 'mouse' });
     if (!screen.queryByText('Export')) fireEvent.keyDown(screen.getByRole('button', { name: /actions for specimen intake/i }), { key: 'Enter' });
@@ -77,5 +78,15 @@ describe('Forms page', () => {
     expect(await screen.findByText('Specimen intake')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /new form/i }));
     expect(await screen.findByText('Builder opened')).toBeInTheDocument();
+  });
+
+  it('duplicates forms from row actions', async () => {
+    const duplicateSpy = vi.spyOn(api, 'duplicateForm').mockResolvedValue({ ...form, id: 'form-2', name: 'Specimen intake copy', schema: importedSchema, targetPages: ['forms'], createdAt: form.updatedAt });
+    render(<MemoryRouter><Forms /></MemoryRouter>);
+    expect(await screen.findByText('Specimen intake')).toBeInTheDocument();
+    fireEvent.pointerDown(screen.getByRole('button', { name: /actions for specimen intake/i }), { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Duplicate')) fireEvent.keyDown(screen.getByRole('button', { name: /actions for specimen intake/i }), { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Duplicate'));
+    await waitFor(() => expect(duplicateSpy).toHaveBeenCalledWith('form-1'));
   });
 });

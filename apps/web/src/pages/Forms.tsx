@@ -9,7 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TablePagination } from '@/components/ui/table-pagination';
-import { createForm, deleteForm, formQuestionnaireUrl, listForms, setFormStatus, type FormDefinition, type FormStatus, type FormSummary } from '@/api';
+import { createForm, deleteForm, duplicateForm, formQuestionnaireUrl, listForms, publishForm, setFormStatus, type FormDefinition, type FormStatus, type FormSummary } from '@/api';
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -120,6 +120,27 @@ export function Forms() {
     }
   };
 
+  const publish = async (form: FormSummary) => {
+    setActionError(null);
+    try {
+      const updated = await publishForm(form.id, { versionLabel: form.versionLabel ?? null });
+      setRows((prev) => upsertForm(prev, toSummary(updated)));
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const duplicate = async (form: FormSummary) => {
+    setActionError(null);
+    try {
+      const copy = await duplicateForm(form.id);
+      setRows((prev) => upsertForm(prev, toSummary(copy)));
+      setPage(0);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
   const confirmDelete = async () => {
     if (!deleting) return;
     setActionError(null);
@@ -219,7 +240,9 @@ export function Forms() {
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => navigate(`/forms/${form.id}`)}>View/Run</DropdownMenuItem>
                           <DropdownMenuItem onClick={() => navigate(`/forms/${form.id}/builder`)}>Edit builder</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => { void changeStatus(form, 'published'); }} disabled={form.status === 'published'}>Publish</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => { void duplicate(form); }}>Duplicate</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => navigate(`/forms/${form.id}/builder`)}>Compare</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => { void publish(form); }} disabled={form.status === 'published'}>Publish</DropdownMenuItem>
                           <DropdownMenuItem onClick={() => { void changeStatus(form, 'archived'); }} disabled={form.status === 'archived'}>Archive</DropdownMenuItem>
                           <DropdownMenuItem asChild>
                             <a href={formQuestionnaireUrl(form.id)} download={`${form.name}.questionnaire.json`}>Export</a>
