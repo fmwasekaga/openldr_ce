@@ -20,11 +20,15 @@ export interface PageTarget {
  * - forms:      no required keys (form templates are self-contained)
  * - users:      UserDialog CORE identity fields (firstName/lastName/email/roles)
  * - facilities: facilities table — only `name` is NOT NULL
+ * - patients:   Patient record — firstName/lastName/dateOfBirth/sex are required
+ * - orders:     Lab order — patient reference + tests reference are required
  */
 export const PAGE_TARGETS: readonly PageTarget[] = [
   { id: 'forms', label: 'Forms', match: 'fieldId', requiredKeys: [] },
   { id: 'users', label: 'Users', match: 'apiProperty', requiredKeys: ['firstName', 'lastName', 'email', 'roles'] },
   { id: 'facilities', label: 'Facilities', match: 'apiProperty', requiredKeys: ['name'] },
+  { id: 'patients', label: 'Patients', match: 'apiProperty', requiredKeys: ['firstName', 'lastName', 'dateOfBirth', 'sex'] },
+  { id: 'orders', label: 'Orders', match: 'fieldId', requiredKeys: ['patient', 'tests'] },
 ];
 
 export function getPageTarget(id: string): PageTarget | undefined {

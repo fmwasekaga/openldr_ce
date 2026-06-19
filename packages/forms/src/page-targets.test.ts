@@ -5,9 +5,11 @@ import type { FormField } from './schema/form-schema';
 const field = (over: Partial<FormField>): FormField => ({ id: 'f', fhirPath: null, displayLabel: 'F', description: null, fieldType: 'text', required: false, enabled: true, order: 0, cardinality: { min: 0, max: '1' }, ...over });
 
 describe('page targets', () => {
-  it('exposes forms/users/facilities', () => {
-    expect(PAGE_TARGETS.map((p) => p.id)).toEqual(['forms', 'users', 'facilities']);
+  it('exposes forms/users/facilities/patients/orders', () => {
+    expect(PAGE_TARGETS.map((p) => p.id)).toEqual(['forms', 'users', 'facilities', 'patients', 'orders']);
     expect(getPageTarget('users')?.requiredKeys).toContain('email');
+    expect(getPageTarget('patients')?.requiredKeys).toEqual(['firstName', 'lastName', 'dateOfBirth', 'sex']);
+    expect(getPageTarget('orders')?.requiredKeys).toEqual(['patient', 'tests']);
   });
   it('reports missing required keys for a target page', () => {
     const violations = validateTemplateTargets(['facilities'], [field({ apiProperty: undefined })]);

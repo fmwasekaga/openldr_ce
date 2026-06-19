@@ -1,5 +1,6 @@
 import { createDbContext, createAppContext } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
+import { sampleForms } from '@openldr/forms';
 
 interface JsonOpt {
   json: boolean;
@@ -74,7 +75,38 @@ export async function runDbSeed(opts: JsonOpt): Promise<number> {
       const out = await ctx.persist(r, { sourceSystem: 'seed' });
       results.push({ id: r.id, flattened: out.flattened });
     }
-    emit(opts.json, { ok: true, results }, `seeded ${results.length} resources`);
+
+    // Seed sample forms idempotently (skip if already present by id)
+    const appCtx = await createAppContext(loadConfig());
+    let formsSeeded = 0;
+    try {
+      const existingForms = await appCtx.forms.list();
+      const existingIds = new Set(existingForms.map((f) => f.id));
+      for (const form of sampleForms) {
+        if (existingIds.has(form.id)) continue;
+        await appCtx.forms.create({
+          name: form.name,
+          versionLabel: form.versionLabel,
+          fhirResourceType: form.fhirResourceType,
+          fhirVersion: form.fhirVersion,
+          fhirProfileUrl: form.fhirProfileUrl,
+          facilityId: form.facilityId,
+          status: form.status,
+          active: form.active,
+          schema: form,
+          targetPages: form.targetPages,
+        });
+        formsSeeded++;
+      }
+    } finally {
+      await appCtx.close();
+    }
+
+    emit(
+      opts.json,
+      { ok: true, results, formsSeeded },
+      `seeded ${results.length} resources, ${formsSeeded} forms`,
+    );
     return 0;
   } finally {
     await ctx.close();
