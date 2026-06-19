@@ -4,7 +4,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { FormField, FormSchema, RuntimeAnswers } from './types';
+import type { FormField, FormSchema, FormSection, RuntimeAnswers } from './types';
 import { cleanAnswers, fieldLabel, groupChildren, validate, visibleIds } from './runtime';
 
 // ── Public component ──────────────────────────────────────────────────────────
@@ -50,15 +50,80 @@ export function FormRuntime({
     await onSubmit(cleanAnswers(schema, answers));
   };
 
-  // Render fields ordered by field.order, grouped by section if desired.
-  // For simplicity we render one flat ordered list (sections are metadata in the new model).
-  const sortedFields = useMemo(
+  // Top-level visible fields (excluding group children, which are rendered inside their group).
+  const topLevelFields = useMemo(
     () =>
       schema.fields
-        .filter((f) => visible.has(f.id) && !f.groupId) // top-level only; children rendered inside group
+        .filter((f) => visible.has(f.id) && !f.groupId)
         .sort((a, b) => a.order - b.order),
     [schema.fields, visible],
   );
+
+  // Determine whether to use section grouping.
+  // We group when the schema has sections defined OR any field has a section assigned.
+  const hasSections = useMemo(
+    () =>
+      (schema.sections && schema.sections.length > 0) ||
+      schema.fields.some((f) => f.section),
+    [schema.sections, schema.fields],
+  );
+
+  // Build section groups: ordered by section.order, then unsectioned fields at the end.
+  const sectionGroups = useMemo(() => {
+    if (!hasSections) return null;
+
+    const orderedSections: FormSection[] = (schema.sections ?? [])
+      .slice()
+      .sort((a, b) => a.order - b.order);
+
+    // Collect any section ids from fields that aren't in schema.sections
+    const knownSectionIds = new Set(orderedSections.map((s) => s.id));
+    const extraSectionIds: string[] = [];
+    for (const f of topLevelFields) {
+      if (f.section && !knownSectionIds.has(f.section) && !extraSectionIds.includes(f.section)) {
+        extraSectionIds.push(f.section);
+      }
+    }
+    const extraSections: FormSection[] = extraSectionIds.map((id, i) => ({
+      id,
+      label: id,
+      order: orderedSections.length + i,
+    }));
+    const allSections = [...orderedSections, ...extraSections];
+
+    const groups: Array<{ key: string; label: string | null; fields: FormField[] }> = [];
+
+    for (const section of allSections) {
+      const sectionFields = topLevelFields.filter((f) => f.section === section.id);
+      if (sectionFields.length === 0) continue;
+      groups.push({ key: section.id, label: section.label ?? section.id, fields: sectionFields });
+    }
+
+    // Unsectioned fields (no section or unknown section)
+    const sectionedFieldIds = new Set(groups.flatMap((g) => g.fields.map((f) => f.id)));
+    const unsectioned = topLevelFields.filter((f) => !sectionedFieldIds.has(f.id));
+    if (unsectioned.length > 0) {
+      groups.push({ key: '__no_section__', label: null, fields: unsectioned });
+    }
+
+    return groups;
+  }, [hasSections, schema.sections, topLevelFields]);
+
+  function renderFieldRows(fields: FormField[]) {
+    return fields.map((field) => (
+      <FieldRow
+        key={field.id}
+        field={field}
+        schema={schema}
+        answers={answers}
+        visible={visible}
+        error={errors[field.id]}
+        onChange={setField}
+        errors={errors}
+        warning={fieldWarnings?.[field.id]}
+      />
+    ));
+  }
 
   return (
     <form
@@ -68,21 +133,24 @@ export function FormRuntime({
         void submit();
       }}
     >
-      <div className="grid gap-4">
-        {sortedFields.map((field) => (
-          <FieldRow
-            key={field.id}
-            field={field}
-            schema={schema}
-            answers={answers}
-            visible={visible}
-            error={errors[field.id]}
-            onChange={setField}
-            errors={errors}
-            warning={fieldWarnings?.[field.id]}
-          />
-        ))}
-      </div>
+      {sectionGroups ? (
+        <div className="grid gap-6">
+          {sectionGroups.map(({ key, label, fields }) => (
+            <div key={key} className="grid gap-4">
+              {label !== null && (
+                <div className="border-b pb-1 mb-1">
+                  <span className="text-sm font-semibold text-foreground">{label}</span>
+                </div>
+              )}
+              {renderFieldRows(fields)}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid gap-4">
+          {renderFieldRows(topLevelFields)}
+        </div>
+      )}
       {footer === undefined ? <Button type="submit">{submitLabel}</Button> : footer}
     </form>
   );

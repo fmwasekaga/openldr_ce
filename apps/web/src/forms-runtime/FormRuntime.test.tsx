@@ -94,6 +94,54 @@ const previewSchema: FormSchema = {
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
 
+// Schema with two sections for grouping tests.
+const sectionedSchema: FormSchema = {
+  id: 'sectioned',
+  name: 'Sectioned form',
+  versionLabel: null,
+  fhirVersion: null,
+  fhirResourceType: null,
+  fhirProfileUrl: null,
+  facilityId: null,
+  fields: [
+    {
+      id: 'fname',
+      fhirPath: null,
+      displayLabel: 'First name',
+      description: null,
+      fieldType: 'text',
+      required: false,
+      enabled: true,
+      order: 1,
+      section: 'main',
+      cardinality: { min: 0, max: '1' },
+    },
+    {
+      id: 'testType',
+      fhirPath: null,
+      displayLabel: 'Test type',
+      description: null,
+      fieldType: 'text',
+      required: false,
+      enabled: true,
+      order: 2,
+      section: 'extra',
+      cardinality: { min: 0, max: '1' },
+    },
+  ],
+  sections: [
+    { id: 'main', label: 'Patient', order: 0 },
+    { id: 'extra', label: 'Order Details', order: 1 },
+  ],
+  targetPages: [],
+  languages: ['en'],
+  version: 1,
+  active: true,
+  status: 'draft',
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+};
+
 describe('FormRuntime', () => {
   it('required validation blocks submit and shows error', async () => {
     const onSubmit = vi.fn();
@@ -171,5 +219,62 @@ describe('FormRuntime', () => {
       screen.queryByLabelText(/error/i) ??
       screen.queryByText('!');
     expect(marker).not.toBeNull();
+  });
+
+  // ── Section grouping ─────────────────────────────────────────────────────────
+
+  it('renders section headers when schema has sections', () => {
+    render(
+      <FormRuntime
+        schema={sectionedSchema}
+        submitLabel=""
+        footer={null}
+        onSubmit={() => {}}
+      />,
+    );
+    // Both section labels must appear as headers
+    expect(screen.getByText('Patient')).toBeTruthy();
+    expect(screen.getByText('Order Details')).toBeTruthy();
+  });
+
+  it('renders fields under correct section headers', () => {
+    render(
+      <FormRuntime
+        schema={sectionedSchema}
+        submitLabel=""
+        footer={null}
+        onSubmit={() => {}}
+      />,
+    );
+    // Field labels are still in the document
+    expect(screen.getByLabelText('First name')).toBeTruthy();
+    expect(screen.getByLabelText('Test type')).toBeTruthy();
+    // Section headers appear before their fields in DOM order
+    const patientHeader = screen.getByText('Patient');
+    const firstNameInput = screen.getByLabelText('First name');
+    expect(
+      patientHeader.compareDocumentPosition(firstNameInput) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    const orderHeader = screen.getByText('Order Details');
+    const testTypeInput = screen.getByLabelText('Test type');
+    expect(
+      orderHeader.compareDocumentPosition(testTypeInput) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('renders fields as flat list with no section headers when schema has no sections', () => {
+    render(
+      <FormRuntime
+        schema={previewSchema}
+        submitLabel=""
+        footer={null}
+        onSubmit={() => {}}
+      />,
+    );
+    // Field appears
+    expect(screen.getByLabelText('Name')).toBeTruthy();
+    // No section header elements
+    expect(screen.queryByText('Patient')).toBeNull();
+    expect(screen.queryByText('Order Details')).toBeNull();
   });
 });

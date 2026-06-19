@@ -55,7 +55,7 @@ export function SortableFieldRow({
       ref={setNodeRef}
       style={style}
       data-sortable-card
-      className={`group flex items-center gap-2 px-3 py-2 rounded-md border transition-colors cursor-pointer ${
+      className={`group flex items-center gap-2 px-3 py-3 rounded-md border transition-colors cursor-pointer ${
         selected
           ? 'border-primary bg-primary/5'
           : 'border-border hover:border-muted-foreground/30'
