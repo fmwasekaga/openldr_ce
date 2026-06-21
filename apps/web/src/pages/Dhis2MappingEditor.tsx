@@ -145,7 +145,12 @@ export function Dhis2MappingEditor() {
         {isNew ? (
           <label className="grid gap-1 text-sm">
             <span className="text-muted-foreground">{t('dhis2.mappings.editor.kindLabel')}</span>
-            <select data-testid="kind-select" className={SELECT} value={kind} onChange={(e) => { setKind(e.target.value as Kind); setProblems(null); }}>
+            <select data-testid="kind-select" className={SELECT} value={kind} onChange={(e) => {
+              setKind(e.target.value as Kind); setProblems(null);
+              // Reset both branches so switching mapping type starts fresh (def() is kind-gated, but stale values are surprising on toggle-back).
+              setReportId(''); setReportColumns([]); setAggOrgUnitColumn(''); setPeriodColumn(''); setAggRows([]);
+              setSourceId(''); setProgram(''); setProgramStage(''); setTrkOrgUnitColumn(''); setEventDateColumn(''); setIdColumn(''); setTrkRows([]);
+            }}>
               <option value="aggregate">{t('dhis2.mappings.editor.kindAggregate')}</option>
               <option value="tracker">{t('dhis2.mappings.editor.kindTracker')}</option>
             </select>

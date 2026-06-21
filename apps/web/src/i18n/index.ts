@@ -199,7 +199,6 @@ const en = {
           save: 'Save',
           cancel: 'Cancel',
           savedToast: 'Saved {{name}}',
-          trackerNotice: 'This is a tracker mapping. Tracker editing comes in a later sub-project (SP-C2).',
           noMetadata: 'No DHIS2 metadata cached — pull metadata from DHIS2 settings to enable dataElement pickers.',
           notFound: 'Mapping not found.',
           kindLabel: 'Mapping type',
