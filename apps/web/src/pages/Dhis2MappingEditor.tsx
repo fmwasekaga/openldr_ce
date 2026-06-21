@@ -22,6 +22,7 @@ export function Dhis2MappingEditor() {
   const [columns, setColumns] = useState<ReportColumn2[]>([]);
   const [tracker, setTracker] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const [mappingId, setMappingId] = useState<string>('');
   const [name, setName] = useState('');
@@ -35,21 +36,31 @@ export function Dhis2MappingEditor() {
   // Initial load: reports + cached metadata + (edit) the mapping.
   useEffect(() => {
     void (async () => {
-      const [reps, m] = await Promise.all([fetchReports(), getDhis2Metadata()]);
-      setReports(reps); setMeta(m);
-      if (isNew) { setMappingId(`mapping-${crypto.randomUUID()}`); return; }
       try {
-        const rec = await getDhis2Mapping(id!);
-        const def = rec.definition as Record<string, unknown> & { kind?: string; source?: { reportId?: string }; orgUnitColumn?: string; periodColumn?: string; columns?: AggregateColumnMapping[] };
-        if (def.kind === 'tracker') { setTracker(true); return; }
-        setMappingId(rec.id);
-        setName(rec.name);
-        setReportId(def.source?.reportId ?? '');
-        setOrgUnitColumn(def.orgUnitColumn ?? '');
-        setPeriodColumn(def.periodColumn ?? '');
-        setRows((def.columns ?? []).map((c) => ({ column: c.column, dataElement: c.dataElement, categoryOptionCombo: c.categoryOptionCombo ?? '' })));
-        if (def.source?.reportId) setColumns(await getReportColumns(def.source.reportId).catch(() => []));
-      } catch { setNotFound(true); }
+        const [reps, m] = await Promise.all([fetchReports(), getDhis2Metadata()]);
+        setReports(reps); setMeta(m);
+        if (isNew) { setMappingId(`mapping-${crypto.randomUUID()}`); return; }
+        try {
+          const rec = await getDhis2Mapping(id!);
+          const def = rec.definition as Record<string, unknown> & { kind?: string; source?: { reportId?: string }; orgUnitColumn?: string; periodColumn?: string; columns?: AggregateColumnMapping[] };
+          if (def.kind === 'tracker') { setTracker(true); return; }
+          setMappingId(rec.id);
+          setName(rec.name);
+          setReportId(def.source?.reportId ?? '');
+          setOrgUnitColumn(def.orgUnitColumn ?? '');
+          setPeriodColumn(def.periodColumn ?? '');
+          setRows((def.columns ?? []).map((c) => ({ column: c.column, dataElement: c.dataElement, categoryOptionCombo: c.categoryOptionCombo ?? '' })));
+          if (def.source?.reportId) setColumns(await getReportColumns(def.source.reportId).catch(() => []));
+        } catch (e) {
+          // Distinguish a genuine 404 (mapping gone) from an unexpected failure.
+          if (e instanceof Error && e.message.includes('404')) setNotFound(true);
+          else setError(e instanceof Error ? e.message : String(e));
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setLoading(false);
+      }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -83,6 +94,9 @@ export function Dhis2MappingEditor() {
     catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }, [mappingId, name, def, navigate]);
 
+  if (loading) {
+    return <AppShell title="DHIS2 mapping"><div className="p-6 text-sm text-muted-foreground">{t('common.loading')}</div></AppShell>;
+  }
   if (tracker) {
     return <AppShell title="DHIS2 mapping"><div className="p-6 text-sm text-muted-foreground">{t('dhis2.mappings.editor.trackerNotice')}</div></AppShell>;
   }
