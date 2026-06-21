@@ -182,11 +182,15 @@ const usersForm: FormSchema = {
       order: 3,
       cardinality: { min: 0, max: '*' },
       apiProperty: 'roles',
+      // Codes must match the Keycloak realm roles (infra/keycloak/openldr-realm.json)
+      // and the i18n users.roleNames keys, so a user's real role shows as selected on
+      // edit and saving writes role codes the identity provider recognises.
       valueSetOptions: [
-        { code: 'admin', display: 'Administrator' },
-        { code: 'lab-tech', display: 'Lab Technician' },
-        { code: 'clinician', display: 'Clinician' },
-        { code: 'viewer', display: 'Viewer' },
+        { code: 'lab_admin', display: 'Lab Admin' },
+        { code: 'lab_manager', display: 'Lab Manager' },
+        { code: 'lab_technician', display: 'Lab Technician' },
+        { code: 'data_analyst', display: 'Data Analyst' },
+        { code: 'system_auditor', display: 'System Auditor' },
       ],
     },
   ],
