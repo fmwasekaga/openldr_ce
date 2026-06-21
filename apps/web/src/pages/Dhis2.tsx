@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Network } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { AppShell } from '@/shell/AppShell';
 import { Badge } from '@/components/ui/badge';
@@ -93,7 +94,10 @@ export function Dhis2() {
             <CardContent className="space-y-4 text-sm">
               <div className="flex flex-wrap gap-6">
                 <div><span className="text-muted-foreground">{t('dhis2.mappings')}: </span>{status.counts.mappings}</div>
-                <div><span className="text-muted-foreground">{t('dhis2.orgUnitMappings')}: </span>{status.counts.orgUnitMappings}</div>
+                <div>
+                  <span className="text-muted-foreground">{t('dhis2.orgUnitMappings')}: </span>{status.counts.orgUnitMappings}
+                  {' '}<Link to="/dhis2/orgunits" className="text-primary hover:underline" data-testid="manage-orgunits">{t('dhis2.orgunits.manage')}</Link>
+                </div>
                 <div><span className="text-muted-foreground">{t('dhis2.schedules')}: </span>{status.counts.schedules}</div>
               </div>
               <div>

@@ -150,6 +150,22 @@ const en = {
       when: 'When',
       action: 'Action',
       mapping: 'Mapping',
+      orgunits: {
+        title: 'Facility → OrgUnit mappings',
+        manage: 'Manage →',
+        facility: 'Facility',
+        orgUnit: 'DHIS2 OrgUnit',
+        unmapped: 'Unmapped',
+        pick: 'Pick an orgUnit…',
+        search: 'Search orgUnits',
+        clear: 'Clear',
+        pulledAt: 'OrgUnit catalog pulled {{when}}',
+        neverPulled: 'No orgUnit catalog yet — pull metadata from DHIS2 settings first.',
+        noFacilities: 'No facilities yet.',
+        mappedToast: 'Mapped {{facility}}',
+        clearedToast: 'Cleared mapping for {{facility}}',
+        errorToast: 'Failed: {{error}}',
+      },
     },
 };
 
