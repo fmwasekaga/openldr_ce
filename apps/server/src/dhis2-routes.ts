@@ -3,6 +3,7 @@ import type { AppContext, Dhis2Context } from '@openldr/bootstrap';
 import type { Dhis2MetadataCache, OrgUnitMapStore, MappingStore } from '@openldr/db';
 import { redact } from '@openldr/core';
 import { z } from 'zod';
+import { validateMapping, type AggregateMapping } from '@openldr/dhis2';
 import { requireRole } from './rbac';
 import { recordAudit } from './audit-helper';
 
@@ -164,5 +165,26 @@ export function registerDhis2Routes(app: FastifyInstance<any, any, any, any>, ct
       programStages: m.programStages ?? [],
       pulledAt: cached.pulledAt,
     };
+  });
+
+  app.post('/api/dhis2/mappings/validate', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const p = aggregateDefinition.safeParse(req.body);
+    if (!p.success) { reply.code(400); return { error: p.error.message }; }
+    const cached = await deps.metadataCache.get();
+    if (!cached) return { problems: ['no DHIS2 metadata cached — pull metadata from DHIS2 settings first'] };
+    return { problems: validateMapping(p.data as AggregateMapping, cached.metadata) };
+  });
+
+  app.get('/api/dhis2/report-columns', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const reportId = (req.query as { reportId?: string }).reportId;
+    if (!reportId) { reply.code(400); return { error: 'reportId is required' }; }
+    try {
+      const result = await ctx.reporting.run(reportId, {});
+      return { columns: result.columns.map((c) => ({ key: c.key, label: c.label })) };
+    } catch (e) {
+      if (e instanceof Error && e.name === 'ReportNotFoundError') { reply.code(404); return { error: 'unknown report' }; }
+      reply.code(502);
+      return { error: redact(e instanceof Error ? e.message : String(e)) };
+    }
   });
 }

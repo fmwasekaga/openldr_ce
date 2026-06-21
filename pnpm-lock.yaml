@@ -53,6 +53,9 @@ importers:
       '@openldr/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@openldr/dhis2':
+        specifier: workspace:*
+        version: link:../../packages/dhis2
       '@openldr/forms':
         specifier: workspace:*
         version: link:../../packages/forms

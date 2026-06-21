@@ -292,3 +292,38 @@ describe('dhis2 mappings CRUD + metadata', () => {
     expect((await app.inject({ method: 'GET', url: '/api/dhis2/mappings' })).statusCode).toBe(403);
   });
 });
+
+describe('dhis2 validate + report-columns', () => {
+  const agg = { kind: 'aggregate', id: 'm1', name: 'Agg', source: { kind: 'report', reportId: 'test-volume' }, orgUnitColumn: 'month', columns: [{ column: 'count', dataElement: 'de1' }] };
+
+  it('validate returns problems from the cached metadata', async () => {
+    const deps = fakeDeps();
+    await deps.metadataCache.save({ dataElements: [{ id: 'de1', name: 'DE' }], orgUnits: [], categoryOptionCombos: [], programs: [], programStages: [] } as never);
+    const app = appWith(configuredCfg(), fakeDhis2(), ['lab_admin'], deps);
+    const okBody = (await app.inject({ method: 'POST', url: '/api/dhis2/mappings/validate', payload: agg })).json();
+    expect(okBody.problems).toEqual([]); // de1 is known
+    const bad = { ...agg, columns: [{ column: 'count', dataElement: 'NOPE' }] };
+    const badBody = (await app.inject({ method: 'POST', url: '/api/dhis2/mappings/validate', payload: bad })).json();
+    expect(badBody.problems.length).toBe(1);
+  });
+
+  it('validate warns when no metadata is cached', async () => {
+    const app = appWith(configuredCfg(), fakeDhis2(), ['lab_admin'], fakeDeps());
+    const body = (await app.inject({ method: 'POST', url: '/api/dhis2/mappings/validate', payload: agg })).json();
+    expect(body.problems[0]).toMatch(/pull metadata/i);
+  });
+
+  it('report-columns returns columns / 400 / 404 / 502', async () => {
+    const app = appWith(configuredCfg(), fakeDhis2(), ['lab_admin']);
+    expect((await app.inject({ method: 'GET', url: '/api/dhis2/report-columns' })).statusCode).toBe(400);
+    const ok = (await app.inject({ method: 'GET', url: '/api/dhis2/report-columns?reportId=test-volume' })).json();
+    expect(ok.columns).toEqual([{ key: 'month', label: 'Month' }, { key: 'count', label: 'Count' }]);
+    expect((await app.inject({ method: 'GET', url: '/api/dhis2/report-columns?reportId=missing' })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'GET', url: '/api/dhis2/report-columns?reportId=boom' })).statusCode).toBe(502);
+  });
+
+  it('validate rejects non-admins with 403', async () => {
+    const app = appWith(configuredCfg(), fakeDhis2(), ['viewer']);
+    expect((await app.inject({ method: 'POST', url: '/api/dhis2/mappings/validate', payload: agg })).statusCode).toBe(403);
+  });
+});
