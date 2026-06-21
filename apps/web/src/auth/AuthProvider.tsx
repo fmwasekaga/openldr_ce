@@ -93,5 +93,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
   }
 
+  // Hold children until auth resolves so no API call fires before the access token is
+  // restored into the in-memory holder (otherwise the first requests race to a 401).
+  // The /auth/callback effect sets loading=false itself, so CallbackPage still renders.
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <p className="text-sm text-muted-foreground">{t('common.signingIn')}</p>
+      </div>
+    );
+  }
+
   return <AuthContext.Provider value={{ user, loading, hasRole, signOut }}>{children}</AuthContext.Provider>;
 }

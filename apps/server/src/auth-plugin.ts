@@ -30,6 +30,21 @@ function bearer(req: FastifyRequest): string | null {
   return null;
 }
 
+const PROVIDER_DEFAULT_ROLE = (n: string): boolean =>
+  n.startsWith('default-roles') || n === 'offline_access' || n === 'uma_authorization';
+
+/**
+ * RBAC roles come from the verified token's `realm_access.roles` (Keycloak owns roles in
+ * the decoupled model), with provider-default roles filtered out. The local user record is
+ * only the audit-actor identity + the disable switch — never the authorization source.
+ */
+function realmRolesFromClaims(claims: Record<string, unknown>): string[] {
+  const ra = claims['realm_access'];
+  const roles = ra && typeof ra === 'object' ? (ra as { roles?: unknown }).roles : undefined;
+  if (!Array.isArray(roles)) return [];
+  return roles.filter((r): r is string => typeof r === 'string' && !PROVIDER_DEFAULT_ROLE(r));
+}
+
 async function devActor(ctx: AppContext): Promise<RequestActor> {
   const username = ctx.cfg.AUTH_DEV_USERNAME ?? 'dev-admin';
   const roles = (ctx.cfg.AUTH_DEV_ROLES ?? 'lab_admin')
@@ -79,7 +94,7 @@ export function registerAuth(app: FastifyInstance<any, any, any, any>, ctx: AppC
         reply.code(403);
         return reply.send({ error: 'account disabled' });
       }
-      req.user = { id: u.id, username: u.username, displayName: u.displayName, roles: u.roles };
+      req.user = { id: u.id, username: u.username, displayName: u.displayName, roles: realmRolesFromClaims(claims) };
     } catch (e) {
       ctx.logger.error({ error: e instanceof Error ? e.message : String(e) }, 'user sync failed');
       reply.code(401);

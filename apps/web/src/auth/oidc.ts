@@ -39,12 +39,22 @@ export function createOidc(cfg: OidcConfig): OidcClient {
   mgr.events.addUserLoaded((u: User) => setAccessToken(u.access_token));
   mgr.events.addAccessTokenExpired(() => setAccessToken(null));
 
+  // The authorization code + PKCE state are single-use. React StrictMode invokes the
+  // callback effect twice in dev; dedupe so the second invocation reuses the first
+  // exchange instead of re-redeeming a consumed code (which Keycloak rejects).
+  let callbackPromise: Promise<User | null> | null = null;
+
   return {
     async signinRedirect() { await mgr.signinRedirect(); },
     async handleCallback() {
-      const u = await mgr.signinCallback();
-      if (u?.access_token) setAccessToken(u.access_token);
-      return u ?? null;
+      if (!callbackPromise) {
+        callbackPromise = (async () => {
+          const u = await mgr.signinCallback();
+          if (u?.access_token) setAccessToken(u.access_token);
+          return u ?? null;
+        })();
+      }
+      return callbackPromise;
     },
     async signoutRedirect() { setAccessToken(null); await mgr.signoutRedirect(); },
     async getStoredUser() {

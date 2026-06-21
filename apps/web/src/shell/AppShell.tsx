@@ -2,13 +2,16 @@ import type { ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, BookOpen, Library, FileInput, Users, ShieldCheck,
-  ChevronLeft, ChevronRight, Sun, Moon, type LucideIcon,
+  ChevronLeft, ChevronRight, Sun, Moon, LogOut, type LucideIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/auth/AuthProvider';
 import { useTheme } from './useTheme';
 import { useSidebar } from './useSidebar';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/cn';
 
 const NAV: { to: string; label: string; end: boolean; icon: LucideIcon }[] = [
@@ -76,17 +79,41 @@ export function AppShell({
         </nav>
 
         <div className="border-t border-border p-2">
-          <div className={cn('flex items-center gap-2', collapsed ? 'justify-center' : 'px-1')} title={collapsed ? (user?.username ?? '') : undefined}>
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-              {(user?.username?.[0] ?? 'O').toUpperCase()}
-            </span>
-            {!collapsed && (
-              <div className="min-w-0 leading-tight">
-                <div className="truncate text-xs font-medium text-foreground">{user?.username ?? ''}</div>
-                <div className="text-[10px] text-muted-foreground">{user?.roles?.[0] ?? ''}</div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                title={collapsed ? (user?.username ?? '') : undefined}
+                className={cn(
+                  'flex w-full items-center gap-2 rounded-md p-1 text-left transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  collapsed && 'justify-center',
+                )}
+              >
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+                  {(user?.username?.[0] ?? 'O').toUpperCase()}
+                </span>
+                {!collapsed && (
+                  <div className="min-w-0 leading-tight">
+                    <div className="truncate text-xs font-medium text-foreground">{user?.username ?? ''}</div>
+                    <div className="text-[10px] text-muted-foreground">{user?.roles?.[0] ?? ''}</div>
+                  </div>
+                )}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="top" align="start" className="w-52">
+              <div className="px-2 py-1.5 leading-tight">
+                <div className="truncate text-sm font-medium text-foreground">{user?.username ?? ''}</div>
+                {user?.roles?.[0] && (
+                  <div className="truncate text-xs text-muted-foreground">{user.roles[0].replace(/_/g, ' ')}</div>
+                )}
               </div>
-            )}
-          </div>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={signOut}>
+                <LogOut className="mr-2 h-4 w-4" />
+                {t('common.signOut')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </aside>
 
@@ -94,12 +121,6 @@ export function AppShell({
         <header className="flex h-12 shrink-0 items-center justify-between border-b border-border px-6">
           <span className="font-medium">{title}</span>
           <div className="flex items-center gap-2">
-            {user ? (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span>{user.username}</span>
-                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={signOut}>{t('common.signOut')}</Button>
-              </div>
-            ) : null}
             <Button
               variant="ghost"
               size="icon"

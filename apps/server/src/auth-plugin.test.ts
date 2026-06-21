@@ -58,6 +58,17 @@ describe('registerAuth', () => {
     expect(res.json().user.username).toBe('ada');
   });
 
+  it('sources req.user.roles from the token realm_access (not the local record), filtering provider defaults', async () => {
+    const c = ctx({
+      verify: async () => ({ sub: 's1', realm_access: { roles: ['lab_admin', 'offline_access', 'default-roles-openldr'] } }),
+      user: { id: 'u1', username: 'ada', displayName: 'Ada', roles: [], status: 'active' },
+    });
+    const app = await appWith(c);
+    const res = await app.inject({ method: 'GET', url: '/api/probe', headers: { authorization: 'Bearer good' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().user.roles).toEqual(['lab_admin']);
+  });
+
   it('401s on an invalid token', async () => {
     const app = await appWith(ctx({ verify: async () => { throw new Error('bad'); } }));
     const res = await app.inject({ method: 'GET', url: '/api/probe', headers: { authorization: 'Bearer bad' } });
