@@ -105,8 +105,8 @@ describe('Terminology page', () => {
     render(<MemoryRouter><Terminology /></MemoryRouter>);
 
     fireEvent.click(await screen.findByRole('button', { name: /value sets/i }));
-    expect(screen.getByText('urn:openldr:vs:yes-no')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Yes/No'));
+    expect(await screen.findByText('urn:openldr:vs:yes-no')).toBeInTheDocument();
+    fireEvent.click(await screen.findByText('Yes/No'));
 
     await waitFor(() => expect(api.getValueSet).toHaveBeenCalledWith('vs-yn'));
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
