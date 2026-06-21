@@ -52,7 +52,7 @@ export function Dhis2() {
                 <div>
                   <span className="text-muted-foreground">{t('dhis2.reachability')}: </span>
                   {status?.reachable
-                    ? `${status.reachable.status === 'up' ? t('dhis2.up') : t('dhis2.down')} (${status.reachable.latencyMs}ms)`
+                    ? `${t(`dhis2.${status.reachable.status}`)} (${status.reachable.latencyMs}ms)`
                     : '-'}
                 </div>
               </>

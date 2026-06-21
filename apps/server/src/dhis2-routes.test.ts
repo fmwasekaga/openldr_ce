@@ -67,6 +67,16 @@ describe('dhis2 status route', () => {
     expect(body.reachable.status).toBe('down');
   });
 
+  it('reports configured:true but no live data when the context is null', async () => {
+    // Env says configured, but the context could not be built (e.g. createDhis2Context failed).
+    const app = appWith(configuredCfg(), null);
+    const body = (await app.inject({ method: 'GET', url: '/api/dhis2/status' })).json();
+    expect(body.configured).toBe(true);
+    expect(body.reachable).toBeNull();
+    expect(body.counts).toBeNull();
+    expect(body.recentPushes).toEqual([]);
+  });
+
   it('rejects non-admins with 403', async () => {
     const app = appWith(configuredCfg(), fakeDhis2(), ['lab_technician']);
     expect((await app.inject({ method: 'GET', url: '/api/dhis2/status' })).statusCode).toBe(403);

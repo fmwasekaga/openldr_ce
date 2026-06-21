@@ -131,6 +131,7 @@ const en = {
       reachability: 'Reachability',
       up: 'Reachable',
       down: 'Unreachable',
+      degraded: 'Degraded',
       notConfiguredHelp: 'Set REPORTING_TARGET_ADAPTER=dhis2 and DHIS2_BASE_URL / DHIS2_USERNAME / DHIS2_PASSWORD in the server environment to enable DHIS2.',
       metadata: 'Metadata',
       pullMetadata: 'Pull metadata',

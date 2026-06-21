@@ -40,6 +40,8 @@ describe('DHIS2 settings page', () => {
 
     fireEvent.click(screen.getByTestId('dhis2-pull-metadata'));
     await waitFor(() => expect(pullDhis2Metadata).toHaveBeenCalled());
-    expect(await screen.findByText('5')).toBeTruthy(); // dataElements count
+    // Scope to the metadata count: the "Data elements" <dt> is immediately followed by its <dd> value.
+    const dataElementsTerm = await screen.findByText('Data elements');
+    expect(dataElementsTerm.nextElementSibling?.textContent).toBe('5');
   });
 });
