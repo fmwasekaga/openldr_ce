@@ -1,13 +1,29 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { getMe, type CurrentUser } from '../api';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { authFetch, getMe, type ClientConfig, type CurrentUser } from '@/api';
+import { getOidc, type OidcClient } from './oidc';
+import { Button } from '@/components/ui/button';
+
+/** Module-level guard: prevents StrictMode double-invocation from issuing two signinRedirects. */
+let redirecting = false;
+
+/** Test-only: reset module-level state between tests. */
+export function __resetAuthProviderState(): void { redirecting = false; }
 
 interface AuthState {
   user: CurrentUser | null;
   loading: boolean;
   hasRole: (role: string) => boolean;
+  signOut: () => void;
 }
 
-const AuthContext = createContext<AuthState>({ user: null, loading: true, hasRole: () => false });
+const AuthContext = createContext<AuthState>({
+  user: null,
+  loading: true,
+  hasRole: () => false,
+  signOut: () => {},
+});
 
 export function useAuth(): AuthState {
   return useContext(AuthContext);
@@ -16,17 +32,66 @@ export function useAuth(): AuthState {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [configError, setConfigError] = useState(false);
+  const oidcRef = useRef<OidcClient | null>(null);
+  const location = useLocation();
+  const { t } = useTranslation();
 
   useEffect(() => {
     let active = true;
-    getMe()
-      .then((u) => { if (active) setUser(u); })
-      .catch(() => { if (active) setUser(null); })
-      .finally(() => { if (active) setLoading(false); });
+    (async () => {
+      try {
+        // Fail-closed: fetch config strictly — a non-OK response is an error, not a bypass.
+        const r = await authFetch('/api/config');
+        if (!r.ok) throw new Error('config');
+        const cfg = await r.json() as ClientConfig;
+
+        if (!cfg.authEnforced || !cfg.oidc) {
+          // Dev-bypass: server injects the dev actor; no interactive login.
+          const u = await getMe().catch(() => null);
+          if (active) { setUser(u); setLoading(false); }
+          return;
+        }
+        // Enforced. The callback route handles its own exchange — don't double-redirect.
+        if (location.pathname === '/auth/callback') { if (active) setLoading(false); return; }
+        const oidc = getOidc(cfg.oidc);
+        oidcRef.current = oidc;
+        const stored = await oidc.getStoredUser();
+        if (!stored) {
+          try {
+            if (redirecting) return;
+            redirecting = true;
+            await oidc.signinRedirect();
+          } catch {
+            redirecting = false;
+            if (active) { setConfigError(true); setLoading(false); }
+          }
+          return; // leaves loading=true through the redirect (or error path above resets it)
+        }
+        const u = await getMe().catch(() => null);
+        if (active) { setUser(u); setLoading(false); }
+      } catch {
+        if (active) { setConfigError(true); setLoading(false); }
+      }
+    })();
     return () => { active = false; };
-  }, []);
+  }, [location.pathname]);
 
   const hasRole = (role: string) => user?.roles.includes(role) ?? false;
+  const signOut = () => { void oidcRef.current?.signoutRedirect(); };
 
-  return <AuthContext.Provider value={{ user, loading, hasRole }}>{children}</AuthContext.Provider>;
+  if (configError) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="flex flex-col items-center gap-4 rounded-lg border border-border bg-card p-8 text-center shadow-sm">
+          <p className="text-sm text-muted-foreground">{t('common.configUnreachable')}</p>
+          <Button variant="outline" onClick={() => window.location.reload()}>
+            Reload
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return <AuthContext.Provider value={{ user, loading, hasRole, signOut }}>{children}</AuthContext.Provider>;
 }

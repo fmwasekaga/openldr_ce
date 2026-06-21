@@ -11,10 +11,12 @@ import { Forms } from './pages/Forms';
 import { FormCapture } from './pages/FormCapture';
 import { FormBuilderPage } from './forms-builder/FormBuilderPage';
 import { RequireRole } from './auth/RequireRole';
+import { CallbackPage } from './auth/CallbackPage';
 
 export function App() {
   return (
     <Routes>
+      <Route path="/auth/callback" element={<CallbackPage />} />
       <Route path="/" element={<DashboardPage />} />
       <Route path="/reports" element={<Reports />} />
       <Route path="/reports/:id" element={<ReportDetail />} />

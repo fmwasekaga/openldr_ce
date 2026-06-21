@@ -27,7 +27,8 @@ describe('AppShell', () => {
     expect(screen.getAllByText('Dashboard').length).toBeGreaterThan(0);
     expect(screen.getByText('Reports')).toBeInTheDocument();
     expect(screen.getByText('content')).toBeInTheDocument();
-    expect(screen.getByText('operator')).toBeInTheDocument();
+    // The avatar initial falls back to 'O' when no user is logged in (user?.username?.[0] ?? 'O').
+    expect(screen.getByText('O')).toBeInTheDocument();
   });
 
   it('renders Forms, Users, and Audit as active navigation links', () => {

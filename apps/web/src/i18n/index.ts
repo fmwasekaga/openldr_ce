@@ -10,6 +10,11 @@ const en = {
     loading: 'Loading…',
     actions: 'Actions',
     saving: 'Saving…',
+    signIn: 'Sign in',
+    signOut: 'Sign out',
+    signingIn: 'Signing in…',
+    callbackError: 'Sign-in failed. Please try again.',
+    configUnreachable: 'Cannot reach the server. Please reload.',
   },
   table: {
     filter: 'Filter',

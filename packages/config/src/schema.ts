@@ -54,6 +54,7 @@ export const ConfigSchema = z
 
     // OIDC issuer (Keycloak realm base URL).
     OIDC_ISSUER_URL: z.string().url(),
+    OIDC_WEB_CLIENT_ID: z.string().min(1).default('openldr-web'),
     OIDC_AUDIENCE: z.string().min(1).optional(),
     KEYCLOAK_ADMIN_CLIENT_ID: z.string().min(1).optional(),
     KEYCLOAK_ADMIN_CLIENT_SECRET: z.string().min(1).optional(),
