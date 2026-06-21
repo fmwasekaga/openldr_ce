@@ -261,6 +261,12 @@ export interface Dhis2SchedulesTable {
   updated_at: Generated<Date>;
 }
 
+export interface Dhis2MetadataCacheTable {
+  id: string;
+  metadata: JSONColumnType<import('@openldr/ports').TargetMetadata>;
+  pulled_at: Generated<Date>;
+}
+
 export interface FormDefinitionsTable {
   id: string;
   name: string;
@@ -326,6 +332,7 @@ export interface InternalSchema {
   dhis2_orgunit_map: Dhis2OrgUnitMapTable;
   dhis2_mappings: Dhis2MappingsTable;
   dhis2_schedules: Dhis2SchedulesTable;
+  dhis2_metadata_cache: Dhis2MetadataCacheTable;
   dashboards: DashboardsTable;
   form_definitions: FormDefinitionsTable;
   form_versions: FormVersionsTable;

@@ -50,6 +50,9 @@ importers:
       '@openldr/dashboards':
         specifier: workspace:*
         version: link:../../packages/dashboards
+      '@openldr/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@openldr/forms':
         specifier: workspace:*
         version: link:../../packages/forms

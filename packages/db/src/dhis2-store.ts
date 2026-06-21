@@ -8,6 +8,7 @@ export interface OrgUnitMapStore {
   upsert(entries: OrgUnitMapEntry[]): Promise<void>;
   list(): Promise<OrgUnitMapEntry[]>;
   getMap(): Promise<Map<string, string>>;
+  remove(facilityId: string): Promise<void>;
 }
 
 export interface MappingStore {
@@ -33,6 +34,9 @@ export function createOrgUnitMapStore(db: Kysely<InternalSchema>): OrgUnitMapSto
     async getMap() {
       const rows = await db.selectFrom('dhis2_orgunit_map').select(['facility_id', 'orgunit_id']).execute();
       return new Map(rows.map((r) => [r.facility_id, r.orgunit_id]));
+    },
+    async remove(facilityId) {
+      await db.deleteFrom('dhis2_orgunit_map').where('facility_id', '=', facilityId).execute();
     },
   };
 }

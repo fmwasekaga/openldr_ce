@@ -1,15 +1,25 @@
 import type { FastifyInstance } from 'fastify';
 import type { AppContext, Dhis2Context } from '@openldr/bootstrap';
+import type { Dhis2MetadataCache, OrgUnitMapStore } from '@openldr/db';
 import { redact } from '@openldr/core';
+import { z } from 'zod';
 import { requireRole } from './rbac';
+import { recordAudit } from './audit-helper';
 
 function hostOf(url: string | undefined): string | null {
   if (!url) return null;
   try { return new URL(url).host; } catch { return null; }
 }
 
+export interface Dhis2RouteDeps {
+  metadataCache: Dhis2MetadataCache;
+  orgUnitStore: OrgUnitMapStore;
+}
+
+const orgUnitMapInput = z.object({ orgUnitId: z.string().min(1), orgUnitName: z.string().nullable() });
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function registerDhis2Routes(app: FastifyInstance<any, any, any, any>, ctx: AppContext, dhis2: Dhis2Context | null): void {
+export function registerDhis2Routes(app: FastifyInstance<any, any, any, any>, ctx: AppContext, dhis2: Dhis2Context | null, deps: Dhis2RouteDeps): void {
   const cfg = ctx.cfg;
   const configured =
     cfg.REPORTING_TARGET_ADAPTER === 'dhis2' && !!cfg.DHIS2_BASE_URL && !!cfg.DHIS2_USERNAME && !!cfg.DHIS2_PASSWORD;
@@ -46,7 +56,10 @@ export function registerDhis2Routes(app: FastifyInstance<any, any, any, any>, ct
     }
     try {
       const md = await dhis2.pullMetadata();
+      await deps.metadataCache.save(md);
+      const cached = await deps.metadataCache.get();
       return {
+        pulledAt: cached?.pulledAt ?? null,
         counts: {
           dataElements: md.dataElements.length,
           orgUnits: md.orgUnits.length,
@@ -59,5 +72,41 @@ export function registerDhis2Routes(app: FastifyInstance<any, any, any, any>, ct
       reply.code(502);
       return { error: redact(e instanceof Error ? e.message : String(e)) };
     }
+  });
+
+  app.get('/api/dhis2/orgunit-mappings', { preHandler: requireRole('lab_admin') }, async () => {
+    const [locations, mappings, cached] = await Promise.all([
+      ctx.fhirStore.listByType('Location'),
+      deps.orgUnitStore.list(),
+      deps.metadataCache.get(),
+    ]);
+    const byFacility = new Map(mappings.map((m) => [m.facilityId, m]));
+    const facilities = locations.map((l) => {
+      const name = (l.resource as { name?: unknown }).name;
+      const facilityName = typeof name === 'string' && name.length > 0 ? name : l.id;
+      const m = byFacility.get(l.id);
+      return { facilityId: l.id, facilityName, orgUnitId: m?.orgUnitId ?? null, orgUnitName: m?.orgUnitName ?? null };
+    });
+    return { facilities, orgUnits: cached?.metadata.orgUnits ?? [], metadataPulledAt: cached?.pulledAt ?? null };
+  });
+
+  app.put('/api/dhis2/orgunit-mappings/:facilityId', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const p = orgUnitMapInput.safeParse(req.body);
+    if (!p.success) { reply.code(400); return { error: p.error.message }; }
+    const facilityId = (req.params as { facilityId: string }).facilityId;
+    const before = (await deps.orgUnitStore.list()).find((m) => m.facilityId === facilityId) ?? null;
+    const after = { facilityId, orgUnitId: p.data.orgUnitId, orgUnitName: p.data.orgUnitName };
+    await deps.orgUnitStore.upsert([after]);
+    await recordAudit(ctx, req, { action: 'dhis2.orgunit.map', entityType: 'dhis2-orgunit-map', entityId: facilityId, before, after, metadata: { orgUnitId: p.data.orgUnitId } });
+    return after;
+  });
+
+  app.delete('/api/dhis2/orgunit-mappings/:facilityId', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const facilityId = (req.params as { facilityId: string }).facilityId;
+    const before = (await deps.orgUnitStore.list()).find((m) => m.facilityId === facilityId) ?? null;
+    await deps.orgUnitStore.remove(facilityId);
+    await recordAudit(ctx, req, { action: 'dhis2.orgunit.unmap', entityType: 'dhis2-orgunit-map', entityId: facilityId, before, after: null });
+    reply.code(204);
+    return null;
   });
 }

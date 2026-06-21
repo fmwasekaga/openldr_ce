@@ -548,6 +548,34 @@ export async function pullDhis2Metadata(): Promise<Dhis2MetadataCounts> {
   return (await r.json()).counts;
 }
 
+// ── DHIS2 admin (SP-B) — OrgUnit mappings ────────────────────────────────────
+export interface FacilityMapping {
+  facilityId: string;
+  facilityName: string;
+  orgUnitId: string | null;
+  orgUnitName: string | null;
+}
+export interface Dhis2OrgUnitMappings {
+  facilities: FacilityMapping[];
+  orgUnits: { id: string; name: string }[];
+  metadataPulledAt: string | null;
+}
+
+export async function getOrgUnitMappings(): Promise<Dhis2OrgUnitMappings> {
+  const r = await authFetch('/api/dhis2/orgunit-mappings');
+  if (!r.ok) throw new Error(`orgunit mappings failed: ${r.status}`);
+  return r.json();
+}
+export async function setOrgUnitMapping(facilityId: string, body: { orgUnitId: string; orgUnitName: string | null }): Promise<FacilityMapping> {
+  const r = await authFetch(`/api/dhis2/orgunit-mappings/${encodeURIComponent(facilityId)}`, jbody(body, 'PUT'));
+  if (!r.ok) throw new Error(`set mapping failed: ${r.status}`);
+  return r.json();
+}
+export async function clearOrgUnitMapping(facilityId: string): Promise<void> {
+  const r = await authFetch(`/api/dhis2/orgunit-mappings/${encodeURIComponent(facilityId)}`, { method: 'DELETE' });
+  if (!r.ok) throw new Error(`clear mapping failed: ${r.status}`);
+}
+
 export function buildOntology(
   id: string,
   opts: { path?: string; rebuild?: boolean },

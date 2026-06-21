@@ -4,7 +4,7 @@ import { createEventBus } from '@openldr/adapter-event-bus';
 import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import type { Config } from '@openldr/config';
 import { createLogger, HealthRegistry, redact, type Logger } from '@openldr/core';
-import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, deriveSystemCode, resolveSeedPublisherId, type TerminologyAdminStore, type OntologyStore } from '@openldr/db';
+import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, deriveSystemCode, resolveSeedPublisherId, type TerminologyAdminStore, type OntologyStore, type FhirStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, type AuditStore } from '@openldr/audit';
@@ -72,6 +72,8 @@ export interface AppContext {
   blob: BlobStoragePort;
   eventing: EventingPort;
   store: TargetStorePort;
+  internalDb: Kysely<InternalSchema>;
+  fhirStore: FhirStore;
   audit: AuditStore;
   users: UserStore;
   userProfiles: UserProfileStore;
@@ -230,6 +232,8 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     blob,
     eventing,
     store,
+    internalDb: internal.db,
+    fhirStore: termFhirStore,
     audit,
     users,
     userProfiles,

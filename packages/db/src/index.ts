@@ -21,3 +21,4 @@ export * from './resolve-publisher';
 export * from './seed-publishers';
 export * from './dhis2-store';
 export * from './dhis2-schedule-store';
+export * from './dhis2-metadata-cache';
