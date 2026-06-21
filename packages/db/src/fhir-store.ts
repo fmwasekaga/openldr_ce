@@ -12,6 +12,7 @@ export interface SavedRef {
 export interface FhirStore {
   save(resource: FhirResource, provenance?: Provenance): Promise<SavedRef>;
   get(resourceType: string, id: string): Promise<FhirResource | null>;
+  listByType(resourceType: string, limit?: number): Promise<{ id: string; resource: FhirResource }[]>;
 }
 
 export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
@@ -58,6 +59,17 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
         .where('id', '=', id)
         .executeTakeFirst();
       return row ? (row.resource as FhirResource) : null;
+    },
+
+    async listByType(resourceType, limit = 500) {
+      const rows = await db
+        .selectFrom('fhir_resources')
+        .select(['id', 'resource'])
+        .where('resource_type', '=', resourceType)
+        .orderBy('updated_at', 'desc')
+        .limit(limit)
+        .execute();
+      return rows.map((r) => ({ id: r.id, resource: r.resource as FhirResource }));
     },
   };
 }
