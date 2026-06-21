@@ -403,6 +403,23 @@ describe('GET /health', () => {
   });
 });
 
+describe('GET /api/config', () => {
+  it('returns authEnforced and OIDC shape from ctx.cfg', async () => {
+    const app = buildApp(ctxWith('up'));
+    const res = await app.inject({ method: 'GET', url: '/api/config' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    // AUTH_DEV_BYPASS: true → authEnforced = false
+    expect(body.authEnforced).toBe(false);
+    expect(body.oidc).toMatchObject({
+      issuerUrl: 'https://kc.example/realms/openldr',
+      clientId: 'openldr-web',
+      audience: null,
+    });
+    await app.close();
+  });
+});
+
 describe('auth routes', () => {
   it('GET /api/me returns the resolved actor under dev bypass', async () => {
     const app = buildApp(ctxWith('up'));
