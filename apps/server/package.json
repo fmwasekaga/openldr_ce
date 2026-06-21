@@ -16,6 +16,7 @@
   "dependencies": {
     "@openldr/bootstrap": "workspace:*",
     "@openldr/db": "workspace:*",
+    "@openldr/dhis2": "workspace:*",
     "@openldr/config": "workspace:*",
     "@openldr/core": "workspace:*",
     "@openldr/forms": "workspace:*",

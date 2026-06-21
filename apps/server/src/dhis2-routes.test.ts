@@ -40,6 +40,15 @@ function fakeDeps(over: Record<string, unknown> = {}) {
       remove: async (facilityId: string) => { const i = orgUnitRows.findIndex((r) => r.facilityId === facilityId); if (i >= 0) orgUnitRows.splice(i, 1); },
       getMap: async () => new Map(),
     },
+    mappingStore: (() => {
+      const rows: { id: string; name: string; definition: Record<string, unknown> }[] = [];
+      return {
+        list: async () => rows.map((r) => ({ id: r.id, name: r.name, kind: (r.definition.kind as string | undefined) ?? null })),
+        get: async (id: string) => rows.find((r) => r.id === id) ?? null,
+        upsert: async (m: { id: string; name: string; definition: Record<string, unknown> }) => { const i = rows.findIndex((r) => r.id === m.id); if (i >= 0) rows[i] = m; else rows.push(m); },
+        remove: async (id: string) => { const i = rows.findIndex((r) => r.id === id); if (i >= 0) rows.splice(i, 1); },
+      };
+    })(),
     ...over,
   };
 }
@@ -52,6 +61,14 @@ function fakeCtx(cfg: Record<string, unknown>, fhirStore: Record<string, unknown
     audit: { record: async (e: unknown) => { audit.push(e); }, list: async () => [] },
     logger: { error: () => {} },
     __audit: audit,
+    reporting: {
+      run: async (id: string) => {
+        if (id === 'missing') { const e = new Error('not found'); e.name = 'ReportNotFoundError'; throw e; }
+        if (id === 'boom') throw new Error('kaboom');
+        return { columns: [{ key: 'month', label: 'Month', kind: 'string' }, { key: 'count', label: 'Count', kind: 'number' }], rows: [], chart: { type: 'bar' }, meta: { generatedAt: 'x', rowCount: 0 } };
+      },
+      list: () => [{ id: 'test-volume', name: 'Test Volume', description: '' }],
+    },
   } as unknown as AppContext;
 }
 
@@ -212,5 +229,101 @@ describe('dhis2 orgunit-mappings routes', () => {
     expect((await app.inject({ method: 'GET', url: '/api/dhis2/orgunit-mappings' })).statusCode).toBe(403);
     expect((await app.inject({ method: 'PUT', url: '/api/dhis2/orgunit-mappings/loc-1', payload: { orgUnitId: 'x', orgUnitName: null } })).statusCode).toBe(403);
     expect((await app.inject({ method: 'DELETE', url: '/api/dhis2/orgunit-mappings/loc-1' })).statusCode).toBe(403);
+  });
+});
+
+describe('dhis2 mappings CRUD + metadata', () => {
+  const agg = { kind: 'aggregate', id: 'm1', name: 'Agg', source: { kind: 'report', reportId: 'test-volume' }, orgUnitColumn: 'month', columns: [{ column: 'count', dataElement: 'de1' }] };
+
+  it('GET /mappings lists with kind', async () => {
+    const deps = fakeDeps();
+    await deps.mappingStore.upsert({ id: 'm1', name: 'Agg', definition: agg });
+    const app = appWith(configuredCfg(), fakeDhis2(), ['lab_admin'], deps);
+    const body = (await app.inject({ method: 'GET', url: '/api/dhis2/mappings' })).json();
+    expect(body).toEqual([{ id: 'm1', name: 'Agg', kind: 'aggregate' }]);
+  });
+
+  it('GET /mappings/:id returns the record or 404', async () => {
+    const deps = fakeDeps();
+    await deps.mappingStore.upsert({ id: 'm1', name: 'Agg', definition: agg });
+    const app = appWith(configuredCfg(), fakeDhis2(), ['lab_admin'], deps);
+    expect((await app.inject({ method: 'GET', url: '/api/dhis2/mappings/m1' })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'GET', url: '/api/dhis2/mappings/ghost' })).statusCode).toBe(404);
+  });
+
+  it('PUT /mappings/:id upserts + audits; 400 on bad body', async () => {
+    const deps = fakeDeps();
+    const ctxRef = fakeCtx(configuredCfg());
+    const app = Fastify();
+    app.addHook('onRequest', async (req) => { req.user = { id: 'admin', username: 'admin', displayName: null, roles: ['lab_admin'] }; });
+    registerDhis2Routes(app, ctxRef, fakeDhis2() as never, deps as never);
+    const ok = await app.inject({ method: 'PUT', url: '/api/dhis2/mappings/m1', payload: { name: 'Agg', definition: agg } });
+    expect(ok.statusCode).toBe(200);
+    expect((await deps.mappingStore.get('m1'))?.name).toBe('Agg');
+    expect((ctxRef as any).__audit.some((e: any) => e.action === 'dhis2.mapping.save')).toBe(true);
+    const bad = await app.inject({ method: 'PUT', url: '/api/dhis2/mappings/m1', payload: { name: 'x', definition: { id: 'm1' } } });
+    expect(bad.statusCode).toBe(400);
+  });
+
+  it('DELETE /mappings/:id removes + audits (204)', async () => {
+    const deps = fakeDeps();
+    await deps.mappingStore.upsert({ id: 'm1', name: 'Agg', definition: agg });
+    const ctxRef = fakeCtx(configuredCfg());
+    const app = Fastify();
+    app.addHook('onRequest', async (req) => { req.user = { id: 'admin', username: 'admin', displayName: null, roles: ['lab_admin'] }; });
+    registerDhis2Routes(app, ctxRef, fakeDhis2() as never, deps as never);
+    expect((await app.inject({ method: 'DELETE', url: '/api/dhis2/mappings/m1' })).statusCode).toBe(204);
+    expect(await deps.mappingStore.get('m1')).toBeNull();
+    expect((ctxRef as any).__audit.some((e: any) => e.action === 'dhis2.mapping.delete')).toBe(true);
+  });
+
+  it('GET /metadata returns the cache or null', async () => {
+    const deps = fakeDeps();
+    const empty = appWith(configuredCfg(), fakeDhis2(), ['lab_admin'], deps);
+    expect((await empty.inject({ method: 'GET', url: '/api/dhis2/metadata' })).json()).toBeNull();
+    await deps.metadataCache.save({ dataElements: [{ id: 'de1', name: 'DE' }], orgUnits: [], categoryOptionCombos: [{ id: 'coc1', name: 'COC' }], programs: [], programStages: [] } as never);
+    const body = (await empty.inject({ method: 'GET', url: '/api/dhis2/metadata' })).json();
+    expect(body.dataElements).toEqual([{ id: 'de1', name: 'DE' }]);
+    expect(body.pulledAt).toBeTruthy();
+  });
+
+  it('rejects non-admins with 403', async () => {
+    const app = appWith(configuredCfg(), fakeDhis2(), ['data_analyst']);
+    expect((await app.inject({ method: 'GET', url: '/api/dhis2/mappings' })).statusCode).toBe(403);
+  });
+});
+
+describe('dhis2 validate + report-columns', () => {
+  const agg = { kind: 'aggregate', id: 'm1', name: 'Agg', source: { kind: 'report', reportId: 'test-volume' }, orgUnitColumn: 'month', columns: [{ column: 'count', dataElement: 'de1' }] };
+
+  it('validate returns problems from the cached metadata', async () => {
+    const deps = fakeDeps();
+    await deps.metadataCache.save({ dataElements: [{ id: 'de1', name: 'DE' }], orgUnits: [], categoryOptionCombos: [], programs: [], programStages: [] } as never);
+    const app = appWith(configuredCfg(), fakeDhis2(), ['lab_admin'], deps);
+    const okBody = (await app.inject({ method: 'POST', url: '/api/dhis2/mappings/validate', payload: agg })).json();
+    expect(okBody.problems).toEqual([]); // de1 is known
+    const bad = { ...agg, columns: [{ column: 'count', dataElement: 'NOPE' }] };
+    const badBody = (await app.inject({ method: 'POST', url: '/api/dhis2/mappings/validate', payload: bad })).json();
+    expect(badBody.problems.length).toBe(1);
+  });
+
+  it('validate warns when no metadata is cached', async () => {
+    const app = appWith(configuredCfg(), fakeDhis2(), ['lab_admin'], fakeDeps());
+    const body = (await app.inject({ method: 'POST', url: '/api/dhis2/mappings/validate', payload: agg })).json();
+    expect(body.problems[0]).toMatch(/pull metadata/i);
+  });
+
+  it('report-columns returns columns / 400 / 404 / 502', async () => {
+    const app = appWith(configuredCfg(), fakeDhis2(), ['lab_admin']);
+    expect((await app.inject({ method: 'GET', url: '/api/dhis2/report-columns' })).statusCode).toBe(400);
+    const ok = (await app.inject({ method: 'GET', url: '/api/dhis2/report-columns?reportId=test-volume' })).json();
+    expect(ok.columns).toEqual([{ key: 'month', label: 'Month' }, { key: 'count', label: 'Count' }]);
+    expect((await app.inject({ method: 'GET', url: '/api/dhis2/report-columns?reportId=missing' })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'GET', url: '/api/dhis2/report-columns?reportId=boom' })).statusCode).toBe(502);
+  });
+
+  it('validate rejects non-admins with 403', async () => {
+    const app = appWith(configuredCfg(), fakeDhis2(), ['viewer']);
+    expect((await app.inject({ method: 'POST', url: '/api/dhis2/mappings/validate', payload: agg })).statusCode).toBe(403);
   });
 });

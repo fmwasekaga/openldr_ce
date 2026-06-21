@@ -1,8 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import type { AppContext, Dhis2Context } from '@openldr/bootstrap';
-import type { Dhis2MetadataCache, OrgUnitMapStore } from '@openldr/db';
+import type { Dhis2MetadataCache, OrgUnitMapStore, MappingStore } from '@openldr/db';
 import { redact } from '@openldr/core';
 import { z } from 'zod';
+import { validateMapping, type AggregateMapping } from '@openldr/dhis2';
 import { requireRole } from './rbac';
 import { recordAudit } from './audit-helper';
 
@@ -14,9 +15,22 @@ function hostOf(url: string | undefined): string | null {
 export interface Dhis2RouteDeps {
   metadataCache: Dhis2MetadataCache;
   orgUnitStore: OrgUnitMapStore;
+  mappingStore: MappingStore;
 }
 
 const orgUnitMapInput = z.object({ orgUnitId: z.string().min(1), orgUnitName: z.string().nullable() });
+
+const aggregateColumn = z.object({ column: z.string().min(1), dataElement: z.string().min(1), categoryOptionCombo: z.string().optional() });
+const aggregateDefinition = z.object({
+  kind: z.literal('aggregate').optional(),
+  id: z.string().min(1),
+  name: z.string().min(1),
+  source: z.object({ kind: z.literal('report'), reportId: z.string().min(1), params: z.record(z.string()).optional() }),
+  orgUnitColumn: z.string().min(1),
+  periodColumn: z.string().optional(),
+  columns: z.array(aggregateColumn),
+});
+const mappingPutInput = z.object({ name: z.string().min(1), definition: aggregateDefinition });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerDhis2Routes(app: FastifyInstance<any, any, any, any>, ctx: AppContext, dhis2: Dhis2Context | null, deps: Dhis2RouteDeps): void {
@@ -108,5 +122,69 @@ export function registerDhis2Routes(app: FastifyInstance<any, any, any, any>, ct
     await recordAudit(ctx, req, { action: 'dhis2.orgunit.unmap', entityType: 'dhis2-orgunit-map', entityId: facilityId, before, after: null });
     reply.code(204);
     return null;
+  });
+
+  app.get('/api/dhis2/mappings', { preHandler: requireRole('lab_admin') }, async () => deps.mappingStore.list());
+
+  app.get('/api/dhis2/mappings/:id', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    const m = await deps.mappingStore.get(id);
+    if (!m) { reply.code(404); return { error: 'not found' }; }
+    return m;
+  });
+
+  app.put('/api/dhis2/mappings/:id', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const p = mappingPutInput.safeParse(req.body);
+    if (!p.success) { reply.code(400); return { error: p.error.message }; }
+    const id = (req.params as { id: string }).id;
+    const before = await deps.mappingStore.get(id);
+    const record = { id, name: p.data.name, definition: p.data.definition as Record<string, unknown> };
+    await deps.mappingStore.upsert(record);
+    await recordAudit(ctx, req, { action: 'dhis2.mapping.save', entityType: 'dhis2-mapping', entityId: id, before, after: record });
+    return record;
+  });
+
+  app.delete('/api/dhis2/mappings/:id', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    const before = await deps.mappingStore.get(id);
+    await deps.mappingStore.remove(id);
+    await recordAudit(ctx, req, { action: 'dhis2.mapping.delete', entityType: 'dhis2-mapping', entityId: id, before, after: null });
+    reply.code(204);
+    return null;
+  });
+
+  app.get('/api/dhis2/metadata', { preHandler: requireRole('lab_admin') }, async () => {
+    const cached = await deps.metadataCache.get();
+    if (!cached) return null;
+    const m = cached.metadata;
+    return {
+      dataElements: m.dataElements,
+      categoryOptionCombos: m.categoryOptionCombos,
+      orgUnits: m.orgUnits,
+      programs: m.programs ?? [],
+      programStages: m.programStages ?? [],
+      pulledAt: cached.pulledAt,
+    };
+  });
+
+  app.post('/api/dhis2/mappings/validate', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const p = aggregateDefinition.safeParse(req.body);
+    if (!p.success) { reply.code(400); return { error: p.error.message }; }
+    const cached = await deps.metadataCache.get();
+    if (!cached) return { problems: ['no DHIS2 metadata cached — pull metadata from DHIS2 settings first'] };
+    return { problems: validateMapping(p.data as AggregateMapping, cached.metadata) };
+  });
+
+  app.get('/api/dhis2/report-columns', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const reportId = (req.query as { reportId?: string }).reportId;
+    if (!reportId) { reply.code(400); return { error: 'reportId is required' }; }
+    try {
+      const result = await ctx.reporting.run(reportId, {});
+      return { columns: result.columns.map((c) => ({ key: c.key, label: c.label })) };
+    } catch (e) {
+      if (e instanceof Error && e.name === 'ReportNotFoundError') { reply.code(404); return { error: 'unknown report' }; }
+      reply.code(502);
+      return { error: redact(e instanceof Error ? e.message : String(e)) };
+    }
   });
 }

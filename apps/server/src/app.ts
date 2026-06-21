@@ -14,7 +14,7 @@ import { registerAuditRoutes } from './audit-routes';
 import { registerUsersRoutes } from './users-routes';
 import { registerFormsRoutes } from './forms-routes';
 import { registerDhis2Routes } from './dhis2-routes';
-import { createDhis2MetadataCache, createOrgUnitMapStore } from '@openldr/db';
+import { createDhis2MetadataCache, createOrgUnitMapStore, createMappingStore } from '@openldr/db';
 import { registerAuth } from './auth-plugin';
 
 export function registerConfigRoute(
@@ -64,6 +64,7 @@ export function buildApp(ctx: AppContext, dhis2: Dhis2Context | null = null) {
   registerDhis2Routes(app, ctx, dhis2, {
     metadataCache: createDhis2MetadataCache(ctx.internalDb),
     orgUnitStore: createOrgUnitMapStore(ctx.internalDb),
+    mappingStore: createMappingStore(ctx.internalDb),
   });
 
   // Serve the built SPA if present (apps/web/dist). API + health are registered first and win.
