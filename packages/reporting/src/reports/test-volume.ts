@@ -17,16 +17,22 @@ export const testVolume: ReportDefinition<Params> = {
     if (p.from) q = q.where('authored_on', '>=', p.from);
     if (p.to) q = q.where('authored_on', '<=', endOfDay(p.to));
     const reqs = await q.execute();
-    const counts = new Map<string, number>();
+    // Count by month -> test. A nested map avoids round-tripping through a
+    // space-joined string key, which would truncate multi-word test names
+    // (e.g. "Blood culture") at their first space on the way back out.
+    const counts = new Map<string, Map<string, number>>();
     for (const r of reqs) {
-      const key = `${monthKey(r.authored_on)} ${r.code_text ?? '(unknown)'}`;
-      counts.set(key, (counts.get(key) ?? 0) + 1);
+      const month = monthKey(r.authored_on);
+      const test = r.code_text ?? '(unknown)';
+      let byTest = counts.get(month);
+      if (!byTest) {
+        byTest = new Map();
+        counts.set(month, byTest);
+      }
+      byTest.set(test, (byTest.get(test) ?? 0) + 1);
     }
     const rows = [...counts.entries()]
-      .map(([k, count]) => {
-        const [month, test] = k.split(' ');
-        return { month, test, count };
-      })
+      .flatMap(([month, byTest]) => [...byTest.entries()].map(([test, count]) => ({ month, test, count })))
       .sort((a, b) => (a.month < b.month ? -1 : a.month > b.month ? 1 : a.test.localeCompare(b.test)));
     return {
       columns: [
