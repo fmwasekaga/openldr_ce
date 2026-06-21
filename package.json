@@ -23,7 +23,8 @@
     "e2e:seed": "pnpm make:whonet-sample && pnpm build:plugins && pnpm openldr db reset && pnpm openldr plugin install reference-plugins/whonet-sqlite/plugin.wasm && pnpm openldr ingest samples/whonet-sample.sqlite --plugin whonet-sqlite",
     "dhis2:seed": "node scripts/dhis2-seed.mjs",
     "make:lab-sample": "node scripts/make-lab-sample.mjs",
-    "load:measure": "node scripts/load-measure.mjs"
+    "load:measure": "node scripts/load-measure.mjs",
+    "mssql:accept": "tsx scripts/mssql-live-acceptance.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
