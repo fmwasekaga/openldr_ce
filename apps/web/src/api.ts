@@ -610,7 +610,7 @@ export interface Dhis2MetadataLists {
   categoryOptionCombos: { id: string; name: string }[];
   orgUnits: { id: string; name: string }[];
   programs: { id: string; name: string }[];
-  programStages: { id: string; name: string }[];
+  programStages: { id: string; name: string; program: string }[];
   pulledAt: string;
 }
 
