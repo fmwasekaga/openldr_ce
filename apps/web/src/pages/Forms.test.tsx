@@ -19,16 +19,17 @@ const importedSchema = {
   ],
 };
 
-const form = {
+const form: api.FormSummary = {
   id: 'form-1',
   name: 'Specimen intake',
   versionLabel: 'v1',
   status: 'draft',
   active: true,
   fhirResourceType: 'Questionnaire',
+  targetPages: ['forms'],
   fieldCount: 1,
   updatedAt: '2026-01-01T00:00:00.000Z',
-} as const;
+};
 
 describe('Forms page', () => {
   beforeEach(() => {
@@ -80,6 +81,36 @@ describe('Forms page', () => {
     if (!screen.queryByText('New')) fireEvent.keyDown(screen.getByRole('button', { name: 'Form actions' }), { key: 'Enter' });
     fireEvent.click(await screen.findByText('New'));
     expect(await screen.findByText('Builder opened')).toBeInTheDocument();
+  });
+
+  it('routes a standalone form (targets the Forms page) to the run/submit view on row click', async () => {
+    render(
+      <MemoryRouter initialEntries={['/forms']}>
+        <Routes>
+          <Route path="/forms" element={<Forms />} />
+          <Route path="/forms/:id" element={<div>Run view</div>} />
+          <Route path="/forms/:id/builder" element={<div>Builder view</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByText('Specimen intake'));
+    expect(await screen.findByText('Run view')).toBeInTheDocument();
+  });
+
+  it('routes a page-allocated form to the builder on row click', async () => {
+    const allocated: api.FormSummary = { ...form, id: 'form-9', name: 'Order entry', targetPages: ['orders'] };
+    vi.spyOn(api, 'listForms').mockResolvedValue([allocated]);
+    render(
+      <MemoryRouter initialEntries={['/forms']}>
+        <Routes>
+          <Route path="/forms" element={<Forms />} />
+          <Route path="/forms/:id" element={<div>Run view</div>} />
+          <Route path="/forms/:id/builder" element={<div>Builder view</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByText('Order entry'));
+    expect(await screen.findByText('Builder view')).toBeInTheDocument();
   });
 
   it('duplicates forms from row actions', async () => {

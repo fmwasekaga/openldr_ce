@@ -218,6 +218,7 @@ export interface FormSummary {
   status: FormStatus;
   active: boolean;
   fhirResourceType: string | null;
+  targetPages: string[] | null;
   fieldCount: number;
   updatedAt: string;
 }

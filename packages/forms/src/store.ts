@@ -31,6 +31,7 @@ export interface FormSummary {
   fhirVersion: string | null;
   fhirProfileUrl: string | null;
   facilityId: string | null;
+  targetPages: string[] | null;
   fieldCount: number;
   updatedAt: string;
 }
@@ -149,6 +150,7 @@ export function createFormStore(db: Kysely<InternalSchema>) {
       fhirVersion: r.fhir_version,
       fhirProfileUrl: r.fhir_profile_url,
       facilityId: r.facility_id,
+      targetPages: r.target_pages ? (parseJson(r.target_pages) as string[]) : null,
       fieldCount: countFields(schema),
       updatedAt: toTimestamp(r.updated_at),
     };

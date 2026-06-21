@@ -33,9 +33,22 @@ function toSummary(form: FormDefinition): FormSummary {
     status: form.status,
     active: form.active,
     fhirResourceType: form.fhirResourceType,
+    targetPages: form.targetPages,
     fieldCount,
     updatedAt: form.updatedAt,
   };
+}
+
+// A form is submittable standalone from the Forms page only when it isn't allocated to
+// another page (no target pages, or it explicitly targets the generic 'forms' page).
+// Forms allocated to a specific page (users/patients/orders/facilities) are submitted from
+// THAT page, so opening one here goes to the builder to edit the template, not a run view.
+function isStandalone(targetPages: string[] | null | undefined): boolean {
+  return !targetPages || targetPages.length === 0 || targetPages.includes('forms');
+}
+
+function rowHref(form: FormSummary): string {
+  return isStandalone(form.targetPages) ? `/forms/${form.id}` : `/forms/${form.id}/builder`;
 }
 
 function upsertForm(rows: FormSummary[], form: FormSummary): FormSummary[] {
@@ -218,7 +231,7 @@ export function Forms() {
                 <TableRow><TableCell colSpan={8} className="py-8 text-center text-muted-foreground">{search ? 'No forms match.' : 'No forms yet.'}</TableCell></TableRow>
               ) : (
                 pageRows.map((form) => (
-                  <TableRow key={form.id} className="cursor-pointer transition-colors hover:bg-[rgba(70,130,180,0.08)]" onClick={() => navigate(`/forms/${form.id}`)}>
+                  <TableRow key={form.id} className="cursor-pointer transition-colors hover:bg-[rgba(70,130,180,0.08)]" onClick={() => navigate(rowHref(form))}>
                     <TableCell>
                       <div className="flex items-center gap-2 font-medium">
                         <FileInput className="h-4 w-4 text-muted-foreground" />
