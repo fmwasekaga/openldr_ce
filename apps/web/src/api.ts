@@ -576,6 +576,64 @@ export async function clearOrgUnitMapping(facilityId: string): Promise<void> {
   if (!r.ok) throw new Error(`clear mapping failed: ${r.status}`);
 }
 
+// ── DHIS2 aggregate mappings (SP-C1) ───────────────────────────────────────────
+export interface Dhis2MappingSummary { id: string; name: string; kind: string | null }
+export interface AggregateColumnMapping { column: string; dataElement: string; categoryOptionCombo?: string }
+export interface AggregateMappingDef {
+  kind?: 'aggregate';
+  id: string;
+  name: string;
+  source: { kind: 'report'; reportId: string; params?: Record<string, string> };
+  orgUnitColumn: string;
+  periodColumn?: string;
+  columns: AggregateColumnMapping[];
+}
+export interface Dhis2MappingRecord { id: string; name: string; definition: AggregateMappingDef | Record<string, unknown> }
+export interface ReportColumn2 { key: string; label: string }
+export interface Dhis2MetadataLists {
+  dataElements: { id: string; name: string }[];
+  categoryOptionCombos: { id: string; name: string }[];
+  orgUnits: { id: string; name: string }[];
+  programs: { id: string; name: string }[];
+  programStages: { id: string; name: string }[];
+  pulledAt: string;
+}
+
+export async function listDhis2Mappings(): Promise<Dhis2MappingSummary[]> {
+  const r = await authFetch('/api/dhis2/mappings');
+  if (!r.ok) throw new Error(`mappings list failed: ${r.status}`);
+  return r.json();
+}
+export async function getDhis2Mapping(id: string): Promise<Dhis2MappingRecord> {
+  const r = await authFetch(`/api/dhis2/mappings/${encodeURIComponent(id)}`);
+  if (!r.ok) throw new Error(`get mapping failed: ${r.status}`);
+  return r.json();
+}
+export async function saveDhis2Mapping(id: string, body: { name: string; definition: AggregateMappingDef }): Promise<Dhis2MappingRecord> {
+  const r = await authFetch(`/api/dhis2/mappings/${encodeURIComponent(id)}`, jbody(body, 'PUT'));
+  if (!r.ok) throw new Error(`save mapping failed: ${r.status}`);
+  return r.json();
+}
+export async function deleteDhis2Mapping(id: string): Promise<void> {
+  const r = await authFetch(`/api/dhis2/mappings/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  if (!r.ok) throw new Error(`delete mapping failed: ${r.status}`);
+}
+export async function validateDhis2Mapping(def: AggregateMappingDef): Promise<string[]> {
+  const r = await authFetch('/api/dhis2/mappings/validate', jbody(def, 'POST'));
+  if (!r.ok) throw new Error(`validate failed: ${r.status}`);
+  return (await r.json()).problems as string[];
+}
+export async function getReportColumns(reportId: string): Promise<ReportColumn2[]> {
+  const r = await authFetch(`/api/dhis2/report-columns?reportId=${encodeURIComponent(reportId)}`);
+  if (!r.ok) { const b = (await r.json().catch(() => ({}))) as { error?: string }; throw new Error(b.error ?? `report columns failed: ${r.status}`); }
+  return (await r.json()).columns as ReportColumn2[];
+}
+export async function getDhis2Metadata(): Promise<Dhis2MetadataLists | null> {
+  const r = await authFetch('/api/dhis2/metadata');
+  if (!r.ok) throw new Error(`metadata failed: ${r.status}`);
+  return r.json();
+}
+
 export function buildOntology(
   id: string,
   opts: { path?: string; rebuild?: boolean },
