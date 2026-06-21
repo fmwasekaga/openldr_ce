@@ -80,23 +80,38 @@ export async function runDbSeed(opts: JsonOpt): Promise<number> {
     const appCtx = await createAppContext(loadConfig());
     let formsSeeded = 0;
     try {
+      // Dedup by name, not id: forms.create() always generates a fresh `form-<uuid>` id and
+      // ignores the sample's id, so id-based dedup would re-create the samples every run.
       const existingForms = await appCtx.forms.list();
-      const existingIds = new Set(existingForms.map((f) => f.id));
+      const existingByName = new Map(existingForms.map((f) => [f.name, f]));
       for (const form of sampleForms) {
-        if (existingIds.has(form.id)) continue;
-        await appCtx.forms.create({
-          name: form.name,
-          versionLabel: form.versionLabel,
-          fhirResourceType: form.fhirResourceType,
-          fhirVersion: form.fhirVersion,
-          fhirProfileUrl: form.fhirProfileUrl,
-          facilityId: form.facilityId,
-          status: form.status,
-          active: form.active,
-          schema: form,
-          targetPages: form.targetPages,
-        });
-        formsSeeded++;
+        const existing = existingByName.get(form.name);
+        // Capture just id + status — list() yields FormSummary, create() yields FormDefinition.
+        let id: string;
+        let status: string;
+        if (existing) {
+          id = existing.id;
+          status = existing.status;
+        } else {
+          const created = await appCtx.forms.create({
+            name: form.name,
+            versionLabel: form.versionLabel,
+            fhirResourceType: form.fhirResourceType,
+            fhirVersion: form.fhirVersion,
+            fhirProfileUrl: form.fhirProfileUrl,
+            facilityId: form.facilityId,
+            status: form.status,
+            active: form.active,
+            schema: form,
+            targetPages: form.targetPages,
+          });
+          id = created.id;
+          status = created.status;
+          formsSeeded++;
+        }
+        // Publish so the forms actually drive their target pages (the Users page needs a
+        // published 'users' form). Idempotent: only publish drafts, never re-snapshot.
+        if (status !== 'published') await appCtx.forms.setStatus(id, 'published');
       }
     } finally {
       await appCtx.close();
