@@ -567,7 +567,7 @@ export async function getOrgUnitMappings(): Promise<Dhis2OrgUnitMappings> {
   return r.json();
 }
 export async function setOrgUnitMapping(facilityId: string, body: { orgUnitId: string; orgUnitName: string | null }): Promise<FacilityMapping> {
-  const r = await authFetch(`/api/dhis2/orgunit-mappings/${encodeURIComponent(facilityId)}`, { ...json(body), method: 'PUT' });
+  const r = await authFetch(`/api/dhis2/orgunit-mappings/${encodeURIComponent(facilityId)}`, jbody(body, 'PUT'));
   if (!r.ok) throw new Error(`set mapping failed: ${r.status}`);
   return r.json();
 }
