@@ -588,6 +588,21 @@ export interface AggregateMappingDef {
   periodColumn?: string;
   columns: AggregateColumnMapping[];
 }
+export interface TrackerColumnMapping { column: string; dataElement: string }
+export interface TrackerMappingDef {
+  kind: 'tracker';
+  id: string;
+  name: string;
+  source: { kind: 'event-source'; sourceId: string; params?: Record<string, string> };
+  program: string;
+  programStage: string;
+  orgUnitColumn: string;
+  eventDateColumn: string;
+  idColumn: string;
+  dataValues: TrackerColumnMapping[];
+}
+export type MappingDef = AggregateMappingDef | TrackerMappingDef;
+export interface Dhis2EventSource { id: string; name: string; columns: { key: string; label: string }[] }
 export interface Dhis2MappingRecord { id: string; name: string; definition: AggregateMappingDef | Record<string, unknown> }
 export interface ReportColumn2 { key: string; label: string }
 export interface Dhis2MetadataLists {
@@ -609,7 +624,7 @@ export async function getDhis2Mapping(id: string): Promise<Dhis2MappingRecord> {
   if (!r.ok) throw new Error(`get mapping failed: ${r.status}`);
   return r.json();
 }
-export async function saveDhis2Mapping(id: string, body: { name: string; definition: AggregateMappingDef }): Promise<Dhis2MappingRecord> {
+export async function saveDhis2Mapping(id: string, body: { name: string; definition: MappingDef }): Promise<Dhis2MappingRecord> {
   const r = await authFetch(`/api/dhis2/mappings/${encodeURIComponent(id)}`, jbody(body, 'PUT'));
   if (!r.ok) throw new Error(`save mapping failed: ${r.status}`);
   return r.json();
@@ -618,7 +633,7 @@ export async function deleteDhis2Mapping(id: string): Promise<void> {
   const r = await authFetch(`/api/dhis2/mappings/${encodeURIComponent(id)}`, { method: 'DELETE' });
   if (!r.ok) throw new Error(`delete mapping failed: ${r.status}`);
 }
-export async function validateDhis2Mapping(def: AggregateMappingDef): Promise<string[]> {
+export async function validateDhis2Mapping(def: MappingDef): Promise<string[]> {
   const r = await authFetch('/api/dhis2/mappings/validate', jbody(def, 'POST'));
   if (!r.ok) throw new Error(`validate failed: ${r.status}`);
   return (await r.json()).problems as string[];
@@ -631,6 +646,11 @@ export async function getReportColumns(reportId: string): Promise<ReportColumn2[
 export async function getDhis2Metadata(): Promise<Dhis2MetadataLists | null> {
   const r = await authFetch('/api/dhis2/metadata');
   if (!r.ok) throw new Error(`metadata failed: ${r.status}`);
+  return r.json();
+}
+export async function getDhis2EventSources(): Promise<Dhis2EventSource[]> {
+  const r = await authFetch('/api/dhis2/event-sources');
+  if (!r.ok) throw new Error(`event sources failed: ${r.status}`);
   return r.json();
 }
 
