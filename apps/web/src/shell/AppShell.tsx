@@ -4,6 +4,8 @@ import {
   LayoutDashboard, FileText, BookOpen, Library, FileInput, Users, ShieldCheck,
   ChevronLeft, ChevronRight, Sun, Moon, type LucideIcon,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { useAuth } from '@/auth/AuthProvider';
 import { useTheme } from './useTheme';
 import { useSidebar } from './useSidebar';
 import { Button } from '@/components/ui/button';
@@ -30,6 +32,8 @@ export function AppShell({
 }) {
   const [theme, toggleTheme] = useTheme();
   const [collapsed, toggleSidebar] = useSidebar();
+  const { user, signOut } = useAuth();
+  const { t } = useTranslation();
 
   return (
     <div className="ui-scope flex h-screen overflow-hidden">
@@ -87,15 +91,23 @@ export function AppShell({
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-12 shrink-0 items-center justify-between border-b border-border px-6">
           <span className="font-medium">{title}</span>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleTheme}
-            aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-            title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
-          >
-            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </Button>
+          <div className="flex items-center gap-2">
+            {user ? (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span>{user.username}</span>
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={signOut}>{t('common.signOut')}</Button>
+              </div>
+            ) : null}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleTheme}
+              aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+              title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+            >
+              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </Button>
+          </div>
         </header>
         <main className={fullBleed ? 'flex min-h-0 flex-1 flex-col' : 'min-h-0 flex-1 overflow-y-auto p-6'}>{children}</main>
       </div>

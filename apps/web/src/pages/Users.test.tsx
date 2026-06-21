@@ -151,9 +151,12 @@ describe('Users page', () => {
 
   it('blocks disabling your own account (menu item is disabled)', async () => {
     render(<MemoryRouter><Users /></MemoryRouter>);
-    await waitFor(() => expect(screen.getByText('me')).toBeTruthy());
+    // 'me' now appears twice: once in the AppShell header (username indicator) and once in the
+    // table row. Use getAllByText and pick the one inside a <tr>.
+    await waitFor(() => expect(screen.getAllByText('me').length).toBeGreaterThan(0));
 
-    const meRow = screen.getByText('me').closest('tr')!;
+    const meCell = screen.getAllByText('me').find(el => el.closest('tr'))!;
+    const meRow = meCell.closest('tr')!;
     const trigger = within(meRow).getByLabelText(/actions for me/i);
     openDropdown(trigger);
 
