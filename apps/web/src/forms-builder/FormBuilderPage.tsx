@@ -249,7 +249,7 @@ export function FormBuilderPage(): JSX.Element {
           onDisable={() => { void disable(); }}
           onDelete={() => setConfirmDeleteOpen(true)}
           onExport={exportForm}
-          onBack={() => navigate('/forms')}
+          onCancel={() => navigate('/forms')}
           languageSlot={
             <LanguageControl
               languages={schema.languages ?? []}

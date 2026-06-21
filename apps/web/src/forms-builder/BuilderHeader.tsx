@@ -1,4 +1,4 @@
-import { ArrowLeft, ChevronDown } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -100,8 +100,8 @@ export interface BuilderHeaderProps {
   onDisable: () => void;
   onDelete: () => void;
   onExport: () => void;
-  /** Navigate back to the originating list (Forms). When omitted, the back button is hidden. */
-  onBack?: () => void;
+  /** Leave the builder without saving (returns to the Forms list). When omitted, the Cancel item is hidden. */
+  onCancel?: () => void;
   /** Globe / language selector mounted by the parent page. */
   languageSlot?: React.ReactNode;
 }
@@ -136,7 +136,7 @@ export function BuilderHeader({
   onDisable,
   onDelete,
   onExport,
-  onBack,
+  onCancel,
   languageSlot,
 }: BuilderHeaderProps): JSX.Element {
   const targetPages = schema.targetPages ?? [];
@@ -167,22 +167,6 @@ export function BuilderHeader({
     <div>
       {/* Header bar */}
       <div className="flex items-end gap-3 flex-wrap rounded-md border border-border bg-card p-3">
-        {/* Back to the originating list */}
-        {onBack ? (
-          <div className="flex items-end">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-9 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
-              onClick={onBack}
-              aria-label="Back to forms"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Forms
-            </Button>
-          </div>
-        ) : null}
-
         {/* Form name (status dot sits to the left of the label+input column) */}
         <div className="flex-1 min-w-40 flex items-end gap-2">
           <TooltipProvider>
@@ -347,6 +331,14 @@ export function BuilderHeader({
               <DropdownMenuItem disabled={!formId} onSelect={() => onDelete()}>
                 Delete
               </DropdownMenuItem>
+              {onCancel ? (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={() => onCancel()}>
+                    Cancel
+                  </DropdownMenuItem>
+                </>
+              ) : null}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

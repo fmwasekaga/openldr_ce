@@ -82,16 +82,19 @@ describe('BuilderHeader', () => {
     });
   });
 
-  describe('Back to forms', () => {
-    it('is hidden when onBack is not provided', () => {
+  describe('Cancel', () => {
+    it('is absent from the actions menu when onCancel is not provided', () => {
       renderHeader();
-      expect(screen.queryByLabelText('Back to forms')).not.toBeInTheDocument();
+      const trigger = screen.getByLabelText('Builder actions');
+      fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+      if (!screen.queryByText('Save draft')) fireEvent.keyDown(trigger, { key: 'Enter' });
+      expect(screen.queryByText('Cancel')).not.toBeInTheDocument();
     });
-    it('calls onBack when clicked', () => {
-      const onBack = vi.fn();
-      renderHeader({ onBack });
-      fireEvent.click(screen.getByLabelText('Back to forms'));
-      expect(onBack).toHaveBeenCalledTimes(1);
+    it('calls onCancel from the actions menu', () => {
+      const onCancel = vi.fn();
+      renderHeader({ onCancel });
+      openMenuAndClick('Builder actions', 'Cancel');
+      expect(onCancel).toHaveBeenCalledTimes(1);
     });
   });
 
