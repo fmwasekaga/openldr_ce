@@ -19,14 +19,14 @@ describe('sample forms', () => {
     expect(ids).toContain('sample-patient');
     expect(ids).toContain('sample-order');
   });
-  it('includes a Facility (Location) form targeting facilities', () => {
+  it('includes a Facility (Location) form, targeting the generic forms page for now', () => {
     const facility = sampleForms.find((f) => f.fhirResourceType === 'Location');
-    expect(facility?.targetPages).toContain('facilities');
+    expect(facility?.targetPages).toEqual(['forms']);
     expect(facility?.fields.some((x) => x.apiProperty === 'name')).toBe(true);
   });
-  it('patient form targets patients and has a firstName apiProperty field', () => {
+  it('patient form targets the forms page and has a firstName apiProperty field', () => {
     const patient = sampleForms.find((f) => f.id === 'sample-patient');
-    expect(patient?.targetPages).toEqual(['patients']);
+    expect(patient?.targetPages).toEqual(['forms']);
     expect(patient?.fields.some((x) => x.apiProperty === 'firstName')).toBe(true);
   });
   it('order form has fields with id "patient" and "tests"', () => {
