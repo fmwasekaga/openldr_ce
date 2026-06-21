@@ -14,6 +14,7 @@ const en = {
     signOut: 'Sign out',
     signingIn: 'Signing in…',
     callbackError: 'Sign-in failed. Please try again.',
+    configUnreachable: 'Cannot reach the server. Please reload.',
   },
   table: {
     filter: 'Filter',

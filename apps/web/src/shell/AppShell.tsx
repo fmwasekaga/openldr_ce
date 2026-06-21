@@ -76,12 +76,14 @@ export function AppShell({
         </nav>
 
         <div className="border-t border-border p-2">
-          <div className={cn('flex items-center gap-2', collapsed ? 'justify-center' : 'px-1')} title={collapsed ? 'operator' : undefined}>
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">O</span>
+          <div className={cn('flex items-center gap-2', collapsed ? 'justify-center' : 'px-1')} title={collapsed ? (user?.username ?? '') : undefined}>
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+              {(user?.username?.[0] ?? 'O').toUpperCase()}
+            </span>
             {!collapsed && (
               <div className="min-w-0 leading-tight">
-                <div className="truncate text-xs font-medium text-foreground">operator</div>
-                <div className="text-[10px] text-muted-foreground">local</div>
+                <div className="truncate text-xs font-medium text-foreground">{user?.username ?? ''}</div>
+                <div className="text-[10px] text-muted-foreground">{user?.roles?.[0] ?? ''}</div>
               </div>
             )}
           </div>

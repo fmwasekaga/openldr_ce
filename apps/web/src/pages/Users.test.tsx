@@ -117,8 +117,9 @@ function openDropdown(trigger: HTMLElement) {
 describe('Users page', () => {
   it('lists active users by default (disabled hidden) with friendly role labels', async () => {
     render(<MemoryRouter><Users /></MemoryRouter>);
-    await waitFor(() => expect(screen.getByText('me')).toBeTruthy());
-    expect(screen.getByText('bob')).toBeTruthy();
+    // 'me' now appears in the AppShell sidebar footer too; scope to a table row.
+    await waitFor(() => expect(screen.getAllByText('me').find(el => el.closest('tr'))).toBeTruthy());
+    expect(screen.getAllByText('bob').find(el => el.closest('tr'))).toBeTruthy();
     expect(screen.queryByText('old')).toBeNull(); // default active-only filter hides disabled
     expect(screen.getByText('Lab Admin')).toBeTruthy(); // friendly role label, not raw 'lab_admin'
   });
@@ -227,7 +228,8 @@ describe('Users page', () => {
 
   it('opens "New user" from the toolbar dropdown, fills username, and calls createUser with CORE + extras split', async () => {
     render(<MemoryRouter><Users /></MemoryRouter>);
-    await waitFor(() => expect(screen.getByText('me')).toBeTruthy());
+    // 'me' appears in sidebar footer + header + table row; scope to table row.
+    await waitFor(() => expect(screen.getAllByText('me').find(el => el.closest('tr'))).toBeTruthy());
 
     // Open the toolbar "User actions" dropdown
     const toolbarTrigger = screen.getByLabelText('User actions');
