@@ -23,7 +23,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { PAGE_TARGETS } from '@openldr/forms/pure';
+import { PAGE_TARGETS, AVAILABLE_PAGE_TARGETS } from '@openldr/forms/pure';
 import type { FormLintIssue, FormSchema } from '@openldr/forms/pure';
 import { LintSummary } from './LintSummary';
 
@@ -138,6 +138,13 @@ export function BuilderHeader({
 }: BuilderHeaderProps): JSX.Element {
   const targetPages = schema.targetPages ?? [];
 
+  // Offer only pages that exist today, plus any already-selected page (e.g. a legacy
+  // allocation to a not-yet-built page) so it stays visible and removable.
+  const pickerTargets = [
+    ...AVAILABLE_PAGE_TARGETS,
+    ...PAGE_TARGETS.filter((p) => !p.available && targetPages.includes(p.id)),
+  ];
+
   const toggleTargetPage = (pageId: string, checked: boolean) => {
     if (checked) {
       onChange({ targetPages: [...targetPages, pageId] });
@@ -232,7 +239,7 @@ export function BuilderHeader({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-48">
-              {PAGE_TARGETS.map((p) => {
+              {pickerTargets.map((p) => {
                 const checked = targetPages.includes(p.id);
                 return (
                   <DropdownMenuCheckboxItem

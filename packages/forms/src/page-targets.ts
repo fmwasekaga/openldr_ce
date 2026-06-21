@@ -12,6 +12,12 @@ export interface PageTarget {
   match: PageMatch;
   /** Keys (by `match`) the page needs to persist a non-broken record. */
   requiredKeys: string[];
+  /**
+   * Whether the destination page actually exists yet. Only `available` targets are
+   * offered in the builder picker; the rest are kept here to preserve their persist
+   * contract for when those pages ship.
+   */
+  available: boolean;
 }
 
 /**
@@ -24,12 +30,17 @@ export interface PageTarget {
  * - orders:     Lab order — patient reference + tests reference are required
  */
 export const PAGE_TARGETS: readonly PageTarget[] = [
-  { id: 'forms', label: 'Forms', match: 'fieldId', requiredKeys: [] },
-  { id: 'users', label: 'Users', match: 'apiProperty', requiredKeys: ['firstName', 'lastName', 'email', 'roles'] },
-  { id: 'facilities', label: 'Facilities', match: 'apiProperty', requiredKeys: ['name'] },
-  { id: 'patients', label: 'Patients', match: 'apiProperty', requiredKeys: ['firstName', 'lastName', 'dateOfBirth', 'sex'] },
-  { id: 'orders', label: 'Orders', match: 'fieldId', requiredKeys: ['patient', 'tests'] },
+  { id: 'forms', label: 'Forms', match: 'fieldId', requiredKeys: [], available: true },
+  { id: 'users', label: 'Users', match: 'apiProperty', requiredKeys: ['firstName', 'lastName', 'email', 'roles'], available: true },
+  // Not available yet — these pages don't exist. Kept for their persist contract; flip
+  // `available` to true when the page ships.
+  { id: 'facilities', label: 'Facilities', match: 'apiProperty', requiredKeys: ['name'], available: false },
+  { id: 'patients', label: 'Patients', match: 'apiProperty', requiredKeys: ['firstName', 'lastName', 'dateOfBirth', 'sex'], available: false },
+  { id: 'orders', label: 'Orders', match: 'fieldId', requiredKeys: ['patient', 'tests'], available: false },
 ];
+
+/** Targets whose destination page exists today — the only ones offered for new selection. */
+export const AVAILABLE_PAGE_TARGETS: readonly PageTarget[] = PAGE_TARGETS.filter((p) => p.available);
 
 export function getPageTarget(id: string): PageTarget | undefined {
   return PAGE_TARGETS.find((p) => p.id === id);
