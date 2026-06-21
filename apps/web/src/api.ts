@@ -509,6 +509,45 @@ export const ontologyAnswerOptions = (id: string, loinc: string): Promise<Answer
 export const ontologySpecimenCodes = (id: string, loinc: string): Promise<SpecimenCode[]> =>
   apiGet(`/api/terminology/ontology/${id}/specimens?loinc=${encodeURIComponent(loinc)}`, 'ontology specimen codes');
 
+// ── DHIS2 admin (SP-A) ─────────────────────────────────────────────────────────
+export interface Dhis2RecentPush {
+  id: string;
+  occurredAt: string;
+  action: string;
+  entityId: string;
+  metadata?: Record<string, unknown>;
+}
+export interface Dhis2Status {
+  configured: boolean;
+  syncEnabled: boolean;
+  host: string | null;
+  reachable: { status: 'up' | 'down' | 'degraded'; latencyMs: number; detail?: string } | null;
+  counts: { mappings: number; orgUnitMappings: number; schedules: number } | null;
+  recentPushes: Dhis2RecentPush[];
+}
+export interface Dhis2MetadataCounts {
+  dataElements: number;
+  orgUnits: number;
+  categoryOptionCombos: number;
+  programs: number;
+  programStages: number;
+}
+
+export async function getDhis2Status(): Promise<Dhis2Status> {
+  const r = await authFetch('/api/dhis2/status');
+  if (!r.ok) throw new Error(`dhis2 status failed: ${r.status}`);
+  return r.json();
+}
+
+export async function pullDhis2Metadata(): Promise<Dhis2MetadataCounts> {
+  const r = await authFetch('/api/dhis2/metadata/pull', { method: 'POST' });
+  if (!r.ok) {
+    const body = (await r.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? `metadata pull failed: ${r.status}`);
+  }
+  return (await r.json()).counts;
+}
+
 export function buildOntology(
   id: string,
   opts: { path?: string; rebuild?: boolean },
