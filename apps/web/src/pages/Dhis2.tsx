@@ -93,7 +93,10 @@ export function Dhis2() {
             <CardHeader><CardTitle>{t('dhis2.overview')}</CardTitle></CardHeader>
             <CardContent className="space-y-4 text-sm">
               <div className="flex flex-wrap gap-6">
-                <div><span className="text-muted-foreground">{t('dhis2.mappings')}: </span>{status.counts.mappings}</div>
+                <div>
+                  <span className="text-muted-foreground">{t('dhis2.mappingsCount')}: </span>{status.counts.mappings}
+                  {' '}<Link to="/dhis2/mappings" className="text-primary hover:underline" data-testid="manage-mappings">{t('dhis2.mappings.manage')}</Link>
+                </div>
                 <div>
                   <span className="text-muted-foreground">{t('dhis2.orgUnitMappings')}: </span>{status.counts.orgUnitMappings}
                   {' '}<Link to="/dhis2/orgunits" className="text-primary hover:underline" data-testid="manage-orgunits">{t('dhis2.orgunits.manage')}</Link>

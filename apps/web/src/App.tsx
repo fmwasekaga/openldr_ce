@@ -9,6 +9,7 @@ import { Audit } from './pages/Audit';
 import { Users } from './pages/Users';
 import { Dhis2 } from '@/pages/Dhis2';
 import { Dhis2OrgUnits } from '@/pages/Dhis2OrgUnits';
+import { Dhis2Mappings } from '@/pages/Dhis2Mappings';
 import { Forms } from './pages/Forms';
 import { FormCapture } from './pages/FormCapture';
 import { FormBuilderPage } from './forms-builder/FormBuilderPage';
@@ -26,6 +27,7 @@ export function App() {
       <Route path="/users" element={<RequireRole role="lab_admin"><Users /></RequireRole>} />
       <Route path="/dhis2" element={<RequireRole role="lab_admin"><Dhis2 /></RequireRole>} />
       <Route path="/dhis2/orgunits" element={<RequireRole role="lab_admin"><Dhis2OrgUnits /></RequireRole>} />
+      <Route path="/dhis2/mappings" element={<RequireRole role="lab_admin"><Dhis2Mappings /></RequireRole>} />
       <Route path="/audit" element={<Audit />} />
       <Route path="/forms" element={<Forms />} />
       <Route path="/forms/new" element={<FormBuilderPage />} />
