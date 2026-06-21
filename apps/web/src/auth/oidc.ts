@@ -2,6 +2,19 @@ import { UserManager, WebStorageStateStore, type User } from 'oidc-client-ts';
 import type { OidcConfig } from '@/api';
 import { setAccessToken } from './token';
 
+let singleton: OidcClient | null = null;
+let singletonKey = '';
+
+/** Returns a process-wide single OidcClient for the given config (one UserManager, shared PKCE state). */
+export function getOidc(cfg: OidcConfig): OidcClient {
+  const key = `${cfg.issuerUrl}|${cfg.clientId}|${cfg.audience ?? ''}`;
+  if (!singleton || singletonKey !== key) { singleton = createOidc(cfg); singletonKey = key; }
+  return singleton;
+}
+
+/** Test-only: reset the singleton between tests. */
+export function __resetOidc(): void { singleton = null; singletonKey = ''; }
+
 export interface OidcClient {
   signinRedirect(): Promise<void>;
   handleCallback(): Promise<User | null>;

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { fetchClientConfig } from '@/api';
-import { createOidc } from './oidc';
+import { getOidc } from './oidc';
 import { Button } from '@/components/ui/button';
 
 export function CallbackPage() {
@@ -15,15 +15,17 @@ export function CallbackPage() {
       try {
         const cfg = await fetchClientConfig();
         if (!cfg.oidc) { navigate('/', { replace: true }); return; }
-        await createOidc(cfg.oidc).handleCallback();
+        await getOidc(cfg.oidc).handleCallback();
         if (active) navigate('/', { replace: true });
       } catch { if (active) setError(true); }
     })();
     return () => { active = false; };
   }, [navigate]);
   const retry = async () => {
-    const cfg = await fetchClientConfig();
-    if (cfg.oidc) await createOidc(cfg.oidc).signinRedirect();
+    try {
+      const cfg = await fetchClientConfig();
+      if (cfg.oidc) await getOidc(cfg.oidc).signinRedirect();
+    } catch { setError(true); }
   };
   return (
     <div className="flex min-h-screen items-center justify-center">

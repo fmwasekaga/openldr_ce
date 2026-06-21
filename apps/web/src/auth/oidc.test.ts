@@ -16,11 +16,14 @@ vi.mock('oidc-client-ts', () => ({
 vi.mock('./token', () => ({ setAccessToken: vi.fn(), getAccessToken: vi.fn() }));
 import { UserManager } from 'oidc-client-ts';
 import { setAccessToken } from './token';
-import { createOidc } from './oidc';
+import { createOidc, getOidc, __resetOidc } from './oidc';
 
 const oidcCfg = { issuerUrl: 'https://kc/realms/openldr', clientId: 'openldr-web', audience: 'openldr-api' };
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  __resetOidc();
+});
 
 describe('createOidc', () => {
   it('configures UserManager with authority/client/redirect/pkce', () => {
@@ -42,5 +45,29 @@ describe('createOidc', () => {
     getUser.mockResolvedValue({ access_token: 'tok', expired: true });
     const oidc = createOidc(oidcCfg);
     expect(await oidc.getStoredUser()).toBeNull();
+  });
+});
+
+describe('getOidc', () => {
+  it('returns the same instance for the same config (singleton)', () => {
+    const a = getOidc(oidcCfg);
+    const b = getOidc(oidcCfg);
+    expect(a).toBe(b);
+    // Only one UserManager should have been created
+    expect((UserManager as unknown as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(1);
+  });
+
+  it('returns a new instance when config changes', () => {
+    const a = getOidc(oidcCfg);
+    const b = getOidc({ ...oidcCfg, clientId: 'other-client' });
+    expect(a).not.toBe(b);
+    expect((UserManager as unknown as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
+  });
+
+  it('__resetOidc clears the singleton so next call creates a fresh instance', () => {
+    const a = getOidc(oidcCfg);
+    __resetOidc();
+    const b = getOidc(oidcCfg);
+    expect(a).not.toBe(b);
   });
 });
