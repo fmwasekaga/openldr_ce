@@ -4,7 +4,7 @@ import { dirname, resolve } from 'node:path';
 import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
-import type { AppContext } from '@openldr/bootstrap';
+import type { AppContext, Dhis2Context } from '@openldr/bootstrap';
 import { registerReportRoutes } from './reports-routes';
 import { registerTerminologyRoutes } from './terminology-routes';
 import { registerTerminologyAdminRoutes } from './terminology-admin-routes';
@@ -13,6 +13,7 @@ import { registerDashboardRoutes } from './dashboards-routes';
 import { registerAuditRoutes } from './audit-routes';
 import { registerUsersRoutes } from './users-routes';
 import { registerFormsRoutes } from './forms-routes';
+import { registerDhis2Routes } from './dhis2-routes';
 import { registerAuth } from './auth-plugin';
 
 export function registerConfigRoute(
@@ -31,7 +32,7 @@ export function registerConfigRoute(
   }));
 }
 
-export function buildApp(ctx: AppContext) {
+export function buildApp(ctx: AppContext, dhis2: Dhis2Context | null = null) {
   const app = Fastify({ loggerInstance: ctx.logger });
 
   app.get('/health', async (_req, reply) => {
@@ -59,6 +60,7 @@ export function buildApp(ctx: AppContext) {
   registerAuditRoutes(app, ctx);
   registerUsersRoutes(app, ctx);
   registerFormsRoutes(app, ctx);
+  registerDhis2Routes(app, ctx, dhis2);
 
   // Serve the built SPA if present (apps/web/dist). API + health are registered first and win.
   const webDist = resolve(dirname(fileURLToPath(import.meta.url)), '../../web/dist');
