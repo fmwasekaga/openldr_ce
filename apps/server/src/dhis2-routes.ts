@@ -3,7 +3,7 @@ import type { AppContext, Dhis2Context } from '@openldr/bootstrap';
 import type { Dhis2MetadataCache, OrgUnitMapStore, MappingStore } from '@openldr/db';
 import { redact } from '@openldr/core';
 import { z } from 'zod';
-import { validateMapping, type AggregateMapping } from '@openldr/dhis2';
+import { validateMapping, validateTrackerMapping, type AggregateMapping, type TrackerMapping } from '@openldr/dhis2';
 import { requireRole } from './rbac';
 import { recordAudit } from './audit-helper';
 
@@ -30,7 +30,21 @@ const aggregateDefinition = z.object({
   periodColumn: z.string().optional(),
   columns: z.array(aggregateColumn),
 });
-const mappingPutInput = z.object({ name: z.string().min(1), definition: aggregateDefinition });
+const trackerColumn = z.object({ column: z.string().min(1), dataElement: z.string().min(1) });
+const trackerDefinition = z.object({
+  kind: z.literal('tracker'),
+  id: z.string().min(1),
+  name: z.string().min(1),
+  source: z.object({ kind: z.literal('event-source'), sourceId: z.string().min(1), params: z.record(z.string()).optional() }),
+  program: z.string().min(1),
+  programStage: z.string().min(1),
+  orgUnitColumn: z.string().min(1),
+  eventDateColumn: z.string().min(1),
+  idColumn: z.string().min(1),
+  dataValues: z.array(trackerColumn),
+});
+const mappingDefinition = z.union([aggregateDefinition, trackerDefinition]);
+const mappingPutInput = z.object({ name: z.string().min(1), definition: mappingDefinition });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerDhis2Routes(app: FastifyInstance<any, any, any, any>, ctx: AppContext, dhis2: Dhis2Context | null, deps: Dhis2RouteDeps): void {
@@ -168,12 +182,17 @@ export function registerDhis2Routes(app: FastifyInstance<any, any, any, any>, ct
   });
 
   app.post('/api/dhis2/mappings/validate', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
-    const p = aggregateDefinition.safeParse(req.body);
+    const p = mappingDefinition.safeParse(req.body);
     if (!p.success) { reply.code(400); return { error: p.error.message }; }
     const cached = await deps.metadataCache.get();
     if (!cached) return { problems: ['no DHIS2 metadata cached — pull metadata from DHIS2 settings first'] };
-    return { problems: validateMapping(p.data as AggregateMapping, cached.metadata) };
+    const problems = (p.data as { kind?: string }).kind === 'tracker'
+      ? validateTrackerMapping(p.data as TrackerMapping, cached.metadata)
+      : validateMapping(p.data as AggregateMapping, cached.metadata);
+    return { problems };
   });
+
+  app.get('/api/dhis2/event-sources', { preHandler: requireRole('lab_admin') }, async () => ctx.reporting.eventSources());
 
   app.get('/api/dhis2/report-columns', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
     const reportId = (req.query as { reportId?: string }).reportId;
