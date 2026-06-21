@@ -20,6 +20,7 @@ import * as m018 from './018_snomed_code_system';
 import * as m019 from './019_form_versions';
 import * as m020 from './020_form_fhir_metadata';
 import * as m021 from './021_user_profiles';
+import * as m022 from './022_dhis2_metadata_cache';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -43,4 +44,5 @@ export const internalMigrations: Record<string, Migration> = {
   '019_form_versions': { up: m019.up, down: m019.down },
   '020_form_fhir_metadata': { up: m020.up, down: m020.down },
   '021_user_profiles': { up: m021.up, down: m021.down },
+  '022_dhis2_metadata_cache': { up: m022.up, down: m022.down },
 };
