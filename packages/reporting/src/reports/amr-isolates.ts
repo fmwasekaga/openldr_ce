@@ -4,6 +4,13 @@ import { endOfDay } from '../helpers';
 export const amrIsolates: EventSource = {
   id: 'amr-isolates',
   name: 'AMR isolates (per AST result)',
+  columns: [
+    { key: 'id', label: 'Isolate ID' },
+    { key: 'facility', label: 'Facility' },
+    { key: 'eventDate', label: 'Event date' },
+    { key: 'antibiotic', label: 'Antibiotic' },
+    { key: 'result', label: 'Result (S/I/R)' },
+  ],
   async run(db, window) {
     const obs = await db
       .selectFrom('observations')
