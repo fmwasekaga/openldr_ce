@@ -86,4 +86,22 @@ describe('registerAuth', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().user.username).toBe('ada'); // resolved via verifyToken+syncFromClaims, NOT the dev actor
   });
+
+  it('allows /api/config with no token when bypass is off', async () => {
+    const app = await appWith(ctx({ bypass: false }));
+    app.get('/api/config', async () => ({ ok: true }));
+    const res = await app.inject({ method: 'GET', url: '/api/config' });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('accepts an access_token query param on the ontology SSE routes only', async () => {
+    const app = await appWith(ctx({ verify: async () => ({ sub: 's1' }) }));
+    app.get('/api/terminology/ontology/:id/build', async (req) => ({ user: req.user ?? null }));
+    app.get('/api/probe2', async (req) => ({ user: req.user ?? null }));
+    const ok = await app.inject({ method: 'GET', url: '/api/terminology/ontology/x/build?path=p&access_token=good' });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().user.username).toBeTruthy();
+    const nonSse = await app.inject({ method: 'GET', url: '/api/probe2?access_token=good' });
+    expect(nonSse.statusCode).toBe(401); // query token not honoured off the SSE routes
+  });
 });

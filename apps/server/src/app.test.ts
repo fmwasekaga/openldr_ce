@@ -380,7 +380,7 @@ function ctxWith(status: 'up' | 'down'): AppContext {
     forms: {} as never,
     terminology: { ops: {} as never, admin: buildFakeAdmin(), ontology: buildFakeOntology(), loaders: buildFakeLoaders() },
     dashboards: {} as never,
-    cfg: { AUTH_DEV_BYPASS: true } as never,
+    cfg: { AUTH_DEV_BYPASS: true, DASHBOARD_SQL_ENABLED: false, TARGET_STORE_ADAPTER: 'pg', OIDC_ISSUER_URL: 'https://kc.example/realms/openldr', OIDC_WEB_CLIENT_ID: 'openldr-web', OIDC_AUDIENCE: undefined } as never,
     async close() {},
   };
 }

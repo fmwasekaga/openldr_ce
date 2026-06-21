@@ -16,9 +16,18 @@ declare module 'fastify' {
 
 function bearer(req: FastifyRequest): string | null {
   const h = req.headers.authorization;
-  if (!h || !h.startsWith('Bearer ')) return null;
-  const t = h.slice('Bearer '.length).trim();
-  return t.length > 0 ? t : null;
+  if (h && h.startsWith('Bearer ')) { const t = h.slice('Bearer '.length).trim(); if (t) return t; }
+  const url = req.raw.url ?? '';
+  const path = url.split('?')[0];
+  // Server-Sent Events streams (ontology build/rebuild) cannot set an Authorization header,
+  // so accept the access token from the query string for THOSE routes only. It is verified
+  // identically to a header token — no weakening of auth.
+  if (/^\/api\/terminology\/ontology\/[^/]+\/(build|rebuild)$/.test(path)) {
+    const qs = url.includes('?') ? url.slice(url.indexOf('?') + 1) : '';
+    const tok = new URLSearchParams(qs).get('access_token');
+    if (tok && tok.trim()) return tok.trim();
+  }
+  return null;
 }
 
 async function devActor(ctx: AppContext): Promise<RequestActor> {
@@ -40,9 +49,10 @@ async function devActor(ctx: AppContext): Promise<RequestActor> {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerAuth(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
   app.addHook('onRequest', async (req: FastifyRequest, reply: FastifyReply) => {
-    const url = (req.raw.url ?? '').split('?')[0];
+    const path = (req.raw.url ?? '').split('?')[0];
     // Only /api/* is protected. /health and the static SPA stay public.
-    if (url !== '/api' && !url.startsWith('/api/')) return;
+    if (path === '/api/config') return; // public: the SPA reads OIDC settings before it has a token
+    if (path !== '/api' && !path.startsWith('/api/')) return;
 
     const token = bearer(req);
     if (!token) {
