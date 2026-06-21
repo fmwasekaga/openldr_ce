@@ -96,9 +96,12 @@ export async function deleteDashboard(id: string): Promise<void> {
   const r = await authFetch(`/api/dashboards/${id}`, { method: 'DELETE' }); if (!r.ok) throw new Error(`delete failed: ${r.status}`);
 }
 
-export interface ClientConfig { dashboardSqlEnabled: boolean }
+export interface OidcConfig { issuerUrl: string; clientId: string; audience: string | null }
+export interface ClientConfig { dashboardSqlEnabled: boolean; authEnforced: boolean; oidc: OidcConfig | null }
 export async function fetchClientConfig(): Promise<ClientConfig> {
-  const r = await authFetch('/api/config'); if (!r.ok) return { dashboardSqlEnabled: false }; return r.json();
+  const r = await authFetch('/api/config');
+  if (!r.ok) return { dashboardSqlEnabled: false, authEnforced: false, oidc: null };
+  return r.json();
 }
 
 // Audit
@@ -510,9 +513,11 @@ export function buildOntology(
   opts: { path?: string; rebuild?: boolean },
   onProgress: (progress: OntologyBuildProgress) => void,
 ): { promise: Promise<OntologyDistribution>; cancel: () => void } {
-  const url = opts.rebuild
+  const token = getAccessToken();
+  const tokenParam = token ? `${opts.rebuild ? '?' : '&'}access_token=${encodeURIComponent(token)}` : '';
+  const url = (opts.rebuild
     ? `/api/terminology/ontology/${id}/rebuild`
-    : `/api/terminology/ontology/${id}/build?path=${encodeURIComponent(opts.path ?? '')}`;
+    : `/api/terminology/ontology/${id}/build?path=${encodeURIComponent(opts.path ?? '')}`) + tokenParam;
   const eventSource = new EventSource(url);
   const promise = new Promise<OntologyDistribution>((resolve, reject) => {
     eventSource.addEventListener('progress', (event) => {
