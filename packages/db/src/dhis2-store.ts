@@ -14,7 +14,8 @@ export interface OrgUnitMapStore {
 export interface MappingStore {
   upsert(m: Dhis2MappingRecord): Promise<void>;
   get(id: string): Promise<Dhis2MappingRecord | null>;
-  list(): Promise<{ id: string; name: string }[]>;
+  list(): Promise<{ id: string; name: string; kind: string | null }[]>;
+  remove(id: string): Promise<void>;
 }
 
 export function createOrgUnitMapStore(db: Kysely<InternalSchema>): OrgUnitMapStore {
@@ -56,7 +57,15 @@ export function createMappingStore(db: Kysely<InternalSchema>): MappingStore {
       return row ? { id: row.id, name: row.name, definition: row.definition as Record<string, unknown> } : null;
     },
     async list() {
-      return db.selectFrom('dhis2_mappings').select(['id', 'name']).orderBy('id').execute();
+      return db
+        .selectFrom('dhis2_mappings')
+        .select(['id', 'name'])
+        .select(sql<string | null>`definition->>'kind'`.as('kind'))
+        .orderBy('id')
+        .execute();
+    },
+    async remove(id) {
+      await db.deleteFrom('dhis2_mappings').where('id', '=', id).execute();
     },
   };
 }
