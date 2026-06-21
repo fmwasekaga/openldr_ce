@@ -348,11 +348,34 @@ function buildFakeLoaders(): FakeLoaders {
   };
 }
 
+function fakeInternalDb() {
+  // Minimal stub so buildApp can construct route deps (createDhis2MetadataCache/createOrgUnitMapStore).
+  // These stores are never exercised in app.test.ts — their tables don't exist here.
+  const stub = {
+    selectFrom: () => stub,
+    insertInto: () => stub,
+    deleteFrom: () => stub,
+    select: () => stub,
+    where: () => stub,
+    orderBy: () => stub,
+    limit: () => stub,
+    execute: async () => [],
+    executeTakeFirst: async () => undefined,
+    executeTakeFirstOrThrow: async () => { throw new Error('stub'); },
+    onConflict: () => ({ doUpdateSet: () => stub }),
+    values: () => stub,
+    destroy: async () => {},
+  };
+  return stub as unknown as import('@openldr/bootstrap').AppContext['internalDb'];
+}
+
 function ctxWith(status: 'up' | 'down'): AppContext {
   const health = new HealthRegistry();
   health.register({ name: 'auth', check: async () => ({ status, latencyMs: 1 }) });
   return {
     logger: createLogger({ level: 'silent' }),
+    internalDb: fakeInternalDb(),
+    fhirStore: { listByType: async () => [] } as never,
     auth: {
       directory: {
         async list() { const e = new Error('admin not configured'); e.name = 'IdentityAdminNotConfiguredError'; throw e; },

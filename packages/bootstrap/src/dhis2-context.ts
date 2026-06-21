@@ -1,6 +1,6 @@
 import type { Config } from '@openldr/config';
 import { createLogger, OpenLdrError, type Logger } from '@openldr/core';
-import { createInternalDb, createOrgUnitMapStore, createMappingStore, createScheduleStore, type ScheduleRecord } from '@openldr/db';
+import { createInternalDb, createOrgUnitMapStore, createMappingStore, createScheduleStore, createDhis2MetadataCache, type ScheduleRecord } from '@openldr/db';
 import { createDhis2Target, type Dhis2Target } from '@openldr/adapter-dhis2';
 import {
   buildDataValueSet, buildEvents, validateMapping, validateTrackerMapping, dispatchReportSource,
@@ -23,6 +23,7 @@ export interface Dhis2Context {
   orgUnits: ReturnType<typeof createOrgUnitMapStore>;
   mappings: ReturnType<typeof createMappingStore>;
   schedules: ReturnType<typeof createScheduleStore>;
+  metadataCache: ReturnType<typeof createDhis2MetadataCache>;
   pullMetadata(): Promise<TargetMetadata>;
   validate(mappingId: string): Promise<string[]>;
   runMapping(args: { mappingId: string; period: string; dryRun: boolean; trigger?: string } & RunCallbacks): Promise<RunOutcome>;
@@ -50,6 +51,7 @@ export async function createDhis2Context(cfg: Config): Promise<Dhis2Context> {
   const orgUnits = createOrgUnitMapStore(db);
   const mappings = createMappingStore(db);
   const schedules = createScheduleStore(db);
+  const metadataCache = createDhis2MetadataCache(db);
   const audit: AuditStore = createAuditStore(db);
   const target = selectReportingTarget(cfg);
 
@@ -105,6 +107,7 @@ export async function createDhis2Context(cfg: Config): Promise<Dhis2Context> {
     orgUnits,
     mappings,
     schedules,
+    metadataCache,
     pullMetadata: () => target.pullMetadata(),
     async validate(mappingId) {
       const mapping = await loadMapping(mappingId);

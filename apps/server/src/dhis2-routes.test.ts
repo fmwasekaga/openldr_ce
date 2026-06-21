@@ -26,12 +26,41 @@ function fakeDhis2(over: Record<string, unknown> = {}) {
   } as never;
 }
 
-function appWith(ctxCfg: Record<string, unknown>, dhis2: unknown, roles: string[] = ['lab_admin']) {
+function fakeDeps(over: Record<string, unknown> = {}) {
+  const orgUnitRows: { facilityId: string; orgUnitId: string; orgUnitName: string | null }[] = [];
+  let saved: unknown = null;
+  return {
+    metadataCache: {
+      get: async () => (saved ? { metadata: saved, pulledAt: '2026-01-01T00:00:00.000Z' } : null),
+      save: async (m: unknown) => { saved = m; },
+    },
+    orgUnitStore: {
+      list: async () => orgUnitRows.slice(),
+      upsert: async (entries: typeof orgUnitRows) => { for (const e of entries) { const i = orgUnitRows.findIndex((r) => r.facilityId === e.facilityId); if (i >= 0) orgUnitRows[i] = e; else orgUnitRows.push(e); } },
+      remove: async (facilityId: string) => { const i = orgUnitRows.findIndex((r) => r.facilityId === facilityId); if (i >= 0) orgUnitRows.splice(i, 1); },
+      getMap: async () => new Map(),
+    },
+    ...over,
+  };
+}
+
+function fakeCtx(cfg: Record<string, unknown>, fhirStore: Record<string, unknown> = {}) {
+  const audit: unknown[] = [];
+  return {
+    cfg,
+    fhirStore: { listByType: async () => [], ...fhirStore },
+    audit: { record: async (e: unknown) => { audit.push(e); }, list: async () => [] },
+    logger: { error: () => {} },
+    __audit: audit,
+  } as unknown as AppContext;
+}
+
+function appWith(ctxCfg: Record<string, unknown>, dhis2: unknown, roles: string[] = ['lab_admin'], deps = fakeDeps(), fhirStore: Record<string, unknown> = {}) {
   const app = Fastify();
   app.addHook('onRequest', async (req) => {
     req.user = { id: 'admin', username: 'admin', displayName: null, roles };
   });
-  registerDhis2Routes(app, { cfg: ctxCfg } as unknown as AppContext, dhis2 as never);
+  registerDhis2Routes(app, fakeCtx(ctxCfg, fhirStore), dhis2 as never, deps as never);
   return app;
 }
 
@@ -107,5 +136,81 @@ describe('dhis2 metadata pull route', () => {
   it('rejects non-admins with 403', async () => {
     const app = appWith(configuredCfg(), fakeDhis2(), ['data_analyst']);
     expect((await app.inject({ method: 'POST', url: '/api/dhis2/metadata/pull' })).statusCode).toBe(403);
+  });
+
+  it('persists the snapshot to the cache and returns pulledAt', async () => {
+    const deps = fakeDeps();
+    const app = appWith(configuredCfg(), fakeDhis2(), ['lab_admin'], deps);
+    const res = await app.inject({ method: 'POST', url: '/api/dhis2/metadata/pull' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().pulledAt).toBe('2026-01-01T00:00:00.000Z');
+    expect(await deps.metadataCache.get()).not.toBeNull(); // save was called
+  });
+});
+
+describe('dhis2 orgunit-mappings routes', () => {
+  const locations = { listByType: async () => [
+    { id: 'loc-1', resource: { resourceType: 'Location', id: 'loc-1', name: 'Clinic A' } },
+    { id: 'loc-2', resource: { resourceType: 'Location', id: 'loc-2' } }, // no name → falls back to id
+  ] };
+
+  it('GET composes facilities + mappings + cached orgUnits', async () => {
+    const deps = fakeDeps();
+    await deps.orgUnitStore.upsert([{ facilityId: 'loc-1', orgUnitId: 'ou1', orgUnitName: 'Clinic A OU' }]);
+    await deps.metadataCache.save({ dataElements: [], orgUnits: [{ id: 'ou1', name: 'Clinic A OU' }], categoryOptionCombos: [], programs: [], programStages: [] } as never);
+    const app = appWith(configuredCfg(), fakeDhis2(), ['lab_admin'], deps, locations);
+    const body = (await app.inject({ method: 'GET', url: '/api/dhis2/orgunit-mappings' })).json();
+    expect(body.facilities).toEqual([
+      { facilityId: 'loc-1', facilityName: 'Clinic A', orgUnitId: 'ou1', orgUnitName: 'Clinic A OU' },
+      { facilityId: 'loc-2', facilityName: 'loc-2', orgUnitId: null, orgUnitName: null },
+    ]);
+    expect(body.orgUnits).toEqual([{ id: 'ou1', name: 'Clinic A OU' }]);
+    expect(body.metadataPulledAt).toBe('2026-01-01T00:00:00.000Z');
+  });
+
+  it('GET works (empty catalog) when DHIS2 unconfigured', async () => {
+    const app = appWith(configuredCfg({ REPORTING_TARGET_ADAPTER: 'pg' }), null, ['lab_admin'], fakeDeps(), locations);
+    const body = (await app.inject({ method: 'GET', url: '/api/dhis2/orgunit-mappings' })).json();
+    expect(body.facilities).toHaveLength(2);
+    expect(body.orgUnits).toEqual([]);
+    expect(body.metadataPulledAt).toBeNull();
+  });
+
+  it('PUT upserts a mapping and records an audit event', async () => {
+    const deps = fakeDeps();
+    const ctxRef = fakeCtx(configuredCfg(), locations);
+    const app = Fastify();
+    app.addHook('onRequest', async (req) => { req.user = { id: 'admin', username: 'admin', displayName: null, roles: ['lab_admin'] }; });
+    registerDhis2Routes(app, ctxRef, fakeDhis2() as never, deps as never);
+    const res = await app.inject({ method: 'PUT', url: '/api/dhis2/orgunit-mappings/loc-1', payload: { orgUnitId: 'ou9', orgUnitName: 'New OU' } });
+    expect(res.statusCode).toBe(200);
+    expect(await deps.orgUnitStore.list()).toEqual([{ facilityId: 'loc-1', orgUnitId: 'ou9', orgUnitName: 'New OU' }]);
+    expect((ctxRef as any).__audit.some((e: any) => e.action === 'dhis2.orgunit.map' && e.entityId === 'loc-1')).toBe(true);
+  });
+
+  it('PUT rejects a bad body with 400', async () => {
+    const app = appWith(configuredCfg(), fakeDhis2());
+    const res = await app.inject({ method: 'PUT', url: '/api/dhis2/orgunit-mappings/loc-1', payload: { orgUnitName: 'x' } });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('DELETE removes a mapping (204) and audits', async () => {
+    const deps = fakeDeps();
+    await deps.orgUnitStore.upsert([{ facilityId: 'loc-1', orgUnitId: 'ou1', orgUnitName: 'A' }]);
+    const ctxRef = fakeCtx(configuredCfg(), locations);
+    const app = Fastify();
+    app.addHook('onRequest', async (req) => { req.user = { id: 'admin', username: 'admin', displayName: null, roles: ['lab_admin'] }; });
+    registerDhis2Routes(app, ctxRef, fakeDhis2() as never, deps as never);
+    const res = await app.inject({ method: 'DELETE', url: '/api/dhis2/orgunit-mappings/loc-1' });
+    expect(res.statusCode).toBe(204);
+    expect(await deps.orgUnitStore.list()).toEqual([]);
+    expect((ctxRef as any).__audit.some((e: any) => e.action === 'dhis2.orgunit.unmap')).toBe(true);
+  });
+
+  it('rejects non-admins with 403', async () => {
+    const app = appWith(configuredCfg(), fakeDhis2(), ['data_analyst']);
+    expect((await app.inject({ method: 'GET', url: '/api/dhis2/orgunit-mappings' })).statusCode).toBe(403);
+    expect((await app.inject({ method: 'PUT', url: '/api/dhis2/orgunit-mappings/loc-1', payload: { orgUnitId: 'x', orgUnitName: null } })).statusCode).toBe(403);
+    expect((await app.inject({ method: 'DELETE', url: '/api/dhis2/orgunit-mappings/loc-1' })).statusCode).toBe(403);
   });
 });
