@@ -68,6 +68,7 @@ function fakeCtx(cfg: Record<string, unknown>, fhirStore: Record<string, unknown
         return { columns: [{ key: 'month', label: 'Month', kind: 'string' }, { key: 'count', label: 'Count', kind: 'number' }], rows: [], chart: { type: 'bar' }, meta: { generatedAt: 'x', rowCount: 0 } };
       },
       list: () => [{ id: 'test-volume', name: 'Test Volume', description: '' }],
+      eventSources: () => [{ id: 'amr-isolates', name: 'AMR isolates', columns: [{ key: 'id', label: 'Isolate ID' }, { key: 'facility', label: 'Facility' }, { key: 'eventDate', label: 'Event date' }, { key: 'antibiotic', label: 'Antibiotic' }, { key: 'result', label: 'Result' }] }],
     },
   } as unknown as AppContext;
 }
@@ -325,5 +326,52 @@ describe('dhis2 validate + report-columns', () => {
   it('validate rejects non-admins with 403', async () => {
     const app = appWith(configuredCfg(), fakeDhis2(), ['viewer']);
     expect((await app.inject({ method: 'POST', url: '/api/dhis2/mappings/validate', payload: agg })).statusCode).toBe(403);
+  });
+});
+
+describe('dhis2 event-sources + tracker mapping', () => {
+  const tracker = {
+    kind: 'tracker', id: 't1', name: 'Trk',
+    source: { kind: 'event-source', sourceId: 'amr-isolates' },
+    program: 'prog1', programStage: 'stage1',
+    orgUnitColumn: 'facility', eventDateColumn: 'eventDate', idColumn: 'id',
+    dataValues: [{ column: 'result', dataElement: 'de1' }],
+  };
+
+  it('GET /event-sources returns sources + columns', async () => {
+    const app = appWith(configuredCfg(), fakeDhis2(), ['lab_admin']);
+    const body = (await app.inject({ method: 'GET', url: '/api/dhis2/event-sources' })).json();
+    expect(body[0].id).toBe('amr-isolates');
+    expect(body[0].columns.map((c: { key: string }) => c.key)).toContain('result');
+  });
+
+  it('event-sources rejects non-admins with 403', async () => {
+    const app = appWith(configuredCfg(), fakeDhis2(), ['viewer']);
+    expect((await app.inject({ method: 'GET', url: '/api/dhis2/event-sources' })).statusCode).toBe(403);
+  });
+
+  it('validate dispatches tracker vs aggregate', async () => {
+    const deps = fakeDeps();
+    await deps.metadataCache.save({ dataElements: [{ id: 'de1', name: 'DE' }], orgUnits: [], categoryOptionCombos: [], programs: [{ id: 'prog1', name: 'P' }], programStages: [{ id: 'stage1', name: 'S', program: 'prog1' }] } as never);
+    const app = appWith(configuredCfg(), fakeDhis2(), ['lab_admin'], deps);
+    // valid tracker → no problems
+    expect((await app.inject({ method: 'POST', url: '/api/dhis2/mappings/validate', payload: tracker })).json().problems).toEqual([]);
+    // tracker with unknown program → a problem
+    const badProg = { ...tracker, program: 'NOPE' };
+    expect((await app.inject({ method: 'POST', url: '/api/dhis2/mappings/validate', payload: badProg })).json().problems.length).toBeGreaterThan(0);
+    // aggregate still validated by validateMapping
+    const agg = { kind: 'aggregate', id: 'm1', name: 'Agg', source: { kind: 'report', reportId: 'test-volume' }, orgUnitColumn: 'month', columns: [{ column: 'count', dataElement: 'de1' }] };
+    expect((await app.inject({ method: 'POST', url: '/api/dhis2/mappings/validate', payload: agg })).json().problems).toEqual([]);
+  });
+
+  it('PUT accepts a tracker definition', async () => {
+    const deps = fakeDeps();
+    const app = appWith(configuredCfg(), fakeDhis2(), ['lab_admin'], deps);
+    const res = await app.inject({ method: 'PUT', url: '/api/dhis2/mappings/t1', payload: { name: 'Trk', definition: tracker } });
+    expect(res.statusCode).toBe(200);
+    expect((await deps.mappingStore.get('t1'))?.definition).toMatchObject({ kind: 'tracker' });
+    // a malformed tracker (missing program) → 400
+    const bad = { name: 'Trk', definition: { ...tracker, program: undefined } };
+    expect((await app.inject({ method: 'PUT', url: '/api/dhis2/mappings/t1', payload: bad })).statusCode).toBe(400);
   });
 });

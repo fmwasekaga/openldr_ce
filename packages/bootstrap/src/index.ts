@@ -10,7 +10,7 @@ import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@
 import { createAuditStore, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore, createUserProfileStore, type UserProfileStore } from '@openldr/users';
 import { createFormStore, type FormStore } from '@openldr/forms';
-import { getReport, reportSummaries, getEventSource, type ReportResult, type ReportSummary } from '@openldr/reporting';
+import { getReport, reportSummaries, getEventSource, eventSourceCatalog, type ReportResult, type ReportSummary } from '@openldr/reporting';
 import { createDashboardStore, getModel, listModels, runBuilderQuery, runSqlQuery, type DashboardStore, type WidgetQuery } from '@openldr/dashboards';
 import { renderReportPdf } from '@openldr/report-pdf';
 import { selectTargetStore } from './target-store';
@@ -37,6 +37,7 @@ export interface ReportingApi {
   list(): ReportSummary[];
   run(id: string, rawParams: unknown): Promise<ReportResult>;
   runEventSource(id: string, window: { from: string; to: string }): Promise<{ rows: Record<string, unknown>[] }>;
+  eventSources(): { id: string; name: string; columns: { key: string; label: string }[] }[];
   renderPdf(id: string, rawParams: unknown): Promise<Buffer>;
 }
 
@@ -129,6 +130,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   };
   const reporting: ReportingApi = {
     list: () => reportSummaries(),
+    eventSources: () => eventSourceCatalog().map((s) => ({ id: s.id, name: s.name, columns: s.columns })),
     run: runReport,
     async runEventSource(id, window) {
       const src = getEventSource(id);

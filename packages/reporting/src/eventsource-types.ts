@@ -6,5 +6,6 @@ export interface EventWindow { from: string; to: string }
 export interface EventSource {
   id: string;
   name: string;
+  columns: { key: string; label: string }[];
   run(db: Kysely<ExternalSchema>, window: EventWindow, params?: Record<string, string>): Promise<{ rows: Record<string, unknown>[] }>;
 }
