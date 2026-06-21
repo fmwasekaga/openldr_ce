@@ -82,6 +82,19 @@ describe('BuilderHeader', () => {
     });
   });
 
+  describe('Back to forms', () => {
+    it('is hidden when onBack is not provided', () => {
+      renderHeader();
+      expect(screen.queryByLabelText('Back to forms')).not.toBeInTheDocument();
+    });
+    it('calls onBack when clicked', () => {
+      const onBack = vi.fn();
+      renderHeader({ onBack });
+      fireEvent.click(screen.getByLabelText('Back to forms'));
+      expect(onBack).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('Version label input', () => {
     it('renders the current version', () => {
       renderHeader();
