@@ -51,6 +51,8 @@ Run these once on a machine that can start the stack:
 - [ ] `client_credentials` token request for `openldr-admin` succeeds and can `GET /admin/realms/openldr/users`.
 - [ ] SP4 actions against `labadmin`: reset-password (204), force-logout (204); send-reset-email needs realm SMTP.
 - [ ] (after SP6) Users list/create/update round-trips to Keycloak.
-- [ ] (after SP1b) Browser login via `openldr-web` (PKCE) signs in as `labadmin`.
+- [ ] **(SP1b) Browser login end-to-end** — with `AUTH_DEV_BYPASS` OFF + the realm up + the web dev server: loading the app redirects to Keycloak; sign in as `labadmin`/`labadmin`; it lands back via `/auth/callback`; `/api/me` resolves; subsequent API calls carry the bearer; the token silently renews; sign-out (shell header) ends the session; the ontology build/rebuild SSE streams (token via `?access_token=`, redacted in logs).
+- [ ] **(SP1b) Dev-bypass unchanged** — with `AUTH_DEV_BYPASS` ON: no redirect; the app works anonymously (dev actor); existing Playwright e2e pass.
+- [ ] **(SP1b) Fail-closed** — stop Keycloak (or break `OIDC_ISSUER_URL`) with auth enforced: the app shows the "Cannot reach the server" card (it does NOT silently fall through to anonymous).
 
 > Note: `bearerOnly` on `openldr-api` works in Keycloak 26 but is soft-deprecated; revisit if upgrading to 27+.
