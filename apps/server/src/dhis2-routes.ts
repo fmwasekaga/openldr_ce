@@ -38,4 +38,26 @@ export function registerDhis2Routes(app: FastifyInstance<any, any, any, any>, ct
       recentPushes,
     };
   });
+
+  app.post('/api/dhis2/metadata/pull', { preHandler: requireRole('lab_admin') }, async (_req, reply) => {
+    if (!configured || !dhis2) {
+      reply.code(409);
+      return { error: 'DHIS2 target not configured' };
+    }
+    try {
+      const md = await dhis2.pullMetadata();
+      return {
+        counts: {
+          dataElements: md.dataElements.length,
+          orgUnits: md.orgUnits.length,
+          categoryOptionCombos: md.categoryOptionCombos.length,
+          programs: md.programs?.length ?? 0,
+          programStages: md.programStages?.length ?? 0,
+        },
+      };
+    } catch (e) {
+      reply.code(502);
+      return { error: redact(e instanceof Error ? e.message : String(e)) };
+    }
+  });
 }

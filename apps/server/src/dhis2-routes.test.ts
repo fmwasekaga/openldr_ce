@@ -72,3 +72,30 @@ describe('dhis2 status route', () => {
     expect((await app.inject({ method: 'GET', url: '/api/dhis2/status' })).statusCode).toBe(403);
   });
 });
+
+describe('dhis2 metadata pull route', () => {
+  it('returns metadata counts when configured', async () => {
+    const app = appWith(configuredCfg(), fakeDhis2());
+    const res = await app.inject({ method: 'POST', url: '/api/dhis2/metadata/pull' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().counts).toEqual({ dataElements: 1, orgUnits: 0, categoryOptionCombos: 0, programs: 0, programStages: 0 });
+  });
+
+  it('returns 409 when not configured', async () => {
+    const app = appWith(configuredCfg({ REPORTING_TARGET_ADAPTER: 'pg' }), null);
+    const res = await app.inject({ method: 'POST', url: '/api/dhis2/metadata/pull' });
+    expect(res.statusCode).toBe(409);
+  });
+
+  it('returns 502 (redacted) when pull throws', async () => {
+    const app = appWith(configuredCfg(), fakeDhis2({ pullMetadata: async () => { throw new Error('boom'); } }));
+    const res = await app.inject({ method: 'POST', url: '/api/dhis2/metadata/pull' });
+    expect(res.statusCode).toBe(502);
+    expect(res.json().error).toBeTruthy();
+  });
+
+  it('rejects non-admins with 403', async () => {
+    const app = appWith(configuredCfg(), fakeDhis2(), ['data_analyst']);
+    expect((await app.inject({ method: 'POST', url: '/api/dhis2/metadata/pull' })).statusCode).toBe(403);
+  });
+});
