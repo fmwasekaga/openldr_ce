@@ -4,7 +4,7 @@ import { createEventBus } from '@openldr/adapter-event-bus';
 import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import type { Config } from '@openldr/config';
 import { createLogger, HealthRegistry, redact, type Logger } from '@openldr/core';
-import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, deriveSystemCode, resolveSeedPublisherId, type TerminologyAdminStore, type OntologyStore, type FhirStore } from '@openldr/db';
+import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, deriveSystemCode, resolveSeedPublisherId, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, type AuditStore } from '@openldr/audit';
@@ -79,6 +79,7 @@ export interface AppContext {
   internalDb: Kysely<InternalSchema>;
   fhirStore: FhirStore;
   audit: AuditStore;
+  reportRuns: ReportRunStore;
   users: UserStore;
   userProfiles: UserProfileStore;
   forms: FormStore;
@@ -121,6 +122,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   const { store } = selectTargetStore(cfg);
   const internal = createInternalDb(cfg.INTERNAL_DATABASE_URL);
   const audit = createAuditStore(internal.db);
+  const reportRuns = createReportRunStore(internal.db);
   const plugins = createPluginRegistry({ blob, internalDb: internal.db, logger, audit, devAllowUnsigned: cfg.MARKETPLACE_DEV_ALLOW_UNSIGNED });
   const users = createUserStore(internal.db);
   const userProfiles = createUserProfileStore(internal.db);
@@ -247,6 +249,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     internalDb: internal.db,
     fhirStore: termFhirStore,
     audit,
+    reportRuns,
     users,
     userProfiles,
     forms,

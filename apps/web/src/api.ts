@@ -75,6 +75,60 @@ export function csvUrl(id: string, params: Record<string, string> = {}): string 
   return `/api/reports/${id}.csv${qs ? `?${qs}` : ''}`;
 }
 
+export interface ReportRun {
+  id: string;
+  reportId: string;
+  reportName: string;
+  format: 'preview' | 'csv' | 'pdf' | 'xlsx';
+  params: Record<string, string>;
+  rowCount: number | null;
+  userName: string | null;
+  createdAt: string;
+}
+
+export async function logReportRun(
+  id: string,
+  body: { format: ReportRun['format']; rowCount?: number | null; params?: Record<string, string> },
+): Promise<void> {
+  try {
+    await authFetch(`/api/reports/${encodeURIComponent(id)}/runs`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    // Fire-and-forget: logging must never block the user's action.
+  }
+}
+
+export async function fetchReportRuns(
+  opts: { reportId?: string; limit?: number; offset?: number } = {},
+): Promise<{ runs: ReportRun[]; total: number }> {
+  const qs = new URLSearchParams();
+  if (opts.reportId) qs.set('reportId', opts.reportId);
+  if (opts.limit != null) qs.set('limit', String(opts.limit));
+  if (opts.offset != null) qs.set('offset', String(opts.offset));
+  const q = qs.toString();
+  const res = await authFetch(`/api/reports/runs${q ? `?${q}` : ''}`);
+  if (!res.ok) throw new Error(`report runs failed: ${res.status}`);
+  return res.json() as Promise<{ runs: ReportRun[]; total: number }>;
+}
+
+export async function downloadReportCsv(id: string, params: Record<string, string> = {}): Promise<void> {
+  const qs = new URLSearchParams(params).toString();
+  const res = await authFetch(`/api/reports/${encodeURIComponent(id)}.csv${qs ? `?${qs}` : ''}`);
+  if (!res.ok) throw new Error(`report csv ${id} failed: ${res.status}`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${id}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 // ── Dashboard types & API client ──────────────────────────────────────────────
 
 export interface WidgetVariableDef {

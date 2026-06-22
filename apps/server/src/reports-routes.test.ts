@@ -80,3 +80,70 @@ describe('GET /api/reports/:id/options', () => {
     expect(res.json()).toEqual({});
   });
 });
+
+describe('report run history routes', () => {
+  function appWithRuns() {
+    const recorded: unknown[] = [];
+    const ctx = {
+      reporting: {
+        list: () => [{ id: 'amr-resistance', name: 'AMR Resistance Rate', description: '', category: 'amr', parameters: [] }],
+        run: async () => ({ columns: [], rows: [], chart: { type: 'stat', value: '0', label: 'x' }, meta: { generatedAt: '', rowCount: 0 } }),
+        renderPdf: async () => Buffer.from(''),
+        options: async () => ({}),
+      },
+      reportRuns: {
+        record: async (r: unknown) => { recorded.push(r); },
+        list: async () => ({ runs: [{ id: 'r1', reportId: 'amr-resistance', reportName: 'AMR Resistance Rate', format: 'preview', params: {}, rowCount: 1, userName: 'ada', createdAt: new Date('2026-01-01') }], total: 1 }),
+      },
+    } as unknown as Parameters<typeof registerReportRoutes>[1];
+
+    const app = Fastify();
+    app.addHook('onRequest', async (req) => {
+      (req as { user?: unknown }).user = { id: 'u1', username: 'ada', displayName: 'Ada', roles: [], status: 'active' };
+    });
+    registerReportRoutes(app, ctx);
+    return { app, recorded };
+  }
+
+  it('POST /api/reports/:id/runs records with the stamped user + resolved name', async () => {
+    const { app, recorded } = appWithRuns();
+    await app.ready();
+    const res = await app.inject({
+      method: 'POST', url: '/api/reports/amr-resistance/runs',
+      payload: { format: 'preview', rowCount: 3, params: { from: '2026-01-01' } },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]).toMatchObject({
+      reportId: 'amr-resistance', reportName: 'AMR Resistance Rate',
+      format: 'preview', rowCount: 3, userId: 'u1', userName: 'ada',
+    });
+    await app.close();
+  });
+
+  it('POST rejects an invalid format with 400', async () => {
+    const { app } = appWithRuns();
+    await app.ready();
+    const res = await app.inject({ method: 'POST', url: '/api/reports/amr-resistance/runs', payload: { format: 'nope' } });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('POST unknown report id → 404', async () => {
+    const { app } = appWithRuns();
+    await app.ready();
+    const res = await app.inject({ method: 'POST', url: '/api/reports/does-not-exist/runs', payload: { format: 'preview' } });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('GET /api/reports/runs returns { runs, total }', async () => {
+    const { app } = appWithRuns();
+    await app.ready();
+    const res = await app.inject({ method: 'GET', url: '/api/reports/runs?reportId=amr-resistance&limit=10' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ total: 1 });
+    expect(res.json().runs).toHaveLength(1);
+    await app.close();
+  });
+});

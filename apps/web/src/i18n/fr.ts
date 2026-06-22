@@ -341,6 +341,15 @@ export const fr: EnShape = {
       quality: 'Qualité',
       regulatory: 'Réglementaire',
     },
+    history: {
+      title: 'Historique',
+      empty: 'Aucune exécution enregistrée.',
+      colFormat: 'Format',
+      colRows: 'Lignes',
+      colUser: 'Utilisateur',
+      colWhen: 'Quand',
+      loadError: 'Impossible de charger l’historique.',
+    },
   },
   nav: {
     dashboard: 'Tableau de bord',

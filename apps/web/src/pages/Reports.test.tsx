@@ -16,6 +16,9 @@ vi.mock('../api', () => ({
   fetchReportOptions: vi.fn(async () => ({})),
   fetchReportPdf: vi.fn(async () => new Blob(['%PDF'])),
   csvUrl: (id: string) => `/api/reports/${id}.csv`,
+  logReportRun: vi.fn(async () => {}),
+  fetchReportRuns: vi.fn(async () => ({ runs: [], total: 0 })),
+  downloadReportCsv: vi.fn(async () => {}),
 }));
 vi.mock('../reports/PdfCanvasViewer', () => ({ PdfCanvasViewer: () => <div>pdf-viewer</div> }));
 
@@ -29,5 +32,16 @@ describe('Reports page', () => {
     fireEvent.click(await screen.findByText('AMR Resistance Rate'));
     fireEvent.click(await screen.findByRole('button', { name: /run|exécuter|executar/i }));
     await waitFor(() => expect(screen.getByText('pdf-viewer')).toBeInTheDocument());
+  });
+
+  it('logs a preview run after Run', async () => {
+    const api = await import('../api');
+    render(<MemoryRouter><Reports /></MemoryRouter>);
+    fireEvent.click(await screen.findByText('AMR Resistance Rate'));
+    fireEvent.click(await screen.findByRole('button', { name: /run|exécuter|executar/i }));
+    await waitFor(() => expect(api.logReportRun).toHaveBeenCalledWith(
+      'amr-resistance',
+      expect.objectContaining({ format: 'preview' }),
+    ));
   });
 });

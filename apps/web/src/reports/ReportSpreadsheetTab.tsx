@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Download } from 'lucide-react';
 import type { ReportResult, ReportColumn } from '../api';
-import { csvUrl } from '../api';
+import { downloadReportCsv } from '../api';
 import { exportXlsx } from './lib/report-export';
 import { useTableState } from '@/components/data-table/useTableState';
 import { applyTableState } from '@/components/data-table/applyTableState';
@@ -28,9 +28,10 @@ interface Props {
   reportId: string;
   result: ReportResult;
   params: Record<string, string>;
+  onExport?: (format: 'csv' | 'xlsx', rowCount: number) => void;
 }
 
-export function ReportSpreadsheetTab({ reportId, result, params }: Props) {
+export function ReportSpreadsheetTab({ reportId, result, params, onExport }: Props) {
   const { t } = useTranslation();
 
   const columns = useMemo<ColumnDef<Row>[]>(
@@ -57,14 +58,22 @@ export function ReportSpreadsheetTab({ reportId, result, params }: Props) {
 
   const exportActions = (
     <div className="flex items-center gap-2">
-      <Button asChild variant="outline" size="sm" className="h-8 text-xs">
-        <a href={csvUrl(reportId, params)}>{t('reports.exportCsv')}</a>
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-8 text-xs"
+        onClick={() => {
+          void downloadReportCsv(reportId, params);
+          onExport?.('csv', result.rows.length);
+        }}
+      >
+        {t('reports.exportCsv')}
       </Button>
       <Button
         variant="outline"
         size="sm"
         className="h-8 text-xs"
-        onClick={() =>
+        onClick={() => {
           exportXlsx(
             reportId,
             result.columns,
@@ -73,8 +82,9 @@ export function ReportSpreadsheetTab({ reportId, result, params }: Props) {
               { filters, sorts, page: 0, pageSize: result.rows.length || 1 },
               columns,
             ).rows,
-          )
-        }
+          );
+          onExport?.('xlsx', result.rows.length);
+        }}
       >
         <Download className="mr-1.5 h-3.5 w-3.5" />
         {t('reports.exportXlsx')}

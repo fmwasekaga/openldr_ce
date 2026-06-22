@@ -295,6 +295,18 @@ export interface UserProfilesTable {
   updated_at: Date;
 }
 
+export interface ReportRunsTable {
+  id: string;
+  report_id: string;
+  report_name: string;
+  format: string;
+  params: JSONColumnType<Record<string, unknown>>;
+  row_count: number | null;
+  user_id: string | null;
+  user_name: string | null;
+  created_at: Generated<Date>;
+}
+
 export interface FormVersionsTable {
   id: string;
   form_id: string;
@@ -350,4 +362,5 @@ export interface InternalSchema {
   form_versions: FormVersionsTable;
   user_profiles: UserProfilesTable;
   marketplace_publishers: MarketplacePublishersTable;
+  report_runs: ReportRunsTable;
 }

@@ -6,10 +6,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 /**
- * SP-1: History and Schedules are placeholders (disabled). They are wired live
- * in SP-2 (Run History) and SP-3 (Scheduling).
+ * SP-2: Run History is live. Schedules remains a placeholder (disabled) until SP-3.
  */
-export function ReportActionsMenu() {
+export function ReportActionsMenu({ onOpenHistory }: { onOpenHistory?: () => void }) {
   const { t } = useTranslation();
   return (
     <DropdownMenu>
@@ -19,7 +18,7 @@ export function ReportActionsMenu() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">
-        <DropdownMenuItem disabled title={t('reports.comingSoon')}>
+        <DropdownMenuItem onSelect={() => onOpenHistory?.()}>
           {t('reports.runHistory')}
         </DropdownMenuItem>
         <DropdownMenuItem disabled title={t('reports.comingSoon')}>

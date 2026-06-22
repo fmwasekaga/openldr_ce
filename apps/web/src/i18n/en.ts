@@ -316,6 +316,15 @@ export const en = {
       quality: 'Quality',
       regulatory: 'Regulatory',
     },
+    history: {
+      title: 'Run History',
+      empty: 'No runs recorded yet.',
+      colFormat: 'Format',
+      colRows: 'Rows',
+      colUser: 'User',
+      colWhen: 'When',
+      loadError: 'Could not load run history.',
+    },
   },
   nav: {
     dashboard: 'Dashboard',
