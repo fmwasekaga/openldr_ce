@@ -699,6 +699,54 @@ export async function deleteDhis2Schedule(id: string): Promise<void> {
   if (!r.ok) throw new Error(`delete schedule failed: ${r.status}`);
 }
 
+// ── Marketplace (SP-4) ─────────────────────────────────────────────────────────
+export interface AvailableArtifact {
+  ref: string;
+  id: string;
+  version: string;
+  type: string;
+  publisher: { id: string; name: string } | null;
+  capabilities: unknown[];
+  compatibility: { ceVersion: string };
+  valid: boolean;
+}
+export interface InstalledArtifact {
+  id: string;
+  version: string;
+  active: boolean;
+  enabled: boolean;
+  approvedBy: string | null;
+  type: string;
+  publisher: unknown;
+  capabilities: unknown[];
+  legacy: boolean;
+}
+
+export const listInstalledArtifacts = (): Promise<InstalledArtifact[]> =>
+  apiGet('/api/marketplace/installed', 'list installed artifacts');
+
+export const listAvailableArtifacts = (): Promise<{ configured: boolean; bundles: AvailableArtifact[] }> =>
+  apiGet('/api/marketplace/available', 'list available artifacts');
+
+export const installArtifact = (ref: string, acknowledgedCapabilities: unknown[]): Promise<{ id: string; version: string }> =>
+  authFetch('/api/marketplace/install', jbody({ ref, acknowledgedCapabilities }, 'POST')).then((r) => okJson<{ id: string; version: string }>(r, 'install artifact'));
+
+export async function setArtifactEnabled(id: string, enabled: boolean): Promise<void> {
+  const endpoint = enabled ? 'enable' : 'disable';
+  const r = await authFetch(`/api/marketplace/${encodeURIComponent(id)}/${endpoint}`, { method: 'POST' });
+  if (!r.ok) throw new Error(`set artifact ${endpoint} failed: ${r.status}`);
+}
+
+export const rollbackArtifact = (id: string, version: string): Promise<void> =>
+  authFetch(`/api/marketplace/${encodeURIComponent(id)}/rollback`, jbody({ version }, 'POST')).then(async (r) => {
+    if (!r.ok) throw new Error(`rollback artifact failed: ${r.status}`);
+  });
+
+export async function removeArtifact(id: string, version?: string): Promise<void> {
+  const qs = version ? `?version=${encodeURIComponent(version)}` : '';
+  await apiDelete(`/api/marketplace/${encodeURIComponent(id)}${qs}`, 'remove artifact');
+}
+
 export function buildOntology(
   id: string,
   opts: { path?: string; rebuild?: boolean },
