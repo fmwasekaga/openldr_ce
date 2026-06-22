@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AppShell } from '@/shell/AppShell';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { listDhis2Pushes, type Dhis2Push } from '@/api';
 
@@ -11,8 +10,8 @@ export function Dhis2Pushes() {
   useEffect(() => { void (async () => { try { setRows(await listDhis2Pushes(100)); } catch (e) { setError(e instanceof Error ? e.message : String(e)); } })(); }, []);
 
   return (
-    <AppShell title="DHIS2 push history">
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4" data-testid="dhis2-pushes-page">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4" data-testid="dhis2-pushes-page">
+      <h1 className="text-lg font-semibold">{t('dhis2.ops.pushesHeading')}</h1>
         {error ? <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div> : null}
         <Table>
           <TableHeader><TableRow>
@@ -37,7 +36,6 @@ export function Dhis2Pushes() {
             })}
           </TableBody>
         </Table>
-      </div>
-    </AppShell>
+    </div>
   );
 }
