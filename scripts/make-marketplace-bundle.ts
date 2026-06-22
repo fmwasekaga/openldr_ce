@@ -11,13 +11,12 @@
 //
 // Run: pnpm make:marketplace-bundle
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
-import { createHash } from 'node:crypto';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   generatePublisherKeypair,
-  signManifest,
   keyFingerprint,
+  packBundle,
   type Capability,
 } from '@openldr/marketplace';
 
@@ -45,42 +44,42 @@ function loadOrCreateKeypair() {
   return kp;
 }
 
-function buildBundle(opts: {
+async function buildBundle(opts: {
   dirName: string;
   version: string;
   resourceTypes: string[];
   wasm: Uint8Array;
-  wasmSha256: string;
   kp: ReturnType<typeof loadOrCreateKeypair>;
 }) {
   const capabilities: Capability[] = [
     { kind: 'emit-fhir', resourceTypes: opts.resourceTypes },
     { kind: 'net-egress', allowedHosts: [] },
   ];
-  const base = {
+  const manifest = {
     schemaVersion: 1 as const,
     type: 'plugin' as const,
     id: 'whonet-sqlite',
     version: opts.version,
     description: 'WHONET SQLite -> FHIR R4 (signed marketplace artifact)',
     license: 'Apache-2.0',
-    publisher: { id: PUBLISHER.id, name: PUBLISHER.name, keyFingerprint: opts.kp.fingerprint },
+    publisher: { id: PUBLISHER.id, name: PUBLISHER.name, keyFingerprint: '0'.repeat(64) },
     compatibility: { ceVersion: '*' },
     capabilities,
-    payload: { kind: 'plugin' as const, wasmSha256: opts.wasmSha256, entrypoint: 'convert', wasi: true, limits: { memoryMb: 256, timeoutMs: 30_000 } },
+    payload: { kind: 'plugin' as const, wasmSha256: '0'.repeat(64), entrypoint: 'convert', wasi: true, limits: { memoryMb: 256, timeoutMs: 30_000 } },
   };
-  const signature = signManifest(base, opts.wasmSha256, opts.kp.privateKeyDer);
-  const manifest = { ...base, signature };
 
-  const dir = join(marketplaceRepo, 'bundles', opts.dirName);
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2));
-  writeFileSync(join(dir, 'plugin.wasm'), opts.wasm);
-  writeFileSync(join(dir, 'publisher.pub'), Buffer.from(opts.kp.publicKeyDer).toString('hex'));
-  console.log(`  ✓ wrote ${opts.dirName} (v${opts.version}, emit-fhir: ${opts.resourceTypes.join(',')}) -> ${dir}`);
+  const outDir = join(marketplaceRepo, 'bundles', opts.dirName);
+  await packBundle({
+    manifest,
+    payload: opts.wasm,
+    outDir,
+    privateKeyDer: opts.kp.privateKeyDer,
+    publicKeyDer: opts.kp.publicKeyDer,
+  });
+  console.log(`  ✓ wrote ${opts.dirName} (v${opts.version}, emit-fhir: ${opts.resourceTypes.join(',')}) -> ${outDir}`);
 }
 
-function main() {
+async function main() {
   if (!existsSync(wasmPath)) {
     console.error(`missing ${wasmPath} — run \`pnpm build:plugins\` first`);
     process.exit(1);
@@ -90,12 +89,11 @@ function main() {
     process.exit(1);
   }
   const wasm = new Uint8Array(readFileSync(wasmPath));
-  const wasmSha256 = createHash('sha256').update(wasm).digest('hex');
   const kp = loadOrCreateKeypair();
 
   console.log(`Publisher ${PUBLISHER.id} fingerprint=${kp.fingerprint}`);
-  buildBundle({ dirName: 'whonet-narrow', version: '1.0.0', resourceTypes: ['Patient'], wasm, wasmSha256, kp });
-  buildBundle({ dirName: 'whonet-wide', version: '1.1.0', resourceTypes: ['Patient', 'Specimen', 'Observation', 'DiagnosticReport', 'ServiceRequest'], wasm, wasmSha256, kp });
+  await buildBundle({ dirName: 'whonet-narrow', version: '1.0.0', resourceTypes: ['Patient'], wasm, kp });
+  await buildBundle({ dirName: 'whonet-wide', version: '1.1.0', resourceTypes: ['Patient', 'Specimen', 'Observation', 'DiagnosticReport', 'ServiceRequest'], wasm, kp });
   console.log('\n✅ bundles built. Private key (gitignored): scripts/.marketplace-keys/whonet.priv');
 }
 
