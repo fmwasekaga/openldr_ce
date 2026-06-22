@@ -34,6 +34,23 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 Browse **https://localhost** (accept the self-signed-certificate warning).
 
+### Windows (PowerShell)
+
+`docker compose` works the same. For the cert, either run the script from **Git Bash**
+(`sh deploy/nginx/gen-selfsigned.sh localhost`) or use this PowerShell one-liner (no local
+openssl needed — generates it inside a container):
+
+```powershell
+docker run --rm -v "${PWD}/deploy/nginx/certs:/certs" alpine/openssl req -x509 -newkey rsa:2048 -nodes -days 825 `
+  -keyout /certs/privkey.pem -out /certs/fullchain.pem -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+Copy-Item .env.prod.example .env.prod   # then edit secrets
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Smoke from PowerShell with `curl.exe` (the real curl, not the `Invoke-WebRequest` alias):
+`curl.exe -k https://localhost/health`. (The repo's `.gitattributes` keeps `*.sh` and the
+nginx template LF so they aren't CRLF-mangled on a Windows checkout.)
+
 ## TLS in production
 
 Replace the self-signed cert with a real one — e.g. via **Let's Encrypt / certbot**:

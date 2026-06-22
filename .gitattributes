@@ -1,0 +1,14 @@
+# Files consumed by Unix shells / containers must stay LF on every platform,
+# otherwise a CRLF checkout on Windows breaks them (e.g. `#!/usr/bin/env sh\r`).
+*.sh                       text eol=lf
+deploy/nginx/*.template    text eol=lf
+Dockerfile                 text eol=lf
+*.dockerignore             text eol=lf
+.dockerignore              text eol=lf
+docker-compose*.yml        text eol=lf
+.env.prod.example          text eol=lf
+
+# Windows-native scripts stay CRLF.
+*.ps1   text eol=crlf
+*.cmd   text eol=crlf
+*.bat   text eol=crlf
