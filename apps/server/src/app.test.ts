@@ -427,6 +427,26 @@ describe('GET /health', () => {
   });
 });
 
+describe('SPA static root (WEB_DIST_DIR)', () => {
+  it('serves index.html from WEB_DIST_DIR when set', async () => {
+    const { mkdtempSync, writeFileSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = mkdtempSync(join(tmpdir(), 'webdist-'));
+    writeFileSync(join(dir, 'index.html'), '<!doctype html><div id="root">SPA</div>');
+    process.env.WEB_DIST_DIR = dir;
+    try {
+      const app = buildApp(ctxWith('up'));
+      const res = await app.inject({ method: 'GET', url: '/' });
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toContain('id="root"');
+      await app.close();
+    } finally {
+      delete process.env.WEB_DIST_DIR;
+    }
+  });
+});
+
 describe('GET /api/config', () => {
   it('returns authEnforced and OIDC shape from ctx.cfg', async () => {
     const app = buildApp(ctxWith('up'));
