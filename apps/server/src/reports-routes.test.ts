@@ -58,3 +58,25 @@ describe('report routes', () => {
     expect(res.body).toContain('Antibiotic,%R');
   });
 });
+
+describe('GET /api/reports/:id/options', () => {
+  const reporting = {
+    list: vi.fn(),
+    run: vi.fn(),
+    options: async (id: string) => (id === 'amr-resistance' ? { facility: ['F1', 'F2'] } : {}),
+  };
+
+  it('returns the option map for a report', async () => {
+    const app = appWith(reporting);
+    const res = await app.inject({ method: 'GET', url: '/api/reports/amr-resistance/options' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ facility: ['F1', 'F2'] });
+  });
+
+  it('returns {} for reports without options', async () => {
+    const app = appWith(reporting);
+    const res = await app.inject({ method: 'GET', url: '/api/reports/amr-antibiogram/options' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({});
+  });
+});
