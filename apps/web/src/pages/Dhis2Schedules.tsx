@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AppShell } from '@/shell/AppShell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -41,8 +40,8 @@ export function Dhis2Schedules() {
   }, [pendingDelete, load, t]);
 
   return (
-    <AppShell title="DHIS2 schedules">
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4" data-testid="dhis2-schedules-page">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4" data-testid="dhis2-schedules-page">
+      <h1 className="text-lg font-semibold">{t('dhis2.ops.schedulesHeading')}</h1>
         <p className="text-xs text-muted-foreground">{t('dhis2.ops.syncNote')}</p>
         {toast ? <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">{toast}</div> : null}
 
@@ -101,7 +100,6 @@ export function Dhis2Schedules() {
         <ConfirmDialog open={pendingDelete !== null} onOpenChange={(o) => { if (!o) setPendingDelete(null); }}
           title={t('dhis2.ops.deleteScheduleTitle')} description={t('dhis2.ops.deleteScheduleDesc')}
           confirmLabel={t('dhis2.ops.delete')} destructive onConfirm={() => { void doDelete(); }} />
-      </div>
-    </AppShell>
+    </div>
   );
 }

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { AppShell } from '@/shell/AppShell';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -152,16 +151,16 @@ export function Dhis2MappingEditor() {
     catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }, [def]);
   const onSave = useCallback(async () => {
-    try { await saveDhis2Mapping(mappingId, { name, definition: def() }); navigate('/dhis2/mappings'); }
+    try { await saveDhis2Mapping(mappingId, { name, definition: def() }); navigate('/settings/dhis2/mappings'); }
     catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }, [mappingId, name, def, navigate]);
 
-  if (loading) return <AppShell title="DHIS2 mapping"><div className="p-6 text-sm text-muted-foreground">{t('common.loading')}</div></AppShell>;
-  if (notFound) return <AppShell title="DHIS2 mapping"><div className="p-6 text-sm text-muted-foreground">{t('dhis2.mappings.editor.notFound')}</div></AppShell>;
+  if (loading) return <div className="p-6 text-sm text-muted-foreground">{t('common.loading')}</div>;
+  if (notFound) return <div className="p-6 text-sm text-muted-foreground">{t('dhis2.mappings.editor.notFound')}</div>;
 
   return (
-    <AppShell title={isNew ? t('dhis2.mappings.editor.newTitle') : t('dhis2.mappings.editor.editTitle')}>
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4" data-testid="dhis2-mapping-editor">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4" data-testid="dhis2-mapping-editor">
+      <h1 className="text-lg font-semibold">{isNew ? t('dhis2.mappings.editor.newTitle') : t('dhis2.mappings.editor.editTitle')}</h1>
         {error ? <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div> : null}
         {metaEmpty ? <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">{t('dhis2.mappings.editor.noMetadata')}</div> : null}
 
@@ -310,9 +309,8 @@ export function Dhis2MappingEditor() {
         <div className="flex items-center gap-2">
           <Button variant="outline" data-testid="validate-mapping" onClick={() => void onValidate()}>{t('dhis2.mappings.editor.validate')}</Button>
           <Button data-testid="save-mapping" onClick={() => void onSave()}>{t('dhis2.mappings.editor.save')}</Button>
-          <Button variant="ghost" onClick={() => navigate('/dhis2/mappings')}>{t('dhis2.mappings.editor.cancel')}</Button>
+          <Button variant="ghost" onClick={() => navigate('/settings/dhis2/mappings')}>{t('dhis2.mappings.editor.cancel')}</Button>
         </div>
-      </div>
-    </AppShell>
+    </div>
   );
 }

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AppShell } from '@/shell/AppShell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
@@ -37,8 +36,8 @@ export function Dhis2OrgUnits() {
   }, [load, t]);
 
   return (
-    <AppShell title="DHIS2 OrgUnits">
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4" data-testid="dhis2-orgunits-page">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4" data-testid="dhis2-orgunits-page">
+      <h1 className="text-lg font-semibold">{t('dhis2.orgunits.heading')}</h1>
         <div className="text-sm text-muted-foreground">
           {data?.metadataPulledAt
             ? t('dhis2.orgunits.pulledAt', { when: new Date(data.metadataPulledAt).toLocaleString() })
@@ -93,7 +92,6 @@ export function Dhis2OrgUnits() {
             ))}
           </TableBody>
         </Table>
-      </div>
-    </AppShell>
+    </div>
   );
 }

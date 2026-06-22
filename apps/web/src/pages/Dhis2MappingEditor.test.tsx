@@ -32,8 +32,8 @@ function renderAt(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
-        <Route path="/dhis2/mappings/new" element={<Dhis2MappingEditor />} />
-        <Route path="/dhis2/mappings/:id" element={<Dhis2MappingEditor />} />
+        <Route path="/settings/dhis2/mappings/new" element={<Dhis2MappingEditor />} />
+        <Route path="/settings/dhis2/mappings/:id" element={<Dhis2MappingEditor />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -64,7 +64,7 @@ beforeEach(() => {
 describe('DHIS2 mapping editor — aggregate', () => {
   it('builds and saves a new aggregate mapping', async () => {
     (saveDhis2Mapping as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'mapping-x', name: 'My Map', definition: {} });
-    renderAt('/dhis2/mappings/new');
+    renderAt('/settings/dhis2/mappings/new');
     fireEvent.change(await screen.findByTestId('mapping-name'), { target: { value: 'My Map' } });
     pick('report-select', 'Test Volume');
     await waitFor(() => expect(getReportColumns).toHaveBeenCalledWith('test-volume'));
@@ -84,7 +84,7 @@ describe('DHIS2 mapping editor — aggregate', () => {
 describe('DHIS2 mapping editor — tracker', () => {
   it('builds and saves a new tracker mapping', async () => {
     (saveDhis2Mapping as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'mapping-y', name: 'Trk', definition: {} });
-    renderAt('/dhis2/mappings/new');
+    renderAt('/settings/dhis2/mappings/new');
     await screen.findByTestId('mapping-name');
     // switch to tracker
     pick('kind-select', 'Tracker');
@@ -117,7 +117,7 @@ describe('DHIS2 mapping editor — tracker', () => {
       id: 't1', name: 'Trk',
       definition: { kind: 'tracker', id: 't1', name: 'Trk', source: { kind: 'event-source', sourceId: 'amr-isolates' }, program: 'prog1', programStage: 'stage1', orgUnitColumn: 'facility', eventDateColumn: 'eventDate', idColumn: 'id', dataValues: [{ column: 'result', dataElement: 'de1' }] },
     });
-    renderAt('/dhis2/mappings/t1');
+    renderAt('/settings/dhis2/mappings/t1');
     // tracker form is shown (program select present), not a read-only notice
     expect(await screen.findByTestId('program-select')).toBeTruthy();
     expect(screen.getByTestId('event-source-select')).toHaveTextContent('AMR isolates');
