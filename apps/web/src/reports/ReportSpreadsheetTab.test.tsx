@@ -1,6 +1,13 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import '@/i18n';
+
+const { downloadReportCsv } = vi.hoisted(() => ({ downloadReportCsv: vi.fn(async () => {}) }));
+vi.mock('../api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../api')>();
+  return { ...actual, downloadReportCsv };
+});
+
 import { ReportSpreadsheetTab } from './ReportSpreadsheetTab';
 import type { ReportResult } from '../api';
 
@@ -15,11 +22,18 @@ const result: ReportResult = {
 };
 
 describe('ReportSpreadsheetTab', () => {
-  it('renders rows and a CSV export link', () => {
+  it('renders rows with percent formatting', () => {
     render(<ReportSpreadsheetTab reportId="amr-resistance" result={result} params={{ from: '2026-01-01' }} />);
     expect(screen.getByText('AMP')).toBeInTheDocument();
     expect(screen.getByText('40%')).toBeInTheDocument();
-    const csv = screen.getByRole('link', { name: /csv/i });
-    expect(csv).toHaveAttribute('href', '/api/reports/amr-resistance.csv?from=2026-01-01');
+  });
+
+  it('downloads CSV via authenticated helper and fires onExport', async () => {
+    const onExport = vi.fn();
+    render(<ReportSpreadsheetTab reportId="amr-resistance" result={result} params={{ from: '2026-01-01' }} onExport={onExport} />);
+    fireEvent.click(screen.getByRole('button', { name: /csv/i }));
+    expect(downloadReportCsv).toHaveBeenCalledWith('amr-resistance', { from: '2026-01-01' });
+    await Promise.resolve();
+    expect(onExport).toHaveBeenCalledWith('csv', 2);
   });
 });
