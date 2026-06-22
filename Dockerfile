@@ -7,7 +7,7 @@ COPY . .
 RUN pnpm install --frozen-lockfile
 RUN pnpm turbo build --filter @openldr/web --filter @openldr/server
 # pnpm deploy resolves the server's workspace deps into a self-contained dir (/deploy).
-RUN pnpm --filter @openldr/server deploy --prod /deploy
+RUN pnpm --filter @openldr/server deploy --prod --legacy /deploy
 # Stage the built SPA where WEB_DIST_DIR points — decoupled from the server-dist layout.
 RUN mkdir -p /deploy/web && cp -r apps/web/dist/. /deploy/web/
 

@@ -38,6 +38,7 @@ services:
       retries: 10
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./scripts/init-target-db.sql:/docker-entrypoint-initdb.d/10-init-target-db.sql:ro
     restart: unless-stopped
 
   minio:
