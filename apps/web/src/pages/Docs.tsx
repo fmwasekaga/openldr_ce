@@ -1,15 +1,12 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { AppShell } from '../shell/AppShell';
-import { useDocLocale } from '../docs/useDocLocale';
-import { list, resolve, LOCALES, type Locale } from '../docs/registry';
+import { list, resolve, type Locale } from '../docs/registry';
 import { buildIndex, searchDocs } from '../docs/search';
 import { DocMarkdown } from '../docs/DocMarkdown';
 import { Lightbox, type LightboxImage } from '../docs/Lightbox';
-import {
-  Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
-} from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -20,7 +17,8 @@ import { exportDocs, type ExportFormat, type ExportScope } from '../docs/export/
 
 export function Docs() {
   const { slug } = useParams();
-  const [locale, setLocale] = useDocLocale();
+  const { i18n } = useTranslation();
+  const locale: Locale = (['en', 'fr', 'pt'] as const).includes(i18n.language as Locale) ? (i18n.language as Locale) : 'en';
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState(false);
   const [lightbox, setLightbox] = useState<LightboxImage | null>(null);
@@ -120,12 +118,6 @@ export function Docs() {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            <Select value={locale} onValueChange={(v) => setLocale(v as Locale)}>
-              <SelectTrigger aria-label="Language" className="w-24"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {LOCALES.map((l) => <SelectItem key={l} value={l}>{l.toUpperCase()}</SelectItem>)}
-              </SelectContent>
-            </Select>
           </div>
           <div className="flex-1 overflow-y-auto p-6">
             {!section ? (

@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import i18n from '@/i18n';
 import { Docs } from './Docs';
 
 function renderAt(path: string) {
@@ -58,5 +59,34 @@ describe('DocsLayout', () => {
     expect(screen.queryByLabelText('Search documentation')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Expand documentation sidebar' }));
     expect(screen.getByRole('navigation', { name: 'Documentation sections' })).toBeInTheDocument();
+  });
+
+  it('does not render a language Select in the toolbar (locale derives from app language)', () => {
+    renderAt('/docs');
+    // The docs-only locale Select has been removed; the toolbar holds only the export dropdown.
+    expect(screen.queryByLabelText('Language')).toBeNull();
+  });
+});
+
+describe('DocsLayout locale derivation', () => {
+  afterEach(async () => {
+    await i18n.changeLanguage('en');
+  });
+
+  it('defaults to English content when app language is en', () => {
+    renderAt('/docs');
+    // English overview title must be present (no fallback notice)
+    expect(screen.getByRole('heading', { level: 1, name: 'OpenLDR Community Edition' })).toBeInTheDocument();
+    expect(screen.queryByText(/Shown in English/)).toBeNull();
+  });
+
+  it('falls back to English content when app language is fr (fr docs not yet created)', async () => {
+    await i18n.changeLanguage('fr');
+    renderAt('/docs');
+    // fr/overview.md doesn't exist yet (Task 3) so the registry falls back to en content.
+    // The fallback notice is shown when localeUsed !== requested locale.
+    expect(screen.getByRole('heading', { level: 1, name: 'OpenLDR Community Edition' })).toBeInTheDocument();
+    // Fallback notice expected since fr docs don't exist yet
+    expect(screen.getByText(/Shown in English/)).toBeInTheDocument();
   });
 });
