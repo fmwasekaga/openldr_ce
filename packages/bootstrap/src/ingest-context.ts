@@ -25,14 +25,9 @@ import {
   type BatchStore,
   type Converter,
 } from '@openldr/ingest';
-import {
-  createPluginStore,
-  createPluginRuntime,
-  createExtismRunner,
-  type PluginRuntime,
-} from '@openldr/plugins';
+import { type PluginRuntime } from '@openldr/plugins';
 import { createAuditStore, safeRecord } from '@openldr/audit';
-import { createTrustStore } from '@openldr/marketplace';
+import { createPluginRegistry } from './plugin-registry';
 import type { EventingPort } from '@openldr/ports';
 import { selectTargetStore } from './target-store';
 
@@ -71,17 +66,7 @@ export async function createIngestContext(cfg: Config): Promise<IngestContext> {
   const batches = createBatchStore(internal.db);
   const audit = createAuditStore(internal.db);
 
-  const pluginStore = createPluginStore(internal.db);
-  const plugins = createPluginRuntime({
-    blob,
-    store: pluginStore,
-    runner: createExtismRunner(),
-    logger,
-    trustStore: createTrustStore(internal.db),
-    ceVersion: '0.1.0', // CE version for the artifact compatibility gate (matches package.json)
-    verifyConfig: { devAllowUnsigned: cfg.MARKETPLACE_DEV_ALLOW_UNSIGNED },
-    recordInstall: (e) => safeRecord(audit, logger, e),
-  });
+  const plugins = createPluginRegistry({ blob, internalDb: internal.db, logger, audit, devAllowUnsigned: cfg.MARKETPLACE_DEV_ALLOW_UNSIGNED });
 
   const pluginResolver = { resolve: (id: string): Promise<Converter | undefined> => plugins.load(id) };
   const resolver = chainResolvers(registryResolver(converters), pluginResolver);
