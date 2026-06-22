@@ -1,0 +1,333 @@
+import type { EnShape } from './en';
+
+export const pt: EnShape = {
+  common: {
+    delete: 'Eliminar',
+    save: 'Guardar',
+    cancel: 'Cancelar',
+    create: 'Criar',
+    loading: 'A carregar…',
+    actions: 'Ações',
+    saving: 'A guardar…',
+    signIn: 'Iniciar sessão',
+    signOut: 'Terminar sessão',
+    signingIn: 'A iniciar sessão…',
+    callbackError: 'Falha no início de sessão. Por favor tente novamente.',
+    configUnreachable: 'Não foi possível contactar o servidor. Por favor recarregue.',
+  },
+  table: {
+    filter: 'Filtrar',
+    sort: 'Ordenar',
+    columns: 'Colunas',
+    reset: 'Repor',
+    resetToDefaults: 'Repor para predefinições',
+    where: 'Onde',
+    and: 'E',
+    or: 'OU',
+    apply: 'Aplicar',
+    clear: 'Limpar',
+    clearAll: 'Limpar tudo',
+    addFilter: 'Adicionar filtro',
+    addSort: 'Adicionar ordenação',
+    noFilters: 'Nenhum filtro aplicado.',
+    noSorts: 'Nenhuma ordenação aplicada.',
+    allColumnsSorted: 'Todas as colunas ordenadas.',
+    ascending: 'Crescente',
+    descending: 'Decrescente',
+    asc: 'Cresc.',
+    desc: 'Decresc.',
+    pickRange: 'Escolher intervalo',
+    pickDate: 'Escolher data',
+    pickValue: 'Escolher valor',
+    from: 'De',
+    to: 'Até',
+    commaSeparated: 'Separado por vírgulas',
+    enterValue: 'Introduzir valor',
+    operators: {
+      eq: 'Igual a',
+      ne: 'Diferente de',
+      like: 'Contém',
+      gt: 'Maior que',
+      gte: 'Pelo menos',
+      lt: 'Menor que',
+      lte: 'No máximo',
+      between: 'Entre',
+      in: 'Na lista',
+      is_null: 'Está vazio',
+      is_not_null: 'Não está vazio',
+    },
+  },
+  users: {
+    searchPlaceholder: 'Pesquisar nome de utilizador ou nome completo',
+    username: 'Nome de utilizador',
+    fullName: 'Nome completo',
+    email: 'E-mail',
+    roles: 'Funções',
+    status: 'Estado',
+    created: 'Criado',
+    lastLogin: 'Último início de sessão',
+    statusActive: 'Ativo',
+    statusDisabled: 'Desativado',
+    count: '{{count}} utilizadores',
+    newUser: 'Novo utilizador',
+    refresh: 'Atualizar',
+    edit: 'Editar',
+    disable: 'Desativar',
+    enable: 'Ativar',
+    selfSuffix: 'você',
+    noUsers: 'Nenhum utilizador.',
+    noMatch: 'Nenhum utilizador corresponde.',
+    savedToast: '{{username}} guardado',
+    enabledToast: '{{username}} ativado',
+    disabledToast: '{{username}} desativado',
+    errorToast: 'Ação falhou: {{error}}',
+    disableTitle: 'Desativar {{username}}?',
+    disableDescription: 'Não poderá iniciar sessão.',
+    enableTitle: 'Ativar {{username}}?',
+    enableDescription: 'Poderá iniciar sessão novamente.',
+    editUserTitle: 'Editar utilizador',
+    newUserTitle: 'Novo utilizador',
+    editUserDesc: 'Atualizar perfil, funções e estado.',
+    newUserDesc: 'Criar uma conta de operador local.',
+    noUsersForm:
+      'Nenhum formulário de Utilizadores publicado encontrado. Crie um formulário de Utilizadores no Construtor de Formulários.',
+    firstName: 'Primeiro nome',
+    lastName: 'Apelido',
+    resetPassword: 'Repor palavra-passe',
+    sendResetEmail: 'Enviar e-mail de reposição',
+    forceSignOut: 'Forçar término de sessão',
+    noProviderAccount: 'nenhuma conta associada',
+    resetPasswordTitle: 'Repor palavra-passe',
+    resetPasswordDescription: 'Definir uma nova palavra-passe para {{username}}.',
+    newPassword: 'Nova palavra-passe',
+    newPasswordPlaceholder: 'Introduzir nova palavra-passe',
+    confirmPassword: 'Confirmar palavra-passe',
+    copyPassword: 'Copiar palavra-passe',
+    resetPasswordHint:
+      'Partilhe esta palavra-passe temporária de forma segura; o utilizador deve alterá-la no próximo início de sessão.',
+    resetPasswordButton: 'Repor palavra-passe',
+    passwordRequired: 'A palavra-passe é obrigatória.',
+    passwordMismatch: 'As palavras-passe não coincidem.',
+    resetPasswordSavedToast: 'Palavra-passe reposta para {{username}}',
+    sendResetEmailToast: 'E-mail de reposição enviado para {{username}}',
+    forceSignOutTitle: 'Forçar término de sessão de {{username}}?',
+    forceSignOutDescription: 'Todas as sessões ativas serão encerradas.',
+    forceSignOutToast: 'Todas as sessões encerradas para {{username}}',
+    roleNames: {
+      lab_admin: 'Administrador do laboratório',
+      lab_manager: 'Gestor do laboratório',
+      lab_technician: 'Técnico de laboratório',
+      data_analyst: 'Analista de dados',
+      system_auditor: 'Auditor do sistema',
+    },
+  },
+  dhis2: {
+    title: 'DHIS2',
+    connection: 'Ligação',
+    configured: 'Configurado',
+    notConfigured: 'Não configurado',
+    syncEnabled: 'Sincronização ativada',
+    syncDisabled: 'Sincronização desativada',
+    host: 'Anfitrião',
+    reachability: 'Acessibilidade',
+    up: 'Acessível',
+    down: 'Inacessível',
+    degraded: 'Degradado',
+    notConfiguredHelp:
+      'Defina REPORTING_TARGET_ADAPTER=dhis2 e DHIS2_BASE_URL / DHIS2_USERNAME / DHIS2_PASSWORD no ambiente do servidor para ativar o DHIS2.',
+    metadata: 'Metadados',
+    pullMetadata: 'Obter metadados',
+    pulling: 'A obter…',
+    dataElements: 'Elementos de dados', // review
+    orgUnits: 'Unidades organizacionais', // review
+    categoryOptionCombos: 'Combinações de opções de categoria', // review
+    programs: 'Programas',
+    programStages: 'Etapas do programa', // review
+    overview: 'Visão geral',
+    mappingsCount: 'Mapeamentos', // review
+    orgUnitMappings: 'Mapeamentos de OrgUnit', // review
+    schedules: 'Agendamentos',
+    recentPushes: 'Envios recentes', // review
+    noPushes: 'Nenhum envio ainda.', // review
+    when: 'Quando',
+    action: 'Ação',
+    mapping: 'Mapeamento', // review
+    orgunits: {
+      heading: 'OrgUnits DHIS2', // review
+      title: 'Mapeamentos Estabelecimento → OrgUnit', // review
+      manage: 'Gerir →',
+      facility: 'Estabelecimento',
+      orgUnit: 'OrgUnit DHIS2', // review
+      unmapped: 'Sem mapeamento', // review
+      pick: 'Escolher um OrgUnit…', // review
+      search: 'Pesquisar OrgUnits', // review
+      clear: 'Limpar',
+      pulledAt: 'Catálogo de OrgUnit obtido {{when}}', // review
+      neverPulled:
+        'Nenhum catálogo de OrgUnit — obtenha primeiro os metadados nas definições do DHIS2.', // review
+      noFacilities: 'Nenhum estabelecimento.',
+      mappedToast: '{{facility}} mapeado', // review
+      clearedToast: 'Mapeamento limpo para {{facility}}', // review
+      errorToast: 'Falhou: {{error}}',
+    },
+    mappings: {
+      heading: 'Mapeamentos DHIS2', // review
+      title: 'Mapeamentos DHIS2', // review
+      manage: 'Gerir →',
+      newMapping: 'Novo mapeamento', // review
+      name: 'Nome',
+      kind: 'Tipo',
+      edit: 'Editar',
+      delete: 'Eliminar',
+      deleteTitle: 'Eliminar mapeamento {{name}}?', // review
+      deleteDescription: 'Isto remove o mapeamento. Não pode ser desfeito.', // review
+      none: 'Nenhum mapeamento ainda.', // review
+      deletedToast: '{{name}} eliminado',
+      errorToast: 'Falhou: {{error}}',
+      editor: {
+        newTitle: 'Novo mapeamento agregado', // review
+        editTitle: 'Editar mapeamento agregado', // review
+        mappingName: 'Nome do mapeamento', // review
+        sourceReport: 'Relatório de origem',
+        pickReport: 'Escolher um relatório…',
+        orgUnitColumn: 'Coluna OrgUnit', // review
+        periodColumn: 'Coluna de período (opcional)',
+        pickColumn: 'Escolher uma coluna…',
+        columns: 'Coluna → elemento de dados', // review
+        reportColumn: 'Coluna do relatório',
+        dataElement: 'Elemento de dados', // review
+        coc: 'Combinação de opção de categoria (opcional)', // review
+        addColumn: 'Adicionar coluna',
+        remove: 'Remover',
+        validate: 'Validar',
+        noProblems: 'Sem problemas.',
+        save: 'Guardar',
+        cancel: 'Cancelar',
+        savedToast: '{{name}} guardado',
+        noMetadata:
+          'Nenhum metadado DHIS2 em cache — obtenha os metadados nas definições do DHIS2 para ativar os seletores de elementos de dados.', // review
+        notFound: 'Mapeamento não encontrado.', // review
+        kindLabel: 'Tipo de mapeamento', // review
+        kindAggregate: 'Agregado', // review
+        kindTracker: 'Tracker', // review
+        tracker: {
+          sourceEventSource: 'Fonte de eventos de origem', // review
+          pickEventSource: 'Escolher uma fonte de eventos…', // review
+          program: 'Programa',
+          pickProgram: 'Escolher um programa…',
+          programStage: 'Etapa do programa', // review
+          pickStage: 'Escolher uma etapa…',
+          orgUnitColumn: 'Coluna OrgUnit', // review
+          eventDateColumn: 'Coluna de data do evento', // review
+          idColumn: 'Coluna ID',
+          pickColumn: 'Escolher uma coluna…',
+          dataValues: 'Coluna → elemento de dados', // review
+          eventColumn: 'Coluna de fonte de eventos', // review
+          dataElement: 'Elemento de dados', // review
+          addRow: 'Adicionar linha',
+          remove: 'Remover',
+        },
+      },
+    },
+    ops: {
+      schedulesHeading: 'Agendamentos DHIS2',
+      pushesHeading: 'Histórico de envios DHIS2', // review
+      run: 'Executar',
+      runTitle: 'Executar {{name}}',
+      period: 'Período',
+      periodHint: 'mensal 202601 · trimestral 2026T1 · anual 2026',
+      dryRun: 'Simulação', // review
+      push: 'Enviar', // review
+      close: 'Fechar',
+      values: 'Valores',
+      skippedRows: 'Linhas ignoradas',
+      pushResult: 'Resultado do envio', // review
+      imported: 'Importado',
+      updated: 'Atualizado',
+      ignored: 'Ignorado',
+      conflicts: 'Conflitos',
+      notConfigured:
+        'DHIS2 não está configurado — configure-o nas definições do DHIS2 para executar mapeamentos.', // review
+      schedules: 'Agendamentos',
+      schedulesManage: 'Gerir →',
+      scheduleTitle: 'Agendamentos DHIS2',
+      newSchedule: 'Novo agendamento',
+      mapping: 'Mapeamento', // review
+      periodType: 'Tipo de período',
+      eventDriven: 'Orientado por eventos', // review
+      enabled: 'Ativado',
+      lastRun: 'Última execução',
+      nextDue: 'Próximo prazo',
+      create: 'Criar',
+      delete: 'Eliminar',
+      deleteScheduleTitle: 'Eliminar agendamento?',
+      deleteScheduleDesc: 'Isto remove o agendamento.',
+      noSchedules: 'Nenhum agendamento ainda.',
+      syncNote: 'Os agendamentos apenas são executados quando o servidor tem DHIS2_SYNC_ENABLED.',
+      pushesTitle: 'Histórico de envios DHIS2', // review
+      viewAll: 'Ver tudo →',
+      when: 'Quando',
+      action: 'Ação',
+      status: 'Estado',
+      noPushes: 'Nenhum envio ainda.', // review
+      errorToast: 'Falhou: {{error}}',
+    },
+  },
+  settings: {
+    title: 'Definições',
+    subNav: {
+      dhis2: 'DHIS2',
+      marketplace: 'Marketplace',
+    },
+    marketplace: {
+      heading: 'Marketplace',
+      available: 'Disponível',
+      installed: 'Instalado',
+      filterPlaceholder: 'Filtrar…',
+      type: 'Tipo',
+      publisher: 'Editor',
+      version: 'Versão',
+      install: 'Instalar',
+      verified: 'Verificado',
+      firstUse: 'Novo editor',
+      invalid: 'Assinatura inválida', // review
+      notConfigured: 'Nenhum registo marketplace configurado (defina MARKETPLACE_REGISTRY_DIR).',
+      consentTitle: 'Rever e aprovar: {{id}}',
+      requestedCapabilities: 'Capacidades solicitadas',
+      approveInstall: 'Aprovar e instalar',
+      cancel: 'Cancelar',
+      enable: 'Ativar',
+      disable: 'Desativar',
+      rollback: 'Reverter',
+      remove: 'Remover',
+      active: 'Ativo',
+      enabledLabel: 'Ativado',
+      approvedBy: 'Aprovado por',
+      installPluginOnly: 'Por enquanto só é possível instalar artefactos de plugin.',
+      removeTitle: 'Remover {{id}}?',
+      removeDescription: 'Isto desinstala o artefacto desta implementação.',
+      installedToast: '{{id}} instalado',
+      errorToast: 'Erro no marketplace: {{error}}',
+    },
+  },
+  layout: {
+    settings: 'Definições',
+  },
+  nav: {
+    dashboard: 'Painel',
+    reports: 'Relatórios',
+    terminology: 'Terminologia',
+    forms: 'Formulários',
+    users: 'Utilizadores',
+    audit: 'Auditoria',
+    docs: 'Documentação',
+  },
+  a11y: {
+    expandSidebar: 'Expandir barra lateral',
+    collapseSidebar: 'Recolher barra lateral',
+    switchToLight: 'Mudar para modo claro',
+    switchToDark: 'Mudar para modo escuro',
+    lightMode: 'Modo claro',
+    darkMode: 'Modo escuro',
+  },
+};
