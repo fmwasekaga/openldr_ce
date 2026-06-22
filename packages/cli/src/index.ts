@@ -15,6 +15,7 @@ import { runExport } from './export';
 import { runTargetStoreTest } from './target-store';
 import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, runTerminologyExpand, runTerminologyTranslate, runPublisherList, runPublisherCreate, runSystemList, runSystemCreate, runTermList, runValueSetList, runOntologyBuild, runOntologyRebuild, runOntologyList, runOntologyUnlink } from './terminology';
 import { runDhis2MapImport, runDhis2MapList, runDhis2OrgUnitImport, runDhis2OrgUnitList, runDhis2PullMetadata, runDhis2Validate, runDhis2Push, runDhis2Status, runDhis2ScheduleAdd, runDhis2ScheduleList, runDhis2ScheduleRemove } from './dhis2';
+import { runMarketVerify, runMarketInstall, runMarketList, runMarketRollback, runMarketEnable, runMarketDisable, runMarketRemove } from './market';
 
 const program = new Command();
 program.name('openldr').description('OpenLDR CE operator CLI');
@@ -383,5 +384,67 @@ dsched.command('add <mappingId>').requiredOption('--mode <m>', 'aggregate|tracke
   .action(async (id: string, o: { mode: string; periodType: string; eventDriven: boolean; json: boolean }) => { process.exitCode = await runDhis2ScheduleAdd(id, o); });
 dsched.command('list').option('--json', 'emit JSON', false).action(async (o: { json: boolean }) => { process.exitCode = await runDhis2ScheduleList(o); });
 dsched.command('remove <scheduleId>').option('--json', 'emit JSON', false).action(async (id: string, o: { json: boolean }) => { process.exitCode = await runDhis2ScheduleRemove(id, o); });
+
+const market = program.command('market').description('Plugin/artifact marketplace');
+market
+  .command('verify <dir>')
+  .description('Verify a bundle directory (manifest + wasm + publisher.pub)')
+  .option('--json', 'emit JSON', false)
+  .action(async (dir: string, opts: { json: boolean }) => {
+    try { process.exitCode = await runMarketVerify(dir, opts); } catch (err) { process.stderr.write(`market verify failed: ${String(err)}\n`); process.exitCode = 1; }
+  });
+market
+  .command('install <dir>')
+  .description('Install a bundle from a directory into the plugin registry')
+  .option('--approve', 'approve the capability grant', false)
+  .option('--approved-by <actor>', 'actor granting approval (default: cli)')
+  .option('--json', 'emit JSON', false)
+  .action(async (dir: string, opts: { approve: boolean; approvedBy?: string; json: boolean }) => {
+    try { process.exitCode = await runMarketInstall(dir, opts); } catch (err) { process.stderr.write(`market install failed: ${String(err)}\n`); process.exitCode = 1; }
+  });
+market
+  .command('update <dir>')
+  .description('Update (re-install) a bundle from a directory')
+  .option('--approve', 'approve the capability grant', false)
+  .option('--approved-by <actor>', 'actor granting approval (default: cli)')
+  .option('--json', 'emit JSON', false)
+  .action(async (dir: string, opts: { approve: boolean; approvedBy?: string; json: boolean }) => {
+    try { process.exitCode = await runMarketInstall(dir, opts); } catch (err) { process.stderr.write(`market update failed: ${String(err)}\n`); process.exitCode = 1; }
+  });
+market
+  .command('list')
+  .description('List installed marketplace plugins')
+  .option('--json', 'emit JSON', false)
+  .action(async (opts: { json: boolean }) => {
+    try { process.exitCode = await runMarketList(opts); } catch (err) { process.stderr.write(`market list failed: ${String(err)}\n`); process.exitCode = 1; }
+  });
+market
+  .command('rollback <id> <version>')
+  .description('Activate a previously installed version of a plugin')
+  .option('--json', 'emit JSON', false)
+  .action(async (id: string, version: string, opts: { json: boolean }) => {
+    try { process.exitCode = await runMarketRollback(id, version, opts); } catch (err) { process.stderr.write(`market rollback failed: ${String(err)}\n`); process.exitCode = 1; }
+  });
+market
+  .command('enable <id>')
+  .description('Enable a plugin')
+  .option('--json', 'emit JSON', false)
+  .action(async (id: string, opts: { json: boolean }) => {
+    try { process.exitCode = await runMarketEnable(id, opts); } catch (err) { process.stderr.write(`market enable failed: ${String(err)}\n`); process.exitCode = 1; }
+  });
+market
+  .command('disable <id>')
+  .description('Disable a plugin (hidden from load)')
+  .option('--json', 'emit JSON', false)
+  .action(async (id: string, opts: { json: boolean }) => {
+    try { process.exitCode = await runMarketDisable(id, opts); } catch (err) { process.stderr.write(`market disable failed: ${String(err)}\n`); process.exitCode = 1; }
+  });
+market
+  .command('remove <id> [version]')
+  .description('Remove a plugin (all versions or a specific one)')
+  .option('--json', 'emit JSON', false)
+  .action(async (id: string, version: string | undefined, opts: { json: boolean }) => {
+    try { process.exitCode = await runMarketRemove(id, version, opts); } catch (err) { process.stderr.write(`market remove failed: ${String(err)}\n`); process.exitCode = 1; }
+  });
 
 program.parseAsync(process.argv);
