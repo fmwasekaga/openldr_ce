@@ -74,7 +74,7 @@ function fakeCtx(cfg: Record<string, unknown>, fhirStore: Record<string, unknown
   return {
     cfg,
     fhirStore: { listByType: async () => [], ...fhirStore },
-    audit: { record: async (e: unknown) => { audit.push(e); }, list: async () => [] },
+    audit: { record: async (e: unknown) => { audit.push(e); }, list: async () => [{ id: 'p1', occurredAt: '2026-01-01T00:00:00Z', action: 'dhis2.push', entityType: 'dhis2-mapping', entityId: 'm1', actorType: 'system', actorName: 'system', metadata: { period: '2026Q1', status: 'success' } }] },
     logger: { error: () => {} },
     __audit: audit,
     reporting: {
@@ -424,5 +424,52 @@ describe('dhis2 run route', () => {
   it('rejects non-admins with 403', async () => {
     const app = appWith(configuredCfg(), fakeDhis2(), ['viewer']);
     expect((await app.inject({ method: 'POST', url: '/api/dhis2/mappings/m1/run', payload: { period: '2026Q1', dryRun: true } })).statusCode).toBe(403);
+  });
+});
+
+describe('dhis2 pushes + schedules', () => {
+  it('GET /pushes returns audit history', async () => {
+    const app = appWith(configuredCfg(), fakeDhis2(), ['lab_admin']);
+    const b = (await app.inject({ method: 'GET', url: '/api/dhis2/pushes' })).json();
+    expect(b[0].action).toBe('dhis2.push');
+    expect(b[0].metadata.period).toBe('2026Q1');
+  });
+
+  it('GET /schedules joins mapping names', async () => {
+    const deps = fakeDeps();
+    await deps.mappingStore.upsert({ id: 'm1', name: 'My Mapping', definition: { kind: 'aggregate' } });
+    await deps.scheduleStore.create({ id: 's1', mappingId: 'm1', mode: 'aggregate', periodType: 'quarterly', eventDriven: false });
+    const app = appWith(configuredCfg(), fakeDhis2(), ['lab_admin'], deps);
+    const b = (await app.inject({ method: 'GET', url: '/api/dhis2/schedules' })).json();
+    expect(b[0]).toMatchObject({ id: 's1', mappingId: 'm1', mappingName: 'My Mapping', periodType: 'quarterly', enabled: true });
+  });
+
+  it('POST /schedules derives mode, arms, audits; 404 unknown mapping', async () => {
+    const deps = fakeDeps();
+    await deps.mappingStore.upsert({ id: 'm2', name: 'Trk', definition: { kind: 'tracker' } });
+    const before = reconcileCalls.length;
+    const app = appWith(configuredCfg(), fakeDhis2(), ['lab_admin'], deps);
+    const res = await app.inject({ method: 'POST', url: '/api/dhis2/schedules', payload: { mappingId: 'm2', periodType: 'monthly', eventDriven: true } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().mode).toBe('tracker');
+    expect(reconcileCalls.length).toBeGreaterThan(before); // armed
+    expect((await deps.scheduleStore.list()).length).toBe(1);
+    const bad = await app.inject({ method: 'POST', url: '/api/dhis2/schedules', payload: { mappingId: 'ghost', periodType: 'monthly', eventDriven: false } });
+    expect(bad.statusCode).toBe(404);
+  });
+
+  it('POST /schedules/:id/enabled toggles + arms on enable; DELETE removes', async () => {
+    const deps = fakeDeps();
+    await deps.scheduleStore.create({ id: 's1', mappingId: 'm1', mode: 'aggregate', periodType: 'quarterly', eventDriven: false });
+    const app = appWith(configuredCfg(), fakeDhis2(), ['lab_admin'], deps);
+    expect((await app.inject({ method: 'POST', url: '/api/dhis2/schedules/s1/enabled', payload: { enabled: false } })).statusCode).toBe(200);
+    expect((await deps.scheduleStore.get('s1'))?.enabled).toBe(false);
+    expect((await app.inject({ method: 'DELETE', url: '/api/dhis2/schedules/s1' })).statusCode).toBe(204);
+    expect(await deps.scheduleStore.list()).toEqual([]);
+  });
+
+  it('rejects non-admins with 403', async () => {
+    const app = appWith(configuredCfg(), fakeDhis2(), ['data_analyst']);
+    expect((await app.inject({ method: 'GET', url: '/api/dhis2/schedules' })).statusCode).toBe(403);
   });
 });
