@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { AppShell } from '@/shell/AppShell';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   fetchReports, getDhis2Metadata, getReportColumns, getDhis2EventSources, getDhis2Mapping, saveDhis2Mapping, validateDhis2Mapping,
   type ReportSummary, type Dhis2MetadataLists, type ReportColumn2, type Dhis2EventSource,
@@ -13,7 +14,29 @@ import {
 type Kind = 'aggregate' | 'tracker';
 type AggRow = { column: string; dataElement: string; categoryOptionCombo: string };
 type TrkRow = { column: string; dataElement: string };
-const SELECT = 'h-9 rounded-md border border-input bg-background px-2 text-sm';
+
+// Local helper: a shadcn Select over a {value,label} list with a placeholder.
+// Radix forbids an empty-string SelectItem, so the unselected state is represented
+// by an empty `value` on the root (which renders the placeholder) and no empty item.
+function Picker({
+  testid, value, onChange, placeholder, disabled, options,
+}: {
+  testid: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  disabled?: boolean;
+  options: { value: string; label: string }[];
+}) {
+  return (
+    <Select value={value} onValueChange={onChange} disabled={disabled}>
+      <SelectTrigger data-testid={testid} className="w-full"><SelectValue placeholder={placeholder} /></SelectTrigger>
+      <SelectContent>
+        {options.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  );
+}
 
 export function Dhis2MappingEditor() {
   const { t } = useTranslation();
@@ -145,15 +168,18 @@ export function Dhis2MappingEditor() {
         {isNew ? (
           <label className="grid gap-1 text-sm">
             <span className="text-muted-foreground">{t('dhis2.mappings.editor.kindLabel')}</span>
-            <select data-testid="kind-select" className={SELECT} value={kind} onChange={(e) => {
-              setKind(e.target.value as Kind); setProblems(null);
+            <Select value={kind} onValueChange={(v) => {
+              setKind(v as Kind); setProblems(null);
               // Reset both branches so switching mapping type starts fresh (def() is kind-gated, but stale values are surprising on toggle-back).
               setReportId(''); setReportColumns([]); setAggOrgUnitColumn(''); setPeriodColumn(''); setAggRows([]);
               setSourceId(''); setProgram(''); setProgramStage(''); setTrkOrgUnitColumn(''); setEventDateColumn(''); setIdColumn(''); setTrkRows([]);
             }}>
-              <option value="aggregate">{t('dhis2.mappings.editor.kindAggregate')}</option>
-              <option value="tracker">{t('dhis2.mappings.editor.kindTracker')}</option>
-            </select>
+              <SelectTrigger data-testid="kind-select" className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="aggregate">{t('dhis2.mappings.editor.kindAggregate')}</SelectItem>
+                <SelectItem value="tracker">{t('dhis2.mappings.editor.kindTracker')}</SelectItem>
+              </SelectContent>
+            </Select>
           </label>
         ) : null}
 
@@ -166,25 +192,22 @@ export function Dhis2MappingEditor() {
           <>
             <label className="grid gap-1 text-sm">
               <span className="text-muted-foreground">{t('dhis2.mappings.editor.sourceReport')}</span>
-              <select data-testid="report-select" className={SELECT} value={reportId} onChange={(e) => void onReport(e.target.value)}>
-                <option value="">{t('dhis2.mappings.editor.pickReport')}</option>
-                {reports.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-              </select>
+              <Picker testid="report-select" value={reportId} onChange={(v) => void onReport(v)}
+                placeholder={t('dhis2.mappings.editor.pickReport')}
+                options={reports.map((r) => ({ value: r.id, label: r.name }))} />
             </label>
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="grid gap-1 text-sm">
                 <span className="text-muted-foreground">{t('dhis2.mappings.editor.orgUnitColumn')}</span>
-                <select data-testid="orgunit-column-select" className={SELECT} value={aggOrgUnitColumn} onChange={(e) => setAggOrgUnitColumn(e.target.value)}>
-                  <option value="">{t('dhis2.mappings.editor.pickColumn')}</option>
-                  {reportColumns.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
-                </select>
+                <Picker testid="orgunit-column-select" value={aggOrgUnitColumn} onChange={setAggOrgUnitColumn}
+                  placeholder={t('dhis2.mappings.editor.pickColumn')}
+                  options={reportColumns.map((c) => ({ value: c.key, label: c.label }))} />
               </label>
               <label className="grid gap-1 text-sm">
                 <span className="text-muted-foreground">{t('dhis2.mappings.editor.periodColumn')}</span>
-                <select data-testid="period-column-select" className={SELECT} value={periodColumn} onChange={(e) => setPeriodColumn(e.target.value)}>
-                  <option value="">{t('dhis2.mappings.editor.pickColumn')}</option>
-                  {reportColumns.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
-                </select>
+                <Picker testid="period-column-select" value={periodColumn} onChange={setPeriodColumn}
+                  placeholder={t('dhis2.mappings.editor.pickColumn')}
+                  options={reportColumns.map((c) => ({ value: c.key, label: c.label }))} />
               </label>
             </div>
             <div className="grid gap-2">
@@ -194,18 +217,18 @@ export function Dhis2MappingEditor() {
               </div>
               {aggRows.map((row, i) => (
                 <div key={i} className="grid grid-cols-[1fr_1fr_1fr_auto] items-center gap-2" data-testid={`column-row-${i}`}>
-                  <select data-testid={`column-key-${i}`} className={SELECT} value={row.column} onChange={(e) => setAggRows((r) => r.map((x, j) => j === i ? { ...x, column: e.target.value } : x))}>
-                    <option value="">{t('dhis2.mappings.editor.reportColumn')}</option>
-                    {reportColumns.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
-                  </select>
-                  <select data-testid={`column-de-${i}`} className={SELECT} disabled={metaEmpty} value={row.dataElement} onChange={(e) => setAggRows((r) => r.map((x, j) => j === i ? { ...x, dataElement: e.target.value } : x))}>
-                    <option value="">{t('dhis2.mappings.editor.dataElement')}</option>
-                    {(meta?.dataElements ?? []).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-                  </select>
-                  <select data-testid={`column-coc-${i}`} className={SELECT} disabled={metaEmpty} value={row.categoryOptionCombo} onChange={(e) => setAggRows((r) => r.map((x, j) => j === i ? { ...x, categoryOptionCombo: e.target.value } : x))}>
-                    <option value="">{t('dhis2.mappings.editor.coc')}</option>
-                    {(meta?.categoryOptionCombos ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
+                  <Picker testid={`column-key-${i}`} value={row.column}
+                    onChange={(v) => setAggRows((r) => r.map((x, j) => j === i ? { ...x, column: v } : x))}
+                    placeholder={t('dhis2.mappings.editor.reportColumn')}
+                    options={reportColumns.map((c) => ({ value: c.key, label: c.label }))} />
+                  <Picker testid={`column-de-${i}`} disabled={metaEmpty} value={row.dataElement}
+                    onChange={(v) => setAggRows((r) => r.map((x, j) => j === i ? { ...x, dataElement: v } : x))}
+                    placeholder={t('dhis2.mappings.editor.dataElement')}
+                    options={(meta?.dataElements ?? []).map((d) => ({ value: d.id, label: d.name }))} />
+                  <Picker testid={`column-coc-${i}`} disabled={metaEmpty} value={row.categoryOptionCombo}
+                    onChange={(v) => setAggRows((r) => r.map((x, j) => j === i ? { ...x, categoryOptionCombo: v } : x))}
+                    placeholder={t('dhis2.mappings.editor.coc')}
+                    options={(meta?.categoryOptionCombos ?? []).map((c) => ({ value: c.id, label: c.name }))} />
                   <Button variant="ghost" size="sm" onClick={() => setAggRows((r) => r.filter((_, j) => j !== i))}>{t('dhis2.mappings.editor.remove')}</Button>
                 </div>
               ))}
@@ -215,48 +238,45 @@ export function Dhis2MappingEditor() {
           <>
             <label className="grid gap-1 text-sm">
               <span className="text-muted-foreground">{t('dhis2.mappings.editor.tracker.sourceEventSource')}</span>
-              <select data-testid="event-source-select" className={SELECT} value={sourceId} onChange={(e) => { setSourceId(e.target.value); setProblems(null); }}>
-                <option value="">{t('dhis2.mappings.editor.tracker.pickEventSource')}</option>
-                {eventSources.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+              <Picker testid="event-source-select" value={sourceId}
+                onChange={(v) => { setSourceId(v); setProblems(null); }}
+                placeholder={t('dhis2.mappings.editor.tracker.pickEventSource')}
+                options={eventSources.map((s) => ({ value: s.id, label: s.name }))} />
             </label>
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="grid gap-1 text-sm">
                 <span className="text-muted-foreground">{t('dhis2.mappings.editor.tracker.program')}</span>
-                <select data-testid="program-select" className={SELECT} disabled={metaEmpty} value={program} onChange={(e) => { setProgram(e.target.value); setProgramStage(''); }}>
-                  <option value="">{t('dhis2.mappings.editor.tracker.pickProgram')}</option>
-                  {(meta?.programs ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
+                <Picker testid="program-select" disabled={metaEmpty} value={program}
+                  onChange={(v) => { setProgram(v); setProgramStage(''); }}
+                  placeholder={t('dhis2.mappings.editor.tracker.pickProgram')}
+                  options={(meta?.programs ?? []).map((p) => ({ value: p.id, label: p.name }))} />
               </label>
               <label className="grid gap-1 text-sm">
                 <span className="text-muted-foreground">{t('dhis2.mappings.editor.tracker.programStage')}</span>
-                <select data-testid="program-stage-select" className={SELECT} disabled={metaEmpty || !program} value={programStage} onChange={(e) => setProgramStage(e.target.value)}>
-                  <option value="">{t('dhis2.mappings.editor.tracker.pickStage')}</option>
-                  {stages.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
+                <Picker testid="program-stage-select" disabled={metaEmpty || !program} value={programStage}
+                  onChange={setProgramStage}
+                  placeholder={t('dhis2.mappings.editor.tracker.pickStage')}
+                  options={stages.map((s) => ({ value: s.id, label: s.name }))} />
               </label>
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
               <label className="grid gap-1 text-sm">
                 <span className="text-muted-foreground">{t('dhis2.mappings.editor.tracker.orgUnitColumn')}</span>
-                <select data-testid="tracker-orgunit-select" className={SELECT} value={trkOrgUnitColumn} onChange={(e) => setTrkOrgUnitColumn(e.target.value)}>
-                  <option value="">{t('dhis2.mappings.editor.tracker.pickColumn')}</option>
-                  {srcColumns.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
-                </select>
+                <Picker testid="tracker-orgunit-select" value={trkOrgUnitColumn} onChange={setTrkOrgUnitColumn}
+                  placeholder={t('dhis2.mappings.editor.tracker.pickColumn')}
+                  options={srcColumns.map((c) => ({ value: c.key, label: c.label }))} />
               </label>
               <label className="grid gap-1 text-sm">
                 <span className="text-muted-foreground">{t('dhis2.mappings.editor.tracker.eventDateColumn')}</span>
-                <select data-testid="tracker-eventdate-select" className={SELECT} value={eventDateColumn} onChange={(e) => setEventDateColumn(e.target.value)}>
-                  <option value="">{t('dhis2.mappings.editor.tracker.pickColumn')}</option>
-                  {srcColumns.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
-                </select>
+                <Picker testid="tracker-eventdate-select" value={eventDateColumn} onChange={setEventDateColumn}
+                  placeholder={t('dhis2.mappings.editor.tracker.pickColumn')}
+                  options={srcColumns.map((c) => ({ value: c.key, label: c.label }))} />
               </label>
               <label className="grid gap-1 text-sm">
                 <span className="text-muted-foreground">{t('dhis2.mappings.editor.tracker.idColumn')}</span>
-                <select data-testid="tracker-id-select" className={SELECT} value={idColumn} onChange={(e) => setIdColumn(e.target.value)}>
-                  <option value="">{t('dhis2.mappings.editor.tracker.pickColumn')}</option>
-                  {srcColumns.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
-                </select>
+                <Picker testid="tracker-id-select" value={idColumn} onChange={setIdColumn}
+                  placeholder={t('dhis2.mappings.editor.tracker.pickColumn')}
+                  options={srcColumns.map((c) => ({ value: c.key, label: c.label }))} />
               </label>
             </div>
             <div className="grid gap-2">
@@ -266,14 +286,14 @@ export function Dhis2MappingEditor() {
               </div>
               {trkRows.map((row, i) => (
                 <div key={i} className="grid grid-cols-[1fr_1fr_auto] items-center gap-2" data-testid={`dv-row-${i}`}>
-                  <select data-testid={`dv-col-${i}`} className={SELECT} value={row.column} onChange={(e) => setTrkRows((r) => r.map((x, j) => j === i ? { ...x, column: e.target.value } : x))}>
-                    <option value="">{t('dhis2.mappings.editor.tracker.eventColumn')}</option>
-                    {srcColumns.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
-                  </select>
-                  <select data-testid={`dv-de-${i}`} className={SELECT} disabled={metaEmpty} value={row.dataElement} onChange={(e) => setTrkRows((r) => r.map((x, j) => j === i ? { ...x, dataElement: e.target.value } : x))}>
-                    <option value="">{t('dhis2.mappings.editor.tracker.dataElement')}</option>
-                    {(meta?.dataElements ?? []).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-                  </select>
+                  <Picker testid={`dv-col-${i}`} value={row.column}
+                    onChange={(v) => setTrkRows((r) => r.map((x, j) => j === i ? { ...x, column: v } : x))}
+                    placeholder={t('dhis2.mappings.editor.tracker.eventColumn')}
+                    options={srcColumns.map((c) => ({ value: c.key, label: c.label }))} />
+                  <Picker testid={`dv-de-${i}`} disabled={metaEmpty} value={row.dataElement}
+                    onChange={(v) => setTrkRows((r) => r.map((x, j) => j === i ? { ...x, dataElement: v } : x))}
+                    placeholder={t('dhis2.mappings.editor.tracker.dataElement')}
+                    options={(meta?.dataElements ?? []).map((d) => ({ value: d.id, label: d.name }))} />
                   <Button variant="ghost" size="sm" onClick={() => setTrkRows((r) => r.filter((_, j) => j !== i))}>{t('dhis2.mappings.editor.tracker.remove')}</Button>
                 </div>
               ))}
