@@ -14,7 +14,7 @@ import { registerAuditRoutes } from './audit-routes';
 import { registerUsersRoutes } from './users-routes';
 import { registerFormsRoutes } from './forms-routes';
 import { registerDhis2Routes } from './dhis2-routes';
-import { createDhis2MetadataCache, createOrgUnitMapStore, createMappingStore } from '@openldr/db';
+import { createDhis2MetadataCache, createOrgUnitMapStore, createMappingStore, createScheduleStore } from '@openldr/db';
 import { registerAuth } from './auth-plugin';
 
 export function registerConfigRoute(
@@ -33,7 +33,7 @@ export function registerConfigRoute(
   }));
 }
 
-export function buildApp(ctx: AppContext, dhis2: Dhis2Context | null = null) {
+export function buildApp(ctx: AppContext, dhis2: Dhis2Context | null = null, eventing: Parameters<Dhis2Context['reconcileSchedules']>[0] | null = null) {
   const app = Fastify({ loggerInstance: ctx.logger });
 
   app.get('/health', async (_req, reply) => {
@@ -65,7 +65,8 @@ export function buildApp(ctx: AppContext, dhis2: Dhis2Context | null = null) {
     metadataCache: createDhis2MetadataCache(ctx.internalDb),
     orgUnitStore: createOrgUnitMapStore(ctx.internalDb),
     mappingStore: createMappingStore(ctx.internalDb),
-  });
+    scheduleStore: createScheduleStore(ctx.internalDb),
+  }, eventing);
 
   // Serve the built SPA if present (apps/web/dist). API + health are registered first and win.
   const webDist = resolve(dirname(fileURLToPath(import.meta.url)), '../../web/dist');

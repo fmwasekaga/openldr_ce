@@ -1,11 +1,14 @@
+import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { AppContext, Dhis2Context } from '@openldr/bootstrap';
-import type { Dhis2MetadataCache, OrgUnitMapStore, MappingStore } from '@openldr/db';
+import type { Dhis2MetadataCache, OrgUnitMapStore, MappingStore, ScheduleStore } from '@openldr/db';
 import { redact } from '@openldr/core';
 import { z } from 'zod';
 import { validateMapping, validateTrackerMapping, type AggregateMapping, type TrackerMapping } from '@openldr/dhis2';
 import { requireRole } from './rbac';
 import { recordAudit } from './audit-helper';
+
+type Eventing = Parameters<Dhis2Context['reconcileSchedules']>[0];
 
 function hostOf(url: string | undefined): string | null {
   if (!url) return null;
@@ -16,6 +19,7 @@ export interface Dhis2RouteDeps {
   metadataCache: Dhis2MetadataCache;
   orgUnitStore: OrgUnitMapStore;
   mappingStore: MappingStore;
+  scheduleStore: ScheduleStore;
 }
 
 const orgUnitMapInput = z.object({ orgUnitId: z.string().min(1), orgUnitName: z.string().nullable() });
@@ -47,10 +51,14 @@ const mappingDefinition = z.union([aggregateDefinition, trackerDefinition]);
 const mappingPutInput = z.object({ name: z.string().min(1), definition: mappingDefinition });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function registerDhis2Routes(app: FastifyInstance<any, any, any, any>, ctx: AppContext, dhis2: Dhis2Context | null, deps: Dhis2RouteDeps): void {
+export function registerDhis2Routes(app: FastifyInstance<any, any, any, any>, ctx: AppContext, dhis2: Dhis2Context | null, deps: Dhis2RouteDeps, eventing: Eventing | null = null): void {
   const cfg = ctx.cfg;
   const configured =
     cfg.REPORTING_TARGET_ADAPTER === 'dhis2' && !!cfg.DHIS2_BASE_URL && !!cfg.DHIS2_USERNAME && !!cfg.DHIS2_PASSWORD;
+
+  async function armSchedules(): Promise<void> {
+    if (dhis2 && eventing) { try { await dhis2.reconcileSchedules(eventing); } catch { /* arming is best-effort */ } }
+  }
 
   app.get('/api/dhis2/status', { preHandler: requireRole('lab_admin') }, async () => {
     const base = { configured, syncEnabled: cfg.DHIS2_SYNC_ENABLED, host: hostOf(cfg.DHIS2_BASE_URL) };

@@ -3,6 +3,9 @@ import Fastify from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { registerDhis2Routes } from './dhis2-routes';
 
+const reconcileCalls: number[] = [];
+const fakeEventing = { publish: async () => {}, subscribe: async () => {}, drain: async () => {} } as never;
+
 function configuredCfg(over: Record<string, unknown> = {}) {
   return {
     REPORTING_TARGET_ADAPTER: 'dhis2',
@@ -22,6 +25,8 @@ function fakeDhis2(over: Record<string, unknown> = {}) {
     schedules: { list: async () => [] },
     recentPushes: async () => [{ id: 'a1', occurredAt: '2026-01-01T00:00:00Z', action: 'dhis2.push', entityType: 'dhis2-mapping', entityId: 'm1', actorType: 'system', actorName: 'system' }],
     pullMetadata: async () => ({ dataElements: [{ id: 'd', name: 'd' }], orgUnits: [], categoryOptionCombos: [], programs: [], programStages: [] }),
+    runMapping: async (args: { dryRun: boolean }) => ({ kind: 'aggregate', dryRun: args.dryRun, build: { payload: { dataValues: [{}, {}] }, skipped: [{ row: 3, reason: 'no orgUnit' }] }, result: args.dryRun ? undefined : { status: 'success', imported: 2, updated: 0, ignored: 0, deleted: 0, conflicts: [], raw: {} } }),
+    reconcileSchedules: async () => { reconcileCalls.push(1); },
     ...over,
   } as never;
 }
@@ -47,6 +52,17 @@ function fakeDeps(over: Record<string, unknown> = {}) {
         get: async (id: string) => rows.find((r) => r.id === id) ?? null,
         upsert: async (m: { id: string; name: string; definition: Record<string, unknown> }) => { const i = rows.findIndex((r) => r.id === m.id); if (i >= 0) rows[i] = m; else rows.push(m); },
         remove: async (id: string) => { const i = rows.findIndex((r) => r.id === id); if (i >= 0) rows.splice(i, 1); },
+      };
+    })(),
+    scheduleStore: (() => {
+      const rows: { id: string; mappingId: string; mode: string; periodType: string; eventDriven: boolean; enabled: boolean; lastRunAt: string | null; nextDueAt: string | null }[] = [];
+      return {
+        create: async (s: { id: string; mappingId: string; mode: string; periodType: string; eventDriven: boolean }) => { rows.push({ ...s, enabled: true, lastRunAt: null, nextDueAt: null }); },
+        get: async (id: string) => rows.find((r) => r.id === id) ?? null,
+        list: async () => rows.slice(),
+        remove: async (id: string) => { const i = rows.findIndex((r) => r.id === id); if (i >= 0) rows.splice(i, 1); },
+        setEnabled: async (id: string, enabled: boolean) => { const r = rows.find((x) => x.id === id); if (r) r.enabled = enabled; },
+        setNextDue: async () => {}, markRun: async () => {},
       };
     })(),
     ...over,
@@ -78,7 +94,7 @@ function appWith(ctxCfg: Record<string, unknown>, dhis2: unknown, roles: string[
   app.addHook('onRequest', async (req) => {
     req.user = { id: 'admin', username: 'admin', displayName: null, roles };
   });
-  registerDhis2Routes(app, fakeCtx(ctxCfg, fhirStore), dhis2 as never, deps as never);
+  registerDhis2Routes(app, fakeCtx(ctxCfg, fhirStore), dhis2 as never, deps as never, fakeEventing);
   return app;
 }
 
@@ -199,7 +215,7 @@ describe('dhis2 orgunit-mappings routes', () => {
     const ctxRef = fakeCtx(configuredCfg(), locations);
     const app = Fastify();
     app.addHook('onRequest', async (req) => { req.user = { id: 'admin', username: 'admin', displayName: null, roles: ['lab_admin'] }; });
-    registerDhis2Routes(app, ctxRef, fakeDhis2() as never, deps as never);
+    registerDhis2Routes(app, ctxRef, fakeDhis2() as never, deps as never, fakeEventing);
     const res = await app.inject({ method: 'PUT', url: '/api/dhis2/orgunit-mappings/loc-1', payload: { orgUnitId: 'ou9', orgUnitName: 'New OU' } });
     expect(res.statusCode).toBe(200);
     expect(await deps.orgUnitStore.list()).toEqual([{ facilityId: 'loc-1', orgUnitId: 'ou9', orgUnitName: 'New OU' }]);
@@ -218,7 +234,7 @@ describe('dhis2 orgunit-mappings routes', () => {
     const ctxRef = fakeCtx(configuredCfg(), locations);
     const app = Fastify();
     app.addHook('onRequest', async (req) => { req.user = { id: 'admin', username: 'admin', displayName: null, roles: ['lab_admin'] }; });
-    registerDhis2Routes(app, ctxRef, fakeDhis2() as never, deps as never);
+    registerDhis2Routes(app, ctxRef, fakeDhis2() as never, deps as never, fakeEventing);
     const res = await app.inject({ method: 'DELETE', url: '/api/dhis2/orgunit-mappings/loc-1' });
     expect(res.statusCode).toBe(204);
     expect(await deps.orgUnitStore.list()).toEqual([]);
@@ -257,7 +273,7 @@ describe('dhis2 mappings CRUD + metadata', () => {
     const ctxRef = fakeCtx(configuredCfg());
     const app = Fastify();
     app.addHook('onRequest', async (req) => { req.user = { id: 'admin', username: 'admin', displayName: null, roles: ['lab_admin'] }; });
-    registerDhis2Routes(app, ctxRef, fakeDhis2() as never, deps as never);
+    registerDhis2Routes(app, ctxRef, fakeDhis2() as never, deps as never, fakeEventing);
     const ok = await app.inject({ method: 'PUT', url: '/api/dhis2/mappings/m1', payload: { name: 'Agg', definition: agg } });
     expect(ok.statusCode).toBe(200);
     expect((await deps.mappingStore.get('m1'))?.name).toBe('Agg');
@@ -272,7 +288,7 @@ describe('dhis2 mappings CRUD + metadata', () => {
     const ctxRef = fakeCtx(configuredCfg());
     const app = Fastify();
     app.addHook('onRequest', async (req) => { req.user = { id: 'admin', username: 'admin', displayName: null, roles: ['lab_admin'] }; });
-    registerDhis2Routes(app, ctxRef, fakeDhis2() as never, deps as never);
+    registerDhis2Routes(app, ctxRef, fakeDhis2() as never, deps as never, fakeEventing);
     expect((await app.inject({ method: 'DELETE', url: '/api/dhis2/mappings/m1' })).statusCode).toBe(204);
     expect(await deps.mappingStore.get('m1')).toBeNull();
     expect((ctxRef as any).__audit.some((e: any) => e.action === 'dhis2.mapping.delete')).toBe(true);
