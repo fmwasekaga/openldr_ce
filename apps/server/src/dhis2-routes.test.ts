@@ -391,3 +391,38 @@ describe('dhis2 event-sources + tracker mapping', () => {
     expect((await app.inject({ method: 'PUT', url: '/api/dhis2/mappings/t1', payload: bad })).statusCode).toBe(400);
   });
 });
+
+describe('dhis2 run route', () => {
+  it('dry-run returns counts + skipped, no result', async () => {
+    const app = appWith(configuredCfg(), fakeDhis2(), ['lab_admin']);
+    const res = await app.inject({ method: 'POST', url: '/api/dhis2/mappings/m1/run', payload: { period: '2026Q1', dryRun: true } });
+    expect(res.statusCode).toBe(200);
+    const b = res.json();
+    expect(b.kind).toBe('aggregate');
+    expect(b.counts).toEqual({ values: 2, skipped: 1 });
+    expect(b.skipped[0].reason).toBe('no orgUnit');
+    expect(b.result).toBeNull();
+  });
+
+  it('push returns the PushResult', async () => {
+    const app = appWith(configuredCfg(), fakeDhis2(), ['lab_admin']);
+    const b = (await app.inject({ method: 'POST', url: '/api/dhis2/mappings/m1/run', payload: { period: '2026Q1', dryRun: false } })).json();
+    expect(b.result.status).toBe('success');
+    expect(b.result.imported).toBe(2);
+  });
+
+  it('returns 409 when DHIS2 is not configured', async () => {
+    const app = appWith(configuredCfg({ REPORTING_TARGET_ADAPTER: 'pg' }), null, ['lab_admin']);
+    expect((await app.inject({ method: 'POST', url: '/api/dhis2/mappings/m1/run', payload: { period: '2026Q1', dryRun: true } })).statusCode).toBe(409);
+  });
+
+  it('400 on bad body', async () => {
+    const app = appWith(configuredCfg(), fakeDhis2(), ['lab_admin']);
+    expect((await app.inject({ method: 'POST', url: '/api/dhis2/mappings/m1/run', payload: { dryRun: true } })).statusCode).toBe(400);
+  });
+
+  it('rejects non-admins with 403', async () => {
+    const app = appWith(configuredCfg(), fakeDhis2(), ['viewer']);
+    expect((await app.inject({ method: 'POST', url: '/api/dhis2/mappings/m1/run', payload: { period: '2026Q1', dryRun: true } })).statusCode).toBe(403);
+  });
+});

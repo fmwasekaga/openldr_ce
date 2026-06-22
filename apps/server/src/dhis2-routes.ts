@@ -23,6 +23,7 @@ export interface Dhis2RouteDeps {
 }
 
 const orgUnitMapInput = z.object({ orgUnitId: z.string().min(1), orgUnitName: z.string().nullable() });
+const runInput = z.object({ period: z.string().min(1), dryRun: z.boolean() });
 
 const aggregateColumn = z.object({ column: z.string().min(1), dataElement: z.string().min(1), categoryOptionCombo: z.string().optional() });
 const aggregateDefinition = z.object({
@@ -173,6 +174,28 @@ export function registerDhis2Routes(app: FastifyInstance<any, any, any, any>, ct
     await recordAudit(ctx, req, { action: 'dhis2.mapping.delete', entityType: 'dhis2-mapping', entityId: id, before, after: null });
     reply.code(204);
     return null;
+  });
+
+  app.post('/api/dhis2/mappings/:id/run', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    if (!dhis2) { reply.code(409); return { error: 'DHIS2 target not configured' }; }
+    const p = runInput.safeParse(req.body);
+    if (!p.success) { reply.code(400); return { error: p.error.message }; }
+    const id = (req.params as { id: string }).id;
+    try {
+      const outcome = await dhis2.runMapping({
+        mappingId: id, period: p.data.period, dryRun: p.data.dryRun, trigger: 'manual',
+        runReport: (rid, params) => ctx.reporting.run(rid, params ?? {}).then((r) => ({ rows: r.rows })),
+        runEventSource: (sid, w) => ctx.reporting.runEventSource(sid, w),
+      });
+      const payload = outcome.build.payload as { dataValues?: unknown[]; events?: unknown[] };
+      const values = payload.dataValues?.length ?? payload.events?.length ?? 0;
+      return { kind: outcome.kind, dryRun: outcome.dryRun, counts: { values, skipped: outcome.build.skipped.length }, skipped: outcome.build.skipped, result: outcome.result ?? null };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/unknown mapping/i.test(msg)) { reply.code(400); return { error: msg }; }
+      reply.code(502);
+      return { error: redact(msg) };
+    }
   });
 
   app.get('/api/dhis2/metadata', { preHandler: requireRole('lab_admin') }, async () => {
