@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppShell } from '../shell/AppShell';
 import {
-  fetchReports, fetchReport, fetchReportOptions,
+  fetchReports, fetchReport, fetchReportOptions, logReportRun,
   type ReportSummary, type ReportResult,
 } from '../api';
 import { ReportLibrary } from '../reports/ReportLibrary';
+import { ReportHistoryDrawer } from '../reports/ReportHistoryDrawer';
 import { ReportParametersBar } from '../reports/ReportParametersBar';
 import { ReportSummaryStrip } from '../reports/ReportSummaryStrip';
 import { ReportActionsMenu } from '../reports/ReportActionsMenu';
@@ -36,6 +37,7 @@ export function Reports() {
   const [ranAt, setRanAt] = useState('');
   const [activeTab, setActiveTab] = useState<Tab>('document');
   const [error, setError] = useState<string>();
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const selected = reports.find((r) => r.id === selectedId) ?? null;
 
@@ -77,6 +79,7 @@ export function Reports() {
       setResult(res);
       setRanParams(params);
       setRanAt(new Date().toLocaleString());
+      logReportRun(selectedId, { format: 'preview', rowCount: res.meta.rowCount, params });
       const next = { ...loadLastParams(), [selectedId]: params };
       saveLastParams(next);
     } catch (e) {
@@ -118,7 +121,7 @@ export function Reports() {
                   <h2 className="text-[15px] font-semibold">{selected.name}</h2>
                   <p className="truncate text-xs text-muted-foreground">{selected.description}</p>
                 </div>
-                <ReportActionsMenu />
+                <ReportActionsMenu onOpenHistory={() => setHistoryOpen(true)} />
               </div>
 
               <ReportParametersBar
@@ -162,9 +165,18 @@ export function Reports() {
 
                   <div className="min-h-0 flex-1">
                     {activeTab === 'document' ? (
-                      <ReportDocumentTab reportId={selected.id} params={ranParams} />
+                      <ReportDocumentTab
+                        reportId={selected.id}
+                        params={ranParams}
+                        onDownload={() => logReportRun(selected.id, { format: 'pdf', rowCount: result.meta.rowCount, params: ranParams })}
+                      />
                     ) : (
-                      <ReportSpreadsheetTab reportId={selected.id} result={result} params={ranParams} />
+                      <ReportSpreadsheetTab
+                        reportId={selected.id}
+                        result={result}
+                        params={ranParams}
+                        onExport={(format, rowCount) => logReportRun(selected.id, { format, rowCount, params: ranParams })}
+                      />
                     )}
                   </div>
                 </>
@@ -173,6 +185,15 @@ export function Reports() {
           )}
         </div>
       </div>
+
+      {selected && (
+        <ReportHistoryDrawer
+          open={historyOpen}
+          reportId={selected.id}
+          onClose={() => setHistoryOpen(false)}
+          onApplyParams={(p) => { setParams(p); setHistoryOpen(false); }}
+        />
+      )}
     </AppShell>
   );
 }
