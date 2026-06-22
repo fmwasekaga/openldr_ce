@@ -11,6 +11,7 @@ import { Dhis2 } from '@/pages/Dhis2';
 import { Dhis2OrgUnits } from '@/pages/Dhis2OrgUnits';
 import { Dhis2Mappings } from '@/pages/Dhis2Mappings';
 import { Dhis2MappingEditor } from '@/pages/Dhis2MappingEditor';
+import { Dhis2Schedules } from '@/pages/Dhis2Schedules';
 import { Forms } from './pages/Forms';
 import { FormCapture } from './pages/FormCapture';
 import { FormBuilderPage } from './forms-builder/FormBuilderPage';
@@ -31,6 +32,7 @@ export function App() {
       <Route path="/dhis2/mappings" element={<RequireRole role="lab_admin"><Dhis2Mappings /></RequireRole>} />
       <Route path="/dhis2/mappings/new" element={<RequireRole role="lab_admin"><Dhis2MappingEditor /></RequireRole>} />
       <Route path="/dhis2/mappings/:id" element={<RequireRole role="lab_admin"><Dhis2MappingEditor /></RequireRole>} />
+      <Route path="/dhis2/schedules" element={<RequireRole role="lab_admin"><Dhis2Schedules /></RequireRole>} />
       <Route path="/audit" element={<Audit />} />
       <Route path="/forms" element={<Forms />} />
       <Route path="/forms/new" element={<FormBuilderPage />} />
