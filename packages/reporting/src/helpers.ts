@@ -1,3 +1,22 @@
+import type { Kysely } from 'kysely';
+import type { ExternalSchema } from '@openldr/db';
+
+/** Distinct facility ids (patients.managing_organization), sorted, for select params. */
+export async function facilityOptions(db: Kysely<ExternalSchema>): Promise<Record<string, string[]>> {
+  const rows = await db
+    .selectFrom('patients')
+    .select('managing_organization')
+    .distinct()
+    .where('managing_organization', 'is not', null)
+    .orderBy('managing_organization')
+    .execute();
+  return {
+    facility: rows
+      .map((r) => (r.managing_organization == null ? '' : String(r.managing_organization)))
+      .filter((v) => v.length > 0),
+  };
+}
+
 /** Pivot grouped interpretation rows into per-antibiotic R/I/S counts + %R. */
 export function pivotResistance(
   grouped: { antibiotic: string; interpretation_code: string; n: number }[],

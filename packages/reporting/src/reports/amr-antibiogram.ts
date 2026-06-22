@@ -14,6 +14,9 @@ export const amrAntibiogram: ReportDefinition<Params> = {
   name: 'AMR Cumulative Antibiogram',
   description: 'First-isolate %R matrix of pathogen x antibiotic (cell = %R with N tested).',
   params,
+  category: 'amr',
+  parameters: [{ id: 'dateRange', label: 'Date range', type: 'daterange', required: false }],
+  summaryMetrics: [{ id: 'pathogens', label: 'Pathogens', type: 'count' }],
   async run(db: Kysely<ExternalSchema>, p: Params): Promise<ReportResultData> {
     const data = await fetchAmrData(db, p);
     const matrix = antibiogram(firstIsolate(buildIsolates(data.org, data.ast, data.specimens, data.patients)));

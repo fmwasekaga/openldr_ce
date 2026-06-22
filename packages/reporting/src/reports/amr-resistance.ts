@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { Kysely } from 'kysely';
 import type { ExternalSchema } from '@openldr/db';
 import type { ReportDefinition, ReportResultData } from '../types';
-import { pivotResistance, endOfDay } from '../helpers';
+import { pivotResistance, endOfDay, facilityOptions } from '../helpers';
 
 const params = z.object({
   from: z.string().optional(),
@@ -31,6 +31,16 @@ export const amrResistance: ReportDefinition<Params> = {
   name: 'AMR Resistance Rate',
   description: 'Resistant/Intermediate/Susceptible counts and %R by antibiotic.',
   params,
+  category: 'amr',
+  parameters: [
+    { id: 'dateRange', label: 'Date range', type: 'daterange', required: false },
+    { id: 'facility', label: 'Facility', type: 'select', required: false, optionsKey: 'facility' },
+  ],
+  summaryMetrics: [
+    { id: 'antibiotics', label: 'Antibiotics', type: 'count' },
+    { id: 'avgR', label: 'Avg %R', type: 'avg', column: 'percentR' },
+  ],
+  options: facilityOptions,
   async run(db: Kysely<ExternalSchema>, p: Params): Promise<ReportResultData> {
     let subjectRefs: string[] | null = null;
     if (p.facility) {

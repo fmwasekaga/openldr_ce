@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { Kysely } from 'kysely';
 import type { ExternalSchema } from '@openldr/db';
 import type { ReportDefinition, ReportResultData } from '../types';
-import { monthKey, endOfDay } from '../helpers';
+import { monthKey, endOfDay, facilityOptions } from '../helpers';
 
 const params = z.object({ from: z.string().optional(), to: z.string().optional(), facility: z.string().optional() });
 type Params = z.infer<typeof params>;
@@ -12,6 +12,13 @@ export const testVolume: ReportDefinition<Params> = {
   name: 'Test Volume Over Time',
   description: 'Count of service requests by test and month.',
   params,
+  category: 'operational',
+  parameters: [
+    { id: 'dateRange', label: 'Date range', type: 'daterange', required: false },
+    { id: 'facility', label: 'Facility', type: 'select', required: false, optionsKey: 'facility' },
+  ],
+  summaryMetrics: [{ id: 'total', label: 'Total tests', type: 'sum', column: 'count' }],
+  options: facilityOptions,
   async run(db: Kysely<ExternalSchema>, p: Params): Promise<ReportResultData> {
     let q = db.selectFrom('service_requests').select(['code_text', 'authored_on']);
     if (p.from) q = q.where('authored_on', '>=', p.from);
