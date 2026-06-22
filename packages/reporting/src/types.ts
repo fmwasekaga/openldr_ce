@@ -8,6 +8,27 @@ export type ChartHint =
   | { type: 'pie'; label: string; value: string }
   | { type: 'stat'; value: string; label: string };
 
+export type ReportCategory = 'amr' | 'operational' | 'quality' | 'regulatory';
+
+export interface ReportParamMeta {
+  id: string;
+  label: string;
+  type: 'daterange' | 'select' | 'text';
+  required: boolean;
+  /** Key into the report's options() result, for type 'select'. */
+  optionsKey?: string;
+}
+
+export interface ReportMetricMeta {
+  id: string;
+  label: string;
+  type: 'count' | 'sum' | 'avg' | 'pct';
+  /** Column the metric is computed over (sum/avg/pct). */
+  column?: string;
+  /** For pct: the value to match against `column`. */
+  match?: string;
+}
+
 export interface ReportColumn {
   key: string;
   label: string;
@@ -28,6 +49,9 @@ export interface ReportSummary {
   id: string;
   name: string;
   description: string;
+  category: ReportCategory;
+  parameters: ReportParamMeta[];
+  summaryMetrics?: ReportMetricMeta[];
 }
 
 export interface ReportDefinition<P = unknown> {
@@ -36,4 +60,9 @@ export interface ReportDefinition<P = unknown> {
   description: string;
   params: ZodType<P>;
   run(db: Kysely<ExternalSchema>, params: P): Promise<ReportResultData>;
+  category: ReportCategory;
+  parameters: ReportParamMeta[];
+  summaryMetrics?: ReportMetricMeta[];
+  /** Resolves dynamic select options keyed by ReportParamMeta.optionsKey. */
+  options?(db: Kysely<ExternalSchema>): Promise<Record<string, string[]>>;
 }

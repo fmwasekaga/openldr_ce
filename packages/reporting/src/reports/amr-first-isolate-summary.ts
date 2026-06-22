@@ -14,6 +14,9 @@ export const amrFirstIsolateSummary: ReportDefinition<Params> = {
   name: 'AMR First-Isolate Resistance Summary',
   description: 'R/I/S counts and %R by specimen type, pathogen, and antibiotic (first isolate per patient).',
   params,
+  category: 'amr',
+  parameters: [{ id: 'dateRange', label: 'Date range', type: 'daterange', required: false }],
+  summaryMetrics: [{ id: 'avgR', label: 'Avg %R', type: 'avg', column: 'percentR' }],
   async run(db: Kysely<ExternalSchema>, p: Params): Promise<ReportResultData> {
     const data = await fetchAmrData(db, p);
     const rows = aggregateRIS(firstIsolate(buildIsolates(data.org, data.ast, data.specimens, data.patients)));

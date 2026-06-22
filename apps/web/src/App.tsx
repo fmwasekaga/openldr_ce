@@ -1,6 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Reports } from './pages/Reports';
-import { ReportDetail } from './pages/ReportDetail';
 import { Terminology } from './pages/Terminology';
 import { Docs } from './pages/Docs';
 import { AppShell } from './shell/AppShell';
@@ -28,7 +27,6 @@ export function App() {
       <Route path="/auth/callback" element={<CallbackPage />} />
       <Route path="/" element={<DashboardPage />} />
       <Route path="/reports" element={<Reports />} />
-      <Route path="/reports/:id" element={<ReportDetail />} />
       <Route path="/terminology" element={<Terminology />} />
       <Route path="/users" element={<RequireRole role="lab_admin"><Users /></RequireRole>} />
       <Route path="/settings" element={<RequireRole role="lab_admin"><SettingsShell /></RequireRole>}>

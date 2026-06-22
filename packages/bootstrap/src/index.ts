@@ -41,6 +41,7 @@ export interface ReportingApi {
   runEventSource(id: string, window: { from: string; to: string }): Promise<{ rows: Record<string, unknown>[] }>;
   eventSources(): { id: string; name: string; columns: { key: string; label: string }[] }[];
   renderPdf(id: string, rawParams: unknown): Promise<Buffer>;
+  options(id: string): Promise<Record<string, string[]>>;
 }
 
 function createOntologyApi(ontologyStore: OntologyStore) {
@@ -151,6 +152,11 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
         columns: result.columns.map((c) => ({ key: c.key, label: c.label })),
         rows: result.rows,
       });
+    },
+    async options(id) {
+      const def = getReport(id);
+      if (!def) throw new ReportNotFoundError(id);
+      return def.options ? def.options(reportingDb) : {};
     },
   };
 

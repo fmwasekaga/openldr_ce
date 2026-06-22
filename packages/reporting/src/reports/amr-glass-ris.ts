@@ -15,6 +15,13 @@ export const amrGlassRis: ReportDefinition<Params> = {
   name: 'AMR GLASS RIS (stratified)',
   description: 'First-isolate R/I/S counts stratified by specimen, pathogen, antibiotic, gender, age group, origin (GLASS submission shape).',
   params: params as ZodType<Params>,
+  category: 'regulatory',
+  parameters: [
+    { id: 'dateRange', label: 'Date range', type: 'daterange', required: false },
+    { id: 'country', label: 'Country code', type: 'text', required: false },
+    { id: 'year', label: 'Year', type: 'text', required: false },
+  ],
+  summaryMetrics: [{ id: 'isolates', label: 'Total isolates', type: 'sum', column: 'Total' }],
   async run(db: Kysely<ExternalSchema>, p: Params): Promise<ReportResultData> {
     const data = await fetchAmrData(db, p);
     const rows = toGlassRis(firstIsolate(buildIsolates(data.org, data.ast, data.specimens, data.patients)), { country: p.country, year: p.year });

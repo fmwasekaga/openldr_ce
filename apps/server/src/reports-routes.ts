@@ -36,6 +36,15 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
     } catch (err) { return mapError(err, reply); }
   });
 
+  app.get('/api/reports/:id/options', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+      return await ctx.reporting.options(id);
+    } catch (err) {
+      return mapError(err, reply);
+    }
+  });
+
   app.get('/api/reports/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
     try {

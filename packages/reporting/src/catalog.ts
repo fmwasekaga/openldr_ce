@@ -18,5 +18,12 @@ export function getReport(id: string): ReportDefinition | undefined {
 }
 
 export function reportSummaries(): ReportSummary[] {
-  return REPORTS.map((r) => ({ id: r.id, name: r.name, description: r.description }));
+  return REPORTS.map((r) => ({
+    id: r.id,
+    name: r.name,
+    description: r.description,
+    category: r.category,
+    parameters: r.parameters,
+    summaryMetrics: r.summaryMetrics,
+  }));
 }

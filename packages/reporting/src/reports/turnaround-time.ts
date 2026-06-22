@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { Kysely } from 'kysely';
 import type { ExternalSchema } from '@openldr/db';
 import type { ReportDefinition, ReportResultData } from '../types';
-import { hoursBetween, endOfDay } from '../helpers';
+import { hoursBetween, endOfDay, facilityOptions } from '../helpers';
 
 const params = z.object({ from: z.string().optional(), to: z.string().optional(), facility: z.string().optional() });
 type Params = z.infer<typeof params>;
@@ -12,6 +12,16 @@ export const turnaroundTime: ReportDefinition<Params> = {
   name: 'Specimen Turnaround Time',
   description: 'Average hours from specimen received to report issued, by test.',
   params,
+  category: 'operational',
+  parameters: [
+    { id: 'dateRange', label: 'Date range', type: 'daterange', required: false },
+    { id: 'facility', label: 'Facility', type: 'select', required: false, optionsKey: 'facility' },
+  ],
+  summaryMetrics: [
+    { id: 'avgHours', label: 'Avg hours', type: 'avg', column: 'avgHours' },
+    { id: 'reports', label: 'Reports', type: 'sum', column: 'count' },
+  ],
+  options: facilityOptions,
   async run(db: Kysely<ExternalSchema>, p: Params): Promise<ReportResultData> {
     // No report->specimen link exists in the flat schema, so pair each report with
     // its patient's earliest specimen receipt. Two queries + JS pairing (one row per

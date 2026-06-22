@@ -9,7 +9,29 @@ export function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise
   return fetch(input, { ...init, headers });
 }
 
-export interface ReportSummary { id: string; name: string; description: string }
+export type ReportCategory = 'amr' | 'operational' | 'quality' | 'regulatory';
+export interface ReportParamMeta {
+  id: string;
+  label: string;
+  type: 'daterange' | 'select' | 'text';
+  required: boolean;
+  optionsKey?: string;
+}
+export interface ReportMetricMeta {
+  id: string;
+  label: string;
+  type: 'count' | 'sum' | 'avg' | 'pct';
+  column?: string;
+  match?: string;
+}
+export interface ReportSummary {
+  id: string;
+  name: string;
+  description: string;
+  category: ReportCategory;
+  parameters: ReportParamMeta[];
+  summaryMetrics?: ReportMetricMeta[];
+}
 export interface ChartHint {
   type: 'bar' | 'line' | 'pie' | 'stat';
   x?: string; y?: string; series?: string; label?: string; value?: string;
@@ -33,6 +55,19 @@ export async function fetchReport(id: string, params: Record<string, string> = {
   const res = await authFetch(`/api/reports/${id}${qs ? `?${qs}` : ''}`);
   if (!res.ok) throw new Error(`report ${id} failed: ${res.status}`);
   return res.json() as Promise<ReportResult>;
+}
+
+export async function fetchReportOptions(id: string): Promise<Record<string, string[]>> {
+  const res = await authFetch(`/api/reports/${encodeURIComponent(id)}/options`);
+  if (!res.ok) throw new Error(`report options ${id} failed: ${res.status}`);
+  return res.json() as Promise<Record<string, string[]>>;
+}
+
+export async function fetchReportPdf(id: string, params: Record<string, string> = {}): Promise<Blob> {
+  const qs = new URLSearchParams(params).toString();
+  const res = await authFetch(`/api/reports/${encodeURIComponent(id)}.pdf${qs ? `?${qs}` : ''}`);
+  if (!res.ok) throw new Error(`report pdf ${id} failed: ${res.status}`);
+  return res.blob();
 }
 
 export function csvUrl(id: string, params: Record<string, string> = {}): string {

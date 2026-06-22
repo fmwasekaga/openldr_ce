@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { Kysely } from 'kysely';
 import type { ExternalSchema } from '@openldr/db';
 import type { ReportDefinition, ReportResultData } from '../types';
-import { ageBand } from '../helpers';
+import { ageBand, facilityOptions } from '../helpers';
 
 const params = z.object({ facility: z.string().optional(), asOf: z.string().optional() });
 type Params = z.infer<typeof params>;
@@ -14,6 +14,13 @@ export const patientDemographics: ReportDefinition<Params> = {
   name: 'Patient Demographics',
   description: 'Patient counts by age band and gender.',
   params,
+  category: 'quality',
+  parameters: [
+    { id: 'facility', label: 'Facility', type: 'select', required: false, optionsKey: 'facility' },
+    { id: 'asOf', label: 'As of (YYYY-MM-DD)', type: 'text', required: false },
+  ],
+  summaryMetrics: [{ id: 'patients', label: 'Patients', type: 'sum', column: 'total' }],
+  options: facilityOptions,
   async run(db: Kysely<ExternalSchema>, p: Params): Promise<ReportResultData> {
     let q = db.selectFrom('patients').select(['gender', 'birth_date']);
     if (p.facility) q = q.where('managing_organization', '=', p.facility);
