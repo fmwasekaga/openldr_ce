@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
-  LayoutDashboard, FileText, BookOpen, Library, FileInput, Users, ShieldCheck, Network,
+  LayoutDashboard, FileText, BookOpen, Library, FileInput, Users, ShieldCheck, Settings,
   ChevronLeft, ChevronRight, Sun, Moon, LogOut, type LucideIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -20,7 +20,7 @@ const NAV: { to: string; label: string; end: boolean; icon: LucideIcon }[] = [
   { to: '/terminology', label: 'Terminology', end: false, icon: Library },
   { to: '/forms', label: 'Forms', end: false, icon: FileInput },
   { to: '/users', label: 'Users', end: false, icon: Users },
-  { to: '/dhis2', label: 'DHIS2', end: false, icon: Network },
+  { to: '/settings', label: 'Settings', end: false, icon: Settings },
   { to: '/audit', label: 'Audit', end: false, icon: ShieldCheck },
   { to: '/docs', label: 'Docs', end: false, icon: BookOpen },
 ];
