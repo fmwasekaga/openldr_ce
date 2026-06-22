@@ -6,8 +6,11 @@ import type { PluginRunner, RunOptions } from './runner';
  * Real Extism-backed runner (@extism/extism@1.0.3).
  *
  * Sandbox notes:
- * - Isolation is default-deny: `allowedPaths`/`allowedHosts` are left unset, so
- *   the plugin gets no host filesystem or network access. WASI is opt-in per plugin.
+ * - Isolation is default-deny: `allowedPaths` is left unset, so the plugin gets
+ *   no host filesystem access. WASI is opt-in per plugin.
+ * - Network egress is now restricted to the granted `allowedHosts` list (passed
+ *   from the capability grant via `opts.allowedHosts`). An empty list or undefined
+ *   means default-deny — no outbound connections are permitted.
  * - `runInWorker` is left false: the 1.0.3 worker path bootstraps from an inline
  *   data: URL whose bundle references a relative `worker.js.map`, which Node cannot
  *   resolve (ERR_INVALID_URL) — a known SDK bug. Running in-process avoids it.
@@ -29,6 +32,7 @@ export function createExtismRunner(): PluginRunner {
           useWasi: opts.wasi,
           runInWorker: false,
           config: opts.config ?? {},
+          allowedHosts: opts.allowedHosts ?? [],
           functions: {
             'extism:host/user': {
               log(cp: CurrentPlugin, level: bigint, msg: bigint) {
