@@ -39,6 +39,13 @@ function renderAt(path: string) {
   );
 }
 
+// The selects are shadcn/Radix, not native: open the trigger by data-testid, then
+// click the option by its rendered text.
+function pick(testid: string, optionText: string) {
+  fireEvent.click(screen.getByTestId(testid));
+  fireEvent.click(screen.getByText(optionText));
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   (fetchReports as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: 'test-volume', name: 'Test Volume', description: '' }]);
@@ -59,12 +66,12 @@ describe('DHIS2 mapping editor — aggregate', () => {
     (saveDhis2Mapping as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'mapping-x', name: 'My Map', definition: {} });
     renderAt('/dhis2/mappings/new');
     fireEvent.change(await screen.findByTestId('mapping-name'), { target: { value: 'My Map' } });
-    fireEvent.change(screen.getByTestId('report-select'), { target: { value: 'test-volume' } });
+    pick('report-select', 'Test Volume');
     await waitFor(() => expect(getReportColumns).toHaveBeenCalledWith('test-volume'));
-    fireEvent.change(screen.getByTestId('orgunit-column-select'), { target: { value: 'month' } });
+    await waitFor(() => pick('orgunit-column-select', 'Month'));
     fireEvent.click(screen.getByTestId('add-column'));
-    fireEvent.change(screen.getByTestId('column-key-0'), { target: { value: 'count' } });
-    fireEvent.change(screen.getByTestId('column-de-0'), { target: { value: 'de1' } });
+    pick('column-key-0', 'Count');
+    pick('column-de-0', 'DE One');
     fireEvent.click(screen.getByTestId('save-mapping'));
     await waitFor(() => expect(saveDhis2Mapping).toHaveBeenCalled());
     const [, body] = (saveDhis2Mapping as ReturnType<typeof vi.fn>).mock.calls[0];
@@ -80,20 +87,21 @@ describe('DHIS2 mapping editor — tracker', () => {
     renderAt('/dhis2/mappings/new');
     await screen.findByTestId('mapping-name');
     // switch to tracker
-    fireEvent.change(screen.getByTestId('kind-select'), { target: { value: 'tracker' } });
+    pick('kind-select', 'Tracker');
     fireEvent.change(screen.getByTestId('mapping-name'), { target: { value: 'Trk' } });
-    fireEvent.change(screen.getByTestId('event-source-select'), { target: { value: 'amr-isolates' } });
-    fireEvent.change(screen.getByTestId('program-select'), { target: { value: 'prog1' } });
-    // program-stage options should be filtered to prog1 (Stage One only)
-    const stageSel = screen.getByTestId('program-stage-select');
-    expect(stageSel.querySelectorAll('option')).toHaveLength(2); // placeholder + Stage One
-    fireEvent.change(stageSel, { target: { value: 'stage1' } });
-    fireEvent.change(screen.getByTestId('tracker-orgunit-select'), { target: { value: 'facility' } });
-    fireEvent.change(screen.getByTestId('tracker-eventdate-select'), { target: { value: 'eventDate' } });
-    fireEvent.change(screen.getByTestId('tracker-id-select'), { target: { value: 'id' } });
+    pick('event-source-select', 'AMR isolates');
+    pick('program-select', 'Program One');
+    // program-stage options should be filtered to prog1 (Stage One only, not "Other")
+    fireEvent.click(screen.getByTestId('program-stage-select'));
+    expect(screen.getByText('Stage One')).toBeTruthy();
+    expect(screen.queryByText('Other')).toBeNull();
+    fireEvent.click(screen.getByText('Stage One'));
+    pick('tracker-orgunit-select', 'Facility');
+    pick('tracker-eventdate-select', 'Event date');
+    pick('tracker-id-select', 'Isolate ID');
     fireEvent.click(screen.getByTestId('add-datavalue'));
-    fireEvent.change(screen.getByTestId('dv-col-0'), { target: { value: 'result' } });
-    fireEvent.change(screen.getByTestId('dv-de-0'), { target: { value: 'de1' } });
+    pick('dv-col-0', 'Result');
+    pick('dv-de-0', 'DE One');
     fireEvent.click(screen.getByTestId('save-mapping'));
     await waitFor(() => expect(saveDhis2Mapping).toHaveBeenCalled());
     const [, body] = (saveDhis2Mapping as ReturnType<typeof vi.fn>).mock.calls[0];
@@ -112,6 +120,6 @@ describe('DHIS2 mapping editor — tracker', () => {
     renderAt('/dhis2/mappings/t1');
     // tracker form is shown (program select present), not a read-only notice
     expect(await screen.findByTestId('program-select')).toBeTruthy();
-    expect((screen.getByTestId('event-source-select') as HTMLSelectElement).value).toBe('amr-isolates');
+    expect(screen.getByTestId('event-source-select')).toHaveTextContent('AMR isolates');
   });
 });

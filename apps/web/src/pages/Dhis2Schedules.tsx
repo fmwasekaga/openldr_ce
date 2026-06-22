@@ -4,6 +4,7 @@ import { AppShell } from '@/shell/AppShell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { listDhis2Schedules, listDhis2Mappings, createDhis2Schedule, setDhis2ScheduleEnabled, deleteDhis2Schedule, type Dhis2Schedule, type Dhis2MappingSummary } from '@/api';
 
@@ -39,7 +40,6 @@ export function Dhis2Schedules() {
     catch (e) { setToast(t('dhis2.ops.errorToast', { error: e instanceof Error ? e.message : String(e) })); }
   }, [pendingDelete, load, t]);
 
-  const sel = 'h-9 rounded-md border border-input bg-background px-2 text-sm';
   return (
     <AppShell title="DHIS2 schedules">
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4" data-testid="dhis2-schedules-page">
@@ -49,16 +49,23 @@ export function Dhis2Schedules() {
         <div className="flex flex-wrap items-end gap-2 rounded-md border border-border p-3">
           <label className="grid gap-1 text-sm">
             <span className="text-muted-foreground">{t('dhis2.ops.mapping')}</span>
-            <select data-testid="new-mapping" className={sel} value={newMapping} onChange={(e) => setNewMapping(e.target.value)}>
-              <option value="">—</option>
-              {mappings.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-            </select>
+            <Select value={newMapping} onValueChange={setNewMapping}>
+              <SelectTrigger data-testid="new-mapping" className="w-44"><SelectValue placeholder="—" /></SelectTrigger>
+              <SelectContent>
+                {mappings.map((m) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </label>
           <label className="grid gap-1 text-sm">
             <span className="text-muted-foreground">{t('dhis2.ops.periodType')}</span>
-            <select data-testid="new-period" className={sel} value={newPeriod} onChange={(e) => setNewPeriod(e.target.value as 'monthly' | 'quarterly' | 'yearly')}>
-              <option value="monthly">monthly</option><option value="quarterly">quarterly</option><option value="yearly">yearly</option>
-            </select>
+            <Select value={newPeriod} onValueChange={(v) => setNewPeriod(v as 'monthly' | 'quarterly' | 'yearly')}>
+              <SelectTrigger data-testid="new-period" className="w-36"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="monthly">monthly</SelectItem>
+                <SelectItem value="quarterly">quarterly</SelectItem>
+                <SelectItem value="yearly">yearly</SelectItem>
+              </SelectContent>
+            </Select>
           </label>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={newEventDriven} onChange={(e) => setNewEventDriven(e.target.checked)} />{t('dhis2.ops.eventDriven')}</label>
           <Button data-testid="create-schedule" disabled={!newMapping} onClick={() => void onCreate()}>{t('dhis2.ops.create')}</Button>
