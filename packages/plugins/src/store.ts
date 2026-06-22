@@ -1,69 +1,125 @@
-import { type Kysely } from 'kysely';
+import { type Kysely, sql } from 'kysely';
 import type { InternalSchema } from '@openldr/db';
-import type { PluginManifest } from './manifest';
 
 export interface PluginRow {
   id: string;
   version: string;
   sha256: string;
-  manifest: PluginManifest;
+  manifest: Record<string, unknown>;
   status: string;
+  enabled: boolean;
+  active: boolean;
+  approvedBy: string | null;
+}
+
+export interface PluginInstallInput {
+  id: string;
+  version: string;
+  sha256: string;
+  manifest: Record<string, unknown>;
+  approvedBy: string | null;
 }
 
 export interface PluginStore {
-  upsert(row: { id: string; version: string; sha256: string; manifest: PluginManifest }): Promise<void>;
+  install(input: PluginInstallInput): Promise<void>;
   get(id: string, version?: string): Promise<PluginRow | undefined>;
   list(): Promise<PluginRow[]>;
+  rollback(id: string, version: string): Promise<void>;
+  setEnabled(id: string, enabled: boolean): Promise<void>;
   remove(id: string, version?: string): Promise<void>;
 }
 
-const COLUMNS = ['id', 'version', 'sha256', 'manifest', 'status'] as const;
+const COLUMNS = ['id', 'version', 'sha256', 'manifest', 'status', 'enabled', 'active', 'approved_by'] as const;
 
-function toRow(r: { id: string; version: string; sha256: string; manifest: unknown; status: string }): PluginRow {
-  return { ...r, manifest: r.manifest as PluginManifest };
-}
-
-/** Compare semver-ish strings numerically by dotted segment; non-numeric segments fall back to string order. */
-function compareVersions(a: string, b: string): number {
-  const pa = a.split('.');
-  const pb = b.split('.');
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const na = Number(pa[i]);
-    const nb = Number(pb[i]);
-    if (Number.isInteger(na) && Number.isInteger(nb)) {
-      if (na !== nb) return na - nb;
-    } else {
-      const sa = pa[i] ?? '';
-      const sb = pb[i] ?? '';
-      if (sa !== sb) return sa < sb ? -1 : 1;
-    }
-  }
-  return 0;
+function toRow(r: Record<string, unknown>): PluginRow {
+  return {
+    id: r.id as string,
+    version: r.version as string,
+    sha256: r.sha256 as string,
+    manifest: r.manifest as Record<string, unknown>,
+    status: r.status as string,
+    enabled: r.enabled as boolean,
+    active: r.active as boolean,
+    approvedBy: (r.approved_by as string | null) ?? null,
+  };
 }
 
 export function createPluginStore(db: Kysely<InternalSchema>): PluginStore {
   return {
-    async upsert(row) {
+    async install({ id, version, sha256, manifest, approvedBy }) {
+      // The newly installed version becomes the sole active one; deactivate all existing rows for this id.
+      await db.updateTable('plugins').set({ active: false }).where('id', '=', id).execute();
       await db
         .insertInto('plugins')
-        .values({ id: row.id, version: row.version, sha256: row.sha256, manifest: row.manifest as never, status: 'installed' })
-        .onConflict((oc) => oc.columns(['id', 'version']).doUpdateSet({ sha256: row.sha256, manifest: row.manifest as never, status: 'installed' }))
+        .values({
+          id,
+          version,
+          sha256,
+          manifest: manifest as never,
+          status: 'installed',
+          enabled: true,
+          active: true,
+          approved_by: approvedBy,
+          granted_at: sql`now()`,
+        })
+        .onConflict((oc) =>
+          oc.columns(['id', 'version']).doUpdateSet({
+            sha256,
+            manifest: manifest as never,
+            status: 'installed',
+            active: true,
+            enabled: true,
+            approved_by: approvedBy,
+            granted_at: sql`now()`,
+          }),
+        )
         .execute();
     },
+
     async get(id, version) {
+      let q = db.selectFrom('plugins').select(COLUMNS).where('id', '=', id);
       if (version) {
-        const r = await db.selectFrom('plugins').select(COLUMNS).where('id', '=', id).where('version', '=', version).executeTakeFirst();
-        return r ? toRow(r) : undefined;
+        q = q.where('version', '=', version);
+      } else {
+        q = q.where('active', '=', true).where('enabled', '=', true);
       }
-      const rows = await db.selectFrom('plugins').select(COLUMNS).where('id', '=', id).where('status', '=', 'installed').execute();
-      if (rows.length === 0) return undefined;
-      rows.sort((a, b) => compareVersions(b.version, a.version));
-      return toRow(rows[0]);
+      const r = await q.executeTakeFirst();
+      return r ? toRow(r as Record<string, unknown>) : undefined;
     },
+
     async list() {
-      const rows = await db.selectFrom('plugins').select(COLUMNS).orderBy('id').orderBy('version', 'desc').execute();
-      return rows.map(toRow);
+      const rows = await db
+        .selectFrom('plugins')
+        .select(COLUMNS)
+        .orderBy('id')
+        .orderBy('version', 'desc')
+        .execute();
+      return rows.map((r) => toRow(r as Record<string, unknown>));
     },
+
+    async rollback(id, version) {
+      const exists = await db
+        .selectFrom('plugins')
+        .select('version')
+        .where('id', '=', id)
+        .where('version', '=', version)
+        .executeTakeFirst();
+      if (!exists) {
+        throw new Error(`cannot roll back ${id}: version ${version} is not installed`);
+      }
+      await db.updateTable('plugins').set({ active: false }).where('id', '=', id).execute();
+      await db
+        .updateTable('plugins')
+        .set({ active: true })
+        .where('id', '=', id)
+        .where('version', '=', version)
+        .execute();
+    },
+
+    async setEnabled(id, enabled) {
+      await db.updateTable('plugins').set({ enabled }).where('id', '=', id).execute();
+    },
+
     async remove(id, version) {
       let q = db.deleteFrom('plugins').where('id', '=', id);
       if (version) q = q.where('version', '=', version);
