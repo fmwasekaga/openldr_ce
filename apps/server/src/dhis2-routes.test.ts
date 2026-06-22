@@ -421,6 +421,11 @@ describe('dhis2 run route', () => {
     expect((await app.inject({ method: 'POST', url: '/api/dhis2/mappings/m1/run', payload: { dryRun: true } })).statusCode).toBe(400);
   });
 
+  it('returns 400 for an unknown mapping', async () => {
+    const app = appWith(configuredCfg(), fakeDhis2({ runMapping: async () => { throw new Error('unknown mapping: m99'); } }), ['lab_admin']);
+    expect((await app.inject({ method: 'POST', url: '/api/dhis2/mappings/m99/run', payload: { period: '2026Q1', dryRun: true } })).statusCode).toBe(400);
+  });
+
   it('rejects non-admins with 403', async () => {
     const app = appWith(configuredCfg(), fakeDhis2(), ['viewer']);
     expect((await app.inject({ method: 'POST', url: '/api/dhis2/mappings/m1/run', payload: { period: '2026Q1', dryRun: true } })).statusCode).toBe(403);
@@ -466,6 +471,8 @@ describe('dhis2 pushes + schedules', () => {
     expect((await deps.scheduleStore.get('s1'))?.enabled).toBe(false);
     expect((await app.inject({ method: 'DELETE', url: '/api/dhis2/schedules/s1' })).statusCode).toBe(204);
     expect(await deps.scheduleStore.list()).toEqual([]);
+    // toggling a nonexistent schedule is a 404, not a silent ok
+    expect((await app.inject({ method: 'POST', url: '/api/dhis2/schedules/ghost/enabled', payload: { enabled: true } })).statusCode).toBe(404);
   });
 
   it('rejects non-admins with 403', async () => {

@@ -230,6 +230,7 @@ export function registerDhis2Routes(app: FastifyInstance<any, any, any, any>, ct
     const p = scheduleEnabledInput.safeParse(req.body);
     if (!p.success) { reply.code(400); return { error: p.error.message }; }
     const id = (req.params as { id: string }).id;
+    if (!(await deps.scheduleStore.get(id))) { reply.code(404); return { error: 'unknown schedule' }; }
     await deps.scheduleStore.setEnabled(id, p.data.enabled);
     if (p.data.enabled) await armSchedules();
     await recordAudit(ctx, req, { action: 'dhis2.schedule.update', entityType: 'dhis2-schedule', entityId: id, before: null, after: null, metadata: { enabled: p.data.enabled } });
