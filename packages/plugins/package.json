@@ -14,6 +14,7 @@
     "@openldr/db": "workspace:*",
     "@openldr/fhir": "workspace:*",
     "@openldr/ingest": "workspace:*",
+    "@openldr/marketplace": "workspace:*",
     "@openldr/ports": "workspace:*",
     "@extism/extism": "^1.0.3",
     "kysely": "^0.27.5",
