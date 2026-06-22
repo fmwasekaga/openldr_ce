@@ -24,7 +24,9 @@
     "dhis2:seed": "node scripts/dhis2-seed.mjs",
     "make:lab-sample": "node scripts/make-lab-sample.mjs",
     "load:measure": "node scripts/load-measure.mjs",
-    "mssql:accept": "tsx scripts/mssql-live-acceptance.ts"
+    "mssql:accept": "tsx scripts/mssql-live-acceptance.ts",
+    "make:marketplace-bundle": "tsx scripts/make-marketplace-bundle.ts",
+    "marketplace:accept": "tsx scripts/marketplace-live-acceptance.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

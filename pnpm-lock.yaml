@@ -517,6 +517,9 @@ importers:
       '@openldr/forms':
         specifier: workspace:*
         version: link:../forms
+      '@openldr/marketplace':
+        specifier: workspace:*
+        version: link:../marketplace
       '@openldr/reporting':
         specifier: workspace:*
         version: link:../reporting
@@ -771,6 +774,9 @@ importers:
         specifier: ^3.24.1
         version: 3.25.76
     devDependencies:
+      pg-mem:
+        specifier: ^3.0.14
+        version: 3.0.14(kysely@0.27.6)
       typescript:
         specifier: ^5.7.2
         version: 5.9.3

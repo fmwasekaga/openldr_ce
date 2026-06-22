@@ -75,7 +75,6 @@ export const ConfigSchema = z
 
     // Marketplace artifact security.
     MARKETPLACE_DEV_ALLOW_UNSIGNED: envBoolean(false),
-    MARKETPLACE_AUTO_PIN_FIRST_USE: envBoolean(true),
   })
   .superRefine((cfg, ctx) => {
     if (cfg.TARGET_STORE_ADAPTER === 'mssql') {
