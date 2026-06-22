@@ -8,3 +8,4 @@ export * from './compatibility';
 export * from './grant';
 export * from './bundle-fs';
 export * from './pack';
+export * from './scaffold';
