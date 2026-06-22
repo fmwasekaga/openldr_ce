@@ -1,30 +1,33 @@
-import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import '@/i18n';
+
+vi.mock('../api', () => ({
+  fetchReports: vi.fn(async () => [
+    { id: 'amr-resistance', name: 'AMR Resistance Rate', description: 'desc', category: 'amr', parameters: [{ id: 'dateRange', label: 'Date range', type: 'daterange', required: false }], summaryMetrics: [{ id: 'antibiotics', label: 'Antibiotics', type: 'count' }] },
+  ]),
+  fetchReport: vi.fn(async () => ({
+    columns: [{ key: 'antibiotic', label: 'Antibiotic', kind: 'string' }],
+    rows: [{ antibiotic: 'AMP' }],
+    chart: { type: 'bar', x: 'antibiotic', y: 'percentR' },
+    meta: { generatedAt: '2026-01-01', rowCount: 1 },
+  })),
+  fetchReportOptions: vi.fn(async () => ({})),
+  fetchReportPdf: vi.fn(async () => new Blob(['%PDF'])),
+  csvUrl: (id: string) => `/api/reports/${id}.csv`,
+}));
+vi.mock('../reports/PdfCanvasViewer', () => ({ PdfCanvasViewer: () => <div>pdf-viewer</div> }));
+
 import { Reports } from './Reports';
 
-beforeAll(() => {
-  Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, value: 600 });
-  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, value: 300 });
-  // Recharts ResponsiveContainer uses ResizeObserver, absent in jsdom.
-  globalThis.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} } as never;
-});
+beforeEach(() => localStorage.clear());
 
-beforeEach(() => {
-  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-    if (url === '/api/reports') {
-      return new Response(JSON.stringify([{ id: 'amr-resistance', name: 'AMR Resistance Rate', description: 'd' }]), { status: 200, headers: { 'content-type': 'application/json' } });
-    }
-    return new Response(JSON.stringify({
-      columns: [{ key: 'antibiotic', label: 'Antibiotic', kind: 'string' }], rows: [{ antibiotic: 'AMP' }],
-      chart: { type: 'bar', x: 'antibiotic', y: 'antibiotic' }, meta: { generatedAt: 'x', rowCount: 1 },
-    }), { status: 200, headers: { 'content-type': 'application/json' } });
-  }));
-});
-
-describe('Reports', () => {
-  it('lists report cards from the API', async () => {
+describe('Reports page', () => {
+  it('lists reports; selecting + running shows the document tab', async () => {
     render(<MemoryRouter><Reports /></MemoryRouter>);
-    await waitFor(() => expect(screen.getByText('AMR Resistance Rate')).toBeInTheDocument());
+    fireEvent.click(await screen.findByText('AMR Resistance Rate'));
+    fireEvent.click(await screen.findByRole('button', { name: /run|exécuter|executar/i }));
+    await waitFor(() => expect(screen.getByText('pdf-viewer')).toBeInTheDocument());
   });
 });
