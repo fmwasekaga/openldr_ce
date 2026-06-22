@@ -157,6 +157,8 @@ openldr_ce/
 
 OpenLDR CE is designed to run behind a **single HTTPS port**. Production environments often allocate only one or two ports, so an nginx reverse proxy terminates TLS (via Let's Encrypt/Certbot) and routes the SPA, API, and auth callbacks under one origin. All application code is proxy-relative — no hard-coded hosts or ports.
 
+A ready-to-run Docker stack (app + nginx + Postgres/MinIO/Keycloak) lives in `Dockerfile` + `docker-compose.prod.yml`. See **[DEPLOYMENT.md](DEPLOYMENT.md)** for the build, TLS setup, environment reference, and smoke check.
+
 ---
 
 ## Roadmap

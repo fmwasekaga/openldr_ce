@@ -1,0 +1,16 @@
+node_modules
+**/node_modules
+**/dist
+.turbo
+.git
+.worktrees
+e2e/artifacts
+e2e/test-results
+playwright-report
+test-results
+scripts/.marketplace-keys
+deploy/nginx/certs
+*.tsbuildinfo
+.env
+.env.*
+!.env.prod.example
