@@ -16,6 +16,7 @@ import { runTargetStoreTest } from './target-store';
 import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, runTerminologyExpand, runTerminologyTranslate, runPublisherList, runPublisherCreate, runSystemList, runSystemCreate, runTermList, runValueSetList, runOntologyBuild, runOntologyRebuild, runOntologyList, runOntologyUnlink } from './terminology';
 import { runDhis2MapImport, runDhis2MapList, runDhis2OrgUnitImport, runDhis2OrgUnitList, runDhis2PullMetadata, runDhis2Validate, runDhis2Push, runDhis2Status, runDhis2ScheduleAdd, runDhis2ScheduleList, runDhis2ScheduleRemove } from './dhis2';
 import { runMarketVerify, runMarketInstall, runMarketList, runMarketRollback, runMarketEnable, runMarketDisable, runMarketRemove } from './market';
+import { runArtifactKeygen, runArtifactNew, runArtifactBuild, runArtifactPack, runArtifactSign, runArtifactTest, runArtifactPublish } from './artifact';
 
 const program = new Command();
 program.name('openldr').description('OpenLDR CE operator CLI');
@@ -446,5 +447,18 @@ market
   .action(async (id: string, version: string | undefined, opts: { json: boolean }) => {
     try { process.exitCode = await runMarketRemove(id, version, opts); } catch (err) { process.stderr.write(`market remove failed: ${String(err)}\n`); process.exitCode = 1; }
   });
+
+const artifact = program.command('artifact').description('Author marketplace artifacts (scaffold/build/sign/publish)');
+artifact.command('keygen').requiredOption('--out <dir>', 'output directory for the keypair').option('--force', 'overwrite an existing key', false).option('--json', 'emit JSON', false)
+  .action(async (o: { out: string; force: boolean; json: boolean }) => { process.exitCode = await runArtifactKeygen(o); });
+artifact.command('new <type> <name>').description('scaffold plugin|form|report').option('--out <dir>', 'parent directory', '.').option('--publisher-id <id>').option('--sdk-path <p>').option('--sdk-git <url>').option('--json', 'emit JSON', false)
+  .action(async (type: string, name: string, o: { out?: string; publisherId?: string; sdkPath?: string; sdkGit?: string; json: boolean }) => { process.exitCode = await runArtifactNew(type, name, o); });
+artifact.command('build <dir>').option('--json', 'emit JSON', false).action(async (dir: string, o: { json: boolean }) => { process.exitCode = await runArtifactBuild(dir, o); });
+artifact.command('pack <dir>').requiredOption('--key <priv>', 'publisher private key').option('--out <dir>', 'bundle output dir').option('--json', 'emit JSON', false)
+  .action(async (dir: string, o: { key: string; out?: string; json: boolean }) => { process.exitCode = await runArtifactPack(dir, o); });
+artifact.command('sign <dir>').requiredOption('--key <priv>').option('--json', 'emit JSON', false).action(async (dir: string, o: { key: string; json: boolean }) => { process.exitCode = await runArtifactSign(dir, o); });
+artifact.command('test <dir>').requiredOption('--sample <file>').option('--json', 'emit JSON', false).action(async (dir: string, o: { sample: string; json: boolean }) => { process.exitCode = await runArtifactTest(dir, o); });
+artifact.command('publish <bundleDir>').requiredOption('--to <registryDir>').option('--install', 'also install into the running CE', false).option('--approve', 'approve requested capabilities on install', false).option('--approved-by <actor>').option('--json', 'emit JSON', false)
+  .action(async (bundleDir: string, o: { to: string; install: boolean; approve: boolean; approvedBy?: string; json: boolean }) => { process.exitCode = await runArtifactPublish(bundleDir, o); });
 
 program.parseAsync(process.argv);
