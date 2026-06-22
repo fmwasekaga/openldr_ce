@@ -30,6 +30,7 @@ export interface ScheduleStore {
   remove(id: string): Promise<void>;
   setNextDue(id: string, at: Date): Promise<void>;
   markRun(id: string, at: Date): Promise<void>;
+  setEnabled(id: string, enabled: boolean): Promise<void>;
 }
 
 function toRecord(r: {
@@ -67,6 +68,9 @@ export function createScheduleStore(db: Kysely<InternalSchema>): ScheduleStore {
     },
     async markRun(id, at) {
       await db.updateTable('dhis2_schedules').set({ last_run_at: at, updated_at: sql`now()` }).where('id', '=', id).execute();
+    },
+    async setEnabled(id, enabled) {
+      await db.updateTable('dhis2_schedules').set({ enabled, updated_at: sql`now()` }).where('id', '=', id).execute();
     },
   };
 }
