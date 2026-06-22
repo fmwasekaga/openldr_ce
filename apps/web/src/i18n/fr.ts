@@ -312,6 +312,7 @@ export const fr: EnShape = {
   },
   layout: {
     settings: 'Paramètres',
+    language: 'Langue',
   },
   nav: {
     dashboard: 'Tableau de bord',

@@ -12,6 +12,7 @@ import { useSidebar } from './useSidebar';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
+  DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/cn';
 
@@ -110,11 +111,20 @@ export function AppShell({
                 )}
               </div>
               <DropdownMenuSeparator />
-              {SUPPORTED_LANGUAGES.map((l) => (
-                <DropdownMenuItem key={l.code} onClick={() => void setLanguage(l.code)} disabled={i18n.language === l.code}>
-                  {l.label}
-                </DropdownMenuItem>
-              ))}
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>{t('layout.language')}</DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  {SUPPORTED_LANGUAGES.map((l) => (
+                    <DropdownMenuItem
+                      key={l.code}
+                      onClick={() => void setLanguage(l.code)}
+                      disabled={i18n.language === l.code}
+                    >
+                      {l.label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
               <DropdownMenuSeparator />
               {/* TODO(phase3): generalize to "user can see >=1 Settings sub-nav section" once
                   General/Marketplace (broader-role) sections land; for SP-0 DHIS2 is admin-only. */}
