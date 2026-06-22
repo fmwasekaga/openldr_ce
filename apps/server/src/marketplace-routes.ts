@@ -2,7 +2,7 @@ import { readdir } from 'node:fs/promises';
 import { join, basename } from 'node:path';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
-import { readBundle, verifyBundle, readGrant } from '@openldr/marketplace';
+import { readBundle, verifyBundle, readGrant, type Capability } from '@openldr/marketplace';
 import { requireRole } from './rbac';
 
 function actor(req: FastifyRequest): { id?: string | null; name: string } {
@@ -80,16 +80,20 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
       reply.code(400);
       return { error: 'invalid bundle ref' };
     }
+    if (body.acknowledgedCapabilities !== undefined && !Array.isArray(body.acknowledgedCapabilities)) {
+      reply.code(400);
+      return { error: 'acknowledgedCapabilities must be an array' };
+    }
     try {
       const b = await readBundle(join(registryDir, ref));
       const a = actor(req);
+      // Default to the bundle's declared capabilities when the caller omits an explicit
+      // acknowledgement; the runtime's consent check (SP-2) still rejects a mismatch.
+      const acknowledgedCapabilities = (body.acknowledgedCapabilities as Capability[] | undefined) ?? b.manifest.capabilities;
       const installed = await ctx.plugins.install(b.wasm, b.raw, {
         publicKeyDer: b.publicKeyDer,
         actor: a,
-        approval: {
-          approvedBy: a.id ?? a.name,
-          acknowledgedCapabilities: (body.acknowledgedCapabilities as never) ?? (b.manifest.capabilities as never),
-        },
+        approval: { approvedBy: a.id ?? a.name, acknowledgedCapabilities },
       });
       return { id: installed.id, version: installed.version };
     } catch (err) {

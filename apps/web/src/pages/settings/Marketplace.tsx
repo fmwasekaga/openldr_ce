@@ -234,13 +234,16 @@ export function Marketplace() {
                     <TableCell className="text-sm text-muted-foreground">{a.approvedBy ?? '—'}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => void doRollback(a.id, a.version)}
-                        >
-                          {t('settings.marketplace.rollback')}
-                        </Button>
+                        {/* Rollback activates a prior, currently-inactive version; the active version has nothing to roll back to. */}
+                        {!a.active ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => void doRollback(a.id, a.version)}
+                          >
+                            {t('settings.marketplace.rollback')}
+                          </Button>
+                        ) : null}
                         <Button
                           variant="ghost"
                           size="sm"
