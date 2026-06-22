@@ -39,3 +39,31 @@ describe('docs registry', () => {
     expect(firstHeading('no heading here')).toBe('');
   });
 });
+
+describe('docs locale coverage (SP-B)', () => {
+  it('every slug resolves localized (not en-fallback) in every locale', () => {
+    for (const locale of LOCALES) {
+      for (const slug of DOC_ORDER) {
+        const s = resolve(locale, slug);
+        expect(s, `${locale}/${slug}`).not.toBeNull();
+        expect(s!.localeUsed, `${locale}/${slug} should be localized`).toBe(locale);
+      }
+    }
+  });
+
+  it('lists all ordered pages in every locale', () => {
+    for (const locale of LOCALES) {
+      expect(list(locale).map((s) => s.slug)).toEqual([...DOC_ORDER]);
+    }
+  });
+
+  it('every fr/pt doc is non-empty and starts with an H1 (truncation guard)', () => {
+    for (const locale of ['fr', 'pt'] as const) {
+      for (const slug of DOC_ORDER) {
+        const s = resolve(locale, slug)!;
+        expect(s.content.trim().length, `${locale}/${slug} empty`).toBeGreaterThan(20);
+        expect(s.content.trim().startsWith('#'), `${locale}/${slug} missing H1`).toBe(true);
+      }
+    }
+  });
+});
