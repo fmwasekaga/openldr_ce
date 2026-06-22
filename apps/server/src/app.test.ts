@@ -390,6 +390,7 @@ function ctxWith(status: 'up' | 'down'): AppContext {
     store: {} as never,
     health,
     reporting: {} as never,
+    reportRuns: {} as never,
     audit: {} as never,
     users: {
       list: async () => [],
