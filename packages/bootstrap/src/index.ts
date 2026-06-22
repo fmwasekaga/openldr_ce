@@ -13,7 +13,9 @@ import { createFormStore, type FormStore } from '@openldr/forms';
 import { getReport, reportSummaries, getEventSource, eventSourceCatalog, type ReportResult, type ReportSummary } from '@openldr/reporting';
 import { createDashboardStore, getModel, listModels, runBuilderQuery, runSqlQuery, type DashboardStore, type WidgetQuery } from '@openldr/dashboards';
 import { renderReportPdf } from '@openldr/report-pdf';
+import { type PluginRuntime } from '@openldr/plugins';
 import { selectTargetStore } from './target-store';
+import { createPluginRegistry } from './plugin-registry';
 import { buildOntologyDistribution, createOperations, importTerminologyResource, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type LoadResult, type OntologyBuildProgress, type OntologyManifest, type Operations } from '@openldr/terminology';
 
 export class ReportNotFoundError extends Error {
@@ -92,6 +94,7 @@ export interface AppContext {
     };
   };
   dashboards: DashboardsApi;
+  plugins: PluginRuntime;
   cfg: Config;
   close(): Promise<void>;
 }
@@ -117,6 +120,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   const { store } = selectTargetStore(cfg);
   const internal = createInternalDb(cfg.INTERNAL_DATABASE_URL);
   const audit = createAuditStore(internal.db);
+  const plugins = createPluginRegistry({ blob, internalDb: internal.db, logger, audit, devAllowUnsigned: cfg.MARKETPLACE_DEV_ALLOW_UNSIGNED });
   const users = createUserStore(internal.db);
   const userProfiles = createUserProfileStore(internal.db);
   const forms = createFormStore(internal.db);
@@ -244,6 +248,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     health,
     terminology,
     dashboards,
+    plugins,
     cfg,
     async close() {
       await Promise.allSettled([eventing.close(), store.close(), internal.close()]);

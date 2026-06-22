@@ -32,6 +32,11 @@ describe('createAppContext', () => {
     expect(typeof ctx.terminology.ontology.listDistributions).toBe('function');
     expect(typeof ctx.terminology.loaders.loinc).toBe('function');
     expect(typeof ctx.forms.list).toBe('function');
+    expect(typeof ctx.plugins.list).toBe('function');
+    expect(typeof ctx.plugins.install).toBe('function');
+    expect(typeof ctx.plugins.rollback).toBe('function');
+    expect(typeof ctx.plugins.setEnabled).toBe('function');
+    expect(typeof ctx.plugins.remove).toBe('function');
     // Nothing reachable in this test → overall down, but no crash.
     expect(out.status).toBe('down');
   }, 20000);
