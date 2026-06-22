@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, BookOpen, Library, FileInput, Users, ShieldCheck, Settings,
   ChevronLeft, ChevronRight, Sun, Moon, LogOut, type LucideIcon,
@@ -20,7 +20,6 @@ const NAV: { to: string; label: string; end: boolean; icon: LucideIcon }[] = [
   { to: '/terminology', label: 'Terminology', end: false, icon: Library },
   { to: '/forms', label: 'Forms', end: false, icon: FileInput },
   { to: '/users', label: 'Users', end: false, icon: Users },
-  { to: '/settings', label: 'Settings', end: false, icon: Settings },
   { to: '/audit', label: 'Audit', end: false, icon: ShieldCheck },
   { to: '/docs', label: 'Docs', end: false, icon: BookOpen },
 ];
@@ -36,7 +35,8 @@ export function AppShell({
 }) {
   const [theme, toggleTheme] = useTheme();
   const [collapsed, toggleSidebar] = useSidebar();
-  const { user, signOut } = useAuth();
+  const { user, signOut, hasRole } = useAuth();
+  const navigate = useNavigate();
   const { t } = useTranslation();
 
   return (
@@ -109,6 +109,14 @@ export function AppShell({
                 )}
               </div>
               <DropdownMenuSeparator />
+              {/* TODO(phase3): generalize to "user can see >=1 Settings sub-nav section" once
+                  General/Marketplace (broader-role) sections land; for SP-0 DHIS2 is admin-only. */}
+              {hasRole('lab_admin') && (
+                <DropdownMenuItem onClick={() => navigate('/settings')}>
+                  <Settings className="mr-2 h-4 w-4" />
+                  {t('layout.settings')}
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={signOut}>
                 <LogOut className="mr-2 h-4 w-4" />
                 {t('common.signOut')}

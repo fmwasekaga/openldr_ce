@@ -51,4 +51,10 @@ describe('AppShell', () => {
     expect(screen.queryByText('OpenLDR')).not.toBeInTheDocument();
     expect(screen.queryByText('Reports')).not.toBeInTheDocument();
   });
+
+  it('does not show DHIS2 or a top-level Settings link in the primary nav', () => {
+    renderShell();
+    expect(screen.queryByRole('link', { name: 'DHIS2' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument();
+  });
 });
