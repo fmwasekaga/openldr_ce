@@ -63,8 +63,9 @@ function main() {
   step('2. market install (narrow) WITH approval — consent + grant persisted + publisher pinned');
   const i = cli(`market install "${narrow}" --approve --approved-by accept --json`);
   if (i.code === 0) ok('installed with approval'); else fail(`install narrow: code=${i.code} out=${i.out}`);
-  const list1 = json(cli('market list --json').out) as Array<{ id: string }> | undefined;
-  if (Array.isArray(list1) && list1.some((r) => r.id === 'whonet-sqlite')) ok('whonet-sqlite present in market list'); else fail('whonet-sqlite not listed after install');
+  const list1 = json(cli('market list --json').out) as Array<{ id: string; version: string; active: boolean; enabled: boolean }> | undefined;
+  const row1 = Array.isArray(list1) ? list1.find((r) => r.id === 'whonet-sqlite') : undefined;
+  if (row1) ok(`whonet-sqlite listed: v${row1.version} active=${row1.active} enabled=${row1.enabled}`); else fail('whonet-sqlite not listed after install');
 
   step('3. tampered bundle — install MUST reject');
   rmSync(tamperDir, { recursive: true, force: true });
@@ -77,12 +78,18 @@ function main() {
   if (t.code !== 0) ok('tampered bundle rejected'); else fail('tampered bundle was NOT rejected');
   rmSync(tamperDir, { recursive: true, force: true });
 
-  step('4. ingest under the narrow [Patient] grant — MUST fail closed');
+  step('4. ingest under the narrow [Patient] grant — MUST fail closed on a CAPABILITY violation');
   cli(`ingest "${sample}" --plugin whonet-sqlite --json`);
   const ps1 = json(cli('pipeline status --json').out) as Array<{ status: string; last_error?: string | null }> | undefined;
   const failedBatch = Array.isArray(ps1) ? ps1.find((b) => b.status === 'failed') : undefined;
-  if (failedBatch) ok(`batch failed closed: ${failedBatch.last_error ?? '(capability violation)'}`);
-  else fail(`expected a failed batch under the narrow grant; pipeline=${JSON.stringify(ps1)}`);
+  const err4 = failedBatch?.last_error ?? '';
+  // Must fail specifically because the plugin emitted a resourceType outside its emit-fhir grant —
+  // NOT because the converter failed to resolve/load (which would mean enforcement never ran).
+  if (failedBatch && /not permitted by its emit-fhir capability grant/i.test(err4)) {
+    ok(`batch failed closed on capability violation: ${err4}`);
+  } else {
+    fail(`expected a fail-closed CAPABILITY violation; got batch=${JSON.stringify(failedBatch)}\n      market list=${cli('market list --json').out.trim()}`);
+  }
 
   step('5. update to the wide grant — re-ingest MUST succeed');
   // Install the wide bundle as an update (publisher already pinned from step 2 → trusted).
