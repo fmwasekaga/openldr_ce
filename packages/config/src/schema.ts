@@ -72,6 +72,10 @@ export const ConfigSchema = z
     DASHBOARD_SQL_ENABLED: envBoolean(false),
     DASHBOARD_SQL_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
     DASHBOARD_SQL_ROW_CAP: z.coerce.number().int().positive().default(10000),
+
+    // Marketplace artifact security.
+    MARKETPLACE_DEV_ALLOW_UNSIGNED: envBoolean(false),
+    MARKETPLACE_AUTO_PIN_FIRST_USE: envBoolean(true),
   })
   .superRefine((cfg, ctx) => {
     if (cfg.TARGET_STORE_ADAPTER === 'mssql') {
