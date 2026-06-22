@@ -69,12 +69,16 @@ annotated set. Required keys: `INTERNAL_DATABASE_URL`, `S3_ENDPOINT`, `S3_ACCESS
 `S3_SECRET_ACCESS_KEY`, `S3_BUCKET`, `OIDC_ISSUER_URL`. Service hostnames
 (`postgres` / `minio` / `keycloak`) resolve on the compose network.
 
-**Auth note:** `OIDC_ISSUER_URL` must be reachable by **both** the browser (for the login
-redirect) and the app (for token validation). The compose publishes Keycloak on `:8180`
-so a local issuer URL (`http://localhost:8180/realms/openldr`) works for both. For a quick
-demo without real login, set `AUTH_DEV_BYPASS=true`. Production Keycloak hardening
-(stable hostname, `start` instead of `start-dev`, TLS, fronting it under the same domain)
-is a follow-up beyond this single-port baseline.
+**Auth note (important — verified on a live run):** an HTTPS page cannot fetch the OIDC
+discovery doc from an `http://` Keycloak — the browser blocks it as **mixed content**. So
+**real single-port SSO requires Keycloak served under the same HTTPS origin** (proxy it
+behind nginx, e.g. `https://<host>/realms/…`, with Keycloak proxy/hostname config, and make
+the issuer reachable by the app container too). That integration is a follow-up beyond this
+single-port baseline.
+
+For a **local demo without real login**, set `NODE_ENV=development` and `AUTH_DEV_BYPASS=true`
+in `.env.prod` — the app loads as a dev admin, no Keycloak round-trip. (`AUTH_DEV_BYPASS` is
+deliberately **rejected when `NODE_ENV=production`**, so demo mode must use `development`.)
 
 ## Smoke check
 
