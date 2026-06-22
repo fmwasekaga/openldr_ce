@@ -20,7 +20,9 @@ services:
       SERVER_NAME: ${SERVER_NAME:-localhost}
     ports: ["80:80", "443:443"]
     volumes:
-      - ./deploy/nginx/openldr.conf.template:/etc/nginx/templates/openldr.conf.template:ro
+      # Render AS default.conf so it replaces the stock nginx welcome config (which also
+      # matches server_name localhost and would otherwise win on :80).
+      - ./deploy/nginx/openldr.conf.template:/etc/nginx/templates/default.conf.template:ro
       - ./deploy/nginx/certs:/etc/nginx/certs:ro
     depends_on: ["app"]
     restart: unless-stopped

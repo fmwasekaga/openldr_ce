@@ -4,13 +4,13 @@
 # Rendered by the nginx image's envsubst entrypoint (${SERVER_NAME}).
 
 server {
-    listen 80;
+    listen 80 default_server;
     server_name ${SERVER_NAME};
     return 301 https://$host$request_uri;
 }
 
 server {
-    listen 443 ssl;
+    listen 443 ssl default_server;
     server_name ${SERVER_NAME};
 
     ssl_certificate     /etc/nginx/certs/fullchain.pem;
