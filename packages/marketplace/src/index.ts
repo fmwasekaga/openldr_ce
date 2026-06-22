@@ -5,3 +5,4 @@ export * from './signing';
 export * from './trust';
 export * from './trust-store';
 export * from './compatibility';
+export * from './grant';
