@@ -14,6 +14,7 @@ import { registerAuditRoutes } from './audit-routes';
 import { registerUsersRoutes } from './users-routes';
 import { registerFormsRoutes } from './forms-routes';
 import { registerDhis2Routes } from './dhis2-routes';
+import { registerMarketplaceRoutes } from './marketplace-routes';
 import { createDhis2MetadataCache, createOrgUnitMapStore, createMappingStore, createScheduleStore } from '@openldr/db';
 import { registerAuth } from './auth-plugin';
 
@@ -67,6 +68,7 @@ export function buildApp(ctx: AppContext, dhis2: Dhis2Context | null = null, eve
     mappingStore: createMappingStore(ctx.internalDb),
     scheduleStore: createScheduleStore(ctx.internalDb),
   }, eventing);
+  registerMarketplaceRoutes(app, ctx);
 
   // Serve the built SPA if present (apps/web/dist). API + health are registered first and win.
   const webDist = resolve(dirname(fileURLToPath(import.meta.url)), '../../web/dist');

@@ -59,6 +59,9 @@ importers:
       '@openldr/forms':
         specifier: workspace:*
         version: link:../../packages/forms
+      '@openldr/marketplace':
+        specifier: workspace:*
+        version: link:../../packages/marketplace
       '@openldr/reporting':
         specifier: workspace:*
         version: link:../../packages/reporting
@@ -520,6 +523,9 @@ importers:
       '@openldr/marketplace':
         specifier: workspace:*
         version: link:../marketplace
+      '@openldr/plugins':
+        specifier: workspace:*
+        version: link:../plugins
       '@openldr/reporting':
         specifier: workspace:*
         version: link:../reporting
