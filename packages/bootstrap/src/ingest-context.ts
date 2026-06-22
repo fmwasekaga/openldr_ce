@@ -79,7 +79,7 @@ export async function createIngestContext(cfg: Config): Promise<IngestContext> {
     logger,
     trustStore: createTrustStore(internal.db),
     ceVersion: '0.1.0', // CE version for the artifact compatibility gate (matches package.json)
-    verifyConfig: { devAllowUnsigned: cfg.MARKETPLACE_DEV_ALLOW_UNSIGNED, autoPinFirstUse: cfg.MARKETPLACE_AUTO_PIN_FIRST_USE },
+    verifyConfig: { devAllowUnsigned: cfg.MARKETPLACE_DEV_ALLOW_UNSIGNED },
     recordInstall: (e) => safeRecord(audit, logger, e),
   });
 
@@ -106,18 +106,7 @@ export async function createIngestContext(cfg: Config): Promise<IngestContext> {
     startWorker: () => eventing.startWorker(),
     batches,
     eventing,
-    plugins: {
-      ...plugins,
-      async install(wasm: Uint8Array, rawManifest: unknown) {
-        const m = await plugins.install(wasm, rawManifest);
-        await safeRecord(audit, logger, { actorType: 'system', actorName: 'system', action: 'plugin.install', entityType: 'plugin', entityId: `${m.id}@${m.version}`, metadata: { sha256: m.wasmSha256 } });
-        return m;
-      },
-      async remove(id: string, version?: string) {
-        await plugins.remove(id, version);
-        await safeRecord(audit, logger, { actorType: 'system', actorName: 'system', action: 'plugin.remove', entityType: 'plugin', entityId: version ? `${id}@${version}` : id });
-      },
-    },
+    plugins,
     async republish(batch) {
       await eventing.publish({ type: 'ingest.received', payload: { batchId: batch.batch_id, blobKey: batch.blob_key, source: batch.source ?? 'cli', converter: batch.converter, config: batch.config ?? null } });
     },

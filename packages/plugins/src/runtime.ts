@@ -8,8 +8,11 @@ import {
   keyFingerprint,
   evaluateTrust,
   isCompatible,
+  readGrant,
+  canonicalJSON,
   type ArtifactManifest,
   type TrustStore,
+  type Capability,
 } from '@openldr/marketplace';
 import { parseManifest, type PluginManifest } from './manifest';
 import { sha256Hex } from './hash';
@@ -34,21 +37,31 @@ export interface PluginRuntimeDeps {
   logger: Logger;
   trustStore: TrustStore;
   ceVersion: string;
-  verifyConfig: { devAllowUnsigned: boolean; autoPinFirstUse: boolean };
+  verifyConfig: { devAllowUnsigned: boolean };
   recordInstall?: (e: MarketplaceInstallAudit) => Promise<void>;
+}
+
+export interface InstallApproval {
+  approvedBy: string;
+  acknowledgedCapabilities: Capability[];
 }
 
 export interface InstallOptions {
   publicKeyDer?: Uint8Array;
   actor?: { id?: string | null; name: string };
+  approval?: InstallApproval;
 }
+
+type LifecycleOpts = { actor?: { id?: string | null; name: string } };
 
 export interface PluginRuntime {
   install(wasm: Uint8Array, rawManifest: unknown, opts?: InstallOptions): Promise<PluginManifest>;
   list(): Promise<PluginRow[]>;
   test(id: string, version?: string): Promise<{ ok: boolean; error?: string }>;
-  remove(id: string, version?: string): Promise<void>;
+  remove(id: string, version?: string, opts?: LifecycleOpts): Promise<void>;
   load(id: string, version?: string): Promise<Converter | undefined>;
+  rollback(id: string, version: string, opts?: LifecycleOpts): Promise<void>;
+  setEnabled(id: string, enabled: boolean, opts?: LifecycleOpts): Promise<void>;
 }
 
 function wasmKey(id: string, version: string): string {
@@ -76,8 +89,25 @@ function artifactToPluginManifest(a: ArtifactManifest): PluginManifest {
   });
 }
 
+/** Extract the legacy PluginManifest fields from a persisted row manifest.
+ *  If the row stores a full artifact manifest (schemaVersion + payload), extract from payload.
+ *  Otherwise parse it directly as a legacy plugin manifest. */
+function pluginManifestFromRow(row: PluginRow): PluginManifest {
+  const m = row.manifest;
+  if (m.schemaVersion && m.payload && (m.payload as { kind?: string }).kind === 'plugin') {
+    return artifactToPluginManifest(parseArtifactManifest(m));
+  }
+  return parseManifest(m);
+}
+
 export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
   const cache = new Map<string, Converter>();
+
+  function invalidateCache(id: string) {
+    for (const k of [...cache.keys()]) {
+      if (k.startsWith(`${id}@`)) cache.delete(k);
+    }
+  }
 
   async function loadWasm(row: PluginRow): Promise<Uint8Array> {
     const wasm = await deps.blob.get(wasmKey(row.id, row.version));
@@ -95,7 +125,8 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
     const cached = cache.get(key);
     if (cached) return cached;
     const wasm = await loadWasm(row);
-    const converter = createWasmConverter(row.manifest, wasm, deps.runner, deps.logger);
+    const grant = readGrant(row.manifest);
+    const converter = createWasmConverter(pluginManifestFromRow(row), wasm, deps.runner, deps.logger, grant.legacy ? undefined : grant.capabilities);
     cache.set(key, converter);
     return converter;
   }
@@ -148,27 +179,48 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
           if (trust.decision === 'key-mismatch') {
             throw new Error(`artifact ${artifact.id}: publisher ${pub.id} key fingerprint does not match the pinned key`);
           }
-          if (trust.decision === 'first-use' && deps.verifyConfig.autoPinFirstUse) {
+          // First-use pinning deferred until after consent is confirmed (see below).
+        }
+      }
+
+      // Consent: publisher-bearing artifacts require explicit approval of the requested capabilities.
+      let approvedBy: string | null = null;
+      if (artifact.publisher) {
+        if (!opts.approval) {
+          throw new Error(`artifact ${artifact.id}@${artifact.version}: install requires explicit approval (publisher ${artifact.publisher.id})`);
+        }
+        if (canonicalJSON(artifact.capabilities) !== canonicalJSON(opts.approval.acknowledgedCapabilities)) {
+          throw new Error(`artifact ${artifact.id}: acknowledged capabilities do not match the requested capabilities`);
+        }
+        approvedBy = opts.approval.approvedBy;
+        // Pin publisher on first-use only once consent is confirmed + signature verified.
+        if (signatureVerified) {
+          const fingerprint = keyFingerprint(opts.publicKeyDer!);
+          const trust = evaluateTrust(artifact.publisher.id, fingerprint, await deps.trustStore.get(artifact.publisher.id));
+          if (trust.decision === 'first-use') {
             await deps.trustStore.pin({
-              publisherId: pub.id,
+              publisherId: artifact.publisher.id,
               keyFingerprint: fingerprint,
-              publisherName: pub.name,
-              approvedBy: opts.actor?.id ?? null,
+              publisherName: artifact.publisher.name,
+              approvedBy,
             });
           }
         }
       }
 
-      // Persist (legacy plugin manifest shape is what the store/runner expect).
+      // Persist the FULL artifact manifest (capabilities included) so the store row carries the grant.
+      const fullManifest = isArtifact ? (rawManifest as Record<string, unknown>) : (artifact as unknown as Record<string, unknown>);
+      // Still derive the legacy PluginManifest for the blob + return value (back-compat callers).
       const pluginManifest = artifactToPluginManifest(artifact);
+
       await deps.blob.put(wasmKey(artifact.id, artifact.version), wasm, 'application/wasm');
       await deps.blob.put(
         manifestKey(artifact.id, artifact.version),
-        new TextEncoder().encode(JSON.stringify(pluginManifest)),
+        new TextEncoder().encode(JSON.stringify(fullManifest)),
         'application/json',
       );
-      await deps.store.upsert({ id: artifact.id, version: artifact.version, sha256: payloadSha, manifest: pluginManifest });
-      cache.delete(`${artifact.id}@${artifact.version}`);
+      await deps.store.install({ id: artifact.id, version: artifact.version, sha256: payloadSha, manifest: fullManifest, approvedBy });
+      invalidateCache(artifact.id);
       deps.logger.info({ id: artifact.id, version: artifact.version }, 'plugin installed');
 
       if (deps.recordInstall) {
@@ -184,13 +236,16 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
             publisherId: artifact.publisher?.id ?? null,
             capabilities: artifact.capabilities,
             signatureVerified,
+            approvedBy,
           },
         });
       }
 
       return pluginManifest;
     },
+
     list: () => deps.store.list(),
+
     async test(id, version) {
       try {
         const c = await load(id, version);
@@ -201,7 +256,46 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
         return { ok: false, error: err instanceof Error ? err.message : String(err) };
       }
     },
-    remove: (id, version) => deps.store.remove(id, version),
+
+    async remove(id, version, o = {}) {
+      await deps.store.remove(id, version);
+      invalidateCache(id);
+      await deps.recordInstall?.({
+        action: 'marketplace.remove',
+        entityType: 'artifact',
+        entityId: version ? `${id}@${version}` : id,
+        actorType: o.actor ? 'user' : 'system',
+        actorId: o.actor?.id ?? null,
+        actorName: o.actor?.name ?? 'system',
+      });
+    },
+
+    async rollback(id, version, o = {}) {
+      await deps.store.rollback(id, version);
+      invalidateCache(id);
+      await deps.recordInstall?.({
+        action: 'marketplace.rollback',
+        entityType: 'artifact',
+        entityId: `${id}@${version}`,
+        actorType: o.actor ? 'user' : 'system',
+        actorId: o.actor?.id ?? null,
+        actorName: o.actor?.name ?? 'system',
+      });
+    },
+
+    async setEnabled(id, enabled, o = {}) {
+      await deps.store.setEnabled(id, enabled);
+      invalidateCache(id);
+      await deps.recordInstall?.({
+        action: enabled ? 'marketplace.enable' : 'marketplace.disable',
+        entityType: 'artifact',
+        entityId: id,
+        actorType: o.actor ? 'user' : 'system',
+        actorId: o.actor?.id ?? null,
+        actorName: o.actor?.name ?? 'system',
+      });
+    },
+
     load,
   };
 }

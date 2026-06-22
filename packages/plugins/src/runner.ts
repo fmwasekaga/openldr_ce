@@ -10,6 +10,7 @@ export interface RunOptions {
   timeoutMs: number;
   host: RunnerHostFns;
   config?: Record<string, string>;
+  allowedHosts?: string[]; // net-egress allowlist; undefined/[] = default-deny (no egress)
 }
 
 /**

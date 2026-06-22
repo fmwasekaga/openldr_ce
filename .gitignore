@@ -3,6 +3,8 @@ dist/
 .turbo/
 *.tsbuildinfo
 .env
+scripts/.marketplace-keys/
+tmp-marketplace-tamper/
 docker-compose.override.yml
 coverage/
 .superpowers/

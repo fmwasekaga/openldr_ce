@@ -50,6 +50,10 @@ export interface PluginsTable {
   manifest: JSONColumnType<Record<string, unknown>>;
   status: Generated<string>;
   installed_at: Generated<Date>;
+  enabled: Generated<boolean>;
+  active: Generated<boolean>;
+  approved_by: string | null;
+  granted_at: Date | null;
 }
 
 export interface AuditEventsTable {
