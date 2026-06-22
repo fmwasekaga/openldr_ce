@@ -15,6 +15,7 @@ import { Dhis2Schedules } from '@/pages/Dhis2Schedules';
 import { Dhis2Pushes } from '@/pages/Dhis2Pushes';
 import { SettingsShell } from '@/pages/settings/SettingsShell';
 import { Dhis2Redirect } from '@/pages/settings/Dhis2Redirect';
+import { Marketplace } from '@/pages/settings/Marketplace';
 import { Forms } from './pages/Forms';
 import { FormCapture } from './pages/FormCapture';
 import { FormBuilderPage } from './forms-builder/FormBuilderPage';
@@ -39,6 +40,7 @@ export function App() {
         <Route path="dhis2/mappings/:id" element={<RequireRole role="lab_admin"><Dhis2MappingEditor /></RequireRole>} />
         <Route path="dhis2/schedules" element={<RequireRole role="lab_admin"><Dhis2Schedules /></RequireRole>} />
         <Route path="dhis2/pushes" element={<RequireRole role="lab_admin"><Dhis2Pushes /></RequireRole>} />
+        <Route path="marketplace" element={<RequireRole role="lab_admin"><Marketplace /></RequireRole>} />
       </Route>
       <Route path="/dhis2/*" element={<Dhis2Redirect />} />
       <Route path="/audit" element={<Audit />} />
