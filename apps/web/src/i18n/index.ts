@@ -151,6 +151,7 @@ const en = {
       action: 'Action',
       mapping: 'Mapping',
       orgunits: {
+        heading: 'DHIS2 OrgUnits',
         title: 'Facility → OrgUnit mappings',
         manage: 'Manage →',
         facility: 'Facility',
@@ -167,6 +168,7 @@ const en = {
         errorToast: 'Failed: {{error}}',
       },
       mappings: {
+        heading: 'DHIS2 mappings',
         title: 'DHIS2 mappings',
         manage: 'Manage →',
         newMapping: 'New mapping',
@@ -224,6 +226,8 @@ const en = {
         },
       },
       ops: {
+        schedulesHeading: 'DHIS2 schedules',
+        pushesHeading: 'DHIS2 push history',
         run: 'Run',
         runTitle: 'Run {{name}}',
         period: 'Period',
@@ -247,6 +251,15 @@ const en = {
         errorToast: 'Failed: {{error}}',
       },
     },
+  settings: {
+    title: 'Settings',
+    subNav: {
+      dhis2: 'DHIS2',
+    },
+  },
+  layout: {
+    settings: 'Settings',
+  },
 };
 
 void i18n.use(initReactI18next).init({
