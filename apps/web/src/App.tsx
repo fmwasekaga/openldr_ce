@@ -30,7 +30,7 @@ export function App() {
       <Route path="/reports/:id" element={<ReportDetail />} />
       <Route path="/terminology" element={<Terminology />} />
       <Route path="/users" element={<RequireRole role="lab_admin"><Users /></RequireRole>} />
-      <Route path="/settings" element={<SettingsShell />}>
+      <Route path="/settings" element={<RequireRole role="lab_admin"><SettingsShell /></RequireRole>}>
         <Route index element={<Navigate to="dhis2" replace />} />
         <Route path="dhis2" element={<RequireRole role="lab_admin"><Dhis2 /></RequireRole>} />
         <Route path="dhis2/orgunits" element={<RequireRole role="lab_admin"><Dhis2OrgUnits /></RequireRole>} />
