@@ -262,3 +262,73 @@ describe('install — artifact security pipeline', () => {
     expect(audit.find((e) => (e as { action: string }).action === 'marketplace.rollback')).toBeTruthy();
   });
 });
+
+// ── Task 7: runtime enforcement integration ────────────────────────────────────
+
+describe('runtime load() — emit-fhir enforcement', () => {
+  const wasmBytes2 = new Uint8Array([0, 1, 2, 3]);
+  const wasmSha2 = sha256Hex(wasmBytes2);
+  const enc2 = (s: string) => new TextEncoder().encode(s);
+
+  function fakeDeps2(runnerOutput: string) {
+    const blobs = new Map<string, Uint8Array>();
+    const rows = new Map<string, PluginRow>();
+    const fakeRunner: PluginRunner = { run: vi.fn(async () => enc2(runnerOutput)) };
+    return {
+      rows,
+      deps: {
+        blob: {
+          put: async (k: string, b: Uint8Array) => { blobs.set(k, b); },
+          get: async (k: string) => blobs.get(k)!,
+          delete: async (k: string) => { blobs.delete(k); },
+        } as never,
+        store: {
+          install: async (r: { id: string; version: string; sha256: string; manifest: Record<string, unknown>; approvedBy: string | null }) => {
+            rows.set(`${r.id}@${r.version}`, { ...r, status: 'installed', enabled: true, active: true });
+          },
+          get: async (id: string, v?: string) => rows.get(`${id}@${v}`) as PluginRow | undefined,
+          list: async () => [...rows.values()] as PluginRow[],
+          rollback: async () => {},
+          setEnabled: async () => {},
+          remove: async () => {},
+        } as PluginStore,
+        runner: fakeRunner,
+        logger: { info: () => {}, error: () => {}, warn: () => {}, debug: () => {} } as never,
+      },
+      fakeRunner,
+    };
+  }
+
+  function signedManifestNarrow(kp: ReturnType<typeof generatePublisherKeypair>) {
+    const base = {
+      schemaVersion: 1 as const, type: 'plugin' as const, id: 'demo', version: '1.0.0',
+      publisher: { id: 'acme', name: 'Acme', keyFingerprint: kp.fingerprint },
+      compatibility: { ceVersion: '>=0.1.0 <0.2.0' },
+      capabilities: [{ kind: 'emit-fhir' as const, resourceTypes: ['Patient'] }],
+      payload: { kind: 'plugin' as const, wasmSha256: wasmSha2, entrypoint: 'convert', wasi: false, limits: { memoryMb: 256, timeoutMs: 30000 } },
+    };
+    return { ...base, signature: signManifest(base as Record<string, unknown>, wasmSha2, kp.privateKeyDer) };
+  }
+
+  it('load().convert() rejects when the runner emits a resourceType outside the emit-fhir grant', async () => {
+    const kp = generatePublisherKeypair();
+    const { deps } = fakeDeps2('{"resourceType":"Observation","id":"o1","status":"final","code":{"text":"x"}}\n');
+    const rt = createPluginRuntime({ ...deps, trustStore: inMemoryTrustStore(), ceVersion: '0.1.0', verifyConfig: { devAllowUnsigned: false } });
+    const m = signedManifestNarrow(kp);
+    await rt.install(wasmBytes2, m, { publicKeyDer: kp.publicKeyDer, approval: { approvedBy: 'admin', acknowledgedCapabilities: m.capabilities } });
+    const converter = await rt.load('demo', '1.0.0');
+    expect(converter).toBeDefined();
+    await expect(converter!.convert(new Uint8Array(), { batchId: 'test' })).rejects.toThrow(/capability|not permitted|Observation/i);
+  });
+
+  it('load().convert() succeeds when the runner emits a resourceType inside the emit-fhir grant', async () => {
+    const kp = generatePublisherKeypair();
+    const { deps } = fakeDeps2('{"resourceType":"Patient","id":"p1"}\n');
+    const rt = createPluginRuntime({ ...deps, trustStore: inMemoryTrustStore(), ceVersion: '0.1.0', verifyConfig: { devAllowUnsigned: false } });
+    const m = signedManifestNarrow(kp);
+    await rt.install(wasmBytes2, m, { publicKeyDer: kp.publicKeyDer, approval: { approvedBy: 'admin', acknowledgedCapabilities: m.capabilities } });
+    const converter = await rt.load('demo', '1.0.0');
+    const resources = await converter!.convert(new Uint8Array(), { batchId: 'test' });
+    expect(resources[0].resourceType).toBe('Patient');
+  });
+});

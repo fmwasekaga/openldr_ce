@@ -8,6 +8,7 @@ import {
   keyFingerprint,
   evaluateTrust,
   isCompatible,
+  readGrant,
   type ArtifactManifest,
   type TrustStore,
   type Capability,
@@ -123,7 +124,8 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
     const cached = cache.get(key);
     if (cached) return cached;
     const wasm = await loadWasm(row);
-    const converter = createWasmConverter(pluginManifestFromRow(row), wasm, deps.runner, deps.logger);
+    const grant = readGrant(row.manifest);
+    const converter = createWasmConverter(pluginManifestFromRow(row), wasm, deps.runner, deps.logger, grant.legacy ? undefined : grant.capabilities);
     cache.set(key, converter);
     return converter;
   }

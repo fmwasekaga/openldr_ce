@@ -1,6 +1,8 @@
 import type { Logger } from '@openldr/core';
 import { validateResource, type FhirResource } from '@openldr/fhir';
 import type { Converter, ConvertContext } from '@openldr/ingest';
+import type { Capability } from '@openldr/marketplace';
+import { allowedResourceTypes, allowedHosts } from '@openldr/marketplace';
 import type { PluginManifest } from './manifest';
 import type { PluginRunner, RunnerHostFns } from './runner';
 
@@ -28,6 +30,7 @@ export function createWasmConverter(
   wasm: Uint8Array,
   runner: PluginRunner,
   logger: Logger,
+  grant?: Capability[],
 ): Converter {
   const host: RunnerHostFns = {
     log(level, msg) {
@@ -38,6 +41,9 @@ export function createWasmConverter(
       logger.debug({ plugin: manifest.id, done, total }, 'plugin progress');
     },
   };
+  const enforced = grant !== undefined;
+  const allowTypes = enforced ? allowedResourceTypes(grant) : null;
+  const hosts = enforced ? allowedHosts(grant) : undefined;
   return {
     id: manifest.id,
     version: manifest.version,
@@ -49,8 +55,18 @@ export function createWasmConverter(
         timeoutMs: manifest.limits.timeoutMs,
         config: ctx.config,
         host,
+        allowedHosts: hosts,
       });
-      return parseNdjson(out);
+      const resources = parseNdjson(out);
+      if (allowTypes !== null) {
+        for (const r of resources) {
+          const rt = (r as { resourceType?: string }).resourceType ?? '';
+          if (!allowTypes.includes(rt)) {
+            throw new Error(`plugin ${manifest.id} emitted ${rt}, which is not permitted by its emit-fhir capability grant`);
+          }
+        }
+      }
+      return resources;
     },
   };
 }
