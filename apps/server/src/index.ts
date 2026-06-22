@@ -14,7 +14,7 @@ async function main(): Promise<void> {
     dhis2 = await createDhis2Context(cfg);
   }
 
-  const app = buildApp(ctx, dhis2);
+  const app = buildApp(ctx, dhis2, ingest.eventing);
 
   if (dhis2 && cfg.DHIS2_SYNC_ENABLED) {
     await dhis2.registerSync(ingest.eventing, {

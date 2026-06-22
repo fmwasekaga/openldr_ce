@@ -101,10 +101,13 @@ export function Dhis2() {
                   <span className="text-muted-foreground">{t('dhis2.orgUnitMappings')}: </span>{status.counts.orgUnitMappings}
                   {' '}<Link to="/dhis2/orgunits" className="text-primary hover:underline" data-testid="manage-orgunits">{t('dhis2.orgunits.manage')}</Link>
                 </div>
-                <div><span className="text-muted-foreground">{t('dhis2.schedules')}: </span>{status.counts.schedules}</div>
+                <div>
+                  <span className="text-muted-foreground">{t('dhis2.schedules')}: </span>{status.counts.schedules}
+                  {' '}<Link to="/dhis2/schedules" className="text-primary hover:underline" data-testid="manage-schedules">{t('dhis2.ops.schedulesManage')}</Link>
+                </div>
               </div>
               <div>
-                <div className="mb-1 font-medium">{t('dhis2.recentPushes')}</div>
+                <div className="mb-1 flex items-center gap-2 font-medium">{t('dhis2.recentPushes')}<Link to="/dhis2/pushes" className="text-xs font-normal text-primary hover:underline" data-testid="view-all-pushes">{t('dhis2.ops.viewAll')}</Link></div>
                 {status.recentPushes.length === 0 ? (
                   <p className="text-muted-foreground">{t('dhis2.noPushes')}</p>
                 ) : (

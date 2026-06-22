@@ -1,11 +1,14 @@
+import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { AppContext, Dhis2Context } from '@openldr/bootstrap';
-import type { Dhis2MetadataCache, OrgUnitMapStore, MappingStore } from '@openldr/db';
+import type { Dhis2MetadataCache, OrgUnitMapStore, MappingStore, ScheduleStore } from '@openldr/db';
 import { redact } from '@openldr/core';
 import { z } from 'zod';
 import { validateMapping, validateTrackerMapping, type AggregateMapping, type TrackerMapping } from '@openldr/dhis2';
 import { requireRole } from './rbac';
 import { recordAudit } from './audit-helper';
+
+type Eventing = Parameters<Dhis2Context['reconcileSchedules']>[0];
 
 function hostOf(url: string | undefined): string | null {
   if (!url) return null;
@@ -16,9 +19,13 @@ export interface Dhis2RouteDeps {
   metadataCache: Dhis2MetadataCache;
   orgUnitStore: OrgUnitMapStore;
   mappingStore: MappingStore;
+  scheduleStore: ScheduleStore;
 }
 
 const orgUnitMapInput = z.object({ orgUnitId: z.string().min(1), orgUnitName: z.string().nullable() });
+const runInput = z.object({ period: z.string().min(1), dryRun: z.boolean() });
+const scheduleCreateInput = z.object({ mappingId: z.string().min(1), periodType: z.enum(['monthly', 'quarterly', 'yearly']), eventDriven: z.boolean() });
+const scheduleEnabledInput = z.object({ enabled: z.boolean() });
 
 const aggregateColumn = z.object({ column: z.string().min(1), dataElement: z.string().min(1), categoryOptionCombo: z.string().optional() });
 const aggregateDefinition = z.object({
@@ -47,10 +54,14 @@ const mappingDefinition = z.union([aggregateDefinition, trackerDefinition]);
 const mappingPutInput = z.object({ name: z.string().min(1), definition: mappingDefinition });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function registerDhis2Routes(app: FastifyInstance<any, any, any, any>, ctx: AppContext, dhis2: Dhis2Context | null, deps: Dhis2RouteDeps): void {
+export function registerDhis2Routes(app: FastifyInstance<any, any, any, any>, ctx: AppContext, dhis2: Dhis2Context | null, deps: Dhis2RouteDeps, eventing: Eventing | null = null): void {
   const cfg = ctx.cfg;
   const configured =
     cfg.REPORTING_TARGET_ADAPTER === 'dhis2' && !!cfg.DHIS2_BASE_URL && !!cfg.DHIS2_USERNAME && !!cfg.DHIS2_PASSWORD;
+
+  async function armSchedules(): Promise<void> {
+    if (dhis2 && eventing) { try { await dhis2.reconcileSchedules(eventing); } catch { /* arming is best-effort */ } }
+  }
 
   app.get('/api/dhis2/status', { preHandler: requireRole('lab_admin') }, async () => {
     const base = { configured, syncEnabled: cfg.DHIS2_SYNC_ENABLED, host: hostOf(cfg.DHIS2_BASE_URL) };
@@ -163,6 +174,73 @@ export function registerDhis2Routes(app: FastifyInstance<any, any, any, any>, ct
     const before = await deps.mappingStore.get(id);
     await deps.mappingStore.remove(id);
     await recordAudit(ctx, req, { action: 'dhis2.mapping.delete', entityType: 'dhis2-mapping', entityId: id, before, after: null });
+    reply.code(204);
+    return null;
+  });
+
+  app.post('/api/dhis2/mappings/:id/run', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    if (!dhis2) { reply.code(409); return { error: 'DHIS2 target not configured' }; }
+    const p = runInput.safeParse(req.body);
+    if (!p.success) { reply.code(400); return { error: p.error.message }; }
+    const id = (req.params as { id: string }).id;
+    try {
+      const outcome = await dhis2.runMapping({
+        mappingId: id, period: p.data.period, dryRun: p.data.dryRun, trigger: 'manual',
+        runReport: (rid, params) => ctx.reporting.run(rid, params ?? {}).then((r) => ({ rows: r.rows })),
+        runEventSource: (sid, w) => ctx.reporting.runEventSource(sid, w),
+      });
+      const payload = outcome.build.payload as { dataValues?: unknown[]; events?: unknown[] };
+      const values = payload.dataValues?.length ?? payload.events?.length ?? 0;
+      return { kind: outcome.kind, dryRun: outcome.dryRun, counts: { values, skipped: outcome.build.skipped.length }, skipped: outcome.build.skipped, result: outcome.result ?? null };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/unknown mapping/i.test(msg)) { reply.code(400); return { error: msg }; }
+      reply.code(502);
+      return { error: redact(msg) };
+    }
+  });
+
+  app.get('/api/dhis2/pushes', { preHandler: requireRole('lab_admin') }, async (req) => {
+    const raw = Number((req.query as { limit?: string }).limit);
+    const limit = Number.isFinite(raw) ? Math.min(Math.max(1, raw), 100) : 20;
+    return ctx.audit.list({ entityType: 'dhis2-mapping', limit });
+  });
+
+  app.get('/api/dhis2/schedules', { preHandler: requireRole('lab_admin') }, async () => {
+    const [schedules, mappings] = await Promise.all([deps.scheduleStore.list(), deps.mappingStore.list()]);
+    const nameById = new Map(mappings.map((m) => [m.id, m.name]));
+    return schedules.map((s) => ({ ...s, mappingName: nameById.get(s.mappingId) ?? s.mappingId }));
+  });
+
+  app.post('/api/dhis2/schedules', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const p = scheduleCreateInput.safeParse(req.body);
+    if (!p.success) { reply.code(400); return { error: p.error.message }; }
+    const mapping = await deps.mappingStore.get(p.data.mappingId);
+    if (!mapping) { reply.code(404); return { error: 'unknown mapping' }; }
+    const mode = (mapping.definition as { kind?: string }).kind === 'tracker' ? 'tracker' : 'aggregate';
+    const id = `sched-${randomUUID()}`;
+    await deps.scheduleStore.create({ id, mappingId: p.data.mappingId, mode, periodType: p.data.periodType, eventDriven: p.data.eventDriven });
+    await armSchedules();
+    await recordAudit(ctx, req, { action: 'dhis2.schedule.create', entityType: 'dhis2-schedule', entityId: id, before: null, after: { mappingId: p.data.mappingId, mode, periodType: p.data.periodType, eventDriven: p.data.eventDriven } });
+    const created = await deps.scheduleStore.get(id);
+    return created;
+  });
+
+  app.post('/api/dhis2/schedules/:id/enabled', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const p = scheduleEnabledInput.safeParse(req.body);
+    if (!p.success) { reply.code(400); return { error: p.error.message }; }
+    const id = (req.params as { id: string }).id;
+    if (!(await deps.scheduleStore.get(id))) { reply.code(404); return { error: 'unknown schedule' }; }
+    await deps.scheduleStore.setEnabled(id, p.data.enabled);
+    if (p.data.enabled) await armSchedules();
+    await recordAudit(ctx, req, { action: 'dhis2.schedule.update', entityType: 'dhis2-schedule', entityId: id, before: null, after: null, metadata: { enabled: p.data.enabled } });
+    return { ok: true };
+  });
+
+  app.delete('/api/dhis2/schedules/:id', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    await deps.scheduleStore.remove(id);
+    await recordAudit(ctx, req, { action: 'dhis2.schedule.delete', entityType: 'dhis2-schedule', entityId: id, before: null, after: null });
     reply.code(204);
     return null;
   });

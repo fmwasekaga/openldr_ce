@@ -5,13 +5,13 @@ import '@/i18n';
 
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
-  return { ...actual, listDhis2Mappings: vi.fn(), deleteDhis2Mapping: vi.fn() };
+  return { ...actual, listDhis2Mappings: vi.fn(), deleteDhis2Mapping: vi.fn(), runDhis2Mapping: vi.fn() };
 });
 vi.mock('@/auth/AuthProvider', () => ({
   useAuth: () => ({ user: { id: 'me', username: 'me', displayName: null, roles: ['lab_admin'] }, loading: false, hasRole: () => true }),
 }));
 
-import { listDhis2Mappings, deleteDhis2Mapping } from '@/api';
+import { listDhis2Mappings, deleteDhis2Mapping, runDhis2Mapping } from '@/api';
 import { Dhis2Mappings } from './Dhis2Mappings';
 
 beforeEach(() => { vi.clearAllMocks(); });
@@ -36,5 +36,19 @@ describe('DHIS2 mappings list', () => {
     const confirm = await screen.findByRole('button', { name: /^delete$/i });
     fireEvent.click(confirm);
     await waitFor(() => expect(deleteDhis2Mapping).toHaveBeenCalledWith('m1'));
+  });
+});
+
+describe('DHIS2 mappings — run dialog', () => {
+  it('dry-runs a mapping and shows counts', async () => {
+    (listDhis2Mappings as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: 'm1', name: 'Agg One', kind: 'aggregate' }]);
+    (runDhis2Mapping as ReturnType<typeof vi.fn>).mockResolvedValue({ kind: 'aggregate', dryRun: true, counts: { values: 5, skipped: 1 }, skipped: [{ row: 2, reason: 'no orgUnit' }], result: null });
+    render(<MemoryRouter><Dhis2Mappings /></MemoryRouter>);
+    await screen.findByText('Agg One');
+    fireEvent.click(screen.getByTestId('run-m1'));
+    fireEvent.change(await screen.findByTestId('run-period'), { target: { value: '2026Q1' } });
+    fireEvent.click(screen.getByTestId('run-dry'));
+    await waitFor(() => expect(runDhis2Mapping).toHaveBeenCalledWith('m1', { period: '2026Q1', dryRun: true }));
+    expect(await screen.findByText('5')).toBeTruthy(); // values count
   });
 });

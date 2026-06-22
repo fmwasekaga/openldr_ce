@@ -654,6 +654,51 @@ export async function getDhis2EventSources(): Promise<Dhis2EventSource[]> {
   return r.json();
 }
 
+// ── DHIS2 operations (SP-D) ────────────────────────────────────────────────────
+export interface Dhis2PushResultClient { status: string; imported: number; updated: number; ignored: number; deleted: number; conflicts: { object: string; value: string }[] }
+export interface Dhis2RunResult {
+  kind: 'aggregate' | 'tracker';
+  dryRun: boolean;
+  counts: { values: number; skipped: number };
+  skipped: { row: number; reason: string }[];
+  result: Dhis2PushResultClient | null;
+}
+export interface Dhis2Push { id: string; occurredAt: string; action: string; entityId: string; metadata?: Record<string, unknown> }
+export interface Dhis2Schedule {
+  id: string; mappingId: string; mappingName: string;
+  mode: 'aggregate' | 'tracker'; periodType: 'monthly' | 'quarterly' | 'yearly';
+  eventDriven: boolean; enabled: boolean; lastRunAt: string | null; nextDueAt: string | null;
+}
+
+export async function runDhis2Mapping(id: string, body: { period: string; dryRun: boolean }): Promise<Dhis2RunResult> {
+  const r = await authFetch(`/api/dhis2/mappings/${encodeURIComponent(id)}/run`, jbody(body, 'POST'));
+  if (!r.ok) { const b = (await r.json().catch(() => ({}))) as { error?: string }; throw new Error(b.error ?? `run failed: ${r.status}`); }
+  return r.json();
+}
+export async function listDhis2Pushes(limit = 50): Promise<Dhis2Push[]> {
+  const r = await authFetch(`/api/dhis2/pushes?limit=${limit}`);
+  if (!r.ok) throw new Error(`pushes failed: ${r.status}`);
+  return r.json();
+}
+export async function listDhis2Schedules(): Promise<Dhis2Schedule[]> {
+  const r = await authFetch('/api/dhis2/schedules');
+  if (!r.ok) throw new Error(`schedules failed: ${r.status}`);
+  return r.json();
+}
+export async function createDhis2Schedule(body: { mappingId: string; periodType: string; eventDriven: boolean }): Promise<Dhis2Schedule> {
+  const r = await authFetch('/api/dhis2/schedules', jbody(body, 'POST'));
+  if (!r.ok) throw new Error(`create schedule failed: ${r.status}`);
+  return r.json();
+}
+export async function setDhis2ScheduleEnabled(id: string, enabled: boolean): Promise<void> {
+  const r = await authFetch(`/api/dhis2/schedules/${encodeURIComponent(id)}/enabled`, jbody({ enabled }, 'POST'));
+  if (!r.ok) throw new Error(`toggle schedule failed: ${r.status}`);
+}
+export async function deleteDhis2Schedule(id: string): Promise<void> {
+  const r = await authFetch(`/api/dhis2/schedules/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  if (!r.ok) throw new Error(`delete schedule failed: ${r.status}`);
+}
+
 export function buildOntology(
   id: string,
   opts: { path?: string; rebuild?: boolean },
