@@ -308,3 +308,13 @@ export const en = {
 } as const;
 
 export type Resources = typeof en;
+
+/**
+ * Maps every leaf value in a nested const object to `string`.
+ * Used to type fr/pt bundles: `const fr: EnShape = { … }` enforces
+ * identical key structure without requiring the exact English literal values.
+ */
+type DeepString<T> = {
+  [K in keyof T]: T[K] extends Record<string, unknown> ? DeepString<T[K]> : string;
+};
+export type EnShape = DeepString<typeof en>;
