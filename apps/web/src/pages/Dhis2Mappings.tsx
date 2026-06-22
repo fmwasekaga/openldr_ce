@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { AppShell } from '@/shell/AppShell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -45,11 +44,11 @@ export function Dhis2Mappings() {
   }, [pendingDelete, load, t]);
 
   return (
-    <AppShell title="DHIS2 mappings">
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4" data-testid="dhis2-mappings-page">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4" data-testid="dhis2-mappings-page">
+      <h1 className="text-lg font-semibold">{t('dhis2.mappings.heading')}</h1>
         <div className="flex items-center justify-between">
           <div className="text-sm text-muted-foreground">{t('dhis2.mappings.title')}</div>
-          <Button onClick={() => navigate('/dhis2/mappings/new')} data-testid="new-mapping">{t('dhis2.mappings.newMapping')}</Button>
+          <Button onClick={() => navigate('/settings/dhis2/mappings/new')} data-testid="new-mapping">{t('dhis2.mappings.newMapping')}</Button>
         </div>
         {toast ? (
           <div className={toast.kind === 'ok'
@@ -74,7 +73,7 @@ export function Dhis2Mappings() {
                 <TableCell>
                   <div className="flex items-center gap-2">
                     <Button variant="ghost" size="sm" onClick={() => { setRunning(m); setPeriod(''); setRunResult(null); setRunErr(null); }} data-testid={`run-${m.id}`}>{t('dhis2.ops.run')}</Button>
-                    <Link to={`/dhis2/mappings/${m.id}`} className="text-primary hover:underline" data-testid={`edit-${m.id}`}>{t('dhis2.mappings.edit')}</Link>
+                    <Link to={`/settings/dhis2/mappings/${m.id}`} className="text-primary hover:underline" data-testid={`edit-${m.id}`}>{t('dhis2.mappings.edit')}</Link>
                     <Button variant="ghost" size="sm" className="text-destructive" onClick={() => setPendingDelete(m)} data-testid={`delete-${m.id}`}>{t('dhis2.mappings.delete')}</Button>
                   </div>
                 </TableCell>
@@ -116,7 +115,6 @@ export function Dhis2Mappings() {
             </div>
           </DialogContent>
         </Dialog>
-      </div>
-    </AppShell>
+    </div>
   );
 }
