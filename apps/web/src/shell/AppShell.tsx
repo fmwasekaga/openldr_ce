@@ -5,6 +5,7 @@ import {
   ChevronLeft, ChevronRight, Sun, Moon, LogOut, type LucideIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { SUPPORTED_LANGUAGES, setLanguage } from '@/i18n/language';
 import { useAuth } from '@/auth/AuthProvider';
 import { useTheme } from './useTheme';
 import { useSidebar } from './useSidebar';
@@ -37,7 +38,7 @@ export function AppShell({
   const [collapsed, toggleSidebar] = useSidebar();
   const { user, signOut, hasRole } = useAuth();
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   return (
     <div className="ui-scope flex h-screen overflow-hidden">
@@ -108,6 +109,12 @@ export function AppShell({
                   <div className="truncate text-xs text-muted-foreground">{user.roles[0].replace(/_/g, ' ')}</div>
                 )}
               </div>
+              <DropdownMenuSeparator />
+              {SUPPORTED_LANGUAGES.map((l) => (
+                <DropdownMenuItem key={l.code} onClick={() => void setLanguage(l.code)} disabled={i18n.language === l.code}>
+                  {l.label}
+                </DropdownMenuItem>
+              ))}
               <DropdownMenuSeparator />
               {/* TODO(phase3): generalize to "user can see >=1 Settings sub-nav section" once
                   General/Marketplace (broader-role) sections land; for SP-0 DHIS2 is admin-only. */}
