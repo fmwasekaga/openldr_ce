@@ -1,0 +1,76 @@
+# Single-HTTPS-port production stack: nginx (TLS) -> app (SPA + API + auth) + backing services.
+# Usage:
+#   cp .env.prod.example .env.prod   # then edit secrets
+#   sh deploy/nginx/gen-selfsigned.sh localhost
+#   docker compose -f docker-compose.prod.yml up -d --build
+services:
+  app:
+    build: .
+    env_file: .env.prod
+    expose: ["3000"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      minio: { condition: service_started }
+      keycloak: { condition: service_started }
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    environment:
+      SERVER_NAME: ${SERVER_NAME:-localhost}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./deploy/nginx/openldr.conf.template:/etc/nginx/templates/openldr.conf.template:ro
+      - ./deploy/nginx/certs:/etc/nginx/certs:ro
+    depends_on: ["app"]
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: openldr
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-openldr}
+      POSTGRES_DB: openldr
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openldr"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ':9001'
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY:-minioadmin}
+    volumes:
+      - miniodata:/data
+    restart: unless-stopped
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on: ["minio"]
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 ${S3_ACCESS_KEY_ID:-minioadmin} ${S3_SECRET_ACCESS_KEY:-minioadmin}; do echo 'waiting for minio'; sleep 2; done &&
+      mc mb --ignore-existing local/${S3_BUCKET:-openldr} &&
+      echo 'bucket ready'"
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+    volumes:
+      - ./infra/keycloak/openldr-realm.json:/opt/keycloak/data/import/openldr-realm.json:ro
+    # The OIDC issuer URL must be reachable by BOTH the browser and the app — see DEPLOYMENT.md.
+    ports: ["8180:8080"]
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  miniodata:

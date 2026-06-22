@@ -3,9 +3,11 @@ dist/
 .turbo/
 *.tsbuildinfo
 .env
+.env.prod
 scripts/.marketplace-keys/
 tmp-marketplace-tamper/
 docker-compose.override.yml
+deploy/nginx/certs/
 coverage/
 .superpowers/
 .worktrees/
