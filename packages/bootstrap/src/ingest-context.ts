@@ -32,6 +32,7 @@ import {
   type PluginRuntime,
 } from '@openldr/plugins';
 import { createAuditStore, safeRecord } from '@openldr/audit';
+import { createTrustStore } from '@openldr/marketplace';
 import type { EventingPort } from '@openldr/ports';
 import { selectTargetStore } from './target-store';
 
@@ -71,7 +72,16 @@ export async function createIngestContext(cfg: Config): Promise<IngestContext> {
   const audit = createAuditStore(internal.db);
 
   const pluginStore = createPluginStore(internal.db);
-  const plugins = createPluginRuntime({ blob, store: pluginStore, runner: createExtismRunner(), logger });
+  const plugins = createPluginRuntime({
+    blob,
+    store: pluginStore,
+    runner: createExtismRunner(),
+    logger,
+    trustStore: createTrustStore(internal.db),
+    ceVersion: '0.1.0', // CE version for the artifact compatibility gate (matches package.json)
+    verifyConfig: { devAllowUnsigned: cfg.MARKETPLACE_DEV_ALLOW_UNSIGNED, autoPinFirstUse: cfg.MARKETPLACE_AUTO_PIN_FIRST_USE },
+    recordInstall: (e) => safeRecord(audit, logger, e),
+  });
 
   const pluginResolver = { resolve: (id: string): Promise<Converter | undefined> => plugins.load(id) };
   const resolver = chainResolvers(registryResolver(converters), pluginResolver);

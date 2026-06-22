@@ -26,7 +26,7 @@ module.exports = {
       name: 'domain-modules-no-apps',
       comment: 'Domain modules must not reach into apps.',
       severity: 'error',
-      from: { path: '(^|/)packages/(fhir|forms|ingest|plugins|reporting|audit|users)/' },
+      from: { path: '(^|/)packages/(fhir|forms|ingest|plugins|reporting|audit|users|marketplace)/' },
       to: { path: '(^|/)apps/' },
     },
     {

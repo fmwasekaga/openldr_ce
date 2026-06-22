@@ -25,9 +25,24 @@ const blob = {
 } as never;
 const runner: PluginRunner = { run: vi.fn(async () => enc('{"resourceType":"Patient","id":"p1"}\n{"resourceType":"Specimen","id":"s1","subject":{"reference":"Patient/p1"}}\n')) };
 
+function inMemoryTrustStore() {
+  const m = new Map<string, { keyFingerprint: string }>();
+  return {
+    get: async (id: string) => m.get(id),
+    pin: async (i: { publisherId: string; keyFingerprint: string; publisherName: string; approvedBy: string | null }) => {
+      m.set(i.publisherId, { keyFingerprint: i.keyFingerprint });
+    },
+  };
+}
+
 describe('plugin → handleIngestEvent (hermetic)', () => {
   it('resolves a plugin converter and persists its resources with plugin provenance', async () => {
-    const runtime = createPluginRuntime({ blob, store, runner, logger });
+    const runtime = createPluginRuntime({
+      blob, store, runner, logger,
+      trustStore: inMemoryTrustStore(),
+      ceVersion: '0.1.0',
+      verifyConfig: { devAllowUnsigned: false, autoPinFirstUse: true },
+    });
     const resolver = chainResolvers(registryResolver(new ConverterRegistry()), { resolve: (id) => runtime.load(id) });
     const persist = vi.fn(async (rs: unknown[]) => rs.map(() => ({ saved: true, flattened: 'written' as const })));
     const batches = { markProcessing: vi.fn(), markDone: vi.fn(), markFailed: vi.fn() } as unknown as BatchStore;
