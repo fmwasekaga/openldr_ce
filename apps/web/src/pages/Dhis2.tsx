@@ -107,7 +107,7 @@ export function Dhis2() {
                 </div>
               </div>
               <div>
-                <div className="mb-1 font-medium">{t('dhis2.recentPushes')}</div>
+                <div className="mb-1 flex items-center gap-2 font-medium">{t('dhis2.recentPushes')}<Link to="/dhis2/pushes" className="text-xs font-normal text-primary hover:underline" data-testid="view-all-pushes">{t('dhis2.ops.viewAll')}</Link></div>
                 {status.recentPushes.length === 0 ? (
                   <p className="text-muted-foreground">{t('dhis2.noPushes')}</p>
                 ) : (
