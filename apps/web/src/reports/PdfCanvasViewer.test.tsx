@@ -24,4 +24,14 @@ describe('PdfCanvasViewer', () => {
     render(<PdfCanvasViewer blob={new Blob(['%PDF'])} fileName="r.pdf" />);
     expect(await screen.findByText(/download|télécharger|baixar/i)).toBeInTheDocument();
   });
+
+  it('invokes onDownload when the download button is clicked', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:mock');
+    URL.revokeObjectURL = vi.fn();
+    const onDownload = vi.fn();
+    render(<PdfCanvasViewer blob={new Blob(['%PDF'])} fileName="r.pdf" onDownload={onDownload} />);
+    const btn = await screen.findByText(/download|télécharger|baixar/i);
+    btn.click();
+    expect(onDownload).toHaveBeenCalled();
+  });
 });

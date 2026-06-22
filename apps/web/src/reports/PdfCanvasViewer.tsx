@@ -14,9 +14,10 @@ const SCALE_STEP = 0.2;
 interface Props {
   blob: Blob;
   fileName: string;
+  onDownload?: () => void;
 }
 
-export function PdfCanvasViewer({ blob, fileName }: Props) {
+export function PdfCanvasViewer({ blob, fileName, onDownload }: Props) {
   const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const docRef = useRef<PDFDocumentProxy | null>(null);
@@ -104,7 +105,8 @@ export function PdfCanvasViewer({ blob, fileName }: Props) {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-  }, [blob, fileName]);
+    onDownload?.();
+  }, [blob, fileName, onDownload]);
 
   if (status === 'error') {
     return (

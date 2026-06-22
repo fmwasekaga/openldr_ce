@@ -6,9 +6,10 @@ import { PdfCanvasViewer } from './PdfCanvasViewer';
 interface Props {
   reportId: string;
   params: Record<string, string>;
+  onDownload?: () => void;
 }
 
-export function ReportDocumentTab({ reportId, params }: Props) {
+export function ReportDocumentTab({ reportId, params, onDownload }: Props) {
   const { t } = useTranslation();
   const [blob, setBlob] = useState<Blob | null>(null);
   const [error, setError] = useState<string>();
@@ -55,5 +56,5 @@ export function ReportDocumentTab({ reportId, params }: Props) {
     );
   }
   if (!blob) return null;
-  return <PdfCanvasViewer blob={blob} fileName={`${reportId}.pdf`} />;
+  return <PdfCanvasViewer blob={blob} fileName={`${reportId}.pdf`} onDownload={onDownload} />;
 }
