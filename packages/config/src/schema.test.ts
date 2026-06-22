@@ -18,6 +18,21 @@ describe('dashboard SQL config', () => {
   });
 });
 
+describe('startup migration config', () => {
+  it('defaults MIGRATE_ON_START to false', () => {
+    expect(ConfigSchema.parse(base).MIGRATE_ON_START).toBe(false);
+  });
+  it('parses MIGRATE_ON_START=true', () => {
+    expect(ConfigSchema.parse({ ...base, MIGRATE_ON_START: 'true' }).MIGRATE_ON_START).toBe(true);
+  });
+  it('defaults SEED_ON_START to false', () => {
+    expect(ConfigSchema.parse(base).SEED_ON_START).toBe(false);
+  });
+  it('parses SEED_ON_START=true', () => {
+    expect(ConfigSchema.parse({ ...base, SEED_ON_START: 'true' }).SEED_ON_START).toBe(true);
+  });
+});
+
 describe('auth config', () => {
   it('defaults AUTH_DEV_BYPASS on in development', () => {
     const cfg = ConfigSchema.parse({ ...base, NODE_ENV: 'development' });

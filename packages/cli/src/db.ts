@@ -1,6 +1,5 @@
-import { createDbContext, createAppContext } from '@openldr/bootstrap';
+import { createDbContext, createAppContext, seedDatabase } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
-import { sampleForms } from '@openldr/forms';
 
 interface JsonOpt {
   json: boolean;
@@ -53,77 +52,19 @@ export async function runDbReset(opts: JsonOpt & { force: boolean }): Promise<nu
 }
 
 export async function runDbSeed(opts: JsonOpt): Promise<number> {
-  const ctx = await createDbContext(loadConfig());
+  const cfg = loadConfig();
+  const ctx = await createDbContext(cfg);
+  const appCtx = await createAppContext(cfg);
   try {
-    const org = { resourceType: 'Organization', id: 'seed-org', name: 'Seed Central Lab' };
-    const loc = {
-      resourceType: 'Location',
-      id: 'seed-loc',
-      status: 'active',
-      name: 'Seed Bench',
-      managingOrganization: { reference: 'Organization/seed-org' },
-    };
-    const patient = {
-      resourceType: 'Patient',
-      id: 'seed-pat',
-      gender: 'female',
-      birthDate: '1990-01-01',
-      managingOrganization: { reference: 'Organization/seed-org' },
-    };
-    const results: { id: string; flattened: string }[] = [];
-    for (const r of [org, loc, patient]) {
-      const out = await ctx.persist(r, { sourceSystem: 'seed' });
-      results.push({ id: r.id, flattened: out.flattened });
-    }
-
-    // Seed sample forms idempotently (skip if already present by id)
-    const appCtx = await createAppContext(loadConfig());
-    let formsSeeded = 0;
-    try {
-      // Dedup by name, not id: forms.create() always generates a fresh `form-<uuid>` id and
-      // ignores the sample's id, so id-based dedup would re-create the samples every run.
-      const existingForms = await appCtx.forms.list();
-      const existingByName = new Map(existingForms.map((f) => [f.name, f]));
-      for (const form of sampleForms) {
-        const existing = existingByName.get(form.name);
-        // Capture just id + status — list() yields FormSummary, create() yields FormDefinition.
-        let id: string;
-        let status: string;
-        if (existing) {
-          id = existing.id;
-          status = existing.status;
-        } else {
-          const created = await appCtx.forms.create({
-            name: form.name,
-            versionLabel: form.versionLabel,
-            fhirResourceType: form.fhirResourceType,
-            fhirVersion: form.fhirVersion,
-            fhirProfileUrl: form.fhirProfileUrl,
-            facilityId: form.facilityId,
-            status: form.status,
-            active: form.active,
-            schema: form,
-            targetPages: form.targetPages,
-          });
-          id = created.id;
-          status = created.status;
-          formsSeeded++;
-        }
-        // Publish so the forms actually drive their target pages (the Users page needs a
-        // published 'users' form). Idempotent: only publish drafts, never re-snapshot.
-        if (status !== 'published') await appCtx.forms.setStatus(id, 'published');
-      }
-    } finally {
-      await appCtx.close();
-    }
-
+    const { resources, formsSeeded } = await seedDatabase(ctx, appCtx);
     emit(
       opts.json,
-      { ok: true, results, formsSeeded },
-      `seeded ${results.length} resources, ${formsSeeded} forms`,
+      { ok: true, results: resources, formsSeeded },
+      `seeded ${resources.length} resources, ${formsSeeded} forms`,
     );
     return 0;
   } finally {
+    await appCtx.close();
     await ctx.close();
   }
 }

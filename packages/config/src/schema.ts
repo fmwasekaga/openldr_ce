@@ -15,6 +15,15 @@ export const ConfigSchema = z
     PORT: z.coerce.number().int().positive().default(3000),
     LOG_LEVEL: z.string().default('info'),
 
+    // Run internal + external DB migrations (migrateToLatest, idempotent) on server
+    // startup before binding. Off by default so dev/tests manage their own schema; the
+    // single-port prod deployment turns it on so a fresh DB self-migrates. See DEPLOYMENT.md.
+    MIGRATE_ON_START: envBoolean(false),
+
+    // Seed idempotent sample data (org/location/patient + bundled sample forms) on startup
+    // after migration. Off by default; the prod demo turns it on so it comes up populated.
+    SEED_ON_START: envBoolean(false),
+
     AUTH_ADAPTER: z.enum(['keycloak']).default('keycloak'),
     BLOB_ADAPTER: z.enum(['minio']).default('minio'),
     EVENTING_ADAPTER: z.enum(['pg']).default('pg'),

@@ -261,3 +261,4 @@ export * from './dhis2-context';
 export * from './ingest-context';
 export * from './target-store';
 export * from './terminology-context';
+export * from './seed';

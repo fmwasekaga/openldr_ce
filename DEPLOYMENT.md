@@ -62,6 +62,21 @@ Replace the self-signed cert with a real one — e.g. via **Let's Encrypt / cert
 Certificate renewal (certbot cron / your platform's mechanism) is the operator's
 responsibility — it is intentionally not wired into the compose file.
 
+## Database migrations
+
+The app **self-migrates on startup** when `MIGRATE_ON_START=true` (set in `.env.prod.example`).
+Migrations are idempotent (`migrateToLatest`): a fresh Postgres gets its full schema, an
+already-migrated one is a no-op. Without this, the API returns **500s** on a schema-less DB
+(`relation "publishers" does not exist`, etc.). The flag is **off by default** so dev/test
+environments manage their own schema; the production stack turns it on.
+
+Migration creates the schema but loads no data. Set **`SEED_ON_START=true`** (also in
+`.env.prod.example`) to seed idempotent sample data after migration — a sample
+organization/location/patient and the bundled sample forms — so the app comes up populated.
+This is the same work as `openldr db seed`; it dedups by name, so it's a no-op on a populated
+DB. Loading real reference terminology (LOINC/RxNorm/SNOMED) and lab data is a separate,
+heavier import — those pages render empty until then, which is expected, not an error.
+
 ## Environment
 
 All configuration is environment-driven; see **`.env.prod.example`** for the full,
