@@ -79,12 +79,13 @@ function main() {
   else fail(`expected a failed batch under the narrow grant; pipeline=${JSON.stringify(ps1)}`);
 
   step('5. update to the wide grant — re-ingest MUST succeed');
+  // Install the wide bundle as an update (publisher already pinned from step 2 → trusted).
+  // Do NOT reset the DB — this genuinely tests update-from-narrow, not a fresh install.
   const u = cli(`market install "${wide}" --approve --approved-by accept --json`);
   if (u.code !== 0) fail(`install wide: code=${u.code} out=${u.out}`); else ok('wide grant installed (update -> v1.1.0 active)');
-  cli('db reset --json'); // clear the failed batch so the next status read is unambiguous
-  cli(`market install "${wide}" --approve --approved-by accept --json`); // re-install after reset
   cli(`ingest "${sample}" --plugin whonet-sqlite --json`);
   const ps2 = json(cli('pipeline status --json').out) as Array<{ status: string; resource_count?: number }> | undefined;
+  // The step-4 failed batch may also be present; find any done/completed batch.
   const doneBatch = Array.isArray(ps2) ? ps2.find((b) => b.status === 'done' || b.status === 'completed') : undefined;
   if (doneBatch) ok(`batch completed under the wide grant (resources: ${doneBatch.resource_count ?? '?'})`); else fail(`expected a completed batch under the wide grant; pipeline=${JSON.stringify(ps2)}`);
 

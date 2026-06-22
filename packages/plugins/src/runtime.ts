@@ -9,6 +9,7 @@ import {
   evaluateTrust,
   isCompatible,
   readGrant,
+  canonicalJSON,
   type ArtifactManifest,
   type TrustStore,
   type Capability,
@@ -188,9 +189,7 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
         if (!opts.approval) {
           throw new Error(`artifact ${artifact.id}@${artifact.version}: install requires explicit approval (publisher ${artifact.publisher.id})`);
         }
-        const requested = JSON.stringify(artifact.capabilities);
-        const acknowledged = JSON.stringify(opts.approval.acknowledgedCapabilities);
-        if (requested !== acknowledged) {
+        if (canonicalJSON(artifact.capabilities) !== canonicalJSON(opts.approval.acknowledgedCapabilities)) {
           throw new Error(`artifact ${artifact.id}: acknowledged capabilities do not match the requested capabilities`);
         }
         approvedBy = opts.approval.approvedBy;

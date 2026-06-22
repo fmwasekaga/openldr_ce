@@ -1,12 +1,15 @@
 import type { Capability } from './capabilities';
+import { parseCapabilities } from './capabilities';
 
 export type Grant = { legacy: true } | { legacy: false; capabilities: Capability[] };
 
-/** A persisted manifest with a `capabilities` field is a marketplace artifact (enforced); otherwise legacy (unrestricted). */
+/** A persisted manifest with a `capabilities` field is a marketplace artifact (enforced); otherwise legacy (unrestricted).
+ *  A capabilities field that is present-but-not-a-valid-array is a corrupt/forged row — fail loudly,
+ *  do NOT silently treat as legacy/unenforced. */
 export function readGrant(manifest: Record<string, unknown>): Grant {
-  const caps = manifest.capabilities;
-  if (!Array.isArray(caps)) return { legacy: true };
-  return { legacy: false, capabilities: caps as Capability[] };
+  if (manifest.capabilities === undefined) return { legacy: true };
+  // present-but-invalid → throws (corrupt or forged manifest row)
+  return { legacy: false, capabilities: parseCapabilities(manifest.capabilities) };
 }
 
 export function allowedResourceTypes(capabilities: Capability[]): string[] {

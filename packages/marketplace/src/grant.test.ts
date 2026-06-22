@@ -12,6 +12,12 @@ describe('readGrant', () => {
   it('an empty capabilities array is a marketplace artifact, not legacy', () => {
     expect(readGrant({ schemaVersion: 1, capabilities: [] })).toEqual({ legacy: false, capabilities: [] });
   });
+  it('throws when capabilities is present but a string (corrupt/forged row)', () => {
+    expect(() => readGrant({ schemaVersion: 1, capabilities: 'oops' })).toThrow();
+  });
+  it('throws when capabilities is present but null (corrupt/forged row)', () => {
+    expect(() => readGrant({ schemaVersion: 1, capabilities: null })).toThrow();
+  });
 });
 
 describe('allowedResourceTypes / allowedHosts', () => {

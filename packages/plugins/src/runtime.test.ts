@@ -239,6 +239,17 @@ describe('install — artifact security pipeline', () => {
     ).rejects.toThrow(/acknowledg/i);
   });
 
+  it('accepts approval where acknowledged capabilities have the same values but different key insertion order', async () => {
+    const { deps, rows } = fakeDeps();
+    const kp = generatePublisherKeypair();
+    const rt = createPluginRuntime({ ...deps, trustStore: inMemoryTrustStore(), ceVersion: '0.1.0', verifyConfig: { devAllowUnsigned: false } });
+    const m = signedManifest(kp);
+    // artifact has { kind: 'emit-fhir', resourceTypes: ['Observation'] }; acknowledge with keys in different insertion order
+    const acknowledgedCapabilities = [{ resourceTypes: ['Observation'], kind: 'emit-fhir' as const }];
+    await rt.install(wasmBytes, m, { publicKeyDer: kp.publicKeyDer, approval: { approvedBy: 'admin', acknowledgedCapabilities } });
+    expect(rows.get('demo@1.0.0')).toBeTruthy();
+  });
+
   it('legacy no-publisher manifest installs without approval (unrestricted)', async () => {
     const { deps, rows } = fakeDeps();
     const rt = createPluginRuntime({ ...deps, trustStore: inMemoryTrustStore(), ceVersion: '0.1.0', verifyConfig: { devAllowUnsigned: false } });

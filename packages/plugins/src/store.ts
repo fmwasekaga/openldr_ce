@@ -47,39 +47,42 @@ function toRow(r: Record<string, unknown>): PluginRow {
 export function createPluginStore(db: Kysely<InternalSchema>): PluginStore {
   return {
     async install({ id, version, sha256, manifest, approvedBy }) {
-      // The newly installed version becomes the sole active one; deactivate all existing rows for this id.
-      await db.updateTable('plugins').set({ active: false }).where('id', '=', id).execute();
-      await db
-        .insertInto('plugins')
-        .values({
-          id,
-          version,
-          sha256,
-          manifest: manifest as never,
-          status: 'installed',
-          enabled: true,
-          active: true,
-          approved_by: approvedBy,
-          granted_at: sql`now()`,
-        })
-        .onConflict((oc) =>
-          oc.columns(['id', 'version']).doUpdateSet({
+      // Wrap in a transaction so there is never a window with zero active rows.
+      await db.transaction().execute(async (trx) => {
+        // The newly installed version becomes the sole active one; deactivate all existing rows for this id.
+        await trx.updateTable('plugins').set({ active: false }).where('id', '=', id).execute();
+        await trx
+          .insertInto('plugins')
+          .values({
+            id,
+            version,
             sha256,
             manifest: manifest as never,
             status: 'installed',
-            active: true,
             enabled: true,
+            active: true,
             approved_by: approvedBy,
             granted_at: sql`now()`,
-          }),
-        )
-        .execute();
+          })
+          .onConflict((oc) =>
+            oc.columns(['id', 'version']).doUpdateSet({
+              sha256,
+              manifest: manifest as never,
+              status: 'installed',
+              active: true,
+              enabled: true,
+              approved_by: approvedBy,
+              granted_at: sql`now()`,
+            }),
+          )
+          .execute();
+      });
     },
 
     async get(id, version) {
       let q = db.selectFrom('plugins').select(COLUMNS).where('id', '=', id);
       if (version) {
-        q = q.where('version', '=', version);
+        q = q.where('version', '=', version).where('enabled', '=', true);
       } else {
         q = q.where('active', '=', true).where('enabled', '=', true);
       }

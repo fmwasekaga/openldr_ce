@@ -39,4 +39,10 @@ describe('plugin store lifecycle', () => {
     await s.install({ id: 'p', version: '1.0.0', sha256: 'a'.repeat(64), manifest: man(), approvedBy: null });
     await expect(s.rollback('p', '9.9.9')).rejects.toThrow();
   });
+  it('get(id, version) returns undefined for a disabled plugin even when a specific version is requested', async () => {
+    const s = createPluginStore(await db());
+    await s.install({ id: 'p', version: '1.0.0', sha256: 'a'.repeat(64), manifest: man(), approvedBy: null });
+    await s.setEnabled('p', false);
+    expect(await s.get('p', '1.0.0')).toBeUndefined();
+  });
 });
