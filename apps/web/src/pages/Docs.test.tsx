@@ -80,13 +80,13 @@ describe('DocsLayout locale derivation', () => {
     expect(screen.queryByText(/Shown in English/)).toBeNull();
   });
 
-  it('falls back to English content when app language is fr (fr docs not yet created)', async () => {
+  it('renders French docs (no fallback) when app language is fr', async () => {
     await i18n.changeLanguage('fr');
     renderAt('/docs');
-    // fr/overview.md doesn't exist yet (Task 3) so the registry falls back to en content.
-    // The fallback notice is shown when localeUsed !== requested locale.
-    expect(screen.getByRole('heading', { level: 1, name: 'OpenLDR Community Edition' })).toBeInTheDocument();
-    // Fallback notice expected since fr docs don't exist yet
-    expect(screen.getByText(/Shown in English/)).toBeInTheDocument();
+    // The overview page is translated → no "Shown in English" fallback notice.
+    expect(screen.queryByText(/Shown in English/)).toBeNull();
+    // The nav lists localized section titles; "Démarrage rapide" (getting-started's French H1)
+    // exists only in the French docs, proving fr/ resolved (not the en fallback).
+    expect(screen.getAllByText('Démarrage rapide').length).toBeGreaterThan(0);
   });
 });

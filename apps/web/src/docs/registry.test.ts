@@ -10,12 +10,15 @@ describe('docs registry', () => {
     expect(s!.content).toMatch(/AMR/);
   });
 
-  it('falls back to English for an untranslated locale', () => {
+  it('resolves a translated page in its own locale (not the en fallback)', () => {
     const fr = resolve('fr', 'overview');
     const en = resolve('en', 'overview');
     expect(fr).not.toBeNull();
-    expect(fr!.localeUsed).toBe('en');
-    expect(fr!.content).toBe(en!.content);
+    expect(fr!.localeUsed).toBe('fr');
+    // Genuinely French content, not the English fallback (the en→locale fallback path is
+    // unreachable for DOC_ORDER slugs once every page is translated; it remains the default
+    // branch in resolve() for any future untranslated page).
+    expect(fr!.content).not.toBe(en!.content);
   });
 
   it('returns null for an unknown slug', () => {
