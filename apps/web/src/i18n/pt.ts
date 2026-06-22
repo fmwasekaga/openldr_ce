@@ -312,6 +312,7 @@ export const pt: EnShape = {
   },
   layout: {
     settings: 'Definições',
+    language: 'Idioma',
   },
   nav: {
     dashboard: 'Painel',

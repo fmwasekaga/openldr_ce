@@ -287,6 +287,7 @@ export const en = {
   },
   layout: {
     settings: 'Settings',
+    language: 'Language',
   },
   nav: {
     dashboard: 'Dashboard',
