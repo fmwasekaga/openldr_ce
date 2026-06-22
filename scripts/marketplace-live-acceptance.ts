@@ -36,7 +36,13 @@ function cli(args: string): { code: number; out: string } {
   }
 }
 function json(out: string): unknown {
-  try { return JSON.parse(out.trim().split('\n').filter(Boolean).pop() ?? ''); } catch { return undefined; }
+  // The CLI emits pretty-printed (multi-line) JSON under --json. Parse the whole
+  // payload; if there's leading noise, parse from the first JSON delimiter onward.
+  const s = out.trim();
+  try { return JSON.parse(s); } catch { /* fall through */ }
+  const i = s.search(/[{[]/);
+  if (i >= 0) { try { return JSON.parse(s.slice(i)); } catch { /* ignore */ } }
+  return undefined;
 }
 
 function main() {
