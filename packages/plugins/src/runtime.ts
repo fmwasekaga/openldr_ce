@@ -126,6 +126,7 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
       }
 
       // Signature + trust (only when a publisher is declared).
+      let signatureVerified = false;
       if (artifact.publisher) {
         const pub = artifact.publisher;
         const hasKey = !!opts.publicKeyDer;
@@ -141,6 +142,7 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
             throw new Error(`artifact ${artifact.id}@${artifact.version}: invalid or missing signature for publisher ${pub.id}`);
           }
         } else {
+          signatureVerified = true;
           const fingerprint = keyFingerprint(opts.publicKeyDer!);
           const trust = evaluateTrust(pub.id, fingerprint, await deps.trustStore.get(pub.id));
           if (trust.decision === 'key-mismatch') {
@@ -181,6 +183,7 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
             type: artifact.type,
             publisherId: artifact.publisher?.id ?? null,
             capabilities: artifact.capabilities,
+            signatureVerified,
           },
         });
       }

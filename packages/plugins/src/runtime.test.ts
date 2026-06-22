@@ -170,6 +170,26 @@ describe('install — artifact security pipeline', () => {
     await expect(rt.install(wasmBytes, signedManifest(kp), { publicKeyDer: kp.publicKeyDer })).rejects.toThrow(/compat/i);
   });
 
+  it('verifies and installs a sparse manifest (no entrypoint/wasi/limits) — raw-vs-Zod-defaulted invariant', async () => {
+    const { deps, rows } = fakeDeps();
+    const trustStore = inMemoryTrustStore();
+    const kp = generatePublisherKeypair();
+    const rt = createPluginRuntime({ ...deps, trustStore, ceVersion: '0.1.0', verifyConfig: { devAllowUnsigned: false, autoPinFirstUse: true } });
+    // Build a minimal manifest omitting optional payload fields (entrypoint, wasi, limits).
+    const base = {
+      schemaVersion: 1 as const, type: 'plugin' as const, id: 'sparse', version: '1.0.0',
+      publisher: { id: 'acme', name: 'Acme', keyFingerprint: kp.fingerprint },
+      compatibility: { ceVersion: '>=0.1.0 <0.2.0' },
+      capabilities: [{ kind: 'emit-fhir' as const, resourceTypes: ['Observation'] }],
+      payload: { kind: 'plugin' as const, wasmSha256: wasmSha },
+    };
+    // Sign the literal BEFORE Zod parse — canonical bytes must match what is signed.
+    const signature = signManifest(base as Record<string, unknown>, wasmSha, kp.privateKeyDer);
+    await rt.install(wasmBytes, { ...base, signature }, { publicKeyDer: kp.publicKeyDer });
+    expect(rows.get('sparse@1.0.0')).toBeTruthy();
+    expect(await trustStore.get('acme')).toEqual({ keyFingerprint: kp.fingerprint });
+  });
+
   it('installs a legacy unsigned plugin manifest (no publisher) hash-only', async () => {
     const { deps, rows } = fakeDeps();
     const rt = createPluginRuntime({ ...deps, trustStore: inMemoryTrustStore(), ceVersion: '0.1.0', verifyConfig: { devAllowUnsigned: false, autoPinFirstUse: true } });
