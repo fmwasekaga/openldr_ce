@@ -15,6 +15,7 @@
   "dependencies": {
     "@openldr/bootstrap": "workspace:*",
     "@openldr/marketplace": "workspace:*",
+    "@openldr/plugins": "workspace:*",
     "@openldr/dhis2": "workspace:*",
     "@openldr/terminology": "workspace:*",
     "@openldr/config": "workspace:*",
