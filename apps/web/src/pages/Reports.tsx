@@ -26,6 +26,10 @@ export function Reports() {
   const [collapsed, setCollapsed] = useState(false);
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
   const [params, setParams] = useState<Record<string, string>>({});
+  // Params snapshotted at the moment of the last Run, so both result tabs (document
+  // PDF + spreadsheet/CSV) always reflect the run that produced `result`, even if the
+  // user edits the parameter controls afterwards without re-running.
+  const [ranParams, setRanParams] = useState<Record<string, string>>({});
   const [options, setOptions] = useState<Record<string, string[]>>({});
   const [result, setResult] = useState<ReportResult | null>(null);
   const [running, setRunning] = useState(false);
@@ -71,6 +75,7 @@ export function Reports() {
     try {
       const res = await fetchReport(selectedId, params);
       setResult(res);
+      setRanParams(params);
       setRanAt(new Date().toLocaleString());
       const next = { ...loadLastParams(), [selectedId]: params };
       saveLastParams(next);
@@ -157,9 +162,9 @@ export function Reports() {
 
                   <div className="min-h-0 flex-1">
                     {activeTab === 'document' ? (
-                      <ReportDocumentTab reportId={selected.id} params={params} />
+                      <ReportDocumentTab reportId={selected.id} params={ranParams} />
                     ) : (
-                      <ReportSpreadsheetTab reportId={selected.id} result={result} params={params} />
+                      <ReportSpreadsheetTab reportId={selected.id} result={result} params={ranParams} />
                     )}
                   </div>
                 </>
