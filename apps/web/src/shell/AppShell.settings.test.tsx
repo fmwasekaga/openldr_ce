@@ -16,8 +16,13 @@ vi.mock('@/auth/AuthProvider', () => ({
     signOut: vi.fn(),
   }),
 }));
+vi.mock('@/i18n/language', async (orig) => {
+  const actual = await orig<typeof import('@/i18n/language')>();
+  return { ...actual, setLanguage: vi.fn() };
+});
 
 import { AppShell } from './AppShell';
+import { setLanguage } from '@/i18n/language';
 
 describe('AppShell settings entry', () => {
   it('navigates to /settings from the user dropdown for an admin', () => {
@@ -37,5 +42,20 @@ describe('AppShell settings entry', () => {
     fireEvent.pointerMove(settingsItem);
     fireEvent.click(settingsItem);
     expect(navigate).toHaveBeenCalledWith('/settings');
+  });
+
+  it('switches language from the user dropdown', () => {
+    render(
+      <MemoryRouter>
+        <AppShell title="Dashboard"><div>content</div></AppShell>
+      </MemoryRouter>,
+    );
+    const trigger = screen.getByText('admin');
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Français')) {
+      fireEvent.keyDown(trigger, { key: 'Enter' });
+    }
+    fireEvent.click(screen.getByText('Français'));
+    expect(setLanguage).toHaveBeenCalledWith('fr');
   });
 });

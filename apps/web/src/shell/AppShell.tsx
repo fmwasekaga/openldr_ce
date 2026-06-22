@@ -5,6 +5,7 @@ import {
   ChevronLeft, ChevronRight, Sun, Moon, LogOut, type LucideIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { SUPPORTED_LANGUAGES, setLanguage } from '@/i18n/language';
 import { useAuth } from '@/auth/AuthProvider';
 import { useTheme } from './useTheme';
 import { useSidebar } from './useSidebar';
@@ -14,14 +15,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/cn';
 
-const NAV: { to: string; label: string; end: boolean; icon: LucideIcon }[] = [
-  { to: '/', label: 'Dashboard', end: true, icon: LayoutDashboard },
-  { to: '/reports', label: 'Reports', end: false, icon: FileText },
-  { to: '/terminology', label: 'Terminology', end: false, icon: Library },
-  { to: '/forms', label: 'Forms', end: false, icon: FileInput },
-  { to: '/users', label: 'Users', end: false, icon: Users },
-  { to: '/audit', label: 'Audit', end: false, icon: ShieldCheck },
-  { to: '/docs', label: 'Docs', end: false, icon: BookOpen },
+const NAV: { to: string; labelKey: string; end: boolean; icon: LucideIcon }[] = [
+  { to: '/', labelKey: 'nav.dashboard', end: true, icon: LayoutDashboard },
+  { to: '/reports', labelKey: 'nav.reports', end: false, icon: FileText },
+  { to: '/terminology', labelKey: 'nav.terminology', end: false, icon: Library },
+  { to: '/forms', labelKey: 'nav.forms', end: false, icon: FileInput },
+  { to: '/users', labelKey: 'nav.users', end: false, icon: Users },
+  { to: '/audit', labelKey: 'nav.audit', end: false, icon: ShieldCheck },
+  { to: '/docs', labelKey: 'nav.docs', end: false, icon: BookOpen },
 ];
 
 export function AppShell({
@@ -37,7 +38,7 @@ export function AppShell({
   const [collapsed, toggleSidebar] = useSidebar();
   const { user, signOut, hasRole } = useAuth();
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   return (
     <div className="ui-scope flex h-screen overflow-hidden">
@@ -51,20 +52,20 @@ export function AppShell({
             variant="ghost"
             size="icon"
             onClick={toggleSidebar}
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-label={collapsed ? t('a11y.expandSidebar') : t('a11y.collapseSidebar')}
+            title={collapsed ? t('a11y.expandSidebar') : t('a11y.collapseSidebar')}
           >
             {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
           </Button>
         </div>
 
         <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
-          {NAV.map(({ to, label, end, icon: Icon }) => (
+          {NAV.map(({ to, labelKey, end, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
               end={end}
-              title={collapsed ? label : undefined}
+              title={collapsed ? t(labelKey) : undefined}
               className={({ isActive }) =>
                 cn(
                   'flex h-9 items-center gap-3 rounded-md px-3 text-sm font-medium no-underline transition-colors',
@@ -74,7 +75,7 @@ export function AppShell({
               }
             >
               <Icon className="h-4 w-4 shrink-0" />
-              {!collapsed && <span>{label}</span>}
+              {!collapsed && <span>{t(labelKey)}</span>}
             </NavLink>
           ))}
         </nav>
@@ -109,6 +110,12 @@ export function AppShell({
                 )}
               </div>
               <DropdownMenuSeparator />
+              {SUPPORTED_LANGUAGES.map((l) => (
+                <DropdownMenuItem key={l.code} onClick={() => void setLanguage(l.code)} disabled={i18n.language === l.code}>
+                  {l.label}
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
               {/* TODO(phase3): generalize to "user can see >=1 Settings sub-nav section" once
                   General/Marketplace (broader-role) sections land; for SP-0 DHIS2 is admin-only. */}
               {hasRole('lab_admin') && (
@@ -134,8 +141,8 @@ export function AppShell({
               variant="ghost"
               size="icon"
               onClick={toggleTheme}
-              aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-              title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+              aria-label={theme === 'dark' ? t('a11y.switchToLight') : t('a11y.switchToDark')}
+              title={theme === 'dark' ? t('a11y.lightMode') : t('a11y.darkMode')}
             >
               {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
