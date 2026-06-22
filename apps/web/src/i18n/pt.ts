@@ -341,6 +341,15 @@ export const pt: EnShape = {
       quality: 'Qualidade',
       regulatory: 'Regulatório',
     },
+    history: {
+      title: 'Histórico',
+      empty: 'Nenhuma execução registrada.',
+      colFormat: 'Formato',
+      colRows: 'Linhas',
+      colUser: 'Usuário',
+      colWhen: 'Quando',
+      loadError: 'Não foi possível carregar o histórico.',
+    },
   },
   nav: {
     dashboard: 'Painel',
