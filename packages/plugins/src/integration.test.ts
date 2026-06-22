@@ -12,12 +12,13 @@ const wasm = enc('fake-wasm');
 const sha = sha256Hex(wasm);
 
 const row: PluginRow = {
-  id: 'whonet-sqlite', version: '0.1.0', sha256: sha, status: 'installed',
+  id: 'whonet-sqlite', version: '0.1.0', sha256: sha, status: 'installed', enabled: true, active: true, approvedBy: null,
   manifest: { id: 'whonet-sqlite', version: '0.1.0', entrypoint: 'convert', wasmSha256: sha, description: '', license: 'Apache-2.0', wasi: false, limits: { memoryMb: 256, timeoutMs: 30000 } },
 };
 
 const store: PluginStore = {
-  upsert: vi.fn(), list: vi.fn(async () => [row]), remove: vi.fn(),
+  install: vi.fn(), list: vi.fn(async () => [row]), remove: vi.fn(),
+  rollback: vi.fn(), setEnabled: vi.fn(),
   get: vi.fn(async (id) => (id === 'whonet-sqlite' ? row : undefined)),
 };
 const blob = {
@@ -41,7 +42,7 @@ describe('plugin → handleIngestEvent (hermetic)', () => {
       blob, store, runner, logger,
       trustStore: inMemoryTrustStore(),
       ceVersion: '0.1.0',
-      verifyConfig: { devAllowUnsigned: false, autoPinFirstUse: true },
+      verifyConfig: { devAllowUnsigned: false },
     });
     const resolver = chainResolvers(registryResolver(new ConverterRegistry()), { resolve: (id) => runtime.load(id) });
     const persist = vi.fn(async (rs: unknown[]) => rs.map(() => ({ saved: true, flattened: 'written' as const })));
