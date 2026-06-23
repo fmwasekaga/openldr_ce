@@ -1,11 +1,31 @@
+import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z, ZodError } from 'zod';
 import { ReportNotFoundError, type AppContext } from '@openldr/bootstrap';
-import { toCsv } from '@openldr/reporting';
+import { toCsv, nextRunAt, type ScheduleFrequency } from '@openldr/reporting';
+import { requireRole } from './rbac';
 
 const runBeaconBody = z.object({
   format: z.enum(['preview', 'csv', 'pdf', 'xlsx']),
   rowCount: z.number().int().nullable().optional(),
+  params: z.record(z.string()).optional(),
+});
+
+const FREQ = z.enum(['daily', 'weekly', 'monthly', 'quarterly']);
+const FORMAT = z.enum(['csv', 'xlsx', 'pdf']);
+const scheduleCreate = z.object({
+  frequency: FREQ,
+  dayOfWeek: z.number().int().min(0).max(6).nullable().optional(),
+  dayOfMonth: z.number().int().min(1).max(28).nullable().optional(),
+  outputFormat: FORMAT,
+  params: z.record(z.string()).optional(),
+});
+const schedulePatch = z.object({
+  enabled: z.boolean().optional(),
+  frequency: FREQ.optional(),
+  dayOfWeek: z.number().int().min(0).max(6).nullable().optional(),
+  dayOfMonth: z.number().int().min(1).max(28).nullable().optional(),
+  outputFormat: FORMAT.optional(),
   params: z.record(z.string()).optional(),
 });
 
@@ -82,6 +102,61 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
       userName: user?.username ?? null,
     });
     reply.code(201);
+    return { ok: true };
+  });
+
+  const MANAGE = { preHandler: requireRole('lab_admin', 'lab_manager') };
+
+  app.get('/api/reports/:id/schedules', async (req) => {
+    const { id } = req.params as { id: string };
+    return ctx.reportSchedules.list({ reportId: id });
+  });
+
+  app.post('/api/reports/:id/schedules', MANAGE, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    let body: z.infer<typeof scheduleCreate>;
+    try { body = scheduleCreate.parse(req.body); } catch (err) { return mapError(err, reply); }
+    if (!ctx.reporting.list().find((r) => r.id === id)) { reply.code(404); return { error: `report not found: ${id}` }; }
+    const sid = randomUUID();
+    const nextDueAt = nextRunAt(body.frequency as ScheduleFrequency, body.dayOfWeek ?? null, body.dayOfMonth ?? null, new Date());
+    await ctx.reportSchedules.create({
+      id: sid, reportId: id, params: body.params ?? {}, frequency: body.frequency,
+      dayOfWeek: body.dayOfWeek ?? null, dayOfMonth: body.dayOfMonth ?? null,
+      outputFormat: body.outputFormat, createdBy: req.user?.id ?? null, nextDueAt,
+    });
+    await ctx.eventing.publish({ type: 'report.schedule.due', payload: { scheduleId: sid } }, { availableAt: nextDueAt });
+    reply.code(201);
+    return await ctx.reportSchedules.get(sid);
+  });
+
+  app.patch('/api/reports/schedules/:sid', MANAGE, async (req, reply) => {
+    const { sid } = req.params as { sid: string };
+    let body: z.infer<typeof schedulePatch>;
+    try { body = schedulePatch.parse(req.body); } catch (err) { return mapError(err, reply); }
+    const existing = await ctx.reportSchedules.get(sid);
+    if (!existing) { reply.code(404); return { error: `schedule not found: ${sid}` }; }
+    const timingChanged = body.frequency !== undefined || body.dayOfWeek !== undefined || body.dayOfMonth !== undefined;
+    const nextDueAt = timingChanged
+      ? nextRunAt((body.frequency ?? existing.frequency) as ScheduleFrequency,
+          body.dayOfWeek !== undefined ? body.dayOfWeek : existing.dayOfWeek,
+          body.dayOfMonth !== undefined ? body.dayOfMonth : existing.dayOfMonth, new Date())
+      : undefined;
+    await ctx.reportSchedules.update(sid, { ...body, ...(nextDueAt ? { nextDueAt } : {}) });
+    if (nextDueAt) await ctx.eventing.publish({ type: 'report.schedule.due', payload: { scheduleId: sid } }, { availableAt: nextDueAt });
+    return await ctx.reportSchedules.get(sid);
+  });
+
+  app.delete('/api/reports/schedules/:sid', MANAGE, async (req) => {
+    const { sid } = req.params as { sid: string };
+    await ctx.reportSchedules.remove(sid);
+    return { ok: true };
+  });
+
+  app.post('/api/reports/schedules/:sid/run', MANAGE, async (req, reply) => {
+    const { sid } = req.params as { sid: string };
+    if (!(await ctx.reportSchedules.get(sid))) { reply.code(404); return { error: `schedule not found: ${sid}` }; }
+    ctx.reportScheduler.runNow(sid);
+    reply.code(202);
     return { ok: true };
   });
 

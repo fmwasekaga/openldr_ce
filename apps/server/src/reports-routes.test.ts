@@ -147,3 +147,60 @@ describe('report run history routes', () => {
     await app.close();
   });
 });
+
+describe('report schedule routes', () => {
+  function appWithSchedules(roles = ['lab_manager']) {
+    const created: any[] = [];
+    const ctx = {
+      reporting: { list: () => [{ id: 'amr-resistance', name: 'AMR Resistance Rate', description: '', category: 'amr', parameters: [] }] },
+      eventing: { publish: async () => {} },
+      reportSchedules: {
+        create: async (s: any) => { created.push(s); },
+        list: async () => [{ id: 's1', reportId: 'amr-resistance', params: {}, frequency: 'weekly', dayOfWeek: 1, dayOfMonth: null, outputFormat: 'pdf', enabled: true, lastRunAt: null, nextDueAt: new Date('2026-03-16T06:00:00Z'), createdBy: 'u1' }],
+        get: async (id: string) => (id === 's1' ? { id: 's1', reportId: 'amr-resistance', frequency: 'weekly', dayOfWeek: 1, dayOfMonth: null, outputFormat: 'pdf', enabled: true, params: {}, lastRunAt: null, nextDueAt: null, createdBy: 'u1' } : null),
+        update: async () => {}, remove: async () => {},
+      },
+      reportScheduler: { runNow: () => {} },
+    } as unknown as Parameters<typeof registerReportRoutes>[1];
+    const app = Fastify();
+    app.addHook('onRequest', async (req) => { (req as { user?: unknown }).user = { id: 'u1', username: 'ada', displayName: 'Ada', roles, status: 'active' }; });
+    registerReportRoutes(app, ctx);
+    return { app, created };
+  }
+
+  it('POST creates a schedule with computed nextDueAt + createdBy', async () => {
+    const { app, created } = appWithSchedules();
+    await app.ready();
+    const res = await app.inject({ method: 'POST', url: '/api/reports/amr-resistance/schedules', payload: { frequency: 'weekly', dayOfWeek: 1, outputFormat: 'pdf' } });
+    expect(res.statusCode).toBe(201);
+    expect(created[0]).toMatchObject({ reportId: 'amr-resistance', frequency: 'weekly', outputFormat: 'pdf', createdBy: 'u1' });
+    expect(created[0].nextDueAt).toBeInstanceOf(Date);
+    await app.close();
+  });
+
+  it('GET lists schedules for a report', async () => {
+    const { app } = appWithSchedules();
+    await app.ready();
+    const res = await app.inject({ method: 'GET', url: '/api/reports/amr-resistance/schedules' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toHaveLength(1);
+    await app.close();
+  });
+
+  it('forbids creation for a non-manager (403)', async () => {
+    const { app } = appWithSchedules(['lab_technician']);
+    await app.ready();
+    const res = await app.inject({ method: 'POST', url: '/api/reports/amr-resistance/schedules', payload: { frequency: 'daily', outputFormat: 'csv' } });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('PATCH updates and DELETE removes; run-now returns 202', async () => {
+    const { app } = appWithSchedules();
+    await app.ready();
+    expect((await app.inject({ method: 'PATCH', url: '/api/reports/schedules/s1', payload: { enabled: false } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'DELETE', url: '/api/reports/schedules/s1' })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'POST', url: '/api/reports/schedules/s1/run' })).statusCode).toBe(202);
+    await app.close();
+  });
+});
