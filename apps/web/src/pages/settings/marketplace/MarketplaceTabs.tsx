@@ -17,6 +17,8 @@ interface MarketplaceTabsProps {
   onToggleEnabled: (id: string, enabled: boolean) => void;
   onRollback: (id: string, version: string) => void;
   onRemove: (entry: CardEntry) => void;
+  onDetach?: (entry: CardEntry) => void;
+  onOpenForm?: (formId: string) => void;
   canPublish?: boolean;
   onPublish?: (entry: CardEntry) => void;
   source: 'local' | 'http' | null;
@@ -52,6 +54,8 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
         onToggleEnabled={props.onToggleEnabled}
         onRollback={props.onRollback}
         onRemove={props.onRemove}
+        onDetach={props.onDetach}
+        onOpenForm={props.onOpenForm}
         canPublish={props.canPublish}
         onPublish={props.onPublish}
       />

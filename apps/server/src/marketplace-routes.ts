@@ -38,7 +38,7 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
 
   app.get('/api/marketplace/installed', { preHandler: requireRole('lab_admin') }, async () => {
     const rows = await ctx.plugins.list();
-    return rows.map((r) => {
+    const pluginRows = rows.map((r) => {
       const g = readGrant(r.manifest);
       const m = r.manifest as Record<string, unknown>;
       return {
@@ -53,6 +53,13 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
         legacy: g.legacy,
       };
     });
+    const formRows = (await ctx.marketplaceForms.list()).map((r) => ({
+      id: r.artifactId, version: r.version, active: true, enabled: true,
+      approvedBy: r.installedBy ?? null, type: 'form-template',
+      publisher: r.publisherName ? { name: r.publisherName } : null,
+      capabilities: [], legacy: false, drifted: r.drifted, targetFormId: r.targetFormId,
+    }));
+    return [...pluginRows, ...formRows];
   });
 
   app.get('/api/marketplace/available', { preHandler: requireRole('lab_admin') }, async () => {
@@ -108,6 +115,13 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
       const b = await source.getBundle(ref);
       const a = actor(req);
       const acknowledgedCapabilities = (body.acknowledgedCapabilities as Capability[] | undefined) ?? b.manifest.capabilities;
+      if (b.manifest.type === 'form-template') {
+        const installed = await ctx.marketplaceForms.install(b, {
+          actor: a, sourceRef: ref,
+          approval: { approvedBy: a.id ?? a.name, acknowledgedCapabilities },
+        });
+        return { id: installed.id, version: installed.version };
+      }
       const installed = await ctx.plugins.install(b.wasm, b.raw, {
         publicKeyDer: b.publicKeyDer, actor: a,
         approval: { approvedBy: a.id ?? a.name, acknowledgedCapabilities },
@@ -223,6 +237,11 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
       reply.code(400);
       return { error: err instanceof Error ? err.message : String(err) };
     }
+  });
+
+  app.post('/api/marketplace/:id/detach', { preHandler: requireRole('lab_admin') }, async (req) => {
+    await ctx.marketplaceForms.detach((req.params as { id: string }).id, { actor: actor(req) });
+    return { ok: true };
   });
 
   app.delete('/api/marketplace/:id', { preHandler: requireRole('lab_admin') }, async (req) => {

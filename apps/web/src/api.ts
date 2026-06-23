@@ -928,6 +928,8 @@ export interface InstalledArtifact {
   publisher: unknown;
   capabilities: unknown[];
   legacy: boolean;
+  drifted?: boolean;
+  targetFormId?: string;
 }
 
 export const listInstalledArtifacts = (): Promise<InstalledArtifact[]> =>
@@ -967,6 +969,11 @@ export const rollbackArtifact = (id: string, version: string): Promise<void> =>
 export async function removeArtifact(id: string, version?: string): Promise<void> {
   const qs = version ? `?version=${encodeURIComponent(version)}` : '';
   await apiDelete(`/api/marketplace/${encodeURIComponent(id)}${qs}`, 'remove artifact');
+}
+
+export async function detachArtifact(id: string): Promise<void> {
+  const r = await authFetch(`/api/marketplace/${encodeURIComponent(id)}/detach`, { method: 'POST' });
+  if (!r.ok) throw new Error(`detach failed: ${r.status}`);
 }
 
 export function buildOntology(
