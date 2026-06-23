@@ -9,7 +9,7 @@ vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
   return { ...actual,
     listInstalledArtifacts: vi.fn(), listAvailableArtifacts: vi.fn(), getAvailableArtifact: vi.fn(),
-    installArtifact: vi.fn(), setArtifactEnabled: vi.fn(), rollbackArtifact: vi.fn(), removeArtifact: vi.fn(), refreshRegistry: vi.fn(),
+    installArtifact: vi.fn(), setArtifactEnabled: vi.fn(), rollbackArtifact: vi.fn(), removeArtifact: vi.fn(), detachArtifact: vi.fn(), refreshRegistry: vi.fn(),
     getPublishStatus: vi.fn(), publishArtifact: vi.fn() };
 });
 import * as api from '@/api';
@@ -72,6 +72,24 @@ describe('Marketplace', () => {
     if (!screen.queryByText('Disable')) fireEvent.keyDown(menuTrigger, { key: 'Enter' });
     fireEvent.click(await screen.findByText('Disable'));
     await waitFor(() => expect(api.setArtifactEnabled).toHaveBeenCalledWith('whonet-sqlite', false));
+  });
+
+  it('detaches an installed form-template from its detail menu', async () => {
+    (api.listAvailableArtifacts as any).mockResolvedValue({ configured: true, source: 'local', host: 'local', bundles: [] });
+    (api.listInstalledArtifacts as any).mockResolvedValue([{ id: 'demo-form', version: '1.0.0', active: true, enabled: true, approvedBy: 'admin', type: 'form-template', publisher: { name: 'Acme' }, capabilities: [], legacy: false, drifted: false, targetFormId: 'form-9' }]);
+    (api.detachArtifact as any).mockResolvedValue(undefined);
+    render(<MemoryRouter><Marketplace /></MemoryRouter>);
+    // Radix Tabs activate on mouseDown in jsdom (matches the installed-tab test above).
+    fireEvent.mouseDown(await screen.findByRole('tab', { name: /Installed \(1\)/ }), { button: 0 });
+    fireEvent.click(await screen.findByTestId('card-demo-form'));
+    // Radix DropdownMenu opens on pointerDown in jsdom, with a keyboard fallback.
+    const menuTrigger = await screen.findByTestId('detail-menu');
+    fireEvent.pointerDown(menuTrigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Detach')) fireEvent.keyDown(menuTrigger, { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Detach'));
+    // Confirm in the AlertDialog (its action button is also labelled "Detach").
+    fireEvent.click(await screen.findByRole('button', { name: 'Detach' }));
+    await waitFor(() => expect(api.detachArtifact).toHaveBeenCalledWith('demo-form'));
   });
 
   it('publishes a staged bundle and shows the PR toast', async () => {

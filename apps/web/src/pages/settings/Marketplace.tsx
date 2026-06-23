@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
   listAvailableArtifacts, listInstalledArtifacts, refreshRegistry,
-  installArtifact, setArtifactEnabled, rollbackArtifact, removeArtifact,
+  installArtifact, setArtifactEnabled, rollbackArtifact, removeArtifact, detachArtifact,
   getPublishStatus, publishArtifact,
   type AvailableArtifact, type InstalledArtifact,
 } from '@/api';
@@ -15,6 +16,7 @@ import { capabilityLine, type CardEntry } from './marketplace/util';
 
 export function Marketplace() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [configured, setConfigured] = useState(true);
   const [source, setSource] = useState<'local' | 'http' | null>(null);
   const [host, setHost] = useState<string | null>(null);
@@ -22,6 +24,7 @@ export function Marketplace() {
   const [installed, setInstalled] = useState<InstalledArtifact[]>([]);
   const [consent, setConsent] = useState<{ entry: CardEntry; capabilities: unknown[] } | null>(null);
   const [pendingRemove, setPendingRemove] = useState<CardEntry | null>(null);
+  const [pendingDetach, setPendingDetach] = useState<CardEntry | null>(null);
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [canPublish, setCanPublish] = useState(false);
@@ -93,6 +96,14 @@ export function Marketplace() {
     catch (e) { toast.error(t('settings.marketplace.errorToast', { error: e instanceof Error ? e.message : String(e) })); }
   }, [pendingRemove, t, load]);
 
+  const doDetach = useCallback(async () => {
+    if (!pendingDetach) return;
+    const entry = pendingDetach;
+    setPendingDetach(null);
+    try { await detachArtifact(entry.id); toast.success(t('settings.marketplace.detach')); await load(); }
+    catch (e) { toast.error(t('settings.marketplace.errorToast', { error: e instanceof Error ? e.message : String(e) })); }
+  }, [pendingDetach, t, load]);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4" data-testid="marketplace-page">
       <h1 className="text-lg font-semibold">{t('settings.marketplace.heading')}</h1>
@@ -105,6 +116,8 @@ export function Marketplace() {
         onToggleEnabled={onToggleEnabled}
         onRollback={onRollback}
         onRemove={(entry) => setPendingRemove(entry)}
+        onDetach={(e) => setPendingDetach(e)}
+        onOpenForm={(id) => navigate('/forms/' + id)}
         canPublish={canPublish}
         onPublish={onPublish}
         source={source}
@@ -149,6 +162,16 @@ export function Marketplace() {
         confirmLabel={t('settings.marketplace.remove')}
         destructive
         onConfirm={() => { void doRemove(); }}
+      />
+
+      <ConfirmDialog
+        open={pendingDetach !== null}
+        onOpenChange={(o) => { if (!o) setPendingDetach(null); }}
+        title={t('settings.marketplace.detachTitle', { id: pendingDetach?.id ?? '' })}
+        description={t('settings.marketplace.detachDescription')}
+        confirmLabel={t('settings.marketplace.detach')}
+        destructive
+        onConfirm={() => { void doDetach(); }}
       />
     </div>
   );
