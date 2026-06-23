@@ -1,18 +1,20 @@
-import { Save, Play, Trash2, Loader2 } from 'lucide-react';
+import { Save, Play, Trash2, Loader2, History } from 'lucide-react';
 import { useWorkflowStore } from '../../hooks/use-workflow-store';
 
 interface ToolbarProps {
   onSave: () => void;
   onRun: () => void;
+  onHistory: () => void;
   saving: boolean;
   executing: boolean;
 }
 
-export function Toolbar({ onSave, onRun, saving, executing }: ToolbarProps) {
+export function Toolbar({ onSave, onRun, onHistory, saving, executing }: ToolbarProps) {
   const workflowName = useWorkflowStore((s) => s.workflowName);
   const setWorkflowName = useWorkflowStore((s) => s.setWorkflowName);
   const clear = useWorkflowStore((s) => s.clear);
   const nodes = useWorkflowStore((s) => s.nodes);
+  const workflowId = useWorkflowStore((s) => s.workflowId);
 
   return (
     <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-card px-4">
@@ -36,6 +38,16 @@ export function Toolbar({ onSave, onRun, saving, executing }: ToolbarProps) {
       >
         <Trash2 className="h-3.5 w-3.5" />
         Clear
+      </button>
+      <button
+        type="button"
+        className="flex items-center gap-1.5 rounded-md border border-border bg-secondary px-3 py-1.5 text-xs font-medium text-secondary-foreground transition-colors hover:bg-secondary/70 disabled:opacity-50"
+        onClick={onHistory}
+        disabled={!workflowId}
+        title={workflowId ? 'View run history' : 'Save the workflow first'}
+      >
+        <History className="h-3.5 w-3.5" />
+        History
       </button>
       <button
         type="button"

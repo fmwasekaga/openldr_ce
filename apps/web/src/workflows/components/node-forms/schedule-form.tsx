@@ -3,17 +3,16 @@ import type { TriggerNodeData } from '../../lib/types';
 import { FormField, TextInput } from './shared';
 
 /**
- * Schedule trigger form. The cron expression is stored in config and used
- * by the backend scheduler (when available) to fire the workflow on a timer.
+ * Schedule trigger form. The cron expression + timezone are read by the backend
+ * scheduler to fire the workflow on a timer.
+ *
+ * Field-name contract (read by the server's `syncWorkflowTriggers`):
+ *   data.triggerType = 'schedule', data.cron, data.tz.
  */
 export function ScheduleForm({ node, update }: NodeFormProps) {
   const data = node.data as TriggerNodeData;
-  const config = data.config ?? {};
-  const cronExpression = (config.cronExpression as string) ?? '';
-  const timezone = (config.timezone as string) ?? '';
-
-  const patchConfig = (patch: Record<string, unknown>) =>
-    update({ config: { ...config, ...patch } });
+  const cron = (data.cron as string | undefined) ?? '';
+  const tz = (data.tz as string | undefined) ?? '';
 
   return (
     <div className="space-y-4">
@@ -29,8 +28,8 @@ export function ScheduleForm({ node, update }: NodeFormProps) {
         hint="Standard cron format: minute hour day month weekday. E.g. */5 * * * * (every 5 min)."
       >
         <TextInput
-          value={cronExpression}
-          onChange={(e) => patchConfig({ cronExpression: e.target.value })}
+          value={cron}
+          onChange={(e) => update({ cron: e.target.value })}
           placeholder="* * * * *"
           className="font-mono"
         />
@@ -38,8 +37,8 @@ export function ScheduleForm({ node, update }: NodeFormProps) {
 
       <FormField label="Timezone" hint="IANA timezone, e.g. America/New_York. Leave empty for UTC.">
         <TextInput
-          value={timezone}
-          onChange={(e) => patchConfig({ timezone: e.target.value })}
+          value={tz}
+          onChange={(e) => update({ tz: e.target.value })}
           placeholder="UTC"
         />
       </FormField>

@@ -5,8 +5,11 @@ import type { NodeCategory, NodeTemplate, WorkflowNodeData } from './lib/types';
  * ("coming soon") in the palette until later slices add the handler.
  */
 export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
-  // trigger
+  // triggers
   'manual-trigger',
+  'schedule-trigger',
+  'webhook-trigger',
+  'ingest',
   // actions
   'set', 'log', 'merge',
   // conditions
@@ -131,10 +134,18 @@ export const nodeCategories: NodeCategory[] = [
       node('manual-trigger', 'trigger', 'Manual Trigger', 'Play', 'Start workflow manually'),
       node('schedule-trigger', 'trigger', 'Schedule', 'Clock', 'Run on a cron schedule', {
         keywords: ['cron', 'timer', 'interval'],
-        data: { triggerType: 'schedule', config: { cronExpression: '', timezone: '' } },
+        // Field names match the server's `syncWorkflowTriggers` contract:
+        // schedule node → data.triggerType:'schedule', data.cron, data.tz.
+        data: { triggerType: 'schedule', cron: '', tz: '', config: {} },
       }),
       node('webhook-trigger', 'webhook', 'Webhook', 'Webhook', 'Trigger via HTTP webhook', {
         keywords: ['http', 'incoming', 'listener'],
+      }),
+      node('ingest', 'trigger', 'On Data Ingest', 'Database', 'Run when a lab data batch is ingested', {
+        keywords: ['ingest', 'batch', 'whonet', 'import'],
+        // Field names match the server's `syncWorkflowTriggers` contract:
+        // ingest node → data.triggerType:'ingest', data.config.sourceFilter.
+        data: { triggerType: 'ingest', config: {} },
       }),
       node('log', 'action', 'Log', 'Terminal', 'Print a templated message to the console', {
         keywords: ['print', 'console', 'debug'],

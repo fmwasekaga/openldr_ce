@@ -10,10 +10,16 @@ export interface NodeVisualMeta {
 
 export interface TriggerNodeData extends NodeVisualMeta {
   label: string;
-  triggerType: 'manual' | 'webhook' | 'schedule';
+  triggerType: 'manual' | 'webhook' | 'schedule' | 'ingest';
   config: Record<string, unknown>;
-  /** For webhook triggers — path segment under /api/webhooks/ that routes here. */
+  /** For schedule triggers — cron expression read by the server scheduler. */
+  cron?: string;
+  /** For schedule triggers — IANA timezone (empty = UTC). */
+  tz?: string;
+  /** For webhook triggers — path segment under /api/workflows/hooks/ that routes here. */
   path?: string;
+  /** For webhook triggers — generated shared secret, sent back as X-Webhook-Token. */
+  secret?: string;
   /** For webhook triggers — HTTP method to accept. */
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
   [key: string]: unknown;
@@ -48,8 +54,10 @@ export interface LoopNodeData extends NodeVisualMeta {
 
 export interface WebhookNodeData extends NodeVisualMeta {
   label: string;
-  /** Path segment under /api/webhooks/ that triggers this workflow (e.g. "hello"). */
+  /** Path segment under /api/workflows/hooks/ that triggers this workflow (e.g. "hello"). */
   path?: string;
+  /** Generated shared secret; callers must send it as the X-Webhook-Token header. */
+  secret?: string;
   url: string;
   method: 'GET' | 'POST' | 'PUT' | 'DELETE';
   [key: string]: unknown;

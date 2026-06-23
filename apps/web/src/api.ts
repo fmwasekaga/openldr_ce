@@ -1103,3 +1103,34 @@ export async function executeWorkflowStream(
   }
   return finalResult;
 }
+
+// ── Workflow run history ───────────────────────────────────────────────────────
+
+export interface WorkflowRunSummary {
+  id: string;
+  workflowId: string;
+  triggerSource: 'manual' | 'schedule' | 'webhook' | 'ingest';
+  status: 'completed' | 'failed';
+  startedAt: string;
+  finishedAt: string;
+  error: string | null;
+  result: unknown;
+}
+
+export async function fetchWorkflowRuns(
+  id: string,
+  opts: { limit?: number; offset?: number } = {},
+): Promise<WorkflowRunSummary[]> {
+  const qs = new URLSearchParams();
+  if (opts.limit != null) qs.set('limit', String(opts.limit));
+  if (opts.offset != null) qs.set('offset', String(opts.offset));
+  const res = await authFetch(`/api/workflows/${encodeURIComponent(id)}/runs${qs.toString() ? `?${qs}` : ''}`);
+  if (!res.ok) throw new Error(`workflow runs failed: ${res.status}`);
+  return res.json() as Promise<WorkflowRunSummary[]>;
+}
+
+export async function fetchWorkflowRun(runId: string): Promise<WorkflowRunSummary> {
+  const res = await authFetch(`/api/workflows/runs/${encodeURIComponent(runId)}`);
+  if (!res.ok) throw new Error(`workflow run failed: ${res.status}`);
+  return res.json() as Promise<WorkflowRunSummary>;
+}

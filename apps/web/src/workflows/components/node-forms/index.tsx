@@ -5,6 +5,7 @@ import { CodeForm } from './code-form';
 import { LogForm } from './log-form';
 import { WebhookForm } from './webhook-form';
 import { ScheduleForm } from './schedule-form';
+import { IngestForm } from './ingest-form';
 import { HttpRequestForm } from './http-request-form';
 import { SetForm } from './set-form';
 import { MergeForm } from './merge-form';
@@ -33,6 +34,7 @@ const FORMS: Record<string, ComponentType<NodeFormProps>> = {
   log: LogForm,
   'webhook-trigger': WebhookForm,
   'schedule-trigger': ScheduleForm,
+  ingest: IngestForm,
   'http-request': HttpRequestForm,
   set: SetForm,
   merge: MergeForm,
