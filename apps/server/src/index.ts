@@ -48,6 +48,19 @@ async function main(): Promise<void> {
   let dhis2: Awaited<ReturnType<typeof createDhis2Context>> | null = null;
   if (cfg.REPORTING_TARGET_ADAPTER === 'dhis2') {
     dhis2 = await createDhis2Context(cfg);
+    // Expose DHIS2 push as a workflow sink. Gated on dhis2 truthiness (not SYNC_ENABLED)
+    // so a workflow push works even with scheduled sync off. runMapping requires the
+    // report/event-source callbacks, supplied from the reporting context.
+    const dhis2Ctx = dhis2;
+    ctx.workflows.services.dhis2Push = ({ mappingId, period, dryRun }) =>
+      dhis2Ctx.runMapping({
+        mappingId,
+        period,
+        dryRun: Boolean(dryRun),
+        trigger: 'workflow',
+        runReport: (id, p) => ctx.reporting.run(id, p ?? {}).then((r) => ({ rows: r.rows })),
+        runEventSource: (id, w) => ctx.reporting.runEventSource(id, w),
+      });
   }
 
   const app = buildApp(ctx, dhis2, ingest.eventing);

@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import * as XLSX from 'xlsx';
 import { Kysely } from 'kysely';
 import { createAuth } from '@openldr/adapter-auth';
 import { createEventBus } from '@openldr/adapter-event-bus';
@@ -10,7 +12,7 @@ import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@
 import { createAuditStore, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore, createUserProfileStore, type UserProfileStore } from '@openldr/users';
 import { createFormStore, type FormStore } from '@openldr/forms';
-import { getReport, reportSummaries, getEventSource, eventSourceCatalog, type ReportResult, type ReportSummary } from '@openldr/reporting';
+import { getReport, reportSummaries, getEventSource, eventSourceCatalog, toCsv, type ReportResult, type ReportSummary } from '@openldr/reporting';
 import { createDashboardStore, getModel, listModels, runBuilderQuery, runSqlQuery, type DashboardStore, type WidgetQuery } from '@openldr/dashboards';
 import {
   createWorkflowStore, type WorkflowStore,
@@ -18,6 +20,7 @@ import {
   createWorkflowScheduleStore, type WorkflowScheduleStore,
   createWebhookRegistry, type WebhookRegistry,
   createWorkflowTriggerRunner, type WorkflowTriggerRunner,
+  createWorkflowDatasetStore, type WorkflowDatasetStore,
   runWorkflow,
   guardedFetch, type WorkflowServices,
 } from '@openldr/workflows';
@@ -117,6 +120,7 @@ export interface AppContext {
     webhooks: WebhookRegistry;
     runner: WorkflowTriggerRunner;
     services: WorkflowServices;
+    datasets: WorkflowDatasetStore;
   };
   plugins: PluginRuntime;
   cfg: Config;
@@ -214,6 +218,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   const workflowRuns = createWorkflowRunStore(internal.db);
   const workflowSchedules = createWorkflowScheduleStore(internal.db);
   const workflowWebhooks = createWebhookRegistry();
+  const workflowDatasets = createWorkflowDatasetStore(internal.db);
 
   const health = new HealthRegistry();
   health.register({ name: 'auth', check: () => auth.healthCheck() });
@@ -285,6 +290,32 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       resources: (await termFhirStore.listByType(resourceType, limit)).map((x) => x.resource),
     }),
     httpFetch: (req) => guardedFetch(req, cfg.WORKFLOW_HTTP_ALLOWLIST),
+    materializeDataset: async (name, columns, rows, workflowId) => {
+      await workflowDatasets.upsertByName({ name, columns, rows, rowCount: rows.length, workflowId });
+      return { dataset: name, rowCount: rows.length };
+    },
+    exportArtifact: async ({ format, filename, title, columns, rows }) => {
+      let bytes: Buffer;
+      let contentType: string;
+      const ext = format;
+      if (format === 'pdf') {
+        bytes = await renderReportPdf({ title: title ?? 'Workflow Export', generatedAt: new Date().toISOString(), params: {}, columns, rows });
+        contentType = 'application/pdf';
+      } else if (format === 'xlsx') {
+        const data = rows.map((r) => Object.fromEntries(columns.map((c) => [c.label, r[c.key] ?? ''])));
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Export');
+        bytes = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+        contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      } else {
+        bytes = Buffer.from(toCsv(columns, rows), 'utf8');
+        contentType = 'text/csv';
+      }
+      const objectKey = `workflow-artifacts/${randomUUID()}/${filename ?? `export.${ext}`}`;
+      await blob.put(objectKey, bytes, contentType);
+      return { objectKey, format, byteSize: bytes.length };
+    },
   };
   const workflowRunner = createWorkflowTriggerRunner({
     store: workflowStore, runs: workflowRuns, schedules: workflowSchedules,
@@ -292,7 +323,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     codeLimits: { timeoutMs: cfg.WORKFLOW_CODE_TIMEOUT_MS, memoryMb: cfg.WORKFLOW_CODE_MEMORY_MB },
     services: workflowServices,
   });
-  const workflows = { store: workflowStore, runs: workflowRuns, schedules: workflowSchedules, webhooks: workflowWebhooks, runner: workflowRunner, services: workflowServices };
+  const workflows = { store: workflowStore, runs: workflowRuns, schedules: workflowSchedules, webhooks: workflowWebhooks, runner: workflowRunner, services: workflowServices, datasets: workflowDatasets };
 
   return {
     logger,

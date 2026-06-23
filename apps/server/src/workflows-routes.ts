@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { ZodError } from 'zod';
 import type { AppContext } from '@openldr/bootstrap';
 import { WorkflowSchema, WorkflowDefinitionSchema, runWorkflow, type RunEvent } from '@openldr/workflows';
+import { toCsv } from '@openldr/reporting';
 import { recordAudit } from './audit-helper';
 import { requireRole } from './rbac';
 
@@ -105,6 +106,7 @@ export function registerWorkflowRoutes(app: FastifyInstance<any, any, any, any>,
         onEvent: send,
         codeLimits: { timeoutMs: ctx.cfg.WORKFLOW_CODE_TIMEOUT_MS, memoryMb: ctx.cfg.WORKFLOW_CODE_MEMORY_MB },
         services: ctx.workflows.services,
+        workflowId: id,
       });
       reply.raw.write(`event: done\ndata: ${JSON.stringify(result)}\n\n`);
       await ctx.workflows.runs.record({
@@ -136,6 +138,39 @@ export function registerWorkflowRoutes(app: FastifyInstance<any, any, any, any>,
     const run = await ctx.workflows.runs.get(runId);
     if (!run) { reply.code(404); return { error: `unknown run: ${runId}` }; }
     return run;
+  });
+
+  // Materialized datasets produced by workflow sink nodes.
+  app.get('/api/workflows/datasets', MANAGE, async () => ctx.workflows.datasets.list());
+
+  // CSV download for a dataset (declared before :name so the .csv suffix isn't swallowed).
+  app.get('/api/workflows/datasets/:name.csv', MANAGE, async (req, reply) => {
+    const { name } = req.params as { name: string };
+    const d = await ctx.workflows.datasets.getByName(name);
+    if (!d) { reply.code(404); return { error: `unknown dataset: ${name}` }; }
+    reply.header('content-type', 'text/csv');
+    reply.header('content-disposition', `attachment; filename="${name}.csv"`);
+    return toCsv(d.columns, d.rows);
+  });
+
+  app.get('/api/workflows/datasets/:name', MANAGE, async (req, reply) => {
+    const { name } = req.params as { name: string };
+    const d = await ctx.workflows.datasets.getByName(name);
+    if (!d) { reply.code(404); return { error: `unknown dataset: ${name}` }; }
+    return d;
+  });
+
+  // Stream an exported artifact out of blob storage by its object key.
+  app.get('/api/workflows/artifacts/*', MANAGE, async (req, reply) => {
+    const key = (req.params as Record<string, string>)['*'];
+    try {
+      const buf = await ctx.blob.get(key);
+      reply.header('content-type', 'application/octet-stream');
+      return reply.send(Buffer.from(buf));
+    } catch {
+      reply.code(404);
+      return { error: 'artifact not found' };
+    }
   });
 
   // Secret-gated webhook trigger. NOT MANAGE-gated — auth is the per-path secret.

@@ -40,7 +40,7 @@ export function createWorkflowTriggerRunner(deps: RunnerDeps): WorkflowTriggerRu
     let result: Awaited<ReturnType<typeof deps.runWorkflow>>;
     let error: string | null = null;
     try {
-      result = await deps.runWorkflow(def.nodes, def.edges, { input, codeLimits: deps.codeLimits, services: deps.services });
+      result = await deps.runWorkflow(def.nodes, def.edges, { input, codeLimits: deps.codeLimits, services: deps.services, workflowId });
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
       result = {

@@ -54,6 +54,10 @@ function fakeWorkflowExtras() {
       registerRunner: async () => {},
       reconcile: async () => {},
     },
+    datasets: {
+      list: async () => [],
+      getByName: async () => undefined,
+    },
   };
 }
 
@@ -80,7 +84,9 @@ function fakeCtx() {
       webhooks: extras.webhooks,
       runner: extras.runner,
       services: undefined,
+      datasets: extras.datasets,
     },
+    blob: { get: async () => Buffer.from('artifact-bytes') },
     cfg: { WORKFLOW_CODE_TIMEOUT_MS: 5000, WORKFLOW_CODE_MEMORY_MB: 128 },
     audit: { record: async (e: unknown) => { auditEvents.push(e); return e; } },
     logger: { error() {}, warn() {}, info() {} },
@@ -193,6 +199,7 @@ describe('workflow routes', () => {
         webhooks: extras.webhooks,
         runner: extras.runner,
         services: undefined,
+        datasets: extras.datasets,
       },
       cfg: { WORKFLOW_CODE_TIMEOUT_MS: 5000, WORKFLOW_CODE_MEMORY_MB: 128 },
       audit: { record: async (e: unknown) => { auditEvents.push(e); return e; } },
@@ -236,6 +243,27 @@ describe('workflow routes', () => {
     registerWorkflowRoutes(app, ctx);
 
     const res = await app.inject({ method: 'GET', url: '/api/workflows/runs/nope' });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('GET /api/workflows/datasets → 200 and empty array', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    const ctx = fakeCtx();
+    registerWorkflowRoutes(app, ctx);
+
+    const res = await app.inject({ method: 'GET', url: '/api/workflows/datasets' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([]);
+  });
+
+  it('GET /api/workflows/datasets/:name for unknown name → 404', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    const ctx = fakeCtx();
+    registerWorkflowRoutes(app, ctx);
+
+    const res = await app.inject({ method: 'GET', url: '/api/workflows/datasets/nope' });
     expect(res.statusCode).toBe(404);
   });
 
