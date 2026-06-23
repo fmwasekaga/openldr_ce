@@ -60,6 +60,9 @@ async function main(): Promise<void> {
     await dhis2.reconcileSchedules(ingest.eventing);
   }
 
+  await ctx.reportScheduler.registerRunner(ingest.eventing);
+  await ctx.reportScheduler.reconcile(ingest.eventing);
+
   const worker = ingest.startWorker();
 
   const close = async () => {
