@@ -27,7 +27,7 @@ export function CodeForm({ node, update }: NodeFormProps) {
           onChange={(e) => update({ language: e.target.value as CodeNodeData['language'] })}
         >
           <option value="javascript">JavaScript</option>
-          <option value="typescript">TypeScript</option>
+          <option value="typescript" disabled>TypeScript (coming soon)</option>
         </Select>
       </FormField>
 

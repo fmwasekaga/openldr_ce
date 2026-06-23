@@ -10,6 +10,8 @@ export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
   'schedule-trigger',
   'webhook-trigger',
   'ingest',
+  // code
+  'code',
   // actions
   'set', 'log', 'merge',
   // conditions
