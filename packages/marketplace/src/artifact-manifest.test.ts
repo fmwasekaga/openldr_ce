@@ -61,4 +61,32 @@ describe('artifact manifest', () => {
     // (fail-closed), NOT unrestricted — see packages/plugins runtime enforcement tests.
     expect(pluginManifestToArtifact(legacy).capabilities).toEqual([]);
   });
+
+  it('defaults pluginKind to source and entrypoints to []', () => {
+    const m = parseArtifactManifest(base);
+    const p = m.payload as Extract<typeof m.payload, { kind: 'plugin' }>;
+    expect(p.pluginKind).toBe('source');
+    expect(p.entrypoints).toEqual([]);
+  });
+  it('parses a sink plugin payload carrying entrypoints', () => {
+    const m = parseArtifactManifest({
+      ...base,
+      payload: { kind: 'plugin', pluginKind: 'sink', wasmSha256: 'b'.repeat(64), entrypoints: ['health_check', 'push_aggregate'] },
+    });
+    const p = m.payload as Extract<typeof m.payload, { kind: 'plugin' }>;
+    expect(p.pluginKind).toBe('sink');
+    expect(p.entrypoints).toEqual(['health_check', 'push_aggregate']);
+  });
+  it('carries kind + entrypoints through legacy->artifact normalization for a sink', () => {
+    const legacy = {
+      id: 'dhis2-sink', version: '0.1.0', kind: 'sink' as const, wasmSha256: 'e'.repeat(64),
+      entrypoints: ['health_check', 'push_aggregate'],
+      capabilities: [{ kind: 'net-egress', allowedHosts: [] as string[] }],
+    };
+    const a = pluginManifestToArtifact(legacy);
+    const p = a.payload as Extract<typeof a.payload, { kind: 'plugin' }>;
+    expect(p.pluginKind).toBe('sink');
+    expect(p.entrypoints).toEqual(['health_check', 'push_aggregate']);
+    expect(() => parseArtifactManifest(a)).not.toThrow();
+  });
 });

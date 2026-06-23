@@ -6,8 +6,14 @@ const HEX64 = /^[0-9a-f]{64}$/;
 
 const pluginPayload = z.object({
   kind: z.literal('plugin'),
+  // Source/sink flavor. Named `pluginKind` because this object's own discriminator is
+  // already `kind: 'plugin'`. Maps to the flat manifest's `kind`. Default 'source' keeps
+  // every existing (signed) plugin artifact byte-identical and verifying.
+  pluginKind: z.enum(['source', 'sink']).default('source'),
   wasmSha256: z.string().regex(HEX64),
   entrypoint: z.string().min(1).default('convert'),
+  // Named entrypoints a sink exports; empty for sources.
+  entrypoints: z.array(z.string().min(1)).default([]),
   wasi: z.boolean().default(false),
   limits: z.object({ memoryMb: z.number().int().positive().default(256), timeoutMs: z.number().int().positive().default(30_000) })
     .default({ memoryMb: 256, timeoutMs: 30_000 }),
@@ -42,8 +48,8 @@ export function parseArtifactManifest(raw: unknown): ArtifactManifest {
  *  still declare `capabilities`; without it the derived grant is empty and emit-fhir is
  *  fail-closed (the plugin can emit nothing), so reference plugins must carry it. */
 export interface LegacyPluginManifest {
-  id: string; version: string; entrypoint?: string; wasmSha256: string;
-  description?: string; license?: string; wasi?: boolean;
+  id: string; version: string; kind?: 'source' | 'sink'; entrypoint?: string; entrypoints?: string[];
+  wasmSha256: string; description?: string; license?: string; wasi?: boolean;
   limits?: { memoryMb: number; timeoutMs: number };
   capabilities?: unknown;
 }
@@ -61,6 +67,14 @@ export function pluginManifestToArtifact(m: LegacyPluginManifest): ArtifactManif
     license: m.license ?? 'UNLICENSED',
     compatibility: { ceVersion: '*' },
     ...(m.capabilities !== undefined ? { capabilities: m.capabilities } : {}),
-    payload: { kind: 'plugin', wasmSha256: m.wasmSha256, entrypoint: m.entrypoint ?? 'convert', wasi: m.wasi ?? false, limits: m.limits ?? { memoryMb: 256, timeoutMs: 30_000 } },
+    payload: {
+      kind: 'plugin',
+      pluginKind: m.kind ?? 'source',
+      wasmSha256: m.wasmSha256,
+      entrypoint: m.entrypoint ?? 'convert',
+      entrypoints: m.entrypoints ?? [],
+      wasi: m.wasi ?? false,
+      limits: m.limits ?? { memoryMb: 256, timeoutMs: 30_000 },
+    },
   });
 }

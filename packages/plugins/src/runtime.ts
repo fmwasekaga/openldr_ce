@@ -80,7 +80,9 @@ function artifactToPluginManifest(a: ArtifactManifest): PluginManifest {
   return parseManifest({
     id: a.id,
     version: a.version,
+    kind: p.pluginKind,
     entrypoint: p.entrypoint,
+    entrypoints: p.entrypoints,
     wasmSha256: p.wasmSha256,
     description: a.description,
     license: a.license,
