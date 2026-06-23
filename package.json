@@ -15,6 +15,7 @@
     "depcruise": "depcruise packages apps --config .dependency-cruiser.cjs",
     "openldr": "tsx packages/cli/src/index.ts",
     "build:plugins": "node scripts/build-wasm-plugins.mjs",
+    "build:test-sink": "node scripts/build-test-sink.mjs",
     "make:whonet-sample": "node scripts/make-whonet-sample.mjs",
     "e2e": "turbo build --filter=@openldr/web --filter=@openldr/server && pnpm --filter @openldr/e2e e2e",
     "verify:ui": "turbo build --filter=@openldr/web --filter=@openldr/server && pnpm --filter @openldr/e2e capture",
