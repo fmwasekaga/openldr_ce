@@ -9,6 +9,7 @@ import {
   openBundlePr, fetchRepoIndexJson, repoPathExists, mergeIndexEntry, parseIndex,
   payloadFileName, type RepoCoords, PublishError,
 } from '@openldr/marketplace';
+import { redact } from '@openldr/core';
 import { requireRole } from './rbac';
 
 function actor(req: FastifyRequest): { id?: string | null; name: string } {
@@ -191,10 +192,10 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
       if (err instanceof PublishError) {
         const status = err.kind === 'version-exists' ? 409 : err.kind === 'no-token' ? 412 : 502;
         reply.code(status);
-        return { error: err.message };
+        return { error: redact(err.message) };
       }
       reply.code(400);
-      return { error: err instanceof Error ? err.message : String(err) };
+      return { error: redact(err instanceof Error ? err.message : String(err)) };
     }
   });
 
