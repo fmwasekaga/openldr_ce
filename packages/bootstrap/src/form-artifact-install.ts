@@ -2,8 +2,9 @@ import { createHash } from 'node:crypto';
 import { verifyBundle, type Bundle, type Capability } from '@openldr/marketplace';
 import { fromQuestionnaire, type FormStore } from '@openldr/forms';
 import type { MarketplaceInstallStore, MarketplaceInstallRow } from '@openldr/db';
+import type { AuditEventInput } from '@openldr/audit';
 
-interface Audit { record(e: Record<string, unknown>): Promise<unknown>; }
+interface Audit { record(e: AuditEventInput): Promise<unknown>; }
 
 export interface FormInstallOptions {
   actor: { id?: string | null; name: string };
