@@ -1,10 +1,13 @@
-import { basename } from 'node:path';
+import { basename, join } from 'node:path';
+import { readFile } from 'node:fs/promises';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { CE_VERSION } from '@openldr/bootstrap';
 import {
-  verifyBundle, readGrant, isCompatible,
+  verifyBundle, readGrant, isCompatible, readBundle,
   LocalRegistrySource, HttpRegistrySource, type RegistrySource, type Capability,
+  openBundlePr, fetchRepoIndexJson, repoPathExists, mergeIndexEntry, parseIndex,
+  payloadFileName, type RepoCoords, PublishError,
 } from '@openldr/marketplace';
 import { requireRole } from './rbac';
 
@@ -20,11 +23,17 @@ function safeRef(ref: unknown): string | null {
   return ref;
 }
 
-export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
+export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext, fetchImpl: typeof fetch = fetch): void {
   const source: RegistrySource | null =
     ctx.cfg.MARKETPLACE_REGISTRY_URL ? new HttpRegistrySource(ctx.cfg.MARKETPLACE_REGISTRY_URL)
     : ctx.cfg.MARKETPLACE_REGISTRY_DIR ? new LocalRegistrySource(ctx.cfg.MARKETPLACE_REGISTRY_DIR)
     : null;
+
+  const stagingDir = ctx.cfg.MARKETPLACE_REGISTRY_DIR ?? null;
+  const publishRepoCfg = ctx.cfg.MARKETPLACE_PUBLISH_REPO ?? null;
+  const publishToken = ctx.cfg.MARKETPLACE_PUBLISH_TOKEN ?? null;
+  const publishBranch = ctx.cfg.MARKETPLACE_PUBLISH_BRANCH ?? 'main';
+  const publishConfigured = Boolean(publishToken && publishRepoCfg && stagingDir);
 
   app.get('/api/marketplace/installed', { preHandler: requireRole('lab_admin') }, async () => {
     const rows = await ctx.plugins.list();
@@ -112,6 +121,81 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
   app.post('/api/marketplace/refresh', { preHandler: requireRole('lab_admin') }, async () => {
     source?.refresh();
     return { ok: true };
+  });
+
+  app.get('/api/marketplace/publish/status', { preHandler: requireRole('lab_admin') }, async () => {
+    return { configured: publishConfigured, repo: publishConfigured ? publishRepoCfg : null };
+  });
+
+  app.post('/api/marketplace/publish', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    if (!publishConfigured || !stagingDir || !publishRepoCfg || !publishToken) {
+      reply.code(412);
+      return { error: 'publishing not configured' };
+    }
+    const ref = safeRef((req.body as { ref?: unknown } | undefined)?.ref);
+    if (!ref) { reply.code(400); return { error: 'invalid bundle ref' }; }
+
+    const [owner, repo] = publishRepoCfg.split('/');
+    if (!owner || !repo) { reply.code(500); return { error: 'MARKETPLACE_PUBLISH_REPO must be owner/repo' }; }
+    const coords: RepoCoords = { owner, repo, baseBranch: publishBranch, token: publishToken };
+
+    try {
+      const dir = join(stagingDir, ref);
+      const b = await readBundle(dir);
+      const v = verifyBundle(b);
+      if (!v.valid) { reply.code(400); return { error: 'bundle failed verification — refusing to publish' }; }
+
+      const id = b.manifest.id;
+      const version = b.manifest.version;
+      const bundlePath = `bundles/${id}-${version}`;
+
+      if (await repoPathExists(coords, bundlePath, fetchImpl)) {
+        reply.code(409);
+        return { error: `v${version} of ${id} is already published — bump the version` };
+      }
+
+      const payloadName = payloadFileName(String((b.raw.payload as { kind?: string } | null)?.kind ?? 'plugin'));
+      const files = [
+        { path: `${bundlePath}/manifest.json`, bytes: new Uint8Array(await readFile(join(dir, 'manifest.json'))) },
+        { path: `${bundlePath}/${payloadName}`, bytes: new Uint8Array(await readFile(join(dir, payloadName))) },
+        { path: `${bundlePath}/publisher.pub`, bytes: new Uint8Array(await readFile(join(dir, 'publisher.pub'))) },
+      ];
+
+      const current = (await fetchRepoIndexJson(coords, fetchImpl)) ?? parseIndex(null);
+      const nowIso = new Date().toISOString();
+      const nextIndex = mergeIndexEntry(current, {
+        id, kind: b.manifest.type, latestVersion: version,
+        publisher: b.manifest.publisher?.name ?? '',
+        summary: b.manifest.description ?? '',
+        path: bundlePath, signatureFingerprint: v.fingerprint,
+      }, nowIso);
+
+      const result = await openBundlePr({
+        ...coords, files, indexJson: JSON.stringify(nextIndex, null, 2),
+        branchName: `publish/${id}-${version}`,
+        prTitle: `Publish ${id} ${version}`,
+        prBody: `Adds \`${bundlePath}\` and updates \`index.json\`.\n\n_Opened from OpenLDR CE._`,
+      }, fetchImpl);
+
+      const a = actor(req);
+      try {
+        await ctx.audit.record({
+          actorType: 'user', actorId: a.id ?? null, actorName: a.name,
+          action: 'marketplace.publish', entityType: 'marketplace.artifact', entityId: `${id}@${version}`,
+          metadata: { prUrl: result.prUrl, prNumber: result.prNumber, repo: publishRepoCfg },
+        });
+      } catch { /* audit must not break the publish */ }
+
+      return result;
+    } catch (err) {
+      if (err instanceof PublishError) {
+        const status = err.kind === 'version-exists' ? 409 : err.kind === 'no-token' ? 412 : 502;
+        reply.code(status);
+        return { error: err.message };
+      }
+      reply.code(400);
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
   });
 
   app.post('/api/marketplace/:id/enable', { preHandler: requireRole('lab_admin') }, async (req) => {
