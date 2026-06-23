@@ -96,6 +96,7 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
         capabilities: b.manifest.capabilities,
         compatibility: b.manifest.compatibility,
         compatible: isCompatible(b.manifest.compatibility.ceVersion, CE_VERSION),
+        ceVersion: CE_VERSION,
         payload: b.manifest.payload,
         valid: v.valid,
       };

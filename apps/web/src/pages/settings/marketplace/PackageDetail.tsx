@@ -78,7 +78,7 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onSelect={() => onToggleEnabled(entry.id, !entry.active ? true : false)}>
+                  <DropdownMenuItem onSelect={() => onToggleEnabled(entry.id, !entry.active)}>
                     {entry.active ? t('settings.marketplace.disable') : t('settings.marketplace.enable')}
                   </DropdownMenuItem>
                   {!entry.active ? (
@@ -123,7 +123,7 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
                 <p className="text-[13px] text-muted-foreground">{t('settings.marketplace.noneCapabilities')}</p>
               ) : (
                 <ul className="list-disc space-y-1 pl-5 text-[13px] text-foreground/85">
-                  {capabilities.map((cap, i) => <li key={i}>{capabilityLine(cap)}</li>)}
+                  {capabilities.map((cap, i) => <li key={`${i}-${capabilityLine(cap)}`}>{capabilityLine(cap)}</li>)}
                 </ul>
               )}
             </section>
@@ -131,7 +131,7 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
             {detail ? (
               <section>
                 <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">{t('settings.marketplace.requirements')}</p>
-                <RequirementsChecklist compatible={detail.compatible} ceRange={detail.compatibility.ceVersion} ceVersion="0.1.0" />
+                <RequirementsChecklist compatible={detail.compatible} ceRange={detail.compatibility.ceVersion} ceVersion={detail.ceVersion} />
               </section>
             ) : null}
           </div>

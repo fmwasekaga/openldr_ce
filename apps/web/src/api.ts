@@ -913,6 +913,7 @@ export interface ArtifactPayloadMeta {
 }
 export interface AvailableArtifactDetail extends AvailableArtifact {
   compatible: boolean;
+  ceVersion: string;
   payload: ArtifactPayloadMeta;
 }
 export interface InstalledArtifact {

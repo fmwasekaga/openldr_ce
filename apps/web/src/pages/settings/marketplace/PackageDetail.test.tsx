@@ -24,7 +24,7 @@ function mockDetail(over: Partial<api.AvailableArtifactDetail> = {}) {
     description: 'Converts WHONET SQLite to FHIR.', license: 'Apache-2.0',
     publisher: { id: 'p', name: 'OpenLDR Reference' },
     capabilities: [{ kind: 'emit-fhir', resourceTypes: ['Patient'] }],
-    compatibility: { ceVersion: '*' }, compatible: true,
+    compatibility: { ceVersion: '*' }, compatible: true, ceVersion: '0.1.0',
     payload: { kind: 'plugin', entrypoint: 'convert', wasmSha256: 'a'.repeat(64), wasi: true, limits: { memoryMb: 256, timeoutMs: 30000 } },
     valid: true, ...over,
   });

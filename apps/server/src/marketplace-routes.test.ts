@@ -94,7 +94,7 @@ describe('marketplace routes', () => {
     const res = await app.inject({ method: 'GET', url: '/api/marketplace/available/demo-1' });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body).toMatchObject({ ref: 'demo-1', id: 'demo', version: '1.0.0', valid: true, compatible: true });
+    expect(body).toMatchObject({ ref: 'demo-1', id: 'demo', version: '1.0.0', valid: true, compatible: true, ceVersion: '0.1.0' });
     expect(body.payload).toMatchObject({ kind: 'plugin' });
     expect(body.capabilities).toEqual([{ kind: 'emit-fhir', resourceTypes: ['Patient'] }]);
   });
