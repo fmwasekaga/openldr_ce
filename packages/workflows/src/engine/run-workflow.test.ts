@@ -49,4 +49,22 @@ describe('runWorkflow', () => {
     const res = await runWorkflow(nodes, edges, {});
     expect(res.status).toBe('failed');
   });
+
+  it('runs a code node, streams its log, and passes its output downstream', async () => {
+    const nodes = [
+      { id: 't', type: 'trigger', data: {} },
+      { id: 'c', type: 'code', data: { code: "console.log('in code'); return { n: 42 };" } },
+      { id: 'l', type: 'action', data: { action: 'log', message: 'n={{ $input.n }}' } },
+    ];
+    const edges = [
+      { id: 'e1', source: 't', target: 'c' },
+      { id: 'e2', source: 'c', target: 'l' },
+    ];
+    const events: RunEvent[] = [];
+    const res = await runWorkflow(nodes, edges, { onEvent: (e) => events.push(e) });
+    expect(res.status).toBe('completed');
+    const cOut = res.results.find((r) => r.nodeId === 'c')?.output;
+    expect(cOut).toEqual({ n: 42 });
+    expect(events.some((e) => e.type === 'node:log' && e.entry.message === 'in code')).toBe(true);
+  });
 });

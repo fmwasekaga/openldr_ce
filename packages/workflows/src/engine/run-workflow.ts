@@ -93,6 +93,8 @@ export interface RunWorkflowOptions {
   input?: unknown;
   /** Per-event sink. Defaults to a no-op so the legacy /execute path stays untouched. */
   onEvent?: (evt: RunEvent) => void;
+  /** Limits for the Code node sandbox. When undefined, createContext's default applies. */
+  codeLimits?: { timeoutMs: number; memoryMb: number };
 }
 
 export async function runWorkflow(
@@ -101,7 +103,7 @@ export async function runWorkflow(
   opts: RunWorkflowOptions = {},
 ): Promise<WorkflowRunResult> {
   const startedAt = new Date().toISOString();
-  const ctx = createContext(opts.input, opts.onEvent ?? (() => {}), edges);
+  const ctx = createContext(opts.input, opts.onEvent ?? (() => {}), edges, opts.codeLimits);
   const sorted = topologicalSort(nodes, edges);
   const results: NodeRunResult[] = [];
 

@@ -5,6 +5,7 @@ import { setHandler } from './set';
 import { mergeHandler } from './merge';
 import { ifHandler } from './if';
 import { filterHandler } from './filter';
+import { codeHandler } from './code';
 import { defaultHandler } from './default';
 
 /** Action subtype → handler. New actions (http-request, code, …) land in later slices. */
@@ -17,6 +18,7 @@ const ACTION_HANDLERS: Record<string, NodeHandler> = {
 
 const TYPE_HANDLERS: Record<string, NodeHandler> = {
   trigger: triggerHandler,
+  code: codeHandler,
 };
 
 export function pickHandler(node: RunnerNode): NodeHandler {

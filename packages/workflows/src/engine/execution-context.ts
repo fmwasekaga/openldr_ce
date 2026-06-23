@@ -11,12 +11,15 @@ export interface ExecutionContext {
   emit: (evt: RunEvent) => void;
   /** All edges — used by the merge handler. */
   edges: Array<{ id: string; source: string; target: string; sourceHandle?: string | null }>;
+  /** Limits for the Code node sandbox. */
+  codeLimits: { timeoutMs: number; memoryMb: number };
 }
 
 export function createContext(
   input: unknown,
   emit: (evt: RunEvent) => void,
   edges: ExecutionContext['edges'] = [],
+  codeLimits: ExecutionContext['codeLimits'] = { timeoutMs: 5000, memoryMb: 128 },
 ): ExecutionContext {
-  return { input, nodeOutputs: {}, logs: {}, emit, edges };
+  return { input, nodeOutputs: {}, logs: {}, emit, edges, codeLimits };
 }
