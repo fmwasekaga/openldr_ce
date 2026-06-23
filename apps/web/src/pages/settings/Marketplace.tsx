@@ -22,6 +22,7 @@ export function Marketplace() {
   const [consent, setConsent] = useState<{ entry: CardEntry; capabilities: unknown[] } | null>(null);
   const [pendingRemove, setPendingRemove] = useState<CardEntry | null>(null);
   const [busy, setBusy] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -29,6 +30,7 @@ export function Marketplace() {
       setConfigured(avail.configured);
       setAvailable(avail.bundles);
       setSource(avail.source); setHost(avail.host);
+      setLoadError(avail.error ?? null);
       setInstalled(inst);
     } catch (e) {
       toast.error(t('settings.marketplace.errorToast', { error: e instanceof Error ? e.message : String(e) }));
@@ -90,6 +92,7 @@ export function Marketplace() {
         source={source}
         host={host}
         onRefresh={onRefresh}
+        loadError={loadError}
       />
 
       {/* Consent dialog */}

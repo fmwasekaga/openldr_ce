@@ -20,6 +20,7 @@ interface MarketplaceTabsProps {
   source: 'local' | 'http' | null;
   host: string | null;
   onRefresh: () => void;
+  loadError?: string | null;
 }
 
 export function MarketplaceTabs(props: MarketplaceTabsProps) {
@@ -83,6 +84,11 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
             </Button>
           </div>
         </div>
+        {props.loadError ? (
+          <div className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {t('settings.marketplace.registryUnreachable')}
+          </div>
+        ) : null}
         {!props.configured ? (
           <div className="px-1 py-6 text-sm text-muted-foreground">{t('settings.marketplace.notConfigured')}</div>
         ) : browseEntries.length === 0 ? (

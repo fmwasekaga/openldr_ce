@@ -295,6 +295,7 @@ export const fr: EnShape = {
       version: 'Version',
       install: 'Installer',
       verified: 'Vérifié',
+      unverified: 'Non vérifié',
       firstUse: 'Nouvel éditeur',
       invalid: 'Signature invalide', // review
       notConfigured: 'Aucun registre marketplace configuré (définir MARKETPLACE_REGISTRY_DIR).',

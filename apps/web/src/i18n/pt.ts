@@ -295,6 +295,7 @@ export const pt: EnShape = {
       version: 'Versão',
       install: 'Instalar',
       verified: 'Verificado',
+      unverified: 'Não verificado',
       firstUse: 'Novo editor',
       invalid: 'Assinatura inválida', // review
       notConfigured: 'Nenhum registo marketplace configurado (defina MARKETPLACE_REGISTRY_DIR).',

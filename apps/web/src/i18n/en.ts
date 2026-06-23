@@ -270,6 +270,7 @@ export const en = {
       version: 'Version',
       install: 'Install',
       verified: 'Verified',
+      unverified: 'Unverified',
       firstUse: 'New publisher',
       invalid: 'Invalid signature',
       notConfigured: 'No marketplace registry configured (set MARKETPLACE_REGISTRY_DIR).',
