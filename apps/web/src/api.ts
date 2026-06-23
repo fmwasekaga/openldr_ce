@@ -983,6 +983,40 @@ export interface Workflow {
   updatedAt?: string;
 }
 
+// Per-node execution event protocol (mirrors @openldr/workflows RunEvent on the server).
+export type LogLevel = 'log' | 'info' | 'warn' | 'error';
+
+export interface LogEntry {
+  nodeId: string;
+  level: LogLevel;
+  message: string;
+  ts: number;
+}
+
+export interface NodeRunResult {
+  nodeId: string;
+  type: string;
+  status: 'success' | 'error' | 'skipped';
+  output?: unknown;
+  error?: string;
+  durationMs: number;
+  logs?: LogEntry[];
+}
+
+export interface ExecuteResponse {
+  status: 'completed' | 'failed';
+  startedAt: string;
+  finishedAt: string;
+  results: NodeRunResult[];
+}
+
+export type RunEvent =
+  | { type: 'node:start'; nodeId: string; nodeType: string }
+  | { type: 'node:log'; entry: LogEntry }
+  | { type: 'node:success'; nodeId: string; nodeType: string; input: unknown; output: unknown; durationMs: number }
+  | { type: 'node:error'; nodeId: string; nodeType: string; error: string; durationMs: number }
+  | { type: 'workflow:done'; status: 'completed' | 'failed' };
+
 export async function fetchWorkflows(): Promise<Workflow[]> {
   const res = await authFetch('/api/workflows');
   if (!res.ok) throw new Error(`workflows list failed: ${res.status}`);
@@ -1016,12 +1050,17 @@ export async function deleteWorkflow(id: string): Promise<void> {
   if (!res.ok) throw new Error(`delete workflow failed: ${res.status}`);
 }
 
-/** Stream execution events. Returns when the stream ends. `onEvent` receives each RunEvent. */
+/**
+ * Stream execution events. `onEvent` receives each per-node RunEvent; the final
+ * `event: done` frame carries the batch summary, which is returned to the caller
+ * (mirrors the standalone `workflowApi.executeStream`). The `event: error` frame
+ * throws.
+ */
 export async function executeWorkflowStream(
   id: string,
-  onEvent: (evt: unknown) => void,
+  onEvent: (evt: RunEvent) => void,
   opts: { input?: unknown; signal?: AbortSignal } = {},
-): Promise<void> {
+): Promise<ExecuteResponse | null> {
   const token = getAccessToken();
   const res = await fetch(`/api/workflows/${encodeURIComponent(id)}/execute-stream`, {
     method: 'POST',
@@ -1033,6 +1072,7 @@ export async function executeWorkflowStream(
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let finalResult: ExecuteResponse | null = null;
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -1040,9 +1080,26 @@ export async function executeWorkflowStream(
     const frames = buffer.split('\n\n');
     buffer = frames.pop() ?? '';
     for (const frame of frames) {
-      const line = frame.split('\n').find((l) => l.startsWith('data:'));
-      if (!line) continue;
-      try { onEvent(JSON.parse(line.slice(5).trim())); } catch { /* ignore malformed frame */ }
+      let eventType = 'message';
+      const dataLines: string[] = [];
+      for (const l of frame.split('\n')) {
+        if (l.startsWith('event:')) eventType = l.slice(6).trim();
+        else if (l.startsWith('data:')) dataLines.push(l.slice(5).trim());
+      }
+      if (dataLines.length === 0) continue;
+      let parsed: unknown;
+      try { parsed = JSON.parse(dataLines.join('\n')); } catch { continue; /* skip malformed frame */ }
+      if (eventType === 'done') {
+        finalResult = parsed as ExecuteResponse;
+      } else if (eventType === 'error') {
+        const msg = parsed && typeof parsed === 'object' && 'message' in parsed
+          ? String((parsed as { message: unknown }).message)
+          : 'Stream error';
+        throw new Error(msg);
+      } else {
+        onEvent(parsed as RunEvent);
+      }
     }
   }
+  return finalResult;
 }

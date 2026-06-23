@@ -1,0 +1,105 @@
+import type { Node, Edge } from '@xyflow/react';
+
+/** Shared visual metadata present on every node's `data`. */
+export interface NodeVisualMeta {
+  /** Name of a lucide-react icon, resolved at render time. */
+  iconName?: string;
+  /** Optional public path (e.g. `/node-icons/slack.svg`) rendered as an <img>. Takes priority over iconName. */
+  iconUrl?: string;
+}
+
+export interface TriggerNodeData extends NodeVisualMeta {
+  label: string;
+  triggerType: 'manual' | 'webhook' | 'schedule';
+  config: Record<string, unknown>;
+  /** For webhook triggers — path segment under /api/webhooks/ that routes here. */
+  path?: string;
+  /** For webhook triggers — HTTP method to accept. */
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
+  [key: string]: unknown;
+}
+
+export interface ActionNodeData extends NodeVisualMeta {
+  label: string;
+  action: string;
+  config: Record<string, unknown>;
+  /** For `action: 'log'` nodes — template message, e.g. `got {{ $input.body.name }}`. */
+  message?: string;
+  level?: 'log' | 'info' | 'warn' | 'error';
+  [key: string]: unknown;
+}
+
+export interface ConditionNodeData extends NodeVisualMeta {
+  label: string;
+  condition: string;
+  /** Switch node: ordered rules evaluated top-to-bottom. */
+  rules?: Array<{ name: string; condition: string }>;
+  /** Switch node: output name when no rule matches. */
+  fallbackOutput?: string;
+  [key: string]: unknown;
+}
+
+export interface LoopNodeData extends NodeVisualMeta {
+  label: string;
+  iterations: number;
+  loopMode?: 'count' | 'items';
+  [key: string]: unknown;
+}
+
+export interface WebhookNodeData extends NodeVisualMeta {
+  label: string;
+  /** Path segment under /api/webhooks/ that triggers this workflow (e.g. "hello"). */
+  path?: string;
+  url: string;
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  [key: string]: unknown;
+}
+
+export interface CodeNodeData extends NodeVisualMeta {
+  label: string;
+  code: string;
+  language: 'javascript' | 'typescript';
+  [key: string]: unknown;
+}
+
+export type WorkflowNodeData =
+  | TriggerNodeData
+  | ActionNodeData
+  | ConditionNodeData
+  | LoopNodeData
+  | WebhookNodeData
+  | CodeNodeData;
+
+export type WorkflowNode = Node<WorkflowNodeData>;
+export type WorkflowEdge = Edge;
+
+export interface WorkflowDefinition {
+  id?: string;
+  name: string;
+  description: string;
+  nodes: WorkflowNode[];
+  edges: WorkflowEdge[];
+}
+
+export interface NodeCategory {
+  name: string;
+  /** Lucide icon name shown next to the category title in the sidebar. */
+  icon?: string;
+  items: NodeTemplate[];
+}
+
+export interface NodeTemplate {
+  /** Stable id used for React keys + filtering. */
+  id: string;
+  /** ReactFlow node type ('trigger' | 'action' | 'condition' | 'loop' | 'webhook' | 'code'). */
+  type: string;
+  label: string;
+  description: string;
+  /** Lucide icon name (sidebar fallback when defaultData has no iconUrl). */
+  icon: string;
+  /** Optional custom asset path under public/, takes priority over the lucide icon. */
+  iconUrl?: string;
+  /** Searchable keywords (brand names, aliases) — not displayed. */
+  keywords?: string[];
+  defaultData: WorkflowNodeData;
+}
