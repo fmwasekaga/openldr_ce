@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeAll, afterAll } from 'vitest';
+import { describe, expect, it, beforeAll, afterAll, vi } from 'vitest';
 import Fastify from 'fastify';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -39,15 +39,15 @@ function fakePlugins() {
 }
 
 function fakeCtx(plugins: unknown, cfg: Record<string, unknown>): AppContext {
-  return { cfg, plugins } as unknown as AppContext;
+  return { cfg, plugins, audit: { record: async () => ({}) } } as unknown as AppContext;
 }
 
-function appWith(cfg: Record<string, unknown>, plugins: unknown, roles: string[] = ['lab_admin']) {
+function appWith(cfg: Record<string, unknown>, plugins: unknown, roles: string[] = ['lab_admin'], fetchImpl?: typeof fetch) {
   const app = Fastify();
   app.addHook('onRequest', async (req) => {
     req.user = { id: 'admin', username: 'admin', displayName: null, roles } as never;
   });
-  registerMarketplaceRoutes(app, fakeCtx(plugins, cfg));
+  registerMarketplaceRoutes(app, fakeCtx(plugins, cfg), fetchImpl);
   return app;
 }
 
@@ -146,6 +146,49 @@ describe('marketplace routes', () => {
     const res = await app.inject({ method: 'POST', url: '/api/marketplace/install', payload: { ref: '../secrets' } });
     expect(res.statusCode).toBe(400);
     expect(calls.install).toHaveLength(0);
+  });
+
+  it('publish/status reports configured=false when unset', async () => {
+    const { runtime } = fakePlugins();
+    const app = appWith({ MARKETPLACE_REGISTRY_DIR: registryDir }, runtime);
+    const res = await app.inject({ method: 'GET', url: '/api/marketplace/publish/status' });
+    expect(res.json()).toEqual({ configured: false, repo: null });
+  });
+
+  it('publish/status reports configured=true when token+repo set', async () => {
+    const { runtime } = fakePlugins();
+    const app = appWith({ MARKETPLACE_REGISTRY_DIR: registryDir, MARKETPLACE_PUBLISH_TOKEN: 't', MARKETPLACE_PUBLISH_REPO: 'o/r' }, runtime);
+    const res = await app.inject({ method: 'GET', url: '/api/marketplace/publish/status' });
+    expect(res.json()).toEqual({ configured: true, repo: 'o/r' });
+  });
+
+  it('publish returns 412 when not configured', async () => {
+    const { runtime } = fakePlugins();
+    const app = appWith({ MARKETPLACE_REGISTRY_DIR: registryDir }, runtime);
+    const res = await app.inject({ method: 'POST', url: '/api/marketplace/publish', payload: { ref: 'demo-1' } });
+    expect(res.statusCode).toBe(412);
+  });
+
+  it('publish opens a PR for a staged bundle', async () => {
+    const { runtime } = fakePlugins();
+    const fetchMock = vi.fn(async (url: string) => {
+      const u = String(url);
+      const ok = (j: unknown) => ({ ok: true, status: 200, json: async () => j, text: async () => JSON.stringify(j) }) as unknown as Response;
+      if (u.includes('/contents/index.json')) return { ok: false, status: 404, text: async () => 'x' } as unknown as Response; // seed
+      if (u.includes('/contents/bundles/')) return { ok: false, status: 404 } as unknown as Response; // no conflict
+      if (u.endsWith('/git/ref/heads/main')) return ok({ object: { sha: 'base' } });
+      if (u.includes('/git/commits/base')) return ok({ tree: { sha: 'bt' } });
+      if (u.endsWith('/git/blobs')) return ok({ sha: 'b' });
+      if (u.endsWith('/git/trees')) return ok({ sha: 't' });
+      if (u.endsWith('/git/commits')) return ok({ sha: 'c' });
+      if (u.endsWith('/git/refs')) return ok({ ref: 'r' });
+      if (u.endsWith('/pulls')) return ok({ html_url: 'https://gh/pr/3', number: 3 });
+      return { ok: false, status: 500, json: async () => ({ message: 'x' }) } as unknown as Response;
+    });
+    const app = appWith({ MARKETPLACE_REGISTRY_DIR: registryDir, MARKETPLACE_PUBLISH_TOKEN: 't', MARKETPLACE_PUBLISH_REPO: 'o/r', MARKETPLACE_PUBLISH_BRANCH: 'main' }, runtime, ['lab_admin'], fetchMock as unknown as typeof fetch);
+    const res = await app.inject({ method: 'POST', url: '/api/marketplace/publish', payload: { ref: 'demo-1' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ prUrl: 'https://gh/pr/3', prNumber: 3 });
   });
 
   it('enable/disable/rollback/remove call the runtime', async () => {

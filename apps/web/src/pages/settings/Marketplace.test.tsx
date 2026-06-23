@@ -9,12 +9,16 @@ vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
   return { ...actual,
     listInstalledArtifacts: vi.fn(), listAvailableArtifacts: vi.fn(), getAvailableArtifact: vi.fn(),
-    installArtifact: vi.fn(), setArtifactEnabled: vi.fn(), rollbackArtifact: vi.fn(), removeArtifact: vi.fn(), refreshRegistry: vi.fn() };
+    installArtifact: vi.fn(), setArtifactEnabled: vi.fn(), rollbackArtifact: vi.fn(), removeArtifact: vi.fn(), refreshRegistry: vi.fn(),
+    getPublishStatus: vi.fn(), publishArtifact: vi.fn() };
 });
 import * as api from '@/api';
 import { Marketplace } from './Marketplace';
 
-beforeEach(() => { vi.clearAllMocks(); });
+beforeEach(() => {
+  vi.clearAllMocks();
+  (api.getPublishStatus as any).mockResolvedValue({ configured: false, repo: null });
+});
 
 const oneBundle = {
   configured: true,
@@ -68,6 +72,22 @@ describe('Marketplace', () => {
     if (!screen.queryByText('Disable')) fireEvent.keyDown(menuTrigger, { key: 'Enter' });
     fireEvent.click(await screen.findByText('Disable'));
     await waitFor(() => expect(api.setArtifactEnabled).toHaveBeenCalledWith('whonet-sqlite', false));
+  });
+
+  it('publishes a staged bundle and shows the PR toast', async () => {
+    (api.listAvailableArtifacts as any).mockResolvedValue({ ...oneBundle });
+    (api.listInstalledArtifacts as any).mockResolvedValue([]);
+    (api.getPublishStatus as any).mockResolvedValue({ configured: true, repo: 'o/r' });
+    (api.getAvailableArtifact as any).mockResolvedValue({
+      ref: 'whonet-narrow', id: 'whonet-sqlite', version: '1.0.0', type: 'plugin', description: 'd', license: 'L',
+      publisher: { id: 'p', name: 'P' }, capabilities: [], compatibility: { ceVersion: '*' }, compatible: true, ceVersion: '0.1.0',
+      payload: { kind: 'plugin', entrypoint: 'convert', wasmSha256: 'a'.repeat(64), wasi: true, limits: { memoryMb: 256, timeoutMs: 30000 } }, valid: true,
+    });
+    (api.publishArtifact as any).mockResolvedValue({ prUrl: 'https://gh/pr/9', prNumber: 9 });
+    render(<MemoryRouter><Marketplace /></MemoryRouter>);
+    fireEvent.click(await screen.findByTestId('card-whonet-narrow'));
+    fireEvent.click(await screen.findByTestId('detail-publish'));
+    await waitFor(() => expect(api.publishArtifact).toHaveBeenCalledWith('whonet-narrow'));
   });
 
   it('refreshes the registry', async () => {
