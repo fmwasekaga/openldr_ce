@@ -475,6 +475,19 @@ export const setFormStatus = (id: string, status: FormStatus): Promise<FormDefin
   authFetch(`/api/forms/${id}/status`, jbody({ status }, 'POST')).then((r) => okJson<FormDefinition>(r, 'set form status'));
 export const deleteForm = (id: string): Promise<void> => apiDelete(`/api/forms/${id}`, 'delete form');
 export const formQuestionnaireUrl = (id: string): string => `/api/forms/${id}/questionnaire`;
+export async function exportFormBundle(id: string): Promise<void> {
+  const r = await authFetch(`/api/forms/${encodeURIComponent(id)}/export-bundle`, { method: 'GET' });
+  if (!r.ok) throw new Error(`export failed: ${r.status}`);
+  const blob = await r.blob();
+  const disposition = r.headers.get('Content-Disposition') ?? '';
+  const match = /filename="([^"]+)"/.exec(disposition);
+  const filename = match?.[1] ?? `${id}.zip`;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
 export const submitFormResponse = (id: string, answers: unknown): Promise<unknown> =>
   authFetch(`/api/forms/${id}/responses`, jbody({ answers }, 'POST')).then((r) => okJson<unknown>(r, 'submit form response'));
 

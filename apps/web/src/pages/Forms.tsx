@@ -9,7 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TablePagination } from '@/components/ui/table-pagination';
-import { createForm, deleteForm, duplicateForm, formQuestionnaireUrl, listForms, publishForm, setFormStatus, type FormDefinition, type FormStatus, type FormSummary } from '@/api';
+import { createForm, deleteForm, duplicateForm, exportFormBundle, formQuestionnaireUrl, listForms, publishForm, setFormStatus, type FormDefinition, type FormStatus, type FormSummary } from '@/api';
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -154,6 +154,15 @@ export function Forms() {
     }
   };
 
+  const exportBundle = async (form: FormSummary) => {
+    setActionError(null);
+    try {
+      await exportFormBundle(form.id);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
   const confirmDelete = async () => {
     if (!deleting) return;
     setActionError(null);
@@ -263,6 +272,14 @@ export function Forms() {
                           <DropdownMenuItem asChild>
                             <a href={formQuestionnaireUrl(form.id)} download={`${form.name}.questionnaire.json`}>Export</a>
                           </DropdownMenuItem>
+                          {form.status === 'published' ? (
+                            <DropdownMenuItem
+                              data-testid={`export-bundle-${form.id}`}
+                              onClick={() => { void exportBundle(form); }}
+                            >
+                              Export as marketplace bundle
+                            </DropdownMenuItem>
+                          ) : null}
                           <DropdownMenuItem onClick={() => setDeleting(form)}>Delete</DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>

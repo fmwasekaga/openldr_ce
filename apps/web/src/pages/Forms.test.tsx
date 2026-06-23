@@ -38,6 +38,7 @@ describe('Forms page', () => {
     vi.spyOn(api, 'setFormStatus').mockImplementation(async (_id, status) => ({ ...form, status, schema: importedSchema, targetPages: ['forms'], createdAt: form.updatedAt }));
     vi.spyOn(api, 'publishForm').mockResolvedValue({ ...form, status: 'published', schema: importedSchema, targetPages: ['forms'], createdAt: form.updatedAt });
     vi.spyOn(api, 'deleteForm').mockResolvedValue();
+    vi.spyOn(api, 'exportFormBundle').mockResolvedValue(undefined);
   });
 
   it('lists forms, imports JSON, and exposes row actions', async () => {
@@ -111,6 +112,17 @@ describe('Forms page', () => {
     );
     fireEvent.click(await screen.findByText('Order entry'));
     expect(await screen.findByText('Builder view')).toBeInTheDocument();
+  });
+
+  it('exports a published form as a marketplace bundle', async () => {
+    const published: api.FormSummary = { ...form, status: 'published' };
+    vi.spyOn(api, 'listForms').mockResolvedValue([published]);
+    render(<MemoryRouter><Forms /></MemoryRouter>);
+    expect(await screen.findByText('Specimen intake')).toBeInTheDocument();
+    fireEvent.pointerDown(screen.getByRole('button', { name: /actions for specimen intake/i }), { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByTestId('export-bundle-form-1')) fireEvent.keyDown(screen.getByRole('button', { name: /actions for specimen intake/i }), { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('export-bundle-form-1'));
+    await waitFor(() => expect(api.exportFormBundle).toHaveBeenCalledWith('form-1'));
   });
 
   it('duplicates forms from row actions', async () => {
