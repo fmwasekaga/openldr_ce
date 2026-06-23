@@ -80,7 +80,16 @@ export async function openBundlePr(a: OpenPrArgs, fetchImpl: typeof fetch = fetc
 
   const newTree = await gh('/git/trees', { method: 'POST', body: JSON.stringify({ base_tree: baseTreeSha, tree }) });
   const commit = await gh('/git/commits', { method: 'POST', body: JSON.stringify({ message: a.prTitle, tree: newTree.sha, parents: [baseSha] }) });
-  await gh('/git/refs', { method: 'POST', body: JSON.stringify({ ref: `refs/heads/${a.branchName}`, sha: commit.sha }) });
+  // Create the branch; if a prior failed publish left it behind, force-update it instead of erroring.
+  try {
+    await gh('/git/refs', { method: 'POST', body: JSON.stringify({ ref: `refs/heads/${a.branchName}`, sha: commit.sha }) });
+  } catch (err) {
+    if (err instanceof PublishError && /already exists/i.test(err.message)) {
+      await gh(`/git/refs/heads/${a.branchName}`, { method: 'PATCH', body: JSON.stringify({ sha: commit.sha, force: true }) });
+    } else {
+      throw err;
+    }
+  }
   const pr = await gh('/pulls', { method: 'POST', body: JSON.stringify({ title: a.prTitle, head: a.branchName, base: a.baseBranch, body: a.prBody }) });
   return { prUrl: pr.html_url as string, prNumber: pr.number as number };
 }

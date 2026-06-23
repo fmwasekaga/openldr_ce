@@ -56,6 +56,27 @@ describe('github-publish', () => {
     expect(blobBodies.some((b) => b.content === Buffer.from(wasm).toString('base64'))).toBe(true);
   });
 
+  it('openBundlePr force-updates the branch if it already exists', async () => {
+    const calls: { url: string; method: string }[] = [];
+    const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
+      const u = String(url);
+      const method = (init?.method ?? 'GET').toUpperCase();
+      calls.push({ url: u, method });
+      if (u.endsWith('/git/ref/heads/main')) return ok({ object: { sha: 'base' } });
+      if (u.includes('/git/commits/base')) return ok({ tree: { sha: 'bt' } });
+      if (u.endsWith('/git/blobs')) return ok({ sha: 'b' });
+      if (u.endsWith('/git/trees')) return ok({ sha: 't' });
+      if (u.endsWith('/git/commits')) return ok({ sha: 'c' });
+      if (u.endsWith('/git/refs') && method === 'POST') return { ok: false, status: 422, json: async () => ({ message: 'Reference already exists' }) } as unknown as Response;
+      if (u.includes('/git/refs/heads/') && method === 'PATCH') return ok({ ref: 'refs/heads/publish/demo-1' });
+      if (u.endsWith('/pulls')) return ok({ html_url: 'https://gh/pr/11', number: 11 });
+      return { ok: false, status: 500, json: async () => ({ message: 'x' }) } as unknown as Response;
+    });
+    const res = await openBundlePr({ ...coords, files: [], indexJson: '{}', branchName: 'publish/demo-1', prTitle: 't', prBody: 'b' }, fetchImpl as unknown as typeof fetch);
+    expect(res).toEqual({ prUrl: 'https://gh/pr/11', prNumber: 11 });
+    expect(calls.some((c) => c.method === 'PATCH' && c.url.includes('/git/refs/heads/publish/demo-1'))).toBe(true);
+  });
+
   it('openBundlePr throws PublishError(network) on a failed API call', async () => {
     const fetchImpl = vi.fn(async () => ({ ok: false, status: 500, json: async () => ({ message: 'boom' }) }) as unknown as Response);
     await expect(openBundlePr({ ...coords, files: [], indexJson: '{}', branchName: 'b', prTitle: 't', prBody: 'b' }, fetchImpl as unknown as typeof fetch))
