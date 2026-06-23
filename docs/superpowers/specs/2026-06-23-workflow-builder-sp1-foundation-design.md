@@ -51,7 +51,7 @@ This sequences risk: prove the page + persistence + engine end-to-end first, the
 - **Persistence**: internal-PG `workflows` table (migration + schema type + registration) and `WorkflowStore`.
 - **Fastify routes**: CRUD + `execute-stream` (SSE) in `apps/server/src/workflows-routes.ts`.
 - **Integration**: `ctx.workflows` in bootstrap; route registration in `app.ts`; `/workflows` route in `App.tsx`; sidebar nav item (role-gated) + i18n in `AppShell`.
-- **Working node handlers (6)**: manual **Trigger**, **Set**, **Filter**, **If/Condition**, **Merge**, **Log** — all declarative, no arbitrary execution.
+- **Working node handlers (6)**: manual **Trigger**, **Set**, **Filter**, **If/Condition**, **Merge**, **Log**. All are declarative except that **If/Filter evaluate a user-supplied boolean expression inside a bounded 1-second `vm` context** (only `$input` exposed, no `require`/globals) — a small surface, RBAC-gated to `lab_admin`/`lab_manager`. The fully-isolated `worker_thread` execution model is reserved for the **Code node in SP-2**; there is no Code node in SP-1.
 
 ### Out of scope (later slices)
 - Code node execution (SP-2), domain source/sink nodes (SP-3), schedule/webhook/ingest triggers (SP-4).
