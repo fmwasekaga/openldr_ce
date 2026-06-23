@@ -1,9 +1,38 @@
+import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { ZodError } from 'zod';
 import type { AppContext } from '@openldr/bootstrap';
 import { WorkflowSchema, WorkflowDefinitionSchema, runWorkflow, type RunEvent } from '@openldr/workflows';
 import { recordAudit } from './audit-helper';
 import { requireRole } from './rbac';
+
+/** Sync a workflow's trigger nodes into the derived registries (webhooks + schedules). */
+async function syncWorkflowTriggers(ctx: AppContext, workflow: { id: string; definition: unknown }): Promise<void> {
+  const def = WorkflowDefinitionSchema.parse(workflow.definition);
+  // webhooks (in-memory)
+  ctx.workflows.webhooks.sync(workflow.id, def.nodes);
+  // schedules (derived table) — replace this workflow's rows with current schedule nodes
+  await ctx.workflows.schedules.removeForWorkflow(workflow.id);
+  for (const n of def.nodes as Array<{ id: string; type?: string; data?: Record<string, unknown> }>) {
+    const isSchedule = n.type === 'trigger' && n.data?.triggerType === 'schedule';
+    const cron = n.data?.cron as string | undefined;
+    if (isSchedule && cron && cron.trim()) {
+      await ctx.workflows.schedules.upsert({
+        workflowId: workflow.id, nodeId: n.id, cron, tz: (n.data?.tz as string) ?? null, enabled: true, nextDueAt: null,
+      });
+    }
+  }
+}
+
+/** Scan all saved workflows for ingest trigger nodes; returns the ids that should fire on ingest. */
+async function listIngestWorkflowIds(ctx: AppContext): Promise<string[]> {
+  const all = await ctx.workflows.store.list();
+  return all.filter((w) => {
+    const def = WorkflowDefinitionSchema.parse(w.definition);
+    return (def.nodes as Array<{ type?: string; data?: Record<string, unknown> }>).some(
+      (n) => n.type === 'trigger' && n.data?.triggerType === 'ingest');
+  }).map((w) => w.id);
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerWorkflowRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
@@ -21,6 +50,8 @@ export function registerWorkflowRoutes(app: FastifyInstance<any, any, any, any>,
   app.post('/api/workflows', MANAGE, async (req, reply) => {
     try {
       const created = await ctx.workflows.store.create(WorkflowSchema.parse(req.body));
+      await syncWorkflowTriggers(ctx, created);
+      ctx.workflows.runner.setIngestWorkflowIds(await listIngestWorkflowIds(ctx));
       await recordAudit(ctx, req, { action: 'workflow.create', entityType: 'workflow', entityId: created.id, before: null, after: created });
       return created;
     } catch (err) { return mapError(err, reply); }
@@ -31,6 +62,8 @@ export function registerWorkflowRoutes(app: FastifyInstance<any, any, any, any>,
     try {
       const before = await ctx.workflows.store.get(id);
       const updated = await ctx.workflows.store.update(id, WorkflowSchema.parse(req.body));
+      await syncWorkflowTriggers(ctx, updated);
+      ctx.workflows.runner.setIngestWorkflowIds(await listIngestWorkflowIds(ctx));
       await recordAudit(ctx, req, { action: 'workflow.update', entityType: 'workflow', entityId: id, before, after: updated });
       return updated;
     } catch (err) { return mapError(err, reply); }
@@ -40,6 +73,9 @@ export function registerWorkflowRoutes(app: FastifyInstance<any, any, any, any>,
     const { id } = req.params as { id: string };
     const before = await ctx.workflows.store.get(id);
     await ctx.workflows.store.remove(id);
+    ctx.workflows.webhooks.clear(id);
+    await ctx.workflows.schedules.removeForWorkflow(id);
+    ctx.workflows.runner.setIngestWorkflowIds(await listIngestWorkflowIds(ctx));
     if (before) {
       await recordAudit(ctx, req, { action: 'workflow.delete', entityType: 'workflow', entityId: id, before, after: null });
     }
@@ -66,12 +102,48 @@ export function registerWorkflowRoutes(app: FastifyInstance<any, any, any, any>,
     try {
       const result = await runWorkflow(def.nodes, def.edges, { input: body.input, onEvent: send });
       reply.raw.write(`event: done\ndata: ${JSON.stringify(result)}\n\n`);
+      await ctx.workflows.runs.record({
+        id: randomUUID(), workflowId: id, triggerSource: 'manual', status: result.status,
+        startedAt: result.startedAt, finishedAt: result.finishedAt, result, error: null,
+      });
     } catch (err) {
-      reply.raw.write(`event: error\ndata: ${JSON.stringify({ message: err instanceof Error ? err.message : String(err) })}\n\n`);
+      const message = err instanceof Error ? err.message : String(err);
+      reply.raw.write(`event: error\ndata: ${JSON.stringify({ message })}\n\n`);
+      await ctx.workflows.runs.record({
+        id: randomUUID(), workflowId: id, triggerSource: 'manual', status: 'failed',
+        startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(),
+        result: { status: 'failed', results: [] }, error: message,
+      }).catch(() => {});
     } finally {
       reply.raw.end();
     }
     return reply;
+  });
+
+  app.get('/api/workflows/:id/runs', MANAGE, async (req) => {
+    const { id } = req.params as { id: string };
+    const q = req.query as { limit?: string; offset?: string };
+    return ctx.workflows.runs.list(id, { limit: q.limit ? Number(q.limit) : 50, offset: q.offset ? Number(q.offset) : 0 });
+  });
+
+  app.get('/api/workflows/runs/:runId', MANAGE, async (req, reply) => {
+    const { runId } = req.params as { runId: string };
+    const run = await ctx.workflows.runs.get(runId);
+    if (!run) { reply.code(404); return { error: `unknown run: ${runId}` }; }
+    return run;
+  });
+
+  // Secret-gated webhook trigger. NOT MANAGE-gated — auth is the per-path secret.
+  app.post('/api/workflows/hooks/*', async (req, reply) => {
+    const wildcard = (req.params as Record<string, string>)['*'] ?? '';
+    const entry = ctx.workflows.webhooks.resolve(wildcard);
+    if (!entry) { reply.code(404); return { error: 'unknown webhook' }; }
+    const token = (req.headers['x-webhook-token'] as string | undefined) ?? (req.query as { token?: string }).token;
+    if (entry.secret && token !== entry.secret) { reply.code(401); return { error: 'invalid webhook token' }; }
+    await ctx.workflows.runner.runAndRecord(entry.workflowId, 'webhook', {
+      method: req.method, body: req.body, headers: req.headers, query: req.query,
+    });
+    return { ok: true };
   });
 }
 
