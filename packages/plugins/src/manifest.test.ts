@@ -17,4 +17,17 @@ describe('parseManifest', () => {
   it('rejects a missing id', () => {
     expect(() => parseManifest({ version: '1', wasmSha256: 'a'.repeat(64) })).toThrow();
   });
+  it('defaults kind to source and entrypoints to []', () => {
+    const m = parseManifest(valid);
+    expect(m.kind).toBe('source');
+    expect(m.entrypoints).toEqual([]);
+  });
+  it('parses a sink manifest with named entrypoints', () => {
+    const m = parseManifest({ ...valid, kind: 'sink', entrypoints: ['health_check', 'push_aggregate'] });
+    expect(m.kind).toBe('sink');
+    expect(m.entrypoints).toEqual(['health_check', 'push_aggregate']);
+  });
+  it('rejects an unknown kind', () => {
+    expect(() => parseManifest({ ...valid, kind: 'proxy' })).toThrow();
+  });
 });
