@@ -53,3 +53,28 @@ export const WorkflowSchema = z.object({
   updatedAt: z.string().optional(),
 });
 export type Workflow = z.infer<typeof WorkflowSchema>;
+
+export const TRIGGER_SOURCES = ['manual', 'schedule', 'webhook', 'ingest'] as const;
+export type TriggerSource = (typeof TRIGGER_SOURCES)[number];
+
+export const WorkflowRunSchema = z.object({
+  id: z.string(),
+  workflowId: z.string(),
+  triggerSource: z.enum(TRIGGER_SOURCES),
+  status: z.enum(['completed', 'failed']),
+  startedAt: z.string(),
+  finishedAt: z.string(),
+  result: z.unknown(),          // the full WorkflowRunResult
+  error: z.string().nullable().default(null),
+});
+export type WorkflowRun = z.infer<typeof WorkflowRunSchema>;
+
+export const WorkflowScheduleSchema = z.object({
+  workflowId: z.string(),
+  nodeId: z.string(),
+  cron: z.string(),
+  tz: z.string().nullable().default(null),
+  enabled: z.boolean().default(true),
+  nextDueAt: z.string().nullable().default(null),
+});
+export type WorkflowSchedule = z.infer<typeof WorkflowScheduleSchema>;
