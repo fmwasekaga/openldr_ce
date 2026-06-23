@@ -12,17 +12,24 @@ function openMenu() {
 describe('ReportActionsMenu', () => {
   it('fires onOpenHistory when Run History is clicked', async () => {
     const onOpenHistory = vi.fn();
-    render(<ReportActionsMenu onOpenHistory={onOpenHistory} />);
+    render(<ReportActionsMenu onOpenHistory={onOpenHistory} onOpenSchedules={() => {}} canManageSchedules />);
     openMenu();
     fireEvent.click(await screen.findByText(/run history|historique|histórico/i));
     expect(onOpenHistory).toHaveBeenCalled();
   });
 
-  it('keeps Schedules disabled (coming soon)', async () => {
-    render(<ReportActionsMenu onOpenHistory={() => {}} />);
+  it('fires onOpenSchedules when a manager clicks Schedules', async () => {
+    const onOpenSchedules = vi.fn();
+    render(<ReportActionsMenu onOpenHistory={() => {}} onOpenSchedules={onOpenSchedules} canManageSchedules />);
     openMenu();
-    const schedules = await screen.findByText(/schedules|planifications|agendamentos/i);
-    const item = schedules.closest('[role="menuitem"]');
+    fireEvent.click(await screen.findByText(/schedules|planifications|agendamentos/i));
+    expect(onOpenSchedules).toHaveBeenCalled();
+  });
+
+  it('keeps Schedules disabled for a non-manager', async () => {
+    render(<ReportActionsMenu onOpenHistory={() => {}} onOpenSchedules={() => {}} canManageSchedules={false} />);
+    openMenu();
+    const item = (await screen.findByText(/schedules|planifications|agendamentos/i)).closest('[role="menuitem"]');
     expect(item?.hasAttribute('data-disabled') || item?.getAttribute('aria-disabled') === 'true').toBe(true);
   });
 });
