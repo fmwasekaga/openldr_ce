@@ -86,6 +86,9 @@ export const ConfigSchema = z
     MARKETPLACE_DEV_ALLOW_UNSIGNED: envBoolean(false),
     MARKETPLACE_REGISTRY_DIR: z.string().optional(),
     MARKETPLACE_REGISTRY_URL: z.string().url().optional(), // raw base URL of a remote registry; takes precedence over _DIR for install
+    MARKETPLACE_PUBLISH_TOKEN: z.string().optional(),     // GitHub PAT (repo write); secret
+    MARKETPLACE_PUBLISH_REPO: z.string().optional(),      // owner/repo, e.g. fmwasekaga/openldr-ce-marketplace
+    MARKETPLACE_PUBLISH_BRANCH: z.string().default('main'),
   })
   .superRefine((cfg, ctx) => {
     if (cfg.TARGET_STORE_ADAPTER === 'mssql') {

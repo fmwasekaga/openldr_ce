@@ -19,9 +19,11 @@ interface PackageDetailProps {
   onToggleEnabled: (id: string, enabled: boolean) => void;
   onRollback: (id: string, version: string) => void;
   onRemove: (entry: CardEntry) => void;
+  canPublish?: boolean;
+  onPublish?: (entry: CardEntry) => void;
 }
 
-export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRollback, onRemove }: PackageDetailProps) {
+export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRollback, onRemove, canPublish, onPublish }: PackageDetailProps) {
   const { t } = useTranslation();
   const [detail, setDetail] = useState<AvailableArtifactDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +63,11 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            {canPublish && entry.ref ? (
+              <Button variant="outline" data-testid="detail-publish" onClick={() => onPublish?.(entry)}>
+                {t('settings.marketplace.publish')}
+              </Button>
+            ) : null}
             {canInstall ? (
               <Button data-testid="detail-install" disabled={detail ? !detail.compatible : false} onClick={() => onInstall(entry, capabilities)}>
                 {t('settings.marketplace.install')}
