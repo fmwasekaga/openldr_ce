@@ -1,9 +1,11 @@
-import { readdir } from 'node:fs/promises';
-import { join, basename } from 'node:path';
+import { basename } from 'node:path';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { CE_VERSION } from '@openldr/bootstrap';
-import { readBundle, verifyBundle, readGrant, isCompatible, type Capability } from '@openldr/marketplace';
+import {
+  verifyBundle, readGrant, isCompatible,
+  LocalRegistrySource, HttpRegistrySource, type RegistrySource, type Capability,
+} from '@openldr/marketplace';
 import { requireRole } from './rbac';
 
 function actor(req: FastifyRequest): { id?: string | null; name: string } {
@@ -19,7 +21,10 @@ function safeRef(ref: unknown): string | null {
 }
 
 export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
-  const registryDir = ctx.cfg.MARKETPLACE_REGISTRY_DIR;
+  const source: RegistrySource | null =
+    ctx.cfg.MARKETPLACE_REGISTRY_URL ? new HttpRegistrySource(ctx.cfg.MARKETPLACE_REGISTRY_URL)
+    : ctx.cfg.MARKETPLACE_REGISTRY_DIR ? new LocalRegistrySource(ctx.cfg.MARKETPLACE_REGISTRY_DIR)
+    : null;
 
   app.get('/api/marketplace/installed', { preHandler: requireRole('lab_admin') }, async () => {
     const rows = await ctx.plugins.list();
@@ -41,64 +46,39 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
   });
 
   app.get('/api/marketplace/available', { preHandler: requireRole('lab_admin') }, async () => {
-    if (!registryDir) return { configured: false, bundles: [] };
-    let dirs: string[];
+    if (!source) return { configured: false, bundles: [], source: null, host: null };
     try {
-      dirs = (await readdir(registryDir, { withFileTypes: true })).filter((d) => d.isDirectory()).map((d) => d.name);
-    } catch {
-      return { configured: true, bundles: [], error: 'registry directory not readable' };
+      const listing = await source.list();
+      return {
+        configured: true,
+        source: source.kind,
+        host: source.label,
+        bundles: listing.map((l) => ({
+          ref: l.ref, id: l.id, version: l.version, type: l.type,
+          publisher: l.publisher, description: l.description, license: l.license,
+          summary: l.summary, signatureFingerprint: l.signatureFingerprint,
+          valid: l.valid,
+        })),
+      };
+    } catch (e) {
+      return { configured: true, source: source.kind, host: source.label, bundles: [], error: e instanceof Error ? e.message : 'registry unreachable' };
     }
-    const bundles = [];
-    for (const ref of dirs) {
-      try {
-        const b = await readBundle(join(registryDir, ref));
-        const v = verifyBundle(b);
-        bundles.push({
-          ref,
-          id: b.manifest.id,
-          version: b.manifest.version,
-          type: b.manifest.type,
-          description: b.manifest.description,
-          license: b.manifest.license,
-          publisher: b.manifest.publisher ?? null,
-          capabilities: b.manifest.capabilities,
-          compatibility: b.manifest.compatibility,
-          valid: v.valid,
-        });
-      } catch {
-        // Not a readable bundle directory — skip it.
-      }
-    }
-    return { configured: true, bundles };
   });
 
   app.get('/api/marketplace/available/:ref', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
-    if (!registryDir) {
-      reply.code(400);
-      return { error: 'no marketplace registry configured' };
-    }
+    if (!source) { reply.code(400); return { error: 'no marketplace registry configured' }; }
     const ref = safeRef((req.params as { ref: string }).ref);
-    if (!ref) {
-      reply.code(400);
-      return { error: 'invalid bundle ref' };
-    }
+    if (!ref) { reply.code(400); return { error: 'invalid bundle ref' }; }
     try {
-      const b = await readBundle(join(registryDir, ref));
+      const b = await source.getBundle(ref);
       const v = verifyBundle(b);
       return {
-        ref,
-        id: b.manifest.id,
-        version: b.manifest.version,
-        type: b.manifest.type,
-        description: b.manifest.description,
-        license: b.manifest.license,
-        publisher: b.manifest.publisher ?? null,
-        capabilities: b.manifest.capabilities,
+        ref, id: b.manifest.id, version: b.manifest.version, type: b.manifest.type,
+        description: b.manifest.description, license: b.manifest.license,
+        publisher: b.manifest.publisher ?? null, capabilities: b.manifest.capabilities,
         compatibility: b.manifest.compatibility,
         compatible: isCompatible(b.manifest.compatibility.ceVersion, CE_VERSION),
-        ceVersion: CE_VERSION,
-        payload: b.manifest.payload,
-        valid: v.valid,
+        ceVersion: CE_VERSION, payload: b.manifest.payload, valid: v.valid,
       };
     } catch {
       reply.code(404);
@@ -107,29 +87,19 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
   });
 
   app.post('/api/marketplace/install', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
-    if (!registryDir) {
-      reply.code(400);
-      return { error: 'no marketplace registry configured' };
-    }
+    if (!source) { reply.code(400); return { error: 'no marketplace registry configured' }; }
     const body = (req.body ?? {}) as { ref?: unknown; acknowledgedCapabilities?: unknown };
     const ref = safeRef(body.ref);
-    if (!ref) {
-      reply.code(400);
-      return { error: 'invalid bundle ref' };
-    }
+    if (!ref) { reply.code(400); return { error: 'invalid bundle ref' }; }
     if (body.acknowledgedCapabilities !== undefined && !Array.isArray(body.acknowledgedCapabilities)) {
-      reply.code(400);
-      return { error: 'acknowledgedCapabilities must be an array' };
+      reply.code(400); return { error: 'acknowledgedCapabilities must be an array' };
     }
     try {
-      const b = await readBundle(join(registryDir, ref));
+      const b = await source.getBundle(ref);
       const a = actor(req);
-      // Default to the bundle's declared capabilities when the caller omits an explicit
-      // acknowledgement; the runtime's consent check (SP-2) still rejects a mismatch.
       const acknowledgedCapabilities = (body.acknowledgedCapabilities as Capability[] | undefined) ?? b.manifest.capabilities;
       const installed = await ctx.plugins.install(b.wasm, b.raw, {
-        publicKeyDer: b.publicKeyDer,
-        actor: a,
+        publicKeyDer: b.publicKeyDer, actor: a,
         approval: { approvedBy: a.id ?? a.name, acknowledgedCapabilities },
       });
       return { id: installed.id, version: installed.version };
@@ -137,6 +107,11 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
       reply.code(400);
       return { error: err instanceof Error ? err.message : String(err) };
     }
+  });
+
+  app.post('/api/marketplace/refresh', { preHandler: requireRole('lab_admin') }, async () => {
+    source?.refresh();
+    return { ok: true };
   });
 
   app.post('/api/marketplace/:id/enable', { preHandler: requireRole('lab_admin') }, async (req) => {

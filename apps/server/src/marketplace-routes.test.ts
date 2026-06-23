@@ -110,7 +110,23 @@ describe('marketplace routes', () => {
     const { runtime } = fakePlugins();
     const app = appWith({}, runtime);
     const res = await app.inject({ method: 'GET', url: '/api/marketplace/available' });
-    expect(res.json()).toEqual({ configured: false, bundles: [] });
+    expect(res.json()).toEqual({ configured: false, bundles: [], source: null, host: null });
+  });
+
+  it('available reports the source kind and host', async () => {
+    const { runtime } = fakePlugins();
+    const app = appWith({ MARKETPLACE_REGISTRY_DIR: registryDir }, runtime);
+    const res = await app.inject({ method: 'GET', url: '/api/marketplace/available' });
+    const body = res.json();
+    expect(body.source).toBe('local');
+  });
+
+  it('refresh returns ok', async () => {
+    const { runtime } = fakePlugins();
+    const app = appWith({ MARKETPLACE_REGISTRY_DIR: registryDir }, runtime);
+    const res = await app.inject({ method: 'POST', url: '/api/marketplace/refresh' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ok: true });
   });
 
   it('installs with consent (passes approval + actor)', async () => {
