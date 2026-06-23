@@ -11,10 +11,24 @@ pub fn to_ndjson(resources: &[Value]) -> String {
     resources.iter().map(|r| r.to_string()).collect::<Vec<_>>().join("\n")
 }
 
+/// Helper for authoring **sink** plugins. A sink exports named entrypoints (e.g.
+/// `health_check`, `pull_metadata`, `push_aggregate`, `push_tracker`), each taking the
+/// host's JSON request bytes and returning a single JSON response object. Use this to
+/// serialize the response value compactly — the host parses the returned string as JSON.
+pub fn to_json_string(value: &Value) -> String {
+    value.to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn to_json_string_is_compact() {
+        let out = to_json_string(&json!({ "ok": true }));
+        assert_eq!(out, "{\"ok\":true}");
+    }
 
     #[test]
     fn ndjson_joins_one_per_line() {
