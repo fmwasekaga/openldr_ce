@@ -50,6 +50,27 @@ describe('runWorkflow', () => {
     expect(res.status).toBe('failed');
   });
 
+  it('runs a SQL source node and feeds rows downstream', async () => {
+    const services = {
+      runSql: async () => ({ columns: [{ key: 'name', label: 'name' }], rows: [{ name: 'alice' }] }),
+      fhirQuery: async () => ({ resources: [] }),
+      httpFetch: async () => ({ status: 200, headers: {}, data: null }),
+    };
+    const nodes = [
+      { id: 't', type: 'trigger', data: {} },
+      { id: 'q', type: 'action', data: { action: 'sql-query', config: { sql: 'select name from x' } } },
+      { id: 'l', type: 'action', data: { action: 'log', message: 'first={{ $input.rows.0.name }}' } },
+    ];
+    const edges = [
+      { id: 'e1', source: 't', target: 'q' },
+      { id: 'e2', source: 'q', target: 'l' },
+    ];
+    const logs: string[] = [];
+    const res = await runWorkflow(nodes, edges, { services, onEvent: (e) => { if (e.type === 'node:log') logs.push(e.entry.message); } });
+    expect(res.status).toBe('completed');
+    expect(logs).toContain('first=alice');
+  });
+
   it('runs a code node, streams its log, and passes its output downstream', async () => {
     const nodes = [
       { id: 't', type: 'trigger', data: {} },

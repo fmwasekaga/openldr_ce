@@ -7,12 +7,18 @@ import { ifHandler } from './if';
 import { filterHandler } from './filter';
 import { codeHandler } from './code';
 import { defaultHandler } from './default';
+import { sqlHandler } from './sql';
+import { fhirHandler } from './fhir';
+import { httpHandler } from './http';
 
 /** Action subtype → handler. New actions (http-request, code, …) land in later slices. */
 const ACTION_HANDLERS: Record<string, NodeHandler> = {
   log: logHandler,
   set: setHandler,
   merge: mergeHandler,
+  'sql-query': sqlHandler,
+  'fhir-query': fhirHandler,
+  'http-request': httpHandler,
   'no-op': defaultHandler,
 };
 
