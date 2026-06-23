@@ -129,6 +129,101 @@ export async function downloadReportCsv(id: string, params: Record<string, strin
   URL.revokeObjectURL(url);
 }
 
+// ── Report schedule types & API client ───────────────────────────────────────
+
+export interface ReportSchedule {
+  id: string;
+  reportId: string;
+  params: Record<string, string>;
+  frequency: 'daily' | 'weekly' | 'monthly' | 'quarterly';
+  dayOfWeek: number | null;
+  dayOfMonth: number | null;
+  outputFormat: 'csv' | 'xlsx' | 'pdf';
+  enabled: boolean;
+  lastRunAt: string | null;
+  nextDueAt: string | null;
+  createdBy: string | null;
+}
+export interface ReportScheduleRun {
+  id: string;
+  scheduleId: string;
+  reportId: string;
+  reportName: string;
+  runAt: string;
+  periodStart: string | null;
+  periodEnd: string | null;
+  outputFormat: string;
+  objectKey: string | null;
+  byteSize: number | null;
+  rowCount: number | null;
+  status: 'success' | 'failed';
+  errorMessage: string | null;
+}
+export interface ScheduleInput {
+  frequency: ReportSchedule['frequency'];
+  dayOfWeek?: number | null;
+  dayOfMonth?: number | null;
+  outputFormat: ReportSchedule['outputFormat'];
+  params?: Record<string, string>;
+}
+
+export async function fetchSchedules(reportId: string): Promise<ReportSchedule[]> {
+  const res = await authFetch(`/api/reports/${encodeURIComponent(reportId)}/schedules`);
+  if (!res.ok) throw new Error(`schedules ${reportId} failed: ${res.status}`);
+  return res.json() as Promise<ReportSchedule[]>;
+}
+export async function createSchedule(reportId: string, body: ScheduleInput): Promise<ReportSchedule> {
+  const res = await authFetch(`/api/reports/${encodeURIComponent(reportId)}/schedules`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`create schedule failed: ${res.status}`);
+  return res.json() as Promise<ReportSchedule>;
+}
+export async function updateSchedule(sid: string, patch: Partial<ScheduleInput> & { enabled?: boolean }): Promise<ReportSchedule> {
+  const res = await authFetch(`/api/reports/schedules/${encodeURIComponent(sid)}`, {
+    method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch),
+  });
+  if (!res.ok) throw new Error(`update schedule failed: ${res.status}`);
+  return res.json() as Promise<ReportSchedule>;
+}
+export async function deleteSchedule(sid: string): Promise<void> {
+  const res = await authFetch(`/api/reports/schedules/${encodeURIComponent(sid)}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`delete schedule failed: ${res.status}`);
+}
+export async function runScheduleNow(sid: string): Promise<void> {
+  const res = await authFetch(`/api/reports/schedules/${encodeURIComponent(sid)}/run`, { method: 'POST' });
+  if (!res.ok) throw new Error(`run schedule failed: ${res.status}`);
+}
+export async function fetchScheduleRuns(
+  opts: { reportId?: string; scheduleId?: string; limit?: number; offset?: number } = {},
+): Promise<{ runs: ReportScheduleRun[]; total: number }> {
+  const qs = new URLSearchParams();
+  if (opts.reportId) qs.set('reportId', opts.reportId);
+  if (opts.scheduleId) qs.set('scheduleId', opts.scheduleId);
+  if (opts.limit != null) qs.set('limit', String(opts.limit));
+  if (opts.offset != null) qs.set('offset', String(opts.offset));
+  const q = qs.toString();
+  const res = await authFetch(`/api/reports/schedule-runs${q ? `?${q}` : ''}`);
+  if (!res.ok) throw new Error(`schedule runs failed: ${res.status}`);
+  return res.json() as Promise<{ runs: ReportScheduleRun[]; total: number }>;
+}
+export async function downloadScheduleRun(runId: string): Promise<void> {
+  const res = await authFetch(`/api/reports/schedule-runs/${encodeURIComponent(runId)}/download`);
+  if (!res.ok) throw new Error(`download schedule run failed: ${res.status}`);
+  const blob = await res.blob();
+  const cd = res.headers.get('content-disposition') ?? '';
+  const m = /filename="?([^"]+)"?/.exec(cd);
+  const filename = m?.[1] ?? runId;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 // ── Dashboard types & API client ──────────────────────────────────────────────
 
 export interface WidgetVariableDef {
