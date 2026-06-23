@@ -7,6 +7,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
   listAvailableArtifacts, listInstalledArtifacts, refreshRegistry,
   installArtifact, setArtifactEnabled, rollbackArtifact, removeArtifact,
+  getPublishStatus, publishArtifact,
   type AvailableArtifact, type InstalledArtifact,
 } from '@/api';
 import { MarketplaceTabs } from './marketplace/MarketplaceTabs';
@@ -23,6 +24,7 @@ export function Marketplace() {
   const [pendingRemove, setPendingRemove] = useState<CardEntry | null>(null);
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [canPublish, setCanPublish] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -38,6 +40,8 @@ export function Marketplace() {
   }, [t]);
 
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => { void getPublishStatus().then((s) => setCanPublish(s.configured)).catch(() => setCanPublish(false)); }, []);
 
   const doInstall = useCallback(async () => {
     if (!consent || !consent.entry.ref || busy) return;
@@ -69,6 +73,18 @@ export function Marketplace() {
     catch (e) { toast.error(t('settings.marketplace.errorToast', { error: e instanceof Error ? e.message : String(e) })); }
   }, [t, load]);
 
+  const onPublish = useCallback(async (entry: CardEntry) => {
+    if (!entry.ref) return;
+    try {
+      const { prUrl, prNumber } = await publishArtifact(entry.ref);
+      toast.success(t('settings.marketplace.publishedToast', { number: prNumber }), {
+        action: { label: t('settings.marketplace.viewPr'), onClick: () => window.open(prUrl, '_blank', 'noopener') },
+      });
+    } catch (e) {
+      toast.error(t('settings.marketplace.errorToast', { error: e instanceof Error ? e.message : String(e) }));
+    }
+  }, [t]);
+
   const doRemove = useCallback(async () => {
     if (!pendingRemove) return;
     const entry = pendingRemove;
@@ -89,6 +105,8 @@ export function Marketplace() {
         onToggleEnabled={onToggleEnabled}
         onRollback={onRollback}
         onRemove={(entry) => setPendingRemove(entry)}
+        canPublish={canPublish}
+        onPublish={onPublish}
         source={source}
         host={host}
         onRefresh={onRefresh}

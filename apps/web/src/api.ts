@@ -947,6 +947,12 @@ export const getAvailableArtifact = (ref: string): Promise<AvailableArtifactDeta
 export const installArtifact = (ref: string, acknowledgedCapabilities: unknown[]): Promise<{ id: string; version: string }> =>
   authFetch('/api/marketplace/install', jbody({ ref, acknowledgedCapabilities }, 'POST')).then((r) => okJson<{ id: string; version: string }>(r, 'install artifact'));
 
+export const getPublishStatus = (): Promise<{ configured: boolean; repo: string | null }> =>
+  apiGet('/api/marketplace/publish/status', 'get publish status');
+
+export const publishArtifact = (ref: string): Promise<{ prUrl: string; prNumber: number }> =>
+  authFetch('/api/marketplace/publish', jbody({ ref }, 'POST')).then((r) => okJson<{ prUrl: string; prNumber: number }>(r, 'publish artifact'));
+
 export async function setArtifactEnabled(id: string, enabled: boolean): Promise<void> {
   const endpoint = enabled ? 'enable' : 'disable';
   const r = await authFetch(`/api/marketplace/${encodeURIComponent(id)}/${endpoint}`, { method: 'POST' });
