@@ -100,7 +100,11 @@ export function registerWorkflowRoutes(app: FastifyInstance<any, any, any, any>,
     });
     const send = (evt: RunEvent) => reply.raw.write(`data: ${JSON.stringify(evt)}\n\n`);
     try {
-      const result = await runWorkflow(def.nodes, def.edges, { input: body.input, onEvent: send });
+      const result = await runWorkflow(def.nodes, def.edges, {
+        input: body.input,
+        onEvent: send,
+        codeLimits: { timeoutMs: ctx.cfg.WORKFLOW_CODE_TIMEOUT_MS, memoryMb: ctx.cfg.WORKFLOW_CODE_MEMORY_MB },
+      });
       reply.raw.write(`event: done\ndata: ${JSON.stringify(result)}\n\n`);
       await ctx.workflows.runs.record({
         id: randomUUID(), workflowId: id, triggerSource: 'manual', status: result.status,

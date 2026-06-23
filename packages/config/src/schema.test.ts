@@ -6,6 +6,14 @@ const base = {
   S3_ENDPOINT: 'http://localhost:9010', S3_ACCESS_KEY_ID: 'k', S3_SECRET_ACCESS_KEY: 's', S3_BUCKET: 'b',
   OIDC_ISSUER_URL: 'http://localhost:8080/realms/master',
 };
+describe('workflow code sandbox config', () => {
+  it('defaults the workflow code sandbox limits', () => {
+    const cfg = ConfigSchema.parse(base);
+    expect(cfg.WORKFLOW_CODE_TIMEOUT_MS).toBe(5000);
+    expect(cfg.WORKFLOW_CODE_MEMORY_MB).toBe(128);
+  });
+});
+
 describe('dashboard SQL config', () => {
   it('defaults DASHBOARD_SQL_ENABLED to false', () => {
     const cfg = ConfigSchema.parse(base);

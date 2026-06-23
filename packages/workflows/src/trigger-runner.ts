@@ -15,6 +15,7 @@ interface RunnerDeps {
   webhooks: Pick<WebhookRegistry, 'resolve'>;
   runWorkflow: typeof RunWorkflowFn;
   logger: { error(o: unknown, m?: string): void; warn(o: unknown, m?: string): void };
+  codeLimits?: { timeoutMs: number; memoryMb: number };
 }
 
 const SCHEDULE_DUE = 'workflow.schedule.due';
@@ -37,7 +38,7 @@ export function createWorkflowTriggerRunner(deps: RunnerDeps): WorkflowTriggerRu
     let result: Awaited<ReturnType<typeof deps.runWorkflow>>;
     let error: string | null = null;
     try {
-      result = await deps.runWorkflow(def.nodes, def.edges, { input });
+      result = await deps.runWorkflow(def.nodes, def.edges, { input, codeLimits: deps.codeLimits });
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
       result = {

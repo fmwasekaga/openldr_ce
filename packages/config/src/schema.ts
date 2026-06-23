@@ -82,6 +82,10 @@ export const ConfigSchema = z
     DASHBOARD_SQL_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
     DASHBOARD_SQL_ROW_CAP: z.coerce.number().int().positive().default(10000),
 
+    // Workflow Code node sandbox limits.
+    WORKFLOW_CODE_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+    WORKFLOW_CODE_MEMORY_MB: z.coerce.number().int().positive().default(128),
+
     // Marketplace artifact security.
     MARKETPLACE_DEV_ALLOW_UNSIGNED: envBoolean(false),
     MARKETPLACE_REGISTRY_DIR: z.string().optional(),
