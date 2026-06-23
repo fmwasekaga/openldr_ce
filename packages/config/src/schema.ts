@@ -85,6 +85,8 @@ export const ConfigSchema = z
     // Workflow Code node sandbox limits.
     WORKFLOW_CODE_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
     WORKFLOW_CODE_MEMORY_MB: z.coerce.number().int().positive().default(128),
+    // Comma-separated allow-list of hostnames for the workflow HTTP source node.
+    WORKFLOW_HTTP_ALLOWLIST: z.string().default(''),
 
     // Marketplace artifact security.
     MARKETPLACE_DEV_ALLOW_UNSIGNED: envBoolean(false),

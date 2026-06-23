@@ -5,6 +5,7 @@ import type { WorkflowRunStore } from './run-store';
 import type { WorkflowScheduleStore } from './schedule-store';
 import type { WebhookRegistry } from './webhook-registry';
 import type { runWorkflow as RunWorkflowFn } from './engine/run-workflow';
+import type { WorkflowServices } from './engine/services';
 import { WorkflowDefinitionSchema, type TriggerSource, type WorkflowRun } from './types';
 import { nextCronDate } from './cron';
 
@@ -16,6 +17,7 @@ interface RunnerDeps {
   runWorkflow: typeof RunWorkflowFn;
   logger: { error(o: unknown, m?: string): void; warn(o: unknown, m?: string): void };
   codeLimits?: { timeoutMs: number; memoryMb: number };
+  services?: WorkflowServices;
 }
 
 const SCHEDULE_DUE = 'workflow.schedule.due';
@@ -38,7 +40,7 @@ export function createWorkflowTriggerRunner(deps: RunnerDeps): WorkflowTriggerRu
     let result: Awaited<ReturnType<typeof deps.runWorkflow>>;
     let error: string | null = null;
     try {
-      result = await deps.runWorkflow(def.nodes, def.edges, { input, codeLimits: deps.codeLimits });
+      result = await deps.runWorkflow(def.nodes, def.edges, { input, codeLimits: deps.codeLimits, services: deps.services });
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
       result = {

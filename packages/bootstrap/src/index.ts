@@ -19,6 +19,7 @@ import {
   createWebhookRegistry, type WebhookRegistry,
   createWorkflowTriggerRunner, type WorkflowTriggerRunner,
   runWorkflow,
+  guardedFetch, type WorkflowServices,
 } from '@openldr/workflows';
 import { renderReportPdf } from '@openldr/report-pdf';
 import { createReportScheduler, type ReportScheduler } from './report-scheduler';
@@ -113,6 +114,7 @@ export interface AppContext {
     schedules: WorkflowScheduleStore;
     webhooks: WebhookRegistry;
     runner: WorkflowTriggerRunner;
+    services: WorkflowServices;
   };
   plugins: PluginRuntime;
   cfg: Config;
@@ -208,12 +210,6 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   const workflowRuns = createWorkflowRunStore(internal.db);
   const workflowSchedules = createWorkflowScheduleStore(internal.db);
   const workflowWebhooks = createWebhookRegistry();
-  const workflowRunner = createWorkflowTriggerRunner({
-    store: workflowStore, runs: workflowRuns, schedules: workflowSchedules,
-    webhooks: workflowWebhooks, runWorkflow, logger,
-    codeLimits: { timeoutMs: cfg.WORKFLOW_CODE_TIMEOUT_MS, memoryMb: cfg.WORKFLOW_CODE_MEMORY_MB },
-  });
-  const workflows = { store: workflowStore, runs: workflowRuns, schedules: workflowSchedules, webhooks: workflowWebhooks, runner: workflowRunner };
 
   const health = new HealthRegistry();
   health.register({ name: 'auth', check: () => auth.healthCheck() });
@@ -275,6 +271,24 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       resource: (json) => importTerminologyResource(json, loaderStore),
     },
   };
+
+  const workflowServices: WorkflowServices = {
+    runSql: async (sql) => {
+      const r = await dashboards.query({ mode: 'sql', sql });
+      return { columns: r.columns.map((c) => ({ key: c.key, label: c.label })), rows: r.rows };
+    },
+    fhirQuery: async (resourceType, limit) => ({
+      resources: (await termFhirStore.listByType(resourceType, limit)).map((x) => x.resource),
+    }),
+    httpFetch: (req) => guardedFetch(req, cfg.WORKFLOW_HTTP_ALLOWLIST),
+  };
+  const workflowRunner = createWorkflowTriggerRunner({
+    store: workflowStore, runs: workflowRuns, schedules: workflowSchedules,
+    webhooks: workflowWebhooks, runWorkflow, logger,
+    codeLimits: { timeoutMs: cfg.WORKFLOW_CODE_TIMEOUT_MS, memoryMb: cfg.WORKFLOW_CODE_MEMORY_MB },
+    services: workflowServices,
+  });
+  const workflows = { store: workflowStore, runs: workflowRuns, schedules: workflowSchedules, webhooks: workflowWebhooks, runner: workflowRunner, services: workflowServices };
 
   return {
     logger,

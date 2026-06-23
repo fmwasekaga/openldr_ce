@@ -12,6 +12,9 @@ describe('workflow code sandbox config', () => {
     expect(cfg.WORKFLOW_CODE_TIMEOUT_MS).toBe(5000);
     expect(cfg.WORKFLOW_CODE_MEMORY_MB).toBe(128);
   });
+  it('defaults WORKFLOW_HTTP_ALLOWLIST to empty', () => {
+    expect(ConfigSchema.parse(base).WORKFLOW_HTTP_ALLOWLIST).toBe('');
+  });
 });
 
 describe('dashboard SQL config', () => {

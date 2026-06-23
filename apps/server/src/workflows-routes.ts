@@ -104,6 +104,7 @@ export function registerWorkflowRoutes(app: FastifyInstance<any, any, any, any>,
         input: body.input,
         onEvent: send,
         codeLimits: { timeoutMs: ctx.cfg.WORKFLOW_CODE_TIMEOUT_MS, memoryMb: ctx.cfg.WORKFLOW_CODE_MEMORY_MB },
+        services: ctx.workflows.services,
       });
       reply.raw.write(`event: done\ndata: ${JSON.stringify(result)}\n\n`);
       await ctx.workflows.runs.record({
