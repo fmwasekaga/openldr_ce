@@ -97,6 +97,9 @@ export class HttpRegistrySource implements RegistrySource {
     const map = await this.loadIndex();
     const entry = map.get(ref);
     if (!entry) throw new Error(`unknown bundle ref: ${ref}`);
+    if (/^[a-z]+:\/\//i.test(entry.path) || entry.path.startsWith('/') || entry.path.split(/[\\/]/).includes('..')) {
+      throw new Error(`unsafe index path: ${entry.path}`);
+    }
     const dir = `${this.baseUrl}/${entry.path}`;
     const manifestRes = await this.fetchWithTimeout(`${dir}/manifest.json`);
     if (!manifestRes.ok) throw new Error(`registry unreachable: manifest ${manifestRes.status}`);

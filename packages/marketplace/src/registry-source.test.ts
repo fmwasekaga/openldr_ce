@@ -79,4 +79,12 @@ describe('HttpRegistrySource', () => {
     const src = new HttpRegistrySource(base, fetchMock as unknown as typeof fetch);
     await expect(src.list()).rejects.toThrow();
   });
+
+  it('rejects an unsafe index path (SSRF guard)', async () => {
+    const evilIndex = JSON.stringify({ schemaVersion: 1, name: 'M', updatedAt: 'now', packages: [{ id: 'demo', kind: 'plugin', latestVersion: '1.0.0', publisher: 'A', summary: 's', path: 'https://evil.test/x', signatureFingerprint: 'x' }] });
+    const fetchMock = vi.fn(async (url: string) => ({ ok: true, status: 200, text: async () => evilIndex }) as unknown as Response);
+    const src = new HttpRegistrySource(base, fetchMock as unknown as typeof fetch);
+    await src.list();
+    await expect(src.getBundle('x')).rejects.toThrow(/unsafe index path/);
+  });
 });
