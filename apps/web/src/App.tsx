@@ -18,6 +18,7 @@ import { Marketplace } from '@/pages/settings/Marketplace';
 import { Forms } from './pages/Forms';
 import { FormCapture } from './pages/FormCapture';
 import { FormBuilderPage } from './forms-builder/FormBuilderPage';
+import { Workflows } from './workflows/page';
 import { RequireRole } from './auth/RequireRole';
 import { CallbackPage } from './auth/CallbackPage';
 import { Toaster } from './components/ui/sonner';
@@ -29,6 +30,7 @@ export function App() {
       <Route path="/auth/callback" element={<CallbackPage />} />
       <Route path="/" element={<DashboardPage />} />
       <Route path="/reports" element={<Reports />} />
+      <Route path="/workflows" element={<RequireRole roles={['lab_admin', 'lab_manager']}><Workflows /></RequireRole>} />
       <Route path="/terminology" element={<Terminology />} />
       <Route path="/users" element={<RequireRole role="lab_admin"><Users /></RequireRole>} />
       <Route path="/settings" element={<RequireRole role="lab_admin"><SettingsShell /></RequireRole>}>

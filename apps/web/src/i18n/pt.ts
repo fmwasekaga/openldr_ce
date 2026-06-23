@@ -370,6 +370,7 @@ export const pt: EnShape = {
   nav: {
     dashboard: 'Painel',
     reports: 'Relatórios',
+    workflows: 'Fluxos de trabalho',
     terminology: 'Terminologia',
     forms: 'Formulários',
     users: 'Utilizadores',
