@@ -4,6 +4,7 @@ import { Search, Star, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { ReportSummary, ReportCategory } from '../api';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/cn';
 
 interface Props {
@@ -36,6 +37,11 @@ export function ReportLibrary({
     items: filtered.filter((r) => r.category === cat),
   })).filter((g) => g.items.length > 0);
 
+  const sections: { key: string; label: string; items: ReportSummary[] }[] = [
+    ...(pinned.length > 0 ? [{ key: 'pinned', label: t('reports.pinned'), items: pinned }] : []),
+    ...byCategory.map(({ cat, items }) => ({ key: cat, label: t(`reports.categories.${cat}`), items })),
+  ];
+
   if (collapsed) {
     return (
       <aside className="flex w-10 shrink-0 flex-col items-center border-r border-border py-2">
@@ -52,11 +58,16 @@ export function ReportLibrary({
         'group flex cursor-pointer items-center gap-2 border-l-2 px-3 py-2 text-sm transition-colors',
         r.id === selectedId
           ? 'border-[#5A9BD6] bg-[rgba(70,130,180,0.08)] text-foreground'
-          : 'border-transparent text-muted-foreground hover:bg-accent hover:text-foreground',
+          : 'border-transparent text-foreground/85 hover:bg-accent hover:text-foreground',
       )}
       onClick={() => onSelect(r.id)}
     >
-      <span className="min-w-0 flex-1 truncate">{r.name}</span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="min-w-0 flex-1 truncate">{r.name}</span>
+        </TooltipTrigger>
+        <TooltipContent side="right">{r.name}</TooltipContent>
+      </Tooltip>
       <button
         type="button"
         aria-label={`pin-${r.id}`}
@@ -85,24 +96,18 @@ export function ReportLibrary({
           <ChevronLeft className="h-4 w-4" />
         </Button>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto py-1">
-        {pinned.length > 0 && (
-          <div className="mb-1">
-            <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              {t('reports.pinned')}
+      <TooltipProvider delayDuration={400}>
+        <div className="min-h-0 flex-1 overflow-y-auto py-1">
+          {sections.map((s, idx) => (
+            <div key={s.key} className={cn('pb-1', idx > 0 && 'mt-1 border-t border-border pt-2')}>
+              <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60">
+                {s.label}
+              </div>
+              {s.items.map((r) => <Row key={`${s.key}-${r.id}`} r={r} />)}
             </div>
-            {pinned.map((r) => <Row key={`pin-${r.id}`} r={r} />)}
-          </div>
-        )}
-        {byCategory.map(({ cat, items }) => (
-          <div key={cat} className="mb-1">
-            <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              {t(`reports.categories.${cat}`)}
-            </div>
-            {items.map((r) => <Row key={r.id} r={r} />)}
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      </TooltipProvider>
     </aside>
   );
 }
