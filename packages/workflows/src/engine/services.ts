@@ -14,11 +14,37 @@ export interface HttpResponse {
   data: unknown;
 }
 
+export interface ExportArtifactInput {
+  format: 'csv' | 'xlsx' | 'pdf';
+  filename?: string;
+  title?: string;
+  columns: { key: string; label: string }[];
+  rows: Record<string, unknown>[];
+}
+export interface ExportArtifactResult {
+  objectKey: string;
+  format: string;
+  byteSize: number;
+}
+export interface Dhis2PushInput {
+  mappingId: string;
+  period: string;
+  dryRun?: boolean;
+}
+
 /** Capabilities the server injects so source handlers can reach lab data. */
 export interface WorkflowServices {
   runSql(sql: string): Promise<SqlResult>;
   fhirQuery(resourceType: string, limit: number): Promise<{ resources: unknown[] }>;
   httpFetch(req: HttpRequest): Promise<HttpResponse>;
+  materializeDataset(
+    name: string,
+    columns: { key: string; label: string }[],
+    rows: Record<string, unknown>[],
+    workflowId: string | null,
+  ): Promise<{ dataset: string; rowCount: number }>;
+  exportArtifact(input: ExportArtifactInput): Promise<ExportArtifactResult>;
+  dhis2Push?(input: Dhis2PushInput): Promise<unknown>;
 }
 
 export function parseAllowlist(raw: string): string[] {

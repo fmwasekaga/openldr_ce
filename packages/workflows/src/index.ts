@@ -6,5 +6,5 @@ export { createWorkflowScheduleStore, type WorkflowScheduleStore } from './sched
 export { createWebhookRegistry, type WebhookRegistry, type WebhookEntry } from './webhook-registry';
 export { createWorkflowTriggerRunner, type WorkflowTriggerRunner } from './trigger-runner';
 export { nextCronDate } from './cron';
-export { guardedFetch, parseAllowlist, type WorkflowServices, type SqlResult, type HttpRequest, type HttpResponse } from './engine/services';
+export { guardedFetch, parseAllowlist, type WorkflowServices, type SqlResult, type HttpRequest, type HttpResponse, type ExportArtifactInput, type ExportArtifactResult, type Dhis2PushInput } from './engine/services';
 export { createWorkflowDatasetStore, type WorkflowDatasetStore, type DatasetInput } from './dataset-store';

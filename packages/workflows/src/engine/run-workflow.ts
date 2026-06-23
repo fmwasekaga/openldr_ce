@@ -98,6 +98,8 @@ export interface RunWorkflowOptions {
   codeLimits?: { timeoutMs: number; memoryMb: number };
   /** Server-provided data capabilities for source nodes. */
   services?: WorkflowServices;
+  /** ID of the persisted workflow record — forwarded to the execution context. */
+  workflowId?: string;
 }
 
 export async function runWorkflow(
@@ -106,7 +108,7 @@ export async function runWorkflow(
   opts: RunWorkflowOptions = {},
 ): Promise<WorkflowRunResult> {
   const startedAt = new Date().toISOString();
-  const ctx = createContext(opts.input, opts.onEvent ?? (() => {}), edges, opts.codeLimits, opts.services);
+  const ctx = createContext(opts.input, opts.onEvent ?? (() => {}), edges, opts.codeLimits, opts.services, opts.workflowId);
   const sorted = topologicalSort(nodes, edges);
   const results: NodeRunResult[] = [];
 

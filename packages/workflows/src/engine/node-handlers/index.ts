@@ -10,6 +10,9 @@ import { defaultHandler } from './default';
 import { sqlHandler } from './sql';
 import { fhirHandler } from './fhir';
 import { httpHandler } from './http';
+import { materializeHandler } from './materialize';
+import { exportHandler } from './export';
+import { dhis2PushHandler } from './dhis2-push';
 
 /** Action subtype → handler. New actions (http-request, code, …) land in later slices. */
 const ACTION_HANDLERS: Record<string, NodeHandler> = {
@@ -20,6 +23,9 @@ const ACTION_HANDLERS: Record<string, NodeHandler> = {
   'fhir-query': fhirHandler,
   'http-request': httpHandler,
   'no-op': defaultHandler,
+  'materialize-dataset': materializeHandler,
+  'export-artifact': exportHandler,
+  'dhis2-push': dhis2PushHandler,
 };
 
 const TYPE_HANDLERS: Record<string, NodeHandler> = {

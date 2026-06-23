@@ -55,6 +55,8 @@ describe('runWorkflow', () => {
       runSql: async () => ({ columns: [{ key: 'name', label: 'name' }], rows: [{ name: 'alice' }] }),
       fhirQuery: async () => ({ resources: [] }),
       httpFetch: async () => ({ status: 200, headers: {}, data: null }),
+      materializeDataset: async (name: string, _c: unknown, rows: unknown[]) => ({ dataset: name, rowCount: rows.length }),
+      exportArtifact: async () => ({ objectKey: 'k', format: 'csv', byteSize: 0 }),
     };
     const nodes = [
       { id: 't', type: 'trigger', data: {} },
@@ -69,6 +71,32 @@ describe('runWorkflow', () => {
     const res = await runWorkflow(nodes, edges, { services, onEvent: (e) => { if (e.type === 'node:log') logs.push(e.entry.message); } });
     expect(res.status).toBe('completed');
     expect(logs).toContain('first=alice');
+  });
+
+  it('runs a materialize sink with an injected service', async () => {
+    const saved: unknown[] = [];
+    const services = {
+      runSql: async () => ({ columns: [{ key: 'n', label: 'n' }], rows: [{ n: 1 }] }),
+      fhirQuery: async () => ({ resources: [] }),
+      httpFetch: async () => ({ status: 200, headers: {}, data: null }),
+      materializeDataset: async (name: string, _c: unknown, rows: unknown[]) => {
+        saved.push({ name, rows });
+        return { dataset: name, rowCount: rows.length };
+      },
+      exportArtifact: async () => ({ objectKey: 'k', format: 'csv', byteSize: 0 }),
+    };
+    const nodes = [
+      { id: 't', type: 'trigger', data: {} },
+      { id: 'q', type: 'action', data: { action: 'sql-query', config: { sql: 'select 1' } } },
+      { id: 'm', type: 'action', data: { action: 'materialize-dataset', config: { datasetName: 'ds1' } } },
+    ];
+    const edges = [
+      { id: 'e1', source: 't', target: 'q' },
+      { id: 'e2', source: 'q', target: 'm' },
+    ];
+    const res = await runWorkflow(nodes, edges, { services: services as never, workflowId: 'w1' });
+    expect(res.status).toBe('completed');
+    expect(saved.length).toBe(1);
   });
 
   it('runs a code node, streams its log, and passes its output downstream', async () => {

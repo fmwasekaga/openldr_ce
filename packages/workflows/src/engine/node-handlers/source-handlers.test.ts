@@ -9,6 +9,8 @@ const services: WorkflowServices = {
   runSql: vi.fn(async (sql: string) => ({ columns: [{ key: 'n', label: 'n' }], rows: [{ n: 1, sql }] })),
   fhirQuery: vi.fn(async (rt: string, limit: number) => ({ resources: [{ resourceType: rt, limit }] })),
   httpFetch: vi.fn(async (req) => ({ status: 200, headers: {}, data: { url: req.url } })),
+  materializeDataset: vi.fn(async (name, _c, rows) => ({ dataset: name, rowCount: rows.length })),
+  exportArtifact: vi.fn(async (i) => ({ objectKey: `k/${i.format}`, format: i.format, byteSize: 0 })),
 };
 const ctxWith = (svc?: WorkflowServices) => {
   const c = createContext(undefined, () => {}, [], undefined, svc);

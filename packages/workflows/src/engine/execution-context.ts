@@ -16,6 +16,8 @@ export interface ExecutionContext {
   codeLimits: { timeoutMs: number; memoryMb: number };
   /** Server-provided data capabilities for source nodes (undefined in pure-engine tests). */
   services?: WorkflowServices;
+  /** ID of the persisted workflow record — threaded through so sink nodes can stamp datasets. */
+  workflowId?: string;
 }
 
 export function createContext(
@@ -24,6 +26,7 @@ export function createContext(
   edges: ExecutionContext['edges'] = [],
   codeLimits: ExecutionContext['codeLimits'] = { timeoutMs: 5000, memoryMb: 128 },
   services?: WorkflowServices,
+  workflowId?: string,
 ): ExecutionContext {
-  return { input, nodeOutputs: {}, logs: {}, emit, edges, codeLimits, services };
+  return { input, nodeOutputs: {}, logs: {}, emit, edges, codeLimits, services, workflowId };
 }
