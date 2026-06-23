@@ -14,6 +14,9 @@ describe('report schedule store', () => {
     });
     expect((await store.get('s1'))?.reportId).toBe('amr-resistance');
     expect((await store.list({ reportId: 'amr-resistance' })).map((s) => s.id)).toEqual(['s1']);
+    const paged = await store.listPaged({ reportId: 'amr-resistance', limit: 10, offset: 0 });
+    expect(paged.total).toBe(1);
+    expect(paged.schedules.map((s) => s.id)).toEqual(['s1']);
     expect((await store.get('s1'))?.params).toEqual({ facility: 'F1' });
 
     await store.update('s1', { enabled: false, outputFormat: 'csv' });

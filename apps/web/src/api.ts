@@ -167,10 +167,17 @@ export interface ScheduleInput {
   params?: Record<string, string>;
 }
 
-export async function fetchSchedules(reportId: string): Promise<ReportSchedule[]> {
-  const res = await authFetch(`/api/reports/${encodeURIComponent(reportId)}/schedules`);
+export async function fetchSchedules(
+  reportId: string,
+  opts: { limit?: number; offset?: number } = {},
+): Promise<{ schedules: ReportSchedule[]; total: number }> {
+  const qs = new URLSearchParams();
+  if (opts.limit != null) qs.set('limit', String(opts.limit));
+  if (opts.offset != null) qs.set('offset', String(opts.offset));
+  const q = qs.toString();
+  const res = await authFetch(`/api/reports/${encodeURIComponent(reportId)}/schedules${q ? `?${q}` : ''}`);
   if (!res.ok) throw new Error(`schedules ${reportId} failed: ${res.status}`);
-  return res.json() as Promise<ReportSchedule[]>;
+  return res.json() as Promise<{ schedules: ReportSchedule[]; total: number }>;
 }
 export async function createSchedule(reportId: string, body: ScheduleInput): Promise<ReportSchedule> {
   const res = await authFetch(`/api/reports/${encodeURIComponent(reportId)}/schedules`, {

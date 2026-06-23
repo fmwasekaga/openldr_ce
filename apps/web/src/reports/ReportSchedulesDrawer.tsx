@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { TablePagination } from '@/components/ui/table-pagination';
 import { ScheduleDialog } from './ScheduleDialog';
 
 interface Props {
@@ -31,6 +32,9 @@ function freqLabel(s: ReportSchedule, t: (k: string) => string): string {
 export function ReportSchedulesDrawer({ open, reportId, parameters, options, currentParams, onClose }: Props) {
   const { t } = useTranslation();
   const [schedules, setSchedules] = useState<ReportSchedule[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(25);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -40,12 +44,14 @@ export function ReportSchedulesDrawer({ open, reportId, parameters, options, cur
   const reload = useCallback(() => {
     setLoading(true);
     setError(undefined);
-    fetchSchedules(reportId)
-      .then((s) => { setSchedules(s); setLoading(false); })
+    fetchSchedules(reportId, { limit: pageSize, offset: page * pageSize })
+      .then((res) => { setSchedules(res.schedules); setTotal(res.total); setLoading(false); })
       .catch(() => { setError(t('reports.scheduling.loadError')); setLoading(false); });
-  }, [reportId, t]);
+  }, [reportId, page, pageSize, t]);
 
   useEffect(() => { if (open) reload(); }, [open, reload]);
+  // Reset to the first page when switching reports.
+  useEffect(() => { setPage(0); }, [reportId]);
 
   const onToggle = async (s: ReportSchedule) => {
     try { await updateSchedule(s.id, { enabled: !s.enabled }); reload(); }
@@ -107,6 +113,15 @@ export function ReportSchedulesDrawer({ open, reportId, parameters, options, cur
             ))
           )}
         </div>
+        {total > 0 && (
+          <TablePagination
+            page={page}
+            pageSize={pageSize}
+            total={total}
+            onPageChange={setPage}
+            onPageSizeChange={(n) => { setPageSize(n); setPage(0); }}
+          />
+        )}
       </SheetContent>
 
       {dialogOpen && (

@@ -114,7 +114,10 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
 
   app.get('/api/reports/:id/schedules', async (req) => {
     const { id } = req.params as { id: string };
-    return ctx.reportSchedules.list({ reportId: id });
+    const q = req.query as { limit?: string; offset?: string };
+    const limit = Math.min(Math.max(Number(q.limit ?? 50) || 50, 1), 200);
+    const offset = Math.max(Number(q.offset ?? 0) || 0, 0);
+    return ctx.reportSchedules.listPaged({ reportId: id, limit, offset });
   });
 
   app.post('/api/reports/:id/schedules', MANAGE, async (req, reply) => {

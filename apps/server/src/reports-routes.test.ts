@@ -156,7 +156,7 @@ describe('report schedule routes', () => {
       eventing: { publish: async () => {} },
       reportSchedules: {
         create: async (s: any) => { created.push(s); },
-        list: async () => [{ id: 's1', reportId: 'amr-resistance', params: {}, frequency: 'weekly', dayOfWeek: 1, dayOfMonth: null, outputFormat: 'pdf', enabled: true, lastRunAt: null, nextDueAt: new Date('2026-03-16T06:00:00Z'), createdBy: 'u1' }],
+        listPaged: async () => ({ schedules: [{ id: 's1', reportId: 'amr-resistance', params: {}, frequency: 'weekly', dayOfWeek: 1, dayOfMonth: null, outputFormat: 'pdf', enabled: true, lastRunAt: null, nextDueAt: new Date('2026-03-16T06:00:00Z'), createdBy: 'u1' }], total: 1 }),
         get: async (id: string) => (id === 's1' ? { id: 's1', reportId: 'amr-resistance', frequency: 'weekly', dayOfWeek: 1, dayOfMonth: null, outputFormat: 'pdf', enabled: true, params: {}, lastRunAt: null, nextDueAt: null, createdBy: 'u1' } : null),
         update: async () => {}, remove: async () => {},
       },
@@ -183,7 +183,8 @@ describe('report schedule routes', () => {
     await app.ready();
     const res = await app.inject({ method: 'GET', url: '/api/reports/amr-resistance/schedules' });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toHaveLength(1);
+    expect(res.json()).toMatchObject({ total: 1 });
+    expect(res.json().schedules).toHaveLength(1);
     await app.close();
   });
 

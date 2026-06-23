@@ -64,6 +64,8 @@ export interface ReportScheduleStore {
   create(s: NewSchedule): Promise<void>;
   get(id: string): Promise<ScheduleRecord | null>;
   list(opts: { reportId?: string }): Promise<ScheduleRecord[]>;
+  listPaged(opts: { reportId?: string; limit: number; offset: number }):
+    Promise<{ schedules: ScheduleRecord[]; total: number }>;
   update(id: string, patch: SchedulePatch): Promise<void>;
   remove(id: string): Promise<void>;
   setNextDue(id: string, at: Date): Promise<void>;
@@ -123,6 +125,15 @@ export function createReportScheduleStore(db: Kysely<InternalSchema>): ReportSch
       let q = db.selectFrom('report_schedules').select(SCHEDULE_COLS);
       if (reportId) q = q.where('report_id', '=', reportId);
       return (await q.orderBy('created_at', 'desc').execute()).map(toSchedule);
+    },
+    async listPaged({ reportId, limit, offset }) {
+      let q = db.selectFrom('report_schedules').select(SCHEDULE_COLS);
+      if (reportId) q = q.where('report_id', '=', reportId);
+      const rows = await q.orderBy('created_at', 'desc').limit(limit).offset(offset).execute();
+      let cq = db.selectFrom('report_schedules').select((eb) => eb.fn.countAll<number>().as('total'));
+      if (reportId) cq = cq.where('report_id', '=', reportId);
+      const c = await cq.executeTakeFirst();
+      return { schedules: rows.map(toSchedule), total: Number(c?.total ?? 0) };
     },
     async update(id, patch) {
       const set: Record<string, unknown> = { updated_at: sql`now()` };

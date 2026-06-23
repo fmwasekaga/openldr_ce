@@ -13,9 +13,12 @@ import { ReportSchedulesDrawer } from './ReportSchedulesDrawer';
 
 beforeEach(() => {
   fetchSchedules.mockReset();
-  fetchSchedules.mockResolvedValue([
-    { id: 's1', reportId: 'amr-resistance', params: {}, frequency: 'weekly', dayOfWeek: 1, dayOfMonth: null, outputFormat: 'pdf', enabled: true, lastRunAt: null, nextDueAt: '2026-03-16T06:00:00Z', createdBy: 'u1' },
-  ]);
+  fetchSchedules.mockResolvedValue({
+    schedules: [
+      { id: 's1', reportId: 'amr-resistance', params: {}, frequency: 'weekly', dayOfWeek: 1, dayOfMonth: null, outputFormat: 'pdf', enabled: true, lastRunAt: null, nextDueAt: '2026-03-16T06:00:00Z', createdBy: 'u1' },
+    ],
+    total: 1,
+  });
   updateSchedule.mockClear(); runScheduleNow.mockClear();
 });
 
