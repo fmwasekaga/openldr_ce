@@ -897,11 +897,13 @@ export interface AvailableArtifact {
   version: string;
   type: string;
   publisher: { id: string; name: string } | null;
-  capabilities: unknown[];
-  compatibility: { ceVersion: string };
-  valid: boolean;
+  capabilities?: unknown[];
+  compatibility?: { ceVersion: string };
+  valid?: boolean;
   description?: string;
   license?: string;
+  summary?: string;
+  signatureFingerprint?: string;
 }
 export interface ArtifactPayloadMeta {
   kind: string;
@@ -931,8 +933,13 @@ export interface InstalledArtifact {
 export const listInstalledArtifacts = (): Promise<InstalledArtifact[]> =>
   apiGet('/api/marketplace/installed', 'list installed artifacts');
 
-export const listAvailableArtifacts = (): Promise<{ configured: boolean; bundles: AvailableArtifact[] }> =>
+export const listAvailableArtifacts = (): Promise<{ configured: boolean; source: 'local' | 'http' | null; host: string | null; bundles: AvailableArtifact[]; error?: string }> =>
   apiGet('/api/marketplace/available', 'list available artifacts');
+
+export async function refreshRegistry(): Promise<void> {
+  const r = await authFetch('/api/marketplace/refresh', { method: 'POST' });
+  if (!r.ok) throw new Error(`refresh failed: ${r.status}`);
+}
 
 export const getAvailableArtifact = (ref: string): Promise<AvailableArtifactDetail> =>
   apiGet(`/api/marketplace/available/${encodeURIComponent(ref)}`, 'get available artifact');

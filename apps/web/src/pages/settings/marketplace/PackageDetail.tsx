@@ -131,7 +131,7 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
             {detail ? (
               <section>
                 <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">{t('settings.marketplace.requirements')}</p>
-                <RequirementsChecklist compatible={detail.compatible} ceRange={detail.compatibility.ceVersion} ceVersion={detail.ceVersion} />
+                <RequirementsChecklist compatible={detail.compatible} ceRange={detail.compatibility?.ceVersion ?? '*'} ceVersion={detail.ceVersion} />
               </section>
             ) : null}
           </div>

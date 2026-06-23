@@ -19,6 +19,22 @@ const PAYLOAD_FILE: Record<string, string> = {
   'report-template': 'report.json',
 };
 
+/** The payload filename for a manifest's payload.kind (defaults to plugin.wasm). */
+export function payloadFileName(kind: string): string {
+  return PAYLOAD_FILE[kind] ?? 'plugin.wasm';
+}
+
+/**
+ * Assemble a Bundle from raw manifest JSON + payload bytes + hex public key.
+ * Shared by readBundle (local dir) and HttpRegistrySource (remote fetch).
+ */
+export function assembleBundle(raw: Record<string, unknown>, payload: Uint8Array, pubHex: string): Bundle {
+  const manifest = parseArtifactManifest(raw);
+  const publicKeyDer = Uint8Array.from(Buffer.from(pubHex.trim(), 'hex'));
+  const payloadSha256 = createHash('sha256').update(payload).digest('hex');
+  return { manifest, raw, wasm: payload, publicKeyDer, payloadSha256 };
+}
+
 /** Map from payload.kind to the sha256 field name in the payload object. */
 const SHA_FIELD: Record<string, string> = {
   plugin: 'wasmSha256',
@@ -36,14 +52,10 @@ const SHA_FIELD: Record<string, string> = {
  */
 export async function readBundle(dir: string): Promise<Bundle> {
   const raw = JSON.parse(await readFile(join(dir, 'manifest.json'), 'utf8')) as Record<string, unknown>;
-  const manifest = parseArtifactManifest(raw);
-  const kind = String((manifest.payload as { kind: string }).kind);
-  const payloadFile = PAYLOAD_FILE[kind] ?? 'plugin.wasm';
-  const wasm = new Uint8Array(await readFile(join(dir, payloadFile)));
-  const pubHex = (await readFile(join(dir, 'publisher.pub'), 'utf8')).trim();
-  const publicKeyDer = Uint8Array.from(Buffer.from(pubHex, 'hex'));
-  const payloadSha256 = createHash('sha256').update(wasm).digest('hex');
-  return { manifest, raw, wasm, publicKeyDer, payloadSha256 };
+  const kind = String((raw.payload as { kind?: string } | null)?.kind ?? 'plugin');
+  const payload = new Uint8Array(await readFile(join(dir, payloadFileName(kind))));
+  const pubHex = await readFile(join(dir, 'publisher.pub'), 'utf8');
+  return assembleBundle(raw, payload, pubHex);
 }
 
 /**

@@ -6,6 +6,9 @@ export function SignatureBadge({ valid, publisher }: { valid?: boolean; publishe
   if (valid === false) {
     return <Badge variant="secondary" className="border-destructive/50 text-destructive">{t('settings.marketplace.invalid')}</Badge>;
   }
+  if (valid === undefined) {
+    return <Badge variant="outline" className="text-muted-foreground">{t('settings.marketplace.unverified')}</Badge>;
+  }
   if (publisher) {
     return <Badge variant="outline" className="border-emerald-500 text-emerald-700">{t('settings.marketplace.verified')}</Badge>;
   }

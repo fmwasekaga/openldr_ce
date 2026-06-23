@@ -283,6 +283,10 @@ export const pt: EnShape = {
     },
     marketplace: {
       heading: 'Marketplace',
+      refresh: 'Atualizar',
+      sourceLocal: 'Registo local',
+      sourceRemote: 'Remoto · {{host}}',
+      registryUnreachable: 'Registo inacessível.',
       available: 'Disponível',
       installed: 'Instalado',
       filterPlaceholder: 'Filtrar…',
@@ -291,6 +295,7 @@ export const pt: EnShape = {
       version: 'Versão',
       install: 'Instalar',
       verified: 'Verificado',
+      unverified: 'Não verificado',
       firstUse: 'Novo editor',
       invalid: 'Assinatura inválida', // review
       notConfigured: 'Nenhum registo marketplace configurado (defina MARKETPLACE_REGISTRY_DIR).',

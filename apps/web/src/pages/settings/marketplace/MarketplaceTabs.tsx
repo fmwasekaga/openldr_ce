@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { AvailableArtifact, InstalledArtifact } from '@/api';
 import { PackageCard } from './PackageCard';
@@ -16,6 +17,10 @@ interface MarketplaceTabsProps {
   onToggleEnabled: (id: string, enabled: boolean) => void;
   onRollback: (id: string, version: string) => void;
   onRemove: (entry: CardEntry) => void;
+  source: 'local' | 'http' | null;
+  host: string | null;
+  onRefresh: () => void;
+  loadError?: string | null;
 }
 
 export function MarketplaceTabs(props: MarketplaceTabsProps) {
@@ -68,7 +73,22 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
               <SelectItem value="report-template">Report</SelectItem>
             </SelectContent>
           </Select>
+          <div className="ml-auto flex items-center gap-2">
+            {props.source ? (
+              <span className="text-xs text-muted-foreground" data-testid="registry-source">
+                {props.source === 'http' ? t('settings.marketplace.sourceRemote', { host: props.host ?? '' }) : t('settings.marketplace.sourceLocal')}
+              </span>
+            ) : null}
+            <Button variant="outline" size="sm" data-testid="refresh-registry" onClick={props.onRefresh}>
+              {t('settings.marketplace.refresh')}
+            </Button>
+          </div>
         </div>
+        {props.loadError ? (
+          <div className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {t('settings.marketplace.registryUnreachable')}
+          </div>
+        ) : null}
         {!props.configured ? (
           <div className="px-1 py-6 text-sm text-muted-foreground">{t('settings.marketplace.notConfigured')}</div>
         ) : browseEntries.length === 0 ? (

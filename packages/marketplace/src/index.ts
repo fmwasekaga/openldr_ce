@@ -9,3 +9,5 @@ export * from './grant';
 export * from './bundle-fs';
 export * from './pack';
 export * from './scaffold';
+export * from './index-json';
+export * from './registry-source';

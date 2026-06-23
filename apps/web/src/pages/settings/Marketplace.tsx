@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
-  listAvailableArtifacts, listInstalledArtifacts,
+  listAvailableArtifacts, listInstalledArtifacts, refreshRegistry,
   installArtifact, setArtifactEnabled, rollbackArtifact, removeArtifact,
   type AvailableArtifact, type InstalledArtifact,
 } from '@/api';
@@ -15,17 +15,22 @@ import { capabilityLine, type CardEntry } from './marketplace/util';
 export function Marketplace() {
   const { t } = useTranslation();
   const [configured, setConfigured] = useState(true);
+  const [source, setSource] = useState<'local' | 'http' | null>(null);
+  const [host, setHost] = useState<string | null>(null);
   const [available, setAvailable] = useState<AvailableArtifact[]>([]);
   const [installed, setInstalled] = useState<InstalledArtifact[]>([]);
   const [consent, setConsent] = useState<{ entry: CardEntry; capabilities: unknown[] } | null>(null);
   const [pendingRemove, setPendingRemove] = useState<CardEntry | null>(null);
   const [busy, setBusy] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       const [avail, inst] = await Promise.all([listAvailableArtifacts(), listInstalledArtifacts()]);
       setConfigured(avail.configured);
       setAvailable(avail.bundles);
+      setSource(avail.source); setHost(avail.host);
+      setLoadError(avail.error ?? null);
       setInstalled(inst);
     } catch (e) {
       toast.error(t('settings.marketplace.errorToast', { error: e instanceof Error ? e.message : String(e) }));
@@ -48,6 +53,11 @@ export function Marketplace() {
       setBusy(false);
     }
   }, [consent, busy, t, load]);
+
+  const onRefresh = useCallback(async () => {
+    try { await refreshRegistry(); await load(); toast.success(t('settings.marketplace.refresh')); }
+    catch (e) { toast.error(t('settings.marketplace.errorToast', { error: e instanceof Error ? e.message : String(e) })); }
+  }, [t, load]);
 
   const onToggleEnabled = useCallback(async (id: string, enabled: boolean) => {
     try { await setArtifactEnabled(id, enabled); await load(); }
@@ -79,6 +89,10 @@ export function Marketplace() {
         onToggleEnabled={onToggleEnabled}
         onRollback={onRollback}
         onRemove={(entry) => setPendingRemove(entry)}
+        source={source}
+        host={host}
+        onRefresh={onRefresh}
+        loadError={loadError}
       />
 
       {/* Consent dialog */}

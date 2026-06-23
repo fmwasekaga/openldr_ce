@@ -85,6 +85,7 @@ export const ConfigSchema = z
     // Marketplace artifact security.
     MARKETPLACE_DEV_ALLOW_UNSIGNED: envBoolean(false),
     MARKETPLACE_REGISTRY_DIR: z.string().optional(),
+    MARKETPLACE_REGISTRY_URL: z.string().url().optional(), // raw base URL of a remote registry; takes precedence over _DIR for install
   })
   .superRefine((cfg, ctx) => {
     if (cfg.TARGET_STORE_ADAPTER === 'mssql') {

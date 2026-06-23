@@ -9,7 +9,7 @@ vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
   return { ...actual,
     listInstalledArtifacts: vi.fn(), listAvailableArtifacts: vi.fn(), getAvailableArtifact: vi.fn(),
-    installArtifact: vi.fn(), setArtifactEnabled: vi.fn(), rollbackArtifact: vi.fn(), removeArtifact: vi.fn() };
+    installArtifact: vi.fn(), setArtifactEnabled: vi.fn(), rollbackArtifact: vi.fn(), removeArtifact: vi.fn(), refreshRegistry: vi.fn() };
 });
 import * as api from '@/api';
 import { Marketplace } from './Marketplace';
@@ -18,6 +18,7 @@ beforeEach(() => { vi.clearAllMocks(); });
 
 const oneBundle = {
   configured: true,
+  source: 'local', host: 'local',
   bundles: [{ ref: 'whonet-narrow', id: 'whonet-sqlite', version: '1.0.0', type: 'plugin', publisher: { id: 'p', name: 'P' }, capabilities: [{ kind: 'emit-fhir', resourceTypes: ['Patient'] }], compatibility: { ceVersion: '*' }, valid: true }],
 };
 
@@ -47,14 +48,14 @@ describe('Marketplace', () => {
   });
 
   it('shows the unconfigured empty state', async () => {
-    (api.listAvailableArtifacts as any).mockResolvedValue({ configured: false, bundles: [] });
+    (api.listAvailableArtifacts as any).mockResolvedValue({ configured: false, source: null, host: null, bundles: [] });
     (api.listInstalledArtifacts as any).mockResolvedValue([]);
     render(<MemoryRouter><Marketplace /></MemoryRouter>);
     expect(await screen.findByText(/No marketplace registry configured/i)).toBeTruthy();
   });
 
   it('installed tab lists installed artifacts and toggles enabled from detail', async () => {
-    (api.listAvailableArtifacts as any).mockResolvedValue({ configured: true, bundles: [] });
+    (api.listAvailableArtifacts as any).mockResolvedValue({ configured: true, source: 'local', host: 'local', bundles: [] });
     (api.listInstalledArtifacts as any).mockResolvedValue([{ id: 'whonet-sqlite', version: '1.0.0', active: true, enabled: true, approvedBy: 'admin', type: 'plugin', publisher: null, capabilities: [], legacy: false }]);
     (api.setArtifactEnabled as any).mockResolvedValue(undefined);
     render(<MemoryRouter><Marketplace /></MemoryRouter>);
@@ -67,5 +68,14 @@ describe('Marketplace', () => {
     if (!screen.queryByText('Disable')) fireEvent.keyDown(menuTrigger, { key: 'Enter' });
     fireEvent.click(await screen.findByText('Disable'));
     await waitFor(() => expect(api.setArtifactEnabled).toHaveBeenCalledWith('whonet-sqlite', false));
+  });
+
+  it('refreshes the registry', async () => {
+    (api.listAvailableArtifacts as any).mockResolvedValue({ configured: true, source: 'local', host: 'local', bundles: [] });
+    (api.listInstalledArtifacts as any).mockResolvedValue([]);
+    (api.refreshRegistry as any).mockResolvedValue(undefined);
+    render(<MemoryRouter><Marketplace /></MemoryRouter>);
+    fireEvent.click(await screen.findByTestId('refresh-registry'));
+    await waitFor(() => expect(api.refreshRegistry).toHaveBeenCalled());
   });
 });

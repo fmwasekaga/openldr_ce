@@ -258,6 +258,10 @@ export const en = {
     },
     marketplace: {
       heading: 'Marketplace',
+      refresh: 'Refresh',
+      sourceLocal: 'Local registry',
+      sourceRemote: 'Remote · {{host}}',
+      registryUnreachable: 'Registry unreachable.',
       available: 'Available',
       installed: 'Installed',
       filterPlaceholder: 'Filter…',
@@ -266,6 +270,7 @@ export const en = {
       version: 'Version',
       install: 'Install',
       verified: 'Verified',
+      unverified: 'Unverified',
       firstUse: 'New publisher',
       invalid: 'Invalid signature',
       notConfigured: 'No marketplace registry configured (set MARKETPLACE_REGISTRY_DIR).',
