@@ -342,4 +342,45 @@ describe('runtime load() — emit-fhir enforcement', () => {
     const resources = await converter!.convert(new Uint8Array(), { batchId: 'test' });
     expect(resources[0].resourceType).toBe('Patient');
   });
+
+  // ── Regression for f48b571 ──────────────────────────────────────────────────
+  // A flat *legacy* manifest (no publisher/signature) that declares emit-fhir
+  // capabilities must yield an ENFORCED grant after install. Before the fix,
+  // pluginManifestToArtifact() dropped the declared array, so install persisted an
+  // empty emit-fhir grant and load().convert() fail-closed rejected every resource
+  // the plugin emitted (this is what broke whonet ingestion + `pnpm e2e:seed`).
+  //
+  // Contract note — "declare-or-denied" (the intended, security-preferred posture):
+  // the install path force-normalizes EVERY manifest into an ArtifactManifest, whose
+  // `capabilities` defaults to []. So a freshly installed row ALWAYS carries a
+  // capabilities array; readGrant() therefore returns { legacy:false } for it and the
+  // grant is enforced. A capability-LESS legacy manifest persists [] ⇒ an enforced
+  // empty grant (emits nothing), NOT unrestricted. readGrant()'s legacy/unrestricted
+  // branch only fires for genuinely pre-capability rows that were persisted without the
+  // field at all (grandfathered). The two declared types below must pass and the
+  // undeclared type must be rejected.
+  const legacyWithCaps = {
+    id: 'whonet-sqlite', version: '0.1.0', entrypoint: 'convert', wasmSha256: wasmSha2,
+    description: '', license: 'MIT', wasi: false, limits: { memoryMb: 256, timeoutMs: 30000 },
+    capabilities: [{ kind: 'emit-fhir', resourceTypes: ['Patient', 'Specimen', 'Observation'] }],
+  };
+
+  it('install(legacy manifest with emit-fhir caps) ⇒ enforced grant permits exactly the declared types', async () => {
+    const { deps } = fakeDeps2(
+      '{"resourceType":"Patient","id":"p1"}\n{"resourceType":"Specimen","id":"s1"}\n{"resourceType":"Observation","id":"o1","status":"final","code":{"text":"x"}}\n',
+    );
+    const rt = createPluginRuntime({ ...deps, trustStore: inMemoryTrustStore(), ceVersion: '0.1.0', verifyConfig: { devAllowUnsigned: false } });
+    await rt.install(wasmBytes2, legacyWithCaps); // legacy ⇒ no publisher ⇒ no signature/approval required
+    const converter = await rt.load('whonet-sqlite', '0.1.0');
+    const resources = await converter!.convert(new Uint8Array(), { batchId: 'test' });
+    expect(resources.map((r) => r.resourceType)).toEqual(['Patient', 'Specimen', 'Observation']);
+  });
+
+  it('install(legacy manifest with emit-fhir caps) ⇒ enforced grant rejects an undeclared type', async () => {
+    const { deps } = fakeDeps2('{"resourceType":"Organization","id":"org1","name":"Lab"}\n');
+    const rt = createPluginRuntime({ ...deps, trustStore: inMemoryTrustStore(), ceVersion: '0.1.0', verifyConfig: { devAllowUnsigned: false } });
+    await rt.install(wasmBytes2, legacyWithCaps);
+    const converter = await rt.load('whonet-sqlite', '0.1.0');
+    await expect(converter!.convert(new Uint8Array(), { batchId: 'test' })).rejects.toThrow(/not permitted|capability|Organization/i);
+  });
 });

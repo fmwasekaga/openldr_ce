@@ -37,4 +37,28 @@ describe('artifact manifest', () => {
     expect(a.payload).toMatchObject({ kind: 'plugin', wasmSha256: 'e'.repeat(64), entrypoint: 'convert' });
     expect(() => parseArtifactManifest(a)).not.toThrow();
   });
+
+  // ── Regression for f48b571 ────────────────────────────────────────────────
+  // A flat legacy manifest may declare `capabilities`. Before the fix,
+  // pluginManifestToArtifact() dropped the field, so installs persisted an empty
+  // emit-fhir grant and fail-closed rejected every emitted resource (e.g. whonet
+  // ingestion broke with "Patient … is not permitted by its emit-fhir grant").
+  it('carries a declared capabilities array through legacy→artifact normalization (regression: f48b571)', () => {
+    const legacy = {
+      id: 'whonet-sqlite', version: '0.1.0', entrypoint: 'convert', wasmSha256: 'e'.repeat(64),
+      description: 'x', license: 'MIT', wasi: false, limits: { memoryMb: 256, timeoutMs: 30000 },
+      capabilities: [{ kind: 'emit-fhir', resourceTypes: ['Patient', 'Specimen', 'Observation'] }],
+    };
+    const a = pluginManifestToArtifact(legacy);
+    expect(a.capabilities).toEqual([{ kind: 'emit-fhir', resourceTypes: ['Patient', 'Specimen', 'Observation'] }]);
+    // The derived artifact must round-trip through the schema unchanged.
+    expect(parseArtifactManifest(a).capabilities).toEqual(legacy.capabilities);
+  });
+
+  it('defaults capabilities to [] when a legacy manifest declares none (declare-or-denied)', () => {
+    const legacy = { id: 'plain', version: '0.1.0', wasmSha256: 'e'.repeat(64) };
+    // No field ⇒ schema default []. Note: a persisted [] is an ENFORCED empty grant
+    // (fail-closed), NOT unrestricted — see packages/plugins runtime enforcement tests.
+    expect(pluginManifestToArtifact(legacy).capabilities).toEqual([]);
+  });
 });

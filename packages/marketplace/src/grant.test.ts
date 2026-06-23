@@ -2,7 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { readGrant, allowedResourceTypes, allowedHosts } from './grant';
 
 describe('readGrant', () => {
-  it('treats a manifest with no capabilities field as legacy (unrestricted)', () => {
+  it('treats a manifest with no capabilities field as legacy/unrestricted (grandfathered pre-capability row)', () => {
+    // Only genuinely pre-capability rows reach this branch: install force-normalizes
+    // every new manifest to carry a capabilities array (declare-or-denied), so a fresh
+    // install never lands here. See the readGrant() doc comment.
     expect(readGrant({ id: 'x', version: '1.0.0' })).toEqual({ legacy: true });
   });
   it('returns capabilities for a marketplace manifest', () => {
