@@ -19,6 +19,7 @@ import { sha256Hex } from './hash';
 import type { PluginStore, PluginRow } from './store';
 import type { PluginRunner } from './runner';
 import { createWasmConverter } from './wasm-converter';
+import { createWasmSink, type WasmSink } from './wasm-sink';
 
 export interface MarketplaceInstallAudit {
   action: string;
@@ -60,6 +61,7 @@ export interface PluginRuntime {
   test(id: string, version?: string): Promise<{ ok: boolean; error?: string }>;
   remove(id: string, version?: string, opts?: LifecycleOpts): Promise<void>;
   load(id: string, version?: string): Promise<Converter | undefined>;
+  loadSink(id: string, version?: string): Promise<WasmSink | undefined>;
   rollback(id: string, version: string, opts?: LifecycleOpts): Promise<void>;
   setEnabled(id: string, enabled: boolean, opts?: LifecycleOpts): Promise<void>;
 }
@@ -104,10 +106,14 @@ function pluginManifestFromRow(row: PluginRow): PluginManifest {
 
 export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
   const cache = new Map<string, Converter>();
+  const sinkCache = new Map<string, WasmSink>();
 
   function invalidateCache(id: string) {
     for (const k of [...cache.keys()]) {
       if (k.startsWith(`${id}@`)) cache.delete(k);
+    }
+    for (const k of [...sinkCache.keys()]) {
+      if (k.startsWith(`${id}@`)) sinkCache.delete(k);
     }
   }
 
@@ -131,6 +137,23 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
     const converter = createWasmConverter(pluginManifestFromRow(row), wasm, deps.runner, deps.logger, grant.legacy ? undefined : grant.capabilities);
     cache.set(key, converter);
     return converter;
+  }
+
+  async function loadSink(id: string, version?: string): Promise<WasmSink | undefined> {
+    const row = await deps.store.get(id, version);
+    if (!row) return undefined;
+    const key = `${row.id}@${row.version}`;
+    const cached = sinkCache.get(key);
+    if (cached) return cached;
+    const manifest = pluginManifestFromRow(row);
+    if (manifest.kind !== 'sink') {
+      throw new Error(`plugin ${row.id}@${row.version} is not a sink (kind=${manifest.kind})`);
+    }
+    const wasm = await loadWasm(row);
+    const grant = readGrant(row.manifest);
+    const sink = createWasmSink(manifest, wasm, deps.runner, deps.logger, grant.legacy ? undefined : grant.capabilities);
+    sinkCache.set(key, sink);
+    return sink;
   }
 
   return {
@@ -299,5 +322,6 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
     },
 
     load,
+    loadSink,
   };
 }

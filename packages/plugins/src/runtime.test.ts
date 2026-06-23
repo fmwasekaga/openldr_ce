@@ -384,3 +384,50 @@ describe('runtime load() — emit-fhir enforcement', () => {
     await expect(converter!.convert(new Uint8Array(), { batchId: 'test' })).rejects.toThrow(/not permitted|capability|Organization/i);
   });
 });
+
+describe('loadSink', () => {
+  const sinkWasm = new TextEncoder().encode('\0asm sink bytes');
+  const sinkSha = sha256Hex(sinkWasm);
+  const sinkRow: PluginRow = {
+    id: 'dhis2-sink', version: '0.1.0', sha256: sinkSha,
+    manifest: {
+      id: 'dhis2-sink', version: '0.1.0', kind: 'sink', entrypoint: 'convert',
+      entrypoints: ['health_check', 'push_aggregate'], wasmSha256: sinkSha,
+      description: '', license: 'x', wasi: false, limits: { memoryMb: 256, timeoutMs: 30000 },
+      capabilities: [{ kind: 'net-egress', allowedHosts: [] }],
+    },
+    status: 'installed', enabled: true, active: true, approvedBy: null,
+  };
+
+  it('loads a sink and invoke() round-trips JSON through the runner', async () => {
+    const blobMap = new Map<string, Uint8Array>([['plugins/dhis2-sink/0.1.0/plugin.wasm', sinkWasm]]);
+    const store = fakeStore([sinkRow]);
+    const runner: PluginRunner = { run: vi.fn(async () => enc('{"ok":true}')) };
+    const rt = createPluginRuntime({ blob: fakeBlob(blobMap), store, runner, logger, ...defaultNewDeps() });
+    const sink = await rt.loadSink('dhis2-sink');
+    expect(sink?.id).toBe('dhis2-sink');
+    expect(sink?.entrypoints).toEqual(['health_check', 'push_aggregate']);
+    expect(await sink!.invoke('health_check', {})).toEqual({ ok: true });
+  });
+
+  it('returns undefined for an unknown sink', async () => {
+    const rt = createPluginRuntime({ blob: fakeBlob(new Map()), store: fakeStore(), runner: okRunner, logger, ...defaultNewDeps() });
+    expect(await rt.loadSink('nope')).toBeUndefined();
+  });
+
+  it('throws when loadSink targets a source plugin', async () => {
+    const store = fakeStore([{ id: 'demo', version: '0.1.0', sha256: sha, manifest: fullManifest(), status: 'installed', enabled: true, active: true, approvedBy: null }]);
+    const rt = createPluginRuntime({ blob: fakeBlob(new Map()), store, runner: okRunner, logger, ...defaultNewDeps() });
+    await expect(rt.loadSink('demo')).rejects.toThrow(/not a sink/);
+  });
+
+  it('caches the loaded sink (one blob fetch across two loads)', async () => {
+    const blobMap = new Map<string, Uint8Array>([['plugins/dhis2-sink/0.1.0/plugin.wasm', sinkWasm]]);
+    const blob = fakeBlob(blobMap);
+    const store = fakeStore([sinkRow]);
+    const rt = createPluginRuntime({ blob, store, runner: okRunner, logger, ...defaultNewDeps() });
+    await rt.loadSink('dhis2-sink');
+    await rt.loadSink('dhis2-sink');
+    expect((blob.get as any).mock.calls.length).toBe(1);
+  });
+});
