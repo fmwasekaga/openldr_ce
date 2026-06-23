@@ -211,7 +211,10 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     const questionnaireBytes = Buffer.from(JSON.stringify(latest.questionnaire, null, 2), 'utf8');
     const questionnaireSha256 = createHash('sha256').update(questionnaireBytes).digest('hex');
     const artifactId = slug(form.name);
-    const version = form.versionLabel ?? '1.0.0';
+    // The artifact manifest requires strict semver; form versionLabel is free-form
+    // (e.g. 'v1'), so fall back to '1.0.0' when it isn't already valid semver.
+    const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+    const version = form.versionLabel && SEMVER.test(form.versionLabel) ? form.versionLabel : '1.0.0';
     const manifest = {
       schemaVersion: 1,
       type: 'form-template',

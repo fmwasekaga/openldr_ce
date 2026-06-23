@@ -482,6 +482,21 @@ describe('forms routes', () => {
     expect(res.statusCode).toBe(404);
   });
 
+  it('coerces a non-semver versionLabel to 1.0.0 (manifest requires semver)', async () => {
+    const questionnaire = { resourceType: 'Questionnaire', status: 'active', title: 'Intake', item: [] };
+    const forms = {
+      get: async () => ({ id: 'form-3', name: 'Intake', versionLabel: 'v1' }),
+      listVersions: async () => [{ version: 1 }],
+      getVersion: async () => ({ questionnaire }),
+    };
+    const app = appWithForms({ forms });
+    const res = await app.inject({ method: 'GET', url: '/api/forms/form-3/export-bundle' });
+    expect(res.statusCode).toBe(200);
+    const zip = new AdmZip(res.rawPayload as Buffer);
+    const manifest = JSON.parse(zip.readAsText('manifest.json'));
+    expect(manifest.version).toBe('1.0.0');
+  });
+
   it('returns 404 for orphaned version snapshots after the parent form is deleted', async () => {
     const app = Fastify();
     const ctx = fakeCtx();
