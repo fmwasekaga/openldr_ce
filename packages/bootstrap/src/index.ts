@@ -4,7 +4,7 @@ import { createEventBus } from '@openldr/adapter-event-bus';
 import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import type { Config } from '@openldr/config';
 import { createLogger, HealthRegistry, redact, type Logger } from '@openldr/core';
-import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, deriveSystemCode, resolveSeedPublisherId, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore } from '@openldr/db';
+import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, deriveSystemCode, resolveSeedPublisherId, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, type AuditStore } from '@openldr/audit';
@@ -23,6 +23,7 @@ import {
 } from '@openldr/workflows';
 import { renderReportPdf } from '@openldr/report-pdf';
 import { createReportScheduler, type ReportScheduler } from './report-scheduler';
+import { createFormArtifactInstaller, type FormArtifactInstaller } from './form-artifact-install';
 import { type PluginRuntime } from '@openldr/plugins';
 import { selectTargetStore } from './target-store';
 import { createPluginRegistry } from './plugin-registry';
@@ -95,6 +96,7 @@ export interface AppContext {
   users: UserStore;
   userProfiles: UserProfileStore;
   forms: FormStore;
+  marketplaceForms: FormArtifactInstaller;
   reporting: ReportingApi;
   health: HealthRegistry;
   terminology: {
@@ -148,6 +150,8 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   const users = createUserStore(internal.db);
   const userProfiles = createUserProfileStore(internal.db);
   const forms = createFormStore(internal.db);
+  const marketplaceInstalls = createMarketplaceInstallStore(internal.db);
+  const marketplaceForms = createFormArtifactInstaller({ forms, installStore: marketplaceInstalls, audit });
   const reportingDb = store.db as unknown as Kysely<ExternalSchema>;
   const runReport = async (id: string, rawParams: unknown): Promise<ReportResult> => {
     const def = getReport(id);
@@ -305,6 +309,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     users,
     userProfiles,
     forms,
+    marketplaceForms,
     reporting,
     health,
     terminology,

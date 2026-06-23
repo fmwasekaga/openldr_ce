@@ -19,11 +19,13 @@ interface PackageDetailProps {
   onToggleEnabled: (id: string, enabled: boolean) => void;
   onRollback: (id: string, version: string) => void;
   onRemove: (entry: CardEntry) => void;
+  onDetach?: (entry: CardEntry) => void;
+  onOpenForm?: (formId: string) => void;
   canPublish?: boolean;
   onPublish?: (entry: CardEntry) => void;
 }
 
-export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRollback, onRemove, canPublish, onPublish }: PackageDetailProps) {
+export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRollback, onRemove, onDetach, onOpenForm, canPublish, onPublish }: PackageDetailProps) {
   const { t } = useTranslation();
   const [detail, setDetail] = useState<AvailableArtifactDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +43,8 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
 
   const capabilities = (detail?.capabilities ?? entry.capabilities) as unknown[];
   const publisher = detail?.publisher ?? entry.publisher;
-  const canInstall = Boolean(entry.ref) && !entry.installed && entry.type === 'plugin' && (detail ? detail.valid : entry.valid !== false);
+  const installableType = entry.type === 'plugin' || entry.type === 'form-template';
+  const canInstall = Boolean(entry.ref) && !entry.installed && installableType && (detail ? detail.valid : entry.valid !== false);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -60,6 +63,7 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
               <span>{(publisher?.name || '—')} · v{entry.version}</span>
               <Badge variant="outline" className="text-[10px] uppercase">{entry.type}</Badge>
               {entry.ref ? <SignatureBadge valid={detail ? detail.valid : entry.valid} publisher={publisher} /> : null}
+              {entry.drifted ? <Badge variant="outline" className="border-amber-500 text-amber-700">{t('settings.marketplace.modifiedLocally')}</Badge> : null}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -72,7 +76,7 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
               <Button data-testid="detail-install" disabled={detail ? !detail.compatible : false} onClick={() => onInstall(entry, capabilities)}>
                 {t('settings.marketplace.install')}
               </Button>
-            ) : entry.ref && entry.type !== 'plugin' && !entry.installed ? (
+            ) : entry.ref && !installableType && !entry.installed ? (
               <Button disabled title={t('settings.marketplace.installPluginOnly')}>
                 {t('settings.marketplace.installComingSoon')}
               </Button>
@@ -85,17 +89,32 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onSelect={() => onToggleEnabled(entry.id, !entry.enabled)}>
-                    {entry.enabled ? t('settings.marketplace.disable') : t('settings.marketplace.enable')}
-                  </DropdownMenuItem>
-                  {!entry.active ? (
-                    <DropdownMenuItem onSelect={() => onRollback(entry.id, entry.version)}>
-                      {t('settings.marketplace.rollback')}
-                    </DropdownMenuItem>
-                  ) : null}
-                  <DropdownMenuItem className="text-destructive" onSelect={() => onRemove(entry)}>
-                    {t('settings.marketplace.remove')}
-                  </DropdownMenuItem>
+                  {entry.type === 'form-template' ? (
+                    <>
+                      {entry.targetFormId ? (
+                        <DropdownMenuItem onSelect={() => onOpenForm?.(entry.targetFormId!)}>
+                          {t('settings.marketplace.openInBuilder')}
+                        </DropdownMenuItem>
+                      ) : null}
+                      <DropdownMenuItem className="text-destructive" onSelect={() => onDetach?.(entry)}>
+                        {t('settings.marketplace.detach')}
+                      </DropdownMenuItem>
+                    </>
+                  ) : (
+                    <>
+                      <DropdownMenuItem onSelect={() => onToggleEnabled(entry.id, !entry.enabled)}>
+                        {entry.enabled ? t('settings.marketplace.disable') : t('settings.marketplace.enable')}
+                      </DropdownMenuItem>
+                      {!entry.active ? (
+                        <DropdownMenuItem onSelect={() => onRollback(entry.id, entry.version)}>
+                          {t('settings.marketplace.rollback')}
+                        </DropdownMenuItem>
+                      ) : null}
+                      <DropdownMenuItem className="text-destructive" onSelect={() => onRemove(entry)}>
+                        {t('settings.marketplace.remove')}
+                      </DropdownMenuItem>
+                    </>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : null}

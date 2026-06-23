@@ -9,6 +9,7 @@ import { registerMarketplaceRoutes } from './marketplace-routes';
 
 // ── A temp registry dir with one signed plugin bundle (built via packBundle). ──
 let registryDir: string;
+let formRegistryDir: string;
 beforeAll(async () => {
   registryDir = await mkdtemp(join(tmpdir(), 'mkt-registry-'));
   const kp = generatePublisherKeypair();
@@ -20,8 +21,19 @@ beforeAll(async () => {
     payload: { kind: 'plugin', wasmSha256: '0'.repeat(64) },
   };
   await packBundle({ manifest, payload: new Uint8Array([1, 2, 3, 4]), outDir: join(registryDir, 'demo-1'), privateKeyDer: kp.privateKeyDer, publicKeyDer: kp.publicKeyDer });
+
+  formRegistryDir = await mkdtemp(join(tmpdir(), 'mkt-form-registry-'));
+  {
+    const fkp = generatePublisherKeypair();
+    const formManifest = { schemaVersion: 1, type: 'form-template', id: 'demo-form', version: '1.0.0', publisher: { id: 'acme', name: 'Acme', keyFingerprint: '0'.repeat(64) }, compatibility: { ceVersion: '*' }, capabilities: [], payload: { kind: 'form-template', questionnaireSha256: '0'.repeat(64) } };
+    const q = { resourceType: 'Questionnaire', status: 'active', title: 'Demo', item: [] };
+    await packBundle({ manifest: formManifest, payload: new TextEncoder().encode(JSON.stringify(q)), outDir: join(formRegistryDir, 'demo-form-1'), privateKeyDer: fkp.privateKeyDer, publicKeyDer: fkp.publicKeyDer });
+  }
 });
-afterAll(async () => { await rm(registryDir, { recursive: true, force: true }); });
+afterAll(async () => {
+  await rm(registryDir, { recursive: true, force: true });
+  await rm(formRegistryDir, { recursive: true, force: true });
+});
 
 function fakePlugins() {
   const calls: Record<string, unknown[]> = { install: [], setEnabled: [], rollback: [], remove: [] };
@@ -38,16 +50,19 @@ function fakePlugins() {
   };
 }
 
-function fakeCtx(plugins: unknown, cfg: Record<string, unknown>): AppContext {
-  return { cfg, plugins, audit: { record: async () => ({}) } } as unknown as AppContext;
+function fakeCtx(plugins: unknown, cfg: Record<string, unknown>, marketplaceForms?: unknown): AppContext {
+  return {
+    cfg, plugins, audit: { record: async () => ({}) },
+    marketplaceForms: marketplaceForms ?? { install: async () => ({ id: 'x', version: '1', targetFormId: 'form-1' }), detach: async () => {}, list: async () => [] },
+  } as unknown as AppContext;
 }
 
-function appWith(cfg: Record<string, unknown>, plugins: unknown, roles: string[] = ['lab_admin'], fetchImpl?: typeof fetch) {
+function appWith(cfg: Record<string, unknown>, plugins: unknown, roles: string[] = ['lab_admin'], fetchImpl?: typeof fetch, marketplaceForms?: unknown) {
   const app = Fastify();
   app.addHook('onRequest', async (req) => {
     req.user = { id: 'admin', username: 'admin', displayName: null, roles } as never;
   });
-  registerMarketplaceRoutes(app, fakeCtx(plugins, cfg), fetchImpl);
+  registerMarketplaceRoutes(app, fakeCtx(plugins, cfg, marketplaceForms), fetchImpl);
   return app;
 }
 
@@ -201,5 +216,37 @@ describe('marketplace routes', () => {
     expect(calls.setEnabled).toEqual([{ id: 'demo', enabled: false }, { id: 'demo', enabled: true }]);
     expect(calls.rollback).toEqual([{ id: 'demo', version: '1.0.0' }]);
     expect(calls.remove).toEqual([{ id: 'demo', version: undefined }]);
+  });
+
+  it('install dispatches a form-template bundle to ctx.marketplaceForms', async () => {
+    const { runtime } = fakePlugins();
+    const installed: unknown[] = [];
+    const marketplaceForms = { install: async (b: unknown, o: unknown) => { installed.push({ b, o }); return { id: 'demo-form', version: '1.0.0', targetFormId: 'form-9' }; }, detach: async () => {}, list: async () => [] };
+    const app = appWith({ MARKETPLACE_REGISTRY_DIR: formRegistryDir }, runtime, ['lab_admin'], undefined, marketplaceForms);
+    const res = await app.inject({ method: 'POST', url: '/api/marketplace/install', payload: { ref: 'demo-form-1', acknowledgedCapabilities: [] } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ id: 'demo-form', version: '1.0.0' });
+    expect(installed).toHaveLength(1);
+  });
+
+  it('installed merges plugin + form-template rows', async () => {
+    const { runtime } = fakePlugins();
+    const marketplaceForms = { install: async () => ({ id: 'x', version: '1', targetFormId: 'f' }), detach: async () => {}, list: async () => [{ artifactId: 'demo-form', version: '1.0.0', kind: 'form-template', targetFormId: 'form-9', publisherName: 'Acme', installedBy: 'admin', drifted: true }] };
+    const app = appWith({ MARKETPLACE_REGISTRY_DIR: registryDir }, runtime, ['lab_admin'], undefined, marketplaceForms);
+    const res = await app.inject({ method: 'GET', url: '/api/marketplace/installed' });
+    const body = res.json();
+    expect(body.find((a: any) => a.id === 'demo' && a.type === 'plugin')).toBeTruthy();
+    const form = body.find((a: any) => a.id === 'demo-form');
+    expect(form).toMatchObject({ type: 'form-template', drifted: true, targetFormId: 'form-9' });
+  });
+
+  it('detach calls ctx.marketplaceForms.detach', async () => {
+    const { runtime } = fakePlugins();
+    const calls: string[] = [];
+    const marketplaceForms = { install: async () => ({ id: 'x', version: '1', targetFormId: 'f' }), detach: async (id: string) => { calls.push(id); }, list: async () => [] };
+    const app = appWith({ MARKETPLACE_REGISTRY_DIR: registryDir }, runtime, ['lab_admin'], undefined, marketplaceForms);
+    const res = await app.inject({ method: 'POST', url: '/api/marketplace/demo-form/detach' });
+    expect(res.statusCode).toBe(200);
+    expect(calls).toEqual(['demo-form']);
   });
 });
