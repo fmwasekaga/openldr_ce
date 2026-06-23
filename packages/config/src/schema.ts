@@ -98,6 +98,12 @@ export const ConfigSchema = z
     MARKETPLACE_PUBLISH_TOKEN: z.string().optional(),     // GitHub PAT (repo write); secret
     MARKETPLACE_PUBLISH_REPO: z.string().optional(),      // owner/repo, e.g. fmwasekaga/openldr-ce-marketplace
     MARKETPLACE_PUBLISH_BRANCH: z.string().default('main'),
+
+    // Secret-at-rest encryption key for dynamic Connectors (base64, decodes to 32 bytes /
+    // AES-256). Optional at boot; required only when a secret-bearing connector is
+    // created/updated/decrypted — the connector store fails closed with a clear error if
+    // it's unset at that point. Never logged (covered by the secrets-redaction boundary).
+    SECRETS_ENCRYPTION_KEY: z.string().optional(),
   })
   .superRefine((cfg, ctx) => {
     if (cfg.TARGET_STORE_ADAPTER === 'mssql') {

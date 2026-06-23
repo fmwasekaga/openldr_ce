@@ -421,6 +421,18 @@ export interface WorkflowDatasetsTable {
   updated_at: Generated<Date>;
 }
 
+export interface ConnectorsTable {
+  id: string;
+  name: string;
+  plugin_id: string;
+  kind: string;
+  config_encrypted: string;
+  allowed_host: string | null;
+  enabled: Generated<boolean>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface InternalSchema {
   fhir_resources: FhirResourcesTable;
   outbox_events: OutboxEventsTable;
@@ -459,4 +471,5 @@ export interface InternalSchema {
   workflow_runs: WorkflowRunsTable;
   workflow_schedules: WorkflowSchedulesTable;
   workflow_datasets: WorkflowDatasetsTable;
+  connectors: ConnectorsTable;
 }
