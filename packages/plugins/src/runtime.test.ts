@@ -415,10 +415,13 @@ describe('loadSink', () => {
     expect(await rt.loadSink('nope')).toBeUndefined();
   });
 
-  it('throws when loadSink targets a source plugin', async () => {
+  it('throws when loadSink targets a source plugin (without fetching its wasm)', async () => {
     const store = fakeStore([{ id: 'demo', version: '0.1.0', sha256: sha, manifest: fullManifest(), status: 'installed', enabled: true, active: true, approvedBy: null }]);
-    const rt = createPluginRuntime({ blob: fakeBlob(new Map()), store, runner: okRunner, logger, ...defaultNewDeps() });
+    const blob = fakeBlob(new Map());
+    const rt = createPluginRuntime({ blob, store, runner: okRunner, logger, ...defaultNewDeps() });
     await expect(rt.loadSink('demo')).rejects.toThrow(/not a sink/);
+    // The kind check must precede the blob fetch, so a source plugin is rejected without I/O.
+    expect(((blob as any).get).mock.calls.length).toBe(0);
   });
 
   it('caches the loaded sink (one blob fetch across two loads)', async () => {
@@ -428,6 +431,6 @@ describe('loadSink', () => {
     const rt = createPluginRuntime({ blob, store, runner: okRunner, logger, ...defaultNewDeps() });
     await rt.loadSink('dhis2-sink');
     await rt.loadSink('dhis2-sink');
-    expect((blob.get as any).mock.calls.length).toBe(1);
+    expect(((blob as any).get).mock.calls.length).toBe(1);
   });
 });
