@@ -78,7 +78,7 @@ export function ReportHistoryDrawer({ open, reportId, onClose, onApplyParams }: 
             <TabsTrigger value="scheduled">{t('reports.scheduling.scheduledRuns')}</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="activity" className="flex min-h-0 flex-col">
+          <TabsContent value="activity" className="flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden">
             <div className="min-h-0 flex-1 overflow-auto">
               {loading ? (
                 <div className="p-4 text-sm text-muted-foreground">{t('common.loading')}</div>
@@ -114,7 +114,7 @@ export function ReportHistoryDrawer({ open, reportId, onClose, onApplyParams }: 
             )}
           </TabsContent>
 
-          <TabsContent value="scheduled" className="flex min-h-0 flex-col">
+          <TabsContent value="scheduled" className="flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden">
             <div className="min-h-0 flex-1 overflow-auto">
               {schedError ? (
                 <div className="p-4 text-sm text-destructive">{schedError}</div>
