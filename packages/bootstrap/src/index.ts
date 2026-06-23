@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import * as XLSX from 'xlsx';
-import { Kysely } from 'kysely';
+import { Kysely, sql } from 'kysely';
 import { createAuth } from '@openldr/adapter-auth';
 import { createEventBus } from '@openldr/adapter-event-bus';
 import { createS3Bucket } from '@openldr/adapter-s3-bucket';
@@ -56,6 +56,12 @@ export interface ReportingApi {
   eventSources(): { id: string; name: string; columns: { key: string; label: string }[] }[];
   renderPdf(id: string, rawParams: unknown): Promise<Buffer>;
   options(id: string): Promise<Record<string, string[]>>;
+}
+
+/** Map a dataset name to a safe `wf_ds_<...>` table identifier. */
+function datasetTableName(name: string): string {
+  const safe = name.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '').slice(0, 48) || 'ds';
+  return `wf_ds_${safe}`;
 }
 
 function createOntologyApi(ontologyStore: OntologyStore) {
@@ -292,7 +298,26 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     httpFetch: (req) => guardedFetch(req, cfg.WORKFLOW_HTTP_ALLOWLIST),
     materializeDataset: async (name, columns, rows, workflowId) => {
       await workflowDatasets.upsertByName({ name, columns, rows, rowCount: rows.length, workflowId });
+      if (cfg.WORKFLOW_DATASET_PUBLISH_ENABLED && cfg.TARGET_STORE_ADAPTER === 'pg') {
+        const table = datasetTableName(name);
+        const ident = sql.table(table);
+        await store.transaction(async (trx) => {
+          await sql`drop table if exists ${ident}`.execute(trx);
+          await sql`create table ${ident} (data jsonb not null)`.execute(trx);
+          if (rows.length) {
+            // Bound-parameter form: Kysely sends the JSON string as a parameter (no sql.lit).
+            await sql`insert into ${ident} (data) select * from jsonb_array_elements(${JSON.stringify(rows)}::jsonb)`.execute(trx);
+          }
+        });
+        await workflowDatasets.markPublished(name, table);
+        return { dataset: name, rowCount: rows.length };
+      }
       return { dataset: name, rowCount: rows.length };
+    },
+    loadDataset: async (name) => {
+      const d = await workflowDatasets.getByName(name);
+      if (!d) throw new Error(`Dataset not found: ${name}`);
+      return { columns: d.columns, rows: d.rows };
     },
     exportArtifact: async ({ format, filename, title, columns, rows }) => {
       let bytes: Buffer;

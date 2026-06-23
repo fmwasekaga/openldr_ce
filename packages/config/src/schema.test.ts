@@ -15,6 +15,9 @@ describe('workflow code sandbox config', () => {
   it('defaults WORKFLOW_HTTP_ALLOWLIST to empty', () => {
     expect(ConfigSchema.parse(base).WORKFLOW_HTTP_ALLOWLIST).toBe('');
   });
+  it('defaults WORKFLOW_DATASET_PUBLISH_ENABLED to false', () => {
+    expect(ConfigSchema.parse(base).WORKFLOW_DATASET_PUBLISH_ENABLED).toBe(false);
+  });
 });
 
 describe('dashboard SQL config', () => {

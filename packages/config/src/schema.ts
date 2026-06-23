@@ -87,6 +87,9 @@ export const ConfigSchema = z
     WORKFLOW_CODE_MEMORY_MB: z.coerce.number().int().positive().default(128),
     // Comma-separated allow-list of hostnames for the workflow HTTP source node.
     WORKFLOW_HTTP_ALLOWLIST: z.string().default(''),
+    // Publish materialized workflow datasets as real `wf_ds_<name>` tables in the
+    // target store (Postgres only) so the SQL node + dashboards can query them.
+    WORKFLOW_DATASET_PUBLISH_ENABLED: envBoolean(false),
 
     // Marketplace artifact security.
     MARKETPLACE_DEV_ALLOW_UNSIGNED: envBoolean(false),
