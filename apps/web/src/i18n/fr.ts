@@ -283,6 +283,10 @@ export const fr: EnShape = {
     },
     marketplace: {
       heading: 'Marketplace',
+      refresh: 'Actualiser',
+      sourceLocal: 'Registre local',
+      sourceRemote: 'Distant · {{host}}',
+      registryUnreachable: 'Registre injoignable.',
       available: 'Disponible',
       installed: 'Installé',
       filterPlaceholder: 'Filtrer…',

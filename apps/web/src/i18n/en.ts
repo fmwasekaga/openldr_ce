@@ -258,6 +258,10 @@ export const en = {
     },
     marketplace: {
       heading: 'Marketplace',
+      refresh: 'Refresh',
+      sourceLocal: 'Local registry',
+      sourceRemote: 'Remote · {{host}}',
+      registryUnreachable: 'Registry unreachable.',
       available: 'Available',
       installed: 'Installed',
       filterPlaceholder: 'Filter…',

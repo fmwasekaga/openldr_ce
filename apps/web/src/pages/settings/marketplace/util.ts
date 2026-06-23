@@ -28,7 +28,7 @@ export function capabilityLine(cap: unknown): string {
 export function availableToEntry(b: AvailableArtifact, installedIds: Set<string>): CardEntry {
   return {
     ref: b.ref, id: b.id, version: b.version, type: b.type,
-    publisher: b.publisher, capabilities: b.capabilities, valid: b.valid,
+    publisher: b.publisher, capabilities: b.capabilities ?? [], valid: b.valid,
     installed: installedIds.has(b.id),
   };
 }
