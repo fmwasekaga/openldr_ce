@@ -30,7 +30,13 @@ export function ScheduleDialog({ open, reportId, parameters, options, initialPar
   const [dayOfWeek, setDayOfWeek] = useState(String(existing?.dayOfWeek ?? 1));
   const [dayOfMonth, setDayOfMonth] = useState(String(existing?.dayOfMonth ?? 1));
   const [outputFormat, setOutputFormat] = useState<ScheduleInput['outputFormat']>(existing?.outputFormat ?? 'xlsx');
-  const [params, setParams] = useState<Record<string, string>>(existing?.params ?? initialParams ?? {});
+  // Seed from the schedule's own params (edit) or the page's current params (new), but
+  // drop the daterange-derived `from`/`to` — a schedule's date window is auto-computed
+  // per period at run time, so storing a fixed window would be stale/misleading.
+  const [params, setParams] = useState<Record<string, string>>(() => {
+    const { from: _f, to: _t, ...rest } = existing?.params ?? initialParams ?? {};
+    return rest;
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
 
