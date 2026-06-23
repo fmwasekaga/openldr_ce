@@ -293,8 +293,6 @@ export const en = {
       details: 'Details',
       permissions: 'Permissions',
       requirements: 'Requirements',
-      tags: 'Tags',
-      category: 'Category',
       license: 'License',
       noDescription: 'No description provided.',
       noneCapabilities: 'No special permissions requested.',

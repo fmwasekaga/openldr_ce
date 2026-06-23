@@ -62,7 +62,7 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {canInstall ? (
-              <Button data-testid="detail-install" onClick={() => onInstall(entry, capabilities)}>
+              <Button data-testid="detail-install" disabled={detail ? !detail.compatible : false} onClick={() => onInstall(entry, capabilities)}>
                 {t('settings.marketplace.install')}
               </Button>
             ) : entry.ref && entry.type !== 'plugin' && !entry.installed ? (
@@ -78,8 +78,8 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onSelect={() => onToggleEnabled(entry.id, !entry.active)}>
-                    {entry.active ? t('settings.marketplace.disable') : t('settings.marketplace.enable')}
+                  <DropdownMenuItem onSelect={() => onToggleEnabled(entry.id, !entry.enabled)}>
+                    {entry.enabled ? t('settings.marketplace.disable') : t('settings.marketplace.enable')}
                   </DropdownMenuItem>
                   {!entry.active ? (
                     <DropdownMenuItem onSelect={() => onRollback(entry.id, entry.version)}>

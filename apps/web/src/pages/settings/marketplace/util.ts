@@ -11,6 +11,7 @@ export interface CardEntry {
   valid?: boolean;       // Browse only (signature validity)
   installed?: boolean;   // is this id currently installed?
   active?: boolean;      // installed AND active version
+  enabled?: boolean;     // installed AND user-enabled (on/off toggle)
 }
 
 /** Render one capability as a human-readable line for the Permissions list. */
@@ -39,6 +40,6 @@ export function installedToEntry(a: InstalledArtifact): CardEntry {
   return {
     id: a.id, version: a.version, type: a.type,
     publisher: pub ? { id: pub.id ?? '', name: pub.name ?? '' } : null,
-    capabilities: a.capabilities, installed: true, active: a.active,
+    capabilities: a.capabilities, installed: true, active: a.active, enabled: a.enabled,
   };
 }

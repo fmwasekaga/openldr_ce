@@ -318,8 +318,6 @@ export const fr: EnShape = {
       details: 'Détails',
       permissions: 'Permissions',
       requirements: 'Prérequis',
-      tags: 'Étiquettes',
-      category: 'Catégorie',
       license: 'Licence',
       noDescription: 'Aucune description fournie.',
       noneCapabilities: 'Aucune permission particulière demandée.',

@@ -59,7 +59,7 @@ describe('PackageDetail', () => {
   });
 
   it('installed item shows the actions menu instead of Install', async () => {
-    const installedEntry: CardEntry = { ...entry, ref: undefined, installed: true, active: true };
+    const installedEntry: CardEntry = { ...entry, ref: undefined, installed: true, active: true, enabled: true };
     render(<PackageDetail entry={installedEntry} onBack={() => {}} onInstall={() => {}} onToggleEnabled={() => {}} onRollback={() => {}} onRemove={() => {}} />);
     expect(screen.queryByTestId('detail-install')).toBeNull();
     expect(await screen.findByText(/emit-fhir/)).toBeTruthy();
