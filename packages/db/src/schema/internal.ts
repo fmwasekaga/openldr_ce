@@ -307,6 +307,39 @@ export interface ReportRunsTable {
   created_at: Generated<Date>;
 }
 
+export interface ReportSchedulesTable {
+  id: string;
+  report_id: string;
+  params: JSONColumnType<Record<string, unknown>>;
+  frequency: string;
+  day_of_week: number | null;
+  day_of_month: number | null;
+  output_format: string;
+  enabled: Generated<boolean>;
+  last_run_at: Date | null;
+  next_due_at: Date | null;
+  created_by: string | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface ReportScheduleRunsTable {
+  id: string;
+  schedule_id: string;
+  report_id: string;
+  report_name: string;
+  run_at: Generated<Date>;
+  period_start: Date | null;
+  period_end: Date | null;
+  output_format: string;
+  object_key: string | null;
+  byte_size: number | null;
+  row_count: number | null;
+  status: string;
+  error_message: string | null;
+  created_at: Generated<Date>;
+}
+
 export interface FormVersionsTable {
   id: string;
   form_id: string;
@@ -363,4 +396,6 @@ export interface InternalSchema {
   user_profiles: UserProfilesTable;
   marketplace_publishers: MarketplacePublishersTable;
   report_runs: ReportRunsTable;
+  report_schedules: ReportSchedulesTable;
+  report_schedule_runs: ReportScheduleRunsTable;
 }
