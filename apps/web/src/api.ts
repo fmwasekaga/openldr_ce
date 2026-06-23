@@ -1191,6 +1191,7 @@ export interface WorkflowDatasetSummary {
   rowCount: number;
   workflowId: string | null;
   updatedAt?: string;
+  publishedTable?: string | null;
 }
 
 export async function fetchWorkflowDatasets(): Promise<WorkflowDatasetSummary[]> {

@@ -20,6 +20,7 @@ import { ExecuteWorkflowForm } from './execute-workflow-form';
 import { MaterializeForm } from './materialize-form';
 import { ExportForm } from './export-form';
 import { Dhis2PushForm } from './dhis2-push-form';
+import { LoadDatasetForm } from './load-dataset-form';
 
 export interface NodeFormProps {
   node: WorkflowNode;
@@ -54,6 +55,7 @@ const FORMS: Record<string, ComponentType<NodeFormProps>> = {
   'materialize-dataset': MaterializeForm,
   'export-artifact': ExportForm,
   'dhis2-push': Dhis2PushForm,
+  'load-dataset': LoadDatasetForm,
 };
 
 export function pickForm(node: WorkflowNode): ComponentType<NodeFormProps> {

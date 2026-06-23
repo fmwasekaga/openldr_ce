@@ -15,6 +15,7 @@ export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
   // actions
   'set', 'log', 'merge',
   'sql-query', 'fhir-query', 'http-request',
+  'load-dataset',
   // conditions
   'if', 'filter',
   // sinks
@@ -167,6 +168,10 @@ export const nodeCategories: NodeCategory[] = [
       node('fhir-query', 'action', 'FHIR Query', 'Activity', 'Fetch FHIR resources by type', {
         keywords: ['fhir', 'hl7', 'resource', 'observation'],
         data: { action: 'fhir-query', config: { resourceType: '', limit: 100 } },
+      }),
+      node('load-dataset', 'action', 'Load Dataset', 'FolderInput', 'Load a previously materialized dataset into this workflow', {
+        keywords: ['dataset', 'load', 'read', 'source'],
+        data: { action: 'load-dataset', config: { datasetName: '' } },
       }),
       node('if', 'condition', 'If', 'GitBranch', 'Conditional branching'),
       node('switch', 'condition', 'Switch', 'Shuffle', 'Route to one of many branches', {

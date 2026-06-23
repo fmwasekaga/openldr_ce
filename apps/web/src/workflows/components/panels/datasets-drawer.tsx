@@ -55,7 +55,14 @@ export function DatasetsDrawer({ open, onClose }: Props) {
               <TableBody>
                 {datasets.map((d) => (
                   <TableRow key={d.name}>
-                    <TableCell className="font-mono text-xs">{d.name}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      <div>{d.name}</div>
+                      {d.publishedTable && (
+                        <code className="mt-0.5 block max-w-[220px] truncate rounded bg-muted/60 px-1 py-0.5 font-mono text-[10px] text-muted-foreground" title={`SELECT data->>'<col>' FROM ${d.publishedTable}`}>
+                          {`SELECT data->>'<col>' FROM ${d.publishedTable}`}
+                        </code>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right text-xs text-muted-foreground">
                       {d.rowCount.toLocaleString()}
                     </TableCell>
