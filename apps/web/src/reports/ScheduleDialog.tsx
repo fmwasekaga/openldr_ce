@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { createSchedule, updateSchedule, type ReportSchedule, type ReportParamMeta, type ScheduleInput } from '../api';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -63,6 +64,7 @@ export function ScheduleDialog({ open, reportId, parameters, options, initialPar
     try {
       if (existing) await updateSchedule(existing.id, body);
       else await createSchedule(reportId, body);
+      toast.success(t('reports.scheduling.saved'));
       onSaved();
       onClose();
     } catch {

@@ -356,6 +356,8 @@ export const fr: EnShape = {
       dayOfWeek: 'Jour de la semaine', dayOfMonth: 'Jour du mois', outputFormat: 'Format de sortie',
       dateWindowAuto: 'Période : automatique (période précédente)',
       runNow: 'Exécuter', edit: 'Modifier', delete: 'Supprimer',
+      queued: 'Exécution lancée — elle apparaîtra bientôt dans les exécutions planifiées.',
+      saved: 'Planification enregistrée.', deleted: 'Planification supprimée.',
       deleteConfirm: 'Supprimer cette planification ?',
       nextRun: 'Prochaine', lastRun: 'Dernière', empty: 'Aucune planification.',
       saveError: 'Impossible d’enregistrer la planification.', loadError: 'Impossible de charger les planifications.',

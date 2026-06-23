@@ -20,9 +20,11 @@ import { FormCapture } from './pages/FormCapture';
 import { FormBuilderPage } from './forms-builder/FormBuilderPage';
 import { RequireRole } from './auth/RequireRole';
 import { CallbackPage } from './auth/CallbackPage';
+import { Toaster } from './components/ui/sonner';
 
 export function App() {
   return (
+    <>
     <Routes>
       <Route path="/auth/callback" element={<CallbackPage />} />
       <Route path="/" element={<DashboardPage />} />
@@ -50,5 +52,7 @@ export function App() {
       <Route path="/docs/:slug" element={<Docs />} />
       <Route path="*" element={<AppShell title="Not found"><div className="card">Page not found.</div></AppShell>} />
     </Routes>
+    <Toaster />
+    </>
   );
 }

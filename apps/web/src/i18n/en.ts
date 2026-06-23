@@ -334,6 +334,8 @@ export const en = {
       outputFormat: 'Output format',
       dateWindowAuto: 'Date window: auto (covers the last period)',
       runNow: 'Run now', edit: 'Edit', delete: 'Delete',
+      queued: 'Run queued — it will appear in Scheduled Runs shortly.',
+      saved: 'Schedule saved.', deleted: 'Schedule deleted.',
       deleteConfirm: 'Delete this schedule?',
       nextRun: 'Next', lastRun: 'Last',
       empty: 'No schedules yet.',

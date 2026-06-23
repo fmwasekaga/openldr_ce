@@ -356,6 +356,8 @@ export const pt: EnShape = {
       dayOfWeek: 'Dia da semana', dayOfMonth: 'Dia do mês', outputFormat: 'Formato de saída',
       dateWindowAuto: 'Janela de datas: automática (período anterior)',
       runNow: 'Executar', edit: 'Editar', delete: 'Excluir',
+      queued: 'Execução enfileirada — aparecerá em Execuções agendadas em breve.',
+      saved: 'Agendamento salvo.', deleted: 'Agendamento excluído.',
       deleteConfirm: 'Excluir este agendamento?',
       nextRun: 'Próxima', lastRun: 'Última', empty: 'Nenhum agendamento.',
       saveError: 'Não foi possível salvar o agendamento.', loadError: 'Não foi possível carregar os agendamentos.',

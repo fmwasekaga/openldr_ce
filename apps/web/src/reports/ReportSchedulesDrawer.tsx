@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { Plus, Play, Pencil, Trash2 } from 'lucide-react';
 import { fetchSchedules, updateSchedule, runScheduleNow, deleteSchedule, type ReportSchedule, type ReportParamMeta } from '../api';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
@@ -48,14 +49,16 @@ export function ReportSchedulesDrawer({ open, reportId, parameters, options, cur
 
   const onToggle = async (s: ReportSchedule) => {
     try { await updateSchedule(s.id, { enabled: !s.enabled }); reload(); }
-    catch { setError(t('reports.scheduling.saveError')); }
+    catch { toast.error(t('reports.scheduling.saveError')); }
   };
   const onRun = async (s: ReportSchedule) => {
-    try { await runScheduleNow(s.id); } catch { setError(t('reports.scheduling.saveError')); }
+    try { await runScheduleNow(s.id); toast.success(t('reports.scheduling.queued')); }
+    catch { toast.error(t('reports.scheduling.saveError')); }
   };
   const onDelete = async (id: string) => {
     setConfirmId(null);
-    try { await deleteSchedule(id); reload(); } catch { setError(t('reports.scheduling.saveError')); }
+    try { await deleteSchedule(id); toast.success(t('reports.scheduling.deleted')); reload(); }
+    catch { toast.error(t('reports.scheduling.saveError')); }
   };
 
   return (
