@@ -7,7 +7,7 @@ import { safeRecord } from '@openldr/audit';
 import { createPluginStore, createPluginRuntime, createExtismRunner, type PluginRuntime } from '@openldr/plugins';
 import { createTrustStore } from '@openldr/marketplace';
 
-const CE_VERSION = '0.1.0'; // artifact compatibility gate; matches package.json
+export const CE_VERSION = '0.1.0'; // artifact compatibility gate; matches package.json
 
 /** Single source of truth for wiring the plugin/artifact registry — used by both the ingest worker and the server AppContext. */
 export function createPluginRegistry(deps: {
