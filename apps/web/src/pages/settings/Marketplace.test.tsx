@@ -51,6 +51,18 @@ describe('Marketplace', () => {
     await waitFor(() => expect(api.installArtifact).toHaveBeenCalledWith('whonet-narrow', [{ kind: 'emit-fhir', resourceTypes: ['Patient'] }]));
   });
 
+  it('installs a form-template bundle from Browse after consent', async () => {
+    (api.listAvailableArtifacts as any).mockResolvedValue({ configured: true, source: 'local', host: 'local', bundles: [{ ref: 'demo-form-1', id: 'demo-form', version: '1.0.0', type: 'form-template', publisher: { id: 'p', name: 'P' }, valid: true }] });
+    (api.listInstalledArtifacts as any).mockResolvedValue([]);
+    (api.getAvailableArtifact as any).mockResolvedValue({ ref: 'demo-form-1', id: 'demo-form', version: '1.0.0', type: 'form-template', description: 'd', license: 'L', publisher: { id: 'p', name: 'P' }, capabilities: [], compatibility: { ceVersion: '*' }, compatible: true, ceVersion: '0.1.0', payload: { kind: 'form-template' }, valid: true });
+    (api.installArtifact as any).mockResolvedValue({ id: 'demo-form', version: '1.0.0' });
+    render(<MemoryRouter><Marketplace /></MemoryRouter>);
+    fireEvent.click(await screen.findByTestId('card-demo-form-1'));
+    fireEvent.click(await screen.findByTestId('detail-install'));
+    fireEvent.click(await screen.findByTestId('approve-install'));
+    await waitFor(() => expect(api.installArtifact).toHaveBeenCalledWith('demo-form-1', []));
+  });
+
   it('shows the unconfigured empty state', async () => {
     (api.listAvailableArtifacts as any).mockResolvedValue({ configured: false, source: null, host: null, bundles: [] });
     (api.listInstalledArtifacts as any).mockResolvedValue([]);

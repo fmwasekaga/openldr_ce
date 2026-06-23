@@ -43,7 +43,8 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
 
   const capabilities = (detail?.capabilities ?? entry.capabilities) as unknown[];
   const publisher = detail?.publisher ?? entry.publisher;
-  const canInstall = Boolean(entry.ref) && !entry.installed && entry.type === 'plugin' && (detail ? detail.valid : entry.valid !== false);
+  const installableType = entry.type === 'plugin' || entry.type === 'form-template';
+  const canInstall = Boolean(entry.ref) && !entry.installed && installableType && (detail ? detail.valid : entry.valid !== false);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -75,7 +76,7 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
               <Button data-testid="detail-install" disabled={detail ? !detail.compatible : false} onClick={() => onInstall(entry, capabilities)}>
                 {t('settings.marketplace.install')}
               </Button>
-            ) : entry.ref && entry.type !== 'plugin' && !entry.installed ? (
+            ) : entry.ref && !installableType && !entry.installed ? (
               <Button disabled title={t('settings.marketplace.installPluginOnly')}>
                 {t('settings.marketplace.installComingSoon')}
               </Button>
