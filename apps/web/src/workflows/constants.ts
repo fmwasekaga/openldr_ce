@@ -14,6 +14,7 @@ export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
   'code',
   // actions
   'set', 'log', 'merge',
+  'sql-query', 'fhir-query', 'http-request',
   // conditions
   'if', 'filter',
 ]);
@@ -156,6 +157,14 @@ export const nodeCategories: NodeCategory[] = [
       node('http-request', 'action', 'HTTP Request', 'Send', 'Call any REST API', {
         keywords: ['api', 'rest', 'fetch'],
         data: { config: { url: '', method: 'GET', headers: '', body: '', responseType: 'json' } },
+      }),
+      node('sql-query', 'action', 'SQL Query', 'Database', 'Run a SELECT over the reporting schema', {
+        keywords: ['sql', 'query', 'database', 'select'],
+        data: { action: 'sql-query', config: { sql: '' } },
+      }),
+      node('fhir-query', 'action', 'FHIR Query', 'Activity', 'Fetch FHIR resources by type', {
+        keywords: ['fhir', 'hl7', 'resource', 'observation'],
+        data: { action: 'fhir-query', config: { resourceType: '', limit: 100 } },
       }),
       node('if', 'condition', 'If', 'GitBranch', 'Conditional branching'),
       node('switch', 'condition', 'Switch', 'Shuffle', 'Route to one of many branches', {

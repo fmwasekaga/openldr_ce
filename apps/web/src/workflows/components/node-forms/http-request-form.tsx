@@ -40,7 +40,7 @@ export function HttpRequestForm({ node, update }: NodeFormProps) {
         </Select>
       </FormField>
 
-      <FormField label="URL" hint="Supports templates: {{ $input.baseUrl }}/users">
+      <FormField label="URL" hint="Supports templates: {{ $input.baseUrl }}/users — only allow-listed hosts are reachable (set WORKFLOW_HTTP_ALLOWLIST on the server).">
         <TextInput
           value={url}
           onChange={(e) => patchConfig({ url: e.target.value })}
