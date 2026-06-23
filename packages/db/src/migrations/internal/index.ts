@@ -26,6 +26,8 @@ import * as m024 from './024_plugin_registry';
 import * as m025 from './025_report_runs';
 import * as m026 from './026_report_schedules';
 import * as m027 from './027_workflows';
+import * as m028 from './028_workflow_runs';
+import * as m029 from './029_workflow_schedules';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -55,4 +57,6 @@ export const internalMigrations: Record<string, Migration> = {
   '025_report_runs': { up: m025.up, down: m025.down },
   '026_report_schedules': { up: m026.up, down: m026.down },
   '027_workflows': { up: m027.up, down: m027.down },
+  '028_workflow_runs': { up: m028.up, down: m028.down },
+  '029_workflow_schedules': { up: m029.up, down: m029.down },
 };
