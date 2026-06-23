@@ -20,6 +20,11 @@ const scheduleCreate = z.object({
   outputFormat: FORMAT,
   params: z.record(z.string()).optional(),
 });
+const FORMAT_CONTENT_TYPE: Record<string, string> = {
+  csv: 'text/csv',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  pdf: 'application/pdf',
+};
 const schedulePatch = z.object({
   enabled: z.boolean().optional(),
   frequency: FREQ.optional(),
@@ -158,6 +163,24 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
     ctx.reportScheduler.runNow(sid);
     reply.code(202);
     return { ok: true };
+  });
+
+  app.get('/api/reports/schedule-runs', async (req) => {
+    const q = req.query as { reportId?: string; scheduleId?: string; limit?: string; offset?: string };
+    const limit = Math.min(Math.max(Number(q.limit ?? 50) || 50, 1), 200);
+    const offset = Math.max(Number(q.offset ?? 0) || 0, 0);
+    return ctx.reportSchedules.listRuns({ reportId: q.reportId, scheduleId: q.scheduleId, limit, offset });
+  });
+
+  app.get('/api/reports/schedule-runs/:runId/download', async (req, reply) => {
+    const { runId } = req.params as { runId: string };
+    const run = await ctx.reportSchedules.getRun(runId);
+    if (!run || !run.objectKey) { reply.code(404); return { error: 'run output not found' }; }
+    const bytes = await ctx.blob.get(run.objectKey);
+    const ct = FORMAT_CONTENT_TYPE[run.outputFormat] ?? 'application/octet-stream';
+    void reply.header('content-type', ct);
+    void reply.header('content-disposition', `attachment; filename="${run.reportId}.${run.outputFormat}"`);
+    return reply.send(Buffer.from(bytes));
   });
 
   app.get('/api/reports/:id', async (req, reply) => {

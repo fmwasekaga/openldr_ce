@@ -204,3 +204,45 @@ describe('report schedule routes', () => {
     await app.close();
   });
 });
+
+describe('report schedule-run routes', () => {
+  function appWithRuns() {
+    const ctx = {
+      reportSchedules: {
+        listRuns: async () => ({ runs: [{ id: 'run1', scheduleId: 's1', reportId: 'amr-resistance', reportName: 'AMR', runAt: new Date('2026-03-16T06:05:00Z'), periodStart: null, periodEnd: null, outputFormat: 'csv', objectKey: 'report-schedules/s1/run1.csv', byteSize: 4, rowCount: 1, status: 'success', errorMessage: null }], total: 1 }),
+        getRun: async (id: string) => (id === 'run1' ? { id: 'run1', scheduleId: 's1', reportId: 'amr-resistance', reportName: 'AMR', runAt: new Date(), periodStart: null, periodEnd: null, outputFormat: 'csv', objectKey: 'report-schedules/s1/run1.csv', byteSize: 4, rowCount: 1, status: 'success', errorMessage: null } : id === 'failed' ? { id: 'failed', objectKey: null, outputFormat: 'csv' } : null),
+      },
+      blob: { get: async () => new TextEncoder().encode('a,b\n1,2') },
+    } as unknown as Parameters<typeof registerReportRoutes>[1];
+    const app = Fastify();
+    app.addHook('onRequest', async (req) => { (req as { user?: unknown }).user = { id: 'u1', username: 'ada', displayName: 'Ada', roles: ['lab_technician'], status: 'active' }; });
+    registerReportRoutes(app, ctx);
+    return { app };
+  }
+
+  it('GET schedule-runs returns { runs, total }', async () => {
+    const { app } = appWithRuns();
+    await app.ready();
+    const res = await app.inject({ method: 'GET', url: '/api/reports/schedule-runs?reportId=amr-resistance&limit=5' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ total: 1 });
+    await app.close();
+  });
+
+  it('download streams the blob with a content-type', async () => {
+    const { app } = appWithRuns();
+    await app.ready();
+    const res = await app.inject({ method: 'GET', url: '/api/reports/schedule-runs/run1/download' });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('text/csv');
+    expect(res.body).toContain('a,b');
+    await app.close();
+  });
+
+  it('download 404 for a failed run with no object_key', async () => {
+    const { app } = appWithRuns();
+    await app.ready();
+    expect((await app.inject({ method: 'GET', url: '/api/reports/schedule-runs/failed/download' })).statusCode).toBe(404);
+    await app.close();
+  });
+});
