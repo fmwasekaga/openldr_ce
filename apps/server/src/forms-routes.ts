@@ -1,9 +1,16 @@
+import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
+import AdmZip from 'adm-zip';
 import type { AppContext } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
 import { toQuestionnaire, toQuestionnaireResponse } from '@openldr/forms';
 import { z } from 'zod';
 import { recordAudit } from './audit-helper';
+import { requireRole } from './rbac';
+
+function slug(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'form';
+}
 
 const formInput = z.object({
   name: z.string().min(1),
@@ -181,6 +188,50 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
       reply.code(500);
       return { error: redact(e instanceof Error ? e.message : String(e)) };
     }
+  });
+
+  app.get('/api/forms/:id/export-bundle', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const form = await ctx.forms.get(id);
+    if (!form) {
+      reply.code(404);
+      return { error: 'form not found' };
+    }
+    const versions = await ctx.forms.listVersions(id);
+    if (!versions.length) {
+      reply.code(404);
+      return { error: 'form has no published version to export' };
+    }
+    const latest = await ctx.forms.getVersion(id, versions[0].version);
+    if (!latest) {
+      reply.code(404);
+      return { error: 'published version not found' };
+    }
+
+    const questionnaireBytes = Buffer.from(JSON.stringify(latest.questionnaire, null, 2), 'utf8');
+    const questionnaireSha256 = createHash('sha256').update(questionnaireBytes).digest('hex');
+    const artifactId = slug(form.name);
+    const version = form.versionLabel ?? '1.0.0';
+    const manifest = {
+      schemaVersion: 1,
+      type: 'form-template',
+      id: artifactId,
+      version,
+      description: form.name,
+      license: 'UNLICENSED',
+      compatibility: { ceVersion: '*' },
+      capabilities: [],
+      payload: { kind: 'form-template', questionnaireSha256 },
+    };
+
+    const zip = new AdmZip();
+    zip.addFile('manifest.json', Buffer.from(JSON.stringify(manifest, null, 2), 'utf8'));
+    zip.addFile('questionnaire.json', questionnaireBytes);
+    const buf = zip.toBuffer();
+
+    reply.header('Content-Type', 'application/zip');
+    reply.header('Content-Disposition', `attachment; filename="${artifactId}-${version}.zip"`);
+    return reply.send(buf);
   });
 
   app.post('/api/forms/:id/responses', async (req, reply) => {

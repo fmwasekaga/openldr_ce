@@ -1,9 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import Fastify from 'fastify';
+import AdmZip from 'adm-zip';
 import type { AppContext } from '@openldr/bootstrap';
 import type { FormDefinition, FormInput, FormVersion, FormVersionSummary } from '@openldr/forms';
 import { registerFormsRoutes } from './forms-routes';
 import './auth-plugin';
+
+function appWithForms(ctx: Record<string, unknown>, roles: string[] = ['lab_admin']) {
+  const app = Fastify();
+  app.addHook('onRequest', async (req) => {
+    req.user = { id: 'admin', username: 'admin', displayName: null, roles } as never;
+  });
+  registerFormsRoutes(app, ctx as never);
+  return app;
+}
 
 type AuditInput = Parameters<AppContext['audit']['record']>[0];
 
@@ -439,6 +449,37 @@ describe('forms routes', () => {
     const id = created.json().id as string;
     const snapshot = await app.inject({ method: 'GET', url: `/api/forms/${id}/versions/1` });
     expect(snapshot.statusCode).toBe(404);
+  });
+
+  it('exports a published form as an unsigned form-template bundle zip', async () => {
+    const questionnaire = { resourceType: 'Questionnaire', status: 'active', title: 'Intake', item: [] };
+    const forms = {
+      get: async (id: string) => (id === 'form-1' ? { id, name: 'Specimen Intake', versionLabel: '2.0.0' } : null),
+      listVersions: async () => [{ version: 3 }, { version: 2 }],
+      getVersion: async (_id: string, v: number) => (v === 3 ? { questionnaire } : null),
+    };
+    const app = appWithForms({ forms });
+    const res = await app.inject({ method: 'GET', url: '/api/forms/form-1/export-bundle' });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('zip');
+    const zip = new AdmZip(res.rawPayload as Buffer);
+    const names = zip.getEntries().map((e) => e.entryName).sort();
+    expect(names).toEqual(['manifest.json', 'questionnaire.json']);
+    const manifest = JSON.parse(zip.readAsText('manifest.json'));
+    expect(manifest).toMatchObject({ type: 'form-template', id: 'specimen-intake', version: '2.0.0' });
+    expect(manifest.payload).toMatchObject({ kind: 'form-template' });
+    const qBytes = zip.readFile('questionnaire.json') as Buffer;
+    const { createHash } = await import('node:crypto');
+    expect(manifest.payload.questionnaireSha256).toBe(createHash('sha256').update(qBytes).digest('hex'));
+    expect(manifest.publisher).toBeUndefined();
+    expect(manifest.signature).toBeUndefined();
+  });
+
+  it('404s when the form has no published version', async () => {
+    const forms = { get: async () => ({ id: 'form-2', name: 'Draft', versionLabel: null }), listVersions: async () => [], getVersion: async () => null };
+    const app = appWithForms({ forms });
+    const res = await app.inject({ method: 'GET', url: '/api/forms/form-2/export-bundle' });
+    expect(res.statusCode).toBe(404);
   });
 
   it('returns 404 for orphaned version snapshots after the parent form is deleted', async () => {
