@@ -114,8 +114,11 @@ docker compose up -d
 # Run database migrations
 pnpm openldr db migrate
 
-# Start the dev environment (API + web)
-pnpm dev
+# Start the API (terminal 1)
+pnpm -C apps/server dev
+
+# Start the web app (terminal 2)
+pnpm -C apps/web dev
 ```
 
 ### The CLI
@@ -130,6 +133,8 @@ pnpm openldr plugin list            # installed ingestion plugins
 pnpm openldr export                 # extract the full dataset in open formats
 ```
 
+For the complete source-backed CLI, configuration, HTTP API, and operator references, see [`docs/CLI-REFERENCE.md`](docs/CLI-REFERENCE.md), [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md), [`docs/HTTP-API.md`](docs/HTTP-API.md), and [`docs/OPERATOR-GUIDE.md`](docs/OPERATOR-GUIDE.md).
+
 ---
 
 ## Project Structure
@@ -137,18 +142,25 @@ pnpm openldr export                 # extract the full dataset in open formats
 ```
 openldr_ce/
 ├── apps/
-│   └── web/            # React + Vite SPA (shadcn/ui)
+│   ├── server/         # Fastify API + built-SPA host
+│   └── web/            # React + Vite SPA
+├── e2e/                # Playwright smoke, capture, and docs screenshots
 ├── packages/
-│   ├── core/           # ports, config, adapter wiring
-│   ├── fhir/           # FHIR R4 data layer + flattening
+│   ├── audit/          # append-only audit store
+│   ├── bootstrap/      # application context wiring
+│   ├── cli/            # OpenLDR CLI
+│   ├── config/         # environment schema
+│   ├── dashboards/     # dashboard models, compile, SQL runner
+│   ├── db/             # internal/external schemas and migrations
+│   ├── dhis2/          # DHIS2 aggregate/tracker domain logic
 │   ├── forms/          # FHIR Questionnaire / SDC form engine
-│   ├── ingest/         # ingest pipeline
-│   ├── plugins/        # Extism/WASM runtime + plugin SDK
-│   ├── reporting/      # multi-driver reporting & dashboards
-│   ├── audit/          # audit log + provenance
-│   ├── users/          # user management (decoupled from Keycloak)
-│   └── cli/            # OpenLDR CLI
-└── docs/               # documentation & phase PRDs
+│   ├── marketplace/    # signed artifact bundle lifecycle
+│   ├── plugins/        # Extism/WASM runtime
+│   ├── reporting/      # AMR/GLASS report catalog
+│   ├── terminology/    # terminology and ontology services
+│   ├── users/          # local user profiles
+│   └── workflows/      # workflow builder runtime and stores
+└── docs/               # operator docs, audit output, plans, and specs
 ```
 
 ---
@@ -186,7 +198,7 @@ Contributions are welcome. A few conventions:
 - Add Playwright coverage for new UI surfaces and tests for new core logic.
 - **Run built artifacts, not just build them.** Dev and tests execute TypeScript from source (`tsx`/`vitest`), so a bundling regression in the `tsup` ESM output can pass everything and still crash the shipped binary at startup. Acceptance for `@openldr/cli` and `apps/server` must launch the `dist/` artifact — run `pnpm build:check` (or `pnpm --filter <pkg> build:check`), which builds each binary and smoke-runs it.
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) (to be added) for the full guide.
+The formal contributing guide is still pending; until it lands, follow the conventions above and the verification commands in this README.
 
 ---
 
