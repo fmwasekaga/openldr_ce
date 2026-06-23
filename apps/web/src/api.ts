@@ -969,3 +969,80 @@ export function buildOntology(
   });
   return { promise, cancel: () => eventSource.close() };
 }
+
+// ── Workflow types & API client ───────────────────────────────────────────────
+
+export interface Workflow {
+  id: string;
+  name: string;
+  description: string | null;
+  definition: { nodes: unknown[]; edges: unknown[] };
+  enabled: boolean;
+  createdBy: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export async function fetchWorkflows(): Promise<Workflow[]> {
+  const res = await authFetch('/api/workflows');
+  if (!res.ok) throw new Error(`workflows list failed: ${res.status}`);
+  return res.json() as Promise<Workflow[]>;
+}
+
+export async function fetchWorkflow(id: string): Promise<Workflow> {
+  const res = await authFetch(`/api/workflows/${encodeURIComponent(id)}`);
+  if (!res.ok) throw new Error(`workflow ${id} failed: ${res.status}`);
+  return res.json() as Promise<Workflow>;
+}
+
+export async function createWorkflow(body: Omit<Workflow, 'createdAt' | 'updatedAt'>): Promise<Workflow> {
+  const res = await authFetch('/api/workflows', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`create workflow failed: ${res.status}`);
+  return res.json() as Promise<Workflow>;
+}
+
+export async function updateWorkflow(id: string, body: Omit<Workflow, 'createdAt' | 'updatedAt'>): Promise<Workflow> {
+  const res = await authFetch(`/api/workflows/${encodeURIComponent(id)}`, {
+    method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`update workflow failed: ${res.status}`);
+  return res.json() as Promise<Workflow>;
+}
+
+export async function deleteWorkflow(id: string): Promise<void> {
+  const res = await authFetch(`/api/workflows/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`delete workflow failed: ${res.status}`);
+}
+
+/** Stream execution events. Returns when the stream ends. `onEvent` receives each RunEvent. */
+export async function executeWorkflowStream(
+  id: string,
+  onEvent: (evt: unknown) => void,
+  opts: { input?: unknown; signal?: AbortSignal } = {},
+): Promise<void> {
+  const token = getAccessToken();
+  const res = await fetch(`/api/workflows/${encodeURIComponent(id)}/execute-stream`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify({ input: opts.input }),
+    signal: opts.signal,
+  });
+  if (!res.ok || !res.body) throw new Error(`execute failed: ${res.status}`);
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const frames = buffer.split('\n\n');
+    buffer = frames.pop() ?? '';
+    for (const frame of frames) {
+      const line = frame.split('\n').find((l) => l.startsWith('data:'));
+      if (!line) continue;
+      try { onEvent(JSON.parse(line.slice(5).trim())); } catch { /* ignore malformed frame */ }
+    }
+  }
+}
