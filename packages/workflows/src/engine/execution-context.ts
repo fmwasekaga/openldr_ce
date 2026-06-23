@@ -1,4 +1,5 @@
 import type { RunEvent } from '../types';
+import type { WorkflowServices } from './services';
 
 export interface ExecutionContext {
   /** Initial input — e.g. a manual trigger payload. */
@@ -13,6 +14,8 @@ export interface ExecutionContext {
   edges: Array<{ id: string; source: string; target: string; sourceHandle?: string | null }>;
   /** Limits for the Code node sandbox. */
   codeLimits: { timeoutMs: number; memoryMb: number };
+  /** Server-provided data capabilities for source nodes (undefined in pure-engine tests). */
+  services?: WorkflowServices;
 }
 
 export function createContext(
@@ -20,6 +23,7 @@ export function createContext(
   emit: (evt: RunEvent) => void,
   edges: ExecutionContext['edges'] = [],
   codeLimits: ExecutionContext['codeLimits'] = { timeoutMs: 5000, memoryMb: 128 },
+  services?: WorkflowServices,
 ): ExecutionContext {
-  return { input, nodeOutputs: {}, logs: {}, emit, edges, codeLimits };
+  return { input, nodeOutputs: {}, logs: {}, emit, edges, codeLimits, services };
 }

@@ -13,6 +13,7 @@
 import { pickHandler, type RunnerNode } from './node-handlers';
 import { createContext } from './execution-context';
 import type { RunEvent, LogEntry, WorkflowEdge } from '../types';
+import type { WorkflowServices } from './services';
 
 export type WorkflowNode = RunnerNode;
 
@@ -95,6 +96,8 @@ export interface RunWorkflowOptions {
   onEvent?: (evt: RunEvent) => void;
   /** Limits for the Code node sandbox. When undefined, createContext's default applies. */
   codeLimits?: { timeoutMs: number; memoryMb: number };
+  /** Server-provided data capabilities for source nodes. */
+  services?: WorkflowServices;
 }
 
 export async function runWorkflow(
@@ -103,7 +106,7 @@ export async function runWorkflow(
   opts: RunWorkflowOptions = {},
 ): Promise<WorkflowRunResult> {
   const startedAt = new Date().toISOString();
-  const ctx = createContext(opts.input, opts.onEvent ?? (() => {}), edges, opts.codeLimits);
+  const ctx = createContext(opts.input, opts.onEvent ?? (() => {}), edges, opts.codeLimits, opts.services);
   const sorted = topologicalSort(nodes, edges);
   const results: NodeRunResult[] = [];
 
