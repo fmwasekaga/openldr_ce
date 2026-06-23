@@ -13,6 +13,7 @@ beforeEach(async () => {
     .addColumn('columns', 'jsonb').addColumn('rows', 'jsonb')
     .addColumn('row_count', 'integer').addColumn('workflow_id', 'text')
     .addColumn('created_at', 'text').addColumn('updated_at', 'text')
+    .addColumn('published_table', 'text')
     .execute();
 });
 
@@ -26,5 +27,8 @@ describe('WorkflowDatasetStore', () => {
     expect(list[0].rowCount).toBe(2);
     expect((await store.getByName('amr'))?.rows.length).toBe(2);
     expect(await store.getByName('nope')).toBeUndefined();
+    await store.markPublished('amr', 'wf_ds_amr');
+    expect((await store.getByName('amr'))?.publishedTable).toBe('wf_ds_amr');
+    expect((await store.list())[0].publishedTable).toBe('wf_ds_amr');
   });
 });

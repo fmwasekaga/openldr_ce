@@ -86,6 +86,7 @@ export const WorkflowDatasetSchema = z.object({
   rows: z.array(z.record(z.unknown())).default([]),
   rowCount: z.number().default(0),
   workflowId: z.string().nullable().default(null),
+  publishedTable: z.string().nullable().default(null),
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
 });

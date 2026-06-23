@@ -416,6 +416,7 @@ export interface WorkflowDatasetsTable {
   rows: JSONColumnType<Record<string, unknown>[]>;
   row_count: Generated<number>;
   workflow_id: string | null;
+  published_table: string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

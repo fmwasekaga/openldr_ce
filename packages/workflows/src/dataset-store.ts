@@ -16,6 +16,7 @@ function fromRow(r: Record<string, unknown>): WorkflowDataset {
   return WorkflowDatasetSchema.parse({
     id: r.id, name: r.name, columns: parse(r.columns), rows: parse(r.rows),
     rowCount: Number(r.row_count ?? 0), workflowId: r.workflow_id ?? null,
+    publishedTable: r.published_table ?? null,
     createdAt: r.created_at ? String(r.created_at) : undefined,
     updatedAt: r.updated_at ? String(r.updated_at) : undefined,
   });
@@ -23,8 +24,9 @@ function fromRow(r: Record<string, unknown>): WorkflowDataset {
 
 export interface WorkflowDatasetStore {
   upsertByName(d: DatasetInput): Promise<WorkflowDataset>;
-  list(): Promise<{ name: string; rowCount: number; workflowId: string | null; updatedAt?: string }[]>;
+  list(): Promise<{ name: string; rowCount: number; workflowId: string | null; updatedAt?: string; publishedTable: string | null }[]>;
   getByName(name: string): Promise<WorkflowDataset | undefined>;
+  markPublished(name: string, publishedTable: string): Promise<void>;
 }
 
 export function createWorkflowDatasetStore(db: Kysely<InternalSchema>): WorkflowDatasetStore {
@@ -42,8 +44,11 @@ export function createWorkflowDatasetStore(db: Kysely<InternalSchema>): Workflow
       const rows = await db.selectFrom(T).selectAll().orderBy('name').execute();
       return rows.map((r) => {
         const d = fromRow(r as Record<string, unknown>);
-        return { name: d.name, rowCount: d.rowCount, workflowId: d.workflowId, updatedAt: d.updatedAt };
+        return { name: d.name, rowCount: d.rowCount, workflowId: d.workflowId, updatedAt: d.updatedAt, publishedTable: d.publishedTable };
       });
+    },
+    async markPublished(name, publishedTable) {
+      await db.updateTable(T).set({ published_table: publishedTable } as never).where('name', '=', name).execute();
     },
     async getByName(name) {
       const r = await db.selectFrom(T).selectAll().where('name', '=', name).executeTakeFirst();
