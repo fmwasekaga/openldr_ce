@@ -56,16 +56,26 @@ export class LocalRegistrySource implements RegistrySource {
 export class HttpRegistrySource implements RegistrySource {
   readonly kind = 'http' as const;
   private cache: Map<string, MarketplaceIndexEntry> | null = null;
-  constructor(private readonly baseUrl: string, private readonly fetchImpl: typeof fetch = fetch) {}
+  constructor(private readonly baseUrl: string, private readonly fetchImpl: typeof fetch = fetch, private readonly timeoutMs = 15_000) {}
 
   get label(): string {
     try { return new URL(this.baseUrl).host; } catch { return this.baseUrl; }
   }
   refresh(): void { this.cache = null; }
 
+  private async fetchWithTimeout(url: string): Promise<Response> {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), this.timeoutMs);
+    try {
+      return await this.fetchImpl(url, { signal: ac.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   private async loadIndex(): Promise<Map<string, MarketplaceIndexEntry>> {
     if (this.cache) return this.cache;
-    const res = await this.fetchImpl(`${this.baseUrl}/index.json`);
+    const res = await this.fetchWithTimeout(`${this.baseUrl}/index.json`);
     if (!res.ok) throw new Error(`registry unreachable: index.json ${res.status}`);
     const index = parseIndex(JSON.parse(await res.text()));
     const map = new Map<string, MarketplaceIndexEntry>();
@@ -88,14 +98,14 @@ export class HttpRegistrySource implements RegistrySource {
     const entry = map.get(ref);
     if (!entry) throw new Error(`unknown bundle ref: ${ref}`);
     const dir = `${this.baseUrl}/${entry.path}`;
-    const manifestRes = await this.fetchImpl(`${dir}/manifest.json`);
+    const manifestRes = await this.fetchWithTimeout(`${dir}/manifest.json`);
     if (!manifestRes.ok) throw new Error(`registry unreachable: manifest ${manifestRes.status}`);
     const raw = JSON.parse(await manifestRes.text()) as Record<string, unknown>;
     const kind = String((raw.payload as { kind?: string } | null)?.kind ?? 'plugin');
-    const payloadRes = await this.fetchImpl(`${dir}/${payloadFileName(kind)}`);
+    const payloadRes = await this.fetchWithTimeout(`${dir}/${payloadFileName(kind)}`);
     if (!payloadRes.ok) throw new Error(`registry unreachable: payload ${payloadRes.status}`);
     const payload = new Uint8Array(await payloadRes.arrayBuffer());
-    const pubRes = await this.fetchImpl(`${dir}/publisher.pub`);
+    const pubRes = await this.fetchWithTimeout(`${dir}/publisher.pub`);
     if (!pubRes.ok) throw new Error(`registry unreachable: publisher.pub ${pubRes.status}`);
     const pubHex = await pubRes.text();
     return assembleBundle(raw, payload, pubHex);
