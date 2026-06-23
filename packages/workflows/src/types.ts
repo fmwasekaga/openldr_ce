@@ -78,3 +78,15 @@ export const WorkflowScheduleSchema = z.object({
   nextDueAt: z.string().nullable().default(null),
 });
 export type WorkflowSchedule = z.infer<typeof WorkflowScheduleSchema>;
+
+export const WorkflowDatasetSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  columns: z.array(z.object({ key: z.string(), label: z.string() })).default([]),
+  rows: z.array(z.record(z.unknown())).default([]),
+  rowCount: z.number().default(0),
+  workflowId: z.string().nullable().default(null),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
+});
+export type WorkflowDataset = z.infer<typeof WorkflowDatasetSchema>;

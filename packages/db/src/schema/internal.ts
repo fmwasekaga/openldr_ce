@@ -409,6 +409,17 @@ export interface WorkflowSchedulesTable {
   next_due_at: Date | null;
 }
 
+export interface WorkflowDatasetsTable {
+  id: string;
+  name: string;
+  columns: JSONColumnType<{ key: string; label: string }[]>;
+  rows: JSONColumnType<Record<string, unknown>[]>;
+  row_count: Generated<number>;
+  workflow_id: string | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface InternalSchema {
   fhir_resources: FhirResourcesTable;
   outbox_events: OutboxEventsTable;
@@ -446,4 +457,5 @@ export interface InternalSchema {
   workflows: WorkflowsTable;
   workflow_runs: WorkflowRunsTable;
   workflow_schedules: WorkflowSchedulesTable;
+  workflow_datasets: WorkflowDatasetsTable;
 }
