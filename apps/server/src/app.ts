@@ -15,6 +15,7 @@ import { registerUsersRoutes } from './users-routes';
 import { registerFormsRoutes } from './forms-routes';
 import { registerDhis2Routes } from './dhis2-routes';
 import { registerMarketplaceRoutes } from './marketplace-routes';
+import { registerWorkflowRoutes } from './workflows-routes';
 import { createDhis2MetadataCache, createOrgUnitMapStore, createMappingStore, createScheduleStore } from '@openldr/db';
 import { registerAuth } from './auth-plugin';
 
@@ -69,6 +70,7 @@ export function buildApp(ctx: AppContext, dhis2: Dhis2Context | null = null, eve
     scheduleStore: createScheduleStore(ctx.internalDb),
   }, eventing);
   registerMarketplaceRoutes(app, ctx);
+  registerWorkflowRoutes(app, ctx);
 
   // Serve the built SPA if present. API + health are registered first and win.
   // WEB_DIST_DIR overrides the location for container deploys (the SPA may not sit at

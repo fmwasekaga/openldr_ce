@@ -68,6 +68,9 @@ importers:
       '@openldr/terminology':
         specifier: workspace:*
         version: link:../../packages/terminology
+      '@openldr/workflows':
+        specifier: workspace:*
+        version: link:../../packages/workflows
       fastify:
         specifier: ^5.2.0
         version: 5.8.5
