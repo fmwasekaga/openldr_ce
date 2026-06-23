@@ -2,7 +2,8 @@ import { readdir } from 'node:fs/promises';
 import { join, basename } from 'node:path';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
-import { readBundle, verifyBundle, readGrant, type Capability } from '@openldr/marketplace';
+import { CE_VERSION } from '@openldr/bootstrap';
+import { readBundle, verifyBundle, readGrant, isCompatible, type Capability } from '@openldr/marketplace';
 import { requireRole } from './rbac';
 
 function actor(req: FastifyRequest): { id?: string | null; name: string } {
@@ -57,6 +58,8 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
           id: b.manifest.id,
           version: b.manifest.version,
           type: b.manifest.type,
+          description: b.manifest.description,
+          license: b.manifest.license,
           publisher: b.manifest.publisher ?? null,
           capabilities: b.manifest.capabilities,
           compatibility: b.manifest.compatibility,
@@ -67,6 +70,40 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
       }
     }
     return { configured: true, bundles };
+  });
+
+  app.get('/api/marketplace/available/:ref', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    if (!registryDir) {
+      reply.code(400);
+      return { error: 'no marketplace registry configured' };
+    }
+    const ref = safeRef((req.params as { ref: string }).ref);
+    if (!ref) {
+      reply.code(400);
+      return { error: 'invalid bundle ref' };
+    }
+    try {
+      const b = await readBundle(join(registryDir, ref));
+      const v = verifyBundle(b);
+      return {
+        ref,
+        id: b.manifest.id,
+        version: b.manifest.version,
+        type: b.manifest.type,
+        description: b.manifest.description,
+        license: b.manifest.license,
+        publisher: b.manifest.publisher ?? null,
+        capabilities: b.manifest.capabilities,
+        compatibility: b.manifest.compatibility,
+        compatible: isCompatible(b.manifest.compatibility.ceVersion, CE_VERSION),
+        ceVersion: CE_VERSION,
+        payload: b.manifest.payload,
+        valid: v.valid,
+      };
+    } catch {
+      reply.code(404);
+      return { error: 'bundle not found' };
+    }
   });
 
   app.post('/api/marketplace/install', { preHandler: requireRole('lab_admin') }, async (req, reply) => {

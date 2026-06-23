@@ -900,6 +900,21 @@ export interface AvailableArtifact {
   capabilities: unknown[];
   compatibility: { ceVersion: string };
   valid: boolean;
+  description?: string;
+  license?: string;
+}
+export interface ArtifactPayloadMeta {
+  kind: string;
+  entrypoint?: string;
+  wasmSha256?: string;
+  wasi?: boolean;
+  limits?: { memoryMb: number; timeoutMs: number };
+  [k: string]: unknown;
+}
+export interface AvailableArtifactDetail extends AvailableArtifact {
+  compatible: boolean;
+  ceVersion: string;
+  payload: ArtifactPayloadMeta;
 }
 export interface InstalledArtifact {
   id: string;
@@ -918,6 +933,9 @@ export const listInstalledArtifacts = (): Promise<InstalledArtifact[]> =>
 
 export const listAvailableArtifacts = (): Promise<{ configured: boolean; bundles: AvailableArtifact[] }> =>
   apiGet('/api/marketplace/available', 'list available artifacts');
+
+export const getAvailableArtifact = (ref: string): Promise<AvailableArtifactDetail> =>
+  apiGet(`/api/marketplace/available/${encodeURIComponent(ref)}`, 'get available artifact');
 
 export const installArtifact = (ref: string, acknowledgedCapabilities: unknown[]): Promise<{ id: string; version: string }> =>
   authFetch('/api/marketplace/install', jbody({ ref, acknowledgedCapabilities }, 'POST')).then((r) => okJson<{ id: string; version: string }>(r, 'install artifact'));
