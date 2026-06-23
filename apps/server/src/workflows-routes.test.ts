@@ -80,6 +80,7 @@ function fakeCtx() {
       webhooks: extras.webhooks,
       runner: extras.runner,
     },
+    cfg: { WORKFLOW_CODE_TIMEOUT_MS: 5000, WORKFLOW_CODE_MEMORY_MB: 128 },
     audit: { record: async (e: unknown) => { auditEvents.push(e); return e; } },
     logger: { error() {}, warn() {}, info() {} },
     __auditEvents: auditEvents,
@@ -191,6 +192,7 @@ describe('workflow routes', () => {
         webhooks: extras.webhooks,
         runner: extras.runner,
       },
+      cfg: { WORKFLOW_CODE_TIMEOUT_MS: 5000, WORKFLOW_CODE_MEMORY_MB: 128 },
       audit: { record: async (e: unknown) => { auditEvents.push(e); return e; } },
       logger: { error() {}, warn() {}, info() {} },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
