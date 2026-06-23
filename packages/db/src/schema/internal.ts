@@ -365,6 +365,19 @@ export interface MarketplacePublishersTable {
   approved_by: string | null;
 }
 
+export interface MarketplaceInstallsTable {
+  artifact_id: string;
+  version: string;
+  kind: string;
+  target_form_id: string;
+  payload_sha256: string;
+  publisher_name: string | null;
+  source_ref: string | null;
+  installed_by: string | null;
+  installed_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface WorkflowsTable {
   id: string;
   name: string;
@@ -426,6 +439,7 @@ export interface InternalSchema {
   form_versions: FormVersionsTable;
   user_profiles: UserProfilesTable;
   marketplace_publishers: MarketplacePublishersTable;
+  marketplace_installs: MarketplaceInstallsTable;
   report_runs: ReportRunsTable;
   report_schedules: ReportSchedulesTable;
   report_schedule_runs: ReportScheduleRunsTable;
