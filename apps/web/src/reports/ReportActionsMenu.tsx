@@ -5,10 +5,14 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 
-/**
- * SP-2: Run History is live. Schedules remains a placeholder (disabled) until SP-3.
- */
-export function ReportActionsMenu({ onOpenHistory }: { onOpenHistory?: () => void }) {
+interface Props {
+  onOpenHistory?: () => void;
+  onOpenSchedules?: () => void;
+  canManageSchedules?: boolean;
+}
+
+/** SP-3b: Run History (SP-2) and Schedules (manager-only) are live. */
+export function ReportActionsMenu({ onOpenHistory, onOpenSchedules, canManageSchedules }: Props) {
   const { t } = useTranslation();
   return (
     <DropdownMenu>
@@ -21,7 +25,11 @@ export function ReportActionsMenu({ onOpenHistory }: { onOpenHistory?: () => voi
         <DropdownMenuItem onSelect={() => onOpenHistory?.()}>
           {t('reports.runHistory')}
         </DropdownMenuItem>
-        <DropdownMenuItem disabled title={t('reports.comingSoon')}>
+        <DropdownMenuItem
+          disabled={!canManageSchedules}
+          title={canManageSchedules ? undefined : t('reports.comingSoon')}
+          onSelect={() => { if (canManageSchedules) onOpenSchedules?.(); }}
+        >
           {t('reports.schedules')}
         </DropdownMenuItem>
       </DropdownMenuContent>

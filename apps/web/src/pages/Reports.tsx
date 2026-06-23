@@ -7,6 +7,8 @@ import {
 } from '../api';
 import { ReportLibrary } from '../reports/ReportLibrary';
 import { ReportHistoryDrawer } from '../reports/ReportHistoryDrawer';
+import { ReportSchedulesDrawer } from '../reports/ReportSchedulesDrawer';
+import { useAuth } from '@/auth/AuthProvider';
 import { ReportParametersBar } from '../reports/ReportParametersBar';
 import { ReportSummaryStrip } from '../reports/ReportSummaryStrip';
 import { ReportActionsMenu } from '../reports/ReportActionsMenu';
@@ -21,6 +23,9 @@ type Tab = 'document' | 'spreadsheet';
 
 export function Reports() {
   const { t } = useTranslation();
+  const { hasRole } = useAuth();
+  const canManageSchedules = hasRole('lab_admin') || hasRole('lab_manager');
+  const [schedulesOpen, setSchedulesOpen] = useState(false);
   const [reports, setReports] = useState<ReportSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -121,7 +126,11 @@ export function Reports() {
                   <h2 className="text-[15px] font-semibold">{selected.name}</h2>
                   <p className="truncate text-xs text-muted-foreground">{selected.description}</p>
                 </div>
-                <ReportActionsMenu onOpenHistory={() => setHistoryOpen(true)} />
+                <ReportActionsMenu
+                  onOpenHistory={() => setHistoryOpen(true)}
+                  onOpenSchedules={() => setSchedulesOpen(true)}
+                  canManageSchedules={canManageSchedules}
+                />
               </div>
 
               <ReportParametersBar
@@ -192,6 +201,17 @@ export function Reports() {
           reportId={selected.id}
           onClose={() => setHistoryOpen(false)}
           onApplyParams={(p) => { setParams(p); setHistoryOpen(false); }}
+        />
+      )}
+
+      {selected && (
+        <ReportSchedulesDrawer
+          open={schedulesOpen}
+          reportId={selected.id}
+          parameters={selected.parameters}
+          options={options}
+          currentParams={params}
+          onClose={() => setSchedulesOpen(false)}
         />
       )}
     </AppShell>

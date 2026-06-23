@@ -21,6 +21,12 @@ vi.mock('../api', () => ({
   downloadReportCsv: vi.fn(async () => {}),
 }));
 vi.mock('../reports/PdfCanvasViewer', () => ({ PdfCanvasViewer: () => <div>pdf-viewer</div> }));
+vi.mock('@/auth/AuthProvider', () => ({
+  useAuth: () => ({ user: { id: 'me', username: 'me', displayName: null, roles: ['lab_admin'] }, loading: false, hasRole: () => true }),
+}));
+vi.mock('../reports/ReportSchedulesDrawer', () => ({
+  ReportSchedulesDrawer: ({ open }: { open: boolean }) => (open ? <div>schedules-drawer</div> : null),
+}));
 
 import { Reports } from './Reports';
 
@@ -43,5 +49,15 @@ describe('Reports page', () => {
       'amr-resistance',
       expect.objectContaining({ format: 'preview' }),
     ));
+  });
+
+  it('opens the Schedules drawer for a manager', async () => {
+    render(<MemoryRouter><Reports /></MemoryRouter>);
+    fireEvent.click(await screen.findByText('AMR Resistance Rate'));
+    const trigger = screen.getByRole('button', { name: /actions|more/i });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+    fireEvent.click(await screen.findByText(/schedules|planifications|agendamentos/i));
+    expect(await screen.findByText('schedules-drawer')).toBeInTheDocument();
   });
 });
