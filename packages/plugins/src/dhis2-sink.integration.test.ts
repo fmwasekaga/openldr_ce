@@ -53,27 +53,32 @@ describe.skipIf(!present)('dhis2-sink through the real Extism runner', () => {
     expect(out.result).toBeUndefined();
   });
 
-  // Skipped: the Extism 1.0.3 foreground runner executes wasm synchronously; host
-  // functions cannot return a Promise, so async fetch-based http_request is
-  // architecturally impossible without runInWorker (which has a known Node ERR_INVALID_URL
-  // bug in 1.0.3). Real egress is verified in SP-6 live e2e against a running DHIS2.
-  it.skip('push_aggregate real push POSTs to a mock DHIS2 and parses the import summary', async () => {
+  // Real egress: the runner routes a pinned-host call through the Extism worker path
+  // (HttpContext + Atomics bridge), which performs the fetch on the host restricted to
+  // allowedHosts. Verified live on Node 22 (prod) and 24 (dev).
+  it('push_aggregate real push POSTs to a mock DHIS2 and parses the import summary', async () => {
     let postedTo = '';
+    let body = '';
     const server: Server = createServer((req, res) => {
       postedTo = req.url ?? '';
-      res.setHeader('content-type', 'application/json');
-      res.end(JSON.stringify({ status: 'SUCCESS', importCount: { imported: 2, updated: 0, ignored: 0, deleted: 0 }, conflicts: [] }));
+      const chunks: Buffer[] = [];
+      req.on('data', (c) => chunks.push(c as Buffer));
+      req.on('end', () => {
+        body = Buffer.concat(chunks).toString();
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify({ status: 'SUCCESS', importCount: { imported: 2, updated: 0, ignored: 0, deleted: 0 }, conflicts: [] }));
+      });
     });
     await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
     try {
       const port = (server.address() as { port: number }).port;
-      // Extism allowed_hosts matches the URL host. Pin the loopback host; if the
-      // matcher needs host:port, adjust to `127.0.0.1:${port}` (report which worked).
+      // Extism allowed_hosts matches the URL host (hostname), so pin '127.0.0.1'.
       const out = (await sink().invoke('push_aggregate', aggInput(false), {
         config: { baseUrl: `http://127.0.0.1:${port}`, username: 'admin', password: 'district' },
         allowedHosts: ['127.0.0.1'],
       })) as { result?: { status: string; imported: number } };
       expect(postedTo).toContain('/api/dataValueSets');
+      expect(body).toContain('DE_TESTED'); // the mapped dataValues reached the server
       expect(out.result).toMatchObject({ status: 'success', imported: 2 });
     } finally {
       await new Promise<void>((r) => server.close(() => r()));

@@ -8,25 +8,27 @@ import type { PluginRunner, RunOptions } from './runner';
  * Sandbox notes:
  * - Isolation is default-deny: `allowedPaths` is left unset, so the plugin gets
  *   no host filesystem access. WASI is opt-in per plugin.
- * - Network egress is now restricted to the granted `allowedHosts` list (passed
- *   from the capability grant via `opts.allowedHosts`). An empty list or undefined
+ * - Network egress is restricted to the granted `allowedHosts` list (passed from the
+ *   capability grant / connector via `opts.allowedHosts`). An empty list or undefined
  *   means default-deny — no outbound connections are permitted.
- * - `runInWorker` is left false: the 1.0.3 worker path bootstraps from an inline
- *   data: URL whose bundle references a relative `worker.js.map`, which Node cannot
- *   resolve (ERR_INVALID_URL) — a known SDK bug. Running in-process avoids it.
- * - The 1.0.3 JS SDK exposes no memory-page or timeout option. The watchdog below
- *   bounds async overruns, but without a worker it cannot interrupt a synchronous
- *   runaway; hard memory + timeout enforcement awaits a newer SDK (tracked as a
- *   follow-up). `opts.memoryMb` is recorded in the manifest but not enforced here.
- * - HTTP egress is NOT supported on this path (1.0.3 limitation). The real HttpContext
- *   that performs fetches is only wired in createBackgroundPlugin, not the foreground
- *   path we use; and the worker/background path has the ERR_INVALID_URL bug above. So
- *   wasm plugins that import the `extism:host/env` http_* symbols (e.g. the dhis2-sink,
- *   built with a newer extism-pdk) need those imports *present* merely to instantiate.
- *   We provide them: http_request THROWS a clear error if actually invoked (no silent
- *   no-op), and http_status_code/http_headers return 0 so a module that never calls
- *   http_request (e.g. a dry-run mapping path) links and runs. Real HTTP egress from
- *   wasm awaits a host-SDK upgrade — see the DHIS2 sink-plugin workstream (SP-6).
+ * - Execution path is chosen per call:
+ *     - No egress requested (allowedHosts empty) -> FOREGROUND (in-process). Faster (no
+ *       worker spawn); used by ingest converters and sink dry-runs. HTTP is unavailable
+ *       here — the http_request stub throws if a foreground plugin attempts egress.
+ *     - Egress requested (allowedHosts non-empty) -> WORKER (off-thread). The SDK's
+ *       HttpContext performs the fetch on the host restricted to allowedHosts and bridges
+ *       it back to the synchronous wasm call via SharedArrayBuffer + Atomics. This is the
+ *       only path that can do HTTP (a foreground host function can't return a Promise to a
+ *       synchronous wasm import). Verified working on Node 22 (prod) + 24 (dev); the older
+ *       `ERR_INVALID_URL` data-URL worker bug is fixed in both.
+ * - http_request / http_status_code are supplied by the SDK's HttpContext on the worker
+ *   path (it overrides ours). http_headers is NOT supplied by HttpContext but IS imported
+ *   by newer extism-pdk builds (e.g. dhis2-sink), so we provide it (0n = no response
+ *   headers) on both paths so the module always links. On the foreground path our
+ *   http_request stub throws loudly (no silent no-op) if egress is attempted.
+ * - The 1.0.3 JS SDK exposes no memory-page/timeout option. The watchdog below bounds
+ *   async overruns; on the worker path `plugin.close()` terminates the worker (a hard
+ *   stop), on the foreground path it cannot interrupt a synchronous runaway.
  */
 export function createExtismRunner(): PluginRunner {
   return {
@@ -36,24 +38,26 @@ export function createExtismRunner(): PluginRunner {
         return block ? block.text() : '';
       };
 
+      // Egress requires the off-thread worker path — the only one that can perform HTTP.
+      // No host pinned ⇒ stay in-process (ingest converters, sink dry-runs): faster, no egress.
+      const useWorker = (opts.allowedHosts?.length ?? 0) > 0;
+
       const plugin = await createPlugin(
         { wasm: [{ data: wasm }] },
         {
           useWasi: opts.wasi,
-          runInWorker: false,
+          runInWorker: useWorker,
           config: opts.config ?? {},
           allowedHosts: opts.allowedHosts ?? [],
           functions: {
-            // The Extism 1.0.3 foreground runner executes wasm synchronously; host
-            // functions cannot be async. The SDK's real HttpContext (which makes actual
-            // fetch calls) is only wired in the background/worker path — and the worker
-            // path has a known Node ERR_INVALID_URL bug in 1.0.3, so we keep runInWorker
-            // false. Provide stubs that allow WebAssembly to link and dry-run paths to
-            // work; real HTTP push is covered by SP-6 live e2e against DHIS2.
-            // http_headers is required by newer extism-pdk builds but absent from the SDK.
             'extism:host/env': {
+              // On the worker path the SDK's HttpContext overrides http_request +
+              // http_status_code with real implementations (it does NOT provide
+              // http_headers). On the foreground path http_request throws if egress is
+              // attempted — never a silent no-op. http_headers (0n = no response headers)
+              // is always supplied so newer-extism-pdk modules link on both paths.
               http_request: (_cp: CurrentPlugin, _reqaddr: bigint, _bodyaddr: bigint): bigint => {
-                throw new Error('http_request: real HTTP egress requires the worker path (deferred to SP-6 e2e)');
+                throw new Error('http_request: egress is only available on the worker path (pin an allowedHost)');
               },
               http_status_code: (_cp: CurrentPlugin): number => 0,
               http_headers: (_cp: CurrentPlugin): bigint => 0n,
