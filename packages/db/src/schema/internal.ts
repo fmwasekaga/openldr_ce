@@ -365,6 +365,17 @@ export interface MarketplacePublishersTable {
   approved_by: string | null;
 }
 
+export interface WorkflowsTable {
+  id: string;
+  name: string;
+  description: string | null;
+  definition: JSONColumnType<{ nodes: unknown[]; edges: unknown[] }>;
+  enabled: Generated<boolean>;
+  created_by: string | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface InternalSchema {
   fhir_resources: FhirResourcesTable;
   outbox_events: OutboxEventsTable;
@@ -398,4 +409,5 @@ export interface InternalSchema {
   report_runs: ReportRunsTable;
   report_schedules: ReportSchedulesTable;
   report_schedule_runs: ReportScheduleRunsTable;
+  workflows: WorkflowsTable;
 }
