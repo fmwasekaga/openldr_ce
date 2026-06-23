@@ -13,6 +13,7 @@ import { httpHandler } from './http';
 import { materializeHandler } from './materialize';
 import { exportHandler } from './export';
 import { dhis2PushHandler } from './dhis2-push';
+import { loadDatasetHandler } from './load-dataset';
 
 /** Action subtype → handler. New actions (http-request, code, …) land in later slices. */
 const ACTION_HANDLERS: Record<string, NodeHandler> = {
@@ -26,6 +27,7 @@ const ACTION_HANDLERS: Record<string, NodeHandler> = {
   'materialize-dataset': materializeHandler,
   'export-artifact': exportHandler,
   'dhis2-push': dhis2PushHandler,
+  'load-dataset': loadDatasetHandler,
 };
 
 const TYPE_HANDLERS: Record<string, NodeHandler> = {

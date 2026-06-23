@@ -12,6 +12,7 @@ const base: WorkflowServices = {
   materializeDataset: vi.fn(async (name, _c, rows) => ({ dataset: name, rowCount: rows.length })),
   exportArtifact: vi.fn(async (i) => ({ objectKey: `k/${i.format}`, format: i.format, byteSize: 10 })),
   dhis2Push: vi.fn(async () => ({ status: 'OK', imported: 1 })),
+  loadDataset: async () => ({ columns: [], rows: [] }),
 } as never;
 
 const ctxWith = (svc?: Partial<WorkflowServices>, workflowId = 'w1') =>

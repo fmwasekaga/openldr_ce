@@ -11,6 +11,7 @@ const services: WorkflowServices = {
   httpFetch: vi.fn(async (req) => ({ status: 200, headers: {}, data: { url: req.url } })),
   materializeDataset: vi.fn(async (name, _c, rows) => ({ dataset: name, rowCount: rows.length })),
   exportArtifact: vi.fn(async (i) => ({ objectKey: `k/${i.format}`, format: i.format, byteSize: 0 })),
+  loadDataset: async () => ({ columns: [], rows: [] }),
 };
 const ctxWith = (svc?: WorkflowServices) => {
   const c = createContext(undefined, () => {}, [], undefined, svc);

@@ -45,6 +45,7 @@ export interface WorkflowServices {
   ): Promise<{ dataset: string; rowCount: number }>;
   exportArtifact(input: ExportArtifactInput): Promise<ExportArtifactResult>;
   dhis2Push?(input: Dhis2PushInput): Promise<unknown>;
+  loadDataset(name: string): Promise<{ columns: { key: string; label: string }[]; rows: Record<string, unknown>[] }>;
 }
 
 export function parseAllowlist(raw: string): string[] {

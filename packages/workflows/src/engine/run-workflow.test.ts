@@ -57,6 +57,7 @@ describe('runWorkflow', () => {
       httpFetch: async () => ({ status: 200, headers: {}, data: null }),
       materializeDataset: async (name: string, _c: unknown, rows: unknown[]) => ({ dataset: name, rowCount: rows.length }),
       exportArtifact: async () => ({ objectKey: 'k', format: 'csv', byteSize: 0 }),
+      loadDataset: async () => ({ columns: [], rows: [] }),
     };
     const nodes = [
       { id: 't', type: 'trigger', data: {} },
@@ -84,6 +85,7 @@ describe('runWorkflow', () => {
         return { dataset: name, rowCount: rows.length };
       },
       exportArtifact: async () => ({ objectKey: 'k', format: 'csv', byteSize: 0 }),
+      loadDataset: async () => ({ columns: [], rows: [] }),
     };
     const nodes = [
       { id: 't', type: 'trigger', data: {} },
