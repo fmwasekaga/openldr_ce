@@ -94,11 +94,13 @@ export function createReportScheduler(deps: SchedulerDeps): ReportScheduler {
     async registerRunner(eventing) {
       await eventing.subscribe('report.schedule.due', async (event) => {
         const { scheduleId } = event.payload as { scheduleId: string };
-        const s = await deps.schedules.get(scheduleId);
-        if (!s) return;
+        if (!(await deps.schedules.get(scheduleId))) return;
         await runDue(scheduleId);
-        if (!s.enabled) return;
-        const due = nextRunAt(s.frequency as ScheduleFrequency, s.dayOfWeek, s.dayOfMonth, new Date());
+        // Re-fetch after the run so a mid-run disable/edit (cadence change) is honored
+        // when re-arming, rather than re-arming from a stale pre-run snapshot.
+        const after = await deps.schedules.get(scheduleId);
+        if (!after || !after.enabled) return;
+        const due = nextRunAt(after.frequency as ScheduleFrequency, after.dayOfWeek, after.dayOfMonth, new Date());
         await deps.schedules.setNextDue(scheduleId, due);
         await eventing.publish({ type: 'report.schedule.due', payload: { scheduleId } }, { availableAt: due });
       });
