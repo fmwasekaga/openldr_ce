@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["openldr-plugin-sdk", "whonet-sqlite", "hl7v2", "tabular", "test-sink"]
+members = ["openldr-plugin-sdk", "whonet-sqlite", "hl7v2", "tabular", "test-sink", "dhis2-sink"]
 
 [workspace.package]
 edition = "2021"
