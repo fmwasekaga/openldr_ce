@@ -18,11 +18,15 @@ import type { PluginRunner, RunOptions } from './runner';
  *   bounds async overruns, but without a worker it cannot interrupt a synchronous
  *   runaway; hard memory + timeout enforcement awaits a newer SDK (tracked as a
  *   follow-up). `opts.memoryMb` is recorded in the manifest but not enforced here.
- * - SDK bug (1.0.3): the real HttpContext (which wires http_request, http_status_code)
- *   is only contributed in createBackgroundPlugin, not createForegroundPlugin. We
- *   replicate the same logic here so foreground plugins can make HTTP calls. We also
- *   add http_headers (returns 0n = no response headers), which newer extism-pdk builds
- *   import but the SDK never provides.
+ * - HTTP egress is NOT supported on this path (1.0.3 limitation). The real HttpContext
+ *   that performs fetches is only wired in createBackgroundPlugin, not the foreground
+ *   path we use; and the worker/background path has the ERR_INVALID_URL bug above. So
+ *   wasm plugins that import the `extism:host/env` http_* symbols (e.g. the dhis2-sink,
+ *   built with a newer extism-pdk) need those imports *present* merely to instantiate.
+ *   We provide them: http_request THROWS a clear error if actually invoked (no silent
+ *   no-op), and http_status_code/http_headers return 0 so a module that never calls
+ *   http_request (e.g. a dry-run mapping path) links and runs. Real HTTP egress from
+ *   wasm awaits a host-SDK upgrade — see the DHIS2 sink-plugin workstream (SP-6).
  */
 export function createExtismRunner(): PluginRunner {
   return {
