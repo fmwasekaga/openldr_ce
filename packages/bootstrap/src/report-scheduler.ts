@@ -106,9 +106,15 @@ export function createReportScheduler(deps: SchedulerDeps): ReportScheduler {
       });
     },
     async reconcile(eventing) {
+      const now = Date.now();
       for (const s of await deps.schedules.list({})) {
         if (!s.enabled) continue;
-        const due = s.nextDueAt ?? nextRunAt(s.frequency as ScheduleFrequency, s.dayOfWeek, s.dayOfMonth, new Date());
+        // Already armed for the future (its due event is still pending in the durable
+        // outbox) — skip, or every restart would re-arm and compound duplicate runs.
+        if (s.nextDueAt && s.nextDueAt.getTime() > now) continue;
+        const due = s.nextDueAt && s.nextDueAt.getTime() <= now
+          ? s.nextDueAt
+          : nextRunAt(s.frequency as ScheduleFrequency, s.dayOfWeek, s.dayOfMonth, new Date());
         await deps.schedules.setNextDue(s.id, due);
         await eventing.publish({ type: 'report.schedule.due', payload: { scheduleId: s.id } }, { availableAt: due });
       }

@@ -64,3 +64,40 @@ describe('registerRunner', () => {
     );
   });
 });
+
+describe('reconcile', () => {
+  const baseSchedule = {
+    id: 's1', reportId: 'amr-resistance', params: {}, frequency: 'weekly',
+    dayOfWeek: 1, dayOfMonth: null, outputFormat: 'csv', enabled: true,
+    lastRunAt: null, createdBy: 'u1',
+  };
+  function schedulerWith(schedule: Record<string, unknown>) {
+    const setNextDue = vi.fn(async () => {});
+    const scheduler = createReportScheduler({
+      reporting: { list: () => [], run: vi.fn(), renderPdf: vi.fn() } as any,
+      blob: { put: vi.fn() } as any,
+      schedules: { list: async () => [schedule], setNextDue, get: async () => schedule } as any,
+      logger: { error: vi.fn() } as any,
+    });
+    return { scheduler, setNextDue };
+  }
+
+  it('skips schedules already armed in the future (no duplicate re-arm)', async () => {
+    const { scheduler, setNextDue } = schedulerWith({ ...baseSchedule, nextDueAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) });
+    const eventing = { subscribe: vi.fn(async () => {}), publish: vi.fn(async () => {}) };
+    await scheduler.reconcile(eventing as any);
+    expect(eventing.publish).not.toHaveBeenCalled();
+    expect(setNextDue).not.toHaveBeenCalled();
+  });
+
+  it('arms schedules that are overdue or never armed', async () => {
+    const { scheduler, setNextDue } = schedulerWith({ ...baseSchedule, nextDueAt: null });
+    const eventing = { subscribe: vi.fn(async () => {}), publish: vi.fn(async () => {}) };
+    await scheduler.reconcile(eventing as any);
+    expect(setNextDue).toHaveBeenCalledWith('s1', expect.any(Date));
+    expect(eventing.publish).toHaveBeenCalledWith(
+      { type: 'report.schedule.due', payload: { scheduleId: 's1' } },
+      expect.objectContaining({ availableAt: expect.any(Date) }),
+    );
+  });
+});
