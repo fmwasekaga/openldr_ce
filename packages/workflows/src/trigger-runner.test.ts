@@ -117,6 +117,34 @@ describe('workflow trigger runner', () => {
     expect((recorded[0] as { triggerSource: string }).triggerSource).toBe('ingest');
   });
 
+  it('ingest sourceFilter: skips workflows whose filter does not match the batch source', async () => {
+    const ev = fakeEventing();
+    const recorded: unknown[] = [];
+    const runner = createWorkflowTriggerRunner({
+      store: {
+        get: async () => wfWith([
+          { id: 'i', type: 'trigger', data: { triggerType: 'ingest', config: { sourceFilter: 'whonet' } } },
+        ]),
+      } as never,
+      runs: { record: async (r: unknown) => { recorded.push(r); } } as never,
+      schedules: { list: async () => [], get: async () => undefined, setNextDue: async () => {} } as never,
+      webhooks: { resolve: () => undefined } as never,
+      runWorkflow,
+      logger: { error: () => {}, warn: () => {} },
+    });
+
+    runner.setIngestWorkflowIds(['w1']);
+    await runner.registerRunner(ev.port as never);
+
+    // Non-matching source → skipped.
+    await ev.handlers.get('ingest.batch.done')!({ type: 'ingest.batch.done', payload: { source: 'dhis2', count: 1 } });
+    expect(recorded.length).toBe(0);
+
+    // Matching source (case-insensitive) → runs.
+    await ev.handlers.get('ingest.batch.done')!({ type: 'ingest.batch.done', payload: { source: 'WHONET', count: 1 } });
+    expect(recorded.length).toBe(1);
+  });
+
   it('reconcile arms schedules with no future nextDueAt', async () => {
     const ev = fakeEventing();
     const setNextDueCalls: unknown[] = [];

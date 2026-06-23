@@ -60,6 +60,24 @@ export function createWorkflowTriggerRunner(deps: RunnerDeps): WorkflowTriggerRu
     await deps.runs.record(run);
   }
 
+  /**
+   * Does this workflow's ingest trigger accept a batch from `source`? An empty
+   * (or absent) `data.config.sourceFilter` matches every batch; a set filter
+   * matches case-insensitively against the event's `source`.
+   */
+  async function ingestNodeMatches(workflowId: string, source: string): Promise<boolean> {
+    const wf = await deps.store.get(workflowId);
+    if (!wf || !wf.enabled) return false;
+    const def = WorkflowDefinitionSchema.parse(wf.definition);
+    const ingestNode = (def.nodes as Array<{ type?: string; data?: Record<string, unknown> }>).find(
+      (n) => n.type === 'trigger' && n.data?.triggerType === 'ingest',
+    );
+    const filter = String((ingestNode?.data?.config as { sourceFilter?: unknown } | undefined)?.sourceFilter ?? '')
+      .trim()
+      .toLowerCase();
+    return filter === '' || filter === source;
+  }
+
   async function arm(
     eventing: EventingPort,
     workflowId: string,
@@ -96,10 +114,16 @@ export function createWorkflowTriggerRunner(deps: RunnerDeps): WorkflowTriggerRu
       });
 
       await eventing.subscribe(INGEST_DONE, async (event) => {
+        const source = String((event.payload as { source?: unknown } | undefined)?.source ?? '')
+          .trim()
+          .toLowerCase();
         for (const workflowId of ingestIds) {
-          await runAndRecord(workflowId, 'ingest', event.payload).catch((err) =>
-            deps.logger.error({ err, workflowId }, 'ingest-triggered workflow run failed'),
-          );
+          try {
+            if (!(await ingestNodeMatches(workflowId, source))) continue;
+            await runAndRecord(workflowId, 'ingest', event.payload);
+          } catch (err) {
+            deps.logger.error({ err, workflowId }, 'ingest-triggered workflow run failed');
+          }
         }
       });
     },
