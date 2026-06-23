@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createSchedule, updateSchedule, type ReportSchedule, type ReportParamMeta, type ScheduleInput } from '../api';
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -74,9 +74,12 @@ export function ScheduleDialog({ open, reportId, parameters, options, initialPar
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-md">
-        <DialogTitle>{existing ? t('reports.scheduling.edit') : t('reports.scheduling.new')}</DialogTitle>
-        <div className="flex flex-col gap-3 py-2">
+      <DialogContent className="w-full max-w-md max-h-[85vh] flex flex-col p-0">
+        <div className="border-b border-border px-6 py-4">
+          <DialogTitle className="text-base font-semibold">{existing ? t('reports.scheduling.edit') : t('reports.scheduling.new')}</DialogTitle>
+          <DialogDescription className="sr-only">{t('reports.scheduling.dateWindowAuto')}</DialogDescription>
+        </div>
+        <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-6 py-4">
           <div className="flex flex-col gap-1">
             <Label className="text-xs uppercase text-muted-foreground">{t('reports.scheduling.frequency')}</Label>
             <Select value={frequency} onValueChange={(v) => setFrequency(v as ScheduleInput['frequency'])}>
@@ -150,7 +153,7 @@ export function ScheduleDialog({ open, reportId, parameters, options, initialPar
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
 
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2 border-t border-border px-6 py-3">
           <Button variant="ghost" onClick={onClose}>{t('reports.scheduling.cancel')}</Button>
           <Button onClick={handleSave} disabled={saving}>{t('reports.scheduling.save')}</Button>
         </div>
