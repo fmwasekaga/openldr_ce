@@ -79,6 +79,33 @@ describe('marketplace routes', () => {
     expect(body.bundles[0]).toMatchObject({ ref: 'demo-1', id: 'demo', version: '1.0.0', valid: true });
   });
 
+  it('available rows include description and license', async () => {
+    const { runtime } = fakePlugins();
+    const app = appWith({ MARKETPLACE_REGISTRY_DIR: registryDir }, runtime);
+    const res = await app.inject({ method: 'GET', url: '/api/marketplace/available' });
+    const body = res.json();
+    expect(body.bundles[0]).toHaveProperty('description');
+    expect(body.bundles[0]).toHaveProperty('license');
+  });
+
+  it('returns full manifest detail for one ref (with compatible flag)', async () => {
+    const { runtime } = fakePlugins();
+    const app = appWith({ MARKETPLACE_REGISTRY_DIR: registryDir }, runtime);
+    const res = await app.inject({ method: 'GET', url: '/api/marketplace/available/demo-1' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toMatchObject({ ref: 'demo-1', id: 'demo', version: '1.0.0', valid: true, compatible: true });
+    expect(body.payload).toMatchObject({ kind: 'plugin' });
+    expect(body.capabilities).toEqual([{ kind: 'emit-fhir', resourceTypes: ['Patient'] }]);
+  });
+
+  it('rejects a traversal ref on the detail endpoint', async () => {
+    const { runtime } = fakePlugins();
+    const app = appWith({ MARKETPLACE_REGISTRY_DIR: registryDir }, runtime);
+    const res = await app.inject({ method: 'GET', url: '/api/marketplace/available/..%2Fsecrets' });
+    expect(res.statusCode).toBe(400);
+  });
+
   it('reports unconfigured when no registry dir', async () => {
     const { runtime } = fakePlugins();
     const app = appWith({}, runtime);
