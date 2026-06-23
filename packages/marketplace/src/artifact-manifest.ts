@@ -38,14 +38,19 @@ export function parseArtifactManifest(raw: unknown): ArtifactManifest {
   return artifactManifestSchema.parse(raw);
 }
 
-/** Legacy plugin manifest shape (packages/plugins manifest.ts). */
+/** Legacy plugin manifest shape (packages/plugins manifest.ts). A flat legacy manifest may
+ *  still declare `capabilities`; without it the derived grant is empty and emit-fhir is
+ *  fail-closed (the plugin can emit nothing), so reference plugins must carry it. */
 export interface LegacyPluginManifest {
   id: string; version: string; entrypoint?: string; wasmSha256: string;
   description?: string; license?: string; wasi?: boolean;
   limits?: { memoryMb: number; timeoutMs: number };
+  capabilities?: unknown;
 }
 
-/** Adapt a legacy plugin manifest to an (unsigned, publisher-less) artifact manifest. */
+/** Adapt a legacy plugin manifest to an (unsigned, publisher-less) artifact manifest.
+ *  Carries `capabilities` through when present (validated by the schema) so a flat
+ *  reference-plugin manifest can declare what it emits; absent ⇒ schema default []. */
 export function pluginManifestToArtifact(m: LegacyPluginManifest): ArtifactManifest {
   return parseArtifactManifest({
     schemaVersion: 1,
@@ -55,6 +60,7 @@ export function pluginManifestToArtifact(m: LegacyPluginManifest): ArtifactManif
     description: m.description ?? '',
     license: m.license ?? 'UNLICENSED',
     compatibility: { ceVersion: '*' },
+    ...(m.capabilities !== undefined ? { capabilities: m.capabilities } : {}),
     payload: { kind: 'plugin', wasmSha256: m.wasmSha256, entrypoint: m.entrypoint ?? 'convert', wasi: m.wasi ?? false, limits: m.limits ?? { memoryMb: 256, timeoutMs: 30_000 } },
   });
 }

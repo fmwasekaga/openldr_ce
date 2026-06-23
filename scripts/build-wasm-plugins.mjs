@@ -57,11 +57,18 @@ const manifest = {
   // so the sandbox must enable WASI even though the plugin reads from memory.
   wasi: true,
   limits: { memoryMb: 256, timeoutMs: 30000 },
+  // Declare the capabilities the plugin actually exercises. emit-fhir is enforced
+  // fail-closed at persist (a missing/empty grant rejects every emitted resource), so
+  // this list must match what the plugin emits or ingestion fails. read-input is advisory.
+  capabilities: [
+    { kind: 'read-input', formats: ['sqlite'] },
+    { kind: 'emit-fhir', resourceTypes: ['Patient', 'Specimen', 'Observation'] },
+  ],
 };
 writeFileSync(join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 process.stdout.write(`staged ${stagedWasm} (sha256 ${sha}) + manifest.json\n`);
 
-function buildPure(crate, id, description) {
+function buildPure(crate, id, description, capabilities) {
   execSync(`cargo build -p ${crate} --release --target wasm32-wasip1`, { cwd: wasmDir, stdio: 'inherit', env: process.env });
   const built = join(wasmDir, 'target', 'wasm32-wasip1', 'release', `${crate.replace(/-/g, '_')}.wasm`);
   const dir = join(root, 'reference-plugins', id);
@@ -71,9 +78,16 @@ function buildPure(crate, id, description) {
   const sha = createHash('sha256').update(readFileSync(staged)).digest('hex');
   // wasm32-wasip1's std imports wasi_snapshot_preview1 (clock/random/fd) even for in-memory
   // plugins, so the sandbox must enable WASI (isolation stays default-deny fs/net).
-  const manifest = { id, version: ver, entrypoint: 'convert', wasmSha256: sha, description, license: 'Apache-2.0', wasi: true, limits: { memoryMb: 256, timeoutMs: 30000 } };
+  // capabilities must match what the plugin emits — emit-fhir is enforced fail-closed.
+  const manifest = { id, version: ver, entrypoint: 'convert', wasmSha256: sha, description, license: 'Apache-2.0', wasi: true, limits: { memoryMb: 256, timeoutMs: 30000 }, capabilities };
   writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
   process.stdout.write(`staged ${staged} (sha256 ${sha}) + manifest.json\n`);
 }
-buildPure('hl7v2', 'hl7v2', 'HL7 v2 (ORU/ORM) -> FHIR R4 ingestion plugin');
-buildPure('tabular', 'tabular', 'CSV/Excel -> FHIR R4 ingestion plugin (configurable mapping)');
+buildPure('hl7v2', 'hl7v2', 'HL7 v2 (ORU/ORM) -> FHIR R4 ingestion plugin', [
+  { kind: 'read-input', formats: ['hl7v2'] },
+  { kind: 'emit-fhir', resourceTypes: ['Patient', 'Specimen', 'Observation', 'DiagnosticReport', 'ServiceRequest'] },
+]);
+buildPure('tabular', 'tabular', 'CSV/Excel -> FHIR R4 ingestion plugin (configurable mapping)', [
+  { kind: 'read-input', formats: ['csv', 'xlsx'] },
+  { kind: 'emit-fhir', resourceTypes: ['Patient', 'Specimen', 'Observation'] },
+]);
