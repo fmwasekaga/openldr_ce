@@ -7,6 +7,7 @@ import { NodeConfigPanel } from './components/panels/node-config-panel';
 import { Toolbar } from './components/panels/toolbar';
 import { ExecutionPanel } from './components/panels/execution-panel';
 import { RunHistoryDrawer } from './components/panels/run-history-drawer';
+import { DatasetsDrawer } from './components/panels/datasets-drawer';
 import { useWorkflowStore } from './hooks/use-workflow-store';
 import { useWorkflowApi } from './hooks/use-workflow-api';
 
@@ -15,6 +16,7 @@ export function Workflows() {
   const workflowId = useWorkflowStore((s) => s.workflowId);
   const { save, execute, fireTrigger, saving, executing, lastExecution } = useWorkflowApi();
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [datasetsOpen, setDatasetsOpen] = useState(false);
 
   return (
     <AppShell title="Workflows" fullBleed>
@@ -24,6 +26,7 @@ export function Workflows() {
             onSave={save}
             onRun={execute}
             onHistory={() => setHistoryOpen(true)}
+            onDatasets={() => setDatasetsOpen(true)}
             saving={saving}
             executing={executing}
           />
@@ -45,6 +48,7 @@ export function Workflows() {
             onClose={() => setHistoryOpen(false)}
           />
         )}
+        <DatasetsDrawer open={datasetsOpen} onClose={() => setDatasetsOpen(false)} />
       </ReactFlowProvider>
     </AppShell>
   );

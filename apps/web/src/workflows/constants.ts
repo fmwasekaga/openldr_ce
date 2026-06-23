@@ -17,6 +17,8 @@ export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
   'sql-query', 'fhir-query', 'http-request',
   // conditions
   'if', 'filter',
+  // sinks
+  'materialize-dataset', 'export-artifact', 'dhis2-push',
 ]);
 
 /**
@@ -194,6 +196,18 @@ export const nodeCategories: NodeCategory[] = [
         data: { config: { workflowId: '', waitForCompletion: true } },
       }),
       node('no-op', 'action', 'No Operation', 'CircleDot', 'Passthrough / placeholder'),
+      node('materialize-dataset', 'action', 'Materialize Dataset', 'Save', 'Write results to an internal dataset', {
+        keywords: ['save', 'dataset', 'store', 'sink'],
+        data: { action: 'materialize-dataset', config: { datasetName: '' } },
+      }),
+      node('export-artifact', 'action', 'Export File', 'Download', 'Export results as CSV, XLSX, or PDF', {
+        keywords: ['csv', 'xlsx', 'pdf', 'download', 'export', 'sink'],
+        data: { action: 'export-artifact', config: { format: 'csv', filename: '' } },
+      }),
+      node('dhis2-push', 'action', 'DHIS2 Push', 'Share2', 'Push aggregate data to DHIS2', {
+        keywords: ['dhis2', 'push', 'aggregate', 'sink'],
+        data: { action: 'dhis2-push', config: { mappingId: '', period: '', dryRun: false } },
+      }),
     ],
   },
 

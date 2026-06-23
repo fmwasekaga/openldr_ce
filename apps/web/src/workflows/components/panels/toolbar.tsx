@@ -1,15 +1,16 @@
-import { Save, Play, Trash2, Loader2, History } from 'lucide-react';
+import { Save, Play, Trash2, Loader2, History, Database } from 'lucide-react';
 import { useWorkflowStore } from '../../hooks/use-workflow-store';
 
 interface ToolbarProps {
   onSave: () => void;
   onRun: () => void;
   onHistory: () => void;
+  onDatasets: () => void;
   saving: boolean;
   executing: boolean;
 }
 
-export function Toolbar({ onSave, onRun, onHistory, saving, executing }: ToolbarProps) {
+export function Toolbar({ onSave, onRun, onHistory, onDatasets, saving, executing }: ToolbarProps) {
   const workflowName = useWorkflowStore((s) => s.workflowName);
   const setWorkflowName = useWorkflowStore((s) => s.setWorkflowName);
   const clear = useWorkflowStore((s) => s.clear);
@@ -38,6 +39,15 @@ export function Toolbar({ onSave, onRun, onHistory, saving, executing }: Toolbar
       >
         <Trash2 className="h-3.5 w-3.5" />
         Clear
+      </button>
+      <button
+        type="button"
+        className="flex items-center gap-1.5 rounded-md border border-border bg-secondary px-3 py-1.5 text-xs font-medium text-secondary-foreground transition-colors hover:bg-secondary/70"
+        onClick={onDatasets}
+        title="View materialized datasets"
+      >
+        <Database className="h-3.5 w-3.5" />
+        Datasets
       </button>
       <button
         type="button"

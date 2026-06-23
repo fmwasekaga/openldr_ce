@@ -1172,3 +1172,16 @@ export async function fetchWorkflowRun(runId: string): Promise<WorkflowRunSummar
   if (!res.ok) throw new Error(`workflow run failed: ${res.status}`);
   return res.json() as Promise<WorkflowRunSummary>;
 }
+
+export interface WorkflowDatasetSummary {
+  name: string;
+  rowCount: number;
+  workflowId: string | null;
+  updatedAt?: string;
+}
+
+export async function fetchWorkflowDatasets(): Promise<WorkflowDatasetSummary[]> {
+  const res = await authFetch('/api/workflows/datasets');
+  if (!res.ok) throw new Error(`datasets failed: ${res.status}`);
+  return res.json() as Promise<WorkflowDatasetSummary[]>;
+}

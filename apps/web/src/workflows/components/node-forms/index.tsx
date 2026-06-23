@@ -17,6 +17,9 @@ import { FilterForm } from './filter-form';
 import { SwitchForm } from './switch-form';
 import { LoopForm } from './loop-form';
 import { ExecuteWorkflowForm } from './execute-workflow-form';
+import { MaterializeForm } from './materialize-form';
+import { ExportForm } from './export-form';
+import { Dhis2PushForm } from './dhis2-push-form';
 
 export interface NodeFormProps {
   node: WorkflowNode;
@@ -48,6 +51,9 @@ const FORMS: Record<string, ComponentType<NodeFormProps>> = {
   switch: SwitchForm,
   loop: LoopForm,
   'execute-workflow': ExecuteWorkflowForm,
+  'materialize-dataset': MaterializeForm,
+  'export-artifact': ExportForm,
+  'dhis2-push': Dhis2PushForm,
 };
 
 export function pickForm(node: WorkflowNode): ComponentType<NodeFormProps> {
