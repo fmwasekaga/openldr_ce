@@ -365,6 +365,37 @@ export interface MarketplacePublishersTable {
   approved_by: string | null;
 }
 
+export interface WorkflowsTable {
+  id: string;
+  name: string;
+  description: string | null;
+  definition: JSONColumnType<{ nodes: unknown[]; edges: unknown[] }>;
+  enabled: Generated<boolean>;
+  created_by: string | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface WorkflowRunsTable {
+  id: string;
+  workflow_id: string;
+  trigger_source: string;
+  status: string;
+  started_at: Date;
+  finished_at: Date;
+  result: JSONColumnType<Record<string, unknown>>;
+  error: string | null;
+}
+
+export interface WorkflowSchedulesTable {
+  workflow_id: string;
+  node_id: string;
+  cron: string;
+  tz: string | null;
+  enabled: Generated<boolean>;
+  next_due_at: Date | null;
+}
+
 export interface InternalSchema {
   fhir_resources: FhirResourcesTable;
   outbox_events: OutboxEventsTable;
@@ -398,4 +429,7 @@ export interface InternalSchema {
   report_runs: ReportRunsTable;
   report_schedules: ReportSchedulesTable;
   report_schedule_runs: ReportScheduleRunsTable;
+  workflows: WorkflowsTable;
+  workflow_runs: WorkflowRunsTable;
+  workflow_schedules: WorkflowSchedulesTable;
 }

@@ -12,6 +12,14 @@ import { createUserStore, type UserStore, createUserProfileStore, type UserProfi
 import { createFormStore, type FormStore } from '@openldr/forms';
 import { getReport, reportSummaries, getEventSource, eventSourceCatalog, type ReportResult, type ReportSummary } from '@openldr/reporting';
 import { createDashboardStore, getModel, listModels, runBuilderQuery, runSqlQuery, type DashboardStore, type WidgetQuery } from '@openldr/dashboards';
+import {
+  createWorkflowStore, type WorkflowStore,
+  createWorkflowRunStore, type WorkflowRunStore,
+  createWorkflowScheduleStore, type WorkflowScheduleStore,
+  createWebhookRegistry, type WebhookRegistry,
+  createWorkflowTriggerRunner, type WorkflowTriggerRunner,
+  runWorkflow,
+} from '@openldr/workflows';
 import { renderReportPdf } from '@openldr/report-pdf';
 import { createReportScheduler, type ReportScheduler } from './report-scheduler';
 import { type PluginRuntime } from '@openldr/plugins';
@@ -99,6 +107,13 @@ export interface AppContext {
     };
   };
   dashboards: DashboardsApi;
+  workflows: {
+    store: WorkflowStore;
+    runs: WorkflowRunStore;
+    schedules: WorkflowScheduleStore;
+    webhooks: WebhookRegistry;
+    runner: WorkflowTriggerRunner;
+  };
   plugins: PluginRuntime;
   cfg: Config;
   close(): Promise<void>;
@@ -189,6 +204,15 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     return { ...data, meta: { generatedAt: new Date().toISOString(), rowCount: data.rows.length } };
   };
   const dashboards: DashboardsApi = { store: dashboardStore, models: () => listModels(), query: runDashboardQuery };
+  const workflowStore = createWorkflowStore(internal.db);
+  const workflowRuns = createWorkflowRunStore(internal.db);
+  const workflowSchedules = createWorkflowScheduleStore(internal.db);
+  const workflowWebhooks = createWebhookRegistry();
+  const workflowRunner = createWorkflowTriggerRunner({
+    store: workflowStore, runs: workflowRuns, schedules: workflowSchedules,
+    webhooks: workflowWebhooks, runWorkflow, logger,
+  });
+  const workflows = { store: workflowStore, runs: workflowRuns, schedules: workflowSchedules, webhooks: workflowWebhooks, runner: workflowRunner };
 
   const health = new HealthRegistry();
   health.register({ name: 'auth', check: () => auth.healthCheck() });
@@ -270,6 +294,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     health,
     terminology,
     dashboards,
+    workflows,
     plugins,
     cfg,
     async close() {

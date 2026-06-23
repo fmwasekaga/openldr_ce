@@ -26,6 +26,7 @@
     "@openldr/reporting": "workspace:*",
     "@openldr/report-pdf": "workspace:*",
     "@openldr/dashboards": "workspace:*",
+    "@openldr/workflows": "workspace:*",
     "@openldr/marketplace": "workspace:*",
     "kysely": "^0.27.5",
     "xlsx": "^0.18.5"

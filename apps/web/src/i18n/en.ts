@@ -382,6 +382,7 @@ export const en = {
   nav: {
     dashboard: 'Dashboard',
     reports: 'Reports',
+    workflows: 'Workflows',
     terminology: 'Terminology',
     forms: 'Forms',
     users: 'Users',

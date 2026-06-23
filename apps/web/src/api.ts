@@ -994,3 +994,168 @@ export function buildOntology(
   });
   return { promise, cancel: () => eventSource.close() };
 }
+
+// ── Workflow types & API client ───────────────────────────────────────────────
+
+export interface Workflow {
+  id: string;
+  name: string;
+  description: string | null;
+  definition: { nodes: unknown[]; edges: unknown[] };
+  enabled: boolean;
+  createdBy: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// Per-node execution event protocol (mirrors @openldr/workflows RunEvent on the server).
+export type LogLevel = 'log' | 'info' | 'warn' | 'error';
+
+export interface LogEntry {
+  nodeId: string;
+  level: LogLevel;
+  message: string;
+  ts: number;
+}
+
+export interface NodeRunResult {
+  nodeId: string;
+  type: string;
+  status: 'success' | 'error' | 'skipped';
+  output?: unknown;
+  error?: string;
+  durationMs: number;
+  logs?: LogEntry[];
+}
+
+export interface ExecuteResponse {
+  status: 'completed' | 'failed';
+  startedAt: string;
+  finishedAt: string;
+  results: NodeRunResult[];
+}
+
+export type RunEvent =
+  | { type: 'node:start'; nodeId: string; nodeType: string }
+  | { type: 'node:log'; entry: LogEntry }
+  | { type: 'node:success'; nodeId: string; nodeType: string; input: unknown; output: unknown; durationMs: number }
+  | { type: 'node:error'; nodeId: string; nodeType: string; error: string; durationMs: number }
+  | { type: 'workflow:done'; status: 'completed' | 'failed' };
+
+export async function fetchWorkflows(): Promise<Workflow[]> {
+  const res = await authFetch('/api/workflows');
+  if (!res.ok) throw new Error(`workflows list failed: ${res.status}`);
+  return res.json() as Promise<Workflow[]>;
+}
+
+export async function fetchWorkflow(id: string): Promise<Workflow> {
+  const res = await authFetch(`/api/workflows/${encodeURIComponent(id)}`);
+  if (!res.ok) throw new Error(`workflow ${id} failed: ${res.status}`);
+  return res.json() as Promise<Workflow>;
+}
+
+export async function createWorkflow(body: Omit<Workflow, 'createdAt' | 'updatedAt'>): Promise<Workflow> {
+  const res = await authFetch('/api/workflows', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`create workflow failed: ${res.status}`);
+  return res.json() as Promise<Workflow>;
+}
+
+export async function updateWorkflow(id: string, body: Omit<Workflow, 'createdAt' | 'updatedAt'>): Promise<Workflow> {
+  const res = await authFetch(`/api/workflows/${encodeURIComponent(id)}`, {
+    method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`update workflow failed: ${res.status}`);
+  return res.json() as Promise<Workflow>;
+}
+
+export async function deleteWorkflow(id: string): Promise<void> {
+  const res = await authFetch(`/api/workflows/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`delete workflow failed: ${res.status}`);
+}
+
+/**
+ * Stream execution events. `onEvent` receives each per-node RunEvent; the final
+ * `event: done` frame carries the batch summary, which is returned to the caller
+ * (mirrors the standalone `workflowApi.executeStream`). The `event: error` frame
+ * throws.
+ */
+export async function executeWorkflowStream(
+  id: string,
+  onEvent: (evt: RunEvent) => void,
+  opts: { input?: unknown; signal?: AbortSignal } = {},
+): Promise<ExecuteResponse | null> {
+  const token = getAccessToken();
+  const res = await fetch(`/api/workflows/${encodeURIComponent(id)}/execute-stream`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify({ input: opts.input }),
+    signal: opts.signal,
+  });
+  if (!res.ok || !res.body) throw new Error(`execute failed: ${res.status}`);
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let finalResult: ExecuteResponse | null = null;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const frames = buffer.split('\n\n');
+    buffer = frames.pop() ?? '';
+    for (const frame of frames) {
+      let eventType = 'message';
+      const dataLines: string[] = [];
+      for (const l of frame.split('\n')) {
+        if (l.startsWith('event:')) eventType = l.slice(6).trim();
+        else if (l.startsWith('data:')) dataLines.push(l.slice(5).trim());
+      }
+      if (dataLines.length === 0) continue;
+      let parsed: unknown;
+      try { parsed = JSON.parse(dataLines.join('\n')); } catch { continue; /* skip malformed frame */ }
+      if (eventType === 'done') {
+        finalResult = parsed as ExecuteResponse;
+      } else if (eventType === 'error') {
+        const msg = parsed && typeof parsed === 'object' && 'message' in parsed
+          ? String((parsed as { message: unknown }).message)
+          : 'Stream error';
+        throw new Error(msg);
+      } else {
+        onEvent(parsed as RunEvent);
+      }
+    }
+  }
+  return finalResult;
+}
+
+// ── Workflow run history ───────────────────────────────────────────────────────
+
+export interface WorkflowRunSummary {
+  id: string;
+  workflowId: string;
+  triggerSource: 'manual' | 'schedule' | 'webhook' | 'ingest';
+  status: 'completed' | 'failed';
+  startedAt: string;
+  finishedAt: string;
+  error: string | null;
+  result: unknown;
+}
+
+export async function fetchWorkflowRuns(
+  id: string,
+  opts: { limit?: number; offset?: number } = {},
+): Promise<WorkflowRunSummary[]> {
+  const qs = new URLSearchParams();
+  if (opts.limit != null) qs.set('limit', String(opts.limit));
+  if (opts.offset != null) qs.set('offset', String(opts.offset));
+  const res = await authFetch(`/api/workflows/${encodeURIComponent(id)}/runs${qs.toString() ? `?${qs}` : ''}`);
+  if (!res.ok) throw new Error(`workflow runs failed: ${res.status}`);
+  return res.json() as Promise<WorkflowRunSummary[]>;
+}
+
+export async function fetchWorkflowRun(runId: string): Promise<WorkflowRunSummary> {
+  const res = await authFetch(`/api/workflows/runs/${encodeURIComponent(runId)}`);
+  if (!res.ok) throw new Error(`workflow run failed: ${res.status}`);
+  return res.json() as Promise<WorkflowRunSummary>;
+}

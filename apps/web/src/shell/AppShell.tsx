@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, BookOpen, Library, FileInput, Users, ShieldCheck, Settings,
-  ChevronLeft, ChevronRight, Sun, Moon, LogOut, type LucideIcon,
+  Workflow, ChevronLeft, ChevronRight, Sun, Moon, LogOut, type LucideIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { SUPPORTED_LANGUAGES, setLanguage } from '@/i18n/language';
@@ -16,9 +16,10 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/cn';
 
-const NAV: { to: string; labelKey: string; end: boolean; icon: LucideIcon }[] = [
+const NAV: { to: string; labelKey: string; end: boolean; icon: LucideIcon; roles?: string[] }[] = [
   { to: '/', labelKey: 'nav.dashboard', end: true, icon: LayoutDashboard },
   { to: '/reports', labelKey: 'nav.reports', end: false, icon: FileText },
+  { to: '/workflows', labelKey: 'nav.workflows', end: false, icon: Workflow, roles: ['lab_admin', 'lab_manager'] },
   { to: '/terminology', labelKey: 'nav.terminology', end: false, icon: Library },
   { to: '/forms', labelKey: 'nav.forms', end: false, icon: FileInput },
   { to: '/users', labelKey: 'nav.users', end: false, icon: Users },
@@ -61,7 +62,7 @@ export function AppShell({
         </div>
 
         <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
-          {NAV.map(({ to, labelKey, end, icon: Icon }) => (
+          {NAV.filter((n) => !n.roles || n.roles.some((r) => hasRole(r))).map(({ to, labelKey, end, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}

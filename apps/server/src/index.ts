@@ -69,6 +69,22 @@ async function main(): Promise<void> {
     ctx.logger.warn({ err }, 'report schedule reconcile failed at startup (continuing)');
   }
 
+  await ctx.workflows.runner.registerRunner(ingest.eventing);
+  // Best-effort like the report scheduler: rebuild the ingest-id set + webhook registry
+  // and arm saved schedules. A bad migration or DB hiccup must not block startup.
+  try {
+    ctx.workflows.runner.setIngestWorkflowIds(
+      (await ctx.workflows.store.list())
+        .filter((w) => JSON.stringify(w.definition).includes('"triggerType":"ingest"'))
+        .map((w) => w.id),
+    );
+    // Rebuild the webhook registry from saved workflows.
+    for (const w of await ctx.workflows.store.list()) ctx.workflows.webhooks.sync(w.id, (w.definition as { nodes: unknown[] }).nodes ?? []);
+    await ctx.workflows.runner.reconcile(ingest.eventing);
+  } catch (err) {
+    ctx.logger.warn({ err }, 'workflow trigger reconcile failed at startup (continuing)');
+  }
+
   const worker = ingest.startWorker();
 
   const close = async () => {
