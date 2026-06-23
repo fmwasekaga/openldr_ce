@@ -24,6 +24,7 @@ import * as m022 from './022_dhis2_metadata_cache';
 import * as m023 from './023_marketplace_publishers';
 import * as m024 from './024_plugin_registry';
 import * as m025 from './025_report_runs';
+import * as m026 from './026_report_schedules';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -51,4 +52,5 @@ export const internalMigrations: Record<string, Migration> = {
   '023_marketplace_publishers': { up: m023.up, down: m023.down },
   '024_plugin_registry': { up: m024.up, down: m024.down },
   '025_report_runs': { up: m025.up, down: m025.down },
+  '026_report_schedules': { up: m026.up, down: m026.down },
 };

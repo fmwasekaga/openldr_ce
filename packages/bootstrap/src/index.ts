@@ -4,7 +4,7 @@ import { createEventBus } from '@openldr/adapter-event-bus';
 import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import type { Config } from '@openldr/config';
 import { createLogger, HealthRegistry, redact, type Logger } from '@openldr/core';
-import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, deriveSystemCode, resolveSeedPublisherId, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore } from '@openldr/db';
+import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, deriveSystemCode, resolveSeedPublisherId, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, type AuditStore } from '@openldr/audit';
@@ -13,6 +13,7 @@ import { createFormStore, type FormStore } from '@openldr/forms';
 import { getReport, reportSummaries, getEventSource, eventSourceCatalog, type ReportResult, type ReportSummary } from '@openldr/reporting';
 import { createDashboardStore, getModel, listModels, runBuilderQuery, runSqlQuery, type DashboardStore, type WidgetQuery } from '@openldr/dashboards';
 import { renderReportPdf } from '@openldr/report-pdf';
+import { createReportScheduler, type ReportScheduler } from './report-scheduler';
 import { type PluginRuntime } from '@openldr/plugins';
 import { selectTargetStore } from './target-store';
 import { createPluginRegistry } from './plugin-registry';
@@ -80,6 +81,8 @@ export interface AppContext {
   fhirStore: FhirStore;
   audit: AuditStore;
   reportRuns: ReportRunStore;
+  reportSchedules: ReportScheduleStore;
+  reportScheduler: ReportScheduler;
   users: UserStore;
   userProfiles: UserProfileStore;
   forms: FormStore;
@@ -123,6 +126,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   const internal = createInternalDb(cfg.INTERNAL_DATABASE_URL);
   const audit = createAuditStore(internal.db);
   const reportRuns = createReportRunStore(internal.db);
+  const reportSchedules = createReportScheduleStore(internal.db);
   const plugins = createPluginRegistry({ blob, internalDb: internal.db, logger, audit, devAllowUnsigned: cfg.MARKETPLACE_DEV_ALLOW_UNSIGNED });
   const users = createUserStore(internal.db);
   const userProfiles = createUserProfileStore(internal.db);
@@ -161,6 +165,13 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       return def.options ? def.options(reportingDb) : {};
     },
   };
+
+  const reportScheduler = createReportScheduler({
+    reporting,
+    blob,
+    schedules: reportSchedules,
+    logger,
+  });
 
   const dashboardStore = createDashboardStore(internal.db);
   const runDashboardQuery = async (q: WidgetQuery): Promise<ReportResult> => {
@@ -250,6 +261,8 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     fhirStore: termFhirStore,
     audit,
     reportRuns,
+    reportSchedules,
+    reportScheduler,
     users,
     userProfiles,
     forms,

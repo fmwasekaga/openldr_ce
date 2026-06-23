@@ -23,3 +23,14 @@ export * from './dhis2-store';
 export * from './dhis2-schedule-store';
 export * from './dhis2-metadata-cache';
 export * from './report-run-store';
+export {
+  createReportScheduleStore,
+  type ScheduleFrequency,
+  type ScheduleOutputFormat,
+  type ScheduleRecord as ReportScheduleRecord,
+  type NewSchedule as NewReportSchedule,
+  type SchedulePatch as ReportSchedulePatch,
+  type ScheduleRunRecord,
+  type NewScheduleRun,
+  type ReportScheduleStore,
+} from './report-schedule-store';
