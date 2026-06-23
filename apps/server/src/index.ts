@@ -61,7 +61,13 @@ async function main(): Promise<void> {
   }
 
   await ctx.reportScheduler.registerRunner(ingest.eventing);
-  await ctx.reportScheduler.reconcile(ingest.eventing);
+  // Arming existing schedules is best-effort: a pending migration or transient DB
+  // hiccup must not block server startup (the runner re-arms on the next firing).
+  try {
+    await ctx.reportScheduler.reconcile(ingest.eventing);
+  } catch (err) {
+    ctx.logger.warn({ err }, 'report schedule reconcile failed at startup (continuing)');
+  }
 
   const worker = ingest.startWorker();
 
