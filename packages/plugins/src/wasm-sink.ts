@@ -54,7 +54,13 @@ export function createWasmSink(
           `sink ${manifest.id}: unknown entrypoint '${entrypoint}' (declared: ${manifest.entrypoints.join(', ') || 'none'})`,
         );
       }
-      // Fail-closed egress: a host may only be pinned if the plugin declared net-egress intent.
+      // Egress model (deliberately differs from the converter): the connector pins the
+      // CONCRETE host at runtime via opts.allowedHosts — trusted host-side config from the
+      // resolved connector. The plugin's net-egress capability is an INTENT/presence gate
+      // only; its declared allowedHosts list is usually empty ("host decides"), so we must
+      // NOT replace opts.allowedHosts with allowedHosts(grant) (that would pin [] = deny-all
+      // and break every real push). Extism enforces that only the pinned host is reachable.
+      // Fail-closed: a host may only be pinned if the plugin declared net-egress intent.
       if (opts.allowedHosts && opts.allowedHosts.length > 0 && enforced && !hasNetEgress) {
         throw new Error(
           `sink ${manifest.id}: egress to ${opts.allowedHosts.join(', ')} requested but the plugin has no net-egress capability`,

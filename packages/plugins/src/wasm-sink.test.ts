@@ -65,4 +65,11 @@ describe('createWasmSink', () => {
     const sink = createWasmSink(sinkManifest, new Uint8Array(), runnerReturning('{"payload":{"dataValues":[]}}'), logger, grant);
     expect(await sink.invoke('push_aggregate', { rows: [] })).toEqual({ payload: { dataValues: [] } });
   });
+
+  it('does not gate egress for a legacy (undefined) grant — passes hosts through', async () => {
+    const runner = runnerReturning('{}');
+    const sink = createWasmSink(sinkManifest, new Uint8Array(), runner, logger); // no grant -> legacy/unrestricted
+    await sink.invoke('push_aggregate', {}, { allowedHosts: ['x:443'] });
+    expect((runner.run as any).mock.calls[0][2].allowedHosts).toEqual(['x:443']);
+  });
 });
