@@ -4,14 +4,17 @@ OpenLDR pode enviar dados de vigilância AMR para uma instância DHIS2 como **da
 
 ## Conexão
 
-Configure a conexão DHIS2 no seu ambiente:
+As informações de conexão do DHIS2 (URL base, usuário, senha) ficam em um **Conector** criptografado, não em variáveis de ambiente. Crie um em **Configurações ▸ Conectores**: escolha o plugin `dhis2-sink`, informe a URL base e as credenciais e clique em **Testar conexão** para verificar o acesso e obter um resumo dos metadados. Os segredos são criptografados em repouso e nunca mais exibidos.
 
+Duas variáveis de ambiente ainda se aplicam:
+
+```text
+REPORTING_TARGET_ADAPTER=dhis2     # ativa a integração do destino de relatórios DHIS2
+SECRETS_ENCRYPTION_KEY=<base64>    # chave de 32 bytes (openssl rand -base64 32) — necessária para armazenar/ler os segredos do conector
+DHIS2_SYNC_ENABLED=true            # opcional, ativa a sincronização agendada/por eventos
 ```
-REPORTING_TARGET_ADAPTER=dhis2
-DHIS2_BASE_URL=http://localhost:8085
-DHIS2_USERNAME=admin
-DHIS2_PASSWORD=district
-```
+
+Cada mapeamento do DHIS2 seleciona o conector que recebe o envio (veja **Mapeamento** abaixo).
 
 ## Mapeamento
 

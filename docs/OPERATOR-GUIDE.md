@@ -152,7 +152,7 @@ Troubleshooting:
 
 ## DHIS2
 
-Use DHIS2 for aggregate `dataValueSet` and tracker event pushes. Configure `REPORTING_TARGET_ADAPTER=dhis2` with `DHIS2_BASE_URL`, `DHIS2_USERNAME`, and `DHIS2_PASSWORD`.
+Use DHIS2 for aggregate `dataValueSet` and tracker event pushes. Set `REPORTING_TARGET_ADAPTER=dhis2` and `SECRETS_ENCRYPTION_KEY` (`openssl rand -base64 32`), then create a DHIS2 connector under **Settings ▸ Connectors** (base URL + credentials, encrypted at rest) and select it from each mapping.
 
 Worked example:
 

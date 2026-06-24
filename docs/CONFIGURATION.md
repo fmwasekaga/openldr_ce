@@ -66,10 +66,8 @@ Required only when `TARGET_STORE_ADAPTER=mssql`.
 
 | Variable | Type | Default | Effect |
 |---|---:|---:|---|
-| `REPORTING_TARGET_ADAPTER` | `none\|dhis2` | `none` | Enables DHIS2 reporting target wiring. |
-| `DHIS2_BASE_URL` | URL | required when `REPORTING_TARGET_ADAPTER=dhis2` | DHIS2 server base URL. |
-| `DHIS2_USERNAME` | string | required when `REPORTING_TARGET_ADAPTER=dhis2` | DHIS2 username. |
-| `DHIS2_PASSWORD` | string | required when `REPORTING_TARGET_ADAPTER=dhis2` | DHIS2 password. |
+| `REPORTING_TARGET_ADAPTER` | `none\|dhis2` | `none` | Enables DHIS2 reporting-target wiring. Connection details live in a Connector (Settings ▸ Connectors), not env vars. |
+| `SECRETS_ENCRYPTION_KEY` | base64 (32 bytes) | required to use secret-bearing connectors | AES-256-GCM key for connector secrets at rest. Generate with `openssl rand -base64 32`. |
 | `DHIS2_SYNC_ENABLED` | boolean string | `true` | Enables scheduled/event-driven DHIS2 sync processing. |
 
 ## Dashboards
@@ -133,7 +131,7 @@ pnpm -C apps/web dev
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | Config validation fails on `TARGET_DATABASE_URL` | `TARGET_STORE_ADAPTER` defaults to `pg`, which requires `TARGET_DATABASE_URL`. | Set `TARGET_DATABASE_URL` or switch to `TARGET_STORE_ADAPTER=mssql` and provide all `MSSQL_*` keys. |
-| DHIS2 commands fail during config load | `REPORTING_TARGET_ADAPTER=dhis2` without all `DHIS2_*` values. | Set `DHIS2_BASE_URL`, `DHIS2_USERNAME`, and `DHIS2_PASSWORD`. |
+| DHIS2 push fails with a connector error | No connector configured, the connector is disabled, or `SECRETS_ENCRYPTION_KEY` is unset. | Create/enable a connector under Settings ▸ Connectors and set `SECRETS_ENCRYPTION_KEY`. |
 | HTTP Request workflow node cannot reach a host | `WORKFLOW_HTTP_ALLOWLIST` does not include the hostname. | Set a comma-separated allowlist, for example `WORKFLOW_HTTP_ALLOWLIST=api.example.org,dhis2.local`. |
 | Built server serves API but not SPA | `WEB_DIST_DIR` points to a missing directory. | Build web with `pnpm -C apps/web build` and set `WEB_DIST_DIR` to that `dist` path if using a custom layout. |
 | Raw SQL dashboard tab is hidden | `DASHBOARD_SQL_ENABLED=false` or target store is not PostgreSQL. | Use builder mode, or set `DASHBOARD_SQL_ENABLED=true` with `TARGET_STORE_ADAPTER=pg`. |

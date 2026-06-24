@@ -4,15 +4,17 @@ OpenLDR can push AMR surveillance data to a DHIS2 instance as aggregate **dataVa
 
 ## Connecting
 
-Set the DHIS2 connection in your environment:
+DHIS2 connection details (base URL, username, password) live in an encrypted **Connector**, not in environment variables. Create one under **Settings ▸ Connectors**: pick the `dhis2-sink` plugin, enter the base URL and credentials, then click **Test connection** to verify reachability and pull a metadata summary. Secrets are encrypted at rest and never shown again.
+
+Two environment values still apply:
 
 ```text
-REPORTING_TARGET_ADAPTER=dhis2
-DHIS2_BASE_URL=http://localhost:8085
-DHIS2_USERNAME=admin
-DHIS2_PASSWORD=district
-DHIS2_SYNC_ENABLED=true
+REPORTING_TARGET_ADAPTER=dhis2     # enables DHIS2 reporting-target wiring
+SECRETS_ENCRYPTION_KEY=<base64>    # 32-byte key (openssl rand -base64 32) — required to store/read connector secrets
+DHIS2_SYNC_ENABLED=true            # optional, enables scheduled/event-driven sync
 ```
+
+Each DHIS2 mapping selects which connector receives its push (see **Mapping** below).
 
 ## Mapping
 
@@ -45,6 +47,6 @@ PS D:\Projects\Repositories\openldr_ce> pnpm openldr dhis2 schedule add <mapping
 PS D:\Projects\Repositories\openldr_ce> pnpm openldr dhis2 schedule add <mappingId> --mode tracker --period-type monthly --event-driven --json
 ```
 
-If a command fails during configuration loading, confirm `REPORTING_TARGET_ADAPTER=dhis2` is paired with all three connection secrets: `DHIS2_BASE_URL`, `DHIS2_USERNAME`, and `DHIS2_PASSWORD`.
+If a command fails during configuration loading, confirm `REPORTING_TARGET_ADAPTER=dhis2` is set, `SECRETS_ENCRYPTION_KEY` is configured, and a connector is created and enabled under Settings ▸ Connectors.
 
 ![DHIS2 setup](doc-dhis2.png)
