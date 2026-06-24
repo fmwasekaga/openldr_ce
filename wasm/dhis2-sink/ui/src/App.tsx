@@ -22,6 +22,11 @@ export function App() {
         if (alive) setStatus({ phase: 'ready', connectors: count });
       } catch (e) {
         if (alive) setStatus({ phase: 'error', message: e instanceof Error ? e.message : String(e) });
+      } finally {
+        // Signal SDK handshake complete + first data settled (success OR error) so the
+        // host/e2e can await a real readiness signal — not merely first paint. Body is
+        // global, so set it unconditionally once init settles even if we've unmounted.
+        document.body.setAttribute('data-openldr-ready', '1');
       }
     })();
     return () => {

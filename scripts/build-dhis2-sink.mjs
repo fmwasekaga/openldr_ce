@@ -38,6 +38,7 @@ const result = await esbuild({
 });
 const js = result.outputFiles[0].text;
 const css = readFileSync(join(uiSrc, 'styles.css'), 'utf8');
+if (css.includes('</style>')) throw new Error('styles.css contains </style> — would break the inlined <style> tag');
 const uiHtml = `<style>${css}</style><div id="app"></div><script>${js}</script>`;
 writeFileSync(join(dir, 'ui.html'), uiHtml);
 const uiSha = createHash('sha256').update(uiHtml).digest('hex');
