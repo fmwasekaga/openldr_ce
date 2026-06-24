@@ -3,8 +3,8 @@ import { getOpenldr } from '../sdk';
 import { Picker } from '../components/Picker';
 
 type Kind = 'aggregate' | 'tracker';
-type AggRow = { column: string; dataElement: string; categoryOptionCombo: string };
-type TrkRow = { column: string; dataElement: string };
+type AggRow = { id: string; column: string; dataElement: string; categoryOptionCombo: string };
+type TrkRow = { id: string; column: string; dataElement: string };
 
 /** A report summary from `reports.list()`. */
 interface ReportSummary {
@@ -71,7 +71,7 @@ interface MappingDoc {
     programStage?: string;
     eventDateColumn?: string;
     idColumn?: string;
-    dataValues?: TrkRow[];
+    dataValues?: Array<{ column: string; dataElement: string }>;
     connectorId?: string;
   };
 }
@@ -177,13 +177,13 @@ export function MappingEditor({ mappingId: editId, onDone }: { mappingId?: strin
           setTrkOrgUnitColumn(d.orgUnitColumn ?? '');
           setEventDateColumn(d.eventDateColumn ?? '');
           setIdColumn(d.idColumn ?? '');
-          setTrkRows((d.dataValues ?? []).map((r) => ({ column: r.column, dataElement: r.dataElement })));
+          setTrkRows((d.dataValues ?? []).map((r) => ({ id: crypto.randomUUID(), column: r.column, dataElement: r.dataElement })));
         } else {
           setKind('aggregate');
           setReportId(d.source?.reportId ?? '');
           setAggOrgUnitColumn(d.orgUnitColumn ?? '');
           setPeriodColumn(d.periodColumn ?? '');
-          setAggRows((d.columns ?? []).map((c) => ({ column: c.column, dataElement: c.dataElement, categoryOptionCombo: c.categoryOptionCombo ?? '' })));
+          setAggRows((d.columns ?? []).map((c) => ({ id: crypto.randomUUID(), column: c.column, dataElement: c.dataElement, categoryOptionCombo: c.categoryOptionCombo ?? '' })));
           if (d.source?.reportId) {
             const cols = await o.reports.columns(d.source.reportId).catch(() => []);
             if (alive) setReportColumns(asArray<ReportColumn>(cols));
@@ -193,7 +193,7 @@ export function MappingEditor({ mappingId: editId, onDone }: { mappingId?: strin
       } catch (e) {
         if (alive) setPhase({ phase: 'error', message: e instanceof Error ? e.message : String(e) });
       } finally {
-        document.body.setAttribute('data-openldr-ready', '1');
+        if (alive) document.body.setAttribute('data-openldr-ready', '1');
       }
     })();
     return () => {
@@ -205,6 +205,7 @@ export function MappingEditor({ mappingId: editId, onDone }: { mappingId?: strin
   const onReport = useCallback(async (rid: string) => {
     setReportId(rid);
     setProblems(null);
+    setError(null);
     if (!rid) {
       setReportColumns([]);
       return;
@@ -269,6 +270,7 @@ export function MappingEditor({ mappingId: editId, onDone }: { mappingId?: strin
     // The host op pulls the connector's metadata to validate, so a connector is
     // required. Without one we cannot validate — guard rather than call with ''.
     if (!connectorId) return;
+    setProblems(null);
     try {
       const result = await getOpenldr().connectors.validate({ connectorId, mapping: def() });
       setProblems(asArray<string>(result));
@@ -409,13 +411,13 @@ export function MappingEditor({ mappingId: editId, onDone }: { mappingId?: strin
                 type="button"
                 class="link"
                 data-testid="add-column"
-                onClick={() => setAggRows((r) => [...r, { column: '', dataElement: '', categoryOptionCombo: '' }])}
+                onClick={() => setAggRows((r) => [...r, { id: crypto.randomUUID(), column: '', dataElement: '', categoryOptionCombo: '' }])}
               >
                 Add column
               </button>
             </div>
             {aggRows.map((row, i) => (
-              <div key={i} class="me-row me-row-3" data-testid={`column-row-${i}`}>
+              <div key={row.id} class="me-row me-row-3" data-testid={`column-row-${i}`}>
                 <Picker
                   testId={`column-key-${i}`}
                   value={row.column}
@@ -532,13 +534,13 @@ export function MappingEditor({ mappingId: editId, onDone }: { mappingId?: strin
                 type="button"
                 class="link"
                 data-testid="add-datavalue"
-                onClick={() => setTrkRows((r) => [...r, { column: '', dataElement: '' }])}
+                onClick={() => setTrkRows((r) => [...r, { id: crypto.randomUUID(), column: '', dataElement: '' }])}
               >
                 Add row
               </button>
             </div>
             {trkRows.map((row, i) => (
-              <div key={i} class="me-row me-row-2" data-testid={`dv-row-${i}`}>
+              <div key={row.id} class="me-row me-row-2" data-testid={`dv-row-${i}`}>
                 <Picker
                   testId={`dv-col-${i}`}
                   value={row.column}

@@ -173,6 +173,59 @@ describe('dhis2-sink MappingEditor', () => {
     expect(onDone).toHaveBeenCalledTimes(1);
   });
 
+  it('tracker: validate calls connectors.validate with a tracker mapping', async () => {
+    const { validateSpy } = buildMock();
+    render(<MappingEditor onDone={() => {}} />);
+
+    await screen.findByTestId('dhis2-mapping-editor');
+    fireEvent.input(screen.getByTestId('mapping-name'), { target: { value: 'Trk validate' } });
+
+    await pick('kind-select', 'Tracker');
+    await screen.findByTestId('event-source-select');
+
+    await pick('connector-select', 'DHIS2 demo');
+    await pick('event-source-select', 'AMR events');
+    await pick('program-select', 'AMR program');
+    await pick('program-stage-select', 'Stage 1');
+
+    fireEvent.click(screen.getByTestId('add-datavalue'));
+    await screen.findByTestId('dv-row-0');
+    await pick('dv-col-0', 'Value');
+    await pick('dv-de-0', 'Confirmed cases');
+
+    fireEvent.click(screen.getByTestId('validate-mapping'));
+    await waitFor(() => expect(validateSpy).toHaveBeenCalledTimes(1));
+    const vArg = (validateSpy.mock.calls[0] as unknown as [{ connectorId: string; mapping: Record<string, unknown> }])[0];
+    expect(vArg.connectorId).toBe('c1');
+    expect(vArg.mapping.kind).toBe('tracker');
+    expect((vArg.mapping.source as { sourceId: string }).sourceId).toBe('es1');
+  });
+
+  it('aggregate: a column row with no category-option-combo omits the key from the saved definition', async () => {
+    const { putSpy } = buildMock();
+    render(<MappingEditor onDone={() => {}} />);
+
+    await screen.findByTestId('dhis2-mapping-editor');
+    fireEvent.input(screen.getByTestId('mapping-name'), { target: { value: 'No coc' } });
+
+    await pick('connector-select', 'DHIS2 demo');
+    await pick('report-select', 'AMR aggregate');
+    await pick('orgunit-column-select', 'Facility');
+
+    fireEvent.click(screen.getByTestId('add-column'));
+    await screen.findByTestId('column-row-0');
+    await pick('column-key-0', 'Count');
+    await pick('column-de-0', 'Confirmed cases');
+    // categoryOptionCombo intentionally left UNSET.
+
+    fireEvent.click(screen.getByTestId('save-mapping'));
+    await waitFor(() => expect(putSpy).toHaveBeenCalledTimes(1));
+    const [, , payload] = putSpy.mock.calls[0] as unknown as [string, string, { definition: Record<string, unknown> }];
+    const col = (payload.definition.columns as Array<Record<string, unknown>>)[0];
+    expect(col).toEqual({ column: 'count', dataElement: 'de1' });
+    expect(col).not.toHaveProperty('categoryOptionCombo');
+  });
+
   it('edit: hydrates the form from a saved aggregate mapping and loads its report columns', async () => {
     const saved = {
       m1: {
