@@ -20,16 +20,26 @@ export type BrokerOp =
   | { kind: 'reports.list' }
   | { kind: 'reports.columns'; id: string }
   | { kind: 'reports.run'; id: string; params?: Record<string, unknown> }
+  | { kind: 'reports.eventSources' }
   | { kind: 'connectors.list' }
-  | { kind: 'connectors.test'; id: string };
+  | { kind: 'connectors.test'; id: string }
+  | { kind: 'connectors.metadata'; id: string }
+  | { kind: 'connectors.push'; connectorId: string; mapping: unknown; orgUnitMap?: Record<string, string>; period: string; dryRun: boolean }
+  | { kind: 'connectors.validate'; connectorId: string; mapping: unknown }
+  | { kind: 'fhir.facilities' }
+  | { kind: 'schedule.register'; schedule: unknown }
+  | { kind: 'schedule.list' }
+  | { kind: 'schedule.remove'; id: string };
 
 export type BrokerResult = { ok: true; data: unknown } | { ok: false; error: string };
 
 /** Maps an op to the capability it requires (undefined = private/no capability). */
 function gateFor(op: BrokerOp): string | undefined {
   switch (op.kind) {
-    case 'reports.list': case 'reports.columns': case 'reports.run': return 'host:reports';
-    case 'connectors.list': case 'connectors.test': return 'host:connectors';
+    case 'reports.list': case 'reports.columns': case 'reports.run': case 'reports.eventSources': return 'host:reports';
+    case 'connectors.list': case 'connectors.test': case 'connectors.metadata': case 'connectors.push': case 'connectors.validate': return 'host:connectors';
+    case 'fhir.facilities': return 'host:fhir';
+    case 'schedule.register': case 'schedule.list': case 'schedule.remove': return 'host:schedule';
     default: return undefined; // storage.*, invoke
   }
 }
@@ -39,8 +49,12 @@ function gateFor(op: BrokerOp): string | undefined {
 function rolesFor(op: BrokerOp): string[] {
   switch (op.kind) {
     // Mirrors the native /api/connectors routes (lab_admin only).
-    case 'connectors.list': case 'connectors.test': return ['lab_admin'];
-    // storage.*, invoke, reports.* — reports are broadly readable (native /api/reports has no role gate).
+    case 'connectors.list': case 'connectors.test': case 'connectors.metadata':
+    case 'connectors.push': case 'connectors.validate':
+    // Schedule register/list/remove mirror the native lab_admin-gated schedule routes.
+    case 'schedule.register': case 'schedule.list': case 'schedule.remove':
+      return ['lab_admin'];
+    // storage.*, invoke, reports.*, fhir.* — reports/fhir reads are broadly readable (native routes have no role gate).
     default: return [];
   }
 }

@@ -33,7 +33,20 @@ export function createMockOpenldr(opts: MockOptions): OpenLdrPluginApi {
       async list() { return opts.reports ?? []; },
       async columns() { return []; },
       async run() { return { columns: [], rows: [] }; },
+      async eventSources() { return []; },
     },
-    connectors: { async list() { return []; }, async test() { return { ok: true }; } },
+    connectors: {
+      async list() { return []; },
+      async test() { return { ok: true }; },
+      async metadata() { return {}; },
+      async push() { return { ok: true, skipped: [] }; },
+      async validate() { return { ok: true }; },
+    },
+    fhir: { async facilities() { return []; } },
+    schedule: {
+      async register() { return { ok: true }; },
+      async list() { return []; },
+      async remove() { return { ok: true }; },
+    },
   };
 }

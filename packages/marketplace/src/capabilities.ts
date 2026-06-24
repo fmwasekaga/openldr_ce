@@ -19,6 +19,7 @@ export const capabilitySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('host:reports') }),
   z.object({ kind: z.literal('host:connectors') }),
   z.object({ kind: z.literal('host:schedule') }),
+  z.object({ kind: z.literal('host:fhir') }),
 ]);
 
 export type Capability = z.infer<typeof capabilitySchema>;

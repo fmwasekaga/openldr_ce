@@ -136,6 +136,54 @@ describe('plugin broker', () => {
     expect((await b.handle('p1', low, { kind: 'reports.list' })).ok).toBe(true);
   });
 
+  it('denies fhir.facilities without the host:fhir capability', async () => {
+    const { b } = broker({ caps: [] });
+    const r = await b.handle('p1', principal, { kind: 'fhir.facilities' });
+    expect(r.ok).toBe(false);
+    expect((r as any).error).toMatch(/host:fhir/);
+  });
+
+  it('denies schedule.list without the host:schedule capability', async () => {
+    const { b } = broker({ caps: [] });
+    const r = await b.handle('p1', principal, { kind: 'schedule.list' });
+    expect(r.ok).toBe(false);
+    expect((r as any).error).toMatch(/host:schedule/);
+  });
+
+  it('denies connectors.metadata/push/validate without the host:connectors capability', async () => {
+    const { b } = broker({ caps: [] });
+    expect((await b.handle('p1', principal, { kind: 'connectors.metadata', id: 'c1' })).ok).toBe(false);
+    expect((await b.handle('p1', principal, { kind: 'connectors.push', connectorId: 'c1', mapping: {}, period: '2026', dryRun: true })).ok).toBe(false);
+    expect((await b.handle('p1', principal, { kind: 'connectors.validate', connectorId: 'c1', mapping: {} })).ok).toBe(false);
+  });
+
+  it('denies reports.eventSources without the host:reports capability', async () => {
+    const { b } = broker({ caps: [] });
+    const r = await b.handle('p1', principal, { kind: 'reports.eventSources' });
+    expect(r.ok).toBe(false);
+    expect((r as any).error).toMatch(/host:reports/);
+  });
+
+  it('denies connectors.metadata/push/validate when the caller lacks lab_admin (role gate)', async () => {
+    const { b } = broker({ caps: [{ kind: 'host:connectors' }] });
+    const low = { id: 'u2', roles: ['data_analyst'] };
+    expect((await b.handle('p1', low, { kind: 'connectors.metadata', id: 'c1' })).ok).toBe(false);
+    const push = await b.handle('p1', low, { kind: 'connectors.push', connectorId: 'c1', mapping: {}, period: '2026', dryRun: true });
+    expect(push.ok).toBe(false);
+    expect((push as any).error).toMatch(/lab_admin/);
+    expect((await b.handle('p1', low, { kind: 'connectors.validate', connectorId: 'c1', mapping: {} })).ok).toBe(false);
+  });
+
+  it('denies schedule.register/list/remove when the caller lacks lab_admin (role gate)', async () => {
+    const { b } = broker({ caps: [{ kind: 'host:schedule' }] });
+    const low = { id: 'u2', roles: ['data_analyst'] };
+    expect((await b.handle('p1', low, { kind: 'schedule.register', schedule: {} })).ok).toBe(false);
+    const list = await b.handle('p1', low, { kind: 'schedule.list' });
+    expect(list.ok).toBe(false);
+    expect((list as any).error).toMatch(/lab_admin/);
+    expect((await b.handle('p1', low, { kind: 'schedule.remove', id: 's1' })).ok).toBe(false);
+  });
+
   it('redacts connectors.test error detail (no raw message to the plugin) and logs it', async () => {
     const { b } = broker({
       caps: [{ kind: 'host:connectors' }],

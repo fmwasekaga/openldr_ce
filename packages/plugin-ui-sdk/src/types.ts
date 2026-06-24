@@ -17,8 +17,16 @@ export type PluginBrokerOp =
   | { kind: 'reports.list' }
   | { kind: 'reports.columns'; id: string }
   | { kind: 'reports.run'; id: string; params?: Record<string, unknown> }
+  | { kind: 'reports.eventSources' }
   | { kind: 'connectors.list' }
-  | { kind: 'connectors.test'; id: string };
+  | { kind: 'connectors.test'; id: string }
+  | { kind: 'connectors.metadata'; id: string }
+  | { kind: 'connectors.push'; connectorId: string; mapping: unknown; orgUnitMap?: Record<string, string>; period: string; dryRun: boolean }
+  | { kind: 'connectors.validate'; connectorId: string; mapping: unknown }
+  | { kind: 'fhir.facilities' }
+  | { kind: 'schedule.register'; schedule: unknown }
+  | { kind: 'schedule.list' }
+  | { kind: 'schedule.remove'; id: string };
 
 export type PluginRpcResult = { ok: true; data: unknown } | { ok: false; error: string };
 
@@ -40,10 +48,20 @@ export interface OpenLdrPluginApi {
     list(): Promise<unknown>;
     columns(id: string): Promise<unknown>;
     run(id: string, params?: Record<string, unknown>): Promise<unknown>;
+    eventSources(): Promise<unknown>;
   };
   connectors: {
     list(): Promise<unknown>;
     test(id: string): Promise<unknown>;
+    metadata(id: string): Promise<unknown>;
+    push(input: { connectorId: string; mapping: unknown; orgUnitMap?: Record<string, string>; period: string; dryRun: boolean }): Promise<unknown>;
+    validate(input: { connectorId: string; mapping: unknown }): Promise<unknown>;
+  };
+  fhir: { facilities(): Promise<unknown> };
+  schedule: {
+    register(schedule: unknown): Promise<unknown>;
+    list(): Promise<unknown>;
+    remove(id: string): Promise<unknown>;
   };
 }
 
