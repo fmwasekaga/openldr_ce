@@ -20,7 +20,7 @@ describe('DocsLayout', () => {
     renderAt('/docs');
     const nav = screen.getByRole('navigation', { name: 'Documentation sections' });
     expect(within(nav).getByRole('link', { name: 'Getting Started' })).toBeInTheDocument();
-    expect(within(nav).getByRole('link', { name: 'DHIS2 Aggregate Reporting' })).toBeInTheDocument();
+    expect(within(nav).getByRole('link', { name: 'DHIS2 Reporting' })).toBeInTheDocument();
   });
 
   it('renders the overview content by default at /docs', () => {
@@ -30,7 +30,7 @@ describe('DocsLayout', () => {
 
   it('renders the active section heading for a slug route', () => {
     renderAt('/docs/dhis2');
-    expect(screen.getByRole('heading', { level: 1, name: 'DHIS2 Aggregate Reporting' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'DHIS2 Reporting' })).toBeInTheDocument();
   });
 
   it('narrows the sidebar list when searching', () => {
