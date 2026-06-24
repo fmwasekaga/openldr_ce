@@ -110,7 +110,7 @@ export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any
       if (!sink) return { ok: false, error: `sink plugin '${connector.pluginId}' is not installed` };
       const target = createPluginTarget(sink, config, connector.allowedHost);
       const health = await target.healthCheck();
-      if (health.status !== 'up') return { ok: false, error: health.detail ?? 'unreachable' };
+      if (health.status !== 'up') return { ok: false, error: redact(health.detail ?? 'unreachable') };
       const md = await target.pullMetadata();
       return {
         ok: true,

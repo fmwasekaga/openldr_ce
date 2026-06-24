@@ -80,6 +80,7 @@ describe('connectors routes', () => {
 
     const got = await app.inject({ method: 'GET', url: `/api/connectors/${rec.id}` });
     expect(got.json().name).toBe('DHIS2 Demo');
+    expect(JSON.stringify(got.json())).not.toContain('district'); // no secret on get-by-id either
   });
 
   it('fails create with 400 when the encryption key is unset', async () => {
