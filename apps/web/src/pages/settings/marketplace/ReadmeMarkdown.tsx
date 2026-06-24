@@ -1,7 +1,7 @@
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
-const SAFE_IMG = /^(data:image\/(png|jpeg|gif|webp|svg\+xml);|https:\/\/)/i;
+const SAFE_IMG = /^(data:image\/(png|jpeg|gif|webp);|https:\/\/)/i;
 const SAFE_HREF = /^https?:\/\//i;
 
 const components: Components = {
