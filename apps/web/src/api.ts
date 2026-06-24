@@ -1237,9 +1237,7 @@ export const createConnector = (input: ConnectorCreateInput): Promise<Connector>
   authFetch('/api/connectors', jbody(input, 'POST')).then((r) => okJson<Connector>(r, 'create connector'));
 export const updateConnector = (id: string, input: ConnectorUpdateInput): Promise<Connector> =>
   authFetch(`/api/connectors/${encodeURIComponent(id)}`, jbody(input, 'PUT')).then((r) => okJson<Connector>(r, 'update connector'));
-export async function deleteConnector(id: string): Promise<void> {
-  const r = await authFetch(`/api/connectors/${encodeURIComponent(id)}`, { method: 'DELETE' });
-  if (!r.ok && r.status !== 204) throw new Error(`delete connector failed: ${r.status}`);
-}
+export const deleteConnector = (id: string): Promise<void> =>
+  apiDelete(`/api/connectors/${encodeURIComponent(id)}`, 'delete connector');
 export const testConnector = (id: string): Promise<ConnectorTestResult> =>
-  authFetch(`/api/connectors/${encodeURIComponent(id)}/test`, jbody({}, 'POST')).then((r) => okJson<ConnectorTestResult>(r, 'test connector'));
+  authFetch(`/api/connectors/${encodeURIComponent(id)}/test`, { method: 'POST' }).then((r) => okJson<ConnectorTestResult>(r, 'test connector'));
