@@ -21,6 +21,7 @@ import { FormCapture } from './pages/FormCapture';
 import { FormBuilderPage } from './forms-builder/FormBuilderPage';
 import { Workflows } from './workflows/page';
 import { WorkflowList } from './workflows/WorkflowList';
+import { PluginContainer } from './plugins/PluginContainer';
 import { RequireRole } from './auth/RequireRole';
 import { CallbackPage } from './auth/CallbackPage';
 import { Toaster } from './components/ui/sonner';
@@ -55,6 +56,7 @@ export function App() {
       <Route path="/forms/new" element={<FormBuilderPage />} />
       <Route path="/forms/:id/builder" element={<FormBuilderPage />} />
       <Route path="/forms/:id" element={<FormCapture />} />
+      <Route path="/x/:pluginId" element={<RequireRole><PluginContainer /></RequireRole>} />
       <Route path="/docs" element={<Docs />} />
       <Route path="/docs/:slug" element={<Docs />} />
       <Route path="*" element={<AppShell title="Not found"><div className="card">Page not found.</div></AppShell>} />
