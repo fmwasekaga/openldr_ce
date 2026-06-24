@@ -51,6 +51,8 @@ export interface InstallOptions {
   publicKeyDer?: Uint8Array;
   actor?: { id?: string | null; name: string };
   approval?: InstallApproval;
+  /** Bytes of the bundle's ui.html, required iff the manifest declares payload.ui. */
+  ui?: Uint8Array;
 }
 
 type LifecycleOpts = { actor?: { id?: string | null; name: string } };
@@ -62,6 +64,7 @@ export interface PluginRuntime {
   remove(id: string, version?: string, opts?: LifecycleOpts): Promise<void>;
   load(id: string, version?: string): Promise<Converter | undefined>;
   loadSink(id: string, version?: string): Promise<WasmSink | undefined>;
+  loadUi(id: string, version?: string): Promise<Uint8Array | undefined>;
   rollback(id: string, version: string, opts?: LifecycleOpts): Promise<void>;
   setEnabled(id: string, enabled: boolean, opts?: LifecycleOpts): Promise<void>;
 }
@@ -71,6 +74,9 @@ function wasmKey(id: string, version: string): string {
 }
 function manifestKey(id: string, version: string): string {
   return `plugins/${id}/${version}/manifest.json`;
+}
+function uiKey(id: string, version: string): string {
+  return `plugins/${id}/${version}/ui.html`;
 }
 
 function isArtifactManifest(raw: unknown): boolean {
@@ -234,6 +240,16 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
         }
       }
 
+      // Validate ui bytes when the manifest declares a ui contribution.
+      const uiMeta = artifact.payload.kind === 'plugin' ? artifact.payload.ui : undefined;
+      if (uiMeta) {
+        if (!opts.ui) throw new Error(`artifact ${artifact.id}: manifest declares payload.ui but no ui bytes were provided`);
+        const uiSha = sha256Hex(opts.ui);
+        if (uiSha !== uiMeta.sha256) {
+          throw new Error(`artifact ${artifact.id}: ui.html sha (${uiSha}) does not match manifest payload.ui.sha256 (${uiMeta.sha256})`);
+        }
+      }
+
       // Persist the FULL artifact manifest (capabilities included) so the store row carries the grant.
       const fullManifest = isArtifact ? (rawManifest as Record<string, unknown>) : (artifact as unknown as Record<string, unknown>);
       // Still derive the legacy PluginManifest for the blob + return value (back-compat callers).
@@ -245,6 +261,9 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
         new TextEncoder().encode(JSON.stringify(fullManifest)),
         'application/json',
       );
+      if (uiMeta && opts.ui) {
+        await deps.blob.put(uiKey(artifact.id, artifact.version), opts.ui, 'text/html');
+      }
       await deps.store.install({ id: artifact.id, version: artifact.version, sha256: payloadSha, manifest: fullManifest, approvedBy });
       invalidateCache(artifact.id);
       deps.logger.info({ id: artifact.id, version: artifact.version }, 'plugin installed');
@@ -324,5 +343,17 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
 
     load,
     loadSink,
+
+    async loadUi(id, version) {
+      const row = await deps.store.get(id, version);
+      if (!row) return undefined;
+      const m = row.manifest as { payload?: { ui?: { entry?: string } } };
+      if (!m.payload?.ui) return undefined;
+      try {
+        return await deps.blob.get(uiKey(row.id, row.version));
+      } catch {
+        return undefined;
+      }
+    },
   };
 }

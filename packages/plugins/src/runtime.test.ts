@@ -1,9 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
+import { createHash } from 'node:crypto';
 import { createPluginRuntime } from './runtime';
 import { sha256Hex } from './hash';
 import type { PluginStore, PluginRow } from './store';
 import type { PluginRunner } from './runner';
-import { generatePublisherKeypair, signManifest, createTrustStore } from '@openldr/marketplace';
+import { generatePublisherKeypair, signManifest, createTrustStore, pluginManifestToArtifact } from '@openldr/marketplace';
 
 const logger = { info: vi.fn(), error: vi.fn(), debug: vi.fn() } as never;
 const wasm = new TextEncoder().encode('\0asm fake bytes');
@@ -432,5 +433,41 @@ describe('loadSink', () => {
     await rt.loadSink('dhis2-sink');
     await rt.loadSink('dhis2-sink');
     expect(((blob as any).get).mock.calls.length).toBe(1);
+  });
+});
+
+// ── Task 4: ui install + loadUi ──────────────────────────────────────────────
+
+describe('runtime ui install', () => {
+  it('persists ui.html to blob and serves it via loadUi', async () => {
+    const blobMap = new Map<string, Uint8Array>();
+    const store = fakeStore();
+    const rt = createPluginRuntime({ blob: fakeBlob(blobMap), store, runner: okRunner, logger, ...defaultNewDeps() });
+    const wasmBytes = new Uint8Array([1, 2, 3]);
+    const ui = new TextEncoder().encode('<div>panel</div>');
+    const manifest = pluginManifestToArtifact({
+      id: 'ui-demo', version: '1.0.0', kind: 'sink', entrypoints: ['echo'],
+      wasmSha256: createHash('sha256').update(wasmBytes).digest('hex'),
+      capabilities: [],
+      ui: { entry: 'ui.html', sha256: createHash('sha256').update(ui).digest('hex'), nav: { label: 'Demo' } },
+    });
+    await rt.install(wasmBytes, manifest, { ui });
+    const served = await rt.loadUi('ui-demo');
+    expect(new TextDecoder().decode(served!)).toBe('<div>panel</div>');
+  });
+
+  it('rejects install when ui bytes do not match the manifest sha', async () => {
+    const blobMap = new Map<string, Uint8Array>();
+    const store = fakeStore();
+    const rt = createPluginRuntime({ blob: fakeBlob(blobMap), store, runner: okRunner, logger, ...defaultNewDeps() });
+    const wasmBytes = new Uint8Array([1, 2, 3]);
+    const ui = new TextEncoder().encode('<div>panel</div>');
+    const manifest = pluginManifestToArtifact({
+      id: 'ui-demo', version: '1.0.0', kind: 'sink', entrypoints: ['echo'],
+      wasmSha256: createHash('sha256').update(wasmBytes).digest('hex'),
+      capabilities: [],
+      ui: { entry: 'ui.html', sha256: 'f'.repeat(64), nav: { label: 'Demo' } },
+    });
+    await expect(rt.install(wasmBytes, manifest, { ui })).rejects.toThrow(/ui/i);
   });
 });
