@@ -1,4 +1,4 @@
-# Rapports DHIS2 agrégés
+# Rapports DHIS2
 
 OpenLDR peut transmettre des données de surveillance AMR à une instance DHIS2 sous forme de **dataValueSets** agrégés et d'**événements tracker**.
 

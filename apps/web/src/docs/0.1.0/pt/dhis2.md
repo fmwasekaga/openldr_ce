@@ -1,4 +1,4 @@
-# Relatórios Agregados DHIS2
+# Relatórios DHIS2
 
 OpenLDR pode enviar dados de vigilância AMR para uma instância DHIS2 como **dataValueSets** agregados e como **eventos de rastreamento**.
 

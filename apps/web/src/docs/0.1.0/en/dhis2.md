@@ -1,4 +1,4 @@
-# DHIS2 Aggregate Reporting
+# DHIS2 Reporting
 
 OpenLDR can push AMR surveillance data to a DHIS2 instance as aggregate **dataValueSets** and as **tracker events**.
 

@@ -174,45 +174,48 @@ export function Connectors() {
       )}
 
       <Dialog open={draft !== null} onOpenChange={(o) => { if (!o) setDraft(null); }}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-2xl">
           <DialogTitle>{draft?.id === null ? t('settings.connectors.newTitle') : t('settings.connectors.editTitle')}</DialogTitle>
           {draft ? (
-            <div className="grid gap-3 text-sm">
-              <label className="grid gap-1">
-                <span className="text-muted-foreground">{t('settings.connectors.fieldName')}</span>
-                <Input data-testid="connector-name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-              </label>
-              <label className="grid gap-1">
-                <span className="text-muted-foreground">{t('settings.connectors.fieldPlugin')}</span>
-                <Select value={draft.pluginId} onValueChange={(v) => setDraft({ ...draft, pluginId: v })}>
-                  <SelectTrigger data-testid="connector-plugin"><SelectValue placeholder={t('settings.connectors.pickPlugin')} /></SelectTrigger>
-                  <SelectContent>
-                    {plugins.map((p) => <SelectItem key={p.id} value={p.id}>{p.id}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </label>
-              <label className="grid gap-1">
-                <span className="text-muted-foreground">{t('settings.connectors.fieldBaseUrl')}</span>
-                <Input data-testid="connector-baseurl" value={draft.baseUrl} onChange={(e) => setDraft({ ...draft, baseUrl: e.target.value })}
-                  placeholder={draft.id === null ? 'https://dhis2.example.org' : t('settings.connectors.secretSet')} />
-              </label>
-              <label className="grid gap-1">
-                <span className="text-muted-foreground">{t('settings.connectors.fieldUsername')}</span>
-                <Input data-testid="connector-username" value={draft.username} onChange={(e) => setDraft({ ...draft, username: e.target.value })}
-                  placeholder={draft.id === null ? '' : t('settings.connectors.secretSet')} />
-              </label>
-              <label className="grid gap-1">
-                <span className="text-muted-foreground">{t('settings.connectors.fieldPassword')}</span>
-                <Input data-testid="connector-password" type="password" value={draft.password} onChange={(e) => setDraft({ ...draft, password: e.target.value })}
-                  placeholder={draft.id === null ? '' : t('settings.connectors.secretSet')} />
-              </label>
-              {draft.id !== null ? (
-                <label className="flex items-center gap-2">
-                  <Switch checked={draft.enabled} onCheckedChange={(v) => setDraft({ ...draft, enabled: v })} aria-label={t('settings.connectors.enabledLabel')} />
-                  <span className="text-muted-foreground">{t('settings.connectors.enabledLabel')}</span>
+            <div className="text-sm">
+              {/* Two-column form so the dialog is wider than it is tall. Base URL spans both. */}
+              <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+                <label className="grid gap-1">
+                  <span className="text-muted-foreground">{t('settings.connectors.fieldName')}</span>
+                  <Input data-testid="connector-name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
                 </label>
-              ) : null}
-              <div className="flex justify-end gap-2 pt-2">
+                <label className="grid gap-1">
+                  <span className="text-muted-foreground">{t('settings.connectors.fieldPlugin')}</span>
+                  <Select value={draft.pluginId} onValueChange={(v) => setDraft({ ...draft, pluginId: v })}>
+                    <SelectTrigger data-testid="connector-plugin"><SelectValue placeholder={t('settings.connectors.pickPlugin')} /></SelectTrigger>
+                    <SelectContent>
+                      {plugins.map((p) => <SelectItem key={p.id} value={p.id}>{p.id}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </label>
+                <label className="grid gap-1 sm:col-span-2">
+                  <span className="text-muted-foreground">{t('settings.connectors.fieldBaseUrl')}</span>
+                  <Input data-testid="connector-baseurl" value={draft.baseUrl} onChange={(e) => setDraft({ ...draft, baseUrl: e.target.value })}
+                    placeholder={draft.id === null ? 'https://dhis2.example.org' : t('settings.connectors.secretSet')} />
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-muted-foreground">{t('settings.connectors.fieldUsername')}</span>
+                  <Input data-testid="connector-username" value={draft.username} onChange={(e) => setDraft({ ...draft, username: e.target.value })}
+                    placeholder={draft.id === null ? '' : t('settings.connectors.secretSet')} />
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-muted-foreground">{t('settings.connectors.fieldPassword')}</span>
+                  <Input data-testid="connector-password" type="password" value={draft.password} onChange={(e) => setDraft({ ...draft, password: e.target.value })}
+                    placeholder={draft.id === null ? '' : t('settings.connectors.secretSet')} />
+                </label>
+                {draft.id !== null ? (
+                  <label className="flex items-center gap-2 sm:col-span-2">
+                    <Switch checked={draft.enabled} onCheckedChange={(v) => setDraft({ ...draft, enabled: v })} aria-label={t('settings.connectors.enabledLabel')} />
+                    <span className="text-muted-foreground">{t('settings.connectors.enabledLabel')}</span>
+                  </label>
+                ) : null}
+              </div>
+              <div className="mt-5 flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setDraft(null)}>{t('settings.connectors.cancel')}</Button>
                 <Button data-testid="connector-save" disabled={busy || !draft.name || !draft.pluginId} onClick={() => void onSave()}>
                   {t('settings.connectors.save')}
