@@ -53,19 +53,53 @@ describe('bundle ui integrity', () => {
     expect(b.ui).toEqual(ui);
   });
 
-  it('verifyBundle: the ui-sha gate matches good bytes and rejects tampered bytes', () => {
-    const good = assembleBundle(rawManifest(sha(ui)), wasm, '00', ui);
-    const bad = assembleBundle(rawManifest('f'.repeat(64)), wasm, '00', ui);
-    // Both are unsigned (no publisher) so verifyBundle().valid is false overall; here we assert
-    // the ui-sha gate logic in isolation via a local mirror that mirrors verifyBundle's check.
-    const uiShaMatches = (bb: { ui?: Uint8Array; raw: Record<string, unknown> }): boolean => {
-      const p = bb.raw.payload as { ui?: { sha256?: string } } | undefined;
-      if (!p?.ui) return true;
-      if (!bb.ui) return false;
-      return sha(bb.ui) === p.ui.sha256;
-    };
-    expect(uiShaMatches(good)).toBe(true);
-    expect(uiShaMatches(bad)).toBe(false);
+  it('verifyBundle accepts a signed bundle whose ui.html matches the signed sha', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'mkt-ui-ok-'));
+    try {
+      const kp = generatePublisherKeypair();
+      const wasmSha = sha256Hex(wasm);
+      const uiSha = sha256Hex(ui);
+      const base = {
+        schemaVersion: 1, type: 'plugin', id: 'demo', version: '1.0.0',
+        publisher: { id: 'acme', name: 'Acme', keyFingerprint: kp.fingerprint },
+        compatibility: { ceVersion: '*' }, capabilities: [],
+        payload: { kind: 'plugin', wasmSha256: wasmSha, ui: { entry: 'ui.html', sha256: uiSha, nav: { label: 'Demo' } } },
+      };
+      const manifest = { ...base, signature: signManifest(base, wasmSha, kp.privateKeyDer) };
+      await writeFile(join(dir, 'manifest.json'), JSON.stringify(manifest));
+      await writeFile(join(dir, 'plugin.wasm'), wasm);
+      await writeFile(join(dir, 'ui.html'), ui);
+      await writeFile(join(dir, 'publisher.pub'), Buffer.from(kp.publicKeyDer).toString('hex'));
+      const b = await readBundle(dir);
+      expect(verifyBundle(b).valid).toBe(true);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('verifyBundle rejects a signed bundle whose ui.html has been tampered', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'mkt-ui-bad-'));
+    try {
+      const kp = generatePublisherKeypair();
+      const wasmSha = sha256Hex(wasm);
+      const uiSha = sha256Hex(ui);
+      const base = {
+        schemaVersion: 1, type: 'plugin', id: 'demo', version: '1.0.0',
+        publisher: { id: 'acme', name: 'Acme', keyFingerprint: kp.fingerprint },
+        compatibility: { ceVersion: '*' }, capabilities: [],
+        payload: { kind: 'plugin', wasmSha256: wasmSha, ui: { entry: 'ui.html', sha256: uiSha, nav: { label: 'Demo' } } },
+      };
+      const manifest = { ...base, signature: signManifest(base, wasmSha, kp.privateKeyDer) };
+      await writeFile(join(dir, 'manifest.json'), JSON.stringify(manifest));
+      await writeFile(join(dir, 'plugin.wasm'), wasm);
+      // Write tampered ui bytes — sha will not match the signed uiSha
+      await writeFile(join(dir, 'ui.html'), new TextEncoder().encode('<script>evil()</script>'));
+      await writeFile(join(dir, 'publisher.pub'), Buffer.from(kp.publicKeyDer).toString('hex'));
+      const b = await readBundle(dir);
+      expect(verifyBundle(b).valid).toBe(false);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });
 
