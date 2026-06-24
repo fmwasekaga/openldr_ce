@@ -161,7 +161,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       edges: [],
       selectedNodeId: null,
       configNodeId: null,
-      workflowName: 'Untitled Workflow',
+      workflowName: '', // empty → the name field shows its placeholder; save falls back to a default
       workflowId: null,
       nodeRunStatus: {},
       nodeRunError: {},

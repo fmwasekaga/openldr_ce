@@ -24,6 +24,6 @@ describe('useWorkflowStore — clear vs clearCanvas', () => {
     const s = useWorkflowStore.getState();
     expect(s.nodes).toEqual([]);
     expect(s.workflowId).toBeNull();
-    expect(s.workflowName).toBe('Untitled Workflow');
+    expect(s.workflowName).toBe(''); // empty so the name input shows its placeholder for a new workflow
   });
 });

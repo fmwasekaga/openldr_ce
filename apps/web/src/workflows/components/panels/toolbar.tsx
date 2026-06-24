@@ -24,7 +24,7 @@ export function Toolbar({ onSave, onRun, onHistory, onDatasets, saving, executin
         className="rounded-md border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:border-muted-foreground/50 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
         value={workflowName}
         onChange={(e) => setWorkflowName(e.target.value)}
-        placeholder="Workflow name"
+        placeholder="Untitled Workflow"
       />
       <span className="text-xs text-muted-foreground">·</span>
       <span className="text-xs text-muted-foreground">

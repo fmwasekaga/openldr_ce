@@ -13,11 +13,14 @@ import { useWorkflowStore } from './use-workflow-store';
 
 /** Build the persisted workflow body from the current store graph. */
 function buildBody(opts: { id: string; name: string; nodes: WorkflowNode[]; edges: WorkflowEdge[] }) {
+  // An empty name field shows a placeholder in the UI; persist a sensible default so the
+  // list never shows a blank row.
+  const name = opts.name.trim() || 'Untitled Workflow';
   // `serializeWorkflow` strips ReactFlow runtime metadata (selected/dragging).
-  const def = serializeWorkflow(opts.name, opts.nodes, opts.edges, opts.id);
+  const def = serializeWorkflow(name, opts.nodes, opts.edges, opts.id);
   return {
     id: opts.id,
-    name: opts.name,
+    name,
     description: null,
     definition: { nodes: def.nodes, edges: def.edges },
     enabled: true,
