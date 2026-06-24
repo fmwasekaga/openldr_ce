@@ -1,51 +1,89 @@
-import { useEffect, useState } from 'preact/hooks';
-import { getOpenldr } from './sdk';
+import { useState } from 'preact/hooks';
+import { Dashboard } from './screens/Dashboard';
+import { Mappings } from './screens/Mappings';
+import { Schedules } from './screens/Schedules';
+import { OrgUnits } from './screens/OrgUnits';
+import { Pushes } from './screens/Pushes';
+import { MappingEditor } from './screens/MappingEditor';
 
-type Status =
-  | { phase: 'loading' }
-  | { phase: 'ready'; connectors: number }
-  | { phase: 'error'; message: string };
+/**
+ * Screen routing for the sandboxed iframe — a plain state union, no react-router
+ * (the SPA is a single page inside the host's webview). `editor` is reached only
+ * from the Mappings list (it is not a top-nav tab); every other screen is a tab.
+ */
+type Route =
+  | { screen: 'dashboard' }
+  | { screen: 'mappings' }
+  | { screen: 'schedules' }
+  | { screen: 'orgUnits' }
+  | { screen: 'pushes' }
+  | { screen: 'editor'; mappingId?: string };
 
-/** Trivial first screen — proves the SPA + host handshake pipeline end-to-end.
-    Real screens (dashboard, mappings, schedules, ...) replace this in Tasks 6-11. */
+/** Top-nav tabs, in order. The editor is intentionally absent (list-only entry). */
+const TABS: ReadonlyArray<{ screen: Exclude<Route['screen'], 'editor'>; label: string }> = [
+  { screen: 'dashboard', label: 'Dashboard' },
+  { screen: 'mappings', label: 'Mappings' },
+  { screen: 'schedules', label: 'Schedules' },
+  { screen: 'orgUnits', label: 'Org Units' },
+  { screen: 'pushes', label: 'Pushes' },
+];
+
+/**
+ * The DHIS2 plugin shell — a top-nav bar + the active screen. The shell renders
+ * synchronously (no blank frame); each mounted screen awaits `openldr.ready`
+ * itself and sets `data-openldr-ready` once its first load settles.
+ */
 export function App() {
-  const [status, setStatus] = useState<Status>({ phase: 'loading' });
+  const [route, setRoute] = useState<Route>({ screen: 'dashboard' });
 
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const openldr = getOpenldr();
-        await openldr.ready;
-        const list = await openldr.connectors.list();
-        const count = Array.isArray(list) ? list.length : 0;
-        if (alive) setStatus({ phase: 'ready', connectors: count });
-      } catch (e) {
-        if (alive) setStatus({ phase: 'error', message: e instanceof Error ? e.message : String(e) });
-      } finally {
-        // Signal SDK handshake complete + first data settled (success OR error) so the
-        // host/e2e can await a real readiness signal — not merely first paint. Body is
-        // global, so set it unconditionally once init settles even if we've unmounted.
-        document.body.setAttribute('data-openldr-ready', '1');
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, []);
+  // The Mappings/Dashboard editor entry collapses to this single route. The
+  // "active" tab for the editor stays on Mappings (it's a sub-screen of it).
+  const activeTab = route.screen === 'editor' ? 'mappings' : route.screen;
 
   return (
-    <div class="dhis2">
-      <h1>DHIS2</h1>
-      {status.phase === 'loading' && <p class="status muted">Loading…</p>}
-      {status.phase === 'ready' && (
-        <p class="status">
-          {status.connectors > 0
-            ? `${status.connectors} connector${status.connectors === 1 ? '' : 's'} configured`
-            : 'No connector configured'}
-        </p>
-      )}
-      {status.phase === 'error' && <p class="status">Error: {status.message}</p>}
+    <div class="dhis2-shell">
+      <nav class="dhis2-nav" data-testid="dhis2-nav">
+        {TABS.map((t) => (
+          <button
+            key={t.screen}
+            type="button"
+            class={`dhis2-tab${activeTab === t.screen ? ' dhis2-tab-active' : ''}`}
+            data-testid={`nav-${t.screen}`}
+            aria-current={activeTab === t.screen ? 'page' : undefined}
+            onClick={() => setRoute({ screen: t.screen })}
+          >
+            {t.label}
+          </button>
+        ))}
+      </nav>
+
+      <main class="dhis2-screen">
+        {route.screen === 'dashboard' && (
+          <Dashboard
+            onNavigate={(s) => {
+              // Dashboard emits 'mappings' | 'orgUnits' | 'schedules' | 'pushes'.
+              if (s === 'mappings' || s === 'orgUnits' || s === 'schedules' || s === 'pushes') {
+                setRoute({ screen: s });
+              }
+            }}
+          />
+        )}
+        {route.screen === 'mappings' && (
+          <Mappings
+            onNavigate={(s, id) => {
+              // Mappings emits 'new' (create) | 'edit' (with id).
+              if (s === 'new') setRoute({ screen: 'editor' });
+              else if (s === 'edit') setRoute({ screen: 'editor', mappingId: id });
+            }}
+          />
+        )}
+        {route.screen === 'schedules' && <Schedules />}
+        {route.screen === 'orgUnits' && <OrgUnits />}
+        {route.screen === 'pushes' && <Pushes />}
+        {route.screen === 'editor' && (
+          <MappingEditor mappingId={route.mappingId} onDone={() => setRoute({ screen: 'mappings' })} />
+        )}
+      </main>
     </div>
   );
 }

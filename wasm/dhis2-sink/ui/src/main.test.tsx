@@ -1,19 +1,33 @@
-import { render, screen, waitFor } from '@testing-library/preact';
+import { fireEvent, render, screen } from '@testing-library/preact';
 import { createMockOpenldr } from '@openldr/plugin-ui-sdk';
 import { App } from './App';
 
 beforeEach(() => {
+  // The mock resolves every host op with empty defaults regardless of
+  // capabilities, so the default screens mount + settle without erroring.
   (window as unknown as { openldr: unknown }).openldr = createMockOpenldr({ pluginId: 'dhis2-sink' });
 });
 
-describe('dhis2-sink ui', () => {
-  it('renders the DHIS2 heading after the host handshake resolves', async () => {
+describe('dhis2-sink shell', () => {
+  it('renders the top-nav with all five tabs', () => {
     render(<App />);
-    expect(await screen.findByText('DHIS2')).toBeTruthy();
+    expect(screen.getByTestId('dhis2-nav')).toBeTruthy();
+    for (const tab of ['nav-dashboard', 'nav-mappings', 'nav-schedules', 'nav-orgUnits', 'nav-pushes']) {
+      expect(screen.getByTestId(tab)).toBeTruthy();
+    }
   });
 
-  it('shows the connector status once connectors.list resolves', async () => {
+  it('mounts the Dashboard screen by default', async () => {
     render(<App />);
-    await waitFor(() => expect(screen.getByText('No connector configured')).toBeTruthy());
+    // The Dashboard finishes its first load → the Pull metadata button appears.
+    expect(await screen.findByTestId('dhis2-pull-metadata')).toBeTruthy();
+    expect(screen.getByTestId('dhis2-dashboard')).toBeTruthy();
+  });
+
+  it('switches to the Mappings screen when the Mappings tab is clicked', async () => {
+    render(<App />);
+    await screen.findByTestId('dhis2-pull-metadata');
+    fireEvent.click(screen.getByTestId('nav-mappings'));
+    expect(await screen.findByTestId('dhis2-mappings-page')).toBeTruthy();
   });
 });
