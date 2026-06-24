@@ -79,6 +79,64 @@ describe('dhis2-sink Mappings', () => {
     expect(pushSpy).toHaveBeenCalledWith(expect.objectContaining({ dryRun: true, period: '202401' }));
   });
 
+  it('Push with no connectorId shows an error and does not call connectors.push', async () => {
+    const o = createMockOpenldr({ pluginId: 'dhis2-sink' });
+    const noConnDoc = { id: 'm2', name: 'No connector', definition: { kind: 'aggregate', source: { reportId: 'r1' } } };
+    o.storage.list = async (c: string): Promise<StoreEntry[]> => {
+      if (c === 'mappings') return [{ collection: 'mappings', key: 'm2', doc: noConnDoc }];
+      if (c === 'orgUnitMaps') return [];
+      return [];
+    };
+    o.storage.get = async (c: string, key: string) => (c === 'mappings' && key === 'm2' ? noConnDoc : null);
+    const pushSpy = vi.fn(async () => RUN_OUTCOME);
+    o.connectors.push = pushSpy as typeof o.connectors.push;
+    (window as unknown as { openldr: unknown }).openldr = o;
+
+    render(<Mappings />);
+    fireEvent.click(await screen.findByTestId('run-m2'));
+    fireEvent.input(await screen.findByTestId('run-period'), { target: { value: '202401' } });
+    fireEvent.click(screen.getByTestId('run-push'));
+
+    const err = await screen.findByRole('alert');
+    expect(err.textContent).toContain('mapping has no connector configured');
+    expect(pushSpy).not.toHaveBeenCalled();
+  });
+
+  it('Tracker push derives the values count from payload.events and shows the push status', async () => {
+    const o = createMockOpenldr({ pluginId: 'dhis2-sink' });
+    const trackerDef = { kind: 'tracker', connectorId: 'c1', source: { reportId: 'r1' } };
+    const trackerDoc = { id: 'm3', name: 'AMR tracker', definition: trackerDef };
+    const trackerOutcome = {
+      kind: 'tracker',
+      dryRun: false,
+      build: { payload: { events: [{}, {}] }, skipped: [] },
+      result: { status: 'OK', imported: 2, updated: 0, ignored: 0, conflicts: [] },
+    };
+    o.storage.list = async (c: string): Promise<StoreEntry[]> => {
+      if (c === 'mappings') return [{ collection: 'mappings', key: 'm3', doc: trackerDoc }];
+      if (c === 'orgUnitMaps') return [{ collection: 'orgUnitMaps', key: 'f1', doc: { facilityId: 'f1', orgUnitId: 'ou1' } }];
+      return [];
+    };
+    o.storage.get = async (c: string, key: string) => (c === 'mappings' && key === 'm3' ? trackerDoc : null);
+    const pushSpy = vi.fn(async () => trackerOutcome);
+    o.connectors.push = pushSpy as typeof o.connectors.push;
+    (window as unknown as { openldr: unknown }).openldr = o;
+
+    render(<Mappings />);
+    fireEvent.click(await screen.findByTestId('run-m3'));
+    fireEvent.input(await screen.findByTestId('run-period'), { target: { value: '202401' } });
+    fireEvent.click(screen.getByTestId('run-push'));
+
+    await waitFor(() => expect(pushSpy).toHaveBeenCalledTimes(1));
+    expect(pushSpy).toHaveBeenCalledWith(expect.objectContaining({ connectorId: 'c1', mapping: trackerDef, dryRun: false }));
+
+    const result = await screen.findByTestId('run-result');
+    expect(result.textContent).toContain('Values:');
+    expect(result.textContent).toContain('2'); // 2 events
+    expect(result.textContent).toContain('OK'); // push status
+    expect(result.textContent).toContain('imported 2');
+  });
+
   it('Delete → confirm calls storage.delete', async () => {
     const { deleteSpy } = mountMock();
     render(<Mappings />);
