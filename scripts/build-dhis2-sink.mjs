@@ -36,5 +36,17 @@ const manifest = {
   // concrete DHIS2 host at runtime" (the connector's baseUrl) — see the SP-1 egress model.
   capabilities: [{ kind: 'net-egress', allowedHosts: [] }],
 };
+
+// Ship the operator guide as the signed readme; inline ./img/*.png as data: URIs so it is self-contained.
+const docsDir = join(wasmDir, 'dhis2-sink', 'docs');
+let readme = readFileSync(join(docsDir, 'README.md'), 'utf8');
+readme = readme.replace(/\]\(\.\/img\/([\w.-]+)\)/g, (_m, file) => {
+  const ext = file.split('.').pop().toLowerCase();
+  const mime = ext === 'png' ? 'image/png' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'gif' ? 'image/gif' : ext === 'webp' ? 'image/webp' : 'application/octet-stream';
+  const b64 = readFileSync(join(docsDir, 'img', file)).toString('base64');
+  return `](data:${mime};base64,${b64})`;
+});
+manifest.readme = readme;
+
 writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 process.stdout.write(`staged ${staged} (sha256 ${sha}) + manifest.json\n`);
