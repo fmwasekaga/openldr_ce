@@ -15,6 +15,44 @@ export interface RegistryListing {
   summary?: string;
   signatureFingerprint?: string;
   valid?: boolean;        // computed only for local (which reads bundles); undefined for http
+  versions?: { version: string; ref: string }[];
+}
+
+/** Compare two semver strings. >0 if a>b, <0 if a<b, 0 equal. Numeric major.minor.patch; a release
+ *  outranks a prerelease of the same core (1.0.0 > 1.0.0-rc.1). Inputs are schema-validated semver. */
+export function compareSemver(a: string, b: string): number {
+  const split = (v: string) => {
+    const [core, pre] = v.split('-', 2);
+    const nums = core.split('.').map((n) => Number.parseInt(n, 10) || 0);
+    return { nums, pre: pre ?? null };
+  };
+  const A = split(a), B = split(b);
+  for (let i = 0; i < 3; i++) {
+    const d = (A.nums[i] ?? 0) - (B.nums[i] ?? 0);
+    if (d !== 0) return d;
+  }
+  if (A.pre === B.pre) return 0;
+  if (A.pre === null) return 1;
+  if (B.pre === null) return -1;
+  return A.pre < B.pre ? -1 : 1;
+}
+
+/** Group listings by plugin id → one listing per id (highest-semver as the card), with all
+ *  { version, ref } attached newest-first. Stable: ids sorted ascending. */
+export function collapseByLatest(listings: RegistryListing[]): RegistryListing[] {
+  const byId = new Map<string, RegistryListing[]>();
+  for (const l of listings) {
+    const arr = byId.get(l.id) ?? [];
+    arr.push(l);
+    byId.set(l.id, arr);
+  }
+  const out: RegistryListing[] = [];
+  for (const id of [...byId.keys()].sort()) {
+    const group = byId.get(id)!.slice().sort((x, y) => compareSemver(y.version, x.version));
+    const latest = group[0];
+    out.push({ ...latest, versions: group.map((g) => ({ version: g.version, ref: g.ref })) });
+  }
+  return out;
 }
 
 export interface RegistrySource {
@@ -47,7 +85,7 @@ export class LocalRegistrySource implements RegistrySource {
         });
       } catch { /* not a readable bundle dir — skip */ }
     }
-    return out;
+    return collapseByLatest(out);
   }
 
   async getBundle(ref: string): Promise<Bundle> {
@@ -92,6 +130,7 @@ export class HttpRegistrySource implements RegistrySource {
       ref, id: e.id, version: e.latestVersion, type: e.kind,
       publisher: e.publisher ? { id: e.publisher, name: e.publisher } : null,
       summary: e.summary, readme: e.readme, signatureFingerprint: e.signatureFingerprint,
+      versions: [{ version: e.latestVersion, ref }],
     }));
   }
 

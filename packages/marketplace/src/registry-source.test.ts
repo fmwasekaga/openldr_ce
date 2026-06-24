@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { generatePublisherKeypair, packBundle, verifyBundle } from './index';
-import { LocalRegistrySource, HttpRegistrySource } from './registry-source';
+import { LocalRegistrySource, HttpRegistrySource, collapseByLatest } from './registry-source';
 
 let dir: string;
 let manifestJson: string;
@@ -86,5 +86,31 @@ describe('HttpRegistrySource', () => {
     const src = new HttpRegistrySource(base, fetchMock as unknown as typeof fetch);
     await src.list();
     await expect(src.getBundle('x')).rejects.toThrow(/unsafe index path/);
+  });
+});
+
+const L = (ref: string, id: string, version: string) => ({ ref, id, version, type: 'plugin', publisher: null });
+
+describe('collapseByLatest', () => {
+  it('returns one listing per id, choosing the highest semver, with all versions attached', () => {
+    const out = collapseByLatest([
+      L('whonet-narrow', 'whonet-sqlite', '1.0.0'),
+      L('whonet-wide', 'whonet-sqlite', '1.1.0'),
+      L('dhis2-sink', 'dhis2-sink', '0.1.0'),
+    ]);
+    expect(out).toHaveLength(2);
+    const whonet = out.find((l) => l.id === 'whonet-sqlite')!;
+    expect(whonet.version).toBe('1.1.0');
+    expect(whonet.ref).toBe('whonet-wide');
+    expect(whonet.versions).toEqual([
+      { version: '1.1.0', ref: 'whonet-wide' },
+      { version: '1.0.0', ref: 'whonet-narrow' },
+    ]);
+  });
+  it('handles patch/minor/major ordering and a lone version', () => {
+    const out = collapseByLatest([L('a-2', 'a', '2.0.0'), L('a-10', 'a', '10.0.0'), L('a-2-1', 'a', '2.1.0')]);
+    expect(out).toHaveLength(1);
+    expect(out[0].version).toBe('10.0.0');
+    expect(out[0].versions!.map((v) => v.version)).toEqual(['10.0.0', '2.1.0', '2.0.0']);
   });
 });
