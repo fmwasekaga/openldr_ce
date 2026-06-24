@@ -1,4 +1,5 @@
 import { getAccessToken } from './auth/token';
+import type { PluginBrokerOp, PluginRpcResult } from '@openldr/plugin-ui-sdk';
 
 /** fetch wrapper that attaches the bearer token when one is present. */
 export function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
@@ -1252,3 +1253,24 @@ export const deleteConnector = (id: string): Promise<void> =>
   apiDelete(`/api/connectors/${encodeURIComponent(id)}`, 'delete connector');
 export const testConnector = (id: string): Promise<ConnectorTestResult> =>
   authFetch(`/api/connectors/${encodeURIComponent(id)}/test`, { method: 'POST' }).then((r) => okJson<ConnectorTestResult>(r, 'test connector'));
+
+// ── Plugin UI surface (SP-A1b) ─────────────────────────────────────────────────
+
+export interface PluginUiEntry {
+  id: string;
+  version: string;
+  nav: { label: string; icon: string; section: string };
+  uiSdkVersion: string;
+  hasWebview: boolean;
+  hasDeclarative: boolean;
+  declarative: unknown | null;
+}
+
+export const listPluginUis = (): Promise<PluginUiEntry[]> =>
+  apiGet<PluginUiEntry[]>('/api/plugins/ui', 'list plugin UIs');
+
+export const pluginUiAssetUrl = (id: string): string => `/api/plugins/${encodeURIComponent(id)}/ui/asset`;
+
+export const pluginBrokerCall = (id: string, op: PluginBrokerOp): Promise<PluginRpcResult> =>
+  authFetch(`/api/plugins/${encodeURIComponent(id)}/broker`, jbody({ op }, 'POST'))
+    .then((r) => okJson<PluginRpcResult>(r, 'plugin broker call'));
