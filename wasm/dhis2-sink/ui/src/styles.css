@@ -1,0 +1,26 @@
+/* Minimal plugin stylesheet. The iframe has no host CSS, so this replaces shadcn.
+   Kept small; the per-screen components (Tasks 6-11) extend it. */
+:root {
+  color-scheme: light dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  color: #111;
+  background: transparent;
+}
+.dhis2 {
+  padding: 16px;
+}
+.dhis2 h1 {
+  font-size: 18px;
+  margin: 0 0 12px;
+}
+.dhis2 .status {
+  color: #555;
+}
+.dhis2 .muted {
+  color: #888;
+}
