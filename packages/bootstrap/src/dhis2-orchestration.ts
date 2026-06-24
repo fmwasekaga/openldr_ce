@@ -43,7 +43,7 @@ export interface Dhis2OrchestrationDeps {
   pluginData: PluginDataStore;
   /** Optional: mirror the host DHIS2 audit trail when present. */
   audit?: AuditStore;
-  logger?: Logger;
+  logger: Logger;
 }
 
 export interface Dhis2Orchestration {
@@ -67,8 +67,7 @@ function mappingKind(m: DhisMapping): 'aggregate' | 'tracker' {
  * the egress-gated push through a connector + sink plugin.
  */
 export function createDhis2Orchestration(deps: Dhis2OrchestrationDeps): Dhis2Orchestration {
-  const noopLogger: Logger = { error() {}, warn() {}, info() {}, debug() {}, child: () => noopLogger } as unknown as Logger;
-  const logger = deps.logger ?? noopLogger;
+  const logger = deps.logger;
 
   async function resolveTarget(connectorId: string): Promise<{ target: ReportingTargetPort; connector: ConnectorRecord }> {
     const connector = await deps.connectors.get(connectorId);

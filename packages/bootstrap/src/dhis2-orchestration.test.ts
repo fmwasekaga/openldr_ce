@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { createLogger } from '@openldr/core';
 import { createDhis2Orchestration } from './dhis2-orchestration';
 
 const aggMapping = {
@@ -64,6 +65,7 @@ function deps(over: Record<string, unknown> = {}) {
     createTarget: vi.fn(() => target),
     secretsKey: 'k',
     pluginData: data.store,
+    logger: createLogger({ level: 'silent' }),
   };
   return { deps: { ...base, ...over }, target, data };
 }
@@ -176,7 +178,7 @@ describe('createDhis2Orchestration', () => {
   it('mirrors host audit records when an audit store is supplied', async () => {
     const records: unknown[] = [];
     const audit = { record: vi.fn(async (e: unknown) => { records.push(e); return e; }), list: vi.fn(), count: vi.fn(), get: vi.fn() };
-    const { deps: d } = deps({ audit, logger: { error() {}, warn() {} } });
+    const { deps: d } = deps({ audit });
     const orch = createDhis2Orchestration(d as any);
     await orch.push({ connectorId: 'c1', mapping: aggMapping, period: '2026', dryRun: false });
     expect(audit.record).toHaveBeenCalled();
