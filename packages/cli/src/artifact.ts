@@ -257,17 +257,20 @@ export async function runArtifactTest(
     const grant = readGrant(manifestRaw);
 
     // Build the PluginManifest (packages/plugins shape) from the artifact manifest payload.
-    const { entrypoint, wasi, limits } = manifest.payload;
+    const { entrypoint, entrypoints, wasi, limits } = manifest.payload;
     const { createHash: _createHash } = await import('node:crypto');
     const wasmSha256 = _createHash('sha256').update(wasm).digest('hex');
     const pluginManifest = {
       id: manifest.id,
       version: manifest.version,
+      kind: 'source' as const,
       entrypoint: entrypoint ?? 'convert',
+      entrypoints: entrypoints ?? [entrypoint ?? 'convert'],
       wasi: wasi ?? false,
       wasmSha256,
       description: manifest.description ?? '',
       license: manifest.license ?? 'UNLICENSED',
+      readme: manifest.readme ?? '',
       limits: limits ?? { memoryMb: 256, timeoutMs: 30_000 },
     };
 
