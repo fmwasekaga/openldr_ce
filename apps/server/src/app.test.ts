@@ -405,6 +405,8 @@ function ctxWith(status: 'up' | 'down'): AppContext {
     } as never,
     forms: {} as never,
     plugins: {} as never,
+    pluginData: {} as never,
+    pluginBroker: {} as never,
     marketplaceForms: {} as never,
     terminology: { ops: {} as never, admin: buildFakeAdmin(), ontology: buildFakeOntology(), loaders: buildFakeLoaders() },
     dashboards: {} as never,

@@ -28,6 +28,10 @@ import { renderReportPdf } from '@openldr/report-pdf';
 import { createReportScheduler, type ReportScheduler } from './report-scheduler';
 import { createFormArtifactInstaller, type FormArtifactInstaller } from './form-artifact-install';
 import { type PluginRuntime } from '@openldr/plugins';
+import { createConnectorStore, createPluginDataStore, type PluginDataStore } from '@openldr/db';
+import { createPluginBroker, type PluginBroker } from './plugin-broker';
+import { policyFromConfig } from './policy';
+import { createPluginTarget } from './connector-target';
 import { selectTargetStore } from './target-store';
 import { createPluginRegistry } from './plugin-registry';
 import { buildOntologyDistribution, createOperations, importTerminologyResource, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type LoadResult, type OntologyBuildProgress, type OntologyManifest, type Operations } from '@openldr/terminology';
@@ -129,6 +133,8 @@ export interface AppContext {
     datasets: WorkflowDatasetStore;
   };
   plugins: PluginRuntime;
+  pluginData: PluginDataStore;
+  pluginBroker: PluginBroker;
   cfg: Config;
   close(): Promise<void>;
 }
@@ -366,6 +372,41 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   });
   const workflows = { store: workflowStore, runs: workflowRuns, schedules: workflowSchedules, webhooks: workflowWebhooks, runner: workflowRunner, services: workflowServices, datasets: workflowDatasets };
 
+  const pluginData = createPluginDataStore(internal.db);
+  const connectorStore = createConnectorStore(internal.db);
+  const pluginBroker = createPluginBroker({
+    plugins,
+    pluginData,
+    reporting: { list: () => reporting.list(), columns: undefined, run: (id, params) => reporting.run(id, params) },
+    connectors: connectorStore,
+    // Live connector test: decrypt config → load sink → health_check + pull_metadata.
+    // Throws on any failure; the broker catches, logs detail server-side, and returns
+    // a generic error to the (untrusted) plugin so credentials in errors never reach the iframe.
+    testConnector: async (id: string) => {
+      const c = await connectorStore.get(id);
+      if (!c || !c.enabled) throw new Error(`connector ${id} not found or disabled`);
+      const config = await connectorStore.getDecryptedConfig(id, cfg.SECRETS_ENCRYPTION_KEY);
+      const sink = await plugins.loadSink(c.pluginId);
+      if (!sink) throw new Error(`sink plugin ${c.pluginId} is not installed`);
+      const target = createPluginTarget(sink, config, c.allowedHost);
+      const health = await target.healthCheck();
+      if (health.status !== 'up') throw new Error(health.detail ?? 'unreachable');
+      const md = await target.pullMetadata();
+      return {
+        ok: true,
+        metadata: {
+          dataElements: md.dataElements.length,
+          orgUnits: md.orgUnits.length,
+          categoryOptionCombos: md.categoryOptionCombos.length,
+          programs: md.programs?.length ?? 0,
+          programStages: md.programStages?.length ?? 0,
+        },
+      };
+    },
+    logger,
+    policy: () => policyFromConfig(cfg),
+  });
+
   return {
     logger,
     auth,
@@ -388,6 +429,8 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     dashboards,
     workflows,
     plugins,
+    pluginData,
+    pluginBroker,
     cfg,
     async close() {
       await Promise.allSettled([eventing.close(), store.close(), internal.close()]);
@@ -403,3 +446,5 @@ export * from './ingest-context';
 export * from './target-store';
 export * from './terminology-context';
 export * from './seed';
+export * from './plugin-broker';
+export * from './policy';
