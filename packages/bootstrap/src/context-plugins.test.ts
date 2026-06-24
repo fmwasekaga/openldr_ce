@@ -7,7 +7,7 @@ describe('context plugin wiring', () => {
     const broker = createPluginBroker({
       plugins: { list: async () => [], loadSink: async () => undefined } as any,
       pluginData: { get: async () => null, put: async () => {}, delete: async () => {}, list: async () => [], purge: async () => {} },
-      reporting: { list: () => [], run: async () => ({}) },
+      reporting: { list: () => [], columns: async () => [], run: async () => ({}), eventSources: () => [] },
       connectors: { list: async () => [], get: async () => null },
       policy: () => policyFromConfig({ PLUGIN_UI_ENABLED: true, PLUGIN_EGRESS_ENABLED: true } as any),
     });

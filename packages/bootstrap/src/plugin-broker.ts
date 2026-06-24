@@ -65,11 +65,21 @@ export interface PluginBrokerDeps {
     loadSink(id: string, version?: string): Promise<{ invoke(entrypoint: string, input: unknown, opts?: unknown): Promise<unknown> } | undefined>;
   };
   pluginData: PluginDataStore;
-  reporting: { list(): unknown; columns?(id: string): unknown; run(id: string, params: unknown): Promise<unknown> };
+  reporting: { list(): unknown; columns(id: string): Promise<unknown>; run(id: string, params: unknown): Promise<unknown>; eventSources(): unknown };
   connectors: { list(): Promise<unknown[]>; get(id: string): Promise<unknown | null> };
   /** Test a connector live (resolve→loadSink→health/metadata). Optional here; wired in app
    *  context. When absent, connectors.test returns a structured error. */
   testConnector?: (id: string) => Promise<unknown>;
+  /** Pull live metadata for a connector (resolve→loadSink→pull_metadata). */
+  connectorMetadata?: (id: string) => Promise<unknown>;
+  /** Run a DHIS2 push for a caller-supplied mapping/orgUnitMap through a connector's sink. */
+  connectorPush?: (input: { connectorId: string; mapping: unknown; orgUnitMap?: Record<string, string>; period: string; dryRun: boolean }) => Promise<unknown>;
+  /** Validate a caller-supplied mapping against a connector's live metadata → string[]. */
+  connectorValidate?: (input: { connectorId: string; mapping: unknown }) => Promise<unknown>;
+  /** List FHIR Location facilities ({ id, name }[]) for the org-unit mapping screen. */
+  facilities?: () => Promise<unknown>;
+  /** Plugin-scoped schedule registry (wired in Task 4; undefined until then). */
+  schedules?: { register(pluginId: string, schedule: unknown): Promise<unknown>; list(pluginId: string): Promise<unknown>; remove(pluginId: string, id: string): Promise<unknown> };
   policy: () => PluginPolicy;
   /** Optional: server-side sink for redacted host-op error detail (never sent to the plugin). */
   logger?: { warn(obj: unknown, msg: string): void };
@@ -124,15 +134,41 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
             return { ok: true, data: await sink.invoke(op.entrypoint, op.input) };
           }
           case 'reports.list': return { ok: true, data: deps.reporting.list() };
-          case 'reports.columns': {
-            if (!deps.reporting.columns) return { ok: false, error: 'reports.columns is unavailable' };
-            return { ok: true, data: deps.reporting.columns(op.id) };
-          }
+          case 'reports.columns': return { ok: true, data: await deps.reporting.columns(op.id) };
           case 'reports.run': return { ok: true, data: await deps.reporting.run(op.id, op.params ?? {}) };
+          case 'reports.eventSources': return { ok: true, data: deps.reporting.eventSources() };
           case 'connectors.list': return { ok: true, data: await deps.connectors.list() };
           case 'connectors.test': {
             if (!deps.testConnector) return { ok: false, error: 'connectors.test is unavailable' };
             return { ok: true, data: await deps.testConnector(op.id) };
+          }
+          case 'connectors.metadata': {
+            if (!deps.connectorMetadata) return { ok: false, error: 'connectors.metadata unavailable' };
+            return { ok: true, data: await deps.connectorMetadata(op.id) };
+          }
+          case 'connectors.push': {
+            if (!deps.connectorPush) return { ok: false, error: 'connectors.push unavailable' };
+            return { ok: true, data: await deps.connectorPush({ connectorId: op.connectorId, mapping: op.mapping, orgUnitMap: op.orgUnitMap, period: op.period, dryRun: op.dryRun }) };
+          }
+          case 'connectors.validate': {
+            if (!deps.connectorValidate) return { ok: false, error: 'connectors.validate unavailable' };
+            return { ok: true, data: await deps.connectorValidate({ connectorId: op.connectorId, mapping: op.mapping }) };
+          }
+          case 'fhir.facilities': {
+            if (!deps.facilities) return { ok: false, error: 'fhir.facilities unavailable' };
+            return { ok: true, data: await deps.facilities() };
+          }
+          case 'schedule.register': {
+            if (!deps.schedules) return { ok: false, error: 'schedule unavailable' };
+            return { ok: true, data: await deps.schedules.register(pluginId, op.schedule) };
+          }
+          case 'schedule.list': {
+            if (!deps.schedules) return { ok: false, error: 'schedule unavailable' };
+            return { ok: true, data: await deps.schedules.list(pluginId) };
+          }
+          case 'schedule.remove': {
+            if (!deps.schedules) return { ok: false, error: 'schedule unavailable' };
+            return { ok: true, data: await deps.schedules.remove(pluginId, op.id) };
           }
           default: return { ok: false, error: `unknown operation` };
         }

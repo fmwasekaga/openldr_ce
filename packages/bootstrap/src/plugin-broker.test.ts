@@ -15,6 +15,8 @@ function memData() {
   };
 }
 
+const defaultReporting = () => ({ list: () => [], columns: async () => [], run: async () => ({ columns: [], rows: [], meta: {} }), eventSources: () => [] });
+
 function broker(opts: {
   caps: unknown[] | undefined;
   uiEnabled?: boolean;
@@ -22,15 +24,25 @@ function broker(opts: {
   connectors?: any;
   loadSink?: any;
   testConnector?: any;
+  connectorMetadata?: any;
+  connectorPush?: any;
+  connectorValidate?: any;
+  facilities?: any;
+  schedules?: any;
 }) {
   const data = memData();
   const row = { id: 'p1', version: '1.0.0', enabled: true, manifest: opts.caps === undefined ? {} : { capabilities: opts.caps } };
   const b = createPluginBroker({
     plugins: { list: async () => [row], loadSink: opts.loadSink ?? (async () => undefined) } as any,
     pluginData: data.store as any,
-    reporting: opts.reporting ?? { list: () => [], run: async () => ({ columns: [], rows: [], meta: {} }) },
+    reporting: { ...defaultReporting(), ...(opts.reporting ?? {}) },
     connectors: opts.connectors ?? { list: async () => [], get: async () => null },
     testConnector: opts.testConnector,
+    connectorMetadata: opts.connectorMetadata,
+    connectorPush: opts.connectorPush,
+    connectorValidate: opts.connectorValidate,
+    facilities: opts.facilities,
+    schedules: opts.schedules,
     policy: () => ({ uiEnabled: opts.uiEnabled ?? true, egressEnabled: true }),
   });
   return { b, data };
@@ -95,7 +107,7 @@ describe('plugin broker', () => {
     const b = createPluginBroker({
       plugins: { list: async () => [{ id: 'p1', version: '1', enabled: false, manifest: { capabilities: [] } }], loadSink: async () => undefined } as any,
       pluginData: data.store as any,
-      reporting: { list: () => [], run: async () => ({}) },
+      reporting: { ...defaultReporting() },
       connectors: { list: async () => [], get: async () => null },
       policy: () => ({ uiEnabled: true, egressEnabled: true }),
     });
@@ -182,6 +194,58 @@ describe('plugin broker', () => {
     expect(list.ok).toBe(false);
     expect((list as any).error).toMatch(/lab_admin/);
     expect((await b.handle('p1', low, { kind: 'schedule.remove', id: 's1' })).ok).toBe(false);
+  });
+
+  it('reports.eventSources returns the injected event-source catalog (gated by host:reports)', async () => {
+    const { b } = broker({ caps: [{ kind: 'host:reports' }], reporting: { eventSources: () => [{ id: 's1', name: 'S1' }] } });
+    const r = await b.handle('p1', principal, { kind: 'reports.eventSources' });
+    expect(r).toEqual({ ok: true, data: [{ id: 's1', name: 'S1' }] });
+  });
+
+  it('connectors.metadata delegates to connectorMetadata(id) for lab_admin with the capability', async () => {
+    const { b } = broker({ caps: [{ kind: 'host:connectors' }], connectorMetadata: async (id: string) => ({ dataElements: 3, id }) });
+    const r = await b.handle('p1', principal, { kind: 'connectors.metadata', id: 'c9' });
+    expect(r).toEqual({ ok: true, data: { dataElements: 3, id: 'c9' } });
+  });
+
+  it('connectors.metadata returns a structured error when no metadata dep is wired', async () => {
+    const { b } = broker({ caps: [{ kind: 'host:connectors' }] });
+    const r = await b.handle('p1', principal, { kind: 'connectors.metadata', id: 'c9' });
+    expect(r).toEqual({ ok: false, error: 'connectors.metadata unavailable' });
+  });
+
+  it('connectors.push delegates with the FULL input object', async () => {
+    const seen: unknown[] = [];
+    const { b } = broker({ caps: [{ kind: 'host:connectors' }], connectorPush: async (input: unknown) => { seen.push(input); return { kind: 'aggregate', dryRun: false }; } });
+    const r = await b.handle('p1', principal, { kind: 'connectors.push', connectorId: 'c1', mapping: { id: 'm' }, orgUnitMap: { f: 'OU' }, period: '2026', dryRun: false });
+    expect(r).toEqual({ ok: true, data: { kind: 'aggregate', dryRun: false } });
+    expect(seen[0]).toEqual({ connectorId: 'c1', mapping: { id: 'm' }, orgUnitMap: { f: 'OU' }, period: '2026', dryRun: false });
+  });
+
+  it('connectors.validate delegates and returns the validator output', async () => {
+    const { b } = broker({ caps: [{ kind: 'host:connectors' }], connectorValidate: async () => ['bad dataElement'] });
+    const r = await b.handle('p1', principal, { kind: 'connectors.validate', connectorId: 'c1', mapping: {} });
+    expect(r).toEqual({ ok: true, data: ['bad dataElement'] });
+  });
+
+  it('fhir.facilities returns the injected facilities list (gated by host:fhir)', async () => {
+    const { b } = broker({ caps: [{ kind: 'host:fhir' }], facilities: async () => [{ id: 'L1', name: 'Lab 1' }] });
+    const r = await b.handle('p1', principal, { kind: 'fhir.facilities' });
+    expect(r).toEqual({ ok: true, data: [{ id: 'L1', name: 'Lab 1' }] });
+  });
+
+  it('schedule.list passes the TRUSTED pluginId to the schedules dep', async () => {
+    let seenPlugin: string | undefined;
+    const { b } = broker({ caps: [{ kind: 'host:schedule' }], schedules: { register: async () => ({}), list: async (pid: string) => { seenPlugin = pid; return [{ id: 's1' }]; }, remove: async () => ({}) } });
+    const r = await b.handle('p1', principal, { kind: 'schedule.list' });
+    expect(r).toEqual({ ok: true, data: [{ id: 's1' }] });
+    expect(seenPlugin).toBe('p1');
+  });
+
+  it('schedule.list returns "schedule unavailable" when no schedules dep is wired', async () => {
+    const { b } = broker({ caps: [{ kind: 'host:schedule' }] });
+    const r = await b.handle('p1', principal, { kind: 'schedule.list' });
+    expect(r).toEqual({ ok: false, error: 'schedule unavailable' });
   });
 
   it('redacts connectors.test error detail (no raw message to the plugin) and logs it', async () => {

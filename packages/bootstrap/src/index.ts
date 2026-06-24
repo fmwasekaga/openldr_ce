@@ -32,6 +32,7 @@ import { createConnectorStore, createPluginDataStore, type PluginDataStore } fro
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { policyFromConfig } from './policy';
 import { createPluginTarget } from './connector-target';
+import { createDhis2Orchestration } from './dhis2-orchestration';
 import { selectTargetStore } from './target-store';
 import { createPluginRegistry } from './plugin-registry';
 import { buildOntologyDistribution, createOperations, importTerminologyResource, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type LoadResult, type OntologyBuildProgress, type OntologyManifest, type Operations } from '@openldr/terminology';
@@ -374,11 +375,40 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
 
   const pluginData = createPluginDataStore(internal.db);
   const connectorStore = createConnectorStore(internal.db);
+  // Generic, caller-driven DHIS2 push orchestration (mapping/orgUnitMap supplied by the
+  // plugin UI through the broker). Mirrors the host dhis2-context runMapping behaviour.
+  const dhis2Orch = createDhis2Orchestration({
+    connectors: connectorStore,
+    loadSink: (id, v) => plugins.loadSink(id, v),
+    reporting: {
+      run: (id, params) => reporting.run(id, params).then((r) => ({ rows: (r as { rows: Record<string, unknown>[] }).rows })),
+      runEventSource: (id, w) => reporting.runEventSource(id, w).then((r) => ({ rows: (r as { rows: Record<string, unknown>[] }).rows })),
+    },
+    createTarget: createPluginTarget,
+    secretsKey: cfg.SECRETS_ENCRYPTION_KEY,
+    pluginData,
+    audit,
+    logger,
+  });
   const pluginBroker = createPluginBroker({
     plugins,
     pluginData,
-    reporting: { list: () => reporting.list(), columns: undefined, run: (id, params) => reporting.run(id, params) },
+    reporting: {
+      list: () => reporting.list(),
+      columns: (id) => reporting.run(id, {}).then((r) => (r as { columns: unknown }).columns),
+      run: (id, params) => reporting.run(id, params),
+      eventSources: () => reporting.eventSources(),
+    },
     connectors: connectorStore,
+    connectorMetadata: (id) => dhis2Orch.metadata(id),
+    connectorPush: (input) => dhis2Orch.push(input),
+    connectorValidate: (input) => dhis2Orch.validate(input),
+    // FHIR Location facilities for the org-unit mapping screen ({ id, name }[]).
+    facilities: async () =>
+      (await termFhirStore.listByType('Location')).map((l) => {
+        const r = (l.resource ?? l) as { id?: string; name?: string };
+        return { id: r.id, name: r.name ?? r.id };
+      }),
     // Live connector test: decrypt config → load sink → health_check + pull_metadata.
     // Throws on any failure; the broker catches, logs detail server-side, and returns
     // a generic error to the (untrusted) plugin so credentials in errors never reach the iframe.
