@@ -933,6 +933,7 @@ export interface ArtifactPayloadMeta {
 export interface AvailableArtifactDetail extends AvailableArtifact {
   compatible: boolean;
   ceVersion: string;
+  readme?: string;
   payload: ArtifactPayloadMeta;
 }
 export interface InstalledArtifact {

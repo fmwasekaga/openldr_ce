@@ -13,6 +13,7 @@ export const pluginManifestSchema = z.object({
   entrypoints: z.array(z.string().min(1)).default([]),
   wasmSha256: z.string().regex(/^[0-9a-f]{64}$/, 'wasmSha256 must be a 64-char hex digest'),
   description: z.string().default(''),
+  readme: z.string().default(''),
   license: z.string().default('UNLICENSED'),
   wasi: z.boolean().default(false),
   limits: z

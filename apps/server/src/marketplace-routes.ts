@@ -91,7 +91,7 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
       const v = verifyBundle(b);
       return {
         ref, id: b.manifest.id, version: b.manifest.version, type: b.manifest.type,
-        description: b.manifest.description, license: b.manifest.license,
+        description: b.manifest.description, readme: b.manifest.readme, license: b.manifest.license,
         publisher: b.manifest.publisher ?? null, capabilities: b.manifest.capabilities,
         compatibility: b.manifest.compatibility,
         compatible: isCompatible(b.manifest.compatibility.ceVersion, CE_VERSION),
@@ -182,6 +182,7 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
         id, kind: b.manifest.type, latestVersion: version,
         publisher: b.manifest.publisher?.name ?? '',
         summary: b.manifest.description ?? '',
+        readme: b.manifest.readme ?? '',
         path: bundlePath, signatureFingerprint: v.fingerprint,
       }, nowIso);
 

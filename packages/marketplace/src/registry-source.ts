@@ -10,6 +10,7 @@ export interface RegistryListing {
   type: string;
   publisher: { id: string; name: string } | null;
   description?: string;
+  readme?: string;
   license?: string;
   summary?: string;
   signatureFingerprint?: string;
@@ -41,6 +42,7 @@ export class LocalRegistrySource implements RegistrySource {
         out.push({
           ref: d.name, id: b.manifest.id, version: b.manifest.version, type: b.manifest.type,
           publisher: b.manifest.publisher ?? null, description: b.manifest.description,
+          readme: b.manifest.readme,
           license: b.manifest.license, valid: verifyBundle(b).valid,
         });
       } catch { /* not a readable bundle dir — skip */ }
@@ -89,7 +91,7 @@ export class HttpRegistrySource implements RegistrySource {
     return [...map.entries()].map(([ref, e]) => ({
       ref, id: e.id, version: e.latestVersion, type: e.kind,
       publisher: e.publisher ? { id: e.publisher, name: e.publisher } : null,
-      summary: e.summary, signatureFingerprint: e.signatureFingerprint,
+      summary: e.summary, readme: e.readme, signatureFingerprint: e.signatureFingerprint,
     }));
   }
 

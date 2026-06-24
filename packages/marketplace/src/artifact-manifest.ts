@@ -27,6 +27,7 @@ export const artifactManifestSchema = z.object({
   id: z.string().min(1),
   version: z.string().regex(SEMVER, 'version must be semver'),
   description: z.string().default(''),
+  readme: z.string().default(''),
   license: z.string().default('UNLICENSED'),
   // Publisher is optional: legacy plugin manifests carry none and install hash-only.
   publisher: z.object({ id: z.string().min(1), name: z.string().default(''), keyFingerprint: z.string().regex(HEX64) }).optional(),
@@ -49,7 +50,7 @@ export function parseArtifactManifest(raw: unknown): ArtifactManifest {
  *  fail-closed (the plugin can emit nothing), so reference plugins must carry it. */
 export interface LegacyPluginManifest {
   id: string; version: string; kind?: 'source' | 'sink'; entrypoint?: string; entrypoints?: string[];
-  wasmSha256: string; description?: string; license?: string; wasi?: boolean;
+  wasmSha256: string; description?: string; readme?: string; license?: string; wasi?: boolean;
   limits?: { memoryMb: number; timeoutMs: number };
   capabilities?: unknown;
 }
@@ -64,6 +65,7 @@ export function pluginManifestToArtifact(m: LegacyPluginManifest): ArtifactManif
     id: m.id,
     version: m.version,
     description: m.description ?? '',
+    readme: m.readme ?? '',
     license: m.license ?? 'UNLICENSED',
     compatibility: { ceVersion: '*' },
     ...(m.capabilities !== undefined ? { capabilities: m.capabilities } : {}),

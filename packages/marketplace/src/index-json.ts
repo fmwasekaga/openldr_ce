@@ -6,6 +6,7 @@ const indexEntrySchema = z.object({
   latestVersion: z.string().min(1),
   publisher: z.string().default(''),
   summary: z.string().default(''),
+  readme: z.string().default(''),
   path: z.string().min(1),
   signatureFingerprint: z.string().optional(),
 });

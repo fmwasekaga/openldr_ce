@@ -3,7 +3,7 @@ import { parseIndex, mergeIndexEntry, type MarketplaceIndexEntry } from './index
 
 const entry = (over: Partial<MarketplaceIndexEntry> = {}): MarketplaceIndexEntry => ({
   id: 'whonet-sqlite', kind: 'plugin', latestVersion: '1.1.0',
-  publisher: 'OpenLDR', summary: 'WHONET -> FHIR',
+  publisher: 'OpenLDR', summary: 'WHONET -> FHIR', readme: '',
   path: 'bundles/whonet-sqlite-1.1.0', signatureFingerprint: 'a'.repeat(64), ...over,
 });
 

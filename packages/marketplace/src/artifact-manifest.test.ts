@@ -89,4 +89,18 @@ describe('artifact manifest', () => {
     expect(p.entrypoints).toEqual(['health_check', 'push_aggregate']);
     expect(() => parseArtifactManifest(a)).not.toThrow();
   });
+
+  it('carries readme through pluginManifestToArtifact and parse', () => {
+    const art = pluginManifestToArtifact({
+      id: 'p', version: '1.0.0', entrypoint: 'convert', wasmSha256: 'e'.repeat(64),
+      description: 'x', license: 'MIT', wasi: false, limits: { memoryMb: 256, timeoutMs: 30000 },
+      readme: '# Hello\n\nsetup steps',
+    } as never);
+    expect(art.readme).toBe('# Hello\n\nsetup steps');
+    expect(parseArtifactManifest({ ...art }).readme).toBe('# Hello\n\nsetup steps');
+  });
+  it('defaults readme to empty string when absent', () => {
+    const art = pluginManifestToArtifact({ id: 'p', version: '1.0.0', entrypoint: 'convert', wasmSha256: 'e'.repeat(64), wasi: false, limits: { memoryMb: 256, timeoutMs: 30000 } } as never);
+    expect(art.readme).toBe('');
+  });
 });

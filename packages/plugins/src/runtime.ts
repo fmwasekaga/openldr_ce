@@ -87,6 +87,7 @@ function artifactToPluginManifest(a: ArtifactManifest): PluginManifest {
     entrypoints: p.entrypoints,
     wasmSha256: p.wasmSha256,
     description: a.description,
+    readme: a.readme,
     license: a.license,
     wasi: p.wasi,
     limits: p.limits,
