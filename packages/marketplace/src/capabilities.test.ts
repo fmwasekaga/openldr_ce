@@ -23,3 +23,18 @@ describe('capabilities', () => {
     expect(() => parseCapabilities([{ kind: 'bad' }])).toThrow();
   });
 });
+
+describe('host-service capabilities', () => {
+  it('parses host:reports, host:connectors, host:schedule presence gates', () => {
+    const caps = parseCapabilities([
+      { kind: 'host:reports' },
+      { kind: 'host:connectors' },
+      { kind: 'host:schedule' },
+    ]);
+    expect(caps.map((c) => c.kind)).toEqual(['host:reports', 'host:connectors', 'host:schedule']);
+  });
+
+  it('still rejects an unknown capability kind', () => {
+    expect(() => parseCapabilities([{ kind: 'host:bogus' }])).toThrow();
+  });
+});

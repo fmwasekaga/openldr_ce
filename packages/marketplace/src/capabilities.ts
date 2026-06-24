@@ -14,6 +14,11 @@ export const capabilitySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('emit-fhir'), resourceTypes: z.array(z.string().min(1)).min(1) }),
   z.object({ kind: z.literal('net-egress'), allowedHosts: z.array(z.string().min(1)).default([]) }),
   z.object({ kind: z.literal('data-scope'), resourceTypes: z.array(z.string().min(1)).default([]), fields: z.array(z.string().min(1)).default([]) }),
+  // Host-service gates (broker-enforced; presence-only, no params). The broker maps each
+  // plugin-UI host operation to one of these and refuses calls whose grant lacks it.
+  z.object({ kind: z.literal('host:reports') }),
+  z.object({ kind: z.literal('host:connectors') }),
+  z.object({ kind: z.literal('host:schedule') }),
 ]);
 
 export type Capability = z.infer<typeof capabilitySchema>;
