@@ -74,7 +74,7 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
           ref: l.ref, id: l.id, version: l.version, type: l.type,
           publisher: l.publisher, description: l.description, license: l.license,
           summary: l.summary, signatureFingerprint: l.signatureFingerprint,
-          valid: l.valid,
+          valid: l.valid, versions: l.versions ?? [],
         })),
       };
     } catch (e) {

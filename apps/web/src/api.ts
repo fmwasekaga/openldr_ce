@@ -921,6 +921,7 @@ export interface AvailableArtifact {
   license?: string;
   summary?: string;
   signatureFingerprint?: string;
+  versions?: { version: string; ref: string }[];
 }
 export interface ArtifactPayloadMeta {
   kind: string;

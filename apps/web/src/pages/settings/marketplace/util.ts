@@ -14,6 +14,7 @@ export interface CardEntry {
   enabled?: boolean;     // installed AND user-enabled (on/off toggle)
   drifted?: boolean;     // installed form-template modified locally
   targetFormId?: string; // installed form-template's local form id
+  versions?: { version: string; ref: string }[];
 }
 
 /** Render one capability as a human-readable line for the Permissions list. */
@@ -31,7 +32,7 @@ export function availableToEntry(b: AvailableArtifact, installedIds: Set<string>
   return {
     ref: b.ref, id: b.id, version: b.version, type: b.type,
     publisher: b.publisher, capabilities: b.capabilities ?? [], valid: b.valid,
-    installed: installedIds.has(b.id),
+    installed: installedIds.has(b.id), versions: b.versions ?? [],
   };
 }
 
