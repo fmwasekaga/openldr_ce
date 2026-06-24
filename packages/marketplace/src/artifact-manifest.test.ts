@@ -142,5 +142,6 @@ describe('manifest ui contribution', () => {
     if (a.payload.kind !== 'plugin') throw new Error('expected plugin payload');
     expect(a.payload.ui?.nav.label).toBe('Demo');
     expect(a.payload.ui?.nav.icon).toBe('share-2');
+    expect(a.payload.ui?.sha256).toBe(UI_SHA);
   });
 });

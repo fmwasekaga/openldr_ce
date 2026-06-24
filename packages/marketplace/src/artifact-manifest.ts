@@ -16,10 +16,10 @@ export const uiContributionSchema = z.object({
   nav: z.object({
     label: z.string().min(1),
     icon: z.string().min(1).default('puzzle'),
-    section: z.string().min(1).default('apps'),
+    section: z.string().min(1).default('apps'), // SP-A1b will narrow to an enum once the host sidebar section set is fixed
   }),
-  uiSdkVersion: z.literal('1').default('1'),
-  declarative: z.unknown().optional(),
+  uiSdkVersion: z.literal('1').default('1'), // add literals here when a new SDK ships; old signed bundles stay valid at their declared version
+  declarative: z.unknown().optional(), // TODO(SP-A1b): narrow to a JSON-Schema record once the declarative renderer consumes it
 });
 
 export type UiContribution = z.infer<typeof uiContributionSchema>;
