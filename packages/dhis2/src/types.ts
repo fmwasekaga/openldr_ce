@@ -14,6 +14,8 @@ export interface AggregateMapping {
   orgUnitColumn: string;
   periodColumn?: string;
   columns: ColumnMapping[];
+  /** Which connector (sink plugin + sealed credentials) this mapping pushes through. */
+  connectorId?: string;
 }
 
 export interface DataValue {
@@ -54,6 +56,8 @@ export interface TrackerMapping {
   eventDateColumn: string;
   idColumn: string;
   dataValues: TrackerColumnMapping[];
+  /** Which connector (sink plugin + sealed credentials) this mapping pushes through. */
+  connectorId?: string;
 }
 
 export type DhisMapping = AggregateMapping | TrackerMapping;
