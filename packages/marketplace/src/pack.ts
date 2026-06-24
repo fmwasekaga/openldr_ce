@@ -11,6 +11,9 @@ export interface PackInput {
   outDir: string;
   privateKeyDer: Uint8Array;
   publicKeyDer: Uint8Array;
+  /** UI bytes (ui.html) for a plugin whose manifest declares payload.ui.entry. Required when the
+   *  manifest declares a webview ui entry; ignored otherwise. */
+  ui?: Uint8Array;
 }
 export interface PackResult { bundleDir: string; fingerprint: string; manifest: ArtifactManifest }
 
@@ -46,9 +49,18 @@ export async function packBundle(input: PackInput): Promise<PackResult> {
   const signature = signManifest(parsed as unknown as Record<string, unknown>, payloadSha, input.privateKeyDer);
   const signedManifest = { ...(parsed as unknown as Record<string, unknown>), signature };
 
+  // A webview ui contribution declares a single ui.html (basename); write its bytes alongside the
+  // payload so readBundle finds it. readBundle re-validates uiEntry === basename(uiEntry), so the
+  // join can't escape outDir. If the manifest declares no ui entry, input.ui is ignored.
+  const uiEntry = (parsed.payload as { ui?: { entry?: string } }).ui?.entry;
+  if (uiEntry && !input.ui) {
+    throw new Error('packBundle: manifest declares payload.ui.entry but no ui bytes were provided');
+  }
+
   await mkdir(input.outDir, { recursive: true });
   await writeFile(join(input.outDir, 'manifest.json'), JSON.stringify(signedManifest, null, 2));
   await writeFile(join(input.outDir, PAYLOAD_FILE[kind]), input.payload);
+  if (uiEntry && input.ui) await writeFile(join(input.outDir, uiEntry), input.ui);
   await writeFile(join(input.outDir, 'publisher.pub'), Buffer.from(input.publicKeyDer).toString('hex'));
 
   // Self-check: the bundle we just wrote must verify.

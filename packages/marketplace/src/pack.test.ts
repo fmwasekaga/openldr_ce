@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { generatePublisherKeypair } from './signing';
@@ -48,6 +49,39 @@ describe('packBundle', () => {
     await packBundle({ manifest: formManifest, payload: new TextEncoder().encode('{"resourceType":"Questionnaire"}'), outDir: out, privateKeyDer: kp.privateKeyDer, publicKeyDer: kp.publicKeyDer });
     expect(verifyBundle(await readBundle(out)).valid).toBe(true);
     expect(await readFile(join(out, 'questionnaire.json'), 'utf8')).toContain('Questionnaire');
+    await rm(out, { recursive: true, force: true });
+  });
+
+  it('packs a UI-bearing plugin: writes ui.html and the bundle verifies', async () => {
+    const out = await mkdtemp(join(tmpdir(), 'pack-'));
+    const kp = generatePublisherKeypair();
+    const wasm = new Uint8Array([1, 2, 3, 4]);
+    const uiBytes = new TextEncoder().encode('<div>Demo UI</div>');
+    const uiSha = createHash('sha256').update(uiBytes).digest('hex');
+    const uiManifest = {
+      ...structuredClone(baseManifest),
+      payload: { kind: 'plugin', wasmSha256: '0'.repeat(64), ui: { entry: 'ui.html', sha256: uiSha, nav: { label: 'Demo' } } },
+    };
+    await packBundle({ manifest: uiManifest, payload: wasm, ui: uiBytes, outDir: out, privateKeyDer: kp.privateKeyDer, publicKeyDer: kp.publicKeyDer });
+    expect(new Uint8Array(await readFile(join(out, 'ui.html')))).toEqual(uiBytes);
+    const bundle = await readBundle(out);
+    expect(verifyBundle(bundle).valid).toBe(true);
+    expect(bundle.ui).toEqual(uiBytes);
+    await rm(out, { recursive: true, force: true });
+  });
+
+  it('throws a clear error when the manifest declares payload.ui.entry but no ui bytes are provided', async () => {
+    const out = await mkdtemp(join(tmpdir(), 'pack-'));
+    const kp = generatePublisherKeypair();
+    const uiBytes = new TextEncoder().encode('<div>Demo UI</div>');
+    const uiSha = createHash('sha256').update(uiBytes).digest('hex');
+    const uiManifest = {
+      ...structuredClone(baseManifest),
+      payload: { kind: 'plugin', wasmSha256: '0'.repeat(64), ui: { entry: 'ui.html', sha256: uiSha, nav: { label: 'Demo' } } },
+    };
+    await expect(
+      packBundle({ manifest: uiManifest, payload: new Uint8Array([1]), outDir: out, privateKeyDer: kp.privateKeyDer, publicKeyDer: kp.publicKeyDer }),
+    ).rejects.toThrow(/no ui bytes/i);
     await rm(out, { recursive: true, force: true });
   });
 });

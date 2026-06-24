@@ -94,17 +94,27 @@ async function buildDhis2SinkBundle(kp: ReturnType<typeof loadOrCreateKeypair>) 
   }
   const flat = JSON.parse(readFileSync(flatPath, 'utf8'));
   // Adapt the flat manifest -> artifact manifest (carries kind->pluginKind, entrypoints,
-  // capabilities, readme, compatibility:{ceVersion:'*'}), then attach the publisher block.
+  // capabilities, readme, compatibility:{ceVersion:'*'}, ui), then attach the publisher block.
   const art = {
     ...pluginManifestToArtifact(flat),
     publisher: { id: PUBLISHER.id, name: PUBLISHER.name, keyFingerprint: '0'.repeat(64) },
   } as unknown as Record<string, unknown>;
+
+  // The dhis2-sink manifest declares a webview ui (payload.ui.entry === 'ui.html'); packBundle
+  // requires those bytes. The built dir carries ui.html after `pnpm build:dhis2-sink`.
+  const uiPath = join(dhis2SinkDir, 'ui.html');
+  if (!existsSync(uiPath)) {
+    console.error(`missing ${uiPath} — run \`pnpm build:dhis2-sink\` first (it emits ui.html)`);
+    process.exit(1);
+  }
+  const ui = new Uint8Array(readFileSync(uiPath));
 
   const wasm = new Uint8Array(readFileSync(wasmPathDhis2));
   const outDir = join(marketplaceRepo, 'bundles', 'dhis2-sink');
   await packBundle({
     manifest: art,
     payload: wasm,
+    ui,
     outDir,
     privateKeyDer: kp.privateKeyDer,
     publicKeyDer: kp.publicKeyDer,
