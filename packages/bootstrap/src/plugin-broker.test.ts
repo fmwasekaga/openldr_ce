@@ -114,4 +114,36 @@ describe('plugin broker', () => {
     expect(r.ok).toBe(false);
     expect((r as any).error).toMatch(/boom/);
   });
+
+  it('denies connectors.list when the caller lacks lab_admin (role gate, even with the capability)', async () => {
+    const { b } = broker({ caps: [{ kind: 'host:connectors' }], connectors: { list: async () => [{ id: 'x' }], get: async () => null } });
+    const lowPriv = { id: 'u2', roles: ['data_analyst'] };
+    const r = await b.handle('p1', lowPriv, { kind: 'connectors.list' });
+    expect(r.ok).toBe(false);
+    expect((r as any).error).toMatch(/lab_admin/);
+  });
+
+  it('allows connectors.list for lab_admin with the capability', async () => {
+    const { b } = broker({ caps: [{ kind: 'host:connectors' }], connectors: { list: async () => [{ id: 'x' }], get: async () => null } });
+    const r = await b.handle('p1', { id: 'u', roles: ['lab_admin'] }, { kind: 'connectors.list' });
+    expect(r).toEqual({ ok: true, data: [{ id: 'x' }] });
+  });
+
+  it('storage/reports ops require no special role (data_analyst allowed)', async () => {
+    const { b } = broker({ caps: [{ kind: 'host:reports' }], reporting: { list: () => [{ id: 'r1' }], run: async () => ({}) } });
+    const low = { id: 'u3', roles: ['data_analyst'] };
+    expect((await b.handle('p1', low, { kind: 'storage.put', collection: 'c', key: 'k', doc: {} })).ok).toBe(true);
+    expect((await b.handle('p1', low, { kind: 'reports.list' })).ok).toBe(true);
+  });
+
+  it('redacts connectors.test error detail (no raw message to the plugin) and logs it', async () => {
+    const { b } = broker({
+      caps: [{ kind: 'host:connectors' }],
+      testConnector: async () => { throw new Error('connect ECONNREFUSED https://dhis.example user=admin password=s3cr3t'); },
+    });
+    const r = await b.handle('p1', { id: 'u', roles: ['lab_admin'] }, { kind: 'connectors.test', id: 'c1' });
+    expect(r.ok).toBe(false);
+    expect((r as any).error).not.toMatch(/s3cr3t/);
+    expect((r as any).error).toMatch(/connectors\.test failed/);
+  });
 });

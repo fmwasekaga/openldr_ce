@@ -34,6 +34,17 @@ function gateFor(op: BrokerOp): string | undefined {
   }
 }
 
+/** Required caller-role set for an op (empty = no role requirement). The capability is the
+ *  plugin's ceiling; the CALLER's role is a separate axis, matching the native routes. */
+function rolesFor(op: BrokerOp): string[] {
+  switch (op.kind) {
+    // Mirrors the native /api/connectors routes (lab_admin only).
+    case 'connectors.list': case 'connectors.test': return ['lab_admin'];
+    // storage.*, invoke, reports.* — reports are broadly readable (native /api/reports has no role gate).
+    default: return [];
+  }
+}
+
 export interface PluginBrokerDeps {
   plugins: {
     list(): Promise<Array<{ id: string; version: string; enabled: boolean; manifest: Record<string, unknown> }>>;
@@ -46,6 +57,8 @@ export interface PluginBrokerDeps {
    *  context. When absent, connectors.test returns a structured error. */
   testConnector?: (id: string) => Promise<unknown>;
   policy: () => PluginPolicy;
+  /** Optional: server-side sink for redacted host-op error detail (never sent to the plugin). */
+  logger?: { warn(obj: unknown, msg: string): void };
 }
 
 export interface PluginBroker {
@@ -58,7 +71,7 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
   }
 
   return {
-    async handle(pluginId, _principal, op) {
+    async handle(pluginId, principal, op) {
       try {
         // 1. Plugin must be installed + enabled.
         const rows = await deps.plugins.list();
@@ -77,6 +90,12 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
           if (!grant.legacy && !hasCapability(grant.capabilities, gate)) {
             return { ok: false, error: `operation ${op.kind} requires the ${gate} capability, which plugin ${pluginId} was not granted` };
           }
+        }
+
+        // Role gate: capability is the plugin's ceiling; the CALLER's role is a separate axis.
+        const need = rolesFor(op);
+        if (need.length > 0 && !need.some((r) => principal.roles.includes(r))) {
+          return { ok: false, error: `operation ${op.kind} requires one of roles: ${need.join(', ')}` };
         }
 
         // 4. Dispatch. Storage is namespaced by the trusted pluginId argument.
@@ -104,7 +123,13 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
           default: return { ok: false, error: `unknown operation` };
         }
       } catch (err) {
-        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+        const detail = err instanceof Error ? err.message : String(err);
+        // Redact secret/egress-bearing host-op errors before they reach the untrusted plugin.
+        if (gateFor(op) === 'host:connectors') {
+          deps.logger?.warn({ op: op.kind, pluginId, detail }, 'plugin broker host op failed');
+          return { ok: false, error: `operation ${op.kind} failed` };
+        }
+        return { ok: false, error: detail };
       }
     },
   };
