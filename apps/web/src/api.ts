@@ -785,6 +785,8 @@ export interface Dhis2MappingSummary { id: string; name: string; kind: string | 
 export interface AggregateColumnMapping { column: string; dataElement: string; categoryOptionCombo?: string }
 export interface AggregateMappingDef {
   kind?: 'aggregate';
+  /** Connector that receives this mapping's push (resolved host-side from the definition). */
+  connectorId?: string;
   id: string;
   name: string;
   source: { kind: 'report'; reportId: string; params?: Record<string, string> };
@@ -795,6 +797,8 @@ export interface AggregateMappingDef {
 export interface TrackerColumnMapping { column: string; dataElement: string }
 export interface TrackerMappingDef {
   kind: 'tracker';
+  /** Connector that receives this mapping's push (resolved host-side from the definition). */
+  connectorId?: string;
   id: string;
   name: string;
   source: { kind: 'event-source'; sourceId: string; params?: Record<string, string> };
@@ -1199,3 +1203,43 @@ export async function fetchWorkflowDatasets(): Promise<WorkflowDatasetSummary[]>
   if (!res.ok) throw new Error(`datasets failed: ${res.status}`);
   return res.json() as Promise<WorkflowDatasetSummary[]>;
 }
+
+// ── Connectors (SP-5b) ─────────────────────────────────────────────────────────
+export interface Connector {
+  id: string;
+  name: string;
+  pluginId: string;
+  kind: string;
+  allowedHost: string | null;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface SinkPluginRef { id: string; version: string; enabled: boolean }
+export interface ConnectorMetadataCounts {
+  dataElements: number; orgUnits: number; categoryOptionCombos: number; programs: number; programStages: number;
+}
+export type ConnectorTestResult =
+  | { ok: true; metadata: ConnectorMetadataCounts }
+  | { ok: false; error: string };
+export interface ConnectorCreateInput {
+  name: string; pluginId: string; config: Record<string, string>; allowedHost?: string;
+}
+export interface ConnectorUpdateInput {
+  name?: string; config?: Record<string, string>; allowedHost?: string | null; enabled?: boolean;
+}
+
+export const listConnectors = (): Promise<Connector[]> =>
+  apiGet<Connector[]>('/api/connectors', 'list connectors');
+export const listSinkPlugins = (): Promise<SinkPluginRef[]> =>
+  apiGet<SinkPluginRef[]>('/api/connectors/sink-plugins', 'list sink plugins');
+export const createConnector = (input: ConnectorCreateInput): Promise<Connector> =>
+  authFetch('/api/connectors', jbody(input, 'POST')).then((r) => okJson<Connector>(r, 'create connector'));
+export const updateConnector = (id: string, input: ConnectorUpdateInput): Promise<Connector> =>
+  authFetch(`/api/connectors/${encodeURIComponent(id)}`, jbody(input, 'PUT')).then((r) => okJson<Connector>(r, 'update connector'));
+export async function deleteConnector(id: string): Promise<void> {
+  const r = await authFetch(`/api/connectors/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  if (!r.ok && r.status !== 204) throw new Error(`delete connector failed: ${r.status}`);
+}
+export const testConnector = (id: string): Promise<ConnectorTestResult> =>
+  authFetch(`/api/connectors/${encodeURIComponent(id)}/test`, jbody({}, 'POST')).then((r) => okJson<ConnectorTestResult>(r, 'test connector'));
