@@ -101,6 +101,28 @@ describe('bundle ui integrity', () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  it('readBundle rejects a ui entry that escapes the bundle directory', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'mkt-ui-traversal-'));
+    try {
+      const kp = generatePublisherKeypair();
+      const wasmSha = sha256Hex(wasm);
+      const uiSha = sha256Hex(ui);
+      const base = {
+        schemaVersion: 1, type: 'plugin', id: 'demo', version: '1.0.0',
+        publisher: { id: 'acme', name: 'Acme', keyFingerprint: kp.fingerprint },
+        compatibility: { ceVersion: '*' }, capabilities: [],
+        payload: { kind: 'plugin', wasmSha256: wasmSha, ui: { entry: '../escape.html', sha256: uiSha, nav: { label: 'Demo' } } },
+      };
+      const manifest = { ...base, signature: signManifest(base, wasmSha, kp.privateKeyDer) };
+      await writeFile(join(dir, 'manifest.json'), JSON.stringify(manifest));
+      await writeFile(join(dir, 'plugin.wasm'), wasm);
+      await writeFile(join(dir, 'publisher.pub'), Buffer.from(kp.publicKeyDer).toString('hex'));
+      await expect(readBundle(dir)).rejects.toThrow(/ui entry|invalid|traversal/i);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('bundle-fs', () => {

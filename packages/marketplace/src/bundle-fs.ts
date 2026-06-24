@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, basename } from 'node:path';
 import { createHash } from 'node:crypto';
 import { parseArtifactManifest, type ArtifactManifest } from './artifact-manifest';
 import { verifyArtifact, keyFingerprint } from './signing';
@@ -57,6 +57,9 @@ export async function readBundle(dir: string): Promise<Bundle> {
   const kind = String((raw.payload as { kind?: string } | null)?.kind ?? 'plugin');
   const payload = new Uint8Array(await readFile(join(dir, payloadFileName(kind))));
   const uiEntry = (raw.payload as { ui?: { entry?: string } } | null)?.ui?.entry;
+  if (uiEntry !== undefined && (uiEntry !== basename(uiEntry) || uiEntry === '')) {
+    throw new Error(`invalid ui entry '${uiEntry}': must be a plain filename inside the bundle`);
+  }
   const ui = uiEntry ? new Uint8Array(await readFile(join(dir, uiEntry))) : undefined;
   const pubHex = await readFile(join(dir, 'publisher.pub'), 'utf8');
   return assembleBundle(raw, payload, pubHex, ui);
