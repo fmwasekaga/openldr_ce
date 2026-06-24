@@ -15,6 +15,7 @@ export interface CardEntry {
   drifted?: boolean;     // installed form-template modified locally
   targetFormId?: string; // installed form-template's local form id
   versions?: { version: string; ref: string }[];
+  registryName?: string; // Browse only: source registry label
 }
 
 /** Render one capability as a human-readable line for the Permissions list. */
@@ -33,6 +34,7 @@ export function availableToEntry(b: AvailableArtifact, installedIds: Set<string>
     ref: b.ref, id: b.id, version: b.version, type: b.type,
     publisher: b.publisher, capabilities: b.capabilities ?? [], valid: b.valid,
     installed: installedIds.has(b.id), versions: b.versions ?? [],
+    registryName: b.registryName,
   };
 }
 

@@ -922,6 +922,7 @@ export interface AvailableArtifact {
   summary?: string;
   signatureFingerprint?: string;
   versions?: { version: string; ref: string }[];
+  registryName?: string;
 }
 export interface ArtifactPayloadMeta {
   kind: string;
@@ -994,6 +995,14 @@ export async function detachArtifact(id: string): Promise<void> {
   const r = await authFetch(`/api/marketplace/${encodeURIComponent(id)}/detach`, { method: 'POST' });
   if (!r.ok) throw new Error(`detach failed: ${r.status}`);
 }
+
+// ── Marketplace registries (SP-C) ──────────────────────────────────────────────
+export interface MarketplaceRegistry { id: string; name: string; kind: 'local' | 'http'; location: string; enabled: boolean; createdAt: string; updatedAt: string }
+export interface RegistryInput { name: string; kind: 'local' | 'http'; location: string; enabled?: boolean }
+export const listRegistries = (): Promise<MarketplaceRegistry[]> => apiGet('/api/marketplace/registries', 'list registries');
+export const createRegistry = (i: RegistryInput): Promise<MarketplaceRegistry> => authFetch('/api/marketplace/registries', jbody(i, 'POST')).then((r) => okJson<MarketplaceRegistry>(r, 'create registry'));
+export const updateRegistry = (id: string, i: Partial<RegistryInput>): Promise<MarketplaceRegistry> => authFetch(`/api/marketplace/registries/${encodeURIComponent(id)}`, jbody(i, 'PUT')).then((r) => okJson<MarketplaceRegistry>(r, 'update registry'));
+export async function deleteRegistry(id: string): Promise<void> { const r = await authFetch(`/api/marketplace/registries/${encodeURIComponent(id)}`, { method: 'DELETE' }); if (!r.ok && r.status !== 204) throw new Error(`delete registry failed: ${r.status}`); }
 
 export function buildOntology(
   id: string,

@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import type { AvailableArtifact, InstalledArtifact } from '@/api';
 import { PackageCard } from './PackageCard';
 import { PackageDetail } from './PackageDetail';
+import { RegistriesTab } from './RegistriesTab';
 import { availableToEntry, installedToEntry, type CardEntry } from './util';
 
 interface MarketplaceTabsProps {
@@ -67,6 +68,7 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
       <TabsList>
         <TabsTrigger value="browse">{t('settings.marketplace.browse')}</TabsTrigger>
         <TabsTrigger value="installed">{t('settings.marketplace.installedTab')} ({props.installed.length})</TabsTrigger>
+        <TabsTrigger value="registries">{t('settings.marketplace.registriesTab')}</TabsTrigger>
       </TabsList>
 
       <TabsContent value="browse" className="min-h-0 flex-1">
@@ -116,6 +118,10 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
             {installedEntries.map((e) => <PackageCard key={e.id} entry={e} onClick={() => setSelected(e)} />)}
           </div>
         )}
+      </TabsContent>
+
+      <TabsContent value="registries" className="min-h-0 flex-1">
+        <RegistriesTab onChanged={props.onRefresh} />
       </TabsContent>
     </Tabs>
   );

@@ -25,6 +25,11 @@ export function PackageCard({ entry, onClick }: { entry: CardEntry; onClick: () 
       <p className="mt-1 text-xs text-muted-foreground">
         {(entry.publisher?.name || '—')} · v{entry.version}
       </p>
+      {entry.registryName ? (
+        <p className="mt-0.5 text-[10px] text-muted-foreground" data-testid="card-registry-source">
+          {t('settings.marketplace.registrySource', { name: entry.registryName })}
+        </p>
+      ) : null}
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {stateBadge}
         {entry.ref ? <SignatureBadge valid={entry.valid} publisher={entry.publisher} /> : null}
