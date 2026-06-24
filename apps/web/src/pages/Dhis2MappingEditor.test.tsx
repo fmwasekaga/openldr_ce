@@ -19,13 +19,14 @@ vi.mock('@/api', async (orig) => {
     getDhis2Mapping: vi.fn(),
     saveDhis2Mapping: vi.fn(),
     validateDhis2Mapping: vi.fn(),
+    listConnectors: vi.fn(),
   };
 });
 vi.mock('@/auth/AuthProvider', () => ({
   useAuth: () => ({ user: { id: 'me', username: 'me', displayName: null, roles: ['lab_admin'] }, loading: false, hasRole: () => true }),
 }));
 
-import { fetchReports, getDhis2Metadata, getReportColumns, getDhis2EventSources, saveDhis2Mapping, getDhis2Mapping } from '@/api';
+import { fetchReports, getDhis2Metadata, getReportColumns, getDhis2EventSources, saveDhis2Mapping, getDhis2Mapping, listConnectors } from '@/api';
 import { Dhis2MappingEditor } from './Dhis2MappingEditor';
 
 function renderAt(path: string) {
@@ -59,6 +60,7 @@ beforeEach(() => {
   (getDhis2EventSources as ReturnType<typeof vi.fn>).mockResolvedValue([
     { id: 'amr-isolates', name: 'AMR isolates', columns: [{ key: 'id', label: 'Isolate ID' }, { key: 'facility', label: 'Facility' }, { key: 'eventDate', label: 'Event date' }, { key: 'result', label: 'Result' }] },
   ]);
+  (listConnectors as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 });
 
 describe('DHIS2 mapping editor — aggregate', () => {
@@ -78,6 +80,22 @@ describe('DHIS2 mapping editor — aggregate', () => {
     expect(body.definition.kind).toBe('aggregate');
     expect(body.definition.orgUnitColumn).toBe('month');
     expect(body.definition.columns).toEqual([{ column: 'count', dataElement: 'de1' }]);
+  });
+});
+
+describe('DHIS2 mapping editor — connector', () => {
+  it('saves the chosen connectorId into the mapping definition', async () => {
+    (listConnectors as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: 'c1', name: 'Prod DHIS2', pluginId: 'dhis2-sink', kind: 'sink', allowedHost: 'h', enabled: true, createdAt: '', updatedAt: '' },
+    ]);
+    (saveDhis2Mapping as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'm', name: 'm', definition: {} });
+    renderAt('/settings/dhis2/mappings/new');
+    fireEvent.change(await screen.findByTestId('mapping-name'), { target: { value: 'm' } });
+    pick('connector-select', 'Prod DHIS2');
+    fireEvent.click(screen.getByTestId('save-mapping'));
+    await waitFor(() => expect(saveDhis2Mapping).toHaveBeenCalled());
+    const [, body] = (saveDhis2Mapping as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(body.definition.connectorId).toBe('c1');
   });
 });
 

@@ -5,9 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  fetchReports, getDhis2Metadata, getReportColumns, getDhis2EventSources, getDhis2Mapping, saveDhis2Mapping, validateDhis2Mapping,
+  fetchReports, getDhis2Metadata, getReportColumns, getDhis2EventSources, getDhis2Mapping, saveDhis2Mapping, validateDhis2Mapping, listConnectors,
   type ReportSummary, type Dhis2MetadataLists, type ReportColumn2, type Dhis2EventSource,
-  type AggregateMappingDef, type AggregateColumnMapping, type TrackerMappingDef, type MappingDef,
+  type AggregateMappingDef, type AggregateColumnMapping, type TrackerMappingDef, type MappingDef, type Connector,
 } from '@/api';
 
 type Kind = 'aggregate' | 'tracker';
@@ -52,6 +52,8 @@ export function Dhis2MappingEditor() {
   const [kind, setKind] = useState<Kind>('aggregate');
   const [mappingId, setMappingId] = useState('');
   const [name, setName] = useState('');
+  const [connectors, setConnectors] = useState<Connector[]>([]);
+  const [connectorId, setConnectorId] = useState('');
   const [problems, setProblems] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -74,8 +76,8 @@ export function Dhis2MappingEditor() {
   useEffect(() => {
     void (async () => {
       try {
-        const [reps, srcs, m] = await Promise.all([fetchReports(), getDhis2EventSources(), getDhis2Metadata()]);
-        setReports(reps); setEventSources(srcs); setMeta(m);
+        const [reps, srcs, m, conns] = await Promise.all([fetchReports(), getDhis2EventSources(), getDhis2Metadata(), listConnectors()]);
+        setReports(reps); setEventSources(srcs); setMeta(m); setConnectors(conns);
         if (isNew) { setMappingId(`mapping-${crypto.randomUUID()}`); return; }
         try {
           const rec = await getDhis2Mapping(id!);
@@ -85,6 +87,7 @@ export function Dhis2MappingEditor() {
             program?: string; programStage?: string; eventDateColumn?: string; idColumn?: string; dataValues?: TrkRow[];
           };
           setMappingId(rec.id); setName(rec.name);
+          setConnectorId((d as { connectorId?: string }).connectorId ?? '');
           if (d.kind === 'tracker') {
             setKind('tracker');
             setSourceId(d.source?.sourceId ?? '');
@@ -130,6 +133,7 @@ export function Dhis2MappingEditor() {
     if (kind === 'tracker') {
       const d: TrackerMappingDef = {
         kind: 'tracker', id: mappingId, name,
+        ...(connectorId ? { connectorId } : {}),
         source: { kind: 'event-source', sourceId },
         program, programStage, orgUnitColumn: trkOrgUnitColumn, eventDateColumn, idColumn,
         dataValues: trkRows.filter((r) => r.column && r.dataElement).map((r) => ({ column: r.column, dataElement: r.dataElement })),
@@ -138,13 +142,14 @@ export function Dhis2MappingEditor() {
     }
     const d: AggregateMappingDef = {
       kind: 'aggregate', id: mappingId, name,
+      ...(connectorId ? { connectorId } : {}),
       source: { kind: 'report', reportId },
       orgUnitColumn: aggOrgUnitColumn,
       ...(periodColumn ? { periodColumn } : {}),
       columns: aggRows.filter((r) => r.column && r.dataElement).map((r): AggregateColumnMapping => ({ column: r.column, dataElement: r.dataElement, ...(r.categoryOptionCombo ? { categoryOptionCombo: r.categoryOptionCombo } : {}) })),
     };
     return d;
-  }, [kind, mappingId, name, reportId, aggOrgUnitColumn, periodColumn, aggRows, sourceId, program, programStage, trkOrgUnitColumn, eventDateColumn, idColumn, trkRows]);
+  }, [kind, mappingId, name, connectorId, reportId, aggOrgUnitColumn, periodColumn, aggRows, sourceId, program, programStage, trkOrgUnitColumn, eventDateColumn, idColumn, trkRows]);
 
   const onValidate = useCallback(async () => {
     try { setProblems(await validateDhis2Mapping(def())); }
@@ -185,6 +190,16 @@ export function Dhis2MappingEditor() {
         <label className="grid gap-1 text-sm">
           <span className="text-muted-foreground">{t('dhis2.mappings.editor.mappingName')}</span>
           <Input data-testid="mapping-name" value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+
+        <label className="grid gap-1 text-sm">
+          <span className="text-muted-foreground">{t('dhis2.mappings.editor.connector')}</span>
+          <Picker testid="connector-select" value={connectorId} onChange={setConnectorId}
+            placeholder={t('dhis2.mappings.editor.pickConnector')}
+            options={connectors.filter((c) => c.enabled).map((c) => ({ value: c.id, label: c.name }))} />
+          {connectors.length === 0 ? (
+            <span className="text-xs text-amber-600">{t('dhis2.mappings.editor.noConnectors')}</span>
+          ) : null}
         </label>
 
         {kind === 'aggregate' ? (
