@@ -10,6 +10,8 @@ export interface Bundle {
   wasm: Uint8Array;
   publicKeyDer: Uint8Array;
   payloadSha256: string;
+  /** Present only for plugin bundles whose manifest declares payload.ui. */
+  ui?: Uint8Array;
 }
 
 /** Map from payload.kind to the filename stored in the bundle directory. */
@@ -28,11 +30,11 @@ export function payloadFileName(kind: string): string {
  * Assemble a Bundle from raw manifest JSON + payload bytes + hex public key.
  * Shared by readBundle (local dir) and HttpRegistrySource (remote fetch).
  */
-export function assembleBundle(raw: Record<string, unknown>, payload: Uint8Array, pubHex: string): Bundle {
+export function assembleBundle(raw: Record<string, unknown>, payload: Uint8Array, pubHex: string, ui?: Uint8Array): Bundle {
   const manifest = parseArtifactManifest(raw);
   const publicKeyDer = Uint8Array.from(Buffer.from(pubHex.trim(), 'hex'));
   const payloadSha256 = createHash('sha256').update(payload).digest('hex');
-  return { manifest, raw, wasm: payload, publicKeyDer, payloadSha256 };
+  return { manifest, raw, wasm: payload, publicKeyDer, payloadSha256, ...(ui ? { ui } : {}) };
 }
 
 /** Map from payload.kind to the sha256 field name in the payload object. */
@@ -54,8 +56,10 @@ export async function readBundle(dir: string): Promise<Bundle> {
   const raw = JSON.parse(await readFile(join(dir, 'manifest.json'), 'utf8')) as Record<string, unknown>;
   const kind = String((raw.payload as { kind?: string } | null)?.kind ?? 'plugin');
   const payload = new Uint8Array(await readFile(join(dir, payloadFileName(kind))));
+  const uiEntry = (raw.payload as { ui?: { entry?: string } } | null)?.ui?.entry;
+  const ui = uiEntry ? new Uint8Array(await readFile(join(dir, uiEntry))) : undefined;
   const pubHex = await readFile(join(dir, 'publisher.pub'), 'utf8');
-  return assembleBundle(raw, payload, pubHex);
+  return assembleBundle(raw, payload, pubHex, ui);
 }
 
 /**
@@ -70,6 +74,9 @@ export function verifyBundle(b: Bundle): { valid: boolean; fingerprint: string }
   const okSha =
     b.raw.payload != null &&
     (b.raw.payload as Record<string, string>)[shaField] === b.payloadSha256;
-  const valid = okFp && okSha && verifyArtifact(b.raw, b.payloadSha256, b.publicKeyDer);
+  // UI integrity: when a manifest declares payload.ui, its bytes must match the signed sha.
+  const uiMeta = (b.raw.payload as { ui?: { sha256?: string } } | null)?.ui;
+  const okUi = !uiMeta ? true : !!b.ui && createHash('sha256').update(b.ui).digest('hex') === uiMeta.sha256;
+  const valid = okFp && okSha && okUi && verifyArtifact(b.raw, b.payloadSha256, b.publicKeyDer);
   return { valid, fingerprint };
 }
