@@ -145,3 +145,30 @@ describe('manifest ui contribution', () => {
     expect(a.payload.ui?.sha256).toBe(UI_SHA);
   });
 });
+
+describe('ui tiers', () => {
+  const WASM = 'b'.repeat(64);
+  it('allows a declarative-only ui block (no entry/sha256)', () => {
+    const m = parseArtifactManifest({
+      schemaVersion: 1, type: 'plugin', id: 'cfg', version: '1.0.0', compatibility: { ceVersion: '*' },
+      payload: { kind: 'plugin', wasmSha256: WASM, ui: { nav: { label: 'Cfg' }, declarative: { type: 'object', properties: { url: { type: 'string' } } } } },
+    });
+    if (m.payload.kind !== 'plugin') throw new Error('plugin');
+    expect(m.payload.ui?.entry).toBeUndefined();
+    expect(m.payload.ui?.declarative).toBeDefined();
+  });
+  it('still allows a webview ui block (entry+sha256)', () => {
+    const m = parseArtifactManifest({
+      schemaVersion: 1, type: 'plugin', id: 'web', version: '1.0.0', compatibility: { ceVersion: '*' },
+      payload: { kind: 'plugin', wasmSha256: WASM, ui: { entry: 'ui.html', sha256: 'a'.repeat(64), nav: { label: 'Web' } } },
+    });
+    if (m.payload.kind !== 'plugin') throw new Error('plugin');
+    expect(m.payload.ui?.entry).toBe('ui.html');
+  });
+  it('rejects a ui block with entry but no sha256 (webview must carry both)', () => {
+    expect(() => parseArtifactManifest({
+      schemaVersion: 1, type: 'plugin', id: 'bad', version: '1.0.0', compatibility: { ceVersion: '*' },
+      payload: { kind: 'plugin', wasmSha256: WASM, ui: { entry: 'ui.html', nav: { label: 'Bad' } } },
+    })).toThrow();
+  });
+});

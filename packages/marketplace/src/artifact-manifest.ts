@@ -4,22 +4,25 @@ import { capabilitySchema } from './capabilities';
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 const HEX64 = /^[0-9a-f]{64}$/;
 
-/** A plugin's UI contribution. `entry`+`sha256` integrity-bind the single self-contained
- *  ui.html (body content + inline CSS/JS; the host wraps it in the document shell). Because
- *  this lives inside the signed manifest, the Ed25519 signature already covers the ui.html
- *  hash — no signing-function change. `nav` drives the sidebar entry routed to /x/:id.
- *  `declarative` is an optional JSON-Schema for the no-webview config tier (rendered by the
- *  host in SP-A1b). `uiSdkVersion` selects the SDK runtime the host injects. */
+/** A plugin's UI contribution. Two tiers:
+ *  - Webview: `entry`+`sha256` integrity-bind the single self-contained ui.html (body content +
+ *    inline CSS/JS; the host wraps it in the document shell). Both fields must be provided together.
+ *  - Declarative: only `declarative` (a JSON-Schema) is provided; the host renders a form. No iframe.
+ *  Because this object lives inside the signed manifest, the Ed25519 signature already covers the
+ *  ui.html hash — no signing-function change. `nav` drives the sidebar entry routed to /x/:id.
+ *  `uiSdkVersion` selects the SDK runtime the host injects. */
 export const uiContributionSchema = z.object({
-  entry: z.string().min(1),
-  sha256: z.string().regex(HEX64),
+  entry: z.string().min(1).optional(),
+  sha256: z.string().regex(HEX64).optional(),
   nav: z.object({
     label: z.string().min(1),
     icon: z.string().min(1).default('puzzle'),
     section: z.string().min(1).default('apps'), // SP-A1b will narrow to an enum once the host sidebar section set is fixed
   }),
   uiSdkVersion: z.literal('1').default('1'), // add literals here when a new SDK ships; old signed bundles stay valid at their declared version
-  declarative: z.unknown().optional(), // TODO(SP-A1b): narrow to a JSON-Schema record once the declarative renderer consumes it
+  declarative: z.unknown().optional(), // JSON-Schema for the declarative tier; narrowed once the renderer consumes it
+}).refine((u) => (u.entry === undefined) === (u.sha256 === undefined), {
+  message: 'ui.entry and ui.sha256 must be provided together (webview tier) or both omitted (declarative tier)',
 });
 
 export type UiContribution = z.infer<typeof uiContributionSchema>;

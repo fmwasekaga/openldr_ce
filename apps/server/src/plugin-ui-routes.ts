@@ -9,8 +9,8 @@ interface UiPluginRow {
     payload?: {
       kind?: string;
       ui?: {
-        entry: string;
-        sha256: string;
+        entry?: string;
+        sha256?: string;
         nav: { label: string; icon: string; section: string };
         uiSdkVersion: string;
         declarative?: unknown;
@@ -35,11 +35,10 @@ export function registerPluginUiRoutes(app: FastifyInstance<any, any, any, any>,
       .map((r) => {
         const ui = r.manifest.payload!.ui!;
         return {
-          id: r.id,
-          version: r.version,
-          nav: ui.nav,
-          uiSdkVersion: ui.uiSdkVersion,
+          id: r.id, version: r.version, nav: ui.nav, uiSdkVersion: ui.uiSdkVersion,
+          hasWebview: ui.entry !== undefined,
           hasDeclarative: ui.declarative !== undefined,
+          declarative: ui.declarative ?? null,
         };
       });
   });

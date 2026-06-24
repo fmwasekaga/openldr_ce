@@ -240,10 +240,11 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
         }
       }
 
-      // Validate ui bytes when the manifest declares a ui contribution.
+      // Validate ui bytes when the manifest declares a webview ui contribution (entry present).
+      // Declarative-only plugins (no entry) carry no ui.html and need no bytes.
       const uiMeta = artifact.payload.kind === 'plugin' ? artifact.payload.ui : undefined;
-      if (uiMeta) {
-        if (!opts.ui) throw new Error(`artifact ${artifact.id}: manifest declares payload.ui but no ui bytes were provided`);
+      if (uiMeta?.entry) {
+        if (!opts.ui) throw new Error(`artifact ${artifact.id}: manifest declares payload.ui.entry but no ui bytes were provided`);
         const uiSha = sha256Hex(opts.ui);
         if (uiSha !== uiMeta.sha256) {
           throw new Error(`artifact ${artifact.id}: ui.html sha (${uiSha}) does not match manifest payload.ui.sha256 (${uiMeta.sha256})`);
@@ -261,7 +262,7 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
         new TextEncoder().encode(JSON.stringify(fullManifest)),
         'application/json',
       );
-      if (uiMeta && opts.ui) {
+      if (uiMeta?.entry && opts.ui) {
         await deps.blob.put(uiKey(artifact.id, artifact.version), opts.ui, 'text/html');
       }
       await deps.store.install({ id: artifact.id, version: artifact.version, sha256: payloadSha, manifest: fullManifest, approvedBy });
@@ -348,7 +349,7 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
       const row = await deps.store.get(id, version);
       if (!row) return undefined;
       const m = row.manifest as { payload?: { ui?: { entry?: string } } };
-      if (!m.payload?.ui) return undefined;
+      if (!m.payload?.ui?.entry) return undefined;
       try {
         return await deps.blob.get(uiKey(row.id, row.version));
       } catch {

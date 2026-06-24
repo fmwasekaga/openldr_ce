@@ -2,12 +2,15 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { registerPluginUiRoutes } from './plugin-ui-routes';
 
+const DECLARATIVE_SCHEMA = { type: 'object', properties: { url: { type: 'string' } } };
+
 function fakeCtx(over: Partial<any> = {}) {
   return {
     cfg: { PLUGIN_UI_ENABLED: true },
     plugins: {
       list: async () => [
         { id: 'ui-demo', version: '1.0.0', enabled: true, manifest: { payload: { kind: 'plugin', ui: { entry: 'ui.html', sha256: 'x', nav: { label: 'Demo', icon: 'puzzle', section: 'apps' }, uiSdkVersion: '1' } } } },
+        { id: 'cfg-plugin', version: '1.0.0', enabled: true, manifest: { payload: { kind: 'plugin', ui: { nav: { label: 'Cfg', icon: 'puzzle', section: 'apps' }, uiSdkVersion: '1', declarative: DECLARATIVE_SCHEMA } } } },
         { id: 'whonet', version: '1.0.0', enabled: true, manifest: { payload: { kind: 'plugin' } } },
       ],
       loadUi: async (id: string) => (id === 'ui-demo' ? new TextEncoder().encode('<div>panel</div>') : undefined),
@@ -32,8 +35,26 @@ describe('plugin-ui routes', () => {
     const res = await app.inject({ method: 'GET', url: '/api/plugins/ui' });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.map((p: any) => p.id)).toEqual(['ui-demo']);
+    expect(body.map((p: any) => p.id)).toEqual(['ui-demo', 'cfg-plugin']);
     expect(body[0].nav).toEqual({ label: 'Demo', icon: 'puzzle', section: 'apps' });
+    expect(body[0].hasWebview).toBe(true);
+    expect(body[0].hasDeclarative).toBe(false);
+    expect(body[0].declarative).toBeNull();
+  });
+
+  it('GET /api/plugins/ui includes declarative-only plugin with tier flags', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/plugins/ui' });
+    const body = res.json();
+    const cfg = body.find((p: any) => p.id === 'cfg-plugin');
+    expect(cfg).toBeDefined();
+    expect(cfg.hasWebview).toBe(false);
+    expect(cfg.hasDeclarative).toBe(true);
+    expect(cfg.declarative).toEqual(DECLARATIVE_SCHEMA);
+  });
+
+  it('GET asset 404s for a declarative-only plugin (no ui.html stored)', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/plugins/cfg-plugin/ui/asset' });
+    expect(res.statusCode).toBe(404);
   });
 
   it('GET /api/plugins/ui returns [] when the master switch is off', async () => {
