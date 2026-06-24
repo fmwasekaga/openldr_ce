@@ -443,6 +443,14 @@ export interface RegistriesTable {
   updated_at: Generated<Date>;
 }
 
+export interface PluginDataTable {
+  plugin_id: string;
+  collection: string;
+  key: string;
+  doc: JSONColumnType<Record<string, unknown>>;
+  updated_at: Generated<Date>;
+}
+
 export interface InternalSchema {
   fhir_resources: FhirResourcesTable;
   outbox_events: OutboxEventsTable;
@@ -483,4 +491,5 @@ export interface InternalSchema {
   workflow_datasets: WorkflowDatasetsTable;
   connectors: ConnectorsTable;
   registries: RegistriesTable;
+  plugin_data: PluginDataTable;
 }
