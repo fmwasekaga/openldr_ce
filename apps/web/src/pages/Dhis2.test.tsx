@@ -19,12 +19,14 @@ beforeEach(() => {
 });
 
 describe('DHIS2 settings page', () => {
-  it('shows the not-configured empty state', async () => {
+  it('shows the not-configured empty state with a link to Settings ▸ Connectors', async () => {
     (getDhis2Status as ReturnType<typeof vi.fn>).mockResolvedValue({
       configured: false, syncEnabled: false, host: null, reachable: null, counts: null, recentPushes: [],
     });
     render(<MemoryRouter><Dhis2 /></MemoryRouter>);
     expect(await screen.findByText(/Not configured/i)).toBeTruthy();
+    expect(await screen.findByTestId('connectors-settings-link')).toBeTruthy();
+    expect(screen.getByTestId('connectors-settings-link').getAttribute('href')).toBe('/settings/connectors');
   });
 
   it('shows host + reachability and pulls metadata when configured', async () => {
@@ -43,5 +45,7 @@ describe('DHIS2 settings page', () => {
     // Scope to the metadata count: the "Data elements" <dt> is immediately followed by its <dd> value.
     const dataElementsTerm = await screen.findByText('Data elements');
     expect(dataElementsTerm.nextElementSibling?.textContent).toBe('5');
+    // Connectors hint link is always visible regardless of configured state
+    expect(screen.getByTestId('connectors-settings-link').getAttribute('href')).toBe('/settings/connectors');
   });
 });

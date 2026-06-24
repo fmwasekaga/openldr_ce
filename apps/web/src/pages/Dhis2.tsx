@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Network } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -36,10 +36,10 @@ export function Dhis2() {
       <h1 className="text-lg font-semibold">{t('dhis2.title')}</h1>
         {error ? <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div> : null}
 
-        {/* Connection */}
+        {/* Active connector */}
         <Card>
           <CardHeader className="flex flex-row items-center gap-2">
-            <Network className="h-4 w-4" /><CardTitle>{t('dhis2.connection')}</CardTitle>
+            <Network className="h-4 w-4" /><CardTitle>{t('dhis2.activeConnector')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             <div className="flex flex-wrap items-center gap-2">
@@ -59,6 +59,9 @@ export function Dhis2() {
             ) : (
               <p className="text-muted-foreground">{t('dhis2.notConfiguredHelp')}</p>
             )}
+            <p className="text-muted-foreground">
+              <NavLink to="/settings/connectors" className="text-primary underline" data-testid="connectors-settings-link">{t('dhis2.connectionManagedHint')}</NavLink>
+            </p>
           </CardContent>
         </Card>
 

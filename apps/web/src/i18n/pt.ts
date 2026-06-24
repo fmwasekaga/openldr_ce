@@ -126,6 +126,8 @@ export const pt: EnShape = {
   dhis2: {
     title: 'DHIS2',
     connection: 'Ligação',
+    activeConnector: 'Conector ativo',
+    connectionManagedHint: 'A conexão DHIS2 é configurada em Configurações ▸ Conectores.',
     configured: 'Configurado',
     notConfigured: 'Não configurado',
     syncEnabled: 'Sincronização ativada',
@@ -135,8 +137,7 @@ export const pt: EnShape = {
     up: 'Acessível',
     down: 'Inacessível',
     degraded: 'Degradado',
-    notConfiguredHelp:
-      'Defina REPORTING_TARGET_ADAPTER=dhis2 no servidor e crie um conector DHIS2 (Definições ▸ Conectores) com o URL base e as credenciais para ativar o DHIS2.',
+    notConfiguredHelp: 'Nenhum conector DHIS2 ativado. Adicione um em Configurações ▸ Conectores.',
     metadata: 'Metadados',
     pullMetadata: 'Obter metadados',
     pulling: 'A obter…',

@@ -122,6 +122,8 @@ export const en = {
   dhis2: {
     title: 'DHIS2',
     connection: 'Connection',
+    activeConnector: 'Active connector',
+    connectionManagedHint: 'DHIS2 connection is configured under Settings ▸ Connectors.',
     configured: 'Configured',
     notConfigured: 'Not configured',
     syncEnabled: 'Sync enabled',
@@ -131,7 +133,7 @@ export const en = {
     up: 'Reachable',
     down: 'Unreachable',
     degraded: 'Degraded',
-    notConfiguredHelp: 'Set REPORTING_TARGET_ADAPTER=dhis2 on the server, then create a DHIS2 Connector (Settings ▸ Connectors) with the base URL + credentials to enable DHIS2.',
+    notConfiguredHelp: 'No enabled DHIS2 connector. Add one under Settings ▸ Connectors.',
     metadata: 'Metadata',
     pullMetadata: 'Pull metadata',
     pulling: 'Pulling…',
