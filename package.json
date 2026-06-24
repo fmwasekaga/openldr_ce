@@ -16,6 +16,7 @@
     "openldr": "tsx packages/cli/src/index.ts",
     "build:plugins": "node scripts/build-wasm-plugins.mjs",
     "build:test-sink": "node scripts/build-test-sink.mjs",
+    "build:ui-reference": "pnpm build:test-sink && node scripts/build-ui-reference.mjs",
     "build:dhis2-sink": "node scripts/build-dhis2-sink.mjs",
     "make:whonet-sample": "node scripts/make-whonet-sample.mjs",
     "e2e": "turbo build --filter=@openldr/web --filter=@openldr/server && pnpm --filter @openldr/e2e e2e",

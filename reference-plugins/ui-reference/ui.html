@@ -1,0 +1,37 @@
+<style>
+  .ref { font-family: system-ui, sans-serif; padding: 16px; color: #111; }
+  .ref h1 { font-size: 16px; margin: 0 0 8px; }
+  .ref pre { background: #f4f4f5; padding: 8px; border-radius: 6px; font-size: 12px; overflow:auto; }
+  .ref button { padding: 6px 10px; border: 1px solid #ccc; border-radius: 6px; background: #fff; cursor: pointer; }
+</style>
+<div class="ref">
+  <h1>OpenLDR Reference Plugin</h1>
+  <p>Proves the host handshake, datastore, and a gated host service.</p>
+  <button id="ping">Save + reload note</button>
+  <p>Saved note: <span id="note" data-testid="note">…</span></p>
+  <h2 style="font-size:14px">reports.list (host:reports)</h2>
+  <pre id="reports" data-testid="reports">…</pre>
+</div>
+<script>
+  (async function () {
+    await window.openldr.ready;
+    var noteEl = document.getElementById('note');
+    var reportsEl = document.getElementById('reports');
+    async function refresh() {
+      var saved = await window.openldr.storage.get('notes', 'last');
+      noteEl.textContent = saved && saved.text ? saved.text : '(none)';
+    }
+    document.getElementById('ping').addEventListener('click', async function () {
+      await window.openldr.storage.put('notes', 'last', { text: 'hello ' + new Date().toISOString() });
+      await refresh();
+    });
+    try {
+      var reports = await window.openldr.reports.list();
+      reportsEl.textContent = JSON.stringify(reports).slice(0, 500);
+    } catch (e) {
+      reportsEl.textContent = 'error: ' + (e && e.message ? e.message : String(e));
+    }
+    await refresh();
+    document.body.setAttribute('data-openldr-ready', '1');
+  })();
+</script>
