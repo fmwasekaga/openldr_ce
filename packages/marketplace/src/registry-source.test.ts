@@ -89,6 +89,63 @@ describe('HttpRegistrySource', () => {
   });
 });
 
+describe('HttpRegistrySource ui fetch', () => {
+  it('fetches the ui asset declared by payload.ui.entry', async () => {
+    const wasm = new Uint8Array([1, 2, 3]);
+    const ui = new TextEncoder().encode('<div>remote-panel</div>');
+    const { createHash } = await import('node:crypto');
+    const manifest = {
+      schemaVersion: 1, type: 'plugin', id: 'demo', version: '1.0.0',
+      compatibility: { ceVersion: '*' }, capabilities: [],
+      payload: { kind: 'plugin', wasmSha256: createHash('sha256').update(wasm).digest('hex'),
+        ui: { entry: 'ui.html', sha256: createHash('sha256').update(ui).digest('hex'), nav: { label: 'Demo' } } },
+    };
+    const index = { schemaVersion: 1, name: 'r', updatedAt: 't', packages: [
+      { id: 'demo', kind: 'plugin', latestVersion: '1.0.0', publisher: '', summary: '', path: 'demo' },
+    ] };
+
+    const fetchImpl = (async (url: string | URL) => {
+      const u = String(url);
+      if (u.endsWith('/plugin.wasm')) return new Response(wasm);
+      const body =
+        u.endsWith('/index.json') ? JSON.stringify(index) :
+        u.endsWith('/manifest.json') ? JSON.stringify(manifest) :
+        u.endsWith('/publisher.pub') ? '00' :
+        u.endsWith('/ui.html') ? new TextDecoder().decode(ui) : null;
+      return new Response(body, { status: body == null ? 404 : 200 });
+    }) as unknown as typeof fetch;
+
+    const src = new HttpRegistrySource('https://reg.example', fetchImpl);
+    const bundle = await src.getBundle('demo');
+    expect(bundle.ui && new TextDecoder().decode(bundle.ui)).toBe('<div>remote-panel</div>');
+  });
+
+  it('does not fetch a ui asset for a bundle without payload.ui', async () => {
+    const wasm = new Uint8Array([9, 9]);
+    const { createHash } = await import('node:crypto');
+    const manifest = {
+      schemaVersion: 1, type: 'plugin', id: 'noui', version: '1.0.0',
+      compatibility: { ceVersion: '*' }, capabilities: [],
+      payload: { kind: 'plugin', wasmSha256: createHash('sha256').update(wasm).digest('hex') },
+    };
+    const index = { schemaVersion: 1, name: 'r', updatedAt: 't', packages: [
+      { id: 'noui', kind: 'plugin', latestVersion: '1.0.0', publisher: '', summary: '', path: 'noui' },
+    ] };
+    let uiRequested = false;
+    const fetchImpl = (async (url: string | URL) => {
+      const u = String(url);
+      if (u.endsWith('/ui.html')) { uiRequested = true; return new Response(null, { status: 404 }); }
+      if (u.endsWith('/plugin.wasm')) return new Response(wasm);
+      const body = u.endsWith('/index.json') ? JSON.stringify(index) : u.endsWith('/manifest.json') ? JSON.stringify(manifest) : u.endsWith('/publisher.pub') ? '00' : null;
+      return new Response(body, { status: body == null ? 404 : 200 });
+    }) as unknown as typeof fetch;
+    const src = new HttpRegistrySource('https://reg.example', fetchImpl);
+    const bundle = await src.getBundle('noui');
+    expect(bundle.ui).toBeUndefined();
+    expect(uiRequested).toBe(false);
+  });
+});
+
 const L = (ref: string, id: string, version: string) => ({ ref, id, version, type: 'plugin', publisher: null });
 
 describe('collapseByLatest', () => {

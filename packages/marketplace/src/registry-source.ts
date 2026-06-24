@@ -152,6 +152,16 @@ export class HttpRegistrySource implements RegistrySource {
     const pubRes = await this.fetchWithTimeout(`${dir}/publisher.pub`);
     if (!pubRes.ok) throw new Error(`registry unreachable: publisher.pub ${pubRes.status}`);
     const pubHex = await pubRes.text();
-    return assembleBundle(raw, payload, pubHex);
+    const uiEntry = (raw.payload as { ui?: { entry?: string } } | null)?.ui?.entry;
+    let ui: Uint8Array | undefined;
+    if (uiEntry !== undefined) {
+      if (uiEntry !== basename(uiEntry) || uiEntry === '') {
+        throw new Error(`invalid ui entry '${uiEntry}': must be a plain filename inside the bundle`);
+      }
+      const uiRes = await this.fetchWithTimeout(`${dir}/${uiEntry}`);
+      if (!uiRes.ok) throw new Error(`registry unreachable: ui asset ${uiRes.status}`);
+      ui = new Uint8Array(await uiRes.arrayBuffer());
+    }
+    return assembleBundle(raw, payload, pubHex, ui);
   }
 }
