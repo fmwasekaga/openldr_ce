@@ -82,6 +82,18 @@ async function main(): Promise<void> {
     ctx.logger.warn({ err }, 'report schedule reconcile failed at startup (continuing)');
   }
 
+  // Plugin schedules (e.g. the DHIS2 webview plugin) fire headlessly through the host
+  // runner. No-double-fire guard: plugin schedules live in `plugin_data`, which is empty
+  // until migration 036 runs at the Phase-4 cutover (which ALSO deletes the host DHIS2
+  // scheduler above). During Phases 1-3 reconcile arms nothing, so it cannot double-fire
+  // with the still-present host `dhis2.registerSync`/`reconcileSchedules`.
+  await ctx.pluginScheduleRunner.registerRunner(ingest.eventing);
+  try {
+    await ctx.pluginScheduleRunner.reconcile(ingest.eventing);
+  } catch (err) {
+    ctx.logger.warn({ err }, 'plugin schedule reconcile failed at startup (continuing)');
+  }
+
   await ctx.workflows.runner.registerRunner(ingest.eventing);
   // Best-effort like the report scheduler: rebuild the ingest-id set + webhook registry
   // and arm saved schedules. A bad migration or DB hiccup must not block startup.

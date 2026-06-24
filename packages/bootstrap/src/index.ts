@@ -26,6 +26,7 @@ import {
 } from '@openldr/workflows';
 import { renderReportPdf } from '@openldr/report-pdf';
 import { createReportScheduler, type ReportScheduler } from './report-scheduler';
+import { createPluginScheduleApi, createPluginScheduleRunner, type PluginScheduleRunner } from './plugin-schedule';
 import { createFormArtifactInstaller, type FormArtifactInstaller } from './form-artifact-install';
 import { type PluginRuntime } from '@openldr/plugins';
 import { createConnectorStore, createPluginDataStore, type PluginDataStore } from '@openldr/db';
@@ -107,6 +108,7 @@ export interface AppContext {
   reportRuns: ReportRunStore;
   reportSchedules: ReportScheduleStore;
   reportScheduler: ReportScheduler;
+  pluginScheduleRunner: PluginScheduleRunner;
   users: UserStore;
   userProfiles: UserProfileStore;
   forms: FormStore;
@@ -390,9 +392,13 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     audit,
     logger,
   });
+  // Generic per-plugin schedule store + host runner (fires plugin schedules headlessly;
+  // for DHIS2 it drives the orchestration push). Completes the broker's deferred `schedules` dep.
+  const pluginScheduleRunner = createPluginScheduleRunner({ pluginData, push: (input) => dhis2Orch.push(input), logger });
   const pluginBroker = createPluginBroker({
     plugins,
     pluginData,
+    schedules: createPluginScheduleApi(pluginData),
     reporting: {
       list: () => reporting.list(),
       columns: (id) => reporting.run(id, {}).then((r) => (r as { columns: unknown }).columns),
@@ -449,6 +455,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     reportRuns,
     reportSchedules,
     reportScheduler,
+    pluginScheduleRunner,
     users,
     userProfiles,
     forms,

@@ -393,6 +393,7 @@ function ctxWith(status: 'up' | 'down'): AppContext {
     reportRuns: {} as never,
     reportSchedules: {} as never,
     reportScheduler: {} as never,
+    pluginScheduleRunner: {} as never,
     audit: {} as never,
     users: {
       list: async () => [],
