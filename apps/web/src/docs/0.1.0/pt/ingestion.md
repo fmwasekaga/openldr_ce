@@ -10,17 +10,26 @@ OpenLDR ingere dados laboratoriais por meio de plugins WebAssembly em sandbox. C
 
 ## Executando uma ingestão
 
-```
-pnpm openldr plugin install reference-plugins/<plugin>/plugin.wasm
-pnpm openldr ingest <file> --plugin <id> [--config config.json]
+```console
+PS D:\Projects\Repositories\openldr_ce> pnpm openldr plugin install reference-plugins/<plugin>/plugin.wasm
+PS D:\Projects\Repositories\openldr_ce> pnpm openldr ingest <file> --plugin <id> --config config.json
+PS D:\Projects\Repositories\openldr_ce> pnpm openldr pipeline status --json
+PS D:\Projects\Repositories\openldr_ce> pnpm openldr queue status --json
 ```
 
 ## Configuração do plugin
 
 O plugin `tabular` requer um mapeamento JSON passado com `--config`. A configuração é persistida no lote de ingestão e reutilizada automaticamente se o lote for reprocessado:
 
-```
-pnpm openldr ingest lab.csv --plugin tabular --config samples/lab-mapping.json
+```console
+PS D:\Projects\Repositories\openldr_ce> pnpm openldr ingest lab.csv --plugin tabular --config samples/lab-mapping.json
 ```
 
 O mapeamento declara quais colunas da planilha correspondem aos campos de paciente, amostra, organismo e resultado de antibiótico.
+
+Se uma ingestão falhar, inspecione os registros do lote do pipeline:
+
+```console
+PS D:\Projects\Repositories\openldr_ce> pnpm openldr pipeline logs <batchId> --json
+PS D:\Projects\Repositories\openldr_ce> pnpm openldr pipeline retry <batchId> --json
+```
