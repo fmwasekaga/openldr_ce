@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { uiContributionSchema } from '@openldr/marketplace';
 
 export const pluginManifestSchema = z.object({
   id: z.string().min(1),
@@ -19,6 +20,7 @@ export const pluginManifestSchema = z.object({
   limits: z
     .object({ memoryMb: z.number().int().positive().default(256), timeoutMs: z.number().int().positive().default(30_000) })
     .default({ memoryMb: 256, timeoutMs: 30_000 }),
+  ui: uiContributionSchema.optional(),
 });
 
 export type PluginManifest = z.infer<typeof pluginManifestSchema>;

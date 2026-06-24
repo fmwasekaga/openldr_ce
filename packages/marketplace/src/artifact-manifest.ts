@@ -4,6 +4,26 @@ import { capabilitySchema } from './capabilities';
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 const HEX64 = /^[0-9a-f]{64}$/;
 
+/** A plugin's UI contribution. `entry`+`sha256` integrity-bind the single self-contained
+ *  ui.html (body content + inline CSS/JS; the host wraps it in the document shell). Because
+ *  this lives inside the signed manifest, the Ed25519 signature already covers the ui.html
+ *  hash — no signing-function change. `nav` drives the sidebar entry routed to /x/:id.
+ *  `declarative` is an optional JSON-Schema for the no-webview config tier (rendered by the
+ *  host in SP-A1b). `uiSdkVersion` selects the SDK runtime the host injects. */
+export const uiContributionSchema = z.object({
+  entry: z.string().min(1),
+  sha256: z.string().regex(HEX64),
+  nav: z.object({
+    label: z.string().min(1),
+    icon: z.string().min(1).default('puzzle'),
+    section: z.string().min(1).default('apps'),
+  }),
+  uiSdkVersion: z.literal('1').default('1'),
+  declarative: z.unknown().optional(),
+});
+
+export type UiContribution = z.infer<typeof uiContributionSchema>;
+
 const pluginPayload = z.object({
   kind: z.literal('plugin'),
   // Source/sink flavor. Named `pluginKind` because this object's own discriminator is
@@ -17,6 +37,7 @@ const pluginPayload = z.object({
   wasi: z.boolean().default(false),
   limits: z.object({ memoryMb: z.number().int().positive().default(256), timeoutMs: z.number().int().positive().default(30_000) })
     .default({ memoryMb: 256, timeoutMs: 30_000 }),
+  ui: uiContributionSchema.optional(),
 });
 const formPayload = z.object({ kind: z.literal('form-template'), questionnaireSha256: z.string().regex(HEX64) });
 const reportPayload = z.object({ kind: z.literal('report-template'), templateSha256: z.string().regex(HEX64) });
@@ -55,6 +76,7 @@ export interface LegacyPluginManifest {
   wasmSha256: string; description?: string; readme?: string; license?: string; wasi?: boolean;
   limits?: { memoryMb: number; timeoutMs: number };
   capabilities?: unknown;
+  ui?: unknown;
 }
 
 /** Adapt a legacy plugin manifest to an (unsigned, publisher-less) artifact manifest.
@@ -79,6 +101,7 @@ export function pluginManifestToArtifact(m: LegacyPluginManifest): ArtifactManif
       entrypoints: m.entrypoints ?? [],
       wasi: m.wasi ?? false,
       limits: m.limits ?? { memoryMb: 256, timeoutMs: 30_000 },
+      ...(m.ui !== undefined ? { ui: m.ui } : {}),
     },
   });
 }

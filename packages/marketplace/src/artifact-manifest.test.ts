@@ -104,3 +104,43 @@ describe('artifact manifest', () => {
     expect(art.readme).toBe('');
   });
 });
+
+const UI_SHA = 'a'.repeat(64);
+const WASM_SHA = 'b'.repeat(64);
+
+describe('manifest ui contribution', () => {
+  it('parses a plugin payload carrying a ui block', () => {
+    const m = parseArtifactManifest({
+      schemaVersion: 1, type: 'plugin', id: 'demo', version: '1.0.0',
+      compatibility: { ceVersion: '*' },
+      payload: {
+        kind: 'plugin', wasmSha256: WASM_SHA,
+        ui: { entry: 'ui.html', sha256: UI_SHA, nav: { label: 'Demo' } },
+      },
+    });
+    if (m.payload.kind !== 'plugin') throw new Error('expected plugin payload');
+    expect(m.payload.ui?.entry).toBe('ui.html');
+    expect(m.payload.ui?.uiSdkVersion).toBe('1');      // default
+    expect(m.payload.ui?.nav.icon).toBe('puzzle');     // default
+    expect(m.payload.ui?.nav.section).toBe('apps');     // default
+  });
+
+  it('ui is optional (payload without it still parses)', () => {
+    const m = parseArtifactManifest({
+      schemaVersion: 1, type: 'plugin', id: 'demo', version: '1.0.0',
+      compatibility: { ceVersion: '*' }, payload: { kind: 'plugin', wasmSha256: WASM_SHA },
+    });
+    if (m.payload.kind !== 'plugin') throw new Error('expected plugin payload');
+    expect(m.payload.ui).toBeUndefined();
+  });
+
+  it('carries a flat manifest ui block through pluginManifestToArtifact', () => {
+    const a = pluginManifestToArtifact({
+      id: 'demo', version: '1.0.0', wasmSha256: WASM_SHA,
+      ui: { entry: 'ui.html', sha256: UI_SHA, nav: { label: 'Demo', icon: 'share-2', section: 'apps' } },
+    });
+    if (a.payload.kind !== 'plugin') throw new Error('expected plugin payload');
+    expect(a.payload.ui?.nav.label).toBe('Demo');
+    expect(a.payload.ui?.nav.icon).toBe('share-2');
+  });
+});
