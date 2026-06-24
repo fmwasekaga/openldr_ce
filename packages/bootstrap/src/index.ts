@@ -6,7 +6,7 @@ import { createEventBus } from '@openldr/adapter-event-bus';
 import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import type { Config } from '@openldr/config';
 import { createLogger, HealthRegistry, redact, type Logger } from '@openldr/core';
-import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, deriveSystemCode, resolveSeedPublisherId, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore } from '@openldr/db';
+import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, deriveSystemCode, resolveSeedPublisherId, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, type AuditStore } from '@openldr/audit';
@@ -162,6 +162,22 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   const forms = createFormStore(internal.db);
   const marketplaceInstalls = createMarketplaceInstallStore(internal.db);
   const marketplaceForms = createFormArtifactInstaller({ forms, installStore: marketplaceInstalls, audit });
+
+  // Seed a default marketplace registry from the legacy env vars the first time (table empty),
+  // so existing deployments keep working without manual setup. No-op once any row exists.
+  try {
+    const registriesSeedStore = createRegistryStore(internal.db as unknown as Kysely<InternalSchema>);
+    if ((await registriesSeedStore.list()).length === 0) {
+      if (cfg.MARKETPLACE_REGISTRY_URL) {
+        await registriesSeedStore.create({ id: 'env-http', name: 'Default registry', kind: 'http', location: cfg.MARKETPLACE_REGISTRY_URL });
+      } else if (cfg.MARKETPLACE_REGISTRY_DIR) {
+        await registriesSeedStore.create({ id: 'env-local', name: 'Local registry', kind: 'local', location: cfg.MARKETPLACE_REGISTRY_DIR });
+      }
+    }
+  } catch (e) {
+    logger.warn({ err: e }, 'bootstrap: registry seed skipped (internal DB not ready)');
+  }
+
   const reportingDb = store.db as unknown as Kysely<ExternalSchema>;
   const runReport = async (id: string, rawParams: unknown): Promise<ReportResult> => {
     const def = getReport(id);
