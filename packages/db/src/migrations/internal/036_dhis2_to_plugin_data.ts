@@ -4,6 +4,15 @@ const PLUGIN_ID = 'dhis2-sink';
 
 type Row = { plugin_id: string; collection: string; key: string; doc: unknown; updated_at: Date };
 
+// Swallow only "source table/relation does not exist" errors (expected on a
+// fresh/cleaned DB); rethrow anything else (column typo, missing plugin_data,
+// insert failure) so real bugs fail loudly. The regex covers Postgres
+// (42P01 / "relation ... does not exist"), SQLite, and pg-mem variants.
+function rethrowUnlessMissingTable(e: unknown): void {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (!/does not exist|relation|no such table|undefined_table|42P01/i.test(msg)) throw e;
+}
+
 // Insert one row idempotently. pg-mem's onConflict support is partial, so we
 // pre-check for an existing (plugin_id, collection, key) and skip if present.
 // This keeps the behaviour correct under both pg-mem and Postgres.
@@ -42,8 +51,8 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         updated_at: now,
       });
     }
-  } catch {
-    /* table absent on a fresh/cleaned DB — skip */
+  } catch (e) {
+    rethrowUnlessMissingTable(e);
   }
 
   // dhis2_mappings -> collection 'mappings', key = id
@@ -61,8 +70,8 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         updated_at: now,
       });
     }
-  } catch {
-    /* table absent on a fresh/cleaned DB — skip */
+  } catch (e) {
+    rethrowUnlessMissingTable(e);
   }
 
   // dhis2_schedules -> collection 'schedules', key = id
@@ -98,8 +107,8 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         updated_at: now,
       });
     }
-  } catch {
-    /* table absent on a fresh/cleaned DB — skip */
+  } catch (e) {
+    rethrowUnlessMissingTable(e);
   }
 
   // dhis2_metadata_cache (singleton) -> collection 'metadataCache', key = 'latest'
@@ -117,8 +126,8 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         updated_at: now,
       });
     }
-  } catch {
-    /* table absent on a fresh/cleaned DB — skip */
+  } catch (e) {
+    rethrowUnlessMissingTable(e);
   }
 }
 

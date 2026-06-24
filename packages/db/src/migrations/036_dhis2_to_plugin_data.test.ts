@@ -111,7 +111,8 @@ describe('036_dhis2_to_plugin_data migration', () => {
   });
 
   it('no-ops when source tables are empty', async () => {
-    const db = await makeMigratedDb();
+    const db = await makeMigratedDb(); // source tables exist but are empty
+    await m036.up(db); // run the copy against empty source tables
     const rows = await db
       .selectFrom('plugin_data')
       .selectAll()
