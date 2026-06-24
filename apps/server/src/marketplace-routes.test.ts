@@ -10,6 +10,7 @@ import { createPluginRuntime } from '@openldr/plugins';
 import { createRegistryStore } from '@openldr/db';
 import { makeMigratedDb } from '@openldr/db/testing';
 import { registerMarketplaceRoutes } from './marketplace-routes';
+import { registerPluginUiRoutes } from './plugin-ui-routes';
 
 // ── A temp registry dir with one signed plugin bundle (built via packBundle). ──
 let registryDir: string;
@@ -403,20 +404,28 @@ describe('marketplace routes', () => {
   // ── UI-bearing bundle install round-trip ──
   // Exercises the b.ui pass-through: the route must forward Bundle.ui into
   // ctx.plugins.install(). Without that, the real runtime throws because the
-  // manifest declares payload.ui but no ui bytes are provided.
+  // manifest declares payload.ui but no ui bytes are provided. We then read the
+  // installed ui.html back through the live /api/plugins/:id/ui/asset endpoint.
   describe('ui-bearing bundle install round-trip', () => {
-    it('installs a plugin whose manifest declares payload.ui (passes b.ui to runtime)', async () => {
+    it('installs a payload.ui plugin and serves its ui.html via /api/plugins/:id/ui/asset', async () => {
+      // In-memory blob + plugin store backing a REAL plugin runtime, so the install
+      // path actually persists ui bytes and loadUi can read them back.
       const blobMap = new Map<string, Uint8Array>();
       const fakeBlob = {
         put: vi.fn(async (k: string, b: Uint8Array) => { blobMap.set(k, b); }),
         get: vi.fn(async (k: string) => { const v = blobMap.get(k); if (!v) throw new Error('missing blob: ' + k); return v; }),
         exists: vi.fn(), presign: vi.fn(), healthCheck: vi.fn(),
       } as never;
-      const pluginRows: unknown[] = [];
+      const rows = new Map<string, { id: string; version: string; active: boolean; enabled: boolean; manifest: Record<string, unknown> }>();
       const fakeStore = {
-        install: vi.fn(async (r: unknown) => { pluginRows.push(r); }),
-        get: vi.fn(async () => undefined),
-        list: vi.fn(async () => []),
+        install: vi.fn(async (r: { id: string; version: string; manifest: Record<string, unknown> }) => {
+          rows.set(`${r.id}@${r.version}`, { ...r, status: 'installed', enabled: true, active: true } as never);
+        }),
+        get: vi.fn(async (id: string, v?: string) => {
+          for (const row of rows.values()) if (row.id === id && (v ? row.version === v : row.active && row.enabled)) return row;
+          return undefined;
+        }),
+        list: vi.fn(async () => [...rows.values()]),
         rollback: vi.fn(), setEnabled: vi.fn(), remove: vi.fn(),
       } as never;
       const realRuntime = createPluginRuntime({
@@ -429,8 +438,18 @@ describe('marketplace routes', () => {
         verifyConfig: { devAllowUnsigned: false },
       });
 
+      // App wired with BOTH marketplace routes (install) and plugin-ui routes (asset).
       const uiReg: SeedRegistry = { id: 'reg-ui', name: 'UI Bundles', kind: 'local', location: uiRegistryDir };
-      const { app } = await appWith({}, realRuntime, { seed: [uiReg] });
+      const db = await makeMigratedDb();
+      const regStore = createRegistryStore(db);
+      await regStore.create(uiReg);
+      const ctx = fakeCtx(realRuntime, { PLUGIN_UI_ENABLED: true }, db);
+      const app = Fastify();
+      app.addHook('onRequest', async (req) => {
+        req.user = { id: 'admin', username: 'admin', displayName: null, roles: ['lab_admin'] } as never;
+      });
+      registerMarketplaceRoutes(app, ctx);
+      registerPluginUiRoutes(app, ctx);
 
       const res = await app.inject({
         method: 'POST', url: '/api/marketplace/install',
@@ -440,8 +459,13 @@ describe('marketplace routes', () => {
       // payload.ui but no ui bytes were provided" and return 400. A 200 proves the seam works.
       expect(res.statusCode).toBe(200);
       expect(res.json()).toMatchObject({ id: 'ui-demo', version: '1.0.0' });
-      // The ui.html bytes must have been persisted to the blob store.
       expect(blobMap.has('plugins/ui-demo/1.0.0/ui.html')).toBe(true);
+
+      // The stored ui.html is served back, sandboxed, by the plugin-ui asset route.
+      const asset = await app.inject({ method: 'GET', url: '/api/plugins/ui-demo/ui/asset' });
+      expect(asset.statusCode).toBe(200);
+      expect(asset.headers['content-type']).toContain('text/html');
+      expect(asset.body).toBe('<div>panel</div>');
     });
   });
 });
