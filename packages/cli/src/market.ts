@@ -64,6 +64,7 @@ export async function runMarketInstall(
     const installed = await ctx.plugins.install(bundle.wasm, bundle.raw, {
       publicKeyDer: bundle.publicKeyDer,
       actor: cliActor,
+      ui: bundle.ui,
       approval,
     });
     emit(

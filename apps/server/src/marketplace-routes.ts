@@ -157,7 +157,7 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
         return { id: installed.id, version: installed.version };
       }
       const installed = await ctx.plugins.install(b.wasm, b.raw, {
-        publicKeyDer: b.publicKeyDer, actor: a,
+        publicKeyDer: b.publicKeyDer, actor: a, ui: b.ui,
         approval: { approvedBy: a.id ?? a.name, acknowledgedCapabilities },
       });
       return { id: installed.id, version: installed.version };

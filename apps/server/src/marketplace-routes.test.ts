@@ -1,10 +1,12 @@
 import { describe, expect, it, beforeAll, afterAll, vi } from 'vitest';
 import Fastify from 'fastify';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 import type { AppContext } from '@openldr/bootstrap';
-import { generatePublisherKeypair, packBundle } from '@openldr/marketplace';
+import { generatePublisherKeypair, packBundle, signManifest, keyFingerprint } from '@openldr/marketplace';
+import { createPluginRuntime } from '@openldr/plugins';
 import { createRegistryStore } from '@openldr/db';
 import { makeMigratedDb } from '@openldr/db/testing';
 import { registerMarketplaceRoutes } from './marketplace-routes';
@@ -12,6 +14,8 @@ import { registerMarketplaceRoutes } from './marketplace-routes';
 // ── A temp registry dir with one signed plugin bundle (built via packBundle). ──
 let registryDir: string;
 let formRegistryDir: string;
+/** Registry dir containing a ui-bearing plugin bundle (ui.html included, signed). */
+let uiRegistryDir: string;
 beforeAll(async () => {
   registryDir = await mkdtemp(join(tmpdir(), 'mkt-registry-'));
   const kp = generatePublisherKeypair();
@@ -31,10 +35,37 @@ beforeAll(async () => {
     const q = { resourceType: 'Questionnaire', status: 'active', title: 'Demo', item: [] };
     await packBundle({ manifest: formManifest, payload: new TextEncoder().encode(JSON.stringify(q)), outDir: join(formRegistryDir, 'demo-form-1'), privateKeyDer: fkp.privateKeyDer, publicKeyDer: fkp.publicKeyDer });
   }
+
+  // Build a ui-bearing bundle manually (packBundle doesn't handle payload.ui).
+  uiRegistryDir = await mkdtemp(join(tmpdir(), 'mkt-ui-registry-'));
+  {
+    const ukp = generatePublisherKeypair();
+    const wasmBytes = new Uint8Array([1, 2, 3, 4]);
+    const uiBytes = new TextEncoder().encode('<div>panel</div>');
+    const wasmSha = createHash('sha256').update(wasmBytes).digest('hex');
+    const uiSha = createHash('sha256').update(uiBytes).digest('hex');
+    const fp = keyFingerprint(ukp.publicKeyDer);
+    const unsigned = {
+      schemaVersion: 1, type: 'plugin', id: 'ui-demo', version: '1.0.0',
+      publisher: { id: 'acme', name: 'Acme', keyFingerprint: fp },
+      compatibility: { ceVersion: '*' },
+      capabilities: [],
+      payload: { kind: 'plugin', wasmSha256: wasmSha, ui: { entry: 'ui.html', sha256: uiSha, nav: { label: 'Demo Panel' } } },
+    };
+    const sig = signManifest(unsigned as Record<string, unknown>, wasmSha, ukp.privateKeyDer);
+    const signed = { ...unsigned, signature: sig };
+    const bundleDir = join(uiRegistryDir, 'ui-demo-1');
+    await mkdir(bundleDir, { recursive: true });
+    await writeFile(join(bundleDir, 'manifest.json'), JSON.stringify(signed));
+    await writeFile(join(bundleDir, 'plugin.wasm'), wasmBytes);
+    await writeFile(join(bundleDir, 'ui.html'), uiBytes);
+    await writeFile(join(bundleDir, 'publisher.pub'), Buffer.from(ukp.publicKeyDer).toString('hex'));
+  }
 });
 afterAll(async () => {
   await rm(registryDir, { recursive: true, force: true });
   await rm(formRegistryDir, { recursive: true, force: true });
+  await rm(uiRegistryDir, { recursive: true, force: true });
 });
 
 function fakePlugins() {
@@ -366,6 +397,51 @@ describe('marketplace routes', () => {
       const { app } = await appWith({}, runtime, { roles: [] });
       const res = await app.inject({ method: 'GET', url: '/api/marketplace/registries' });
       expect(res.statusCode).toBe(403);
+    });
+  });
+
+  // ── UI-bearing bundle install round-trip ──
+  // Exercises the b.ui pass-through: the route must forward Bundle.ui into
+  // ctx.plugins.install(). Without that, the real runtime throws because the
+  // manifest declares payload.ui but no ui bytes are provided.
+  describe('ui-bearing bundle install round-trip', () => {
+    it('installs a plugin whose manifest declares payload.ui (passes b.ui to runtime)', async () => {
+      const blobMap = new Map<string, Uint8Array>();
+      const fakeBlob = {
+        put: vi.fn(async (k: string, b: Uint8Array) => { blobMap.set(k, b); }),
+        get: vi.fn(async (k: string) => { const v = blobMap.get(k); if (!v) throw new Error('missing blob: ' + k); return v; }),
+        exists: vi.fn(), presign: vi.fn(), healthCheck: vi.fn(),
+      } as never;
+      const pluginRows: unknown[] = [];
+      const fakeStore = {
+        install: vi.fn(async (r: unknown) => { pluginRows.push(r); }),
+        get: vi.fn(async () => undefined),
+        list: vi.fn(async () => []),
+        rollback: vi.fn(), setEnabled: vi.fn(), remove: vi.fn(),
+      } as never;
+      const realRuntime = createPluginRuntime({
+        blob: fakeBlob,
+        store: fakeStore,
+        runner: { run: vi.fn(async () => new TextEncoder().encode('')) } as never,
+        logger: { info: vi.fn(), error: vi.fn(), debug: vi.fn() } as never,
+        trustStore: { get: async () => undefined, pin: async () => {} },
+        ceVersion: '0.1.0',
+        verifyConfig: { devAllowUnsigned: false },
+      });
+
+      const uiReg: SeedRegistry = { id: 'reg-ui', name: 'UI Bundles', kind: 'local', location: uiRegistryDir };
+      const { app } = await appWith({}, realRuntime, { seed: [uiReg] });
+
+      const res = await app.inject({
+        method: 'POST', url: '/api/marketplace/install',
+        payload: { ref: 'reg-ui::ui-demo-1', acknowledgedCapabilities: [] },
+      });
+      // If the route did NOT pass b.ui, the real runtime would throw "manifest declares
+      // payload.ui but no ui bytes were provided" and return 400. A 200 proves the seam works.
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ id: 'ui-demo', version: '1.0.0' });
+      // The ui.html bytes must have been persisted to the blob store.
+      expect(blobMap.has('plugins/ui-demo/1.0.0/ui.html')).toBe(true);
     });
   });
 });

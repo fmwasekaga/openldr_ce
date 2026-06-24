@@ -204,6 +204,7 @@ export async function runArtifactPublish(
         const installed = await ctx.plugins.install(bundle.wasm, bundle.raw, {
           publicKeyDer: bundle.publicKeyDer,
           actor: { name: 'cli' },
+          ui: bundle.ui,
           approval,
         });
         emit(
