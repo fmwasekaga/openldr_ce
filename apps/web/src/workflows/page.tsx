@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ReactFlowProvider } from '@xyflow/react';
+import { useParams, Link } from 'react-router-dom';
 import { AppShell } from '@/shell/AppShell';
 import { Canvas } from './components/canvas';
 import { Sidebar } from './components/sidebar';
@@ -10,6 +11,8 @@ import { RunHistoryDrawer } from './components/panels/run-history-drawer';
 import { DatasetsDrawer } from './components/panels/datasets-drawer';
 import { useWorkflowStore } from './hooks/use-workflow-store';
 import { useWorkflowApi } from './hooks/use-workflow-api';
+import { fetchWorkflow } from '@/api';
+import type { WorkflowNode, WorkflowEdge } from './lib/types';
 
 export function Workflows() {
   const configNodeId = useWorkflowStore((s) => s.configNodeId);
@@ -18,10 +21,26 @@ export function Workflows() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [datasetsOpen, setDatasetsOpen] = useState(false);
 
+  const { id } = useParams();
+  const setWorkflow = useWorkflowStore((s) => s.setWorkflow);
+  const clear = useWorkflowStore((s) => s.clear);
+
+  useEffect(() => {
+    if (!id || id === 'new') { clear(); return; }
+    let active = true;
+    void fetchWorkflow(id)
+      .then((w) => { if (active) setWorkflow(w.id, w.name, w.definition.nodes as WorkflowNode[], w.definition.edges as WorkflowEdge[]); })
+      .catch(() => { /* missing id leaves a blank builder; save will create one */ });
+    return () => { active = false; };
+  }, [id, setWorkflow, clear]);
+
   return (
     <AppShell title="Workflows" fullBleed>
       <ReactFlowProvider>
         <div className="flex h-full flex-col">
+          <div className="flex items-center gap-2 border-b border-border px-3 py-1.5">
+            <Link to="/workflows" className="text-xs text-muted-foreground hover:text-foreground hover:underline" data-testid="back-to-workflows">← Workflows</Link>
+          </div>
           <Toolbar
             onSave={save}
             onRun={execute}
