@@ -47,7 +47,7 @@ async function main(): Promise<void> {
   // status + metadata routes work even with sync disabled. Sync wiring stays gated below.
   let dhis2: Awaited<ReturnType<typeof createDhis2Context>> | null = null;
   if (cfg.REPORTING_TARGET_ADAPTER === 'dhis2') {
-    dhis2 = await createDhis2Context(cfg);
+    dhis2 = await createDhis2Context(cfg, { loadSink: (id, version) => ctx.plugins.loadSink(id, version) });
     // Expose DHIS2 push as a workflow sink. Gated on dhis2 truthiness (not SYNC_ENABLED)
     // so a workflow push works even with scheduled sync off. runMapping requires the
     // report/event-source callbacks, supplied from the reporting context.

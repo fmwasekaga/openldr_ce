@@ -44,10 +44,7 @@ export const ConfigSchema = z
     MSSQL_ENCRYPT: envBoolean(false),
     MSSQL_TRUST_SERVER_CERT: envBoolean(true),
 
-    // DHIS2 reporting target (required when REPORTING_TARGET_ADAPTER=dhis2).
-    DHIS2_BASE_URL: z.string().url().optional(),
-    DHIS2_USERNAME: z.string().min(1).optional(),
-    DHIS2_PASSWORD: z.string().min(1).optional(),
+    // DHIS2 reporting target. Connection lives in Connectors (no env vars needed).
     DHIS2_SYNC_ENABLED: z
       .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
       .default(true)
@@ -114,11 +111,6 @@ export const ConfigSchema = z
       }
     } else if (!cfg.TARGET_DATABASE_URL) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['TARGET_DATABASE_URL'], message: 'TARGET_DATABASE_URL is required when TARGET_STORE_ADAPTER=pg' });
-    }
-    if (cfg.REPORTING_TARGET_ADAPTER === 'dhis2') {
-      for (const key of ['DHIS2_BASE_URL', 'DHIS2_USERNAME', 'DHIS2_PASSWORD'] as const) {
-        if (!cfg[key]) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [key], message: `${key} is required when REPORTING_TARGET_ADAPTER=dhis2` });
-      }
     }
     if (cfg.NODE_ENV === 'production' && cfg.AUTH_DEV_BYPASS === true) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['AUTH_DEV_BYPASS'], message: 'AUTH_DEV_BYPASS must be off in production' });

@@ -57,12 +57,9 @@ describe('config reporting-target (dhis2)', () => {
   it('defaults REPORTING_TARGET_ADAPTER to none', () => {
     expect(loadConfig({ ...basePg } as never).REPORTING_TARGET_ADAPTER).toBe('none');
   });
-  it('accepts a dhis2 config', () => {
-    const cfg = loadConfig({ ...basePg, REPORTING_TARGET_ADAPTER: 'dhis2', DHIS2_BASE_URL: 'https://dhis2.example/dhis', DHIS2_USERNAME: 'admin', DHIS2_PASSWORD: 'district' } as never);
+  it('accepts a dhis2 adapter without connection env vars (connection lives in connectors)', () => {
+    const cfg = loadConfig({ ...basePg, REPORTING_TARGET_ADAPTER: 'dhis2' } as never);
     expect(cfg.REPORTING_TARGET_ADAPTER).toBe('dhis2');
-  });
-  it('rejects dhis2 without connection fields', () => {
-    expect(() => loadConfig({ ...basePg, REPORTING_TARGET_ADAPTER: 'dhis2' } as never)).toThrow(/DHIS2_BASE_URL/);
   });
 });
 

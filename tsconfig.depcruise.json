@@ -7,7 +7,6 @@
       "@openldr/adapter-db-store": ["packages/adapter-db-store/src/index.ts"],
       "@openldr/adapter-event-bus": ["packages/adapter-event-bus/src/index.ts"],
       "@openldr/adapter-s3-bucket": ["packages/adapter-s3-bucket/src/index.ts"],
-      "@openldr/adapter-dhis2": ["packages/adapter-dhis2/src/index.ts"],
       "@openldr/audit": ["packages/audit/src/index.ts"],
       "@openldr/bootstrap": ["packages/bootstrap/src/index.ts"],
       "@openldr/cli": ["packages/cli/src/index.ts"],

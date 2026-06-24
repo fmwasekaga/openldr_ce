@@ -9,9 +9,6 @@ const fakeEventing = { publish: async () => {}, subscribe: async () => {}, drain
 function configuredCfg(over: Record<string, unknown> = {}) {
   return {
     REPORTING_TARGET_ADAPTER: 'dhis2',
-    DHIS2_BASE_URL: 'https://play.dhis2.example/api',
-    DHIS2_USERNAME: 'admin',
-    DHIS2_PASSWORD: 'secret',
     DHIS2_SYNC_ENABLED: true,
     ...over,
   };
@@ -19,7 +16,8 @@ function configuredCfg(over: Record<string, unknown> = {}) {
 
 function fakeDhis2(over: Record<string, unknown> = {}) {
   return {
-    target: { healthCheck: async () => ({ status: 'up' as const, latencyMs: 12 }) },
+    healthCheck: async () => ({ status: 'up' as const, latencyMs: 12 }),
+    defaultConnector: async () => ({ id: 'c1', name: 'Demo', pluginId: 'dhis2-sink', kind: 'sink', allowedHost: 'play.dhis2.example', enabled: true, createdAt: new Date(), updatedAt: new Date() }),
     mappings: { list: async () => [{ id: 'm1', name: 'A' }] },
     orgUnits: { list: async () => [{ facilityId: 'f1', orgUnit: 'o1' }] },
     schedules: { list: async () => [] },
@@ -125,7 +123,7 @@ describe('dhis2 status route', () => {
   });
 
   it('reports reachable down when healthCheck throws', async () => {
-    const app = appWith(configuredCfg(), fakeDhis2({ target: { healthCheck: async () => { throw new Error('ECONNREFUSED'); } } }));
+    const app = appWith(configuredCfg(), fakeDhis2({ healthCheck: async () => { throw new Error('ECONNREFUSED'); } }));
     const body = (await app.inject({ method: 'GET', url: '/api/dhis2/status' })).json();
     expect(body.reachable.status).toBe('down');
   });

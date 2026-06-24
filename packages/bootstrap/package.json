@@ -9,7 +9,6 @@
     "@openldr/audit": "workspace:*",
     "@openldr/users": "workspace:*",
     "@openldr/adapter-auth": "workspace:*",
-    "@openldr/adapter-dhis2": "workspace:*",
     "@openldr/adapter-db-store": "workspace:*",
     "@openldr/adapter-mssql-store": "workspace:*",
     "@openldr/adapter-event-bus": "workspace:*",
