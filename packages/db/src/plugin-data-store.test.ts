@@ -52,4 +52,16 @@ describe('plugin-data store', () => {
     await s.put('p1', 'c', 'a', { type: 'x' });
     await expect(s.list('p1', 'c', { where: { field: 'type; DROP', eq: 'x' } })).rejects.toThrow();
   });
+
+  it('rejects an empty filter field name', async () => {
+    const s = createPluginDataStore(db);
+    await s.put('p1', 'c', 'a', { type: 'x' });
+    await expect(s.list('p1', 'c', { where: { field: '', eq: 'x' } })).rejects.toThrow();
+  });
+
+  it('rejects a non-ascii filter field name', async () => {
+    const s = createPluginDataStore(db);
+    await s.put('p1', 'c', 'a', { type: 'x' });
+    await expect(s.list('p1', 'c', { where: { field: 'typé', eq: 'x' } })).rejects.toThrow();
+  });
 });

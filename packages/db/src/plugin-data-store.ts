@@ -51,8 +51,8 @@ export function createPluginDataStore(db: Kysely<InternalSchema>): PluginDataSto
         .where('plugin_id', '=', pluginId).where('collection', '=', collection);
       if (opts?.where) {
         const field = opts.where.field;
-        if (!/^[A-Za-z0-9_]+$/.test(field)) throw new Error(`invalid filter field: ${field}`);
-        q = q.where(sql`doc ->> ${sql.lit(field)}`, '=', String(opts.where.eq));
+        if (!/^[A-Za-z0-9_]+$/.test(field)) throw new Error('invalid filter field');
+        q = q.where(sql`doc ->> ${field}`, '=', String(opts.where.eq));
       }
       q = q.orderBy('key');
       if (opts?.limit !== undefined) q = q.limit(opts.limit);
