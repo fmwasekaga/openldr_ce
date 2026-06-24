@@ -212,6 +212,9 @@ export const fr: EnShape = {
         kindLabel: 'Type de mapping', // review
         kindAggregate: 'Agrégé', // review
         kindTracker: 'Tracker', // review
+        connector: 'Connecteur',
+        pickConnector: 'Choisir un connecteur…',
+        noConnectors: 'Aucun connecteur configuré — ajoutez-en un dans Paramètres ▸ Connecteurs.',
         tracker: {
           sourceEventSource: 'Source d\'événement source', // review
           pickEventSource: 'Choisir une source d\'événement…', // review
@@ -279,7 +282,43 @@ export const fr: EnShape = {
     title: 'Paramètres',
     subNav: {
       dhis2: 'DHIS2',
+      connectors: 'Connecteurs',
       marketplace: 'Marketplace',
+    },
+    connectors: {
+      heading: 'Connecteurs',
+      description: 'Configurez et testez les connecteurs de sortie (par ex. DHIS2). Les secrets sont chiffrés au repos et ne sont plus jamais affichés.',
+      add: 'Ajouter un connecteur',
+      empty: 'Aucun connecteur pour le moment.',
+      colName: 'Nom',
+      colPlugin: 'Extension',
+      colHost: 'Hôte',
+      colEnabled: 'Activé',
+      colActions: 'Actions',
+      test: 'Tester',
+      edit: 'Modifier',
+      remove: 'Supprimer',
+      newTitle: 'Ajouter un connecteur',
+      editTitle: 'Modifier le connecteur',
+      fieldName: 'Nom',
+      fieldPlugin: 'Extension de sortie',
+      pickPlugin: 'Choisir une extension…',
+      fieldBaseUrl: 'URL de base',
+      fieldUsername: "Nom d'utilisateur",
+      fieldPassword: 'Mot de passe',
+      secretSet: '••• défini (laisser vide pour conserver)',
+      enabledLabel: 'Activé',
+      save: 'Enregistrer',
+      cancel: 'Annuler',
+      removeTitle: 'Supprimer {{name}} ?',
+      removeDescription: "Cela supprime le connecteur et ses secrets. Les correspondances qui le visent échoueront jusqu'à réassignation.",
+      testing: 'Test en cours…',
+      testOk: "Connecté. {{dataElements}} éléments de données, {{orgUnits}} unités d'organisation.",
+      testFailed: 'Échec du test : {{error}}',
+      savedToast: 'Enregistré {{name}}',
+      removedToast: 'Supprimé {{name}}',
+      errorToast: 'Erreur du connecteur : {{error}}',
+      noPlugins: 'Aucune extension de sortie installée. Installez-en une depuis la Place de marché.',
     },
     marketplace: {
       heading: 'Marketplace',

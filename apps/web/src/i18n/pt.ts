@@ -212,6 +212,9 @@ export const pt: EnShape = {
         kindLabel: 'Tipo de mapeamento', // review
         kindAggregate: 'Agregado', // review
         kindTracker: 'Tracker', // review
+        connector: 'Conector',
+        pickConnector: 'Escolher um conector…',
+        noConnectors: 'Nenhum conector configurado — adicione um em Configurações ▸ Conectores.',
         tracker: {
           sourceEventSource: 'Fonte de eventos de origem', // review
           pickEventSource: 'Escolher uma fonte de eventos…', // review
@@ -279,7 +282,43 @@ export const pt: EnShape = {
     title: 'Definições',
     subNav: {
       dhis2: 'DHIS2',
+      connectors: 'Conectores',
       marketplace: 'Marketplace',
+    },
+    connectors: {
+      heading: 'Conectores',
+      description: 'Configure e teste conectores de saída (por ex. DHIS2). Os segredos são criptografados em repouso e nunca mais exibidos.',
+      add: 'Adicionar conector',
+      empty: 'Nenhum conector ainda.',
+      colName: 'Nome',
+      colPlugin: 'Plugin',
+      colHost: 'Host',
+      colEnabled: 'Ativado',
+      colActions: 'Ações',
+      test: 'Testar',
+      edit: 'Editar',
+      remove: 'Remover',
+      newTitle: 'Adicionar conector',
+      editTitle: 'Editar conector',
+      fieldName: 'Nome',
+      fieldPlugin: 'Plugin de saída',
+      pickPlugin: 'Escolher um plugin…',
+      fieldBaseUrl: 'URL base',
+      fieldUsername: 'Usuário',
+      fieldPassword: 'Senha',
+      secretSet: '••• definido (deixe em branco para manter)',
+      enabledLabel: 'Ativado',
+      save: 'Salvar',
+      cancel: 'Cancelar',
+      removeTitle: 'Remover {{name}}?',
+      removeDescription: 'Isto exclui o conector e seus segredos. Mapeamentos que o utilizam falharão até serem reatribuídos.',
+      testing: 'Testando…',
+      testOk: 'Conectado. {{dataElements}} elementos de dados, {{orgUnits}} unidades organizacionais.',
+      testFailed: 'Falha no teste: {{error}}',
+      savedToast: 'Salvo {{name}}',
+      removedToast: 'Removido {{name}}',
+      errorToast: 'Erro do conector: {{error}}',
+      noPlugins: 'Nenhum plugin de saída instalado. Instale um pelo Marketplace primeiro.',
     },
     marketplace: {
       heading: 'Marketplace',
