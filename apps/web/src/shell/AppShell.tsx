@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, BookOpen, Library, FileInput, Users, ShieldCheck, Settings,
@@ -15,6 +15,8 @@ import {
   DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/cn';
+import { listPluginUis, type PluginUiEntry } from '@/api';
+import { pluginIcon } from '@/plugins/icons';
 
 const NAV: { to: string; labelKey: string; end: boolean; icon: LucideIcon; roles?: string[] }[] = [
   { to: '/', labelKey: 'nav.dashboard', end: true, icon: LayoutDashboard },
@@ -39,6 +41,8 @@ export function AppShell({
   const [theme, toggleTheme] = useTheme();
   const [collapsed, toggleSidebar] = useSidebar();
   const { user, signOut, hasRole } = useAuth();
+  const [pluginUis, setPluginUis] = useState<PluginUiEntry[]>([]);
+  useEffect(() => { void listPluginUis().then(setPluginUis).catch(() => setPluginUis([])); }, []);
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
 
@@ -80,6 +84,26 @@ export function AppShell({
               {!collapsed && <span>{t(labelKey)}</span>}
             </NavLink>
           ))}
+          {pluginUis.map((p) => {
+            const Icon = pluginIcon(p.nav.icon);
+            return (
+              <NavLink
+                key={p.id}
+                to={`/x/${p.id}`}
+                title={collapsed ? p.nav.label : undefined}
+                className={({ isActive }) =>
+                  cn(
+                    'flex h-9 items-center gap-3 rounded-md px-3 text-sm font-medium no-underline transition-colors',
+                    collapsed && 'justify-center px-0',
+                    isActive ? 'bg-accent text-primary' : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                  )
+                }
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                {!collapsed && <span>{p.nav.label}</span>}
+              </NavLink>
+            );
+          })}
         </nav>
 
         <div className="border-t border-border p-2">
