@@ -16,7 +16,8 @@ import { registerFormsRoutes } from './forms-routes';
 import { registerDhis2Routes } from './dhis2-routes';
 import { registerMarketplaceRoutes } from './marketplace-routes';
 import { registerWorkflowRoutes } from './workflows-routes';
-import { createDhis2MetadataCache, createOrgUnitMapStore, createMappingStore, createScheduleStore } from '@openldr/db';
+import { registerConnectorsRoutes } from './connectors-routes';
+import { createDhis2MetadataCache, createOrgUnitMapStore, createMappingStore, createScheduleStore, createConnectorStore } from '@openldr/db';
 import { registerAuth } from './auth-plugin';
 
 export function registerConfigRoute(
@@ -70,6 +71,7 @@ export function buildApp(ctx: AppContext, dhis2: Dhis2Context | null = null, eve
     scheduleStore: createScheduleStore(ctx.internalDb),
   }, eventing);
   registerMarketplaceRoutes(app, ctx);
+  registerConnectorsRoutes(app, ctx, { connectors: createConnectorStore(ctx.internalDb) });
   registerWorkflowRoutes(app, ctx);
 
   // Serve the built SPA if present. API + health are registered first and win.

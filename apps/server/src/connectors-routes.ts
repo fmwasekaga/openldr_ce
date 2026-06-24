@@ -1,0 +1,129 @@
+import { randomUUID } from 'node:crypto';
+import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+import type { AppContext } from '@openldr/bootstrap';
+import { createPluginTarget } from '@openldr/bootstrap';
+import type { ConnectorStore } from '@openldr/db';
+import { redact } from '@openldr/core';
+import { requireRole } from './rbac';
+
+export interface ConnectorsRouteDeps {
+  connectors: ConnectorStore;
+}
+
+const createInput = z.object({
+  name: z.string().min(1),
+  pluginId: z.string().min(1),
+  config: z.record(z.string()),
+  allowedHost: z.string().optional(),
+});
+const updateInput = z.object({
+  name: z.string().min(1).optional(),
+  config: z.record(z.string()).optional(),
+  allowedHost: z.string().nullable().optional(),
+  enabled: z.boolean().optional(),
+});
+
+/** Derive the egress host to pin from the connection config's baseUrl (an explicit
+ *  allowedHost wins). Returns null when neither yields a host (egress stays default-deny). */
+function hostFor(config: Record<string, string> | undefined, explicit: string | null | undefined): string | null {
+  if (explicit !== undefined) return explicit && explicit.length > 0 ? explicit : null;
+  const base = config?.baseUrl;
+  if (!base) return null;
+  try {
+    return new URL(base).hostname || null;
+  } catch {
+    return null;
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext, deps: ConnectorsRouteDeps): void {
+  const { connectors } = deps;
+  const key = (): string | undefined => ctx.cfg.SECRETS_ENCRYPTION_KEY;
+
+  // Installed sink plugins, for the "pick a plugin" dropdown.
+  app.get('/api/connectors/sink-plugins', { preHandler: requireRole('lab_admin') }, async () => {
+    const rows = await ctx.plugins.list();
+    return rows
+      .filter((r) => {
+        const m = r.manifest as { kind?: string; payload?: { pluginKind?: string } };
+        return m.kind === 'sink' || m.payload?.pluginKind === 'sink';
+      })
+      .map((r) => ({ id: r.id, version: r.version, enabled: r.enabled }));
+  });
+
+  app.get('/api/connectors', { preHandler: requireRole('lab_admin') }, async () => connectors.list());
+
+  app.get('/api/connectors/:id', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const c = await connectors.get(id);
+    if (!c) { reply.code(404); return { error: 'connector not found' }; }
+    return c;
+  });
+
+  app.post('/api/connectors', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const parsed = createInput.safeParse(req.body);
+    if (!parsed.success) { reply.code(400); return { error: 'invalid connector input' }; }
+    const { name, pluginId, config, allowedHost } = parsed.data;
+    const id = randomUUID();
+    try {
+      await connectors.create({ id, name, pluginId, kind: 'sink', config, allowedHost: hostFor(config, allowedHost) }, key());
+    } catch (e) {
+      reply.code(400);
+      return { error: redact(e instanceof Error ? e.message : String(e)) };
+    }
+    return connectors.get(id);
+  });
+
+  app.put('/api/connectors/:id', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const parsed = updateInput.safeParse(req.body);
+    if (!parsed.success) { reply.code(400); return { error: 'invalid connector patch' }; }
+    if (!(await connectors.get(id))) { reply.code(404); return { error: 'connector not found' }; }
+    const patch = parsed.data;
+    // Re-derive the pinned host when the config (baseUrl) changes, unless explicitly given.
+    const allowedHost = patch.config !== undefined ? hostFor(patch.config, patch.allowedHost) : patch.allowedHost;
+    try {
+      await connectors.update(id, { name: patch.name, config: patch.config, enabled: patch.enabled, allowedHost }, key());
+    } catch (e) {
+      reply.code(400);
+      return { error: redact(e instanceof Error ? e.message : String(e)) };
+    }
+    return connectors.get(id);
+  });
+
+  app.delete('/api/connectors/:id', { preHandler: requireRole('lab_admin') }, async (req) => {
+    const { id } = req.params as { id: string };
+    await connectors.remove(id);
+    return { ok: true };
+  });
+
+  // Live connection test: resolve → loadSink → health_check + pull_metadata (restricted to allowedHost).
+  app.post('/api/connectors/:id/test', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const connector = await connectors.get(id);
+    if (!connector) { reply.code(404); return { error: 'connector not found' }; }
+    try {
+      const config = await connectors.getDecryptedConfig(id, key());
+      const sink = await ctx.plugins.loadSink(connector.pluginId);
+      if (!sink) return { ok: false, error: `sink plugin '${connector.pluginId}' is not installed` };
+      const target = createPluginTarget(sink, config, connector.allowedHost);
+      const health = await target.healthCheck();
+      if (health.status !== 'up') return { ok: false, error: health.detail ?? 'unreachable' };
+      const md = await target.pullMetadata();
+      return {
+        ok: true,
+        metadata: {
+          dataElements: md.dataElements.length,
+          orgUnits: md.orgUnits.length,
+          categoryOptionCombos: md.categoryOptionCombos.length,
+          programs: md.programs?.length ?? 0,
+          programStages: md.programStages?.length ?? 0,
+        },
+      };
+    } catch (e) {
+      return { ok: false, error: redact(e instanceof Error ? e.message : String(e)) };
+    }
+  });
+}
