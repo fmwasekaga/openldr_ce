@@ -359,3 +359,142 @@ body {
   background: #a12622;
   border-color: #a12622;
 }
+
+/* Reusable Modal (Task 10) — replaces shadcn Dialog/ConfirmDialog inside the iframe. */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+}
+.modal-panel {
+  background: #fff;
+  border-radius: 8px;
+  padding: 18px 20px;
+  width: 100%;
+  max-width: 460px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  color: #111;
+}
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+.modal-close {
+  font: inherit;
+  font-size: 20px;
+  line-height: 1;
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.modal-close:hover {
+  color: #111;
+}
+.modal-body {
+  display: grid;
+  gap: 12px;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+/* Mappings list + run (Task 10). */
+.dhis2 .mappings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.dhis2 .mappings-head h1 {
+  margin: 0;
+}
+.dhis2 .mappings-kind-col {
+  width: 120px;
+}
+.dhis2 .mappings-actions-col {
+  width: 180px;
+}
+.dhis2 .mappings-name {
+  font-weight: 600;
+}
+.dhis2 .mappings-empty {
+  text-align: center;
+  padding: 32px 8px;
+}
+.dhis2 .mappings-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.dhis2 .mappings-del {
+  color: #a12622;
+}
+.mappings-confirm-del {
+  background: #a12622;
+  border-color: #a12622;
+}
+
+/* Run dialog body (Task 10). */
+.run-form {
+  display: grid;
+  gap: 12px;
+}
+.run-field {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+.run-input {
+  font: inherit;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #fff;
+  color: #111;
+  padding: 6px 10px;
+}
+.run-actions {
+  display: flex;
+  gap: 8px;
+}
+.run-dry-btn {
+  background: #fff;
+  color: #111;
+  border-color: #ccc;
+}
+.run-result {
+  border: 1px solid #e3e3e3;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+.run-num {
+  font-weight: 600;
+}
+.run-skipped {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: #888;
+}
+.run-push-result {
+  margin-top: 8px;
+}
