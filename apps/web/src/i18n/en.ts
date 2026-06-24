@@ -282,6 +282,7 @@ export const en = {
       fieldUsername: 'Username',
       fieldPassword: 'Password',
       secretSet: '••• set (leave blank to keep)',
+      partialSecrets: 'Enter all connection fields (base URL, username, password) together, or leave them all blank to keep the stored values.',
       enabledLabel: 'Enabled',
       save: 'Save',
       cancel: 'Cancel',

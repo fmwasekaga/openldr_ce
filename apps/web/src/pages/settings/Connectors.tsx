@@ -53,15 +53,22 @@ export function Connectors() {
     if (!draft || busy) return;
     setBusy(true);
     try {
-      const config: Record<string, string> = {};
-      if (draft.baseUrl) config.baseUrl = draft.baseUrl;
-      if (draft.username) config.username = draft.username;
-      if (draft.password) config.password = draft.password;
+      const anyFilled = Boolean(draft.baseUrl || draft.username || draft.password);
+      const allFilled = Boolean(draft.baseUrl && draft.username && draft.password);
+      // Connection fields go all-or-nothing: the server replaces the whole encrypted
+      // config blob, and secrets can't be read back to pre-fill, so a partial re-entry
+      // would silently wipe the fields left blank.
+      if (draft.id === null ? !allFilled : (anyFilled && !allFilled)) {
+        toast.error(t('settings.connectors.partialSecrets'));
+        return;
+      }
+      const config: Record<string, string> = allFilled
+        ? { baseUrl: draft.baseUrl, username: draft.username, password: draft.password }
+        : {};
       if (draft.id === null) {
         await createConnector({ name: draft.name, pluginId: draft.pluginId, config });
       } else {
-        const hasConfig = Object.keys(config).length > 0;
-        await updateConnector(draft.id, { name: draft.name, enabled: draft.enabled, ...(hasConfig ? { config } : {}) });
+        await updateConnector(draft.id, { name: draft.name, enabled: draft.enabled, ...(allFilled ? { config } : {}) });
       }
       toast.success(t('settings.connectors.savedToast', { name: draft.name }));
       setDraft(null);

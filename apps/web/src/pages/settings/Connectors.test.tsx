@@ -12,6 +12,7 @@ vi.mock('@/api', async (orig) => {
     updateConnector: vi.fn(), deleteConnector: vi.fn(), testConnector: vi.fn() };
 });
 import * as api from '@/api';
+import { toast } from 'sonner';
 import { Connectors } from './Connectors';
 
 const conn = { id: 'c1', name: 'Prod DHIS2', pluginId: 'dhis2-sink', kind: 'sink', allowedHost: 'dhis2.example.org', enabled: true, createdAt: '2026-06-24T00:00:00Z', updatedAt: '2026-06-24T00:00:00Z' };
@@ -63,5 +64,23 @@ describe('Connectors page', () => {
     fireEvent.click(await screen.findByTestId('remove-c1'));
     fireEvent.click(await screen.findByRole('button', { name: 'Remove' }));
     await waitFor(() => expect(api.deleteConnector).toHaveBeenCalledWith('c1'));
+  });
+
+  it('updates name/enabled without resending secrets', async () => {
+    (api.updateConnector as any).mockResolvedValue(conn);
+    render(<MemoryRouter><Connectors /></MemoryRouter>);
+    fireEvent.click(await screen.findByTestId('edit-c1'));
+    fireEvent.change(await screen.findByTestId('connector-name'), { target: { value: 'Renamed' } });
+    fireEvent.click(screen.getByTestId('connector-save'));
+    await waitFor(() => expect(api.updateConnector).toHaveBeenCalledWith('c1', { name: 'Renamed', enabled: true }));
+  });
+
+  it('rejects a partial connection-field re-entry on edit', async () => {
+    render(<MemoryRouter><Connectors /></MemoryRouter>);
+    fireEvent.click(await screen.findByTestId('edit-c1'));
+    fireEvent.change(await screen.findByTestId('connector-baseurl'), { target: { value: 'https://new.example.org' } });
+    fireEvent.click(screen.getByTestId('connector-save'));
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(api.updateConnector).not.toHaveBeenCalled();
   });
 });

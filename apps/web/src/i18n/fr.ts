@@ -307,6 +307,7 @@ export const fr: EnShape = {
       fieldUsername: "Nom d'utilisateur",
       fieldPassword: 'Mot de passe',
       secretSet: '••• défini (laisser vide pour conserver)',
+      partialSecrets: 'Saisissez tous les champs de connexion (URL de base, nom d’utilisateur, mot de passe) ensemble, ou laissez-les tous vides pour conserver les valeurs enregistrées.',
       enabledLabel: 'Activé',
       save: 'Enregistrer',
       cancel: 'Annuler',
