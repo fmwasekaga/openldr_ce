@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AppContext } from '@openldr/bootstrap';
 import { generatePublisherKeypair, packBundle } from '@openldr/marketplace';
+import { makeMigratedDb, createRegistryStore } from '@openldr/db';
 import { registerMarketplaceRoutes } from './marketplace-routes';
 
 // ── A temp registry dir with one signed plugin bundle (built via packBundle). ──
@@ -50,26 +51,43 @@ function fakePlugins() {
   };
 }
 
-function fakeCtx(plugins: unknown, cfg: Record<string, unknown>, marketplaceForms?: unknown): AppContext {
+function fakeCtx(plugins: unknown, cfg: Record<string, unknown>, internalDb: unknown, marketplaceForms?: unknown): AppContext {
   return {
-    cfg, plugins, audit: { record: async () => ({}) },
+    cfg, plugins, internalDb, audit: { record: async () => ({}) },
     marketplaceForms: marketplaceForms ?? { install: async () => ({ id: 'x', version: '1', targetFormId: 'form-1' }), detach: async () => {}, list: async () => [] },
   } as unknown as AppContext;
 }
 
-function appWith(cfg: Record<string, unknown>, plugins: unknown, roles: string[] = ['lab_admin'], fetchImpl?: typeof fetch, marketplaceForms?: unknown) {
+type SeedRegistry = { id: string; name: string; kind: 'local' | 'http'; location: string; enabled?: boolean };
+
+// Build an app over a freshly-migrated in-memory internal DB, optionally pre-seeding
+// registry rows. The DB is returned so tests can read/seed registries directly.
+async function appWith(
+  cfg: Record<string, unknown>,
+  plugins: unknown,
+  opts: { roles?: string[]; fetchImpl?: typeof fetch; marketplaceForms?: unknown; seed?: SeedRegistry[] } = {},
+) {
+  const { roles = ['lab_admin'], fetchImpl, marketplaceForms, seed = [] } = opts;
+  const db = await makeMigratedDb();
+  const store = createRegistryStore(db);
+  for (const r of seed) await store.create(r);
   const app = Fastify();
   app.addHook('onRequest', async (req) => {
     req.user = { id: 'admin', username: 'admin', displayName: null, roles } as never;
   });
-  registerMarketplaceRoutes(app, fakeCtx(plugins, cfg, marketplaceForms), fetchImpl);
-  return app;
+  registerMarketplaceRoutes(app, fakeCtx(plugins, cfg, db, marketplaceForms), fetchImpl);
+  return { app, db, store };
 }
+
+// The single-bundle local registry every "happy path" test uses.
+const REG: SeedRegistry = { id: 'reg-local', name: 'Local Bundles', kind: 'local', location: '' };
+function localReg(): SeedRegistry { return { ...REG, location: registryDir }; }
+function formReg(): SeedRegistry { return { id: 'reg-forms', name: 'Form Bundles', kind: 'local', location: formRegistryDir }; }
 
 describe('marketplace routes', () => {
   it('lists installed artifacts (mapped shape)', async () => {
     const { runtime } = fakePlugins();
-    const app = appWith({ MARKETPLACE_REGISTRY_DIR: registryDir }, runtime);
+    const { app } = await appWith({}, runtime, { seed: [localReg()] });
     const res = await app.inject({ method: 'GET', url: '/api/marketplace/installed' });
     expect(res.statusCode).toBe(200);
     const body = res.json();
@@ -79,66 +97,99 @@ describe('marketplace routes', () => {
 
   it('403s without lab_admin', async () => {
     const { runtime } = fakePlugins();
-    const app = appWith({ MARKETPLACE_REGISTRY_DIR: registryDir }, runtime, []);
+    const { app } = await appWith({}, runtime, { roles: [], seed: [localReg()] });
     const res = await app.inject({ method: 'GET', url: '/api/marketplace/installed' });
     expect(res.statusCode).toBe(403);
   });
 
-  it('lists available bundles from the registry dir', async () => {
+  it('lists available bundles aggregated from enabled registries (tagged + composite ref)', async () => {
     const { runtime } = fakePlugins();
-    const app = appWith({ MARKETPLACE_REGISTRY_DIR: registryDir }, runtime);
+    const { app } = await appWith({}, runtime, { seed: [localReg()] });
     const res = await app.inject({ method: 'GET', url: '/api/marketplace/available' });
     const body = res.json();
     expect(body.configured).toBe(true);
     expect(body.bundles).toHaveLength(1);
-    expect(body.bundles[0]).toMatchObject({ ref: 'demo-1', id: 'demo', version: '1.0.0', valid: true });
+    expect(body.bundles[0]).toMatchObject({ id: 'demo', version: '1.0.0', valid: true, registryId: 'reg-local', registryName: 'Local Bundles' });
+    expect(body.bundles[0].ref).toContain('::');
+    expect(body.bundles[0].ref).toBe('reg-local::demo-1');
+    // versions are also composite-encoded
+    expect(body.bundles[0].versions[0].ref).toContain('::');
   });
 
   it('available rows include description and license', async () => {
     const { runtime } = fakePlugins();
-    const app = appWith({ MARKETPLACE_REGISTRY_DIR: registryDir }, runtime);
+    const { app } = await appWith({}, runtime, { seed: [localReg()] });
     const res = await app.inject({ method: 'GET', url: '/api/marketplace/available' });
     const body = res.json();
     expect(body.bundles[0]).toHaveProperty('description');
     expect(body.bundles[0]).toHaveProperty('license');
   });
 
-  it('returns full manifest detail for one ref (with compatible flag)', async () => {
+  it('aggregates bundles across multiple enabled registries', async () => {
     const { runtime } = fakePlugins();
-    const app = appWith({ MARKETPLACE_REGISTRY_DIR: registryDir }, runtime);
-    const res = await app.inject({ method: 'GET', url: '/api/marketplace/available/demo-1' });
+    const { app } = await appWith({}, runtime, { seed: [localReg(), formReg()] });
+    const res = await app.inject({ method: 'GET', url: '/api/marketplace/available' });
+    const body = res.json();
+    expect(body.configured).toBe(true);
+    expect(body.source).toBe('multi');
+    expect(body.host).toBe('2 registries');
+    const ids = body.bundles.map((b: any) => b.id).sort();
+    expect(ids).toEqual(['demo', 'demo-form']);
+    const fromForms = body.bundles.find((b: any) => b.id === 'demo-form');
+    expect(fromForms).toMatchObject({ registryId: 'reg-forms', registryName: 'Form Bundles' });
+  });
+
+  it('returns full manifest detail for one composite ref (with compatible flag)', async () => {
+    const { runtime } = fakePlugins();
+    const { app } = await appWith({}, runtime, { seed: [localReg()] });
+    const res = await app.inject({ method: 'GET', url: '/api/marketplace/available/reg-local::demo-1' });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body).toMatchObject({ ref: 'demo-1', id: 'demo', version: '1.0.0', valid: true, compatible: true, ceVersion: '0.1.0' });
+    expect(body).toMatchObject({ ref: 'reg-local::demo-1', id: 'demo', version: '1.0.0', valid: true, compatible: true, ceVersion: '0.1.0', registryId: 'reg-local', registryName: 'Local Bundles' });
     expect(body.payload).toMatchObject({ kind: 'plugin' });
     expect(body.capabilities).toEqual([{ kind: 'emit-fhir', resourceTypes: ['Patient'] }]);
   });
 
-  it('rejects a traversal ref on the detail endpoint', async () => {
+  it('detail 400s on a non-composite (bad) ref', async () => {
     const { runtime } = fakePlugins();
-    const app = appWith({ MARKETPLACE_REGISTRY_DIR: registryDir }, runtime);
-    const res = await app.inject({ method: 'GET', url: '/api/marketplace/available/..%2Fsecrets' });
+    const { app } = await appWith({}, runtime, { seed: [localReg()] });
+    const res = await app.inject({ method: 'GET', url: '/api/marketplace/available/demo-1' });
     expect(res.statusCode).toBe(400);
   });
 
-  it('reports unconfigured when no registry dir', async () => {
+  it('detail 404s for an unknown registry id', async () => {
     const { runtime } = fakePlugins();
-    const app = appWith({}, runtime);
+    const { app } = await appWith({}, runtime, { seed: [localReg()] });
+    const res = await app.inject({ method: 'GET', url: '/api/marketplace/available/nope::demo-1' });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('rejects a traversal ref on the detail endpoint', async () => {
+    const { runtime } = fakePlugins();
+    const { app } = await appWith({}, runtime, { seed: [localReg()] });
+    const res = await app.inject({ method: 'GET', url: '/api/marketplace/available/reg-local%3A%3A..%2Fsecrets' });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('reports unconfigured when no enabled registries', async () => {
+    const { runtime } = fakePlugins();
+    const { app } = await appWith({}, runtime);
     const res = await app.inject({ method: 'GET', url: '/api/marketplace/available' });
     expect(res.json()).toEqual({ configured: false, bundles: [], source: null, host: null });
   });
 
-  it('available reports the source kind and host', async () => {
+  it('available reports the single source kind and host', async () => {
     const { runtime } = fakePlugins();
-    const app = appWith({ MARKETPLACE_REGISTRY_DIR: registryDir }, runtime);
+    const { app } = await appWith({}, runtime, { seed: [localReg()] });
     const res = await app.inject({ method: 'GET', url: '/api/marketplace/available' });
     const body = res.json();
     expect(body.source).toBe('local');
+    expect(body.host).toBe('Local Bundles');
   });
 
   it('refresh returns ok', async () => {
     const { runtime } = fakePlugins();
-    const app = appWith({ MARKETPLACE_REGISTRY_DIR: registryDir }, runtime);
+    const { app } = await appWith({}, runtime, { seed: [localReg()] });
     const res = await app.inject({ method: 'POST', url: '/api/marketplace/refresh' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ ok: true });
@@ -146,8 +197,8 @@ describe('marketplace routes', () => {
 
   it('installs with consent (passes approval + actor)', async () => {
     const { runtime, calls } = fakePlugins();
-    const app = appWith({ MARKETPLACE_REGISTRY_DIR: registryDir }, runtime);
-    const res = await app.inject({ method: 'POST', url: '/api/marketplace/install', payload: { ref: 'demo-1', acknowledgedCapabilities: [{ kind: 'emit-fhir', resourceTypes: ['Patient'] }] } });
+    const { app } = await appWith({}, runtime, { seed: [localReg()] });
+    const res = await app.inject({ method: 'POST', url: '/api/marketplace/install', payload: { ref: 'reg-local::demo-1', acknowledgedCapabilities: [{ kind: 'emit-fhir', resourceTypes: ['Patient'] }] } });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ id: 'demo', version: '1.0.0' });
     const opts = calls.install[0] as { approval: { approvedBy: string; acknowledgedCapabilities: unknown } };
@@ -155,36 +206,44 @@ describe('marketplace routes', () => {
     expect(opts.approval.acknowledgedCapabilities).toEqual([{ kind: 'emit-fhir', resourceTypes: ['Patient'] }]);
   });
 
-  it('rejects a path-traversal ref', async () => {
+  it('install rejects a non-composite ref', async () => {
     const { runtime, calls } = fakePlugins();
-    const app = appWith({ MARKETPLACE_REGISTRY_DIR: registryDir }, runtime);
-    const res = await app.inject({ method: 'POST', url: '/api/marketplace/install', payload: { ref: '../secrets' } });
+    const { app } = await appWith({}, runtime, { seed: [localReg()] });
+    const res = await app.inject({ method: 'POST', url: '/api/marketplace/install', payload: { ref: 'demo-1' } });
+    expect(res.statusCode).toBe(400);
+    expect(calls.install).toHaveLength(0);
+  });
+
+  it('install rejects a path-traversal inner ref', async () => {
+    const { runtime, calls } = fakePlugins();
+    const { app } = await appWith({}, runtime, { seed: [localReg()] });
+    const res = await app.inject({ method: 'POST', url: '/api/marketplace/install', payload: { ref: 'reg-local::../secrets' } });
     expect(res.statusCode).toBe(400);
     expect(calls.install).toHaveLength(0);
   });
 
   it('publish/status reports configured=false when unset', async () => {
     const { runtime } = fakePlugins();
-    const app = appWith({ MARKETPLACE_REGISTRY_DIR: registryDir }, runtime);
+    const { app } = await appWith({}, runtime, { seed: [localReg()] });
     const res = await app.inject({ method: 'GET', url: '/api/marketplace/publish/status' });
     expect(res.json()).toEqual({ configured: false, repo: null });
   });
 
   it('publish/status reports configured=true when token+repo set', async () => {
     const { runtime } = fakePlugins();
-    const app = appWith({ MARKETPLACE_REGISTRY_DIR: registryDir, MARKETPLACE_PUBLISH_TOKEN: 't', MARKETPLACE_PUBLISH_REPO: 'o/r' }, runtime);
+    const { app } = await appWith({ MARKETPLACE_REGISTRY_DIR: registryDir, MARKETPLACE_PUBLISH_TOKEN: 't', MARKETPLACE_PUBLISH_REPO: 'o/r' }, runtime, { seed: [localReg()] });
     const res = await app.inject({ method: 'GET', url: '/api/marketplace/publish/status' });
     expect(res.json()).toEqual({ configured: true, repo: 'o/r' });
   });
 
   it('publish returns 412 when not configured', async () => {
     const { runtime } = fakePlugins();
-    const app = appWith({ MARKETPLACE_REGISTRY_DIR: registryDir }, runtime);
+    const { app } = await appWith({}, runtime, { seed: [localReg()] });
     const res = await app.inject({ method: 'POST', url: '/api/marketplace/publish', payload: { ref: 'demo-1' } });
     expect(res.statusCode).toBe(412);
   });
 
-  it('publish opens a PR for a staged bundle', async () => {
+  it('publish opens a PR for a staged bundle (env stagingDir, AS-IS)', async () => {
     const { runtime } = fakePlugins();
     const fetchMock = vi.fn(async (url: string) => {
       const u = String(url);
@@ -200,7 +259,7 @@ describe('marketplace routes', () => {
       if (u.endsWith('/pulls')) return ok({ html_url: 'https://gh/pr/3', number: 3 });
       return { ok: false, status: 500, json: async () => ({ message: 'x' }) } as unknown as Response;
     });
-    const app = appWith({ MARKETPLACE_REGISTRY_DIR: registryDir, MARKETPLACE_PUBLISH_TOKEN: 't', MARKETPLACE_PUBLISH_REPO: 'o/r', MARKETPLACE_PUBLISH_BRANCH: 'main' }, runtime, ['lab_admin'], fetchMock as unknown as typeof fetch);
+    const { app } = await appWith({ MARKETPLACE_REGISTRY_DIR: registryDir, MARKETPLACE_PUBLISH_TOKEN: 't', MARKETPLACE_PUBLISH_REPO: 'o/r', MARKETPLACE_PUBLISH_BRANCH: 'main' }, runtime, { fetchImpl: fetchMock as unknown as typeof fetch, seed: [localReg()] });
     const res = await app.inject({ method: 'POST', url: '/api/marketplace/publish', payload: { ref: 'demo-1' } });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ prUrl: 'https://gh/pr/3', prNumber: 3 });
@@ -208,7 +267,7 @@ describe('marketplace routes', () => {
 
   it('enable/disable/rollback/remove call the runtime', async () => {
     const { runtime, calls } = fakePlugins();
-    const app = appWith({ MARKETPLACE_REGISTRY_DIR: registryDir }, runtime);
+    const { app } = await appWith({}, runtime, { seed: [localReg()] });
     await app.inject({ method: 'POST', url: '/api/marketplace/demo/disable' });
     await app.inject({ method: 'POST', url: '/api/marketplace/demo/enable' });
     await app.inject({ method: 'POST', url: '/api/marketplace/demo/rollback', payload: { version: '1.0.0' } });
@@ -222,8 +281,8 @@ describe('marketplace routes', () => {
     const { runtime } = fakePlugins();
     const installed: unknown[] = [];
     const marketplaceForms = { install: async (b: unknown, o: unknown) => { installed.push({ b, o }); return { id: 'demo-form', version: '1.0.0', targetFormId: 'form-9' }; }, detach: async () => {}, list: async () => [] };
-    const app = appWith({ MARKETPLACE_REGISTRY_DIR: formRegistryDir }, runtime, ['lab_admin'], undefined, marketplaceForms);
-    const res = await app.inject({ method: 'POST', url: '/api/marketplace/install', payload: { ref: 'demo-form-1', acknowledgedCapabilities: [] } });
+    const { app } = await appWith({}, runtime, { marketplaceForms, seed: [formReg()] });
+    const res = await app.inject({ method: 'POST', url: '/api/marketplace/install', payload: { ref: 'reg-forms::demo-form-1', acknowledgedCapabilities: [] } });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ id: 'demo-form', version: '1.0.0' });
     expect(installed).toHaveLength(1);
@@ -232,7 +291,7 @@ describe('marketplace routes', () => {
   it('installed merges plugin + form-template rows', async () => {
     const { runtime } = fakePlugins();
     const marketplaceForms = { install: async () => ({ id: 'x', version: '1', targetFormId: 'f' }), detach: async () => {}, list: async () => [{ artifactId: 'demo-form', version: '1.0.0', kind: 'form-template', targetFormId: 'form-9', publisherName: 'Acme', installedBy: 'admin', drifted: true }] };
-    const app = appWith({ MARKETPLACE_REGISTRY_DIR: registryDir }, runtime, ['lab_admin'], undefined, marketplaceForms);
+    const { app } = await appWith({}, runtime, { marketplaceForms, seed: [localReg()] });
     const res = await app.inject({ method: 'GET', url: '/api/marketplace/installed' });
     const body = res.json();
     expect(body.find((a: any) => a.id === 'demo' && a.type === 'plugin')).toBeTruthy();
@@ -244,9 +303,68 @@ describe('marketplace routes', () => {
     const { runtime } = fakePlugins();
     const calls: string[] = [];
     const marketplaceForms = { install: async () => ({ id: 'x', version: '1', targetFormId: 'f' }), detach: async (id: string) => { calls.push(id); }, list: async () => [] };
-    const app = appWith({ MARKETPLACE_REGISTRY_DIR: registryDir }, runtime, ['lab_admin'], undefined, marketplaceForms);
+    const { app } = await appWith({}, runtime, { marketplaceForms, seed: [localReg()] });
     const res = await app.inject({ method: 'POST', url: '/api/marketplace/demo-form/detach' });
     expect(res.statusCode).toBe(200);
     expect(calls).toEqual(['demo-form']);
+  });
+
+  // ── Registries CRUD ──
+  describe('registries CRUD', () => {
+    it('POST creates → GET lists → PUT disables → DELETE removes', async () => {
+      const { runtime } = fakePlugins();
+      const { app } = await appWith({}, runtime);
+
+      // create
+      const created = await app.inject({ method: 'POST', url: '/api/marketplace/registries', payload: { name: 'Public', kind: 'http', location: 'https://example.org/reg' } });
+      expect(created.statusCode).toBe(200);
+      const reg = created.json();
+      expect(reg).toMatchObject({ name: 'Public', kind: 'http', location: 'https://example.org/reg', enabled: true });
+      expect(typeof reg.id).toBe('string');
+
+      // list
+      const listed = await app.inject({ method: 'GET', url: '/api/marketplace/registries' });
+      expect(listed.statusCode).toBe(200);
+      expect(listed.json().map((r: any) => r.id)).toContain(reg.id);
+
+      // patch enabled=false
+      const patched = await app.inject({ method: 'PUT', url: `/api/marketplace/registries/${reg.id}`, payload: { enabled: false } });
+      expect(patched.statusCode).toBe(200);
+      expect(patched.json().enabled).toBe(false);
+
+      // delete
+      const deleted = await app.inject({ method: 'DELETE', url: `/api/marketplace/registries/${reg.id}` });
+      expect(deleted.json()).toEqual({ ok: true });
+      const after = await app.inject({ method: 'GET', url: '/api/marketplace/registries' });
+      expect(after.json().map((r: any) => r.id)).not.toContain(reg.id);
+    });
+
+    it('POST 400s on invalid input', async () => {
+      const { runtime } = fakePlugins();
+      const { app } = await appWith({}, runtime);
+      const res = await app.inject({ method: 'POST', url: '/api/marketplace/registries', payload: { name: '', kind: 'ftp', location: '' } });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('PUT 404s for an unknown registry', async () => {
+      const { runtime } = fakePlugins();
+      const { app } = await appWith({}, runtime);
+      const res = await app.inject({ method: 'PUT', url: '/api/marketplace/registries/nope', payload: { enabled: false } });
+      expect(res.statusCode).toBe(404);
+    });
+
+    it('a disabled registry is excluded from available', async () => {
+      const { runtime } = fakePlugins();
+      const { app } = await appWith({}, runtime, { seed: [{ ...localReg(), enabled: false }] });
+      const res = await app.inject({ method: 'GET', url: '/api/marketplace/available' });
+      expect(res.json()).toEqual({ configured: false, bundles: [], source: null, host: null });
+    });
+
+    it('CRUD requires lab_admin', async () => {
+      const { runtime } = fakePlugins();
+      const { app } = await appWith({}, runtime, { roles: [] });
+      const res = await app.inject({ method: 'GET', url: '/api/marketplace/registries' });
+      expect(res.statusCode).toBe(403);
+    });
   });
 });

@@ -1,6 +1,8 @@
 import { basename, join } from 'node:path';
 import { readFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { z } from 'zod';
 import type { AppContext } from '@openldr/bootstrap';
 import { CE_VERSION } from '@openldr/bootstrap';
 import {
@@ -9,6 +11,7 @@ import {
   openBundlePr, fetchRepoIndexJson, repoPathExists, mergeIndexEntry, parseIndex,
   payloadFileName, type RepoCoords, PublishError,
 } from '@openldr/marketplace';
+import { createRegistryStore, type RegistryRecord } from '@openldr/db';
 import { redact } from '@openldr/core';
 import { requireRole } from './rbac';
 
@@ -25,10 +28,24 @@ function safeRef(ref: unknown): string | null {
 }
 
 export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext, fetchImpl: typeof fetch = fetch): void {
-  const source: RegistrySource | null =
-    ctx.cfg.MARKETPLACE_REGISTRY_URL ? new HttpRegistrySource(ctx.cfg.MARKETPLACE_REGISTRY_URL)
-    : ctx.cfg.MARKETPLACE_REGISTRY_DIR ? new LocalRegistrySource(ctx.cfg.MARKETPLACE_REGISTRY_DIR)
-    : null;
+  const registries = createRegistryStore(ctx.internalDb);
+
+  function sourceFor(reg: RegistryRecord): RegistrySource {
+    return reg.kind === 'http' ? new HttpRegistrySource(reg.location, fetchImpl) : new LocalRegistrySource(reg.location);
+  }
+  async function enabledRegistries(): Promise<RegistryRecord[]> {
+    return (await registries.list()).filter((r) => r.enabled);
+  }
+
+  // The web treats `ref` opaquely, so we encode the owning registry into the ref
+  // (`<registryId>::<innerRef>`). This keeps the detail/install/version-switch flow unchanged.
+  const SEP = '::';
+  const packRef = (registryId: string, ref: string) => `${registryId}${SEP}${ref}`;
+  function unpackRef(composite: string): { registryId: string; ref: string } | null {
+    const i = composite.indexOf(SEP);
+    if (i <= 0) return null;
+    return { registryId: composite.slice(0, i), ref: composite.slice(i + SEP.length) };
+  }
 
   const stagingDir = ctx.cfg.MARKETPLACE_REGISTRY_DIR ?? null;
   const publishRepoCfg = ctx.cfg.MARKETPLACE_PUBLISH_REPO ?? null;
@@ -63,39 +80,53 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
   });
 
   app.get('/api/marketplace/available', { preHandler: requireRole('lab_admin') }, async () => {
-    if (!source) return { configured: false, bundles: [], source: null, host: null };
-    try {
-      const listing = await source.list();
-      return {
-        configured: true,
-        source: source.kind,
-        host: source.label,
-        bundles: listing.map((l) => ({
-          ref: l.ref, id: l.id, version: l.version, type: l.type,
-          publisher: l.publisher, description: l.description, license: l.license,
-          summary: l.summary, signatureFingerprint: l.signatureFingerprint,
-          valid: l.valid, versions: l.versions ?? [],
-        })),
-      };
-    } catch (e) {
-      return { configured: true, source: source.kind, host: source.label, bundles: [], error: e instanceof Error ? e.message : 'registry unreachable' };
+    const regs = await enabledRegistries();
+    if (regs.length === 0) return { configured: false, bundles: [], source: null, host: null };
+    const bundles: unknown[] = [];
+    let firstError: string | undefined;
+    for (const reg of regs) {
+      try {
+        const listing = await sourceFor(reg).list();
+        for (const l of listing) {
+          bundles.push({
+            ref: packRef(reg.id, l.ref), id: l.id, version: l.version, type: l.type,
+            publisher: l.publisher, description: l.description, license: l.license,
+            summary: l.summary, signatureFingerprint: l.signatureFingerprint, valid: l.valid,
+            registryId: reg.id, registryName: reg.name,
+            versions: (l.versions ?? []).map((v) => ({ version: v.version, ref: packRef(reg.id, v.ref) })),
+          });
+        }
+      } catch (e) {
+        firstError = firstError ?? (e instanceof Error ? e.message : 'registry unreachable');
+      }
     }
+    return {
+      configured: true,
+      source: regs.length === 1 ? regs[0].kind : 'multi',
+      host: regs.length === 1 ? regs[0].name : `${regs.length} registries`,
+      bundles,
+      ...(firstError ? { error: firstError } : {}),
+    };
   });
 
   app.get('/api/marketplace/available/:ref', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
-    if (!source) { reply.code(400); return { error: 'no marketplace registry configured' }; }
-    const ref = safeRef((req.params as { ref: string }).ref);
+    const parsed = unpackRef(decodeURIComponent((req.params as { ref: string }).ref));
+    if (!parsed) { reply.code(400); return { error: 'invalid bundle ref' }; }
+    const reg = await registries.get(parsed.registryId);
+    if (!reg) { reply.code(404); return { error: 'registry not found' }; }
+    const ref = safeRef(parsed.ref);
     if (!ref) { reply.code(400); return { error: 'invalid bundle ref' }; }
     try {
-      const b = await source.getBundle(ref);
+      const b = await sourceFor(reg).getBundle(ref);
       const v = verifyBundle(b);
       return {
-        ref, id: b.manifest.id, version: b.manifest.version, type: b.manifest.type,
+        ref: packRef(reg.id, ref), id: b.manifest.id, version: b.manifest.version, type: b.manifest.type,
         description: b.manifest.description, readme: b.manifest.readme, license: b.manifest.license,
         publisher: b.manifest.publisher ?? null, capabilities: b.manifest.capabilities,
         compatibility: b.manifest.compatibility,
         compatible: isCompatible(b.manifest.compatibility.ceVersion, CE_VERSION),
         ceVersion: CE_VERSION, payload: b.manifest.payload, valid: v.valid,
+        registryId: reg.id, registryName: reg.name,
       };
     } catch {
       reply.code(404);
@@ -104,15 +135,18 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
   });
 
   app.post('/api/marketplace/install', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
-    if (!source) { reply.code(400); return { error: 'no marketplace registry configured' }; }
     const body = (req.body ?? {}) as { ref?: unknown; acknowledgedCapabilities?: unknown };
-    const ref = safeRef(body.ref);
+    const parsed = unpackRef(typeof body.ref === 'string' ? body.ref : '');
+    if (!parsed) { reply.code(400); return { error: 'invalid bundle ref' }; }
+    const reg = await registries.get(parsed.registryId);
+    if (!reg) { reply.code(404); return { error: 'registry not found' }; }
+    const ref = safeRef(parsed.ref);
     if (!ref) { reply.code(400); return { error: 'invalid bundle ref' }; }
     if (body.acknowledgedCapabilities !== undefined && !Array.isArray(body.acknowledgedCapabilities)) {
       reply.code(400); return { error: 'acknowledgedCapabilities must be an array' };
     }
     try {
-      const b = await source.getBundle(ref);
+      const b = await sourceFor(reg).getBundle(ref);
       const a = actor(req);
       const acknowledgedCapabilities = (body.acknowledgedCapabilities as Capability[] | undefined) ?? b.manifest.capabilities;
       if (b.manifest.type === 'form-template') {
@@ -134,7 +168,35 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
   });
 
   app.post('/api/marketplace/refresh', { preHandler: requireRole('lab_admin') }, async () => {
-    source?.refresh();
+    for (const reg of await enabledRegistries()) sourceFor(reg).refresh();
+    return { ok: true };
+  });
+
+  // ── Registries CRUD (DB-backed marketplace sources) ──
+  const regInput = z.object({ name: z.string().min(1), kind: z.enum(['local', 'http']), location: z.string().min(1), enabled: z.boolean().optional() });
+  const regPatch = z.object({ name: z.string().min(1).optional(), kind: z.enum(['local', 'http']).optional(), location: z.string().min(1).optional(), enabled: z.boolean().optional() });
+
+  app.get('/api/marketplace/registries', { preHandler: requireRole('lab_admin') }, async () => registries.list());
+
+  app.post('/api/marketplace/registries', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const p = regInput.safeParse(req.body);
+    if (!p.success) { reply.code(400); return { error: 'invalid registry' }; }
+    const id = randomUUID();
+    await registries.create({ id, ...p.data });
+    return registries.get(id);
+  });
+
+  app.put('/api/marketplace/registries/:id', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const p = regPatch.safeParse(req.body);
+    if (!p.success) { reply.code(400); return { error: 'invalid patch' }; }
+    if (!(await registries.get(id))) { reply.code(404); return { error: 'registry not found' }; }
+    await registries.update(id, p.data);
+    return registries.get(id);
+  });
+
+  app.delete('/api/marketplace/registries/:id', { preHandler: requireRole('lab_admin') }, async (req) => {
+    await registries.remove((req.params as { id: string }).id);
     return { ok: true };
   });
 
