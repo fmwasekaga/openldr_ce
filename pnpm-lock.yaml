@@ -81,6 +81,12 @@ importers:
         specifier: ^3.24.1
         version: 3.25.76
     devDependencies:
+      '@openldr/plugins':
+        specifier: workspace:*
+        version: link:../../packages/plugins
+      '@openldr/ports':
+        specifier: workspace:*
+        version: link:../../packages/ports
       '@types/adm-zip':
         specifier: ^0.5.7
         version: 0.5.8

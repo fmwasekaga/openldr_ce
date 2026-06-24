@@ -28,7 +28,8 @@
     "load:measure": "node scripts/load-measure.mjs",
     "mssql:accept": "tsx scripts/mssql-live-acceptance.ts",
     "make:marketplace-bundle": "tsx scripts/make-marketplace-bundle.ts",
-    "marketplace:accept": "tsx scripts/marketplace-live-acceptance.ts"
+    "marketplace:accept": "tsx scripts/marketplace-live-acceptance.ts",
+    "dhis2:accept": "tsx scripts/dhis2-live-acceptance.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

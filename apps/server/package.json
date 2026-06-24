@@ -30,5 +30,5 @@
     "fastify": "^5.2.0",
     "zod": "^3.24.1"
   },
-  "devDependencies": { "@types/adm-zip": "^0.5.7", "tsup": "^8.3.5", "tsx": "^4.19.2", "typescript": "^5.7.2", "vitest": "^2.1.8" }
+  "devDependencies": { "@openldr/plugins": "workspace:*", "@openldr/ports": "workspace:*", "@types/adm-zip": "^0.5.7", "tsup": "^8.3.5", "tsx": "^4.19.2", "typescript": "^5.7.2", "vitest": "^2.1.8" }
 }
