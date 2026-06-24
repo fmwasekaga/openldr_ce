@@ -347,6 +347,8 @@ export const en = {
       license: 'License',
       noDescription: 'No description provided.',
       noneCapabilities: 'No special permissions requested.',
+      docs: 'Docs',
+      noDocs: 'This plugin has no documentation.',
       installComingSoon: 'Install (coming soon)',
       publish: 'Publish to GitHub',
       publishedToast: 'Published — pull request #{{number}} opened.',

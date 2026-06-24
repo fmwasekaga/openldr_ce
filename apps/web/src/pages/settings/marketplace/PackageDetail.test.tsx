@@ -58,6 +58,12 @@ describe('PackageDetail', () => {
     expect(onBack).toHaveBeenCalledOnce();
   });
 
+  it('renders the readme docs section when present', async () => {
+    mockDetail({ readme: '# Setup\n\nstep one' });
+    render(<PackageDetail entry={entry} onBack={() => {}} onInstall={() => {}} onToggleEnabled={() => {}} onRollback={() => {}} onRemove={() => {}} />);
+    expect(await screen.findByText('Setup')).toBeTruthy();
+  });
+
   it('installed item shows the actions menu instead of Install', async () => {
     const installedEntry: CardEntry = { ...entry, ref: undefined, installed: true, active: true, enabled: true };
     render(<PackageDetail entry={installedEntry} onBack={() => {}} onInstall={() => {}} onToggleEnabled={() => {}} onRollback={() => {}} onRemove={() => {}} />);

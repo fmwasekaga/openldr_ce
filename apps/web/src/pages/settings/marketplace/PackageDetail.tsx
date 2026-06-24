@@ -10,6 +10,7 @@ import {
 import { SignatureBadge } from './SignatureBadge';
 import { PayloadPreview } from './PayloadPreview';
 import { RequirementsChecklist } from './RequirementsChecklist';
+import { ReadmeMarkdown } from './ReadmeMarkdown';
 import { capabilityLine, type CardEntry } from './util';
 
 interface PackageDetailProps {
@@ -127,6 +128,12 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
             <p className="whitespace-pre-line text-sm text-foreground/85">
               {detail?.description || t('settings.marketplace.noDescription')}
             </p>
+            {detail?.readme ? (
+              <section data-testid="detail-docs">
+                <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">{t('settings.marketplace.docs')}</p>
+                <ReadmeMarkdown content={detail.readme} />
+              </section>
+            ) : null}
             <PayloadPreview payload={detail?.payload ?? null} />
             {error ? (
               <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>

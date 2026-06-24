@@ -372,6 +372,8 @@ export const pt: EnShape = {
       license: 'Licença',
       noDescription: 'Nenhuma descrição fornecida.',
       noneCapabilities: 'Nenhuma permissão especial solicitada.',
+      docs: 'Docs',
+      noDocs: 'Este plugin não tem documentação.',
       installComingSoon: 'Instalar (em breve)',
       publish: 'Publicar no GitHub',
       publishedToast: 'Publicado — pull request #{{number}} aberto.',
