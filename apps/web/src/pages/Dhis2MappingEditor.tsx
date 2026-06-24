@@ -85,9 +85,10 @@ export function Dhis2MappingEditor() {
             kind?: string; source?: { reportId?: string; sourceId?: string };
             orgUnitColumn?: string; periodColumn?: string; columns?: AggregateColumnMapping[];
             program?: string; programStage?: string; eventDateColumn?: string; idColumn?: string; dataValues?: TrkRow[];
+            connectorId?: string;
           };
           setMappingId(rec.id); setName(rec.name);
-          setConnectorId((d as { connectorId?: string }).connectorId ?? '');
+          setConnectorId(d.connectorId ?? '');
           if (d.kind === 'tracker') {
             setKind('tracker');
             setSourceId(d.source?.sourceId ?? '');
@@ -197,7 +198,7 @@ export function Dhis2MappingEditor() {
           <Picker testid="connector-select" value={connectorId} onChange={setConnectorId}
             placeholder={t('dhis2.mappings.editor.pickConnector')}
             options={connectors.filter((c) => c.enabled).map((c) => ({ value: c.id, label: c.name }))} />
-          {connectors.length === 0 ? (
+          {connectors.filter((c) => c.enabled).length === 0 ? (
             <span className="text-xs text-amber-600">{t('dhis2.mappings.editor.noConnectors')}</span>
           ) : null}
         </label>
