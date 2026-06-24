@@ -13,7 +13,7 @@ interface ToolbarProps {
 export function Toolbar({ onSave, onRun, onHistory, onDatasets, saving, executing }: ToolbarProps) {
   const workflowName = useWorkflowStore((s) => s.workflowName);
   const setWorkflowName = useWorkflowStore((s) => s.setWorkflowName);
-  const clear = useWorkflowStore((s) => s.clear);
+  const clearCanvas = useWorkflowStore((s) => s.clearCanvas);
   const nodes = useWorkflowStore((s) => s.nodes);
   const workflowId = useWorkflowStore((s) => s.workflowId);
 
@@ -34,8 +34,8 @@ export function Toolbar({ onSave, onRun, onHistory, onDatasets, saving, executin
       <button
         type="button"
         className="flex items-center gap-1.5 rounded-md border border-border bg-secondary px-3 py-1.5 text-xs font-medium text-secondary-foreground transition-colors hover:bg-secondary/70 disabled:opacity-50"
-        onClick={clear}
-        title="Clear canvas"
+        onClick={clearCanvas}
+        title="Clear canvas (keeps the workflow; Save updates it)"
       >
         <Trash2 className="h-3.5 w-3.5" />
         Clear

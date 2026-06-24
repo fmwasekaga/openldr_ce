@@ -66,7 +66,13 @@ interface WorkflowState {
   setConfigNode: (id: string | null) => void;
   setWorkflowName: (name: string) => void;
   setWorkflow: (id: string, name: string, nodes: WorkflowNode[], edges: WorkflowEdge[]) => void;
+  /** Full reset — wipes the canvas AND the workflow identity (id + name). Used when
+   *  starting a brand-new workflow (the /workflows/new load path). */
   clear: () => void;
+  /** Empty the canvas (nodes/edges + run state) but KEEP the open workflow's identity
+   *  (workflowId + name), so a subsequent Save updates that workflow rather than creating
+   *  a duplicate. Wired to the toolbar "Clear canvas" button. */
+  clearCanvas: () => void;
 
   /** Reset all per-node run state (called at the start of every run). */
   resetRun: () => void;
@@ -157,6 +163,21 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       configNodeId: null,
       workflowName: 'Untitled Workflow',
       workflowId: null,
+      nodeRunStatus: {},
+      nodeRunError: {},
+      nodeLogs: {},
+      nodeRunInput: {},
+      nodeRunOutput: {},
+      armed: false,
+    });
+  },
+
+  clearCanvas: () => {
+    set({
+      nodes: [],
+      edges: [],
+      selectedNodeId: null,
+      configNodeId: null,
       nodeRunStatus: {},
       nodeRunError: {},
       nodeLogs: {},
