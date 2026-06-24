@@ -277,3 +277,85 @@ body {
   color: #888;
   font-size: 13px;
 }
+
+/* Schedules (Task 8). */
+.dhis2 .sched-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  border: 1px solid #e3e3e3;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.dhis2 .sched-field {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+.dhis2 .sched-field .picker {
+  min-width: 200px;
+}
+.dhis2 .sched-select {
+  font: inherit;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #fff;
+  color: #111;
+  padding: 6px 10px;
+}
+.dhis2 .sched-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.dhis2 .sched-actions-col {
+  width: 160px;
+}
+.dhis2 .sched-mapping-name {
+  font-weight: 600;
+}
+.dhis2 .sched-empty {
+  text-align: center;
+  padding: 32px 8px;
+}
+.dhis2 .sched-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.dhis2 .sched-del {
+  color: #a12622;
+}
+.dhis2 .sched-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+}
+.dhis2 .sched-confirm {
+  background: #fff;
+  border-radius: 8px;
+  padding: 18px 20px;
+  max-width: 360px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+}
+.dhis2 .sched-confirm-title {
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+.dhis2 .sched-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 16px;
+}
+.dhis2 .sched-confirm-del {
+  background: #a12622;
+  border-color: #a12622;
+}
