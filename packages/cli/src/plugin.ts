@@ -1,10 +1,21 @@
 import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { createIngestContext } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 
 interface JsonOpt {
   json: boolean;
+}
+
+/** Read the ui.html bytes adjacent to a plugin manifest, when the manifest declares
+ *  payload.ui.entry (webview tier). Rejects non-plain-filename entries (path traversal). */
+export function readAdjacentUi(manifest: { ui?: { entry?: string } }, manifestDir: string): Uint8Array | undefined {
+  const entry = manifest.ui?.entry;
+  if (!entry) return undefined;
+  if (entry !== basename(entry) || entry === '') {
+    throw new Error(`invalid ui entry '${entry}': must be a plain filename inside the plugin dir`);
+  }
+  return new Uint8Array(readFileSync(join(manifestDir, entry)));
 }
 
 function emit(json: boolean, payload: unknown, human: string): void {
@@ -17,7 +28,8 @@ export async function runPluginInstall(wasmPath: string, opts: JsonOpt & { manif
     const wasm = new Uint8Array(readFileSync(wasmPath));
     const manifestPath = opts.manifest ?? join(dirname(wasmPath), 'manifest.json');
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
-    const installed = await ctx.plugins.install(wasm, manifest);
+    const ui = readAdjacentUi(manifest, dirname(manifestPath));
+    const installed = await ctx.plugins.install(wasm, manifest, { ui });
     emit(opts.json, { id: installed.id, version: installed.version }, `installed ${installed.id}@${installed.version}`);
     return 0;
   } finally {
