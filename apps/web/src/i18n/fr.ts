@@ -136,7 +136,7 @@ export const fr: EnShape = {
     down: 'Inaccessible',
     degraded: 'Dégradé',
     notConfiguredHelp:
-      'Définissez REPORTING_TARGET_ADAPTER=dhis2 et DHIS2_BASE_URL / DHIS2_USERNAME / DHIS2_PASSWORD dans l\'environnement serveur pour activer DHIS2.',
+      'Définissez REPORTING_TARGET_ADAPTER=dhis2 sur le serveur, puis créez un connecteur DHIS2 (Paramètres ▸ Connecteurs) avec l\'URL de base et les identifiants pour activer DHIS2.',
     metadata: 'Métadonnées',
     pullMetadata: 'Récupérer les métadonnées',
     pulling: 'Récupération…',

@@ -1,8 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createPluginTarget } from './connector-target';
 
-const enc = (o: unknown) => o;
-
 describe('createPluginTarget', () => {
   function fakeSink(outputs: Record<string, unknown>) {
     return {
@@ -42,5 +40,3 @@ describe('createPluginTarget', () => {
     expect((await t.healthCheck()).status).toBe('up');
   });
 });
-
-void enc;
