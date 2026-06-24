@@ -27,7 +27,9 @@ export const artifactManifestSchema = z.object({
   id: z.string().min(1),
   version: z.string().regex(SEMVER, 'version must be semver'),
   description: z.string().default(''),
-  readme: z.string().max(128_000).default(''),
+  // Markdown docs shipped with the artifact. Cap bounds a render-DoS while leaving room
+  // for a handful of inlined data: URI screenshots (each ~40-60KB base64).
+  readme: z.string().max(1_000_000).default(''),
   license: z.string().default('UNLICENSED'),
   // Publisher is optional: legacy plugin manifests carry none and install hash-only.
   publisher: z.object({ id: z.string().min(1), name: z.string().default(''), keyFingerprint: z.string().regex(HEX64) }).optional(),
