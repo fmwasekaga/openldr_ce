@@ -42,7 +42,13 @@ export function AppShell({
   const [collapsed, toggleSidebar] = useSidebar();
   const { user, signOut, hasRole } = useAuth();
   const [pluginUis, setPluginUis] = useState<PluginUiEntry[]>([]);
-  useEffect(() => { void listPluginUis().then(setPluginUis).catch(() => setPluginUis([])); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    void listPluginUis()
+      .then((list) => { if (!cancelled) setPluginUis(Array.isArray(list) ? list : []); })
+      .catch(() => { if (!cancelled) setPluginUis([]); });
+    return () => { cancelled = true; };
+  }, []);
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
 
