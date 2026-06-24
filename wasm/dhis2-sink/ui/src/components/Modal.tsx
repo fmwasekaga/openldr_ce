@@ -1,5 +1,6 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect } from 'preact/hooks';
+import { t } from '../i18n';
 
 /**
  * A minimal, dependency-free overlay dialog. Replaces shadcn's Dialog inside the
@@ -44,7 +45,7 @@ export function Modal({
       >
         <div class="modal-head">
           <h2 class="modal-title">{title}</h2>
-          <button type="button" class="modal-close" aria-label="Close" onClick={() => onClose()}>
+          <button type="button" class="modal-close" aria-label={t('modal.close')} onClick={() => onClose()}>
             ×
           </button>
         </div>

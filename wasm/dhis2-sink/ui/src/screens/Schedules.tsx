@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { getOpenldr } from '../sdk';
 import { Picker } from '../components/Picker';
+import { t } from '../i18n';
 
 /** A schedule doc as stored in the plugin `schedules` collection (migration 036). */
 interface ScheduleDoc {
@@ -134,10 +135,10 @@ export function Schedules() {
 
   return (
     <div class="dhis2" data-testid="dhis2-schedules-page">
-      <h1>Schedules</h1>
-      <p class="muted">Schedules run mappings on a recurring period; event-driven ones also fire on new data.</p>
+      <h1>{t('schedules.title')}</h1>
+      <p class="muted">{t('schedules.subtitle')}</p>
 
-      {phase.phase === 'loading' && <p class="status muted">Loading…</p>}
+      {phase.phase === 'loading' && <p class="status muted">{t('common.loading')}</p>}
       {phase.phase === 'error' && <div class="error" role="alert">{phase.message}</div>}
 
       {toast && (
@@ -148,28 +149,28 @@ export function Schedules() {
         <>
           <div class="sched-form">
             <div class="sched-field">
-              <span class="muted">Mapping</span>
+              <span class="muted">{t('schedules.mapping')}</span>
               <Picker
                 options={mappingOptions}
                 value={newMapping}
                 onChange={(v) => setNewMapping(v)}
-                placeholder="Pick a mapping"
-                searchPlaceholder="Search mappings…"
+                placeholder={t('schedules.pickMapping')}
+                searchPlaceholder={t('schedules.searchMappings')}
                 disabled={mappingOptions.length === 0}
                 testId="new-mapping"
               />
             </div>
             <label class="sched-field">
-              <span class="muted">Period</span>
+              <span class="muted">{t('schedules.period')}</span>
               <select
                 class="sched-select"
                 data-testid="new-period"
                 value={newPeriod}
                 onChange={(e) => setNewPeriod((e.currentTarget as HTMLSelectElement).value as PeriodType)}
               >
-                <option value="monthly">monthly</option>
-                <option value="quarterly">quarterly</option>
-                <option value="yearly">yearly</option>
+                <option value="monthly">{t('schedules.monthly')}</option>
+                <option value="quarterly">{t('schedules.quarterly')}</option>
+                <option value="yearly">{t('schedules.yearly')}</option>
               </select>
             </label>
             <label class="sched-check">
@@ -178,7 +179,7 @@ export function Schedules() {
                 checked={newEventDriven}
                 onChange={(e) => setNewEventDriven((e.currentTarget as HTMLInputElement).checked)}
               />
-              Event-driven
+              {t('schedules.eventDriven')}
             </label>
             <button
               type="button"
@@ -187,25 +188,25 @@ export function Schedules() {
               disabled={!newMapping}
               onClick={() => void onCreate()}
             >
-              Create
+              {t('schedules.create')}
             </button>
           </div>
 
           <table class="table sched-table">
             <thead>
               <tr>
-                <th>Mapping</th>
-                <th>Period</th>
-                <th>Event-driven</th>
-                <th>Enabled</th>
-                <th>Next due</th>
+                <th>{t('schedules.mapping')}</th>
+                <th>{t('schedules.period')}</th>
+                <th>{t('schedules.eventDriven')}</th>
+                <th>{t('schedules.enabled')}</th>
+                <th>{t('schedules.nextDue')}</th>
                 <th class="sched-actions-col" />
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} class="muted sched-empty">No schedules yet.</td>
+                  <td colSpan={6} class="muted sched-empty">{t('schedules.none')}</td>
                 </tr>
               ) : (
                 rows.map((s) => (
@@ -217,7 +218,7 @@ export function Schedules() {
                     <td>{s.periodType}</td>
                     <td>{s.eventDriven ? '✓' : '—'}</td>
                     <td>
-                      {s.enabled ? <span class="badge badge-on">on</span> : <span class="badge">off</span>}
+                      {s.enabled ? <span class="badge badge-on">{t('schedules.on')}</span> : <span class="badge">{t('schedules.off')}</span>}
                     </td>
                     <td class="muted">{s.nextDueAt ? new Date(s.nextDueAt).toLocaleString() : '—'}</td>
                     <td>
@@ -228,7 +229,7 @@ export function Schedules() {
                           data-testid={`toggle-${s.id}`}
                           onClick={() => void onToggle(s)}
                         >
-                          {s.enabled ? 'Disable' : 'Enable'}
+                          {s.enabled ? t('schedules.disable') : t('schedules.enable')}
                         </button>
                         <button
                           type="button"
@@ -236,7 +237,7 @@ export function Schedules() {
                           data-testid={`del-${s.id}`}
                           onClick={() => setPendingDelete(s)}
                         >
-                          Delete
+                          {t('schedules.delete')}
                         </button>
                       </div>
                     </td>
@@ -251,14 +252,15 @@ export function Schedules() {
       {pendingDelete && (
         <div class="sched-confirm-overlay" role="dialog" aria-modal="true">
           <div class="sched-confirm">
-            <p class="sched-confirm-title">Delete this schedule?</p>
+            <p class="sched-confirm-title">{t('schedules.deleteTitle')}</p>
             <p class="muted">
-              {mappingNameById.get(pendingDelete.mappingId) ?? pendingDelete.mappingId} will stop running.
-              This cannot be undone.
+              {t('schedules.deleteBody', {
+                mapping: mappingNameById.get(pendingDelete.mappingId) ?? pendingDelete.mappingId,
+              })}
             </p>
             <div class="sched-confirm-actions">
               <button type="button" class="link" onClick={() => setPendingDelete(null)}>
-                Cancel
+                {t('schedules.cancel')}
               </button>
               <button
                 type="button"
@@ -266,7 +268,7 @@ export function Schedules() {
                 data-testid="confirm-delete"
                 onClick={() => void doDelete()}
               >
-                Delete
+                {t('schedules.delete')}
               </button>
             </div>
           </div>

@@ -1,5 +1,6 @@
 import type { JSX } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { t } from '../i18n';
 
 export interface PickerOption {
   value: string;
@@ -75,7 +76,7 @@ export function Picker(props: {
         }}
       >
         <span class={selected ? 'picker-label' : 'picker-label picker-placeholder'}>
-          {selected ? selected.label : placeholder ?? 'Select…'}
+          {selected ? selected.label : placeholder ?? t('picker.select')}
         </span>
         <span class="picker-caret" aria-hidden="true">▾</span>
       </button>
@@ -87,7 +88,7 @@ export function Picker(props: {
             type="text"
             class="picker-search"
             value={query}
-            placeholder={searchPlaceholder ?? 'Search…'}
+            placeholder={searchPlaceholder ?? t('picker.search')}
             onInput={(e) => setQuery((e.currentTarget as HTMLInputElement).value)}
             onKeyDown={(e) => {
               if (e.key === 'Escape') {
@@ -98,7 +99,7 @@ export function Picker(props: {
           />
           <div class="picker-options">
             {filtered.length === 0 ? (
-              <div class="picker-empty">No matches</div>
+              <div class="picker-empty">{t('picker.noMatches')}</div>
             ) : (
               filtered.map((o) => (
                 <button

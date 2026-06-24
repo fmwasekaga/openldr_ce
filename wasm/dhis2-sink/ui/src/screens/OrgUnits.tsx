@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { getOpenldr } from '../sdk';
 import { Picker } from '../components/Picker';
+import { t } from '../i18n';
 
 /** A facility from `fhir.facilities()` ({ id, name }). */
 interface Facility {
@@ -110,7 +111,7 @@ export function OrgUnits() {
         orgUnitId,
         orgUnitName: ou?.name ?? null,
       });
-      setToast({ kind: 'ok', text: `Mapped ${facilityId}` });
+      setToast({ kind: 'ok', text: t('orgUnits.mappedToast', { facility: facilityId }) });
       await load();
     } catch (e) {
       setToast({ kind: 'err', text: e instanceof Error ? e.message : String(e) });
@@ -120,7 +121,7 @@ export function OrgUnits() {
   async function onClear(facilityId: string) {
     try {
       await getOpenldr().storage.delete('orgUnitMaps', facilityId);
-      setToast({ kind: 'ok', text: `Cleared ${facilityId}` });
+      setToast({ kind: 'ok', text: t('orgUnits.clearedToast', { facility: facilityId }) });
       await load();
     } catch (e) {
       setToast({ kind: 'err', text: e instanceof Error ? e.message : String(e) });
@@ -129,13 +130,15 @@ export function OrgUnits() {
 
   return (
     <div class="dhis2" data-testid="dhis2-orgunits-page">
-      <h1>Org-unit mapping</h1>
+      <h1>{t('orgUnits.title')}</h1>
 
       <p class="muted orgunits-pulled">
-        {pulledAt ? `Metadata pulled at ${new Date(pulledAt).toLocaleString()}` : 'Metadata never pulled'}
+        {pulledAt
+          ? t('orgUnits.pulledAt', { when: new Date(pulledAt).toLocaleString() })
+          : t('orgUnits.neverPulled')}
       </p>
 
-      {phase.phase === 'loading' && <p class="status muted">Loading…</p>}
+      {phase.phase === 'loading' && <p class="status muted">{t('common.loading')}</p>}
       {phase.phase === 'error' && <div class="error" role="alert">{phase.message}</div>}
 
       {toast && (
@@ -148,15 +151,15 @@ export function OrgUnits() {
         <table class="table orgunits-table">
           <thead>
             <tr>
-              <th>Facility</th>
-              <th>Org unit</th>
+              <th>{t('orgUnits.facility')}</th>
+              <th>{t('orgUnits.orgUnit')}</th>
               <th class="orgunits-actions-col" />
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={3} class="muted orgunits-empty">No facilities found.</td>
+                <td colSpan={3} class="muted orgunits-empty">{t('orgUnits.noFacilities')}</td>
               </tr>
             ) : (
               rows.map((f) => (
@@ -172,7 +175,7 @@ export function OrgUnits() {
                         <span class="muted">({f.orgUnitId})</span>
                       </span>
                     ) : (
-                      <span class="badge">Unmapped</span>
+                      <span class="badge">{t('orgUnits.unmapped')}</span>
                     )}
                   </td>
                   <td>
@@ -182,8 +185,8 @@ export function OrgUnits() {
                           options={options}
                           value={f.orgUnitId}
                           onChange={(v) => void onPick(f.facilityId, v)}
-                          placeholder="Pick an org unit"
-                          searchPlaceholder="Search org units…"
+                          placeholder={t('orgUnits.pickOrgUnit')}
+                          searchPlaceholder={t('orgUnits.searchOrgUnits')}
                           disabled={catalogEmpty}
                           testId={`orgunit-picker-${f.facilityId}`}
                         />
@@ -194,7 +197,7 @@ export function OrgUnits() {
                           class="link"
                           onClick={() => void onClear(f.facilityId)}
                         >
-                          Clear
+                          {t('orgUnits.clear')}
                         </button>
                       )}
                     </div>

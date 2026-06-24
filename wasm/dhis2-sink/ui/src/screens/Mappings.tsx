@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { getOpenldr } from '../sdk';
 import { Modal } from '../components/Modal';
+import { t } from '../i18n';
 
 /** A mapping doc as stored in the `mappings` collection. */
 interface MappingDoc {
@@ -143,7 +144,7 @@ export function Mappings({ onNavigate }: { onNavigate?: (screen: string, id?: st
     setPendingDelete(null);
     try {
       await getOpenldr().storage.delete('mappings', m.id);
-      setToast({ kind: 'ok', text: `Deleted ${m.name}` });
+      setToast({ kind: 'ok', text: t('mappings.deletedToast', { name: m.name }) });
       await load();
     } catch (e) {
       setToast({ kind: 'err', text: e instanceof Error ? e.message : String(e) });
@@ -157,14 +158,14 @@ export function Mappings({ onNavigate }: { onNavigate?: (screen: string, id?: st
   return (
     <div class="dhis2" data-testid="dhis2-mappings-page">
       <div class="mappings-head">
-        <h1>Mappings</h1>
+        <h1>{t('mappings.title')}</h1>
         <button type="button" class="btn" data-testid="new-mapping" onClick={() => onNavigate?.('new')}>
-          New mapping
+          {t('mappings.newMapping')}
         </button>
       </div>
-      <p class="muted">Mappings turn report rows into DHIS2 data values or tracker events.</p>
+      <p class="muted">{t('mappings.subtitle')}</p>
 
-      {phase.phase === 'loading' && <p class="status muted">Loading…</p>}
+      {phase.phase === 'loading' && <p class="status muted">{t('common.loading')}</p>}
       {phase.phase === 'error' && <div class="error" role="alert">{phase.message}</div>}
 
       {toast && (
@@ -177,15 +178,15 @@ export function Mappings({ onNavigate }: { onNavigate?: (screen: string, id?: st
         <table class="table mappings-table">
           <thead>
             <tr>
-              <th>Name</th>
-              <th class="mappings-kind-col">Kind</th>
+              <th>{t('mappings.name')}</th>
+              <th class="mappings-kind-col">{t('mappings.kind')}</th>
               <th class="mappings-actions-col" />
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={3} class="muted mappings-empty">No mappings yet.</td>
+                <td colSpan={3} class="muted mappings-empty">{t('mappings.none')}</td>
               </tr>
             ) : (
               rows.map((m) => (
@@ -195,13 +196,13 @@ export function Mappings({ onNavigate }: { onNavigate?: (screen: string, id?: st
                   <td>
                     <div class="mappings-row-actions">
                       <button type="button" class="link" data-testid={`run-${m.id}`} onClick={() => openRun(m)}>
-                        Run
+                        {t('mappings.run')}
                       </button>
                       <button type="button" class="link" data-testid={`edit-${m.id}`} onClick={() => onNavigate?.('edit', m.id)}>
-                        Edit
+                        {t('mappings.edit')}
                       </button>
                       <button type="button" class="link mappings-del" data-testid={`delete-${m.id}`} onClick={() => setPendingDelete(m)}>
-                        Delete
+                        {t('mappings.delete')}
                       </button>
                     </div>
                   </td>
@@ -214,32 +215,32 @@ export function Mappings({ onNavigate }: { onNavigate?: (screen: string, id?: st
 
       <Modal
         open={pendingDelete !== null}
-        title={`Delete ${pendingDelete?.name ?? ''}?`}
+        title={t('mappings.deleteTitle', { name: pendingDelete?.name ?? '' })}
         onClose={() => setPendingDelete(null)}
       >
-        <p class="muted">This mapping will be removed. This cannot be undone.</p>
+        <p class="muted">{t('mappings.deleteBody')}</p>
         <div class="modal-actions">
-          <button type="button" class="link" onClick={() => setPendingDelete(null)}>Cancel</button>
+          <button type="button" class="link" onClick={() => setPendingDelete(null)}>{t('mappings.cancel')}</button>
           <button type="button" class="btn mappings-confirm-del" data-testid="confirm-delete" onClick={() => void doDelete()}>
-            Delete
+            {t('mappings.delete')}
           </button>
         </div>
       </Modal>
 
       <Modal
         open={running !== null}
-        title={`Run ${running?.name ?? ''}`}
+        title={t('mappings.runTitle', { name: running?.name ?? '' })}
         onClose={() => setRunning(null)}
       >
         <div class="run-form">
           {runErr && <div class="error" role="alert">{runErr}</div>}
           <label class="run-field">
-            <span class="muted">Period</span>
+            <span class="muted">{t('mappings.period')}</span>
             <input
               class="run-input"
               data-testid="run-period"
               value={period}
-              placeholder="e.g. 202401"
+              placeholder={t('mappings.periodPlaceholder')}
               onInput={(e) => setPeriod((e.currentTarget as HTMLInputElement).value)}
             />
           </label>
@@ -251,7 +252,7 @@ export function Mappings({ onNavigate }: { onNavigate?: (screen: string, id?: st
               disabled={runBusy || !period}
               onClick={() => void doRun(true)}
             >
-              Dry run
+              {t('mappings.dryRun')}
             </button>
             <button
               type="button"
@@ -260,28 +261,31 @@ export function Mappings({ onNavigate }: { onNavigate?: (screen: string, id?: st
               disabled={runBusy || !period}
               onClick={() => void doRun(false)}
             >
-              Push
+              {t('mappings.push')}
             </button>
           </div>
 
           {runResult && (
             <div class="run-result" data-testid="run-result">
               <div>
-                Values: <span class="run-num">{valueCount}</span> · Skipped:{' '}
+                {t('mappings.values')}<span class="run-num">{valueCount}</span>{t('mappings.skipped')}
                 <span class="run-num">{runResult.build.skipped.length}</span>
               </div>
               {runResult.build.skipped.length > 0 && (
                 <ul class="run-skipped">
                   {runResult.build.skipped.slice(0, 10).map((s, i) => (
-                    <li key={i}>row {s.row}: {s.reason}</li>
+                    <li key={i}>{t('mappings.rowReason', { row: s.row, reason: s.reason })}</li>
                   ))}
                 </ul>
               )}
               {runResult.result && (
                 <div class="run-push-result">
-                  Push result: <span class="run-num">{runResult.result.status}</span> — imported{' '}
-                  {runResult.result.imported} · updated {runResult.result.updated} · ignored{' '}
-                  {runResult.result.ignored} · conflicts {runResult.result.conflicts.length}
+                  {t('mappings.pushResult')}<span class="run-num">{runResult.result.status}</span>{t('mappings.pushResultDetail', {
+                    imported: runResult.result.imported,
+                    updated: runResult.result.updated,
+                    ignored: runResult.result.ignored,
+                    conflicts: runResult.result.conflicts.length,
+                  })}
                 </div>
               )}
             </div>

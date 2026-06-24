@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
 import { getOpenldr } from '../sdk';
 import { Picker } from '../components/Picker';
+import { t } from '../i18n';
 
 type Kind = 'aggregate' | 'tracker';
 type AggRow = { id: string; column: string; dataElement: string; categoryOptionCombo: string };
@@ -307,8 +308,8 @@ export function MappingEditor({ mappingId: editId, onDone }: { mappingId?: strin
     setTrkRows([]);
   }
 
-  if (phase.phase === 'loading') return <div class="dhis2"><p class="status muted">Loading…</p></div>;
-  if (phase.phase === 'not-found') return <div class="dhis2"><p class="muted">That mapping no longer exists.</p></div>;
+  if (phase.phase === 'loading') return <div class="dhis2"><p class="status muted">{t('common.loading')}</p></div>;
+  if (phase.phase === 'not-found') return <div class="dhis2"><p class="muted">{t('editor.notFound')}</p></div>;
   if (phase.phase === 'error') return <div class="dhis2"><div class="error" role="alert">{phase.message}</div></div>;
 
   const colOptions = reportColumns.map((c) => ({ value: c.key, label: c.label }));
@@ -318,26 +319,26 @@ export function MappingEditor({ mappingId: editId, onDone }: { mappingId?: strin
 
   return (
     <div class="dhis2 mapping-editor" data-testid="dhis2-mapping-editor">
-      <h1>{isNew ? 'New mapping' : 'Edit mapping'}</h1>
+      <h1>{isNew ? t('editor.newTitle') : t('editor.editTitle')}</h1>
 
       {error && <div class="error" role="alert">{error}</div>}
       {metaEmpty && (
         <div class="warn" role="alert">
-          No DHIS2 metadata cached yet. Pull metadata before you can pick data elements.
+          {t('editor.noMetadata')}
         </div>
       )}
 
       {isNew && (
         <label class="me-field">
-          <span class="muted">Mapping kind</span>
+          <span class="muted">{t('editor.kindLabel')}</span>
           <div class="me-kind">
             <Picker
               testId="kind-select"
               value={kind}
               onChange={(v) => onKindChange(v as Kind)}
               options={[
-                { value: 'aggregate', label: 'Aggregate' },
-                { value: 'tracker', label: 'Tracker' },
+                { value: 'aggregate', label: t('editor.kindAggregate') },
+                { value: 'tracker', label: t('editor.kindTracker') },
               ]}
             />
           </div>
@@ -345,7 +346,7 @@ export function MappingEditor({ mappingId: editId, onDone }: { mappingId?: strin
       )}
 
       <label class="me-field">
-        <span class="muted">Name</span>
+        <span class="muted">{t('editor.name')}</span>
         <input
           class="me-input"
           data-testid="mapping-name"
@@ -355,65 +356,65 @@ export function MappingEditor({ mappingId: editId, onDone }: { mappingId?: strin
       </label>
 
       <label class="me-field">
-        <span class="muted">Connector</span>
+        <span class="muted">{t('editor.connector')}</span>
         <Picker
           testId="connector-select"
           value={connectorId}
           onChange={setConnectorId}
-          placeholder="Pick a connector"
-          searchPlaceholder="Search connectors…"
+          placeholder={t('editor.pickConnector')}
+          searchPlaceholder={t('editor.searchConnectors')}
           options={enabledConnectors.map((c) => ({ value: c.id, label: c.name }))}
         />
         {enabledConnectors.length === 0 && (
-          <span class="me-hint">No enabled connectors. Add one in Connectors first.</span>
+          <span class="me-hint">{t('editor.noConnectors')}</span>
         )}
       </label>
 
       {kind === 'aggregate' ? (
         <>
           <label class="me-field">
-            <span class="muted">Source report</span>
+            <span class="muted">{t('editor.sourceReport')}</span>
             <Picker
               testId="report-select"
               value={reportId}
               onChange={(v) => void onReport(v)}
-              placeholder="Pick a report"
-              searchPlaceholder="Search reports…"
+              placeholder={t('editor.pickReport')}
+              searchPlaceholder={t('editor.searchReports')}
               options={reports.map((r) => ({ value: r.id, label: r.name }))}
             />
           </label>
           <div class="me-grid me-grid-2">
             <label class="me-field">
-              <span class="muted">Org-unit column</span>
+              <span class="muted">{t('editor.orgUnitColumn')}</span>
               <Picker
                 testId="orgunit-column-select"
                 value={aggOrgUnitColumn}
                 onChange={setAggOrgUnitColumn}
-                placeholder="Pick a column"
+                placeholder={t('editor.pickColumn')}
                 options={colOptions}
               />
             </label>
             <label class="me-field">
-              <span class="muted">Period column</span>
+              <span class="muted">{t('editor.periodColumn')}</span>
               <Picker
                 testId="period-column-select"
                 value={periodColumn}
                 onChange={setPeriodColumn}
-                placeholder="Pick a column"
+                placeholder={t('editor.pickColumn')}
                 options={colOptions}
               />
             </label>
           </div>
           <div class="me-rows">
             <div class="me-rows-head">
-              <span class="me-rows-title">Columns</span>
+              <span class="me-rows-title">{t('editor.columns')}</span>
               <button
                 type="button"
                 class="link"
                 data-testid="add-column"
                 onClick={() => setAggRows((r) => [...r, { id: crypto.randomUUID(), column: '', dataElement: '', categoryOptionCombo: '' }])}
               >
-                Add column
+                {t('editor.addColumn')}
               </button>
             </div>
             {aggRows.map((row, i) => (
@@ -422,7 +423,7 @@ export function MappingEditor({ mappingId: editId, onDone }: { mappingId?: strin
                   testId={`column-key-${i}`}
                   value={row.column}
                   onChange={(v) => setAggRows((r) => r.map((x, j) => (j === i ? { ...x, column: v } : x)))}
-                  placeholder="Report column"
+                  placeholder={t('editor.reportColumn')}
                   options={colOptions}
                 />
                 <Picker
@@ -430,7 +431,7 @@ export function MappingEditor({ mappingId: editId, onDone }: { mappingId?: strin
                   disabled={metaEmpty}
                   value={row.dataElement}
                   onChange={(v) => setAggRows((r) => r.map((x, j) => (j === i ? { ...x, dataElement: v } : x)))}
-                  placeholder="Data element"
+                  placeholder={t('editor.dataElement')}
                   options={deOptions}
                 />
                 <Picker
@@ -438,7 +439,7 @@ export function MappingEditor({ mappingId: editId, onDone }: { mappingId?: strin
                   disabled={metaEmpty}
                   value={row.categoryOptionCombo}
                   onChange={(v) => setAggRows((r) => r.map((x, j) => (j === i ? { ...x, categoryOptionCombo: v } : x)))}
-                  placeholder="Category option combo"
+                  placeholder={t('editor.coc')}
                   options={cocOptions}
                 />
                 <button
@@ -446,7 +447,7 @@ export function MappingEditor({ mappingId: editId, onDone }: { mappingId?: strin
                   class="link me-remove"
                   onClick={() => setAggRows((r) => r.filter((_, j) => j !== i))}
                 >
-                  Remove
+                  {t('editor.remove')}
                 </button>
               </div>
             ))}
@@ -455,7 +456,7 @@ export function MappingEditor({ mappingId: editId, onDone }: { mappingId?: strin
       ) : (
         <>
           <label class="me-field">
-            <span class="muted">Source event source</span>
+            <span class="muted">{t('editor.sourceEventSource')}</span>
             <Picker
               testId="event-source-select"
               value={sourceId}
@@ -463,14 +464,14 @@ export function MappingEditor({ mappingId: editId, onDone }: { mappingId?: strin
                 setSourceId(v);
                 setProblems(null);
               }}
-              placeholder="Pick an event source"
-              searchPlaceholder="Search event sources…"
+              placeholder={t('editor.pickEventSource')}
+              searchPlaceholder={t('editor.searchEventSources')}
               options={eventSources.map((s) => ({ value: s.id, label: s.name }))}
             />
           </label>
           <div class="me-grid me-grid-2">
             <label class="me-field">
-              <span class="muted">Program</span>
+              <span class="muted">{t('editor.program')}</span>
               <Picker
                 testId="program-select"
                 disabled={metaEmpty}
@@ -479,64 +480,64 @@ export function MappingEditor({ mappingId: editId, onDone }: { mappingId?: strin
                   setProgram(v);
                   setProgramStage('');
                 }}
-                placeholder="Pick a program"
+                placeholder={t('editor.pickProgram')}
                 options={(meta?.programs ?? []).map((p) => ({ value: p.id, label: p.name }))}
               />
             </label>
             <label class="me-field">
-              <span class="muted">Program stage</span>
+              <span class="muted">{t('editor.programStage')}</span>
               <Picker
                 testId="program-stage-select"
                 disabled={metaEmpty || !program}
                 value={programStage}
                 onChange={setProgramStage}
-                placeholder="Pick a stage"
+                placeholder={t('editor.pickStage')}
                 options={stages.map((s) => ({ value: s.id, label: s.name }))}
               />
             </label>
           </div>
           <div class="me-grid me-grid-3">
             <label class="me-field">
-              <span class="muted">Org-unit column</span>
+              <span class="muted">{t('editor.orgUnitColumn')}</span>
               <Picker
                 testId="tracker-orgunit-select"
                 value={trkOrgUnitColumn}
                 onChange={setTrkOrgUnitColumn}
-                placeholder="Pick a column"
+                placeholder={t('editor.pickColumn')}
                 options={srcColOptions}
               />
             </label>
             <label class="me-field">
-              <span class="muted">Event-date column</span>
+              <span class="muted">{t('editor.eventDateColumn')}</span>
               <Picker
                 testId="tracker-eventdate-select"
                 value={eventDateColumn}
                 onChange={setEventDateColumn}
-                placeholder="Pick a column"
+                placeholder={t('editor.pickColumn')}
                 options={srcColOptions}
               />
             </label>
             <label class="me-field">
-              <span class="muted">Id column</span>
+              <span class="muted">{t('editor.idColumn')}</span>
               <Picker
                 testId="tracker-id-select"
                 value={idColumn}
                 onChange={setIdColumn}
-                placeholder="Pick a column"
+                placeholder={t('editor.pickColumn')}
                 options={srcColOptions}
               />
             </label>
           </div>
           <div class="me-rows">
             <div class="me-rows-head">
-              <span class="me-rows-title">Data values</span>
+              <span class="me-rows-title">{t('editor.dataValues')}</span>
               <button
                 type="button"
                 class="link"
                 data-testid="add-datavalue"
                 onClick={() => setTrkRows((r) => [...r, { id: crypto.randomUUID(), column: '', dataElement: '' }])}
               >
-                Add row
+                {t('editor.addRow')}
               </button>
             </div>
             {trkRows.map((row, i) => (
@@ -545,7 +546,7 @@ export function MappingEditor({ mappingId: editId, onDone }: { mappingId?: strin
                   testId={`dv-col-${i}`}
                   value={row.column}
                   onChange={(v) => setTrkRows((r) => r.map((x, j) => (j === i ? { ...x, column: v } : x)))}
-                  placeholder="Event column"
+                  placeholder={t('editor.eventColumn')}
                   options={srcColOptions}
                 />
                 <Picker
@@ -553,7 +554,7 @@ export function MappingEditor({ mappingId: editId, onDone }: { mappingId?: strin
                   disabled={metaEmpty}
                   value={row.dataElement}
                   onChange={(v) => setTrkRows((r) => r.map((x, j) => (j === i ? { ...x, dataElement: v } : x)))}
-                  placeholder="Data element"
+                  placeholder={t('editor.dataElement')}
                   options={deOptions}
                 />
                 <button
@@ -561,7 +562,7 @@ export function MappingEditor({ mappingId: editId, onDone }: { mappingId?: strin
                   class="link me-remove"
                   onClick={() => setTrkRows((r) => r.filter((_, j) => j !== i))}
                 >
-                  Remove
+                  {t('editor.remove')}
                 </button>
               </div>
             ))}
@@ -572,7 +573,7 @@ export function MappingEditor({ mappingId: editId, onDone }: { mappingId?: strin
       {problems !== null && (
         <div class="me-problems" data-testid="validate-problems">
           {problems.length === 0 ? (
-            <span class="muted">No problems.</span>
+            <span class="muted">{t('editor.noProblems')}</span>
           ) : (
             <ul class="me-problems-list">
               {problems.map((p, i) => (
@@ -589,16 +590,16 @@ export function MappingEditor({ mappingId: editId, onDone }: { mappingId?: strin
           class="btn me-validate-btn"
           data-testid="validate-mapping"
           disabled={!connectorId}
-          title={connectorId ? undefined : 'Select a connector to validate'}
+          title={connectorId ? undefined : t('editor.validateTitle')}
           onClick={() => void onValidate()}
         >
-          Validate
+          {t('editor.validate')}
         </button>
         <button type="button" class="btn" data-testid="save-mapping" onClick={() => void onSave()}>
-          Save
+          {t('editor.save')}
         </button>
         <button type="button" class="link" onClick={onDone}>
-          Cancel
+          {t('editor.cancel')}
         </button>
       </div>
     </div>

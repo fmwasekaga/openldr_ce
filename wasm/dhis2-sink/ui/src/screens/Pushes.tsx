@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { getOpenldr } from '../sdk';
+import { t } from '../i18n';
 
 /** A push doc as written by the orchestration into the `pushes` collection. */
 interface PushDoc {
@@ -76,24 +77,24 @@ export function Pushes() {
 
   return (
     <div class="dhis2" data-testid="dhis2-pushes-page">
-      <h1>Push history</h1>
+      <h1>{t('pushes.title')}</h1>
 
-      {phase.phase === 'loading' && <p class="status muted">Loading…</p>}
+      {phase.phase === 'loading' && <p class="status muted">{t('common.loading')}</p>}
       {phase.phase === 'error' && <div class="error" role="alert">{phase.message}</div>}
 
       {phase.phase === 'ready' &&
         (pushes.length === 0 ? (
-          <p class="muted">No pushes yet</p>
+          <p class="muted">{t('pushes.noPushes')}</p>
         ) : (
           <table class="table" data-testid="pushes-table">
             <thead>
               <tr>
-                <th>When</th>
-                <th>Kind</th>
-                <th>Period</th>
-                <th>Status</th>
-                <th>Result</th>
-                <th>Trigger</th>
+                <th>{t('pushes.when')}</th>
+                <th>{t('pushes.kind')}</th>
+                <th>{t('pushes.period')}</th>
+                <th>{t('pushes.status')}</th>
+                <th>{t('pushes.result')}</th>
+                <th>{t('pushes.trigger')}</th>
               </tr>
             </thead>
             <tbody>

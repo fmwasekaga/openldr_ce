@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { getOpenldr } from '../sdk';
+import { t } from '../i18n';
 
 /** Connector record as exposed by the host `connectors.list()` (secrets masked).
     Mirrors apps/web api `Connector` — `allowedHost` is the host field. */
@@ -137,36 +138,36 @@ export function Dashboard({ onNavigate }: { onNavigate?: (screen: string) => voi
 
   return (
     <div class="dhis2" data-testid="dhis2-dashboard">
-      <h1>DHIS2</h1>
+      <h1>{t('dashboard.title')}</h1>
 
-      {phase.phase === 'loading' && <p class="status muted">Loading…</p>}
+      {phase.phase === 'loading' && <p class="status muted">{t('common.loading')}</p>}
       {phase.phase === 'error' && <div class="error" role="alert">{phase.message}</div>}
 
       {phase.phase === 'ready' && (
         <div class="cards">
           {/* Active connector */}
           <section class="card" data-testid="active-connector">
-            <h2>Active connector</h2>
+            <h2>{t('dashboard.activeConnector')}</h2>
             <div class="badges">
               <span class={`badge ${configured ? 'badge-on' : ''}`}>
-                {configured ? 'Configured' : 'Not configured'}
+                {configured ? t('dashboard.configured') : t('dashboard.notConfigured')}
               </span>
             </div>
             {configured ? (
               <dl class="kv">
-                <div><dt>Name</dt><dd>{active?.name ?? '-'}</dd></div>
-                <div><dt>Host</dt><dd>{active?.allowedHost ?? '-'}</dd></div>
+                <div><dt>{t('dashboard.name')}</dt><dd>{active?.name ?? '-'}</dd></div>
+                <div><dt>{t('dashboard.host')}</dt><dd>{active?.allowedHost ?? '-'}</dd></div>
               </dl>
             ) : (
               <p class="muted">
-                No connector is configured. Add one in Settings ▸ Connectors before pushing to DHIS2.
+                {t('dashboard.noConnector')}
               </p>
             )}
           </section>
 
           {/* Metadata */}
           <section class="card" data-testid="metadata-card">
-            <h2>Metadata</h2>
+            <h2>{t('dashboard.metadata')}</h2>
             <button
               type="button"
               class="btn"
@@ -174,55 +175,55 @@ export function Dashboard({ onNavigate }: { onNavigate?: (screen: string) => voi
               disabled={!configured || pulling}
               data-testid="dhis2-pull-metadata"
             >
-              {pulling ? 'Pulling…' : 'Pull metadata'}
+              {pulling ? t('dashboard.pulling') : t('dashboard.pullMetadata')}
             </button>
             {pullError && <p class="error-text" role="alert">{pullError}</p>}
             {meta ? (
               <dl class="counts" data-testid="metadata-counts">
                 {([
-                  ['Data elements', meta.dataElements],
-                  ['Org units', meta.orgUnits],
-                  ['Category option combos', meta.categoryOptionCombos],
-                  ['Programs', meta.programs],
-                  ['Program stages', meta.programStages],
+                  [t('dashboard.dataElements'), meta.dataElements],
+                  [t('dashboard.orgUnits'), meta.orgUnits],
+                  [t('dashboard.categoryOptionCombos'), meta.categoryOptionCombos],
+                  [t('dashboard.programs'), meta.programs],
+                  [t('dashboard.programStages'), meta.programStages],
                 ] as const).map(([label, n]) => (
                   <div key={label}><dt>{label}</dt><dd>{n}</dd></div>
                 ))}
               </dl>
             ) : (
-              <p class="muted">No metadata cached yet. Pull to populate the counts.</p>
+              <p class="muted">{t('dashboard.noMetadata')}</p>
             )}
           </section>
 
           {/* Overview */}
           <section class="card" data-testid="overview-card">
-            <h2>Overview</h2>
+            <h2>{t('dashboard.overview')}</h2>
             <div class="overview-counts">
               <div>
-                <span class="muted">Mappings: </span>{mappingCount}{' '}
-                <button type="button" class="link" onClick={() => onNavigate?.('mappings')} data-testid="manage-mappings">Manage</button>
+                <span class="muted">{t('dashboard.mappings')}</span>{mappingCount}{' '}
+                <button type="button" class="link" onClick={() => onNavigate?.('mappings')} data-testid="manage-mappings">{t('dashboard.manage')}</button>
               </div>
               <div>
-                <span class="muted">Org-unit mappings: </span>{orgUnitCount}{' '}
-                <button type="button" class="link" onClick={() => onNavigate?.('orgUnits')} data-testid="manage-orgunits">Manage</button>
+                <span class="muted">{t('dashboard.orgUnitMappings')}</span>{orgUnitCount}{' '}
+                <button type="button" class="link" onClick={() => onNavigate?.('orgUnits')} data-testid="manage-orgunits">{t('dashboard.manage')}</button>
               </div>
               <div>
-                <span class="muted">Schedules: </span>{scheduleCount}{' '}
-                <button type="button" class="link" onClick={() => onNavigate?.('schedules')} data-testid="manage-schedules">Manage</button>
+                <span class="muted">{t('dashboard.schedules')}</span>{scheduleCount}{' '}
+                <button type="button" class="link" onClick={() => onNavigate?.('schedules')} data-testid="manage-schedules">{t('dashboard.manage')}</button>
               </div>
             </div>
 
             <div class="recent">
               <div class="recent-head">
-                <span class="recent-title">Recent pushes</span>
-                <button type="button" class="link" onClick={() => onNavigate?.('pushes')} data-testid="view-all-pushes">View all</button>
+                <span class="recent-title">{t('dashboard.recentPushes')}</span>
+                <button type="button" class="link" onClick={() => onNavigate?.('pushes')} data-testid="view-all-pushes">{t('dashboard.viewAll')}</button>
               </div>
               {pushes.length === 0 ? (
-                <p class="muted">No pushes yet</p>
+                <p class="muted">{t('dashboard.noPushes')}</p>
               ) : (
                 <table class="table" data-testid="recent-pushes">
                   <thead>
-                    <tr><th>When</th><th>Status</th><th>Kind / Period</th></tr>
+                    <tr><th>{t('dashboard.when')}</th><th>{t('dashboard.status')}</th><th>{t('dashboard.kindPeriod')}</th></tr>
                   </thead>
                   <tbody>
                     {pushes.map((p, i) => (

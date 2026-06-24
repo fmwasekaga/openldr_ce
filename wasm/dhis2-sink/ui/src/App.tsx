@@ -5,6 +5,7 @@ import { Schedules } from './screens/Schedules';
 import { OrgUnits } from './screens/OrgUnits';
 import { Pushes } from './screens/Pushes';
 import { MappingEditor } from './screens/MappingEditor';
+import { t } from './i18n';
 
 /**
  * Screen routing for the sandboxed iframe — a plain state union, no react-router
@@ -19,13 +20,14 @@ type Route =
   | { screen: 'pushes' }
   | { screen: 'editor'; mappingId?: string };
 
-/** Top-nav tabs, in order. The editor is intentionally absent (list-only entry). */
-const TABS: ReadonlyArray<{ screen: Exclude<Route['screen'], 'editor'>; label: string }> = [
-  { screen: 'dashboard', label: 'Dashboard' },
-  { screen: 'mappings', label: 'Mappings' },
-  { screen: 'schedules', label: 'Schedules' },
-  { screen: 'orgUnits', label: 'Org Units' },
-  { screen: 'pushes', label: 'Pushes' },
+/** Top-nav tabs, in order. The editor is intentionally absent (list-only entry).
+    The `labelKey` resolves through i18n at render time. */
+const TABS: ReadonlyArray<{ screen: Exclude<Route['screen'], 'editor'>; labelKey: string }> = [
+  { screen: 'dashboard', labelKey: 'nav.dashboard' },
+  { screen: 'mappings', labelKey: 'nav.mappings' },
+  { screen: 'schedules', labelKey: 'nav.schedules' },
+  { screen: 'orgUnits', labelKey: 'nav.orgUnits' },
+  { screen: 'pushes', labelKey: 'nav.pushes' },
 ];
 
 /**
@@ -43,16 +45,16 @@ export function App() {
   return (
     <div class="dhis2-shell">
       <nav class="dhis2-nav" data-testid="dhis2-nav">
-        {TABS.map((t) => (
+        {TABS.map((tab) => (
           <button
-            key={t.screen}
+            key={tab.screen}
             type="button"
-            class={`dhis2-tab${activeTab === t.screen ? ' dhis2-tab-active' : ''}`}
-            data-testid={`nav-${t.screen}`}
-            aria-current={activeTab === t.screen ? 'page' : undefined}
-            onClick={() => setRoute({ screen: t.screen })}
+            class={`dhis2-tab${activeTab === tab.screen ? ' dhis2-tab-active' : ''}`}
+            data-testid={`nav-${tab.screen}`}
+            aria-current={activeTab === tab.screen ? 'page' : undefined}
+            onClick={() => setRoute({ screen: tab.screen })}
           >
-            {t.label}
+            {t(tab.labelKey)}
           </button>
         ))}
       </nav>
