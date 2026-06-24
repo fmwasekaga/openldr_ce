@@ -34,8 +34,8 @@ async function main(): Promise<void> {
     const logger = createLogger({ level: cfg.LOG_LEVEL });
     const dbCtx = await createDbContext(cfg);
     try {
-      const { resources, formsSeeded } = await seedDatabase(dbCtx, ctx);
-      logger.info({ resources: resources.length, formsSeeded }, 'startup seed complete');
+      const { resources, formsSeeded, workflowsSeeded } = await seedDatabase(dbCtx, ctx);
+      logger.info({ resources: resources.length, formsSeeded, workflowsSeeded }, 'startup seed complete');
     } finally {
       await dbCtx.close();
     }

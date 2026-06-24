@@ -1,9 +1,11 @@
 import { sampleForms, type FormStore } from '@openldr/forms';
+import { sampleWorkflow, type WorkflowStore } from '@openldr/workflows';
 import type { DbContext } from './db-context';
 
 export interface SeedResult {
   resources: { id: string; flattened: string }[];
   formsSeeded: number;
+  workflowsSeeded: number;
 }
 
 // Minimal structural shape of the forms surface seedDatabase needs. Typed against FormStore
@@ -11,6 +13,7 @@ export interface SeedResult {
 // module — that would be a circular dependency. AppContext satisfies this at the call sites.
 export interface FormSeedTarget {
   forms: Pick<FormStore, 'list' | 'create' | 'setStatus'>;
+  workflows: { store: Pick<WorkflowStore, 'list' | 'create'> };
 }
 
 // Idempotent sample-data seed shared by the `openldr db seed` CLI and the server's
@@ -74,5 +77,14 @@ export async function seedDatabase(db: DbContext, app: FormSeedTarget): Promise<
     if (status !== 'published') await app.forms.setStatus(id, 'published');
   }
 
-  return { resources, formsSeeded };
+  // Sample workflow — seeded once (idempotent by stable id) so the Workflows list isn't
+  // empty on a fresh install. Matched by id, not name, so a user-renamed copy is never re-created.
+  const existingWorkflows = await app.workflows.store.list();
+  let workflowsSeeded = 0;
+  if (!existingWorkflows.some((w) => w.id === sampleWorkflow.id)) {
+    await app.workflows.store.create(sampleWorkflow);
+    workflowsSeeded = 1;
+  }
+
+  return { resources, formsSeeded, workflowsSeeded };
 }
