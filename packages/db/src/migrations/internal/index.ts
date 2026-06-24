@@ -34,6 +34,7 @@ import * as m032 from './032_workflow_dataset_published';
 import * as m033 from './033_connectors';
 import * as m034 from './034_marketplace_registries';
 import * as m035 from './035_plugin_data';
+import * as m036 from './036_dhis2_to_plugin_data';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -71,4 +72,5 @@ export const internalMigrations: Record<string, Migration> = {
   '033_connectors': { up: m033.up, down: m033.down },
   '034_marketplace_registries': { up: m034.up, down: m034.down },
   '035_plugin_data': { up: m035.up, down: m035.down },
+  '036_dhis2_to_plugin_data': { up: m036.up, down: m036.down },
 };
