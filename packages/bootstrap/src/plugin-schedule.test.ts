@@ -194,6 +194,9 @@ describe('plugin schedule runner registerRunner', () => {
     await runner.registerRunner(eventing as never);
     await eventing.handlers['plugin.schedule.due']!({ type: 'plugin.schedule.due', payload: { pluginId: PID, scheduleId: 'sch1' } });
     expect(eventing.publish).not.toHaveBeenCalled();
+    // The anti-crash-loop RMW still ran even on the disable path.
+    const doc = (await pd.get(PID, 'schedules', 'sch1')) as Record<string, unknown>;
+    expect(doc.lastRunAt).toEqual(expect.any(String));
   });
 
   it('firing for a no-longer-existing schedule is a no-op', async () => {

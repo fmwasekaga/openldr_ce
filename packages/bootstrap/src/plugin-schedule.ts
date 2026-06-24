@@ -103,10 +103,15 @@ export function createPluginScheduleRunner(deps: PluginScheduleRunnerDeps): Plug
       } else {
         const orgEntries = await deps.pluginData.list(pluginId, ORG_UNIT_MAPS);
         const orgUnitMap = Object.fromEntries(
-          orgEntries.map((e) => {
-            const m = e.doc as { facilityId: string; orgUnitId: string };
-            return [m.facilityId, m.orgUnitId];
-          }),
+          orgEntries
+            .filter((e) => {
+              const m = e.doc as Record<string, unknown>;
+              return typeof m.facilityId === 'string' && typeof m.orgUnitId === 'string';
+            })
+            .map((e) => {
+              const m = e.doc as { facilityId: string; orgUnitId: string };
+              return [m.facilityId, m.orgUnitId] as [string, string];
+            }),
         );
         const period = currentPeriod(schedule.periodType, new Date());
         try {
@@ -128,7 +133,10 @@ export function createPluginScheduleRunner(deps: PluginScheduleRunnerDeps): Plug
     runDue,
     async registerRunner(eventing) {
       await eventing.subscribe(DUE_EVENT, async (event) => {
-        const { pluginId, scheduleId } = event.payload as { pluginId: string; scheduleId: string };
+        const payload = event.payload;
+        if (typeof payload !== 'object' || payload === null) return;
+        const { pluginId, scheduleId } = payload as { pluginId?: string; scheduleId?: string };
+        if (typeof pluginId !== 'string' || typeof scheduleId !== 'string') return;
         if (!(await getSchedule(pluginId, scheduleId))) return;
         await runDue(pluginId, scheduleId);
         // Re-fetch after the run so a mid-run disable/edit (cadence change) is honored
