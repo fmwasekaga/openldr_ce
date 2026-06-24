@@ -7,6 +7,9 @@ import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { SignatureBadge } from './SignatureBadge';
 import { PayloadPreview } from './PayloadPreview';
 import { RequirementsChecklist } from './RequirementsChecklist';
@@ -30,17 +33,21 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
   const { t } = useTranslation();
   const [detail, setDetail] = useState<AvailableArtifactDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedRef, setSelectedRef] = useState(entry.ref);
+
+  // Reset the selection when navigating to a different package.
+  useEffect(() => { setSelectedRef(entry.ref); }, [entry.ref]);
 
   useEffect(() => {
     let active = true;
     setDetail(null);
     setError(null);
-    if (!entry.ref) return;
-    void getAvailableArtifact(entry.ref)
+    if (!selectedRef) return;
+    void getAvailableArtifact(selectedRef)
       .then((d) => { if (active) setDetail(d); })
       .catch((e) => { if (active) setError(e instanceof Error ? e.message : String(e)); });
     return () => { active = false; };
-  }, [entry.ref]);
+  }, [selectedRef]);
 
   const capabilities = (detail?.capabilities ?? entry.capabilities) as unknown[];
   const publisher = detail?.publisher ?? entry.publisher;
@@ -74,7 +81,7 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
               </Button>
             ) : null}
             {canInstall ? (
-              <Button data-testid="detail-install" disabled={detail ? !detail.compatible : false} onClick={() => onInstall(entry, capabilities)}>
+              <Button data-testid="detail-install" disabled={detail ? !detail.compatible : false} onClick={() => onInstall({ ...entry, ref: selectedRef, version: detail?.version ?? entry.version }, capabilities)}>
                 {t('settings.marketplace.install')}
               </Button>
             ) : entry.ref && !installableType && !entry.installed ? (
@@ -145,7 +152,16 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
               <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">{t('settings.marketplace.details')}</p>
               <dl className="space-y-1 text-[13px]">
                 <div className="flex justify-between gap-2"><dt className="text-muted-foreground">{t('settings.marketplace.publisher')}</dt><dd className="text-right text-foreground/90">{publisher?.name || '—'}</dd></div>
-                <div className="flex justify-between gap-2"><dt className="text-muted-foreground">{t('settings.marketplace.version')}</dt><dd className="text-right text-foreground/90">{entry.version}</dd></div>
+                <div className="flex items-center justify-between gap-2"><dt className="text-muted-foreground">{t('settings.marketplace.version')}</dt><dd className="text-right text-foreground/90">{entry.versions && entry.versions.length > 1 ? (
+                  <Select value={selectedRef} onValueChange={setSelectedRef}>
+                    <SelectTrigger data-testid="version-select" className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {entry.versions.map((v) => <SelectItem key={v.ref} value={v.ref}>{v.version}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <span>{entry.version}</span>
+                )}</dd></div>
                 {detail?.license ? <div className="flex justify-between gap-2"><dt className="text-muted-foreground">{t('settings.marketplace.license')}</dt><dd className="text-right text-foreground/90">{detail.license}</dd></div> : null}
               </dl>
             </section>

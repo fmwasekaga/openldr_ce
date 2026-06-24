@@ -64,6 +64,19 @@ describe('PackageDetail', () => {
     expect(await screen.findByText('Setup')).toBeTruthy();
   });
 
+  it('switches version and installs the selected ref', async () => {
+    (api.getAvailableArtifact as any).mockImplementation((ref: string) =>
+      Promise.resolve({ ref, id: 'whonet-sqlite', version: ref === 'whonet-narrow' ? '1.0.0' : '1.1.0', type: 'plugin', publisher: { id: 'p', name: 'P' }, capabilities: [], compatibility: { ceVersion: '*' }, compatible: true, ceVersion: '0.1.0', payload: { kind: 'plugin', entrypoint: 'convert', wasmSha256: 'a'.repeat(64), wasi: true, limits: { memoryMb: 256, timeoutMs: 30000 } }, valid: true }));
+    const onInstall = vi.fn();
+    const versioned = { ref: 'whonet-wide', id: 'whonet-sqlite', version: '1.1.0', type: 'plugin', publisher: { id: 'p', name: 'P' }, capabilities: [], valid: true, installed: false, versions: [{ version: '1.1.0', ref: 'whonet-wide' }, { version: '1.0.0', ref: 'whonet-narrow' }] };
+    render(<PackageDetail entry={versioned as any} onBack={vi.fn()} onInstall={onInstall} onToggleEnabled={vi.fn()} onRollback={vi.fn()} onRemove={vi.fn()} />);
+    fireEvent.click(await screen.findByTestId('version-select'));
+    fireEvent.click(await screen.findByRole('option', { name: '1.0.0' }));
+    await waitFor(() => expect(api.getAvailableArtifact).toHaveBeenCalledWith('whonet-narrow'));
+    fireEvent.click(await screen.findByTestId('detail-install'));
+    expect(onInstall).toHaveBeenCalledWith(expect.objectContaining({ ref: 'whonet-narrow' }), expect.anything());
+  });
+
   it('installed item shows the actions menu instead of Install', async () => {
     const installedEntry: CardEntry = { ...entry, ref: undefined, installed: true, active: true, enabled: true };
     render(<PackageDetail entry={installedEntry} onBack={() => {}} onInstall={() => {}} onToggleEnabled={() => {}} onRollback={() => {}} onRemove={() => {}} />);
