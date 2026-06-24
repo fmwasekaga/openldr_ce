@@ -88,6 +88,13 @@ export const ConfigSchema = z
     // target store (Postgres only) so the SQL node + dashboards can query them.
     WORKFLOW_DATASET_PUBLISH_ENABLED: envBoolean(false),
 
+    // Plugin-UI surface master switch. When false the broker refuses all calls and the host
+    // serves no plugin nav/UI (kill-switch for the whole webview surface).
+    PLUGIN_UI_ENABLED: envBoolean(true),
+    // Global egress kill-switch for plugin host services. When false the broker refuses any
+    // net-egress-bearing operation regardless of a plugin's grant (consumed by SP-A2's push ops).
+    PLUGIN_EGRESS_ENABLED: envBoolean(true),
+
     // Marketplace artifact security.
     MARKETPLACE_DEV_ALLOW_UNSIGNED: envBoolean(false),
     MARKETPLACE_REGISTRY_DIR: z.string().optional(),
