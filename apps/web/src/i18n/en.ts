@@ -470,6 +470,11 @@ export const en = {
     lightMode: 'Light mode',
     darkMode: 'Dark mode',
   },
+  plugins: {
+    notFound: 'Plugin not found or not installed.',
+    noUi: 'This plugin contributes no UI.',
+    loadError: 'Failed to load plugin UI.',
+  },
 } as const;
 
 export type Resources = typeof en;

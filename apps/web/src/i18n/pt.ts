@@ -486,4 +486,9 @@ export const pt: EnShape = {
     lightMode: 'Modo claro',
     darkMode: 'Modo escuro',
   },
+  plugins: {
+    notFound: 'Plugin não encontrado ou não instalado.',
+    noUi: 'Este plugin não fornece interface.',
+    loadError: 'Falha ao carregar a interface do plugin.',
+  },
 };

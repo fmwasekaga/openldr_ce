@@ -486,4 +486,9 @@ export const fr: EnShape = {
     lightMode: 'Mode clair',
     darkMode: 'Mode sombre',
   },
+  plugins: {
+    notFound: "Extension introuvable ou non installée.",
+    noUi: "Cette extension ne fournit aucune interface.",
+    loadError: "Échec du chargement de l'interface de l'extension.",
+  },
 } as const;
