@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { toast } from 'sonner';
 import {
   createWorkflow,
   updateWorkflow,
@@ -50,6 +51,10 @@ export function useWorkflowApi() {
         );
         store.setWorkflow(result.id, result.name, store.nodes, store.edges);
       }
+      toast.success('Workflow saved');
+    } catch (err) {
+      toast.error(`Save failed: ${err instanceof Error ? err.message : String(err)}`);
+      throw err;
     } finally {
       setSaving(false);
     }

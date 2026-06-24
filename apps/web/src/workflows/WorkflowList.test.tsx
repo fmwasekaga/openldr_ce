@@ -18,6 +18,18 @@ import { WorkflowList } from './WorkflowList';
 
 const wf = (over = {}) => ({ id: 'wf_1', name: 'AMR sync', description: null, definition: { nodes: [], edges: [] }, enabled: true, createdBy: null, createdAt: '2026-06-24T00:00:00Z', updatedAt: '2026-06-24T00:00:00Z', ...over });
 
+// Radix menus open on pointerDown in jsdom, with a keyboard fallback.
+function openMenu(name: RegExp | string) {
+  const trigger = screen.getByRole('button', { name });
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+  return trigger;
+}
+async function openMenuItem(menuName: RegExp | string, itemTestId: string) {
+  const trigger = openMenu(menuName);
+  if (!screen.queryByTestId(itemTestId)) fireEvent.keyDown(trigger, { key: 'Enter' });
+  return screen.findByTestId(itemTestId);
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   (api.fetchWorkflows as any).mockResolvedValue([wf()]);
@@ -30,7 +42,8 @@ describe('WorkflowList', () => {
   });
   it('navigates to the builder for a new workflow', async () => {
     render(<MemoryRouter><WorkflowList /></MemoryRouter>);
-    fireEvent.click(await screen.findByTestId('workflow-new'));
+    await screen.findByText('AMR sync');
+    fireEvent.click(await openMenuItem('Workflow actions', 'workflow-new'));
     expect(navigateMock).toHaveBeenCalledWith('/workflows/new');
   });
   it('opens a workflow in the builder', async () => {
@@ -41,13 +54,15 @@ describe('WorkflowList', () => {
   it('duplicates a workflow', async () => {
     (api.createWorkflow as any).mockResolvedValue(wf({ id: 'wf_2', name: 'AMR sync (copy)' }));
     render(<MemoryRouter><WorkflowList /></MemoryRouter>);
-    fireEvent.click(await screen.findByTestId('duplicate-wf_1'));
+    await screen.findByText('AMR sync');
+    fireEvent.click(await openMenuItem(/actions for amr sync/i, 'duplicate-wf_1'));
     await waitFor(() => expect(api.createWorkflow).toHaveBeenCalledWith(expect.objectContaining({ name: 'AMR sync (copy)' })));
   });
   it('deletes a workflow after confirm', async () => {
     (api.deleteWorkflow as any).mockResolvedValue(undefined);
     render(<MemoryRouter><WorkflowList /></MemoryRouter>);
-    fireEvent.click(await screen.findByTestId('delete-wf_1'));
+    await screen.findByText('AMR sync');
+    fireEvent.click(await openMenuItem(/actions for amr sync/i, 'delete-wf_1'));
     fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(api.deleteWorkflow).toHaveBeenCalledWith('wf_1'));
   });
