@@ -17,6 +17,7 @@ function renderAt(path: string) {
         <Route path="/settings" element={<SettingsShell />}>
           <Route path="dhis2" element={<div>dhis2 child</div>} />
           <Route path="marketplace" element={<div>marketplace child</div>} />
+          <Route path="connectors" element={<div>connectors child</div>} />
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -47,5 +48,11 @@ describe('SettingsShell', () => {
     hasRole.mockReturnValue(false);
     renderAt('/settings/marketplace');
     expect(screen.queryByRole('link', { name: 'Marketplace' })).not.toBeInTheDocument();
+  });
+
+  it('renders the Connectors sub-nav link for a lab_admin', () => {
+    hasRole.mockImplementation((r: string) => r === 'lab_admin');
+    renderAt('/settings/connectors');
+    expect(screen.getByRole('link', { name: 'Connectors' })).toHaveAttribute('href', '/settings/connectors');
   });
 });

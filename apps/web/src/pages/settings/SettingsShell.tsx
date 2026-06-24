@@ -13,6 +13,7 @@ interface SubNavItem {
 
 const SUB_NAV: SubNavItem[] = [
   { labelKey: 'settings.subNav.dhis2', to: '/settings/dhis2', roles: ['lab_admin'] },
+  { labelKey: 'settings.subNav.connectors', to: '/settings/connectors', roles: ['lab_admin'] },
   { labelKey: 'settings.subNav.marketplace', to: '/settings/marketplace', roles: ['lab_admin'] },
 ];
 
