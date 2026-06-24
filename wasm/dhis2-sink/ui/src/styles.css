@@ -24,3 +24,127 @@ body {
 .dhis2 .muted {
   color: #888;
 }
+
+/* Dashboard (Task 6) + shared screen primitives. Minimal, shadcn-free. */
+.dhis2 .cards {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.dhis2 .card {
+  border: 1px solid #e3e3e3;
+  border-radius: 8px;
+  padding: 14px 16px;
+  background: #fff;
+}
+.dhis2 .card h2 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 10px;
+}
+.dhis2 .error {
+  border: 1px solid #e0b4b4;
+  background: #fdf2f2;
+  color: #a12622;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+}
+.dhis2 .error-text {
+  color: #a12622;
+  margin: 8px 0 0;
+}
+.dhis2 .badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.dhis2 .badge {
+  display: inline-block;
+  border: 1px solid #ccc;
+  border-radius: 999px;
+  padding: 1px 10px;
+  font-size: 12px;
+  color: #555;
+}
+.dhis2 .badge-on {
+  background: #111;
+  border-color: #111;
+  color: #fff;
+}
+.dhis2 .kv,
+.dhis2 .counts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 4px 24px;
+}
+.dhis2 .kv > div,
+.dhis2 .counts > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.dhis2 .kv dt,
+.dhis2 .counts dt {
+  color: #888;
+  margin: 0;
+}
+.dhis2 .kv dd,
+.dhis2 .counts dd {
+  margin: 0;
+  font-weight: 600;
+}
+.dhis2 .btn {
+  font: inherit;
+  border: 1px solid #111;
+  background: #111;
+  color: #fff;
+  border-radius: 6px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+.dhis2 .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.dhis2 .link {
+  font: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  color: #1a55c4;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.dhis2 .overview-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin-bottom: 12px;
+}
+.dhis2 .recent-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.dhis2 .recent-title {
+  font-weight: 600;
+}
+.dhis2 .table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.dhis2 .table th,
+.dhis2 .table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid #eee;
+}
+.dhis2 .table th {
+  color: #888;
+  font-weight: 500;
+}
