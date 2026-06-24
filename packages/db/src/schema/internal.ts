@@ -433,6 +433,16 @@ export interface ConnectorsTable {
   updated_at: Generated<Date>;
 }
 
+export interface RegistriesTable {
+  id: string;
+  name: string;
+  kind: string; // 'local' | 'http'
+  location: string;
+  enabled: Generated<boolean>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface InternalSchema {
   fhir_resources: FhirResourcesTable;
   outbox_events: OutboxEventsTable;
@@ -472,4 +482,5 @@ export interface InternalSchema {
   workflow_schedules: WorkflowSchedulesTable;
   workflow_datasets: WorkflowDatasetsTable;
   connectors: ConnectorsTable;
+  registries: RegistriesTable;
 }

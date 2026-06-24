@@ -25,6 +25,7 @@ export * from './dhis2-metadata-cache';
 export * from './report-run-store';
 export * from './marketplace-install-store';
 export * from './connector-store';
+export * from './registry-store';
 export {
   createReportScheduleStore,
   type ScheduleFrequency,
