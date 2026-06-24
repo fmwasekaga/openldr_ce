@@ -498,3 +498,95 @@ body {
 .run-push-result {
   margin-top: 8px;
 }
+
+/* Mapping editor (Task 11) — the most complex screen. */
+.dhis2.mapping-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.dhis2 .warn {
+  border: 1px solid #e6cf8f;
+  background: #fdf8ea;
+  color: #8a6d12;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+.dhis2 .me-field {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+.dhis2 .me-input {
+  font: inherit;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #fff;
+  color: #111;
+  padding: 6px 10px;
+}
+.dhis2 .me-kind {
+  max-width: 240px;
+}
+.dhis2 .me-hint {
+  color: #8a6d12;
+  font-size: 12px;
+}
+.dhis2 .me-grid {
+  display: grid;
+  gap: 12px;
+}
+.dhis2 .me-grid-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.dhis2 .me-grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.dhis2 .me-rows {
+  display: grid;
+  gap: 8px;
+}
+.dhis2 .me-rows-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.dhis2 .me-rows-title {
+  font-weight: 600;
+}
+.dhis2 .me-row {
+  display: grid;
+  align-items: center;
+  gap: 8px;
+}
+.dhis2 .me-row-2 {
+  grid-template-columns: 1fr 1fr auto;
+}
+.dhis2 .me-row-3 {
+  grid-template-columns: 1fr 1fr 1fr auto;
+}
+.dhis2 .me-remove {
+  color: #a12622;
+}
+.dhis2 .me-problems {
+  border: 1px solid #e3e3e3;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+.dhis2 .me-problems-list {
+  margin: 0;
+  padding-left: 18px;
+  color: #a12622;
+}
+.dhis2 .me-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.dhis2 .me-validate-btn {
+  background: #fff;
+  color: #111;
+  border-color: #ccc;
+}
