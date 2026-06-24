@@ -46,6 +46,7 @@ describe('plugin-ui routes', () => {
     const res = await app.inject({ method: 'GET', url: '/api/plugins/ui-demo/ui/asset' });
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toContain('text/html');
+    expect(res.headers['content-security-policy']).toBe('sandbox');
     expect(res.body).toBe('<div>panel</div>');
   });
 

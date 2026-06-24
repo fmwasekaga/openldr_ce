@@ -62,6 +62,9 @@ export function registerPluginUiRoutes(app: FastifyInstance<any, any, any, any>,
     reply.header('content-type', 'text/html; charset=utf-8');
     // Prevent browsers from sniffing away from text/html into something executable.
     reply.header('x-content-type-options', 'nosniff');
+    // Defense-in-depth: if this URL is opened directly (not via the host's sandboxed iframe),
+    // the CSP sandbox keeps the plugin HTML inert (no scripts, no same-origin) at the host origin.
+    reply.header('content-security-policy', 'sandbox');
     return reply.send(Buffer.from(bytes));
   });
 
