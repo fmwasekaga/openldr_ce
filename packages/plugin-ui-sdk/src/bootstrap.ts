@@ -92,8 +92,10 @@ function pluginBootstrapV1(): void {
         list: () => call({ kind: 'connectors.list' }),
         test: (id: string) => call({ kind: 'connectors.test', id }),
         metadata: (id: string) => call({ kind: 'connectors.metadata', id }),
-        push: (input: unknown) => call({ kind: 'connectors.push', ...(input as object) }),
-        validate: (input: unknown) => call({ kind: 'connectors.validate', ...(input as object) }),
+        push: (input: { connectorId: string; mapping: unknown; orgUnitMap?: Record<string, string>; period: string; dryRun: boolean }) =>
+          call({ kind: 'connectors.push', connectorId: input.connectorId, mapping: input.mapping, orgUnitMap: input.orgUnitMap, period: input.period, dryRun: input.dryRun }),
+        validate: (input: { connectorId: string; mapping: unknown }) =>
+          call({ kind: 'connectors.validate', connectorId: input.connectorId, mapping: input.mapping }),
       },
       fhir: { facilities: () => call({ kind: 'fhir.facilities' }) },
       schedule: {
