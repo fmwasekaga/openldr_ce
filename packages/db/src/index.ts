@@ -26,7 +26,6 @@ export * from './report-run-store';
 export * from './marketplace-install-store';
 export * from './connector-store';
 export * from './registry-store';
-export { makeMigratedDb } from './migrations/internal/test-helpers';
 export {
   createReportScheduleStore,
   type ScheduleFrequency,

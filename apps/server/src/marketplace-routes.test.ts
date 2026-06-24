@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AppContext } from '@openldr/bootstrap';
 import { generatePublisherKeypair, packBundle } from '@openldr/marketplace';
-import { makeMigratedDb, createRegistryStore } from '@openldr/db';
+import { createRegistryStore } from '@openldr/db';
+import { makeMigratedDb } from '@openldr/db/testing';
 import { registerMarketplaceRoutes } from './marketplace-routes';
 
 // ── A temp registry dir with one signed plugin bundle (built via packBundle). ──
