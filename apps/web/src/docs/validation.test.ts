@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DocGuide, DocSection } from './registry';
+import { resolve } from './registry';
 import {
   markdownImages,
   markdownLinks,
@@ -198,5 +199,31 @@ describe('docs integrity validation', () => {
       ['dashboard-dhis2.png'],
     );
     expect(errors.map((error) => error.code)).toContain('dhis2-reference');
+  });
+});
+
+describe('authored guide structure', () => {
+  const requiredHeadings = [
+    '## Outcome',
+    '## Before you begin',
+    '## Steps',
+    '## Expected result',
+    '## Troubleshooting',
+    '## Advanced web usage',
+    '## Related guides',
+  ];
+
+  function expectStepGuideStructure(slugs: string[]) {
+    for (const slug of slugs) {
+      const resolved = resolve('en', slug);
+      expect(resolved, `${slug} should resolve`).not.toBeNull();
+      for (const heading of requiredHeadings) {
+        expect(resolved!.content, `${slug} should contain ${heading}`).toContain(heading);
+      }
+    }
+  }
+
+  it('keeps the entry, dashboard, and reports guides procedural', () => {
+    expectStepGuideStructure(['start-here', 'dashboard', 'reports']);
   });
 });
