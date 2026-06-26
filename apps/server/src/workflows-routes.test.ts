@@ -108,6 +108,22 @@ const SAMPLE_WORKFLOW = {
   createdBy: null,
 };
 
+// A workflow whose definition embeds secrets (webhook secret + HTTP auth header).
+const SECRET_WORKFLOW = {
+  id: 'wf-secret',
+  name: 'Secret Workflow',
+  description: null,
+  definition: {
+    nodes: [
+      { id: 't1', type: 'trigger', data: { triggerType: 'webhook', path: 'hook', secret: 'sup3r-secret' } },
+      { id: 'h1', type: 'action', data: { action: 'http-request', headers: { Authorization: 'Bearer tok', 'X-Keep': 'yes' } } },
+    ],
+    edges: [],
+  },
+  enabled: true,
+  createdBy: null,
+};
+
 describe('workflow routes', () => {
   it('POST /api/workflows as lab_manager → 200 and returns the created workflow', async () => {
     const app = Fastify();
@@ -140,6 +156,7 @@ describe('workflow routes', () => {
 
   it('GET /api/workflows/:id with missing id → 404', async () => {
     const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
     const ctx = fakeCtx();
     registerWorkflowRoutes(app, ctx);
 
@@ -298,5 +315,153 @@ describe('workflow routes', () => {
     expect(ctx.__extras.runAndRecordCalls.length).toBe(1);
     expect(ctx.__extras.runAndRecordCalls[0].workflowId).toBe('wf-hook');
     expect(ctx.__extras.runAndRecordCalls[0].source).toBe('webhook');
+  });
+
+  // --- SEC-06: workflow reads are manager-gated + list redacts secrets ---
+
+  it('GET /api/workflows as lab_technician → 403 (SEC-06)', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = TECHNICIAN_USER; });
+    const ctx = fakeCtx();
+    registerWorkflowRoutes(app, ctx);
+
+    const res = await app.inject({ method: 'GET', url: '/api/workflows' });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('GET /api/workflows/:id as lab_technician → 403 (SEC-06)', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = TECHNICIAN_USER; });
+    const ctx = fakeCtx();
+    registerWorkflowRoutes(app, ctx);
+
+    const res = await app.inject({ method: 'GET', url: '/api/workflows/wf-secret' });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('GET /api/workflows as lab_manager → 200 and the LIST redacts node secrets (SEC-06)', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    const ctx = fakeCtx();
+    registerWorkflowRoutes(app, ctx);
+
+    await app.inject({ method: 'POST', url: '/api/workflows', payload: SECRET_WORKFLOW });
+    const res = await app.inject({ method: 'GET', url: '/api/workflows' });
+    expect(res.statusCode).toBe(200);
+    const list = res.json();
+    expect(list.length).toBe(1);
+    const raw = JSON.stringify(list);
+    // The webhook secret must NOT appear anywhere in the list response.
+    expect(raw).not.toContain('sup3r-secret');
+    // The Authorization header value must be masked, not leaked.
+    expect(raw).not.toContain('Bearer tok');
+    // The trigger node's `secret` field is stripped entirely.
+    const trigger = list[0].definition.nodes.find((n: any) => n.id === 't1');
+    expect(trigger.data.secret).toBeUndefined();
+    // Non-secret data is preserved.
+    expect(trigger.data.path).toBe('hook');
+    const http = list[0].definition.nodes.find((n: any) => n.id === 'h1');
+    expect(http.data.headers['X-Keep']).toBe('yes');
+  });
+
+  it('GET /api/workflows/:id as lab_manager → 200 and detail keeps FULL secrets (SEC-06)', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    const ctx = fakeCtx();
+    registerWorkflowRoutes(app, ctx);
+
+    await app.inject({ method: 'POST', url: '/api/workflows', payload: SECRET_WORKFLOW });
+    const res = await app.inject({ method: 'GET', url: '/api/workflows/wf-secret' });
+    expect(res.statusCode).toBe(200);
+    const w = res.json();
+    const trigger = w.definition.nodes.find((n: any) => n.id === 't1');
+    // Detail is full — the builder needs the real secret to edit.
+    expect(trigger.data.secret).toBe('sup3r-secret');
+    const http = w.definition.nodes.find((n: any) => n.id === 'h1');
+    expect(http.data.headers.Authorization).toBe('Bearer tok');
+  });
+
+  // --- SEC-07: webhook fail-closed, header-only, constant-time, stripped input ---
+
+  it('POST /api/workflows/hooks/:path with no configured secret → 401 (SEC-07 fail-closed)', async () => {
+    const app = Fastify();
+    const ctx = fakeCtx();
+    ctx.workflows.webhooks.register('open', { workflowId: 'wf-open', secret: '' });
+    registerWorkflowRoutes(app, ctx);
+
+    const res = await app.inject({ method: 'POST', url: '/api/workflows/hooks/open', payload: {} });
+    expect(res.statusCode).toBe(401);
+    expect(ctx.__extras.runAndRecordCalls.length).toBe(0);
+  });
+
+  it('POST /api/workflows/hooks/:path with token only in query string → 401 (SEC-07 header-only)', async () => {
+    const app = Fastify();
+    const ctx = fakeCtx();
+    ctx.workflows.webhooks.register('hello', { workflowId: 'wf-hook', secret: 's3cret' });
+    registerWorkflowRoutes(app, ctx);
+
+    const res = await app.inject({ method: 'POST', url: '/api/workflows/hooks/hello?token=s3cret', payload: {} });
+    expect(res.statusCode).toBe(401);
+    expect(ctx.__extras.runAndRecordCalls.length).toBe(0);
+  });
+
+  it('POST /api/workflows/hooks/:path strips auth headers from forwarded input (SEC-07)', async () => {
+    const app = Fastify();
+    const ctx = fakeCtx();
+    ctx.workflows.webhooks.register('hello', { workflowId: 'wf-hook', secret: 's3cret' });
+    registerWorkflowRoutes(app, ctx);
+
+    const ok = await app.inject({
+      method: 'POST', url: '/api/workflows/hooks/hello',
+      headers: { 'x-webhook-token': 's3cret', authorization: 'Bearer leak', cookie: 'sid=abc' },
+      payload: { name: 'a' },
+    });
+    expect(ok.statusCode).toBe(200);
+    expect(ctx.__extras.runAndRecordCalls.length).toBe(1);
+    const forwarded = ctx.__extras.runAndRecordCalls[0].input as { headers: Record<string, unknown> };
+    expect(forwarded.headers['x-webhook-token']).toBeUndefined();
+    expect(forwarded.headers.authorization).toBeUndefined();
+    expect(forwarded.headers.cookie).toBeUndefined();
+  });
+
+  // --- SEC-08: artifact blob key constrained to the workflow-artifacts/ namespace ---
+
+  it('GET /api/workflows/artifacts/* rejects a key outside the namespace (SEC-08)', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    let calledWith: string | undefined;
+    const ctx = fakeCtx();
+    ctx.blob = { get: async (k: string) => { calledWith = k; return Buffer.from('x'); } };
+    registerWorkflowRoutes(app, ctx);
+
+    const res = await app.inject({ method: 'GET', url: '/api/workflows/artifacts/plugin-assets/secret.bin' });
+    expect([400, 404]).toContain(res.statusCode);
+    expect(calledWith).toBeUndefined();
+  });
+
+  it('GET /api/workflows/artifacts/* rejects path traversal (SEC-08)', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    let calledWith: string | undefined;
+    const ctx = fakeCtx();
+    ctx.blob = { get: async (k: string) => { calledWith = k; return Buffer.from('x'); } };
+    registerWorkflowRoutes(app, ctx);
+
+    const res = await app.inject({ method: 'GET', url: '/api/workflows/artifacts/workflow-artifacts/..%2f..%2fsecret' });
+    expect([400, 404]).toContain(res.statusCode);
+    expect(calledWith).toBeUndefined();
+  });
+
+  it('GET /api/workflows/artifacts/* serves a valid namespaced key (SEC-08)', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    let calledWith: string | undefined;
+    const ctx = fakeCtx();
+    ctx.blob = { get: async (k: string) => { calledWith = k; return Buffer.from('artifact-bytes'); } };
+    registerWorkflowRoutes(app, ctx);
+
+    const res = await app.inject({ method: 'GET', url: '/api/workflows/artifacts/workflow-artifacts/abc/export.csv' });
+    expect(res.statusCode).toBe(200);
+    expect(calledWith).toBe('workflow-artifacts/abc/export.csv');
   });
 });
