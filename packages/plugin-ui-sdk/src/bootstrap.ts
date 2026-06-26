@@ -96,8 +96,16 @@ function pluginBootstrapV1(): void {
   };
   (window as unknown as { openldr: unknown }).openldr = api;
 
+  function applyTheme(theme: string): void {
+    if (theme !== 'light' && theme !== 'dark') return;
+    api.theme = theme;
+    try { document.documentElement.setAttribute('data-openldr-theme', theme); } catch { /* no-op */ }
+  }
+
   window.addEventListener('message', (ev: MessageEvent) => {
-    const data = ev.data as { type?: string; context?: Record<string, unknown> } | undefined;
+    const data = ev.data as { type?: string; theme?: string; context?: Record<string, unknown> } | undefined;
+    // Live host theme changes (the host posts these when the user toggles dark/light).
+    if (data && data.type === 'openldr:theme') { applyTheme(data.theme ?? 'light'); return; }
     if (!data || data.type !== 'openldr:init' || port) return;
     port = ev.ports[0];
     if (!port) return;
@@ -114,7 +122,7 @@ function pluginBootstrapV1(): void {
     const ctx = (data.context ?? {}) as { pluginId?: string; capabilities?: string[]; theme?: string; locale?: string };
     api.pluginId = ctx.pluginId ?? '';
     api.capabilities = ctx.capabilities ?? [];
-    api.theme = ctx.theme ?? 'light';
+    applyTheme(ctx.theme ?? 'light');
     api.locale = ctx.locale ?? 'en';
     resolveReady();
   });

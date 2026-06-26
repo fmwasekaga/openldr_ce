@@ -34,7 +34,7 @@ export function PluginContainer(): JSX.Element {
         <div className="min-h-0 flex-1">
           <PluginFrame
             pluginId={entry.id}
-            context={{ pluginId: entry.id, capabilities: [], theme: document.documentElement.classList.contains('dark') ? 'dark' : 'light', locale: i18n.language, sessionId: crypto.randomUUID() }}
+            context={{ pluginId: entry.id, capabilities: [], theme: document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark', locale: i18n.language, sessionId: crypto.randomUUID() }}
           />
         </div>
       ) : entry.hasDeclarative ? (

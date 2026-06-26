@@ -43,6 +43,19 @@ describe('SDK_BOOTSTRAP_V1', () => {
     expect(api.locale).toBe('fr');
     expect(api.capabilities).toEqual(['host:connectors']);
   });
+
+  it('updates api.theme when the host posts an openldr:theme message', () => {
+    let handler: ((ev: unknown) => void) | undefined;
+    const win = { addEventListener: (t: string, h: (ev: unknown) => void) => { if (t === 'message') handler = h; } };
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    new Function('window', SDK_BOOTSTRAP_V1)(win);
+    const api = (win as unknown as { openldr: Record<string, unknown> }).openldr;
+    expect(api.theme).toBe('light');
+    handler!({ data: { type: 'openldr:theme', theme: 'dark' } });
+    expect(api.theme).toBe('dark');
+    handler!({ data: { type: 'openldr:theme', theme: 'light' } });
+    expect(api.theme).toBe('light');
+  });
 });
 
 describe('makeRpc', () => {
