@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RefreshCw } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -38,6 +38,36 @@ function RefreshButton({ onClick, label, testId }: { onClick: () => void; label:
   );
 }
 
+/** Search + type filter toolbar, shared by Browse + Installed. `right` holds the
+ *  tab-specific trailing controls (source label / refresh). */
+function FilterBar({ filter, setFilter, typeFilter, setTypeFilter, right }: {
+  filter: string; setFilter: (v: string) => void;
+  typeFilter: string; setTypeFilter: (v: string) => void;
+  right?: ReactNode;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="mb-3 flex items-center gap-2">
+      <Input className="max-w-xs" placeholder={t('settings.marketplace.searchPlaceholder')} value={filter} onChange={(e) => setFilter(e.target.value)} />
+      <Select value={typeFilter} onValueChange={setTypeFilter}>
+        <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">{t('settings.marketplace.allTypes')}</SelectItem>
+          <SelectItem value="plugin">Plugin</SelectItem>
+          <SelectItem value="form-template">Form template</SelectItem>
+          <SelectItem value="report-template">Report</SelectItem>
+        </SelectContent>
+      </Select>
+      {right ? <div className="ml-auto flex items-center gap-2">{right}</div> : null}
+    </div>
+  );
+}
+
+/** Full-bleed divider between the toolbar and the cards (negates the page's p-4). */
+function Separator() {
+  return <div className="-mx-4 mb-4 border-b border-border" />;
+}
+
 export function MarketplaceTabs(props: MarketplaceTabsProps) {
   const { t } = useTranslation();
   const [filter, setFilter] = useState('');
@@ -54,7 +84,13 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
     })
     .map((b) => availableToEntry(b, installedIds)), [props.available, filter, typeFilter, installedIds]);
 
-  const installedEntries = useMemo(() => props.installed.map(installedToEntry), [props.installed]);
+  const installedEntries = useMemo(() => props.installed
+    .filter((a) => {
+      const textMatch = !filter || a.id.toLowerCase().includes(filter.toLowerCase());
+      const typeMatch = typeFilter === 'all' || a.type === typeFilter;
+      return textMatch && typeMatch;
+    })
+    .map(installedToEntry), [props.installed, filter, typeFilter]);
 
   if (selected) {
     return (
@@ -82,26 +118,18 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
       </TabsList>
 
       <TabsContent value="browse" className="mt-4 min-h-0 flex-1">
-        <div className="mb-3 flex items-center gap-2">
-          <Input className="max-w-xs" placeholder={t('settings.marketplace.searchPlaceholder')} value={filter} onChange={(e) => setFilter(e.target.value)} />
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t('settings.marketplace.allTypes')}</SelectItem>
-              <SelectItem value="plugin">Plugin</SelectItem>
-              <SelectItem value="form-template">Form template</SelectItem>
-              <SelectItem value="report-template">Report</SelectItem>
-            </SelectContent>
-          </Select>
-          <div className="ml-auto flex items-center gap-2">
+        <FilterBar
+          filter={filter} setFilter={setFilter} typeFilter={typeFilter} setTypeFilter={setTypeFilter}
+          right={<>
             {props.source ? (
               <span className="text-xs text-muted-foreground" data-testid="registry-source">
                 {props.source === 'http' ? t('settings.marketplace.sourceRemote', { host: props.host ?? '' }) : t('settings.marketplace.sourceLocal')}
               </span>
             ) : null}
             <RefreshButton onClick={props.onRefresh} label={t('settings.marketplace.refresh')} testId="refresh-registry" />
-          </div>
-        </div>
+          </>}
+        />
+        <Separator />
         {props.loadError ? (
           <div className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {t('settings.marketplace.registryUnreachable')}
@@ -119,9 +147,11 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
       </TabsContent>
 
       <TabsContent value="installed" className="mt-4 min-h-0 flex-1">
-        <div className="mb-3 flex items-center justify-end">
-          <RefreshButton onClick={props.onRefresh} label={t('settings.marketplace.refresh')} testId="refresh-installed" />
-        </div>
+        <FilterBar
+          filter={filter} setFilter={setFilter} typeFilter={typeFilter} setTypeFilter={setTypeFilter}
+          right={<RefreshButton onClick={props.onRefresh} label={t('settings.marketplace.refresh')} testId="refresh-installed" />}
+        />
+        <Separator />
         {installedEntries.length === 0 ? (
           <div className="px-1 py-6 text-center text-sm text-muted-foreground">{t('settings.marketplace.emptyInstalled')}</div>
         ) : (
