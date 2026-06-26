@@ -53,6 +53,49 @@ function pluginBootstrapV1(): void {
     });
   }
 
+  // Define window.openldr SYNCHRONOUSLY at bootstrap time, BEFORE the plugin's bundled
+  // script runs. The init handshake (port + context) arrives asynchronously on iframe
+  // onLoad; until then `port` is null so `call()` rejects, and `ready` stays pending.
+  // Screens MUST `await openldr.ready` before issuing host calls. Defining the binding
+  // up front avoids a race where a screen mounts and reads `window.openldr` (e.g. via
+  // getOpenldr()) before the first 'openldr:init' message is processed.
+  const api = {
+    pluginId: '',
+    capabilities: [] as string[],
+    theme: 'light',
+    locale: 'en',
+    ready,
+    storage: {
+      get: (c: string, k: string) => call({ kind: 'storage.get', collection: c, key: k }),
+      put: (c: string, k: string, doc: unknown) => call({ kind: 'storage.put', collection: c, key: k, doc }),
+      delete: (c: string, k: string) => call({ kind: 'storage.delete', collection: c, key: k }),
+      list: (c: string, o?: unknown) => call({ kind: 'storage.list', collection: c, ...((o as object) ?? {}) }),
+    },
+    invoke: (entrypoint: string, input: unknown) => call({ kind: 'invoke', entrypoint, input }),
+    reports: {
+      list: () => call({ kind: 'reports.list' }),
+      columns: (id: string) => call({ kind: 'reports.columns', id }),
+      run: (id: string, params?: Record<string, unknown>) => call({ kind: 'reports.run', id, params }),
+      eventSources: () => call({ kind: 'reports.eventSources' }),
+    },
+    connectors: {
+      list: () => call({ kind: 'connectors.list' }),
+      test: (id: string) => call({ kind: 'connectors.test', id }),
+      metadata: (id: string) => call({ kind: 'connectors.metadata', id }),
+      push: (input: { connectorId: string; mapping: unknown; orgUnitMap?: Record<string, string>; period: string; dryRun: boolean }) =>
+        call({ kind: 'connectors.push', connectorId: input.connectorId, mapping: input.mapping, orgUnitMap: input.orgUnitMap, period: input.period, dryRun: input.dryRun }),
+      validate: (input: { connectorId: string; mapping: unknown }) =>
+        call({ kind: 'connectors.validate', connectorId: input.connectorId, mapping: input.mapping }),
+    },
+    fhir: { facilities: () => call({ kind: 'fhir.facilities' }) },
+    schedule: {
+      register: (schedule: unknown) => call({ kind: 'schedule.register', schedule }),
+      list: () => call({ kind: 'schedule.list' }),
+      remove: (id: string) => call({ kind: 'schedule.remove', id }),
+    },
+  };
+  (window as unknown as { openldr: unknown }).openldr = api;
+
   window.addEventListener('message', (ev: MessageEvent) => {
     const data = ev.data as { type?: string; context?: Record<string, unknown> } | undefined;
     if (!data || data.type !== 'openldr:init' || port) return;
@@ -69,41 +112,10 @@ function pluginBootstrapV1(): void {
     };
     port.start();
     const ctx = (data.context ?? {}) as { pluginId?: string; capabilities?: string[]; theme?: string; locale?: string };
-    (window as unknown as { openldr: unknown }).openldr = {
-      pluginId: ctx.pluginId ?? '',
-      capabilities: ctx.capabilities ?? [],
-      theme: ctx.theme ?? 'light',
-      locale: ctx.locale ?? 'en',
-      ready,
-      storage: {
-        get: (c: string, k: string) => call({ kind: 'storage.get', collection: c, key: k }),
-        put: (c: string, k: string, doc: unknown) => call({ kind: 'storage.put', collection: c, key: k, doc }),
-        delete: (c: string, k: string) => call({ kind: 'storage.delete', collection: c, key: k }),
-        list: (c: string, o?: unknown) => call({ kind: 'storage.list', collection: c, ...((o as object) ?? {}) }),
-      },
-      invoke: (entrypoint: string, input: unknown) => call({ kind: 'invoke', entrypoint, input }),
-      reports: {
-        list: () => call({ kind: 'reports.list' }),
-        columns: (id: string) => call({ kind: 'reports.columns', id }),
-        run: (id: string, params?: Record<string, unknown>) => call({ kind: 'reports.run', id, params }),
-        eventSources: () => call({ kind: 'reports.eventSources' }),
-      },
-      connectors: {
-        list: () => call({ kind: 'connectors.list' }),
-        test: (id: string) => call({ kind: 'connectors.test', id }),
-        metadata: (id: string) => call({ kind: 'connectors.metadata', id }),
-        push: (input: { connectorId: string; mapping: unknown; orgUnitMap?: Record<string, string>; period: string; dryRun: boolean }) =>
-          call({ kind: 'connectors.push', connectorId: input.connectorId, mapping: input.mapping, orgUnitMap: input.orgUnitMap, period: input.period, dryRun: input.dryRun }),
-        validate: (input: { connectorId: string; mapping: unknown }) =>
-          call({ kind: 'connectors.validate', connectorId: input.connectorId, mapping: input.mapping }),
-      },
-      fhir: { facilities: () => call({ kind: 'fhir.facilities' }) },
-      schedule: {
-        register: (schedule: unknown) => call({ kind: 'schedule.register', schedule }),
-        list: () => call({ kind: 'schedule.list' }),
-        remove: (id: string) => call({ kind: 'schedule.remove', id }),
-      },
-    };
+    api.pluginId = ctx.pluginId ?? '';
+    api.capabilities = ctx.capabilities ?? [];
+    api.theme = ctx.theme ?? 'light';
+    api.locale = ctx.locale ?? 'en';
     resolveReady();
   });
 }

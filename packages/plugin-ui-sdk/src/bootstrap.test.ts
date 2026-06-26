@@ -10,6 +10,39 @@ describe('SDK_BOOTSTRAP_V1', () => {
     expect(SDK_BOOTSTRAP_V1).toMatch(/ready/);
     expect(SDK_BOOTSTRAP_V1).toMatch(/ports\[0\]/);
   });
+
+  it('defines window.openldr SYNCHRONOUSLY (before any openldr:init) so screens never race the injection', () => {
+    // Run the bootstrap IIFE against a controlled fake window, capturing the message handler.
+    let handler: ((ev: unknown) => void) | undefined;
+    const win = { addEventListener: (t: string, h: (ev: unknown) => void) => { if (t === 'message') handler = h; } };
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    new Function('window', SDK_BOOTSTRAP_V1)(win);
+
+    // The binding + its api surface + the ready promise exist immediately — no init yet.
+    const api = (win as unknown as { openldr?: Record<string, unknown> }).openldr;
+    expect(api).toBeTruthy();
+    expect(api!.ready).toBeInstanceOf(Promise);
+    expect(typeof (api!.storage as Record<string, unknown>).get).toBe('function');
+    expect(typeof (api!.connectors as Record<string, unknown>).metadata).toBe('function');
+    expect(api!.pluginId).toBe(''); // placeholder until init populates context
+    expect(handler).toBeTypeOf('function');
+  });
+
+  it('populates context + resolves ready when openldr:init arrives', async () => {
+    let handler: ((ev: unknown) => void) | undefined;
+    const win = { addEventListener: (t: string, h: (ev: unknown) => void) => { if (t === 'message') handler = h; } };
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    new Function('window', SDK_BOOTSTRAP_V1)(win);
+    const api = (win as unknown as { openldr: Record<string, unknown> }).openldr;
+
+    const port = { start: () => {}, postMessage: () => {}, onmessage: null as unknown };
+    handler!({ data: { type: 'openldr:init', context: { pluginId: 'dhis2-sink', locale: 'fr', capabilities: ['host:connectors'] } }, ports: [port] });
+
+    await expect(api.ready).resolves.toBeUndefined();
+    expect(api.pluginId).toBe('dhis2-sink');
+    expect(api.locale).toBe('fr');
+    expect(api.capabilities).toEqual(['host:connectors']);
+  });
 });
 
 describe('makeRpc', () => {
