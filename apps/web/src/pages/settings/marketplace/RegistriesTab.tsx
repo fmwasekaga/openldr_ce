@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Bleed } from '@/components/ui/bleed';
 import {
   listRegistries, createRegistry, updateRegistry, deleteRegistry,
   type MarketplaceRegistry,
@@ -83,6 +84,7 @@ export function RegistriesTab({ onChanged }: { onChanged: () => void }) {
       {rows.length === 0 ? (
         <div className="text-sm text-muted-foreground">{t('settings.marketplace.noRegistries')}</div>
       ) : (
+        <Bleed>
         <Table>
           <TableHeader>
             <TableRow>
@@ -120,6 +122,7 @@ export function RegistriesTab({ onChanged }: { onChanged: () => void }) {
             ))}
           </TableBody>
         </Table>
+        </Bleed>
       )}
 
       <Dialog open={draft !== null} onOpenChange={(o) => { if (!o) setDraft(null); }}>
