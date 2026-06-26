@@ -67,7 +67,7 @@ export function buildBrokerOpSchema(maxDocBytes: number) {
     z.object({ kind: z.literal('invoke'), entrypoint: STR, input: docBound('input') }),
     z.object({ kind: z.literal('reports.list') }),
     z.object({ kind: z.literal('reports.columns'), id: ID }),
-    z.object({ kind: z.literal('reports.run'), id: ID, params: z.record(z.unknown()).optional() }),
+    z.object({ kind: z.literal('reports.run'), id: ID, params: docBound('params').optional() }),
     z.object({ kind: z.literal('reports.eventSources') }),
     z.object({ kind: z.literal('connectors.list') }),
     z.object({ kind: z.literal('connectors.test'), id: ID }),

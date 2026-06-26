@@ -328,6 +328,21 @@ describe('plugin broker', () => {
       expect((await b.handle('p1', principal, { kind: 'storage.put', collection: 'c', key: 'k', doc: { n: 1 } })).ok).toBe(true);
     });
 
+    it('rejects a reports.run params object just over the configured byte cap', async () => {
+      const cap = 1024;
+      const { b } = broker({ caps: [{ kind: 'host:reports' }], maxDocBytes: cap });
+      const bigParams = { blob: 'a'.repeat(cap + 100) };
+      const r = await b.handle('p1', principal, { kind: 'reports.run', id: 'r1', params: bigParams } as any);
+      expect(r.ok).toBe(false);
+      expect((r as any).error).toMatch(/invalid operation/);
+    });
+
+    it('accepts a reports.run params object within the cap', async () => {
+      const { b } = broker({ caps: [{ kind: 'host:reports' }], maxDocBytes: 1024 });
+      const r = await b.handle('p1', principal, { kind: 'reports.run', id: 'r1', params: { from: '2026-01-01' } });
+      expect(r.ok).toBe(true);
+    });
+
     it('rejects an out-of-range storage.list limit', async () => {
       const { b } = broker({ caps: [] });
       expect((await b.handle('p1', principal, { kind: 'storage.list', collection: 'c', limit: 5000 } as any)).ok).toBe(false);
