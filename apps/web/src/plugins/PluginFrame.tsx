@@ -60,7 +60,7 @@ export function PluginFrame({ pluginId, context }: { pluginId: string; context: 
       sandbox="allow-scripts"
       srcDoc={srcdoc}
       onLoad={onLoad}
-      className="h-full w-full border-0"
+      className="block h-full w-full border-0"
     />
   );
 }
