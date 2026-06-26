@@ -37,4 +37,9 @@ describe('host-service capabilities', () => {
   it('still rejects an unknown capability kind', () => {
     expect(() => parseCapabilities([{ kind: 'host:bogus' }])).toThrow();
   });
+
+  it('parses host:fhir presence gate', () => {
+    const caps = parseCapabilities([{ kind: 'host:fhir' }]);
+    expect(caps[0].kind).toBe('host:fhir');
+  });
 });

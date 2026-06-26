@@ -12,17 +12,18 @@ function fakeCtx(over: Partial<any> = {}) {
         { id: 'ui-demo', version: '1.0.0', enabled: true, manifest: { payload: { kind: 'plugin', ui: { entry: 'ui.html', sha256: 'x', nav: { label: 'Demo', icon: 'puzzle', section: 'apps' }, uiSdkVersion: '1' } } } },
         { id: 'cfg-plugin', version: '1.0.0', enabled: true, manifest: { payload: { kind: 'plugin', ui: { nav: { label: 'Cfg', icon: 'puzzle', section: 'apps' }, uiSdkVersion: '1', declarative: DECLARATIVE_SCHEMA } } } },
         { id: 'whonet', version: '1.0.0', enabled: true, manifest: { payload: { kind: 'plugin' } } },
+        { id: 'dhis2-sink', version: '1.0.0', enabled: true, manifest: { payload: { kind: 'plugin', ui: { entry: 'ui.html', sha256: 'y', nav: { label: 'DHIS2', icon: 'share-2', section: 'apps' }, uiSdkVersion: '1', requiredRoles: ['lab_admin'] } } } },
       ],
-      loadUi: async (id: string) => (id === 'ui-demo' ? new TextEncoder().encode('<div>panel</div>') : undefined),
+      loadUi: async (id: string) => (id === 'ui-demo' || id === 'dhis2-sink' ? new TextEncoder().encode('<div>panel</div>') : undefined),
     },
     pluginBroker: { handle: async (_id: string, _p: unknown, op: any) => ({ ok: true, data: { echoedOp: op.kind } }) },
     ...over,
   } as any;
 }
 
-function build(ctx: any): FastifyInstance {
+function build(ctx: any, roles: string[] = ['lab_admin']): FastifyInstance {
   const app = Fastify();
-  app.addHook('onRequest', async (req) => { (req as any).user = { id: 'u1', username: 'admin', displayName: null, roles: ['lab_admin'] }; });
+  app.addHook('onRequest', async (req) => { (req as any).user = { id: 'u1', username: 'admin', displayName: null, roles }; });
   registerPluginUiRoutes(app, ctx);
   return app;
 }
@@ -35,7 +36,8 @@ describe('plugin-ui routes', () => {
     const res = await app.inject({ method: 'GET', url: '/api/plugins/ui' });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.map((p: any) => p.id)).toEqual(['ui-demo', 'cfg-plugin']);
+    // lab_admin sees all ui plugins including the lab_admin-gated dhis2-sink.
+    expect(body.map((p: any) => p.id)).toEqual(['ui-demo', 'cfg-plugin', 'dhis2-sink']);
     expect(body[0].nav).toEqual({ label: 'Demo', icon: 'puzzle', section: 'apps' });
     expect(body[0].hasWebview).toBe(true);
     expect(body[0].hasDeclarative).toBe(false);
@@ -85,5 +87,31 @@ describe('plugin-ui routes', () => {
   it('POST broker 400s when op is missing', async () => {
     const res = await app.inject({ method: 'POST', url: '/api/plugins/ui-demo/broker', payload: {} });
     expect(res.statusCode).toBe(400);
+  });
+
+  // ── SEC-03: required-roles filtering on discovery + asset ──
+  it('GET /api/plugins/ui EXCLUDES a requiredRoles plugin for a non-admin caller', async () => {
+    const lowPriv = build(fakeCtx(), ['lab_technician']);
+    const res = await lowPriv.inject({ method: 'GET', url: '/api/plugins/ui' });
+    const ids = res.json().map((p: any) => p.id);
+    expect(ids).not.toContain('dhis2-sink');
+    expect(ids).toContain('ui-demo');
+  });
+
+  it('GET /api/plugins/ui INCLUDES a requiredRoles plugin for an admin caller', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/plugins/ui' });
+    expect(res.json().map((p: any) => p.id)).toContain('dhis2-sink');
+  });
+
+  it('GET asset 404s for a non-admin on a requiredRoles plugin', async () => {
+    const lowPriv = build(fakeCtx(), ['lab_technician']);
+    const res = await lowPriv.inject({ method: 'GET', url: '/api/plugins/dhis2-sink/ui/asset' });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('GET asset serves the html for an admin on a requiredRoles plugin', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/plugins/dhis2-sink/ui/asset' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toBe('<div>panel</div>');
   });
 });

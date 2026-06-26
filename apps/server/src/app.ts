@@ -4,7 +4,7 @@ import { dirname, resolve } from 'node:path';
 import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
-import type { AppContext, Dhis2Context } from '@openldr/bootstrap';
+import type { AppContext } from '@openldr/bootstrap';
 import { registerReportRoutes } from './reports-routes';
 import { registerTerminologyRoutes } from './terminology-routes';
 import { registerTerminologyAdminRoutes } from './terminology-admin-routes';
@@ -13,12 +13,11 @@ import { registerDashboardRoutes } from './dashboards-routes';
 import { registerAuditRoutes } from './audit-routes';
 import { registerUsersRoutes } from './users-routes';
 import { registerFormsRoutes } from './forms-routes';
-import { registerDhis2Routes } from './dhis2-routes';
 import { registerMarketplaceRoutes } from './marketplace-routes';
 import { registerWorkflowRoutes } from './workflows-routes';
 import { registerConnectorsRoutes } from './connectors-routes';
 import { registerPluginUiRoutes } from './plugin-ui-routes';
-import { createDhis2MetadataCache, createOrgUnitMapStore, createMappingStore, createScheduleStore, createConnectorStore } from '@openldr/db';
+import { createConnectorStore } from '@openldr/db';
 import { registerAuth } from './auth-plugin';
 
 export function registerConfigRoute(
@@ -37,7 +36,7 @@ export function registerConfigRoute(
   }));
 }
 
-export function buildApp(ctx: AppContext, dhis2: Dhis2Context | null = null, eventing: Parameters<Dhis2Context['reconcileSchedules']>[0] | null = null) {
+export function buildApp(ctx: AppContext) {
   const app = Fastify({ loggerInstance: ctx.logger });
 
   app.get('/health', async (_req, reply) => {
@@ -65,12 +64,6 @@ export function buildApp(ctx: AppContext, dhis2: Dhis2Context | null = null, eve
   registerAuditRoutes(app, ctx);
   registerUsersRoutes(app, ctx);
   registerFormsRoutes(app, ctx);
-  registerDhis2Routes(app, ctx, dhis2, {
-    metadataCache: createDhis2MetadataCache(ctx.internalDb),
-    orgUnitStore: createOrgUnitMapStore(ctx.internalDb),
-    mappingStore: createMappingStore(ctx.internalDb),
-    scheduleStore: createScheduleStore(ctx.internalDb),
-  }, eventing);
   registerMarketplaceRoutes(app, ctx);
   registerPluginUiRoutes(app, ctx);
   registerConnectorsRoutes(app, ctx, { connectors: createConnectorStore(ctx.internalDb) });

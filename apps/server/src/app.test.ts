@@ -349,7 +349,7 @@ function buildFakeLoaders(): FakeLoaders {
 }
 
 function fakeInternalDb() {
-  // Minimal stub so buildApp can construct route deps (createDhis2MetadataCache/createOrgUnitMapStore).
+  // Minimal stub so buildApp can construct route deps (e.g. createConnectorStore).
   // These stores are never exercised in app.test.ts — their tables don't exist here.
   const stub = {
     selectFrom: () => stub,
@@ -393,6 +393,7 @@ function ctxWith(status: 'up' | 'down'): AppContext {
     reportRuns: {} as never,
     reportSchedules: {} as never,
     reportScheduler: {} as never,
+    pluginScheduleRunner: {} as never,
     audit: {} as never,
     users: {
       list: async () => [],

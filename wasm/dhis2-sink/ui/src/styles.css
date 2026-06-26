@@ -1,0 +1,620 @@
+/* Minimal plugin stylesheet. The iframe has no host CSS, so this replaces shadcn.
+   Kept small; the per-screen components (Tasks 6-11) extend it. */
+:root {
+  color-scheme: light dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  color: #111;
+  background: transparent;
+}
+.dhis2 {
+  padding: 16px;
+}
+
+/* Shell: top-nav + active screen (Task 12a). */
+.dhis2-nav {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid #e3e3e3;
+  padding: 0 12px;
+  overflow-x: auto;
+}
+.dhis2-tab {
+  font: inherit;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 10px 12px;
+  margin-bottom: -1px;
+  color: #555;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.dhis2-tab:hover {
+  color: #111;
+}
+.dhis2-tab-active {
+  color: #111;
+  font-weight: 600;
+  border-bottom-color: #111;
+}
+.dhis2 h1 {
+  font-size: 18px;
+  margin: 0 0 12px;
+}
+.dhis2 .status {
+  color: #555;
+}
+.dhis2 .muted {
+  color: #888;
+}
+
+/* Dashboard (Task 6) + shared screen primitives. Minimal, shadcn-free. */
+.dhis2 .cards {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.dhis2 .card {
+  border: 1px solid #e3e3e3;
+  border-radius: 8px;
+  padding: 14px 16px;
+  background: #fff;
+}
+.dhis2 .card h2 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 10px;
+}
+.dhis2 .error {
+  border: 1px solid #e0b4b4;
+  background: #fdf2f2;
+  color: #a12622;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+}
+.dhis2 .error-text {
+  color: #a12622;
+  margin: 8px 0 0;
+}
+.dhis2 .badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.dhis2 .badge {
+  display: inline-block;
+  border: 1px solid #ccc;
+  border-radius: 999px;
+  padding: 1px 10px;
+  font-size: 12px;
+  color: #555;
+}
+.dhis2 .badge-on {
+  background: #111;
+  border-color: #111;
+  color: #fff;
+}
+.dhis2 .kv,
+.dhis2 .counts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 4px 24px;
+}
+.dhis2 .kv > div,
+.dhis2 .counts > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.dhis2 .kv dt,
+.dhis2 .counts dt {
+  color: #888;
+  margin: 0;
+}
+.dhis2 .kv dd,
+.dhis2 .counts dd {
+  margin: 0;
+  font-weight: 600;
+}
+.dhis2 .btn {
+  font: inherit;
+  border: 1px solid #111;
+  background: #111;
+  color: #fff;
+  border-radius: 6px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+.dhis2 .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.dhis2 .link {
+  font: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  color: #1a55c4;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.dhis2 .overview-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin-bottom: 12px;
+}
+.dhis2 .recent-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.dhis2 .recent-title {
+  font-weight: 600;
+}
+.dhis2 .table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.dhis2 .table th,
+.dhis2 .table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid #eee;
+}
+.dhis2 .table th {
+  color: #888;
+  font-weight: 500;
+}
+
+/* Toasts (Org-unit mapping, Task 7) — transient, auto-dismissed. */
+.dhis2 .toast {
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  font-size: 12px;
+}
+.dhis2 .toast-ok {
+  border: 1px solid #b7e0c2;
+  background: #effaf2;
+  color: #1f7a44;
+}
+.dhis2 .toast-err {
+  border: 1px solid #e0b4b4;
+  background: #fdf2f2;
+  color: #a12622;
+}
+
+/* Org-unit mapping table (Task 7). */
+.dhis2 .orgunits-pulled {
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+.dhis2 .orgunits-actions-col {
+  width: 320px;
+}
+.dhis2 .orgunits-facility-name {
+  font-weight: 600;
+}
+.dhis2 .orgunits-facility-id {
+  font-size: 12px;
+}
+.dhis2 .orgunits-empty {
+  text-align: center;
+  padding: 32px 8px;
+}
+.dhis2 .orgunits-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dhis2 .orgunits-picker {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Picker — minimal searchable single-select (Task 7, reused by later screens). */
+.dhis2 .picker {
+  position: relative;
+}
+.dhis2 .picker-trigger {
+  font: inherit;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #fff;
+  color: #111;
+  padding: 6px 10px;
+  cursor: pointer;
+  text-align: left;
+}
+.dhis2 .picker-trigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.dhis2 .picker-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dhis2 .picker-placeholder {
+  color: #888;
+}
+.dhis2 .picker-caret {
+  color: #888;
+  font-size: 11px;
+}
+.dhis2 .picker-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+.dhis2 .picker-search {
+  font: inherit;
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid #eee;
+  padding: 8px 10px;
+  outline: none;
+}
+.dhis2 .picker-options {
+  max-height: 220px;
+  overflow-y: auto;
+}
+.dhis2 .picker-option {
+  font: inherit;
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 7px 10px;
+  cursor: pointer;
+  color: #111;
+}
+.dhis2 .picker-option:hover {
+  background: #f2f5fb;
+}
+.dhis2 .picker-option-selected {
+  font-weight: 600;
+  background: #eef3fd;
+}
+.dhis2 .picker-empty {
+  padding: 10px;
+  color: #888;
+  font-size: 13px;
+}
+
+/* Schedules (Task 8). */
+.dhis2 .sched-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  border: 1px solid #e3e3e3;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.dhis2 .sched-field {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+.dhis2 .sched-field .picker {
+  min-width: 200px;
+}
+.dhis2 .sched-select {
+  font: inherit;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #fff;
+  color: #111;
+  padding: 6px 10px;
+}
+.dhis2 .sched-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.dhis2 .sched-actions-col {
+  width: 160px;
+}
+.dhis2 .sched-mapping-name {
+  font-weight: 600;
+}
+.dhis2 .sched-empty {
+  text-align: center;
+  padding: 32px 8px;
+}
+.dhis2 .sched-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.dhis2 .sched-del {
+  color: #a12622;
+}
+.dhis2 .sched-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+}
+.dhis2 .sched-confirm {
+  background: #fff;
+  border-radius: 8px;
+  padding: 18px 20px;
+  max-width: 360px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+}
+.dhis2 .sched-confirm-title {
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+.dhis2 .sched-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 16px;
+}
+.dhis2 .sched-confirm-del {
+  background: #a12622;
+  border-color: #a12622;
+}
+
+/* Reusable Modal (Task 10) — replaces shadcn Dialog/ConfirmDialog inside the iframe. */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+}
+.modal-panel {
+  background: #fff;
+  border-radius: 8px;
+  padding: 18px 20px;
+  width: 100%;
+  max-width: 460px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  color: #111;
+}
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+.modal-close {
+  font: inherit;
+  font-size: 20px;
+  line-height: 1;
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.modal-close:hover {
+  color: #111;
+}
+.modal-body {
+  display: grid;
+  gap: 12px;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+/* Mappings list + run (Task 10). */
+.dhis2 .mappings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.dhis2 .mappings-head h1 {
+  margin: 0;
+}
+.dhis2 .mappings-kind-col {
+  width: 120px;
+}
+.dhis2 .mappings-actions-col {
+  width: 180px;
+}
+.dhis2 .mappings-name {
+  font-weight: 600;
+}
+.dhis2 .mappings-empty {
+  text-align: center;
+  padding: 32px 8px;
+}
+.dhis2 .mappings-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.dhis2 .mappings-del {
+  color: #a12622;
+}
+.mappings-confirm-del {
+  background: #a12622;
+  border-color: #a12622;
+}
+
+/* Run dialog body (Task 10). */
+.run-form {
+  display: grid;
+  gap: 12px;
+}
+.run-field {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+.run-input {
+  font: inherit;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #fff;
+  color: #111;
+  padding: 6px 10px;
+}
+.run-actions {
+  display: flex;
+  gap: 8px;
+}
+.run-dry-btn {
+  background: #fff;
+  color: #111;
+  border-color: #ccc;
+}
+.run-result {
+  border: 1px solid #e3e3e3;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+.run-num {
+  font-weight: 600;
+}
+.run-skipped {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: #888;
+}
+.run-push-result {
+  margin-top: 8px;
+}
+
+/* Mapping editor (Task 11) — the most complex screen. */
+.dhis2.mapping-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.dhis2 .warn {
+  border: 1px solid #e6cf8f;
+  background: #fdf8ea;
+  color: #8a6d12;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+.dhis2 .me-field {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+.dhis2 .me-input {
+  font: inherit;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #fff;
+  color: #111;
+  padding: 6px 10px;
+}
+.dhis2 .me-kind {
+  max-width: 240px;
+}
+.dhis2 .me-hint {
+  color: #8a6d12;
+  font-size: 12px;
+}
+.dhis2 .me-grid {
+  display: grid;
+  gap: 12px;
+}
+.dhis2 .me-grid-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.dhis2 .me-grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.dhis2 .me-rows {
+  display: grid;
+  gap: 8px;
+}
+.dhis2 .me-rows-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.dhis2 .me-rows-title {
+  font-weight: 600;
+}
+.dhis2 .me-row {
+  display: grid;
+  align-items: center;
+  gap: 8px;
+}
+.dhis2 .me-row-2 {
+  grid-template-columns: 1fr 1fr auto;
+}
+.dhis2 .me-row-3 {
+  grid-template-columns: 1fr 1fr 1fr auto;
+}
+.dhis2 .me-remove {
+  color: #a12622;
+}
+.dhis2 .me-problems {
+  border: 1px solid #e3e3e3;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+.dhis2 .me-problems-list {
+  margin: 0;
+  padding-left: 18px;
+  color: #a12622;
+}
+.dhis2 .me-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.dhis2 .me-validate-btn {
+  background: #fff;
+  color: #111;
+  border-color: #ccc;
+}

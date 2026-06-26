@@ -1,2 +1,5 @@
 plugin.wasm
 manifest.json
+# dhis2-sink's ui.html is a build artifact (esbuild output from wasm/dhis2-sink/ui).
+# ui-reference/ui.html is hand-authored source and stays force-tracked.
+dhis2-sink/ui.html

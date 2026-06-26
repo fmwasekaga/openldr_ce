@@ -52,9 +52,61 @@ export function parseAllowlist(raw: string): string[] {
   return raw.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
 }
 
+const MAX_REDIRECTS = 5;
+
+/**
+ * Validate a single hop's URL: scheme must be http/https, and the hostname
+ * must be on the allow-list. Returns the parsed URL.
+ *
+ * NOTE (residual risk): the check is host-based and operator-controlled. It
+ * does NOT defend against DNS-rebinding — an allow-listed hostname that resolves
+ * to an internal/loopback IP would still pass. Resolve-and-pin (checking the
+ * resolved IP against private/link-local ranges) is a possible future hardening.
+ */
+function validateHop(rawUrl: string, allow: string[]): URL {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw new Error(`HTTP Request: invalid URL: ${rawUrl}`);
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error(`HTTP Request: unsupported URL scheme: ${parsed.protocol}`);
+  }
+  const host = parsed.hostname.toLowerCase();
+  if (!allow.includes(host)) throw new Error(`HTTP host not allowed: ${host}`);
+  return parsed;
+}
+
+/** Drop sensitive auth headers (case-insensitively) before a cross-host hop. */
+function stripSensitiveHeaders(headers: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(headers)) {
+    const lower = k.toLowerCase();
+    // Strip Authorization, Cookie, and any "x-...token" style auth headers.
+    if (lower === 'authorization' || lower === 'cookie' || lower === 'proxy-authorization') continue;
+    if (lower.startsWith('x-') && lower.includes('token')) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+/** Drop body + Content-Type headers (when a 301/302/303 downgrades to GET). */
+function dropBodyHeaders(headers: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(headers)) {
+    if (k.toLowerCase() === 'content-type') continue;
+    out[k] = v;
+  }
+  return out;
+}
+
 /**
  * fetch wrapper that rejects any host not on the comma-separated allow-list
- * before making the request (SSRF guard). `fetchImpl` is injectable for tests.
+ * (SSRF guard). Redirects are followed MANUALLY so every hop — the initial URL
+ * and each redirect target — is revalidated against the allow-list and scheme
+ * check; fetch is never allowed to auto-follow. `fetchImpl` is injectable for
+ * tests.
  */
 export async function guardedFetch(
   req: HttpRequest,
@@ -62,24 +114,52 @@ export async function guardedFetch(
   fetchImpl: typeof fetch = fetch,
 ): Promise<HttpResponse> {
   if (!req.url) throw new Error('HTTP Request: URL is required');
-  let host: string;
-  try {
-    host = new URL(req.url).hostname.toLowerCase();
-  } catch {
-    throw new Error(`HTTP Request: invalid URL: ${req.url}`);
-  }
   const allow = parseAllowlist(allowlistRaw);
-  if (!allow.includes(host)) throw new Error(`HTTP host not allowed: ${host}`);
 
-  const method = (req.method ?? 'GET').toUpperCase();
-  const headers: Record<string, string> = { ...(req.headers ?? {}) };
+  let currentUrl = validateHop(req.url, allow);
+  let method = (req.method ?? 'GET').toUpperCase();
+  let headers: Record<string, string> = { ...(req.headers ?? {}) };
   let body: string | undefined;
   if (['POST', 'PUT', 'PATCH'].includes(method) && req.body !== undefined) {
     body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
     if (!headers['Content-Type'] && !headers['content-type']) headers['Content-Type'] = 'application/json';
   }
 
-  const res = await fetchImpl(req.url, { method, headers, body });
+  let res: Response | undefined;
+  for (let hop = 0; ; hop++) {
+    if (hop > MAX_REDIRECTS) throw new Error('HTTP Request: too many redirects');
+
+    // `redirect: 'manual'` ensures fetch never auto-follows — we revalidate each hop.
+    res = await fetchImpl(currentUrl.toString(), { method, headers, body, redirect: 'manual' });
+
+    const isRedirect = res.status >= 300 && res.status < 400;
+    const location = isRedirect ? res.headers.get('location') : null;
+    // 3xx with no Location → treat as the final response.
+    if (!isRedirect || !location) break;
+
+    // Resolve the (possibly relative) Location against the current hop, then
+    // revalidate scheme + host. This is the core fix: a redirect to a
+    // non-allow-listed host is rejected before it is ever fetched.
+    const nextUrl = new URL(location, currentUrl);
+    const validated = validateHop(nextUrl.toString(), allow);
+
+    // Standard redirect method semantics.
+    if (res.status === 303 || ((res.status === 301 || res.status === 302) && method !== 'GET' && method !== 'HEAD')) {
+      // 303 always → GET; 301/302 on a non-idempotent method → GET. Drop the body.
+      method = 'GET';
+      body = undefined;
+      headers = dropBodyHeaders(headers);
+    }
+    // 307/308 (and 301/302 already-GET) preserve method + body as-is.
+
+    // Cross-host hop: strip sensitive request headers before forwarding.
+    if (validated.hostname.toLowerCase() !== currentUrl.hostname.toLowerCase()) {
+      headers = stripSensitiveHeaders(headers);
+    }
+
+    currentUrl = validated;
+  }
+
   const responseHeaders: Record<string, string> = {};
   res.headers.forEach((v, k) => { responseHeaders[k] = v; });
   const text = await res.text();

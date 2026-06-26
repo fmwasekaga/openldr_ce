@@ -11,6 +11,8 @@ describe('workflow code sandbox config', () => {
     const cfg = ConfigSchema.parse(base);
     expect(cfg.WORKFLOW_CODE_TIMEOUT_MS).toBe(5000);
     expect(cfg.WORKFLOW_CODE_MEMORY_MB).toBe(128);
+    // SEC-01: Code nodes are fail-safe OFF unless explicitly enabled.
+    expect(cfg.WORKFLOW_CODE_ENABLED).toBe(false);
   });
   it('defaults WORKFLOW_HTTP_ALLOWLIST to empty', () => {
     expect(ConfigSchema.parse(base).WORKFLOW_HTTP_ALLOWLIST).toBe('');

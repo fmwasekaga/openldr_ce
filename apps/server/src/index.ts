@@ -1,5 +1,5 @@
 import { loadConfig } from '@openldr/config';
-import { createAppContext, createIngestContext, createDhis2Context, createDbContext, seedDatabase } from '@openldr/bootstrap';
+import { createAppContext, createIngestContext, createDbContext, seedDatabase } from '@openldr/bootstrap';
 import { createLogger } from '@openldr/core';
 import { buildApp } from './app';
 
@@ -43,35 +43,7 @@ async function main(): Promise<void> {
 
   const ingest = await createIngestContext(cfg);
 
-  // Build the DHIS2 context whenever DHIS2 is the reporting target so the admin
-  // status + metadata routes work even with sync disabled. Sync wiring stays gated below.
-  let dhis2: Awaited<ReturnType<typeof createDhis2Context>> | null = null;
-  if (cfg.REPORTING_TARGET_ADAPTER === 'dhis2') {
-    dhis2 = await createDhis2Context(cfg, { loadSink: (id, version) => ctx.plugins.loadSink(id, version) });
-    // Expose DHIS2 push as a workflow sink. Gated on dhis2 truthiness (not SYNC_ENABLED)
-    // so a workflow push works even with scheduled sync off. runMapping requires the
-    // report/event-source callbacks, supplied from the reporting context.
-    const dhis2Ctx = dhis2;
-    ctx.workflows.services.dhis2Push = ({ mappingId, period, dryRun }) =>
-      dhis2Ctx.runMapping({
-        mappingId,
-        period,
-        dryRun: Boolean(dryRun),
-        trigger: 'workflow',
-        runReport: (id, p) => ctx.reporting.run(id, p ?? {}).then((r) => ({ rows: r.rows })),
-        runEventSource: (id, w) => ctx.reporting.runEventSource(id, w),
-      });
-  }
-
-  const app = buildApp(ctx, dhis2, ingest.eventing);
-
-  if (dhis2 && cfg.DHIS2_SYNC_ENABLED) {
-    await dhis2.registerSync(ingest.eventing, {
-      runReport: (id, p) => ctx.reporting.run(id, p ?? {}).then((r) => ({ rows: r.rows })),
-      runEventSource: (id, w) => ctx.reporting.runEventSource(id, w),
-    });
-    await dhis2.reconcileSchedules(ingest.eventing);
-  }
+  const app = buildApp(ctx);
 
   await ctx.reportScheduler.registerRunner(ingest.eventing);
   // Arming existing schedules is best-effort: a pending migration or transient DB
@@ -80,6 +52,17 @@ async function main(): Promise<void> {
     await ctx.reportScheduler.reconcile(ingest.eventing);
   } catch (err) {
     ctx.logger.warn({ err }, 'report schedule reconcile failed at startup (continuing)');
+  }
+
+  // Plugin schedules (e.g. the DHIS2 webview plugin) fire headlessly through the host
+  // runner. The legacy host DHIS2 scheduler has been removed (SP-A2 Task 14); plugin
+  // schedules live in `plugin_data` (migration 036 copied the host rows over), so this
+  // runner is now the sole driver of DHIS2 (and any other plugin) schedules.
+  await ctx.pluginScheduleRunner.registerRunner(ingest.eventing);
+  try {
+    await ctx.pluginScheduleRunner.reconcile(ingest.eventing);
+  } catch (err) {
+    ctx.logger.warn({ err }, 'plugin schedule reconcile failed at startup (continuing)');
   }
 
   await ctx.workflows.runner.registerRunner(ingest.eventing);
@@ -104,7 +87,6 @@ async function main(): Promise<void> {
     await worker.stop();
     await app.close();
     await ingest.close();
-    if (dhis2) await dhis2.close();
     await ctx.close();
     process.exit(0);
   };

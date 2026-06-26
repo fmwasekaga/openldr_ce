@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { ZodError } from 'zod';
 import type { AppContext } from '@openldr/bootstrap';
@@ -35,16 +35,83 @@ async function listIngestWorkflowIds(ctx: AppContext): Promise<string[]> {
   }).map((w) => w.id);
 }
 
+/**
+ * Defense-in-depth redaction for the LIST response (SEC-06). Workflow
+ * definitions can embed secrets; the list surface only needs id/name/enabled +
+ * non-secret node info, so we strip/mask secret-bearing fields before returning.
+ *
+ * Redacts, for every node's `data`:
+ *  - `secret`            → removed (webhook trigger shared secret)
+ *  - `data.headers`      → any auth header key (authorization / proxy-authorization /
+ *                          x-*-token / x-api-key / cookie) masked to '***'
+ *
+ * NOTE (out-of-scope follow-up): the deeper fix is to move secrets out of the
+ * definition into a server-side secret store referenced by opaque IDs. The detail
+ * endpoint deliberately stays FULL (it is manager-gated and the builder needs the
+ * real values to edit).
+ */
+const AUTH_HEADER_RE = /^(authorization|proxy-authorization|cookie|x-api-key|x-.*-token)$/i;
+
+function redactWorkflowSecrets(definition: unknown): unknown {
+  if (!definition || typeof definition !== 'object') return definition;
+  const def = definition as { nodes?: unknown };
+  if (!Array.isArray(def.nodes)) return definition;
+  const nodes = def.nodes.map((raw) => {
+    if (!raw || typeof raw !== 'object') return raw;
+    const node = raw as { data?: Record<string, unknown> };
+    if (!node.data || typeof node.data !== 'object') return node;
+    const data: Record<string, unknown> = { ...node.data };
+    // Strip webhook trigger secret entirely.
+    if ('secret' in data) delete data.secret;
+    // Mask auth-bearing headers when stored as an object.
+    if (data.headers && typeof data.headers === 'object' && !Array.isArray(data.headers)) {
+      const headers: Record<string, unknown> = { ...(data.headers as Record<string, unknown>) };
+      for (const k of Object.keys(headers)) {
+        if (AUTH_HEADER_RE.test(k)) headers[k] = '***';
+      }
+      data.headers = headers;
+    }
+    return { ...node, data };
+  });
+  return { ...def, nodes };
+}
+
+/** Headers stripped before forwarding webhook request headers into workflow input (SEC-07). */
+const FORWARD_STRIP_HEADERS = new Set(['x-webhook-token', 'authorization', 'cookie', 'proxy-authorization']);
+
+function stripAuthHeaders(headers: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(headers)) {
+    if (!FORWARD_STRIP_HEADERS.has(k.toLowerCase())) out[k] = v;
+  }
+  return out;
+}
+
+/** Constant-time string compare that does not leak via length (SEC-07). */
+function secretEquals(token: string, secret: string): boolean {
+  const a = Buffer.from(token, 'utf8');
+  const b = Buffer.from(secret, 'utf8');
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerWorkflowRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
   const MANAGE = { preHandler: requireRole('lab_admin', 'lab_manager') };
 
-  app.get('/api/workflows', async () => ctx.workflows.store.list());
+  // SEC-06: workflow definitions are manager-level config (they can embed
+  // webhook secrets, HTTP auth headers, tokens, and SQL). Reads require the same
+  // role as writes; the LIST response is additionally redacted (defense in depth).
+  app.get('/api/workflows', MANAGE, async () => {
+    const all = await ctx.workflows.store.list();
+    return all.map((w) => ({ ...w, definition: redactWorkflowSecrets(w.definition) }));
+  });
 
-  app.get('/api/workflows/:id', async (req, reply) => {
+  app.get('/api/workflows/:id', MANAGE, async (req, reply) => {
     const { id } = req.params as { id: string };
     const w = await ctx.workflows.store.get(id);
     if (!w) { reply.code(404); return { error: `unknown workflow: ${id}` }; }
+    // Detail stays FULL — manager-gated and the builder needs real values to edit.
     return w;
   });
 
@@ -104,9 +171,10 @@ export function registerWorkflowRoutes(app: FastifyInstance<any, any, any, any>,
       const result = await runWorkflow(def.nodes, def.edges, {
         input: body.input,
         onEvent: send,
-        codeLimits: { timeoutMs: ctx.cfg.WORKFLOW_CODE_TIMEOUT_MS, memoryMb: ctx.cfg.WORKFLOW_CODE_MEMORY_MB },
+        codeLimits: { timeoutMs: ctx.cfg.WORKFLOW_CODE_TIMEOUT_MS, memoryMb: ctx.cfg.WORKFLOW_CODE_MEMORY_MB, enabled: ctx.cfg.WORKFLOW_CODE_ENABLED },
         services: ctx.workflows.services,
         workflowId: id,
+        logger: { warn: (msg: string) => ctx.logger.warn(msg) },
       });
       reply.raw.write(`event: done\ndata: ${JSON.stringify(result)}\n\n`);
       await ctx.workflows.runs.record({
@@ -140,6 +208,19 @@ export function registerWorkflowRoutes(app: FastifyInstance<any, any, any, any>,
     return run;
   });
 
+  // DHIS2 mapping picker for the dhis2-push node. The workflow builder is a HOST page
+  // (not a plugin iframe), so it reads the dhis2-sink plugin's mappings directly from
+  // plugin_data instead of through the broker. Returns the connectorId too so the form's
+  // "Test connection" works without the host dhis2-context. Empty when dhis2-sink isn't
+  // installed (graceful).
+  app.get('/api/workflows/dhis2-mappings', MANAGE, async () => {
+    const rows = await ctx.pluginData.list('dhis2-sink', 'mappings');
+    return rows.map((r) => {
+      const d = r.doc as { id?: string; name?: string; definition?: { connectorId?: string } };
+      return { id: d.id ?? r.key, name: d.name ?? d.id ?? r.key, connectorId: d.definition?.connectorId ?? null };
+    });
+  });
+
   // Materialized datasets produced by workflow sink nodes.
   app.get('/api/workflows/datasets', MANAGE, async () => ctx.workflows.datasets.list());
 
@@ -161,8 +242,18 @@ export function registerWorkflowRoutes(app: FastifyInstance<any, any, any, any>,
   });
 
   // Stream an exported artifact out of blob storage by its object key.
+  // SEC-08: exports are written under `workflow-artifacts/` (see bootstrap
+  // exportArtifact). Constrain the caller-controlled key to that namespace and
+  // reject path traversal so a manager cannot fetch blobs outside it.
   app.get('/api/workflows/artifacts/*', MANAGE, async (req, reply) => {
-    const key = (req.params as Record<string, string>)['*'];
+    const raw = (req.params as Record<string, string>)['*'] ?? '';
+    let key: string;
+    try { key = decodeURIComponent(raw); } catch { key = raw; }
+    const traversal = key.split(/[\\/]/).some((seg) => seg === '..');
+    if (!key.startsWith('workflow-artifacts/') || traversal) {
+      reply.code(404);
+      return { error: 'artifact not found' };
+    }
     try {
       const buf = await ctx.blob.get(key);
       reply.header('content-type', 'application/octet-stream');
@@ -174,14 +265,19 @@ export function registerWorkflowRoutes(app: FastifyInstance<any, any, any, any>,
   });
 
   // Secret-gated webhook trigger. NOT MANAGE-gated — auth is the per-path secret.
+  // SEC-07: fail closed when no secret is configured; accept the token from the
+  // `x-webhook-token` header ONLY (no query-string token); compare in constant
+  // time; and strip auth headers before forwarding request headers into input.
   app.post('/api/workflows/hooks/*', async (req, reply) => {
     const wildcard = (req.params as Record<string, string>)['*'] ?? '';
     const entry = ctx.workflows.webhooks.resolve(wildcard);
     if (!entry) { reply.code(404); return { error: 'unknown webhook' }; }
-    const token = (req.headers['x-webhook-token'] as string | undefined) ?? (req.query as { token?: string }).token;
-    if (entry.secret && token !== entry.secret) { reply.code(401); return { error: 'invalid webhook token' }; }
+    if (!entry.secret) { reply.code(401); return { error: 'webhook has no secret configured' }; }
+    const token = (req.headers['x-webhook-token'] as string | undefined) ?? '';
+    if (!secretEquals(token, entry.secret)) { reply.code(401); return { error: 'invalid webhook token' }; }
     await ctx.workflows.runner.runAndRecord(entry.workflowId, 'webhook', {
-      method: req.method, body: req.body, headers: req.headers, query: req.query,
+      method: req.method, body: req.body,
+      headers: stripAuthHeaders(req.headers as Record<string, unknown>), query: req.query,
     });
     return { ok: true };
   });

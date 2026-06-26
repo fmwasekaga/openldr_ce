@@ -29,17 +29,17 @@
     "load:measure": "node scripts/load-measure.mjs",
     "mssql:accept": "tsx scripts/mssql-live-acceptance.ts",
     "make:marketplace-bundle": "tsx scripts/make-marketplace-bundle.ts",
-    "marketplace:accept": "tsx scripts/marketplace-live-acceptance.ts",
-    "dhis2:accept": "tsx scripts/dhis2-live-acceptance.ts"
+    "marketplace:accept": "tsx scripts/marketplace-live-acceptance.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "dependency-cruiser": "^16.4.0",
+    "esbuild": "^0.24.0",
     "tsup": "^8.3.5",
     "tsx": "^4.19.2",
     "turbo": "^2.3.3",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   }
 }

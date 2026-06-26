@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
-  return { ...actual, listDhis2Mappings: vi.fn(), getDhis2Mapping: vi.fn(), testConnector: vi.fn() };
+  return { ...actual, listDhis2PushMappings: vi.fn(), testConnector: vi.fn() };
 });
 import * as api from '@/api';
 import { Dhis2PushForm } from './dhis2-push-form';
@@ -12,7 +12,7 @@ const node = (config: Record<string, unknown> = {}) => ({ id: 'n1', type: 'actio
 
 beforeEach(() => {
   vi.clearAllMocks();
-  (api.listDhis2Mappings as any).mockResolvedValue([{ id: 'amr-mapping', name: 'AMR', kind: 'aggregate' }]);
+  (api.listDhis2PushMappings as any).mockResolvedValue([{ id: 'amr-mapping', name: 'AMR', connectorId: 'c1' }]);
 });
 
 describe('Dhis2PushForm', () => {
@@ -24,8 +24,7 @@ describe('Dhis2PushForm', () => {
     expect(update).toHaveBeenCalledWith({ config: expect.objectContaining({ mappingId: 'amr-mapping' }) });
   });
 
-  it('tests the selected mapping connector and shows the result', async () => {
-    (api.getDhis2Mapping as any).mockResolvedValue({ id: 'amr-mapping', name: 'AMR', definition: { connectorId: 'c1' } });
+  it('tests the selected mapping connector (from the picker) and shows the result', async () => {
     (api.testConnector as any).mockResolvedValue({ ok: true, metadata: { dataElements: 7, orgUnits: 2, categoryOptionCombos: 0, programs: 0, programStages: 0 } });
     render(<Dhis2PushForm node={node({ mappingId: 'amr-mapping' })} update={vi.fn()} />);
     fireEvent.click(await screen.findByTestId('dhis2-test'));

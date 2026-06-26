@@ -1,6 +1,7 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+  - 'wasm/dhis2-sink/ui'
   - 'e2e'
 allowBuilds:
   esbuild: true

@@ -28,7 +28,8 @@
     "@openldr/workflows": "workspace:*",
     "@openldr/marketplace": "workspace:*",
     "kysely": "^0.27.5",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+    "zod": "^3.24.1"
   },
   "devDependencies": { "typescript": "^5.7.2", "vitest": "^2.1.8" }
 }

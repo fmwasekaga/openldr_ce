@@ -137,4 +137,56 @@ describe('connectors routes', () => {
     const res = await appWith(fakeStore(), fakeCtx(), ['lab_technician']).inject({ method: 'GET', url: '/api/connectors' });
     expect(res.statusCode).toBe(403);
   });
+
+  describe('baseUrl validation (SEC-13)', () => {
+    const post = (config: Record<string, string>) =>
+      appWith(fakeStore()).inject({ method: 'POST', url: '/api/connectors', payload: { name: 'C', pluginId: 'dhis2-sink', config } });
+
+    it('accepts an https baseUrl', async () => {
+      const res = await post({ baseUrl: 'https://play.dhis2.org' });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().allowedHost).toBe('play.dhis2.org');
+    });
+
+    it('accepts a plain http localhost baseUrl (on-prem/dev allowed)', async () => {
+      const res = await post({ baseUrl: 'http://localhost:8080' });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().allowedHost).toBe('localhost');
+    });
+
+    it('accepts a private-IP baseUrl (on-prem DHIS2 must NOT be blocked)', async () => {
+      const res = await post({ baseUrl: 'https://10.0.0.5:8443' });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().allowedHost).toBe('10.0.0.5');
+    });
+
+    it('rejects a non-http(s) scheme with 400', async () => {
+      const res = await post({ baseUrl: 'ftp://x' });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('rejects a malformed baseUrl with 400 instead of silently creating with null host', async () => {
+      const res = await post({ baseUrl: 'not a url' });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('rejects a baseUrl carrying userinfo (credentials) with 400', async () => {
+      const res = await post({ baseUrl: 'https://user:pass@host' });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('rejects a malformed baseUrl on PUT patch with 400', async () => {
+      const store = fakeStore();
+      const app = appWith(store);
+      const id = (await app.inject({ method: 'POST', url: '/api/connectors', payload: newBody })).json().id;
+      const res = await app.inject({ method: 'PUT', url: `/api/connectors/${id}`, payload: { config: { baseUrl: 'ftp://nope' } } });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('still creates a connector with no baseUrl in config (host null)', async () => {
+      const res = await post({ username: 'admin', password: 'district' });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().allowedHost).toBeNull();
+    });
+  });
 });

@@ -6,7 +6,7 @@ import type { PluginStore, PluginRow } from './store';
 import type { PluginRunner } from './runner';
 import { generatePublisherKeypair, signManifest, createTrustStore, pluginManifestToArtifact } from '@openldr/marketplace';
 
-const logger = { info: vi.fn(), error: vi.fn(), debug: vi.fn() } as never;
+const logger = { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() } as never;
 const wasm = new TextEncoder().encode('\0asm fake bytes');
 const sha = sha256Hex(wasm);
 const enc = (s: string) => new TextEncoder().encode(s);
@@ -469,5 +469,37 @@ describe('runtime ui install', () => {
       ui: { entry: 'ui.html', sha256: 'f'.repeat(64), nav: { label: 'Demo' } },
     });
     await expect(rt.install(wasmBytes, manifest, { ui })).rejects.toThrow(/ui/i);
+  });
+
+  // SEC-11: loadUi must re-hash the stored bytes against the signed manifest sha and fail closed on tamper.
+  it('loadUi serves the bytes when their sha matches the manifest ui.sha256', async () => {
+    const ui = new TextEncoder().encode('<div>panel</div>');
+    const uiSha = sha256Hex(ui);
+    const row: PluginRow = {
+      id: 'ui-demo', version: '1.0.0', sha256: sha,
+      manifest: { id: 'ui-demo', version: '1.0.0', schemaVersion: 1, payload: { kind: 'plugin', ui: { entry: 'ui.html', sha256: uiSha } } },
+      status: 'installed', enabled: true, active: true, approvedBy: null,
+    };
+    const blobMap = new Map<string, Uint8Array>([['plugins/ui-demo/1.0.0/ui.html', ui]]);
+    const rt = createPluginRuntime({ blob: fakeBlob(blobMap), store: fakeStore([row]), runner: okRunner, logger, ...defaultNewDeps() });
+    const served = await rt.loadUi('ui-demo');
+    expect(new TextDecoder().decode(served!)).toBe('<div>panel</div>');
+  });
+
+  it('loadUi fails closed (returns undefined + warns) when stored ui bytes do NOT match the manifest sha', async () => {
+    (logger as unknown as { warn: ReturnType<typeof vi.fn> }).warn.mockClear();
+    const declared = new TextEncoder().encode('<div>panel</div>');
+    const declaredSha = sha256Hex(declared);
+    const tampered = new TextEncoder().encode('<script>evil()</script>'); // different bytes than the manifest declares
+    const row: PluginRow = {
+      id: 'ui-demo', version: '1.0.0', sha256: sha,
+      manifest: { id: 'ui-demo', version: '1.0.0', schemaVersion: 1, payload: { kind: 'plugin', ui: { entry: 'ui.html', sha256: declaredSha } } },
+      status: 'installed', enabled: true, active: true, approvedBy: null,
+    };
+    const blobMap = new Map<string, Uint8Array>([['plugins/ui-demo/1.0.0/ui.html', tampered]]);
+    const rt = createPluginRuntime({ blob: fakeBlob(blobMap), store: fakeStore([row]), runner: okRunner, logger, ...defaultNewDeps() });
+    const served = await rt.loadUi('ui-demo');
+    expect(served).toBeUndefined();
+    expect((logger as unknown as { warn: ReturnType<typeof vi.fn> }).warn).toHaveBeenCalled();
   });
 });

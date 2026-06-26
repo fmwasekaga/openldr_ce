@@ -26,12 +26,15 @@ import {
 } from '@openldr/workflows';
 import { renderReportPdf } from '@openldr/report-pdf';
 import { createReportScheduler, type ReportScheduler } from './report-scheduler';
+import { createPluginScheduleApi, createPluginScheduleRunner, type PluginScheduleRunner } from './plugin-schedule';
 import { createFormArtifactInstaller, type FormArtifactInstaller } from './form-artifact-install';
 import { type PluginRuntime } from '@openldr/plugins';
 import { createConnectorStore, createPluginDataStore, type PluginDataStore } from '@openldr/db';
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { policyFromConfig } from './policy';
 import { createPluginTarget } from './connector-target';
+import { createDhis2Orchestration } from './dhis2-orchestration';
+import { buildDhis2PushService } from './dhis2-push-service';
 import { selectTargetStore } from './target-store';
 import { createPluginRegistry } from './plugin-registry';
 import { buildOntologyDistribution, createOperations, importTerminologyResource, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type LoadResult, type OntologyBuildProgress, type OntologyManifest, type Operations } from '@openldr/terminology';
@@ -106,6 +109,7 @@ export interface AppContext {
   reportRuns: ReportRunStore;
   reportSchedules: ReportScheduleStore;
   reportScheduler: ReportScheduler;
+  pluginScheduleRunner: PluginScheduleRunner;
   users: UserStore;
   userProfiles: UserProfileStore;
   forms: FormStore;
@@ -367,18 +371,57 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   const workflowRunner = createWorkflowTriggerRunner({
     store: workflowStore, runs: workflowRuns, schedules: workflowSchedules,
     webhooks: workflowWebhooks, runWorkflow, logger,
-    codeLimits: { timeoutMs: cfg.WORKFLOW_CODE_TIMEOUT_MS, memoryMb: cfg.WORKFLOW_CODE_MEMORY_MB },
+    codeLimits: { timeoutMs: cfg.WORKFLOW_CODE_TIMEOUT_MS, memoryMb: cfg.WORKFLOW_CODE_MEMORY_MB, enabled: cfg.WORKFLOW_CODE_ENABLED },
     services: workflowServices,
   });
   const workflows = { store: workflowStore, runs: workflowRuns, schedules: workflowSchedules, webhooks: workflowWebhooks, runner: workflowRunner, services: workflowServices, datasets: workflowDatasets };
 
   const pluginData = createPluginDataStore(internal.db);
   const connectorStore = createConnectorStore(internal.db);
+  // Generic, caller-driven DHIS2 push orchestration (mapping/orgUnitMap supplied by the
+  // plugin UI through the broker). Mirrors the host dhis2-context runMapping behaviour.
+  const dhis2Orch = createDhis2Orchestration({
+    connectors: connectorStore,
+    loadSink: (id, v) => plugins.loadSink(id, v),
+    reporting: {
+      run: (id, params) => reporting.run(id, params).then((r) => ({ rows: (r as { rows: Record<string, unknown>[] }).rows })),
+      runEventSource: (id, w) => reporting.runEventSource(id, w).then((r) => ({ rows: (r as { rows: Record<string, unknown>[] }).rows })),
+    },
+    createTarget: createPluginTarget,
+    secretsKey: cfg.SECRETS_ENCRYPTION_KEY,
+    pluginData,
+    audit,
+    logger,
+  });
+  // Generic per-plugin schedule store + host runner (fires plugin schedules headlessly;
+  // for DHIS2 it drives the orchestration push). Completes the broker's deferred `schedules` dep.
+  const pluginScheduleRunner = createPluginScheduleRunner({ pluginData, push: (input) => dhis2Orch.push(input), logger });
+
+  // Wire the workflow dhis2-push node to the plugin datastore + orchestration. Mutates the
+  // same `workflowServices` object the runner already references (set post-construction, like
+  // the host did) so the dhis2-push handler resolves the service at run time. Deployment-agnostic:
+  // it reads the dhis2-sink plugin's mappings/org-units, no longer gated on the host DHIS2 context.
+  workflowServices.dhis2Push = buildDhis2PushService({ pluginData, push: (input) => dhis2Orch.push(input) });
   const pluginBroker = createPluginBroker({
     plugins,
     pluginData,
-    reporting: { list: () => reporting.list(), columns: undefined, run: (id, params) => reporting.run(id, params) },
+    schedules: createPluginScheduleApi(pluginData),
+    reporting: {
+      list: () => reporting.list(),
+      columns: (id) => reporting.run(id, {}).then((r) => (r as { columns: unknown }).columns),
+      run: (id, params) => reporting.run(id, params),
+      eventSources: () => reporting.eventSources(),
+    },
     connectors: connectorStore,
+    connectorMetadata: (id) => dhis2Orch.metadata(id),
+    connectorPush: (input) => dhis2Orch.push(input),
+    connectorValidate: (input) => dhis2Orch.validate(input),
+    // FHIR Location facilities for the org-unit mapping screen ({ id, name }[]).
+    facilities: async () =>
+      (await termFhirStore.listByType('Location')).map((l) => {
+        const r = (l.resource ?? l) as { id?: string; name?: string };
+        return { id: r.id, name: r.name ?? r.id };
+      }),
     // Live connector test: decrypt config → load sink → health_check + pull_metadata.
     // Throws on any failure; the broker catches, logs detail server-side, and returns
     // a generic error to the (untrusted) plugin so credentials in errors never reach the iframe.
@@ -404,6 +447,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       };
     },
     logger,
+    maxDocBytes: cfg.PLUGIN_DATA_MAX_DOC_BYTES,
     policy: () => policyFromConfig(cfg),
   });
 
@@ -419,6 +463,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     reportRuns,
     reportSchedules,
     reportScheduler,
+    pluginScheduleRunner,
     users,
     userProfiles,
     forms,
@@ -440,7 +485,6 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
 
 export { CE_VERSION } from './plugin-registry';
 export * from './db-context';
-export * from './dhis2-context';
 export { createPluginTarget } from './connector-target';
 export * from './ingest-context';
 export * from './target-store';

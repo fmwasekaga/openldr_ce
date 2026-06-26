@@ -86,10 +86,22 @@ function pluginBootstrapV1(): void {
         list: () => call({ kind: 'reports.list' }),
         columns: (id: string) => call({ kind: 'reports.columns', id }),
         run: (id: string, params?: Record<string, unknown>) => call({ kind: 'reports.run', id, params }),
+        eventSources: () => call({ kind: 'reports.eventSources' }),
       },
       connectors: {
         list: () => call({ kind: 'connectors.list' }),
         test: (id: string) => call({ kind: 'connectors.test', id }),
+        metadata: (id: string) => call({ kind: 'connectors.metadata', id }),
+        push: (input: { connectorId: string; mapping: unknown; orgUnitMap?: Record<string, string>; period: string; dryRun: boolean }) =>
+          call({ kind: 'connectors.push', connectorId: input.connectorId, mapping: input.mapping, orgUnitMap: input.orgUnitMap, period: input.period, dryRun: input.dryRun }),
+        validate: (input: { connectorId: string; mapping: unknown }) =>
+          call({ kind: 'connectors.validate', connectorId: input.connectorId, mapping: input.mapping }),
+      },
+      fhir: { facilities: () => call({ kind: 'fhir.facilities' }) },
+      schedule: {
+        register: (schedule: unknown) => call({ kind: 'schedule.register', schedule }),
+        list: () => call({ kind: 'schedule.list' }),
+        remove: (id: string) => call({ kind: 'schedule.remove', id }),
       },
     };
     resolveReady();

@@ -112,7 +112,11 @@ describe('runWorkflow', () => {
       { id: 'e2', source: 'c', target: 'l' },
     ];
     const events: RunEvent[] = [];
-    const res = await runWorkflow(nodes, edges, { onEvent: (e) => events.push(e) });
+    // Code nodes are gated OFF by default (SEC-01); opt in for this happy-path test.
+    const res = await runWorkflow(nodes, edges, {
+      onEvent: (e) => events.push(e),
+      codeLimits: { timeoutMs: 5000, memoryMb: 128, enabled: true },
+    });
     expect(res.status).toBe('completed');
     const cOut = res.results.find((r) => r.nodeId === 'c')?.output;
     expect(cOut).toEqual({ n: 42 });

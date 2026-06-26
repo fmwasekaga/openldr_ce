@@ -1,0 +1,19 @@
+{
+  "name": "@openldr/dhis2-sink-ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "lint": "echo \"no lint\""
+  },
+  "devDependencies": {
+    "@openldr/plugin-ui-sdk": "workspace:*",
+    "@testing-library/preact": "^3.2.4",
+    "jsdom": "^25.0.1",
+    "preact": "^10.25.1",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

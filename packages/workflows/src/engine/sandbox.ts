@@ -1,3 +1,24 @@
+/**
+ * SECURITY WARNING (SEC-01) — Node's `vm` is NOT a security boundary.
+ *
+ * This module runs user-authored Code-node JavaScript via `vm.runInNewContext`
+ * inside a worker_thread. That is NOT isolation: the constructor chain
+ * (`this.constructor.constructor('return process')()`) reaches the worker's real
+ * `process`, and worker_threads SHARE the host process's filesystem, network, and
+ * environment. So Code-node authors effectively have HOST-LEVEL privileges
+ * (read/write files, open sockets, read secrets/env). The sandbox.test.ts
+ * "escape documentation" test asserts this on purpose.
+ *
+ * Because of this, Code-node execution is gated OFF by default behind
+ * WORKFLOW_CODE_ENABLED (enforced in node-handlers/code.ts BEFORE this runs).
+ * Only enable in trusted, single-tenant deployments.
+ *
+ * FOLLOW-UP (proper long-term fix): replace the `vm` boundary with a real
+ * isolate — a separate unprivileged process (or container) with OS-level
+ * filesystem/network restrictions, no inherited secrets, no network by default,
+ * and hard CPU/memory/time limits — or a purpose-built isolate such as
+ * `isolated-vm`. Tracked as a follow-up to this interim gating.
+ */
 import { Worker } from 'node:worker_threads';
 import type { LogLevel } from '../types';
 

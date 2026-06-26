@@ -125,6 +125,33 @@ describe('manifest ui contribution', () => {
     expect(m.payload.ui?.nav.section).toBe('apps');     // default
   });
 
+  it('parses a ui block carrying requiredRoles (authz boundary)', () => {
+    const m = parseArtifactManifest({
+      schemaVersion: 1, type: 'plugin', id: 'demo', version: '1.0.0', compatibility: { ceVersion: '*' },
+      payload: { kind: 'plugin', wasmSha256: WASM_SHA, ui: { entry: 'ui.html', sha256: UI_SHA, nav: { label: 'Demo' }, requiredRoles: ['lab_admin'] } },
+    });
+    if (m.payload.kind !== 'plugin') throw new Error('expected plugin payload');
+    expect(m.payload.ui?.requiredRoles).toEqual(['lab_admin']);
+  });
+
+  it('ui requiredRoles defaults to undefined when absent', () => {
+    const m = parseArtifactManifest({
+      schemaVersion: 1, type: 'plugin', id: 'demo', version: '1.0.0', compatibility: { ceVersion: '*' },
+      payload: { kind: 'plugin', wasmSha256: WASM_SHA, ui: { entry: 'ui.html', sha256: UI_SHA, nav: { label: 'Demo' } } },
+    });
+    if (m.payload.kind !== 'plugin') throw new Error('expected plugin payload');
+    expect(m.payload.ui?.requiredRoles).toBeUndefined();
+  });
+
+  it('carries requiredRoles through pluginManifestToArtifact', () => {
+    const a = pluginManifestToArtifact({
+      id: 'demo', version: '1.0.0', wasmSha256: WASM_SHA,
+      ui: { entry: 'ui.html', sha256: UI_SHA, nav: { label: 'Demo' }, requiredRoles: ['lab_admin'] },
+    });
+    if (a.payload.kind !== 'plugin') throw new Error('expected plugin payload');
+    expect(a.payload.ui?.requiredRoles).toEqual(['lab_admin']);
+  });
+
   it('ui is optional (payload without it still parses)', () => {
     const m = parseArtifactManifest({
       schemaVersion: 1, type: 'plugin', id: 'demo', version: '1.0.0',

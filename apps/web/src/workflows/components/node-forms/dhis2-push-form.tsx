@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { NodeFormProps } from './index';
 import { FormField, TextInput, Select, inputClass } from './shared';
 import { Button } from '@/components/ui/button';
-import { listDhis2Mappings, getDhis2Mapping, testConnector, type Dhis2MappingSummary } from '@/api';
+import { listDhis2PushMappings, testConnector, type WorkflowDhis2Mapping } from '@/api';
 
 export function Dhis2PushForm({ node, update }: NodeFormProps) {
   const data = node.data as {
@@ -10,20 +10,19 @@ export function Dhis2PushForm({ node, update }: NodeFormProps) {
     config?: { mappingId?: string; period?: string; dryRun?: boolean };
   };
   const config = data.config ?? {};
-  const [mappings, setMappings] = useState<Dhis2MappingSummary[]>([]);
+  const [mappings, setMappings] = useState<WorkflowDhis2Mapping[]>([]);
   const [testMsg, setTestMsg] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
 
-  useEffect(() => { void listDhis2Mappings().then(setMappings).catch(() => setMappings([])); }, []);
+  useEffect(() => { void listDhis2PushMappings().then(setMappings).catch(() => setMappings([])); }, []);
 
   const onTest = useCallback(async () => {
     const mappingId = config.mappingId;
     if (!mappingId) { setTestMsg('Select a mapping first.'); return; }
     setTesting(true); setTestMsg('Testing…');
     try {
-      const rec = await getDhis2Mapping(mappingId);
-      const connectorId = (rec.definition as { connectorId?: string }).connectorId;
-      if (!connectorId) { setTestMsg('This mapping has no connector configured (set it in Settings › DHIS2).'); return; }
+      const connectorId = mappings.find((m) => m.id === mappingId)?.connectorId;
+      if (!connectorId) { setTestMsg('This mapping has no connector configured (set it in the DHIS2 plugin).'); return; }
       const res = await testConnector(connectorId);
       setTestMsg(res.ok ? `Connected. ${res.metadata.dataElements} data elements, ${res.metadata.orgUnits} org units.` : `Test failed: ${res.error}`);
     } catch (e) {
@@ -31,14 +30,14 @@ export function Dhis2PushForm({ node, update }: NodeFormProps) {
     } finally {
       setTesting(false);
     }
-  }, [config.mappingId]);
+  }, [config.mappingId, mappings]);
 
   return (
     <div className="space-y-4">
       <FormField label="Label">
         <TextInput value={data.label ?? ''} onChange={(e) => update({ label: e.target.value })} />
       </FormField>
-      <FormField label="Mapping" hint="A DHIS2 mapping from Settings › DHIS2. The mapping carries the connector to push to.">
+      <FormField label="Mapping" hint="A DHIS2 mapping from the DHIS2 plugin. The mapping carries the connector to push to.">
         <Select
           data-testid="dhis2-mapping-select"
           value={config.mappingId ?? ''}

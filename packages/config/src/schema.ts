@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 // Env vars arrive as strings, so `z.coerce.boolean()` (JS `Boolean(value)`) treats
 // any non-empty string — including 'false' and '0' — as `true`. Parse string booleans
-// explicitly instead. Mirrors the DHIS2_SYNC_ENABLED pattern below.
+// explicitly instead.
 const envBoolean = (defaultValue: boolean) =>
   z
     .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
@@ -28,7 +28,6 @@ export const ConfigSchema = z
     BLOB_ADAPTER: z.enum(['minio']).default('minio'),
     EVENTING_ADAPTER: z.enum(['pg']).default('pg'),
     TARGET_STORE_ADAPTER: z.enum(['pg', 'mssql']).default('pg'),
-    REPORTING_TARGET_ADAPTER: z.enum(['none', 'dhis2']).default('none'),
 
     // Internal operational Postgres (always pg) — used by the event bus, audit, users, plugins.
     INTERNAL_DATABASE_URL: z.string().url(),
@@ -43,12 +42,6 @@ export const ConfigSchema = z
     MSSQL_PASSWORD: z.string().min(1).optional(),
     MSSQL_ENCRYPT: envBoolean(false),
     MSSQL_TRUST_SERVER_CERT: envBoolean(true),
-
-    // DHIS2 reporting target. Connection lives in Connectors (no env vars needed).
-    DHIS2_SYNC_ENABLED: z
-      .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
-      .default(true)
-      .transform((v) => v === true || v === 'true' || v === '1'),
 
     // S3 / blob storage.
     S3_ENDPOINT: z.string().url(),
@@ -80,6 +73,13 @@ export const ConfigSchema = z
     DASHBOARD_SQL_ROW_CAP: z.coerce.number().int().positive().default(10000),
 
     // Workflow Code node sandbox limits.
+    // SECURITY (SEC-01): Code nodes execute user JS via Node's `vm` inside a worker_thread.
+    // `vm` is NOT a security boundary — workflow code can escape it (constructor chain) and
+    // reach the host process's filesystem, network, environment, and secrets. This flag is
+    // therefore default-OFF (fail-safe): enabling it lets workflow AUTHORS run code with
+    // HOST-LEVEL privileges. Only enable in trusted, single-tenant deployments. It is NOT a
+    // sandbox. A real isolate (separate unprivileged process) is the proper long-term fix.
+    WORKFLOW_CODE_ENABLED: envBoolean(false),
     WORKFLOW_CODE_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
     WORKFLOW_CODE_MEMORY_MB: z.coerce.number().int().positive().default(128),
     // Comma-separated allow-list of hostnames for the workflow HTTP source node.
@@ -94,6 +94,10 @@ export const ConfigSchema = z
     // Global egress kill-switch for plugin host services. When false the broker refuses any
     // net-egress-bearing operation regardless of a plugin's grant (consumed by SP-A2's push ops).
     PLUGIN_EGRESS_ENABLED: envBoolean(true),
+    // Max serialized byte size of a plugin document persisted/forwarded through the broker
+    // (storage.put doc, invoke/push/validate payloads). Generous default (8 MB) so the DHIS2
+    // metadata-cache doc (full metadata snapshot) still writes; bounds a memory-DoS otherwise.
+    PLUGIN_DATA_MAX_DOC_BYTES: z.coerce.number().int().positive().default(8_388_608),
 
     // Marketplace artifact security.
     MARKETPLACE_DEV_ALLOW_UNSIGNED: envBoolean(false),
@@ -102,6 +106,13 @@ export const ConfigSchema = z
     MARKETPLACE_PUBLISH_TOKEN: z.string().optional(),     // GitHub PAT (repo write); secret
     MARKETPLACE_PUBLISH_REPO: z.string().optional(),      // owner/repo, e.g. fmwasekaga/openldr-ce-marketplace
     MARKETPLACE_PUBLISH_BRANCH: z.string().default('main'),
+    // SEC-09: when non-empty, an admin-added LOCAL registry's directory must resolve
+    // INSIDE this root (path-containment), bounding arbitrary-local-path reads. Empty
+    // (default) preserves current behavior — the root is the opt-in containment switch.
+    MARKETPLACE_LOCAL_REGISTRY_ROOT: z.string().default(''),
+    // SEC-10: max bytes for a remote bundle wasm payload download (defense against an
+    // OOM from a malicious/compromised registry). 64 MB default.
+    MARKETPLACE_MAX_PAYLOAD_BYTES: z.coerce.number().int().positive().default(67_108_864),
 
     // Secret-at-rest encryption key for dynamic Connectors (base64, decodes to 32 bytes /
     // AES-256). Optional at boot; required only when a secret-bearing connector is

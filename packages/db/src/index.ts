@@ -19,9 +19,6 @@ export { fhirValueSetCatalogToInputs, fhirValueSetToInput, isFhirValueSetCatalog
 export type { FhirValueSetCatalogInput, FhirValueSetInput, ValueSetCore, ValueSetStatus } from './fhir-value-set';
 export * from './resolve-publisher';
 export * from './seed-publishers';
-export * from './dhis2-store';
-export * from './dhis2-schedule-store';
-export * from './dhis2-metadata-cache';
 export * from './report-run-store';
 export * from './marketplace-install-store';
 export * from './connector-store';

@@ -6,6 +6,7 @@ import type { WorkflowScheduleStore } from './schedule-store';
 import type { WebhookRegistry } from './webhook-registry';
 import type { runWorkflow as RunWorkflowFn } from './engine/run-workflow';
 import type { WorkflowServices } from './engine/services';
+import type { CodeLimits } from './engine/execution-context';
 import { WorkflowDefinitionSchema, type TriggerSource, type WorkflowRun } from './types';
 import { nextCronDate } from './cron';
 
@@ -16,7 +17,7 @@ interface RunnerDeps {
   webhooks: Pick<WebhookRegistry, 'resolve'>;
   runWorkflow: typeof RunWorkflowFn;
   logger: { error(o: unknown, m?: string): void; warn(o: unknown, m?: string): void };
-  codeLimits?: { timeoutMs: number; memoryMb: number };
+  codeLimits?: CodeLimits;
   services?: WorkflowServices;
 }
 
@@ -40,7 +41,13 @@ export function createWorkflowTriggerRunner(deps: RunnerDeps): WorkflowTriggerRu
     let result: Awaited<ReturnType<typeof deps.runWorkflow>>;
     let error: string | null = null;
     try {
-      result = await deps.runWorkflow(def.nodes, def.edges, { input, codeLimits: deps.codeLimits, services: deps.services, workflowId });
+      result = await deps.runWorkflow(def.nodes, def.edges, {
+        input,
+        codeLimits: deps.codeLimits,
+        services: deps.services,
+        workflowId,
+        logger: { warn: (msg: string) => deps.logger.warn(msg) },
+      });
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
       result = {
