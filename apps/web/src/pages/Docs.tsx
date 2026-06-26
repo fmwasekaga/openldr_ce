@@ -51,10 +51,10 @@ function GuideLink({
     <Link
       to={`/docs/${section.slug}`}
       aria-current={section.slug === activeSlug ? 'page' : undefined}
-      className={`block border-l-2 px-3 py-1.5 text-sm no-underline transition-colors ${
+      className={`block border-l-2 px-3 py-2 text-sm no-underline transition-colors ${
         section.slug === activeSlug
-          ? 'border-primary bg-accent font-medium text-primary'
-          : 'border-transparent text-foreground/80 hover:bg-accent hover:text-foreground'
+          ? 'border-primary bg-accent text-primary'
+          : 'border-transparent text-foreground/85 hover:bg-accent hover:text-foreground'
       }`}
     >
       <span>{section.title}</span>
@@ -172,7 +172,7 @@ export function Docs() {
             >
               {query.trim() ? (
                 <>
-                  <p className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                  <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60">
                     Search results
                   </p>
                   {navSections.map((navSection) => (
@@ -184,17 +184,20 @@ export function Docs() {
                   ))}
                 </>
               ) : (
-                DOC_GROUPS.map((group) => {
-                  const groupSections = navSections.filter(
-                    (navSection) => navSection.group === group.id,
-                  );
-                  if (groupSections.length === 0) return null;
-                  return (
-                    <div key={group.id} className="pb-1">
-                      <p className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                DOC_GROUPS.map((group) => ({
+                  group,
+                  items: navSections.filter((navSection) => navSection.group === group.id),
+                }))
+                  .filter((entry) => entry.items.length > 0)
+                  .map(({ group, items }, idx) => (
+                    <div
+                      key={group.id}
+                      className={`pb-1${idx > 0 ? ' mt-1 border-t border-border pt-2' : ''}`}
+                    >
+                      <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60">
                         {group.title}
                       </p>
-                      {groupSections.map((navSection) => (
+                      {items.map((navSection) => (
                         <GuideLink
                           key={navSection.slug}
                           section={navSection}
@@ -202,8 +205,7 @@ export function Docs() {
                         />
                       ))}
                     </div>
-                  );
-                })
+                  ))
               )}
               {navSections.length === 0 && (
                 <p className="px-3 py-2 text-sm text-muted-foreground">No results.</p>
