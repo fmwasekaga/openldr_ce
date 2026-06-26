@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { RefreshCw } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -26,6 +27,15 @@ interface MarketplaceTabsProps {
   host: string | null;
   onRefresh: () => void;
   loadError?: string | null;
+}
+
+/** Icon-only refresh control (shared by Browse + Installed). */
+function RefreshButton({ onClick, label, testId }: { onClick: () => void; label: string; testId: string }) {
+  return (
+    <Button variant="outline" size="icon" data-testid={testId} onClick={onClick} aria-label={label} title={label}>
+      <RefreshCw className="h-4 w-4" />
+    </Button>
+  );
 }
 
 export function MarketplaceTabs(props: MarketplaceTabsProps) {
@@ -71,7 +81,7 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
         <TabsTrigger value="registries">{t('settings.marketplace.registriesTab')}</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="browse" className="min-h-0 flex-1">
+      <TabsContent value="browse" className="mt-4 min-h-0 flex-1">
         <div className="mb-3 flex items-center gap-2">
           <Input className="max-w-xs" placeholder={t('settings.marketplace.searchPlaceholder')} value={filter} onChange={(e) => setFilter(e.target.value)} />
           <Select value={typeFilter} onValueChange={setTypeFilter}>
@@ -89,9 +99,7 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
                 {props.source === 'http' ? t('settings.marketplace.sourceRemote', { host: props.host ?? '' }) : t('settings.marketplace.sourceLocal')}
               </span>
             ) : null}
-            <Button variant="outline" size="sm" data-testid="refresh-registry" onClick={props.onRefresh}>
-              {t('settings.marketplace.refresh')}
-            </Button>
+            <RefreshButton onClick={props.onRefresh} label={t('settings.marketplace.refresh')} testId="refresh-registry" />
           </div>
         </div>
         {props.loadError ? (
@@ -110,7 +118,10 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
         )}
       </TabsContent>
 
-      <TabsContent value="installed" className="min-h-0 flex-1">
+      <TabsContent value="installed" className="mt-4 min-h-0 flex-1">
+        <div className="mb-3 flex items-center justify-end">
+          <RefreshButton onClick={props.onRefresh} label={t('settings.marketplace.refresh')} testId="refresh-installed" />
+        </div>
         {installedEntries.length === 0 ? (
           <div className="px-1 py-6 text-center text-sm text-muted-foreground">{t('settings.marketplace.emptyInstalled')}</div>
         ) : (
@@ -120,7 +131,7 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
         )}
       </TabsContent>
 
-      <TabsContent value="registries" className="min-h-0 flex-1">
+      <TabsContent value="registries" className="mt-4 min-h-0 flex-1">
         <RegistriesTab onChanged={props.onRefresh} />
       </TabsContent>
     </Tabs>
