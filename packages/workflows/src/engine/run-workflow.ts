@@ -11,7 +11,7 @@
  */
 
 import { pickHandler, type RunnerNode } from './node-handlers';
-import { createContext } from './execution-context';
+import { createContext, type CodeLimits, type ExecutionContext } from './execution-context';
 import type { RunEvent, LogEntry, WorkflowEdge } from '../types';
 import type { WorkflowServices } from './services';
 
@@ -94,12 +94,14 @@ export interface RunWorkflowOptions {
   input?: unknown;
   /** Per-event sink. Defaults to a no-op so the legacy /execute path stays untouched. */
   onEvent?: (evt: RunEvent) => void;
-  /** Limits for the Code node sandbox. When undefined, createContext's default applies. */
-  codeLimits?: { timeoutMs: number; memoryMb: number };
+  /** Limits + enable flag for the Code node sandbox. When undefined, createContext's default (disabled) applies. */
+  codeLimits?: CodeLimits;
   /** Server-provided data capabilities for source nodes. */
   services?: WorkflowServices;
   /** ID of the persisted workflow record — forwarded to the execution context. */
   workflowId?: string;
+  /** Optional logger so an enabled Code node can warn about host-level execution. */
+  logger?: ExecutionContext['logger'];
 }
 
 export async function runWorkflow(
@@ -108,7 +110,7 @@ export async function runWorkflow(
   opts: RunWorkflowOptions = {},
 ): Promise<WorkflowRunResult> {
   const startedAt = new Date().toISOString();
-  const ctx = createContext(opts.input, opts.onEvent ?? (() => {}), edges, opts.codeLimits, opts.services, opts.workflowId);
+  const ctx = createContext(opts.input, opts.onEvent ?? (() => {}), edges, opts.codeLimits, opts.services, opts.workflowId, opts.logger);
   const sorted = topologicalSort(nodes, edges);
   const results: NodeRunResult[] = [];
 

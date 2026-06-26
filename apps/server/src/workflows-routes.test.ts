@@ -87,7 +87,7 @@ function fakeCtx() {
       datasets: extras.datasets,
     },
     blob: { get: async () => Buffer.from('artifact-bytes') },
-    cfg: { WORKFLOW_CODE_TIMEOUT_MS: 5000, WORKFLOW_CODE_MEMORY_MB: 128 },
+    cfg: { WORKFLOW_CODE_TIMEOUT_MS: 5000, WORKFLOW_CODE_MEMORY_MB: 128, WORKFLOW_CODE_ENABLED: true },
     audit: { record: async (e: unknown) => { auditEvents.push(e); return e; } },
     logger: { error() {}, warn() {}, info() {} },
     __auditEvents: auditEvents,
@@ -201,7 +201,7 @@ describe('workflow routes', () => {
         services: undefined,
         datasets: extras.datasets,
       },
-      cfg: { WORKFLOW_CODE_TIMEOUT_MS: 5000, WORKFLOW_CODE_MEMORY_MB: 128 },
+      cfg: { WORKFLOW_CODE_TIMEOUT_MS: 5000, WORKFLOW_CODE_MEMORY_MB: 128, WORKFLOW_CODE_ENABLED: true },
       audit: { record: async (e: unknown) => { auditEvents.push(e); return e; } },
       logger: { error() {}, warn() {}, info() {} },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

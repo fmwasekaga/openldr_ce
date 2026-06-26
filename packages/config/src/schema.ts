@@ -80,6 +80,13 @@ export const ConfigSchema = z
     DASHBOARD_SQL_ROW_CAP: z.coerce.number().int().positive().default(10000),
 
     // Workflow Code node sandbox limits.
+    // SECURITY (SEC-01): Code nodes execute user JS via Node's `vm` inside a worker_thread.
+    // `vm` is NOT a security boundary — workflow code can escape it (constructor chain) and
+    // reach the host process's filesystem, network, environment, and secrets. This flag is
+    // therefore default-OFF (fail-safe): enabling it lets workflow AUTHORS run code with
+    // HOST-LEVEL privileges. Only enable in trusted, single-tenant deployments. It is NOT a
+    // sandbox. A real isolate (separate unprivileged process) is the proper long-term fix.
+    WORKFLOW_CODE_ENABLED: envBoolean(false),
     WORKFLOW_CODE_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
     WORKFLOW_CODE_MEMORY_MB: z.coerce.number().int().positive().default(128),
     // Comma-separated allow-list of hostnames for the workflow HTTP source node.

@@ -21,8 +21,19 @@ describe('runInSandbox', () => {
     expect(await run("return $node('n1').v;", undefined, { n1: { v: 7 } })).toBe(7);
   });
 
-  it('does not expose require/process/fetch', async () => {
+  it('does not expose require/process/fetch as bare globals (necessary but NOT sufficient)', async () => {
+    // These globals being undefined is cosmetic only — see the escape test below.
     expect(await run('return typeof require + "," + typeof process + "," + typeof fetch;')).toBe('undefined,undefined,undefined');
+  });
+
+  // HONEST ESCAPE DOCUMENTATION (SEC-01): Node's `vm` is NOT a security boundary.
+  // The constructor chain reaches the worker's real `process`, which shares the
+  // host filesystem/network/env. This test asserts the escape WORKS on purpose —
+  // it is WHY Code nodes are gated OFF by default (WORKFLOW_CODE_ENABLED). Do not
+  // "fix" this assertion; the real fix is a true isolate (separate process), not vm.
+  it('DOCUMENTS that the vm boundary is porous (constructor escape reaches host process)', async () => {
+    const escaped = await run("return this.constructor.constructor('return typeof process')();");
+    expect(escaped).toBe('object'); // the host process object is reachable — the sandbox does not isolate
   });
 
   it('rejects on a thrown error', async () => {

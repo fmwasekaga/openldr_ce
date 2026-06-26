@@ -82,6 +82,7 @@ Required only when `TARGET_STORE_ADAPTER=mssql`.
 
 | Variable | Type | Default | Effect |
 |---|---:|---:|---|
+| `WORKFLOW_CODE_ENABLED` | boolean string | `false` | Master switch for Workflow Code nodes. **Default off (fail-safe).** Code nodes run author-supplied JavaScript via Node's `vm`, which is **not** a security sandbox — enabled code executes with **host-level privileges** (filesystem, network, environment, secrets). Enable only in trusted, single-tenant deployments. When false, Code nodes refuse to run. |
 | `WORKFLOW_CODE_TIMEOUT_MS` | positive integer | `5000` | Code node timeout. |
 | `WORKFLOW_CODE_MEMORY_MB` | positive integer | `128` | Code node worker memory cap. |
 | `WORKFLOW_HTTP_ALLOWLIST` | comma-separated hostnames | empty | Allowed hosts for Workflow HTTP Request nodes. Empty means no hosts are reachable. |
