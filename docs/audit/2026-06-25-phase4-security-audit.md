@@ -389,9 +389,14 @@ Post-remediation `pnpm audit --prod --audit-level high`:
 Severity: 0 low | 0 moderate | 3 high | 0 critical
 ```
 
-The 3 remaining HIGH advisories are all `kysely` (JSON-path traversal in `JSONPathBuilder.key()`/`.at()`,
-patched `>=0.28.17`), tracked separately from SEC-I. jsPDF and xlsx advisories are fully cleared; the
-2 criticals are gone.
+The 3 remaining HIGH advisories are all `kysely@0.27.6` (JSON-path traversal in
+`JSONPathBuilder.key()`/`.at()`, patched `>=0.28.17`). **Not reachable:** OpenLDR uses none of the
+kysely JSON-path builder methods (`.jsonPath()`/`.key()`/`.at()`) — grep confirms the only JSON
+access is a single hardcoded raw-SQL literal `definition->>'kind'` (`packages/db/src/dhis2-store.ts`,
+no interpolation; that file is removed in the Phase-4 cutover). The `kysely@>=0.28.17` bump is a
+core data-layer change with broad blast radius, so it is tracked as a separate follow-up rather than
+folded into SEC-I; the advisory carries no exploitable path in the current code. jsPDF and xlsx
+advisories are fully cleared; the 2 criticals are gone.
 
 ## Positive controls observed
 
