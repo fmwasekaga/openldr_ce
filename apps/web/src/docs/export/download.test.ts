@@ -2,8 +2,24 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { saveBlob, exportDocs } from './download';
 import type { DocSection } from '../registry';
 
-const a: DocSection = { slug: 'overview', title: 'Overview', content: '# Overview\n\nA', localeUsed: 'en' };
-const b: DocSection = { slug: 'dhis2', title: 'DHIS2', content: '# DHIS2\n\nB', localeUsed: 'en' };
+function section(overrides: Pick<DocSection, 'slug' | 'title' | 'content'>): DocSection {
+  return {
+    group: 'daily-work',
+    summary: `Summary for ${overrides.title}`,
+    audience: ['all-users'],
+    requiredRoles: [],
+    estimatedMinutes: 5,
+    difficulty: 'beginner',
+    relatedSlugs: [],
+    screenshotNames: [],
+    status: 'published',
+    localeUsed: 'en',
+    ...overrides,
+  };
+}
+
+const a = section({ slug: 'overview', title: 'Overview', content: '# Overview\n\nA' });
+const b = section({ slug: 'reports', title: 'Reports', content: '# Reports\n\nB' });
 
 describe('download', () => {
   beforeEach(() => {
@@ -33,6 +49,6 @@ describe('download', () => {
     expect(saved[0].name).toBe('openldr-documentation.md');
     const text = await saved[0].blob.text();
     expect(text).toContain('# Overview');
-    expect(text).toContain('# DHIS2');
+    expect(text).toContain('# Reports');
   });
 });
