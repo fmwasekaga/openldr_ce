@@ -363,6 +363,36 @@ Recommended action:
 3. Upgrade `@fastify/static`.
 4. Re-run the production dependency audit and review every remaining reachable advisory.
 
+### Remediation (SEC-I, 2026-06-26)
+
+- `jspdf` `^2.5.2` → `^4.2.1` (latest). Clears all jsPDF advisories (LFI/path-traversal,
+  PDF/HTML injection, AcroForm/addJS object injection, BMP/GIF DoS) and the transitive
+  `dompurify` sanitization advisories. The only consumer is `apps/web/src/docs/export/toPdf.ts`
+  (client-side "export docs to PDF"); the constructor + `text`/`save`/`addImage`/`getImageProperties`/
+  `output('blob')` API is unchanged across v2→v4, so no code change was required. Note: jsPDF 3.0.x
+  was insufficient — newer advisories (HTML injection in new-window paths, FreeText object injection)
+  are patched only in 4.2.1.
+- `@fastify/static` `^8.0.0` → `^9.1.3` (matches the installed `fastify@5`). The `register(fastifyStatic,
+  { root })` + `sendFile` usage in `apps/server/src/app.ts` is unchanged; option names are stable.
+- `xlsx` `^0.18.5` → maintained SheetJS CDN build `0.20.3`
+  (`https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz`, pinned in `packages/bootstrap/package.json`
+  and the root devDep). Clears both HIGH advisories (prototype-pollution GHSA-4r6h, ReDoS GHSA-5pgg).
+  Note: these advisories live in the **parse** path. OpenLDR uses xlsx **write-only**
+  (`XLSX.utils.json_to_sheet`/`book_new`/`book_append_sheet` + `XLSX.write` in
+  `packages/bootstrap/src/index.ts` and `report-scheduler.ts`); there is no `XLSX.read`/`readFile`,
+  so the advisories were not reachable even before the bump. The `XLSX.utils.*`/`XLSX.write` API is
+  unchanged at 0.20.3.
+
+Post-remediation `pnpm audit --prod --audit-level high`:
+
+```text
+Severity: 0 low | 0 moderate | 3 high | 0 critical
+```
+
+The 3 remaining HIGH advisories are all `kysely` (JSON-path traversal in `JSONPathBuilder.key()`/`.at()`,
+patched `>=0.28.17`), tracked separately from SEC-I. jsPDF and xlsx advisories are fully cleared; the
+2 criticals are gone.
+
 ## Positive controls observed
 
 - Connector secrets are encrypted at rest using AES-256-GCM.
