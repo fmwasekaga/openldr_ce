@@ -25,6 +25,9 @@ export function PackageCard({ entry, onClick }: { entry: CardEntry; onClick: () 
       <p className="mt-1 text-xs text-muted-foreground">
         {(entry.publisher?.name || '—')} · v{entry.version}
       </p>
+      {entry.description ? (
+        <p className="mt-1 line-clamp-2 text-xs text-foreground/70">{entry.description}</p>
+      ) : null}
       {entry.registryName ? (
         <p className="mt-0.5 text-[10px] text-muted-foreground" data-testid="card-registry-source">
           {t('settings.marketplace.registrySource', { name: entry.registryName })}

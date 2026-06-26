@@ -133,7 +133,7 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
         <div className="mt-4 grid gap-6" style={{ gridTemplateColumns: 'minmax(0,1fr) 244px' }}>
           <div className="min-w-0 space-y-4">
             <p className="whitespace-pre-line text-sm text-foreground/85">
-              {detail?.description || t('settings.marketplace.noDescription')}
+              {detail?.description || entry.description || t('settings.marketplace.noDescription')}
             </p>
             {detail?.readme ? (
               <section data-testid="detail-docs">
@@ -141,7 +141,7 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
                 <ReadmeMarkdown content={detail.readme} />
               </section>
             ) : null}
-            <PayloadPreview payload={detail?.payload ?? null} />
+            <PayloadPreview payload={detail?.payload ?? entry.payload ?? null} />
             {error ? (
               <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>
             ) : null}
@@ -162,7 +162,7 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
                 ) : (
                   <span>{entry.version}</span>
                 )}</dd></div>
-                {detail?.license ? <div className="flex justify-between gap-2"><dt className="text-muted-foreground">{t('settings.marketplace.license')}</dt><dd className="text-right text-foreground/90">{detail.license}</dd></div> : null}
+                {(detail?.license ?? entry.license) ? <div className="flex justify-between gap-2"><dt className="text-muted-foreground">{t('settings.marketplace.license')}</dt><dd className="text-right text-foreground/90">{detail?.license ?? entry.license}</dd></div> : null}
               </dl>
             </section>
 

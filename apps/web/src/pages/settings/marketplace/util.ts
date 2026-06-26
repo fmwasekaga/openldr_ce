@@ -1,4 +1,4 @@
-import type { AvailableArtifact, InstalledArtifact } from '@/api';
+import type { AvailableArtifact, ArtifactPayloadMeta, InstalledArtifact } from '@/api';
 
 /** A minimal, source-agnostic shape for a card + detail header. */
 export interface CardEntry {
@@ -7,6 +7,9 @@ export interface CardEntry {
   version: string;
   type: string;
   publisher: { id: string; name: string } | null;
+  description?: string | null;   // from the bundle/manifest (used when no registry detail)
+  license?: string | null;
+  payload?: ArtifactPayloadMeta | null;
   capabilities: unknown[];
   valid?: boolean;       // Browse only (signature validity)
   installed?: boolean;   // is this id currently installed?
@@ -32,7 +35,8 @@ export function capabilityLine(cap: unknown): string {
 export function availableToEntry(b: AvailableArtifact, installedIds: Set<string>): CardEntry {
   return {
     ref: b.ref, id: b.id, version: b.version, type: b.type,
-    publisher: b.publisher, capabilities: b.capabilities ?? [], valid: b.valid,
+    publisher: b.publisher, description: b.description, license: b.license,
+    capabilities: b.capabilities ?? [], valid: b.valid,
     installed: installedIds.has(b.id), versions: b.versions ?? [],
     registryName: b.registryName,
   };
@@ -45,6 +49,7 @@ export function installedToEntry(a: InstalledArtifact): CardEntry {
   return {
     id: a.id, version: a.version, type: a.type,
     publisher: pub ? { id: pub.id ?? '', name: pub.name ?? '' } : null,
+    description: a.description, license: a.license, payload: a.payload,
     capabilities: a.capabilities, installed: true, active: a.active,
     enabled: a.enabled, drifted: a.drifted, targetFormId: a.targetFormId,
   };

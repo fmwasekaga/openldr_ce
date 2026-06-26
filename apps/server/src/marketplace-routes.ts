@@ -70,6 +70,11 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
         approvedBy: r.approvedBy,
         type: (m.type as string) ?? 'plugin',
         publisher: (m.publisher as unknown) ?? null,
+        // Surface the stored-manifest metadata so the Installed detail view is as rich
+        // as Browse (which reads it from the registry bundle).
+        description: (m.description as string) ?? null,
+        license: (m.license as string) ?? null,
+        payload: (m.payload as unknown) ?? null,
         capabilities: g.legacy ? [] : g.capabilities,
         legacy: g.legacy,
       };
@@ -78,6 +83,7 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
       id: r.artifactId, version: r.version, active: true, enabled: true,
       approvedBy: r.installedBy ?? null, type: 'form-template',
       publisher: r.publisherName ? { name: r.publisherName } : null,
+      description: null, license: null, payload: null,
       capabilities: [], legacy: false, drifted: r.drifted, targetFormId: r.targetFormId,
     }));
     return [...pluginRows, ...formRows];

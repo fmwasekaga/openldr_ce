@@ -765,6 +765,9 @@ export interface InstalledArtifact {
   approvedBy: string | null;
   type: string;
   publisher: unknown;
+  description?: string | null;
+  license?: string | null;
+  payload?: ArtifactPayloadMeta | null;
   capabilities: unknown[];
   legacy: boolean;
   drifted?: boolean;
