@@ -1,5 +1,5 @@
 import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, basename } from 'node:path';
 import { createHash } from 'node:crypto';
 import { parseArtifactManifest, type ArtifactManifest } from './artifact-manifest';
 import { signManifest, keyFingerprint } from './signing';
@@ -50,11 +50,15 @@ export async function packBundle(input: PackInput): Promise<PackResult> {
   const signedManifest = { ...(parsed as unknown as Record<string, unknown>), signature };
 
   // A webview ui contribution declares a single ui.html (basename); write its bytes alongside the
-  // payload so readBundle finds it. readBundle re-validates uiEntry === basename(uiEntry), so the
-  // join can't escape outDir. If the manifest declares no ui entry, input.ui is ignored.
+  // payload so readBundle finds it. We require uiEntry === basename(uiEntry) BEFORE writing, so a
+  // traversal entry (e.g. '../escaped.html') throws and nothing is written — the join can't escape
+  // outDir. If the manifest declares no ui entry, input.ui is ignored.
   const uiEntry = (parsed.payload as { ui?: { entry?: string } }).ui?.entry;
   if (uiEntry && !input.ui) {
     throw new Error('packBundle: manifest declares payload.ui.entry but no ui bytes were provided');
+  }
+  if (uiEntry && (uiEntry !== basename(uiEntry) || uiEntry === '')) {
+    throw new Error(`packBundle: invalid ui entry '${uiEntry}' — must be a plain filename inside the bundle`);
   }
 
   await mkdir(input.outDir, { recursive: true });
