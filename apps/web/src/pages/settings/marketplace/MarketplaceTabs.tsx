@@ -111,7 +111,7 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
 
   return (
     <Tabs defaultValue="browse" className="flex min-h-0 flex-1 flex-col">
-      <TabsList>
+      <TabsList className="-mx-4 px-4">
         <TabsTrigger value="browse">{t('settings.marketplace.browse')}</TabsTrigger>
         <TabsTrigger value="installed">{t('settings.marketplace.installedTab')} ({props.installed.length})</TabsTrigger>
         <TabsTrigger value="registries">{t('settings.marketplace.registriesTab')}</TabsTrigger>
