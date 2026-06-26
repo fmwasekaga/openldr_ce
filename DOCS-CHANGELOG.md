@@ -1,5 +1,33 @@
 # Documentation Changelog
 
+Date: 2026-06-25
+
+## Added
+
+- Rebuilt the active in-app documentation as a twelve-guide, English-first web manual focused on signed-in web-interface tasks.
+- Added step-by-step coverage for Dashboard, Reports, Workflows, Forms, Terminology, Users and Roles, Audit, Settings, Connectors, and Marketplace.
+- Added an **Advanced Docs — Coming soon** placeholder that points future installation, deployment, API, CLI, plugin, and operator troubleshooting material to the planned dedicated advanced web app.
+- Added manifest-driven Playwright screenshot capture with focused crops, masks, and numbered callouts for the active guide screenshots.
+- Added deterministic docs fixture seeding for screenshots, including a DHIS2-free marketplace sample bundle.
+- Added end-to-end coverage for grouped docs navigation, search, workflow guide metadata/procedures, screenshot lightbox behavior, English fallback, download-menu reachability, and retired DHIS2 docs exclusion.
+
+## Fixed
+
+- Removed DHIS2 from the active in-app documentation registry, search results, screenshot manifest, and bundled screenshot assets.
+- Replaced the old self-referential documentation screenshots with twenty-two current, task-focused web-interface screenshots.
+- Removed stale French and Portuguese markdown from the active docs set so those locales consistently show the English fallback notice until translations are authored.
+- Replaced generic connector examples in the web interface with external-system wording so docs screenshots do not teach a soon-to-be-retired integration path.
+
+## Counts
+
+- Active English guides: **12**.
+- Committed guide screenshots: **22**.
+- Active French/Portuguese authored guides: **0**; both locales intentionally fall back to English.
+
+## Notes
+
+- This entry supersedes the June 23 “Still Missing” notes about fresh GUI screenshots, missing in-app pages for Workflows/Forms/Marketplace/Users/Audit, and DHIS2-active docs.
+
 Date: 2026-06-23
 
 ## Added

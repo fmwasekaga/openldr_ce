@@ -196,7 +196,7 @@ export function Connectors() {
                 <label className="grid gap-1 sm:col-span-2">
                   <span className="text-muted-foreground">{t('settings.connectors.fieldBaseUrl')}</span>
                   <Input data-testid="connector-baseurl" value={draft.baseUrl} onChange={(e) => setDraft({ ...draft, baseUrl: e.target.value })}
-                    placeholder={draft.id === null ? 'https://dhis2.example.org' : t('settings.connectors.secretSet')} />
+                    placeholder={draft.id === null ? 'https://external-system.example.org/api' : t('settings.connectors.secretSet')} />
                 </label>
                 <label className="grid gap-1">
                   <span className="text-muted-foreground">{t('settings.connectors.fieldUsername')}</span>

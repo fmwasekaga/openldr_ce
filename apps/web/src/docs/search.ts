@@ -1,8 +1,21 @@
 import Fuse from 'fuse.js';
 import type { DocSection } from './registry';
 
-export interface DocRecord { slug: string; title: string; headings: string; body: string; }
-export interface SearchHit { slug: string; title: string; snippet: string; }
+export interface DocRecord {
+  slug: string;
+  title: string;
+  summary: string;
+  audience: string;
+  roles: string;
+  headings: string;
+  body: string;
+}
+
+export interface SearchHit {
+  slug: string;
+  title: string;
+  snippet: string;
+}
 
 function plainText(md: string): string {
   return md
@@ -15,53 +28,112 @@ function plainText(md: string): string {
 }
 
 function headingsOf(md: string): string {
-  return md.split('\n')
-    .filter((l) => /^#{2,3}\s+/.test(l.trim()))
-    .map((l) => l.trim().replace(/^#{2,3}\s+/, '').trim())
+  return md
+    .split('\n')
+    .filter((line) => /^#{2,3}\s+/.test(line.trim()))
+    .map((line) => line.trim().replace(/^#{2,3}\s+/, '').trim())
     .join(' ');
 }
 
-export function toRecord(s: DocSection): DocRecord {
-  return { slug: s.slug, title: s.title, headings: headingsOf(s.content), body: plainText(s.content) };
+export function toRecord(section: DocSection): DocRecord {
+  return {
+    slug: section.slug,
+    title: section.title,
+    summary: section.summary,
+    audience: section.audience.join(' '),
+    roles: section.requiredRoles.join(' '),
+    headings: headingsOf(section.content),
+    body: plainText(section.content),
+  };
 }
 
 export function buildIndex(sections: DocSection[]): Fuse<DocRecord> {
-  return new Fuse(sections.map(toRecord), {
-    keys: [
-      { name: 'title', weight: 0.5 },
-      { name: 'headings', weight: 0.3 },
-      { name: 'body', weight: 0.2 },
-    ],
-    includeMatches: true,
-    includeScore: true,
-    ignoreLocation: true,
-    threshold: 0.3,
-    minMatchCharLength: 2,
-  });
+  return new Fuse(
+    sections
+      .filter((section) => !/dhis2/i.test(section.slug))
+      .map(toRecord)
+      .filter((record) => !/dhis2/i.test(JSON.stringify(record))),
+    {
+      keys: [
+        { name: 'title', weight: 0.3 },
+        { name: 'summary', weight: 0.2 },
+        { name: 'headings', weight: 0.2 },
+        { name: 'body', weight: 0.2 },
+        { name: 'roles', weight: 0.05 },
+        { name: 'audience', weight: 0.05 },
+      ],
+      includeMatches: true,
+      includeScore: true,
+      ignoreLocation: true,
+      threshold: 0.4,
+      minMatchCharLength: 2,
+    },
+  );
 }
 
-// Fuse's per-key threshold can surface a page whose aggregate relevance is weak
-// (e.g. a slug term mentioned once in another page's body). Drop those by combined
-// Fuse score (lower = better; 0 = perfect): real matches score well under this
-// cutoff, incidental ones land far above it.
-// Measured (corpus @ DOCS_VERSION 0.1.0): real title hit ~0; legit antibiogram body
-// match 0.569 (keep); incidental cross-page slug mention 0.708 (drop). 0.64 centers
-// the (0.569, 0.708) window for symmetric margin.
+// Fuse can surface a page whose aggregate relevance is weak. Keep the score gate
+// for fuzzy matches, but allow task-style queries when every word is explicitly
+// present across the indexed guide fields.
 const SCORE_CUTOFF = 0.64;
 
-function snippet(rec: DocRecord, query: string): string {
-  const i = rec.body.toLowerCase().indexOf(query.toLowerCase());
-  if (i < 0) return rec.title;
-  const start = Math.max(0, i - 60);
-  const end = Math.min(rec.body.length, i + query.length + 60);
-  return (start > 0 ? '…' : '') + rec.body.slice(start, end).trim() + (end < rec.body.length ? '…' : '');
+function snippet(record: DocRecord, query: string): string {
+  const index = record.body.toLowerCase().indexOf(query.toLowerCase());
+  if (index < 0) return record.title;
+  const start = Math.max(0, index - 60);
+  const end = Math.min(record.body.length, index + query.length + 60);
+  return (
+    (start > 0 ? '…' : '') +
+    record.body.slice(start, end).trim() +
+    (end < record.body.length ? '…' : '')
+  );
+}
+
+function queryTokens(query: string): string[] {
+  return query
+    .toLowerCase()
+    .split(/[^a-z0-9_]+/i)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2);
+}
+
+function hasToken(text: string, token: string): boolean {
+  if (text.includes(token)) return true;
+  if (!token.endsWith('s') && text.includes(`${token}s`)) return true;
+  if (token.endsWith('s') && text.includes(token.slice(0, -1))) return true;
+  return false;
+}
+
+function hasAllQueryTokens(record: DocRecord, query: string): boolean {
+  const tokens = queryTokens(query);
+  if (tokens.length === 0) return false;
+  const haystack = [
+    record.title,
+    record.summary,
+    record.headings,
+    record.body,
+    record.roles,
+    record.audience,
+  ]
+    .join(' ')
+    .toLowerCase();
+  return tokens.every((token) => hasToken(haystack, token));
 }
 
 export function searchDocs(index: Fuse<DocRecord>, query: string): SearchHit[] {
-  const q = query.trim();
-  if (!q) return [];
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+  if (/dhis2/i.test(trimmed)) return [];
   return index
-    .search(q)
-    .filter((r) => r.score == null || r.score <= SCORE_CUTOFF)
-    .map((r) => ({ slug: r.item.slug, title: r.item.title, snippet: snippet(r.item, q) }));
+    .search(trimmed)
+    .filter(
+      (result) =>
+        result.score == null ||
+        result.score <= SCORE_CUTOFF ||
+        hasAllQueryTokens(result.item, trimmed),
+    )
+    .map((result) => ({
+      slug: result.item.slug,
+      title: result.item.title,
+      snippet: snippet(result.item, trimmed),
+    }));
 }

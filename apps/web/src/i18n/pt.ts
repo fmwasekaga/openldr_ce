@@ -131,7 +131,7 @@ export const pt: EnShape = {
     },
     connectors: {
       heading: 'Conectores',
-      description: 'Configure e teste conectores de saída (por ex. DHIS2). Os segredos são criptografados em repouso e nunca mais exibidos.',
+      description: 'Configure e teste conectores de saída para sistemas externos. Os segredos são criptografados em repouso e nunca mais exibidos.',
       add: 'Adicionar conector',
       empty: 'Nenhum conector ainda.',
       colName: 'Nome',
