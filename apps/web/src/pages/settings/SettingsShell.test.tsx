@@ -15,7 +15,6 @@ function renderAt(path: string) {
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/settings" element={<SettingsShell />}>
-          <Route path="dhis2" element={<div>dhis2 child</div>} />
           <Route path="marketplace" element={<div>marketplace child</div>} />
           <Route path="connectors" element={<div>connectors child</div>} />
         </Route>
@@ -25,17 +24,17 @@ function renderAt(path: string) {
 }
 
 describe('SettingsShell', () => {
-  it('renders the DHIS2 sub-nav link and the active child for a lab_admin', () => {
+  it('renders the Connectors sub-nav link and the active child for a lab_admin', () => {
     hasRole.mockImplementation((r: string) => r === 'lab_admin');
-    renderAt('/settings/dhis2');
-    expect(screen.getByRole('link', { name: 'DHIS2' })).toHaveAttribute('href', '/settings/dhis2');
-    expect(screen.getByText('dhis2 child')).toBeInTheDocument();
+    renderAt('/settings/connectors');
+    expect(screen.getByRole('link', { name: 'Connectors' })).toHaveAttribute('href', '/settings/connectors');
+    expect(screen.getByText('connectors child')).toBeInTheDocument();
   });
 
-  it('hides the DHIS2 sub-nav link for a user without the role', () => {
+  it('hides the sub-nav links for a user without the role', () => {
     hasRole.mockReturnValue(false);
-    renderAt('/settings/dhis2');
-    expect(screen.queryByRole('link', { name: 'DHIS2' })).not.toBeInTheDocument();
+    renderAt('/settings/connectors');
+    expect(screen.queryByRole('link', { name: 'Connectors' })).not.toBeInTheDocument();
   });
 
   it('renders the Marketplace sub-nav link for a lab_admin', () => {

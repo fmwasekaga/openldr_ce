@@ -6,14 +6,7 @@ import { AppShell } from './shell/AppShell';
 import { DashboardPage } from './dashboard/DashboardPage';
 import { Audit } from './pages/Audit';
 import { Users } from './pages/Users';
-import { Dhis2 } from '@/pages/Dhis2';
-import { Dhis2OrgUnits } from '@/pages/Dhis2OrgUnits';
-import { Dhis2Mappings } from '@/pages/Dhis2Mappings';
-import { Dhis2MappingEditor } from '@/pages/Dhis2MappingEditor';
-import { Dhis2Schedules } from '@/pages/Dhis2Schedules';
-import { Dhis2Pushes } from '@/pages/Dhis2Pushes';
 import { SettingsShell } from '@/pages/settings/SettingsShell';
-import { Dhis2Redirect } from '@/pages/settings/Dhis2Redirect';
 import { Marketplace } from '@/pages/settings/Marketplace';
 import { Connectors } from '@/pages/settings/Connectors';
 import { Forms } from './pages/Forms';
@@ -39,18 +32,10 @@ export function App() {
       <Route path="/terminology" element={<Terminology />} />
       <Route path="/users" element={<RequireRole role="lab_admin"><Users /></RequireRole>} />
       <Route path="/settings" element={<RequireRole role="lab_admin"><SettingsShell /></RequireRole>}>
-        <Route index element={<Navigate to="dhis2" replace />} />
-        <Route path="dhis2" element={<RequireRole role="lab_admin"><Dhis2 /></RequireRole>} />
-        <Route path="dhis2/orgunits" element={<RequireRole role="lab_admin"><Dhis2OrgUnits /></RequireRole>} />
-        <Route path="dhis2/mappings" element={<RequireRole role="lab_admin"><Dhis2Mappings /></RequireRole>} />
-        <Route path="dhis2/mappings/new" element={<RequireRole role="lab_admin"><Dhis2MappingEditor /></RequireRole>} />
-        <Route path="dhis2/mappings/:id" element={<RequireRole role="lab_admin"><Dhis2MappingEditor /></RequireRole>} />
-        <Route path="dhis2/schedules" element={<RequireRole role="lab_admin"><Dhis2Schedules /></RequireRole>} />
-        <Route path="dhis2/pushes" element={<RequireRole role="lab_admin"><Dhis2Pushes /></RequireRole>} />
+        <Route index element={<Navigate to="connectors" replace />} />
         <Route path="marketplace" element={<RequireRole role="lab_admin"><Marketplace /></RequireRole>} />
         <Route path="connectors" element={<RequireRole role="lab_admin"><Connectors /></RequireRole>} />
       </Route>
-      <Route path="/dhis2/*" element={<Dhis2Redirect />} />
       <Route path="/audit" element={<Audit />} />
       <Route path="/forms" element={<Forms />} />
       <Route path="/forms/new" element={<FormBuilderPage />} />
