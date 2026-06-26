@@ -62,13 +62,15 @@ Required only when `TARGET_STORE_ADAPTER=mssql`.
 | `MSSQL_ENCRYPT` | boolean string | `false` | Enables encrypted SQL Server connection. |
 | `MSSQL_TRUST_SERVER_CERT` | boolean string | `true` | Trusts self-signed SQL Server certificates. |
 
-## DHIS2
+## Connectors (DHIS2 & external targets)
+
+DHIS2 ships as a removable `dhis2-sink` plugin (Settings ▸ Marketplace). Its connection,
+mappings, org-unit links, and schedules are managed from the plugin's own screens —
+there are no DHIS2 env vars. Connector credentials are stored encrypted in the database.
 
 | Variable | Type | Default | Effect |
 |---|---:|---:|---|
-| `REPORTING_TARGET_ADAPTER` | `none\|dhis2` | `none` | Enables DHIS2 reporting-target wiring. Connection details live in a Connector (Settings ▸ Connectors), not env vars. |
 | `SECRETS_ENCRYPTION_KEY` | base64 (32 bytes) | required to use secret-bearing connectors | AES-256-GCM key for connector secrets at rest. Generate with `openssl rand -base64 32`. |
-| `DHIS2_SYNC_ENABLED` | boolean string | `true` | Enables scheduled/event-driven DHIS2 sync processing. |
 
 ## Dashboards
 

@@ -14,7 +14,6 @@ import { runUserList, runUsersList, runUserShow, runUserCreate, runUserSetRole, 
 import { runExport } from './export';
 import { runTargetStoreTest } from './target-store';
 import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, runTerminologyExpand, runTerminologyTranslate, runPublisherList, runPublisherCreate, runSystemList, runSystemCreate, runTermList, runValueSetList, runOntologyBuild, runOntologyRebuild, runOntologyList, runOntologyUnlink } from './terminology';
-import { runDhis2MapImport, runDhis2MapList, runDhis2OrgUnitImport, runDhis2OrgUnitList, runDhis2PullMetadata, runDhis2Validate, runDhis2Push, runDhis2Status, runDhis2ScheduleAdd, runDhis2ScheduleList, runDhis2ScheduleRemove } from './dhis2';
 import { runMarketVerify, runMarketInstall, runMarketList, runMarketRollback, runMarketEnable, runMarketDisable, runMarketRemove } from './market';
 import { runArtifactKeygen, runArtifactNew, runArtifactBuild, runArtifactPack, runArtifactSign, runArtifactTest, runArtifactPublish } from './artifact';
 
@@ -363,28 +362,6 @@ program
       process.exitCode = 1;
     }
   });
-
-const dhis2 = program.command('dhis2').description('DHIS2 aggregate reporting target');
-const dmap = dhis2.command('map').description('Manage DHIS2 aggregate mappings');
-dmap.command('import <file>').option('--json', 'emit JSON', false).action(async (file: string, o: { json: boolean }) => { process.exitCode = await runDhis2MapImport(file, o); });
-dmap.command('list').option('--json', 'emit JSON', false).action(async (o: { json: boolean }) => { process.exitCode = await runDhis2MapList(o); });
-const dou = dhis2.command('orgunit').description('Manage facility -> DHIS2 orgUnit mappings');
-dou.command('import <file>').option('--json', 'emit JSON', false).action(async (file: string, o: { json: boolean }) => { process.exitCode = await runDhis2OrgUnitImport(file, o); });
-dou.command('list').option('--json', 'emit JSON', false).action(async (o: { json: boolean }) => { process.exitCode = await runDhis2OrgUnitList(o); });
-dhis2.command('pull-metadata').option('--json', 'emit JSON', false).action(async (o: { json: boolean }) => { process.exitCode = await runDhis2PullMetadata(o); });
-dhis2.command('validate <mappingId>').option('--json', 'emit JSON', false).action(async (id: string, o: { json: boolean }) => { process.exitCode = await runDhis2Validate(id, o); });
-dhis2.command('push <mappingId>').requiredOption('--period <p>', 'DHIS2 period, e.g. 2026Q1').option('--dry-run', 'preview payload without sending', false).option('--json', 'emit JSON', false)
-  .action(async (id: string, o: { period: string; dryRun: boolean; json: boolean }) => { process.exitCode = await runDhis2Push(id, o); });
-dhis2.command('status').option('--json', 'emit JSON', false).action(async (o: { json: boolean }) => { process.exitCode = await runDhis2Status(o); });
-
-const dtracker = dhis2.command('tracker').description('DHIS2 tracker (event) push');
-dtracker.command('push <mappingId>').requiredOption('--period <p>', 'DHIS2 period, e.g. 2026Q1').option('--dry-run', 'preview events without sending', false).option('--json', 'emit JSON', false)
-  .action(async (id: string, o: { period: string; dryRun: boolean; json: boolean }) => { process.exitCode = await runDhis2Push(id, o); });
-const dsched = dhis2.command('schedule').description('Scheduled / event-driven push');
-dsched.command('add <mappingId>').requiredOption('--mode <m>', 'aggregate|tracker').requiredOption('--period-type <t>', 'monthly|quarterly|yearly').option('--event-driven', 'also push on ingest (tracker)', false).option('--json', 'emit JSON', false)
-  .action(async (id: string, o: { mode: string; periodType: string; eventDriven: boolean; json: boolean }) => { process.exitCode = await runDhis2ScheduleAdd(id, o); });
-dsched.command('list').option('--json', 'emit JSON', false).action(async (o: { json: boolean }) => { process.exitCode = await runDhis2ScheduleList(o); });
-dsched.command('remove <scheduleId>').option('--json', 'emit JSON', false).action(async (id: string, o: { json: boolean }) => { process.exitCode = await runDhis2ScheduleRemove(id, o); });
 
 const market = program.command('market').description('Plugin/artifact marketplace');
 market

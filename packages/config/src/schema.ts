@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 // Env vars arrive as strings, so `z.coerce.boolean()` (JS `Boolean(value)`) treats
 // any non-empty string — including 'false' and '0' — as `true`. Parse string booleans
-// explicitly instead. Mirrors the DHIS2_SYNC_ENABLED pattern below.
+// explicitly instead.
 const envBoolean = (defaultValue: boolean) =>
   z
     .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
@@ -28,7 +28,6 @@ export const ConfigSchema = z
     BLOB_ADAPTER: z.enum(['minio']).default('minio'),
     EVENTING_ADAPTER: z.enum(['pg']).default('pg'),
     TARGET_STORE_ADAPTER: z.enum(['pg', 'mssql']).default('pg'),
-    REPORTING_TARGET_ADAPTER: z.enum(['none', 'dhis2']).default('none'),
 
     // Internal operational Postgres (always pg) — used by the event bus, audit, users, plugins.
     INTERNAL_DATABASE_URL: z.string().url(),
@@ -43,12 +42,6 @@ export const ConfigSchema = z
     MSSQL_PASSWORD: z.string().min(1).optional(),
     MSSQL_ENCRYPT: envBoolean(false),
     MSSQL_TRUST_SERVER_CERT: envBoolean(true),
-
-    // DHIS2 reporting target. Connection lives in Connectors (no env vars needed).
-    DHIS2_SYNC_ENABLED: z
-      .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
-      .default(true)
-      .transform((v) => v === true || v === 'true' || v === '1'),
 
     // S3 / blob storage.
     S3_ENDPOINT: z.string().url(),

@@ -53,25 +53,6 @@ describe('config target-store engine', () => {
   });
 });
 
-describe('config reporting-target (dhis2)', () => {
-  it('defaults REPORTING_TARGET_ADAPTER to none', () => {
-    expect(loadConfig({ ...basePg } as never).REPORTING_TARGET_ADAPTER).toBe('none');
-  });
-  it('accepts a dhis2 adapter without connection env vars (connection lives in connectors)', () => {
-    const cfg = loadConfig({ ...basePg, REPORTING_TARGET_ADAPTER: 'dhis2' } as never);
-    expect(cfg.REPORTING_TARGET_ADAPTER).toBe('dhis2');
-  });
-});
-
-describe('config DHIS2_SYNC_ENABLED', () => {
-  it('defaults to true', () => {
-    expect(loadConfig({ ...basePg } as never).DHIS2_SYNC_ENABLED).toBe(true);
-  });
-  it('parses false', () => {
-    expect(loadConfig({ ...basePg, DHIS2_SYNC_ENABLED: 'false' } as never).DHIS2_SYNC_ENABLED).toBe(false);
-  });
-});
-
 describe('config S3_FORCE_PATH_STYLE', () => {
   it('defaults to true', () => {
     expect(loadConfig({ ...basePg } as never).S3_FORCE_PATH_STYLE).toBe(true);

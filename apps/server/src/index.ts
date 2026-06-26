@@ -1,5 +1,5 @@
 import { loadConfig } from '@openldr/config';
-import { createAppContext, createIngestContext, createDhis2Context, createDbContext, seedDatabase } from '@openldr/bootstrap';
+import { createAppContext, createIngestContext, createDbContext, seedDatabase } from '@openldr/bootstrap';
 import { createLogger } from '@openldr/core';
 import { buildApp } from './app';
 
@@ -43,24 +43,7 @@ async function main(): Promise<void> {
 
   const ingest = await createIngestContext(cfg);
 
-  // Build the DHIS2 context whenever DHIS2 is the reporting target so the admin
-  // status + metadata routes work even with sync disabled. Sync wiring stays gated below.
-  let dhis2: Awaited<ReturnType<typeof createDhis2Context>> | null = null;
-  if (cfg.REPORTING_TARGET_ADAPTER === 'dhis2') {
-    dhis2 = await createDhis2Context(cfg, { loadSink: (id, version) => ctx.plugins.loadSink(id, version) });
-    // NOTE: the workflow dhis2-push service is now wired in createAppContext (bootstrap) from
-    // the dhis2-sink plugin datastore + orchestration — no longer from this host dhis2-context.
-  }
-
-  const app = buildApp(ctx, dhis2, ingest.eventing);
-
-  if (dhis2 && cfg.DHIS2_SYNC_ENABLED) {
-    await dhis2.registerSync(ingest.eventing, {
-      runReport: (id, p) => ctx.reporting.run(id, p ?? {}).then((r) => ({ rows: r.rows })),
-      runEventSource: (id, w) => ctx.reporting.runEventSource(id, w),
-    });
-    await dhis2.reconcileSchedules(ingest.eventing);
-  }
+  const app = buildApp(ctx);
 
   await ctx.reportScheduler.registerRunner(ingest.eventing);
   // Arming existing schedules is best-effort: a pending migration or transient DB
@@ -72,10 +55,9 @@ async function main(): Promise<void> {
   }
 
   // Plugin schedules (e.g. the DHIS2 webview plugin) fire headlessly through the host
-  // runner. No-double-fire guard: plugin schedules live in `plugin_data`, which is empty
-  // until migration 036 runs at the Phase-4 cutover (which ALSO deletes the host DHIS2
-  // scheduler above). During Phases 1-3 reconcile arms nothing, so it cannot double-fire
-  // with the still-present host `dhis2.registerSync`/`reconcileSchedules`.
+  // runner. The legacy host DHIS2 scheduler has been removed (SP-A2 Task 14); plugin
+  // schedules live in `plugin_data` (migration 036 copied the host rows over), so this
+  // runner is now the sole driver of DHIS2 (and any other plugin) schedules.
   await ctx.pluginScheduleRunner.registerRunner(ingest.eventing);
   try {
     await ctx.pluginScheduleRunner.reconcile(ingest.eventing);
@@ -105,7 +87,6 @@ async function main(): Promise<void> {
     await worker.stop();
     await app.close();
     await ingest.close();
-    if (dhis2) await dhis2.close();
     await ctx.close();
     process.exit(0);
   };
