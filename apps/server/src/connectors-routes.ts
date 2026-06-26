@@ -24,6 +24,27 @@ const updateInput = z.object({
   enabled: z.boolean().optional(),
 });
 
+/** Validate a connector baseUrl, IF PRESENT. Throws a clear error when it is unparseable,
+ *  uses a non-http(s) scheme, or carries userinfo (credentials must not live in the URL).
+ *  Private/loopback hosts and arbitrary ports are intentionally ALLOWED — on-prem/localhost
+ *  DHIS2 servers are legitimate connector targets, so this is input-validation correctness,
+ *  not SSRF IP-range blocking. Exported for tests. */
+export function validateConnectorBaseUrl(baseUrl: string): URL {
+  let url: URL;
+  try {
+    url = new URL(baseUrl);
+  } catch {
+    throw new Error('invalid connector baseUrl');
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    throw new Error('invalid connector baseUrl: scheme must be http or https');
+  }
+  if (url.username !== '' || url.password !== '') {
+    throw new Error('invalid connector baseUrl: must not contain userinfo (credentials)');
+  }
+  return url;
+}
+
 /** Derive the egress host to pin from the connection config's baseUrl (an explicit
  *  allowedHost wins). Returns null when neither yields a host (egress stays default-deny). */
 function hostFor(config: Record<string, string> | undefined, explicit: string | null | undefined): string | null {
@@ -66,6 +87,10 @@ export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any
     const parsed = createInput.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: 'invalid connector input' }; }
     const { name, pluginId, config, allowedHost } = parsed.data;
+    if (config?.baseUrl !== undefined) {
+      try { validateConnectorBaseUrl(config.baseUrl); }
+      catch (e) { reply.code(400); return { error: redact(e instanceof Error ? e.message : 'invalid connector baseUrl') }; }
+    }
     const id = randomUUID();
     try {
       await connectors.create({ id, name, pluginId, kind: 'sink', config, allowedHost: hostFor(config, allowedHost) }, key());
@@ -82,6 +107,10 @@ export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any
     if (!parsed.success) { reply.code(400); return { error: 'invalid connector patch' }; }
     if (!(await connectors.get(id))) { reply.code(404); return { error: 'connector not found' }; }
     const patch = parsed.data;
+    if (patch.config?.baseUrl !== undefined) {
+      try { validateConnectorBaseUrl(patch.config.baseUrl); }
+      catch (e) { reply.code(400); return { error: redact(e instanceof Error ? e.message : 'invalid connector baseUrl') }; }
+    }
     // Re-derive the pinned host when the config (baseUrl) changes, unless explicitly given.
     const allowedHost = patch.config !== undefined ? hostFor(patch.config, patch.allowedHost) : patch.allowedHost;
     try {
