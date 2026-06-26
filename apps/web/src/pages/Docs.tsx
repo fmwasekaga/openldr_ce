@@ -172,9 +172,9 @@ export function Docs() {
             >
               {query.trim() ? (
                 <>
-                  <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60">
+                  <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60">
                     Search results
-                  </p>
+                  </div>
                   {navSections.map((navSection) => (
                     <GuideLink
                       key={navSection.slug}
@@ -194,9 +194,9 @@ export function Docs() {
                       key={group.id}
                       className={`pb-1${idx > 0 ? ' mt-1 border-t border-border pt-2' : ''}`}
                     >
-                      <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60">
+                      <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60">
                         {group.title}
-                      </p>
+                      </div>
                       {items.map((navSection) => (
                         <GuideLink
                           key={navSection.slug}
