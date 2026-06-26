@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MoreHorizontal } from 'lucide-react';
-import { getAvailableArtifact, type AvailableArtifactDetail } from '@/api';
+import { getAvailableArtifact, getInstalledArtifact, type AvailableArtifactDetail, type InstalledArtifactDetail } from '@/api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -31,7 +31,7 @@ interface PackageDetailProps {
 
 export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRollback, onRemove, onDetach, onOpenForm, canPublish, onPublish }: PackageDetailProps) {
   const { t } = useTranslation();
-  const [detail, setDetail] = useState<AvailableArtifactDetail | null>(null);
+  const [detail, setDetail] = useState<AvailableArtifactDetail | InstalledArtifactDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedRef, setSelectedRef] = useState(entry.ref);
 
@@ -42,12 +42,20 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
     let active = true;
     setDetail(null);
     setError(null);
-    if (!selectedRef) return;
-    void getAvailableArtifact(selectedRef)
-      .then((d) => { if (active) setDetail(d); })
-      .catch((e) => { if (active) setError(e instanceof Error ? e.message : String(e)); });
+    if (selectedRef) {
+      // Browse (registry) item: fetch the signed bundle detail.
+      void getAvailableArtifact(selectedRef)
+        .then((d) => { if (active) setDetail(d); })
+        .catch((e) => { if (active) setError(e instanceof Error ? e.message : String(e)); });
+    } else if (entry.installed && entry.type === 'plugin') {
+      // Installed plugin with no registry ref: read the rich detail from its stored
+      // manifest on demand. Failure degrades silently to the entry-level fields.
+      void getInstalledArtifact(entry.id)
+        .then((d) => { if (active) setDetail(d); })
+        .catch(() => { /* keep entry-level fallback */ });
+    }
     return () => { active = false; };
-  }, [selectedRef]);
+  }, [selectedRef, entry.id, entry.installed, entry.type]);
 
   const capabilities = (detail?.capabilities ?? entry.capabilities) as unknown[];
   const publisher = detail?.publisher ?? entry.publisher;

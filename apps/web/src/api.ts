@@ -788,6 +788,27 @@ export async function refreshRegistry(): Promise<void> {
 export const getAvailableArtifact = (ref: string): Promise<AvailableArtifactDetail> =>
   apiGet(`/api/marketplace/available/${encodeURIComponent(ref)}`, 'get available artifact');
 
+/** Rich detail for an installed plugin (readme/payload/compatibility), read from its
+ *  stored manifest — the installed analogue of getAvailableArtifact. */
+export interface InstalledArtifactDetail {
+  id: string;
+  version: string;
+  type: string;
+  publisher: { id: string; name: string } | null;
+  description?: string | null;
+  readme?: string;
+  license?: string | null;
+  payload?: ArtifactPayloadMeta | null;
+  capabilities: unknown[];
+  compatible: boolean;
+  ceVersion: string;
+  compatibility?: { ceVersion: string };
+  valid?: boolean;
+}
+
+export const getInstalledArtifact = (id: string): Promise<InstalledArtifactDetail> =>
+  apiGet(`/api/marketplace/installed/${encodeURIComponent(id)}`, 'get installed artifact');
+
 export const installArtifact = (ref: string, acknowledgedCapabilities: unknown[]): Promise<{ id: string; version: string }> =>
   authFetch('/api/marketplace/install', jbody({ ref, acknowledgedCapabilities }, 'POST')).then((r) => okJson<{ id: string; version: string }>(r, 'install artifact'));
 

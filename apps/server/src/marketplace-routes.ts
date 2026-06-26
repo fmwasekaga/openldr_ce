@@ -144,6 +144,30 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
     }
   });
 
+  // On-demand rich detail for an INSTALLED plugin, read from its stored manifest. Mirrors
+  // the available/:ref detail (readme, payload, compatibility) so the Installed detail view
+  // reaches parity with Browse without bloating the installed LIST with every readme.
+  app.get('/api/marketplace/installed/:id', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    const row = (await ctx.plugins.list()).find((r) => r.id === id);
+    if (!row) { reply.code(404); return { error: 'plugin not installed' }; }
+    const m = row.manifest as Record<string, unknown>;
+    const g = readGrant(row.manifest);
+    const compatibility = (m.compatibility as { ceVersion: string } | undefined) ?? { ceVersion: '*' };
+    return {
+      id: row.id, version: row.version, type: (m.type as string) ?? 'plugin',
+      description: (m.description as string) ?? null,
+      readme: (m.readme as string) ?? undefined,
+      license: (m.license as string) ?? null,
+      publisher: (m.publisher as unknown) ?? null,
+      capabilities: g.legacy ? [] : g.capabilities,
+      payload: (m.payload as unknown) ?? null,
+      compatibility,
+      compatible: isCompatible(compatibility.ceVersion, CE_VERSION),
+      ceVersion: CE_VERSION,
+    };
+  });
+
   app.post('/api/marketplace/install', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
     const body = (req.body ?? {}) as { ref?: unknown; acknowledgedCapabilities?: unknown };
     const parsed = unpackRef(typeof body.ref === 'string' ? body.ref : '');
