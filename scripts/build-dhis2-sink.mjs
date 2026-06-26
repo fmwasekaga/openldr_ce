@@ -65,7 +65,9 @@ const manifest = {
     { kind: 'host:fhir' },
   ],
   // Plugin-contributed UI: the host renders ui.html in a sandboxed iframe and contributes a nav entry.
-  ui: { entry: 'ui.html', sha256: uiSha, nav: { label: 'DHIS2', icon: 'share-2', section: 'apps' }, uiSdkVersion: '1' },
+  // requiredRoles gates the whole UI + every broker op to lab_admin (restores the native
+  // DHIS2 routes' authorization boundary now that the screens live in this plugin).
+  ui: { entry: 'ui.html', sha256: uiSha, nav: { label: 'DHIS2', icon: 'share-2', section: 'apps' }, uiSdkVersion: '1', requiredRoles: ['lab_admin'] },
 };
 
 // Ship the operator guide as the signed readme; inline ./img/*.png as data: URIs so it is self-contained.

@@ -94,6 +94,10 @@ export const ConfigSchema = z
     // Global egress kill-switch for plugin host services. When false the broker refuses any
     // net-egress-bearing operation regardless of a plugin's grant (consumed by SP-A2's push ops).
     PLUGIN_EGRESS_ENABLED: envBoolean(true),
+    // Max serialized byte size of a plugin document persisted/forwarded through the broker
+    // (storage.put doc, invoke/push/validate payloads). Generous default (8 MB) so the DHIS2
+    // metadata-cache doc (full metadata snapshot) still writes; bounds a memory-DoS otherwise.
+    PLUGIN_DATA_MAX_DOC_BYTES: z.coerce.number().int().positive().default(8_388_608),
 
     // Marketplace artifact security.
     MARKETPLACE_DEV_ALLOW_UNSIGNED: envBoolean(false),

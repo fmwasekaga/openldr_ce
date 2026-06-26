@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createPluginBroker } from './plugin-broker';
+import { createPluginBroker, buildBrokerOpSchema } from './plugin-broker';
 
 function memData() {
   const m = new Map<string, unknown>();
@@ -29,9 +29,13 @@ function broker(opts: {
   connectorValidate?: any;
   facilities?: any;
   schedules?: any;
+  requiredRoles?: string[];
+  maxDocBytes?: number;
 }) {
   const data = memData();
-  const row = { id: 'p1', version: '1.0.0', enabled: true, manifest: opts.caps === undefined ? {} : { capabilities: opts.caps } };
+  const manifest: any = opts.caps === undefined ? {} : { capabilities: opts.caps };
+  if (opts.requiredRoles) manifest.payload = { ui: { requiredRoles: opts.requiredRoles } };
+  const row = { id: 'p1', version: '1.0.0', enabled: true, manifest };
   const b = createPluginBroker({
     plugins: { list: async () => [row], loadSink: opts.loadSink ?? (async () => undefined) } as any,
     pluginData: data.store as any,
@@ -43,6 +47,7 @@ function broker(opts: {
     connectorValidate: opts.connectorValidate,
     facilities: opts.facilities,
     schedules: opts.schedules,
+    maxDocBytes: opts.maxDocBytes,
     policy: () => ({ uiEnabled: opts.uiEnabled ?? true, egressEnabled: true }),
   });
   return { b, data };
@@ -257,5 +262,82 @@ describe('plugin broker', () => {
     expect(r.ok).toBe(false);
     expect((r as any).error).not.toMatch(/s3cr3t/);
     expect((r as any).error).toMatch(/connectors\.test failed/);
+  });
+
+  // ── SEC-03: plugin-level required-roles gate (applies to ALL ops incl. storage.*/invoke) ──
+  describe('plugin required-roles gate (SEC-03)', () => {
+    const tech = { id: 'u-tech', roles: ['lab_technician'] };
+    const admin = { id: 'u-admin', roles: ['lab_admin'] };
+
+    it('DENIES storage.list/get/put/invoke for a caller lacking the plugin required role', async () => {
+      const { b } = broker({ caps: [], requiredRoles: ['lab_admin'], loadSink: async () => ({ invoke: async () => ({}) }) });
+      for (const op of [
+        { kind: 'storage.list', collection: 'c' },
+        { kind: 'storage.get', collection: 'c', key: 'k' },
+        { kind: 'storage.put', collection: 'c', key: 'k', doc: { n: 1 } },
+        { kind: 'invoke', entrypoint: 'e', input: {} },
+      ] as const) {
+        const r = await b.handle('p1', tech, op);
+        expect(r.ok).toBe(false);
+        expect((r as any).error).toMatch(/requires one of roles: lab_admin/);
+      }
+    });
+
+    it('ALLOWS the same ops for a caller holding the plugin required role', async () => {
+      const { b } = broker({ caps: [], requiredRoles: ['lab_admin'], loadSink: async () => ({ invoke: async (_e: string, input: unknown) => ({ echoed: input }) }) });
+      expect((await b.handle('p1', admin, { kind: 'storage.put', collection: 'c', key: 'k', doc: { n: 1 } })).ok).toBe(true);
+      expect((await b.handle('p1', admin, { kind: 'storage.get', collection: 'c', key: 'k' })).ok).toBe(true);
+      expect((await b.handle('p1', admin, { kind: 'storage.list', collection: 'c' })).ok).toBe(true);
+      expect((await b.handle('p1', admin, { kind: 'invoke', entrypoint: 'e', input: { hi: 1 } })).ok).toBe(true);
+    });
+
+    it('a plugin with NO requiredRoles leaves storage.* open to any authed caller (unchanged)', async () => {
+      const { b } = broker({ caps: [] });
+      expect((await b.handle('p1', tech, { kind: 'storage.put', collection: 'c', key: 'k', doc: {} })).ok).toBe(true);
+      expect((await b.handle('p1', tech, { kind: 'storage.get', collection: 'c', key: 'k' })).ok).toBe(true);
+    });
+  });
+
+  // ── SEC-12: op schema + size bounds ──
+  describe('broker op schema + bounds (SEC-12)', () => {
+    it('returns a structured invalid-operation error for an unknown kind', async () => {
+      const { b } = broker({ caps: [] });
+      const r = await b.handle('p1', principal, { kind: 'storage.nuke' } as any);
+      expect(r.ok).toBe(false);
+      expect((r as any).error).toMatch(/invalid operation/);
+    });
+
+    it('rejects an over-long collection / key', async () => {
+      const { b } = broker({ caps: [] });
+      const long = 'x'.repeat(300);
+      expect((await b.handle('p1', principal, { kind: 'storage.get', collection: long, key: 'k' } as any)).ok).toBe(false);
+      expect((await b.handle('p1', principal, { kind: 'storage.get', collection: 'c', key: long } as any)).ok).toBe(false);
+    });
+
+    it('rejects a storage.put doc just over the configured byte cap', async () => {
+      const cap = 1024;
+      const { b } = broker({ caps: [], maxDocBytes: cap });
+      const big = { blob: 'a'.repeat(cap + 100) };
+      const r = await b.handle('p1', principal, { kind: 'storage.put', collection: 'c', key: 'k', doc: big });
+      expect(r.ok).toBe(false);
+      expect((r as any).error).toMatch(/invalid operation/);
+    });
+
+    it('accepts a doc within the cap', async () => {
+      const { b } = broker({ caps: [], maxDocBytes: 1024 });
+      expect((await b.handle('p1', principal, { kind: 'storage.put', collection: 'c', key: 'k', doc: { n: 1 } })).ok).toBe(true);
+    });
+
+    it('rejects an out-of-range storage.list limit', async () => {
+      const { b } = broker({ caps: [] });
+      expect((await b.handle('p1', principal, { kind: 'storage.list', collection: 'c', limit: 5000 } as any)).ok).toBe(false);
+      expect((await b.handle('p1', principal, { kind: 'storage.list', collection: 'c', limit: 0 } as any)).ok).toBe(false);
+    });
+
+    it('buildBrokerOpSchema accepts a valid op and rejects a malformed one', () => {
+      const schema = buildBrokerOpSchema(1024);
+      expect(schema.safeParse({ kind: 'storage.get', collection: 'c', key: 'k' }).success).toBe(true);
+      expect(schema.safeParse({ kind: 'bogus' }).success).toBe(false);
+    });
   });
 });

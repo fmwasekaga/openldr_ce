@@ -21,6 +21,10 @@ export const uiContributionSchema = z.object({
   }),
   uiSdkVersion: z.literal('1').default('1'), // add literals here when a new SDK ships; old signed bundles stay valid at their declared version
   declarative: z.unknown().optional(), // JSON-Schema for the declarative tier; narrowed once the renderer consumes it
+  // Authorization boundary: caller must hold ONE of these roles to see this plugin's nav,
+  // fetch its UI asset, or invoke ANY broker op (incl. storage.*/invoke). Empty/absent ⇒ any
+  // authenticated user (back-compat). The broker enforces this independently of the per-op gate.
+  requiredRoles: z.array(z.string().min(1)).optional(),
 }).refine((u) => (u.entry === undefined) === (u.sha256 === undefined), {
   message: 'ui.entry and ui.sha256 must be provided together (webview tier) or both omitted (declarative tier)',
 });

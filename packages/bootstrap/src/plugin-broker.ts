@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { readGrant, type Capability } from '@openldr/marketplace';
 import type { PluginDataStore } from '@openldr/db';
 import type { PluginPolicy } from './policy';
@@ -32,6 +33,53 @@ export type BrokerOp =
   | { kind: 'schedule.remove'; id: string };
 
 export type BrokerResult = { ok: true; data: unknown } | { ok: false; error: string };
+
+/** Default cap on the JSON byte size of a persisted/forwarded plugin document. Generous —
+ *  the dhis2-sink metadataCache:latest doc holds a full DHIS2 metadata snapshot (1000+ data
+ *  elements, a few MB). Overridable via PLUGIN_DATA_MAX_DOC_BYTES. */
+export const DEFAULT_MAX_DOC_BYTES = 8 * 1024 * 1024;
+
+const STR = z.string().min(1).max(256);
+const ID = z.string().min(1).max(256);
+
+/** Build the discriminated-union op schema. `maxDocBytes` bounds any persisted/forwarded
+ *  arbitrary-object payload (doc/mapping/schedule/input) by its serialized byte size. */
+export function buildBrokerOpSchema(maxDocBytes: number) {
+  const docBound = (label: string) =>
+    z.unknown().superRefine((v, ctx) => {
+      let bytes = 0;
+      try {
+        bytes = Buffer.byteLength(JSON.stringify(v ?? null));
+      } catch {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${label} is not serializable` });
+        return;
+      }
+      if (bytes > maxDocBytes) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${label} exceeds ${maxDocBytes} bytes (${bytes})` });
+      }
+    });
+
+  return z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('storage.get'), collection: STR, key: STR }),
+    z.object({ kind: z.literal('storage.put'), collection: STR, key: STR, doc: docBound('doc') }),
+    z.object({ kind: z.literal('storage.delete'), collection: STR, key: STR }),
+    z.object({ kind: z.literal('storage.list'), collection: STR, where: z.object({ field: STR, eq: z.unknown() }).optional(), limit: z.number().int().min(1).max(1000).optional() }),
+    z.object({ kind: z.literal('invoke'), entrypoint: STR, input: docBound('input') }),
+    z.object({ kind: z.literal('reports.list') }),
+    z.object({ kind: z.literal('reports.columns'), id: ID }),
+    z.object({ kind: z.literal('reports.run'), id: ID, params: z.record(z.unknown()).optional() }),
+    z.object({ kind: z.literal('reports.eventSources') }),
+    z.object({ kind: z.literal('connectors.list') }),
+    z.object({ kind: z.literal('connectors.test'), id: ID }),
+    z.object({ kind: z.literal('connectors.metadata'), id: ID }),
+    z.object({ kind: z.literal('connectors.push'), connectorId: ID, mapping: docBound('mapping'), orgUnitMap: z.record(z.string().max(256)).optional(), period: STR, dryRun: z.boolean() }),
+    z.object({ kind: z.literal('connectors.validate'), connectorId: ID, mapping: docBound('mapping') }),
+    z.object({ kind: z.literal('fhir.facilities') }),
+    z.object({ kind: z.literal('schedule.register'), schedule: docBound('schedule') }),
+    z.object({ kind: z.literal('schedule.list') }),
+    z.object({ kind: z.literal('schedule.remove'), id: ID }),
+  ]);
+}
 
 /** Maps an op to the capability it requires (undefined = private/no capability). */
 function gateFor(op: BrokerOp): string | undefined {
@@ -81,12 +129,14 @@ export interface PluginBrokerDeps {
   /** Plugin-scoped schedule registry (wired in Task 4; undefined until then). */
   schedules?: { register(pluginId: string, schedule: unknown): Promise<unknown>; list(pluginId: string): Promise<unknown>; remove(pluginId: string, id: string): Promise<unknown> };
   policy: () => PluginPolicy;
+  /** Max serialized byte size of a persisted/forwarded plugin doc. Defaults to DEFAULT_MAX_DOC_BYTES. */
+  maxDocBytes?: number;
   /** Optional: server-side sink for redacted host-op error detail (never sent to the plugin). */
   logger?: { warn(obj: unknown, msg: string): void };
 }
 
 export interface PluginBroker {
-  handle(pluginId: string, principal: BrokerPrincipal, op: BrokerOp): Promise<BrokerResult>;
+  handle(pluginId: string, principal: BrokerPrincipal, op: unknown): Promise<BrokerResult>;
 }
 
 export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
@@ -94,13 +144,31 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
     return caps.some((c) => c.kind === gate);
   }
 
+  const brokerOpSchema = buildBrokerOpSchema(deps.maxDocBytes ?? DEFAULT_MAX_DOC_BYTES);
+
   return {
-    async handle(pluginId, principal, op) {
+    async handle(pluginId, principal, rawOp) {
+      // Parse FIRST so a malformed op can't probe installed-plugin state or dispatch.
+      const parsed = brokerOpSchema.safeParse(rawOp);
+      if (!parsed.success) {
+        const msg = parsed.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ').slice(0, 300);
+        return { ok: false, error: `invalid operation: ${msg}` };
+      }
+      const op: BrokerOp = parsed.data as BrokerOp;
       try {
         // 1. Plugin must be installed + enabled.
         const rows = await deps.plugins.list();
         const row = rows.find((r) => r.id === pluginId && r.enabled);
         if (!row) return { ok: false, error: `plugin ${pluginId} is not installed or disabled` };
+
+        // 1b. Plugin-level required-roles gate — applies to EVERY op (incl. storage.*/invoke),
+        // independent of and in addition to the per-op rolesFor() gate below. This is the
+        // authorization boundary the native DHIS2 routes had: a plugin declaring
+        // ui.requiredRoles:['lab_admin'] is fully off-limits to callers lacking those roles.
+        const requiredRoles = (row.manifest as { payload?: { ui?: { requiredRoles?: string[] } } }).payload?.ui?.requiredRoles;
+        if (requiredRoles?.length && !requiredRoles.some((r) => principal.roles.includes(r))) {
+          return { ok: false, error: `plugin ${pluginId} requires one of roles: ${requiredRoles.join(', ')}` };
+        }
 
         // 2. Global policy (kill-switches) — checked on EVERY call.
         const gate = gateFor(op);

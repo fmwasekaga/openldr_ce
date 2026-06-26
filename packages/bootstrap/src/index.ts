@@ -440,6 +440,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       };
     },
     logger,
+    maxDocBytes: cfg.PLUGIN_DATA_MAX_DOC_BYTES,
     policy: () => policyFromConfig(cfg),
   });
 

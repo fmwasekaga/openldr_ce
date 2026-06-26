@@ -14,6 +14,7 @@ interface UiPluginRow {
         nav: { label: string; icon: string; section: string };
         uiSdkVersion: string;
         declarative?: unknown;
+        requiredRoles?: string[];
       };
     };
   };
@@ -29,9 +30,16 @@ export function registerPluginUiRoutes(app: FastifyInstance<any, any, any, any>,
       return reply.send({ error: 'authentication required' });
     }
     if (!ctx.cfg.PLUGIN_UI_ENABLED) return [];
+    const userRoles = req.user.roles;
     const rows = (await ctx.plugins.list()) as unknown as UiPluginRow[];
     return rows
       .filter((r) => r.enabled && r.manifest.payload?.kind === 'plugin' && r.manifest.payload.ui)
+      // Authorization boundary: hide a plugin's nav entry from callers lacking its required roles
+      // (so e.g. a lab_technician never sees the lab_admin-gated DHIS2 entry).
+      .filter((r) => {
+        const need = r.manifest.payload!.ui!.requiredRoles;
+        return !(need?.length && !need.some((role) => userRoles.includes(role)));
+      })
       .map((r) => {
         const ui = r.manifest.payload!.ui!;
         return {
@@ -52,6 +60,15 @@ export function registerPluginUiRoutes(app: FastifyInstance<any, any, any, any>,
     if (!ctx.cfg.PLUGIN_UI_ENABLED) {
       reply.code(404);
       return reply.send({ error: 'plugin UI disabled' });
+    }
+    // Authorization boundary: don't serve the UI html to a caller lacking the plugin's
+    // required roles. 404 (not 403) so the asset's existence isn't disclosed.
+    const rows = (await ctx.plugins.list()) as unknown as UiPluginRow[];
+    const row = rows.find((r) => r.id === req.params.id);
+    const need = row?.manifest.payload?.ui?.requiredRoles;
+    if (need?.length && !need.some((role) => req.user!.roles.includes(role))) {
+      reply.code(404);
+      return reply.send({ error: 'no ui asset' });
     }
     const bytes = await ctx.plugins.loadUi(req.params.id);
     if (!bytes) {
@@ -75,11 +92,13 @@ export function registerPluginUiRoutes(app: FastifyInstance<any, any, any, any>,
       reply.code(401);
       return reply.send({ error: 'authentication required' });
     }
-    const op = (req.body as { op?: unknown } | undefined)?.op as never;
-    if (!op || typeof op !== 'object') {
+    const op = (req.body as { op?: unknown } | undefined)?.op;
+    if (op === undefined || op === null) {
       reply.code(400);
       return reply.send({ ok: false, error: 'missing op' });
     }
+    // The broker parses + validates the op itself (zod schema + size bounds), returning a
+    // structured invalid-operation error for anything malformed.
     const principal = { id: req.user.id, roles: req.user.roles };
     return ctx.pluginBroker.handle(req.params.id, principal, op);
   });
