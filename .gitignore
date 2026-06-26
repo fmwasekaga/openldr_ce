@@ -16,4 +16,5 @@ tmp-export*/
 playwright-report/
 test-results/
 e2e/artifacts/
+.docs-marketplace/
 .dhis2-seed/
