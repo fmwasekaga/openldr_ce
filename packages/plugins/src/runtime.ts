@@ -348,13 +348,24 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
     async loadUi(id, version) {
       const row = await deps.store.get(id, version);
       if (!row) return undefined;
-      const m = row.manifest as { payload?: { ui?: { entry?: string } } };
+      const m = row.manifest as { payload?: { ui?: { entry?: string; sha256?: string } } };
       if (!m.payload?.ui?.entry) return undefined;
+      let bytes: Uint8Array;
       try {
-        return await deps.blob.get(uiKey(row.id, row.version));
+        bytes = await deps.blob.get(uiKey(row.id, row.version));
       } catch {
         return undefined;
       }
+      // SEC-11: re-verify the stored UI bytes against the signed manifest sha. Fail closed on
+      // tamper-at-rest (or a missing sha, which shouldn't happen for a webview plugin) so the
+      // asset route 404s rather than serving altered HTML into the plugin iframe.
+      const expected = m.payload.ui.sha256;
+      const actual = sha256Hex(bytes);
+      if (!expected || actual !== expected) {
+        deps.logger.warn({ id: row.id, version: row.version, expected, actual }, 'plugin ui sha mismatch on load — refusing to serve');
+        return undefined;
+      }
+      return bytes;
     },
   };
 }

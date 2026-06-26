@@ -4,7 +4,7 @@ import { authFetch, pluginUiAssetUrl, pluginBrokerCall } from '@/api';
 import { wireHostPort, type HostPortLike } from './host-bridge';
 
 const CSP =
-  "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: https:; font-src data:; connect-src 'none'";
+  "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'";
 
 /** Wrap the plugin's body HTML in a host-controlled document: strict CSP + the injected SDK
  *  bootstrap as the FIRST script, then the plugin content. No same-origin, no network. */
