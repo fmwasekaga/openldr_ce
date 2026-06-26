@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -51,10 +51,10 @@ function GuideLink({
     <Link
       to={`/docs/${section.slug}`}
       aria-current={section.slug === activeSlug ? 'page' : undefined}
-      className={`border-l-2 px-3 py-2 text-sm no-underline transition-colors ${
+      className={`block border-l-2 px-3 py-1.5 text-sm no-underline transition-colors ${
         section.slug === activeSlug
-          ? 'border-primary bg-accent text-primary'
-          : 'border-transparent text-muted-foreground hover:bg-accent hover:text-foreground'
+          ? 'border-primary bg-accent font-medium text-primary'
+          : 'border-transparent text-foreground/80 hover:bg-accent hover:text-foreground'
       }`}
     >
       <span>{section.title}</span>
@@ -77,6 +77,7 @@ export function Docs() {
   const [collapsed, setCollapsed] = useState(false);
   const [lightbox, setLightbox] = useState<LightboxImage | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   const sections = useMemo(() => list(locale), [locale]);
   const index = useMemo(() => buildIndex(sections), [sections]);
@@ -89,6 +90,10 @@ export function Docs() {
   const defaultSlug = sections[0]?.slug ?? 'start-here';
   const activeSlug = slug ?? defaultSlug;
   const section = resolve(locale, activeSlug);
+  // Reset the reading pane to the top whenever the active guide changes.
+  useEffect(() => {
+    if (contentRef.current) contentRef.current.scrollTop = 0;
+  }, [activeSlug]);
   const navSections = useMemo(() => {
     if (!query.trim()) return sections;
     return hits
@@ -167,7 +172,7 @@ export function Docs() {
             >
               {query.trim() ? (
                 <>
-                  <p className="px-3 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <p className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
                     Search results
                   </p>
                   {navSections.map((navSection) => (
@@ -185,8 +190,8 @@ export function Docs() {
                   );
                   if (groupSections.length === 0) return null;
                   return (
-                    <div key={group.id} className="py-1">
-                      <p className="px-3 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <div key={group.id} className="pb-1">
+                      <p className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
                         {group.title}
                       </p>
                       {groupSections.map((navSection) => (
@@ -244,7 +249,7 @@ export function Docs() {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-          <div className="flex-1 overflow-y-auto p-6">
+          <div ref={contentRef} className="flex-1 overflow-y-auto p-6">
             {!section ? (
               <p className="text-sm text-muted-foreground">
                 Documentation page not found.{' '}
