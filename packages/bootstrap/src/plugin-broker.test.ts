@@ -20,6 +20,7 @@ const defaultReporting = () => ({ list: () => [], columns: async () => [], run: 
 function broker(opts: {
   caps: unknown[] | undefined;
   uiEnabled?: boolean;
+  egressEnabled?: boolean;
   reporting?: any;
   connectors?: any;
   loadSink?: any;
@@ -48,7 +49,7 @@ function broker(opts: {
     facilities: opts.facilities,
     schedules: opts.schedules,
     maxDocBytes: opts.maxDocBytes,
-    policy: () => ({ uiEnabled: opts.uiEnabled ?? true, egressEnabled: true }),
+    policy: () => ({ uiEnabled: opts.uiEnabled ?? true, egressEnabled: opts.egressEnabled ?? true }),
   });
   return { b, data };
 }
@@ -295,6 +296,63 @@ describe('plugin broker', () => {
       const { b } = broker({ caps: [] });
       expect((await b.handle('p1', tech, { kind: 'storage.put', collection: 'c', key: 'k', doc: {} })).ok).toBe(true);
       expect((await b.handle('p1', tech, { kind: 'storage.get', collection: 'c', key: 'k' })).ok).toBe(true);
+    });
+  });
+
+  // ── SEC-04: egress kill-switch covers connector ops (gated to host:connectors, not net-egress) ──
+  describe('egress kill-switch (SEC-04)', () => {
+    const admin = { id: 'u-admin', roles: ['lab_admin'] };
+
+    it('DENIES every egressing connector op with the kill-switch error and does NOT reach the dep', async () => {
+      const calls: string[] = [];
+      const { b } = broker({
+        caps: [{ kind: 'host:connectors' }],
+        egressEnabled: false,
+        testConnector: async () => { calls.push('test'); return {}; },
+        connectorMetadata: async () => { calls.push('metadata'); return {}; },
+        connectorPush: async () => { calls.push('push'); return {}; },
+        connectorValidate: async () => { calls.push('validate'); return {}; },
+      });
+      const ops = [
+        { kind: 'connectors.test', id: 'c1' },
+        { kind: 'connectors.metadata', id: 'c1' },
+        { kind: 'connectors.push', connectorId: 'c1', mapping: {}, period: '2026', dryRun: false },
+        { kind: 'connectors.validate', connectorId: 'c1', mapping: {} },
+      ] as const;
+      for (const op of ops) {
+        const r = await b.handle('p1', admin, op);
+        expect(r.ok).toBe(false);
+        expect((r as any).error).toMatch(/egress kill-switch/);
+      }
+      // No egressing dep was reached — denial happens before dispatch.
+      expect(calls).toEqual([]);
+    });
+
+    it('STILL ALLOWS connectors.list with egressEnabled:false (DB-only, no egress)', async () => {
+      const { b } = broker({
+        caps: [{ kind: 'host:connectors' }],
+        egressEnabled: false,
+        connectors: { list: async () => [{ id: 'x' }], get: async () => null },
+      });
+      const r = await b.handle('p1', admin, { kind: 'connectors.list' });
+      expect(r).toEqual({ ok: true, data: [{ id: 'x' }] });
+    });
+
+    it('with egressEnabled:true the egressing ops dispatch normally (reach their dep)', async () => {
+      const calls: string[] = [];
+      const { b } = broker({
+        caps: [{ kind: 'host:connectors' }],
+        egressEnabled: true,
+        testConnector: async (id: string) => { calls.push('test'); return { id }; },
+        connectorMetadata: async (id: string) => { calls.push('metadata'); return { id }; },
+        connectorPush: async () => { calls.push('push'); return { pushed: true }; },
+        connectorValidate: async () => { calls.push('validate'); return []; },
+      });
+      expect((await b.handle('p1', admin, { kind: 'connectors.test', id: 'c1' })).ok).toBe(true);
+      expect((await b.handle('p1', admin, { kind: 'connectors.metadata', id: 'c1' })).ok).toBe(true);
+      expect((await b.handle('p1', admin, { kind: 'connectors.push', connectorId: 'c1', mapping: {}, period: '2026', dryRun: false })).ok).toBe(true);
+      expect((await b.handle('p1', admin, { kind: 'connectors.validate', connectorId: 'c1', mapping: {} })).ok).toBe(true);
+      expect(calls).toEqual(['test', 'metadata', 'push', 'validate']);
     });
   });
 

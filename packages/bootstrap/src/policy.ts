@@ -15,7 +15,12 @@ export function policyFromConfig(cfg: Config): PluginPolicy {
  *  `gate` is the capability the operation maps to (or undefined for private ops like storage).
  *  - uiEnabled=false → nothing is allowed (master kill-switch).
  *  - egressEnabled=false → net-egress operations are refused regardless of grant.
- *  - everything else is policy-allowed (the grant check is separate, in the broker). */
+ *  - everything else is policy-allowed (the grant check is separate, in the broker).
+ *
+ *  NOTE: the connector broker ops that actually egress (connectors.test/metadata/push/validate)
+ *  gate to the `host:connectors` capability, NOT `net-egress`, so this function does NOT cover
+ *  them. The egress kill-switch is enforced for those ops at the OP level in the broker's
+ *  `handle` (see `egresses()` in plugin-broker.ts), so PLUGIN_EGRESS_ENABLED=false blocks them. */
 export function policyAllows(policy: PluginPolicy, gate: string | undefined): boolean {
   if (!policy.uiEnabled) return false;
   if (gate === 'net-egress' && !policy.egressEnabled) return false;

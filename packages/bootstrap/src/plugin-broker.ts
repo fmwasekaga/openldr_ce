@@ -92,6 +92,27 @@ function gateFor(op: BrokerOp): string | undefined {
   }
 }
 
+/** Does this op make a LIVE outbound network request when dispatched? These ops gate to the
+ *  `host:connectors` capability (NOT `net-egress`), so `policyAllows` does not cover them — the
+ *  egress kill-switch (PLUGIN_EGRESS_ENABLED=false) is enforced for them at the OP level in
+ *  `handle`. Each resolves a connector → decrypts its config → contacts the configured host:
+ *   - connectors.test      live health_check + pull_metadata
+ *   - connectors.metadata  live pull_metadata
+ *   - connectors.push      live push to the target
+ *   - connectors.validate  live pull_metadata to validate the mapping against
+ *  connectors.list is DB-only (no egress) and is intentionally excluded. */
+function egresses(op: BrokerOp): boolean {
+  switch (op.kind) {
+    case 'connectors.test':
+    case 'connectors.metadata':
+    case 'connectors.push':
+    case 'connectors.validate':
+      return true;
+    default:
+      return false;
+  }
+}
+
 /** Required caller-role set for an op (empty = no role requirement). The capability is the
  *  plugin's ceiling; the CALLER's role is a separate axis, matching the native routes. */
 function rolesFor(op: BrokerOp): string[] {
@@ -174,6 +195,13 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
         const gate = gateFor(op);
         if (!policyAllows(deps.policy(), gate)) {
           return { ok: false, error: `operation ${op.kind} is disabled by global policy` };
+        }
+
+        // 2b. Egress kill-switch — connector ops gate to host:connectors (not net-egress), so
+        // policyAllows can't see them; enforce PLUGIN_EGRESS_ENABLED for them here, before
+        // capability/role/dispatch, so a false kill-switch blocks every outbound connector op.
+        if (egresses(op) && !deps.policy().egressEnabled) {
+          return { ok: false, error: `operation ${op.kind} is disabled by the egress kill-switch` };
         }
 
         // 3. Capability grant. Legacy rows (no capabilities field) are grandfathered.
