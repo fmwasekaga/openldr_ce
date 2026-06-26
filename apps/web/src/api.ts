@@ -828,6 +828,16 @@ export async function listDhis2Mappings(): Promise<Dhis2MappingSummary[]> {
   if (!r.ok) throw new Error(`mappings list failed: ${r.status}`);
   return r.json();
 }
+// DHIS2 mapping picker for the workflow dhis2-push node. Sourced from the dhis2-sink
+// plugin datastore via a host endpoint (the builder is a host page, not a plugin iframe),
+// so it stays available after the host DHIS2 screens/API are removed. Carries connectorId
+// so the node form can Test the connection without the host dhis2-context.
+export interface WorkflowDhis2Mapping { id: string; name: string; connectorId: string | null }
+export async function listDhis2PushMappings(): Promise<WorkflowDhis2Mapping[]> {
+  const r = await authFetch('/api/workflows/dhis2-mappings');
+  if (!r.ok) throw new Error(`dhis2 mappings list failed: ${r.status}`);
+  return r.json();
+}
 export async function getDhis2Mapping(id: string): Promise<Dhis2MappingRecord> {
   const r = await authFetch(`/api/dhis2/mappings/${encodeURIComponent(id)}`);
   if (!r.ok) throw new Error(`get mapping failed: ${r.status}`);

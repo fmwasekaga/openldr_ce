@@ -208,6 +208,19 @@ export function registerWorkflowRoutes(app: FastifyInstance<any, any, any, any>,
     return run;
   });
 
+  // DHIS2 mapping picker for the dhis2-push node. The workflow builder is a HOST page
+  // (not a plugin iframe), so it reads the dhis2-sink plugin's mappings directly from
+  // plugin_data instead of through the broker. Returns the connectorId too so the form's
+  // "Test connection" works without the host dhis2-context. Empty when dhis2-sink isn't
+  // installed (graceful).
+  app.get('/api/workflows/dhis2-mappings', MANAGE, async () => {
+    const rows = await ctx.pluginData.list('dhis2-sink', 'mappings');
+    return rows.map((r) => {
+      const d = r.doc as { id?: string; name?: string; definition?: { connectorId?: string } };
+      return { id: d.id ?? r.key, name: d.name ?? d.id ?? r.key, connectorId: d.definition?.connectorId ?? null };
+    });
+  });
+
   // Materialized datasets produced by workflow sink nodes.
   app.get('/api/workflows/datasets', MANAGE, async () => ctx.workflows.datasets.list());
 

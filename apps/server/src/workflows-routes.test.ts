@@ -87,6 +87,8 @@ function fakeCtx() {
       datasets: extras.datasets,
     },
     blob: { get: async () => Buffer.from('artifact-bytes') },
+    // dhis2-sink mappings for the workflow dhis2-push picker. Empty by default; tests override.
+    pluginData: { list: async () => [] },
     cfg: { WORKFLOW_CODE_TIMEOUT_MS: 5000, WORKFLOW_CODE_MEMORY_MB: 128, WORKFLOW_CODE_ENABLED: true },
     audit: { record: async (e: unknown) => { auditEvents.push(e); return e; } },
     logger: { error() {}, warn() {}, info() {} },
@@ -261,6 +263,53 @@ describe('workflow routes', () => {
 
     const res = await app.inject({ method: 'GET', url: '/api/workflows/runs/nope' });
     expect(res.statusCode).toBe(404);
+  });
+
+  // --- dhis2-push mapping picker (sourced from the dhis2-sink plugin datastore) ---
+
+  it('GET /api/workflows/dhis2-mappings as lab_manager → 200 and maps {id,name,connectorId}', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    const ctx = fakeCtx();
+    ctx.pluginData = {
+      list: async (pluginId: string, collection: string) => {
+        expect(pluginId).toBe('dhis2-sink');
+        expect(collection).toBe('mappings');
+        return [
+          { collection, key: 'm1', doc: { id: 'm1', name: 'AMR', definition: { connectorId: 'c1' } }, updatedAt: new Date(0) },
+          { collection, key: 'm2', doc: { definition: {} }, updatedAt: new Date(0) }, // falls back to key, null connector
+        ];
+      },
+    };
+    registerWorkflowRoutes(app, ctx);
+
+    const res = await app.inject({ method: 'GET', url: '/api/workflows/dhis2-mappings' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([
+      { id: 'm1', name: 'AMR', connectorId: 'c1' },
+      { id: 'm2', name: 'm2', connectorId: null },
+    ]);
+  });
+
+  it('GET /api/workflows/dhis2-mappings as lab_technician → 403', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = TECHNICIAN_USER; });
+    const ctx = fakeCtx();
+    registerWorkflowRoutes(app, ctx);
+
+    const res = await app.inject({ method: 'GET', url: '/api/workflows/dhis2-mappings' });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('GET /api/workflows/dhis2-mappings with no dhis2-sink mappings → 200 and empty array', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    const ctx = fakeCtx();
+    registerWorkflowRoutes(app, ctx);
+
+    const res = await app.inject({ method: 'GET', url: '/api/workflows/dhis2-mappings' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([]);
   });
 
   it('GET /api/workflows/datasets → 200 and empty array', async () => {

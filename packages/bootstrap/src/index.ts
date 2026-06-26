@@ -34,6 +34,7 @@ import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { policyFromConfig } from './policy';
 import { createPluginTarget } from './connector-target';
 import { createDhis2Orchestration } from './dhis2-orchestration';
+import { buildDhis2PushService } from './dhis2-push-service';
 import { selectTargetStore } from './target-store';
 import { createPluginRegistry } from './plugin-registry';
 import { buildOntologyDistribution, createOperations, importTerminologyResource, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type LoadResult, type OntologyBuildProgress, type OntologyManifest, type Operations } from '@openldr/terminology';
@@ -395,6 +396,12 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   // Generic per-plugin schedule store + host runner (fires plugin schedules headlessly;
   // for DHIS2 it drives the orchestration push). Completes the broker's deferred `schedules` dep.
   const pluginScheduleRunner = createPluginScheduleRunner({ pluginData, push: (input) => dhis2Orch.push(input), logger });
+
+  // Wire the workflow dhis2-push node to the plugin datastore + orchestration. Mutates the
+  // same `workflowServices` object the runner already references (set post-construction, like
+  // the host did) so the dhis2-push handler resolves the service at run time. Deployment-agnostic:
+  // it reads the dhis2-sink plugin's mappings/org-units, no longer gated on the host DHIS2 context.
+  workflowServices.dhis2Push = buildDhis2PushService({ pluginData, push: (input) => dhis2Orch.push(input) });
   const pluginBroker = createPluginBroker({
     plugins,
     pluginData,
