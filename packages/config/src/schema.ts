@@ -113,6 +113,13 @@ export const ConfigSchema = z
     MARKETPLACE_PUBLISH_TOKEN: z.string().optional(),     // GitHub PAT (repo write); secret
     MARKETPLACE_PUBLISH_REPO: z.string().optional(),      // owner/repo, e.g. fmwasekaga/openldr-ce-marketplace
     MARKETPLACE_PUBLISH_BRANCH: z.string().default('main'),
+    // SEC-09: when non-empty, an admin-added LOCAL registry's directory must resolve
+    // INSIDE this root (path-containment), bounding arbitrary-local-path reads. Empty
+    // (default) preserves current behavior — the root is the opt-in containment switch.
+    MARKETPLACE_LOCAL_REGISTRY_ROOT: z.string().default(''),
+    // SEC-10: max bytes for a remote bundle wasm payload download (defense against an
+    // OOM from a malicious/compromised registry). 64 MB default.
+    MARKETPLACE_MAX_PAYLOAD_BYTES: z.coerce.number().int().positive().default(67_108_864),
 
     // Secret-at-rest encryption key for dynamic Connectors (base64, decodes to 32 bytes /
     // AES-256). Optional at boot; required only when a secret-bearing connector is

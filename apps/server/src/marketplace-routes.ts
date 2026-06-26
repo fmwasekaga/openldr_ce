@@ -30,8 +30,12 @@ function safeRef(ref: unknown): string | null {
 export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext, fetchImpl: typeof fetch = fetch): void {
   const registries = createRegistryStore(ctx.internalDb);
 
+  const localRegistryRoot = ctx.cfg.MARKETPLACE_LOCAL_REGISTRY_ROOT ?? '';
+  const maxPayloadBytes = ctx.cfg.MARKETPLACE_MAX_PAYLOAD_BYTES;
   function sourceFor(reg: RegistryRecord): RegistrySource {
-    return reg.kind === 'http' ? new HttpRegistrySource(reg.location, fetchImpl) : new LocalRegistrySource(reg.location);
+    return reg.kind === 'http'
+      ? new HttpRegistrySource(reg.location, fetchImpl, undefined, maxPayloadBytes)
+      : new LocalRegistrySource(reg.location, localRegistryRoot);
   }
   async function enabledRegistries(): Promise<RegistryRecord[]> {
     return (await registries.list()).filter((r) => r.enabled);
