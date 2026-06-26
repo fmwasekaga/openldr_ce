@@ -186,19 +186,24 @@ async function ensureConnector(api: APIRequestContext): Promise<void> {
 }
 
 async function ensureMarketplaceRegistry(api: APIRequestContext): Promise<void> {
-  const registries = await json<Array<{ id: string; name: string }>>(
+  const registries = await json<Array<{ id: string; name: string; enabled?: boolean }>>(
     await api.get('/api/marketplace/registries'),
     'GET /api/marketplace/registries',
   );
   const payload = {
     name: 'Documentation samples',
     kind: 'local',
-    location: '.docs-marketplace',
+    location: '.docs-marketplace/bundles',
     enabled: true,
   };
   const existing = registries.find((registry) => registry.name === payload.name);
   if (existing) await put(api, `/api/marketplace/registries/${existing.id}`, payload);
   else await post(api, '/api/marketplace/registries', payload);
+  for (const registry of registries) {
+    if (registry.name !== payload.name && registry.enabled !== false) {
+      await put(api, `/api/marketplace/registries/${registry.id}`, { enabled: false });
+    }
+  }
   await api.post('/api/marketplace/refresh');
 }
 

@@ -15,6 +15,21 @@ const sourceDir = join(root, 'reference-plugins', 'test-sink');
 const outRoot = join(root, '.docs-marketplace');
 const outDir = join(outRoot, 'bundles', 'test-sink');
 const PUBLISHER = { id: 'openldr-docs', name: 'OpenLDR Documentation Samples' };
+const README = [
+  '# Training sink',
+  '',
+  'Use this sample artifact to practice Marketplace review and connector setup without sending data to an external system.',
+  '',
+  '## Review before install',
+  '',
+  '- Confirm the artifact type is `plugin`.',
+  '- Check compatibility for the current OpenLDR version.',
+  '- Review requested capabilities before approving installation.',
+  '',
+  '## After install',
+  '',
+  'Create a connector named **Training destination**, select `test-sink`, and use it for dry-run workflow or report export exercises.',
+].join('\n');
 
 function loadOrCreateKeypair() {
   mkdirSync(keysDir, { recursive: true });
@@ -43,6 +58,7 @@ async function main() {
     ...pluginManifestToArtifact(flat),
     summary: 'Training sink used by the OpenLDR web documentation',
     description: 'Training sink used by the OpenLDR web documentation',
+    readme: README,
     publisher: { id: PUBLISHER.id, name: PUBLISHER.name, keyFingerprint: '0'.repeat(64) },
   } as Record<string, unknown>;
   const wasm = new Uint8Array(readFileSync(wasmPath));

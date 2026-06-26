@@ -25,7 +25,7 @@ You can use Installed, Available, and Registries views; inspect artifact details
 7. Approve installation when you are ready.
 8. Return to **Installed** to enable, disable, or remove artifacts when supported.
 
-![Marketplace artifact detail with compatibility, documentation, and install action](marketplace-detail.png)
+![Marketplace artifact detail with version, permissions, documentation, and requirements](marketplace-detail.png)
 
 9. Open **Registries**.
 10. Select **Add registry**.

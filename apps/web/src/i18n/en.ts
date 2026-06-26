@@ -264,7 +264,7 @@ export const en = {
     },
     connectors: {
       heading: 'Connectors',
-      description: 'Configure and test outbound sink connectors (e.g. DHIS2). Secrets are encrypted at rest and never shown again.',
+      description: 'Configure and test outbound sink connectors for external systems. Secrets are encrypted at rest and never shown again.',
       add: 'Add connector',
       empty: 'No connectors yet.',
       colName: 'Name',

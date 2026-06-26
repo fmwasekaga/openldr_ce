@@ -10,6 +10,7 @@ export type CaptureStep =
   | { action: 'click'; role: string; name: string }
   | { action: 'clickTestId'; testId: string }
   | { action: 'fill'; label: string; value: string }
+  | { action: 'fillTestId'; testId: string; value: string }
   | { action: 'selectText'; text: string }
   | { action: 'waitForText'; text: string };
 

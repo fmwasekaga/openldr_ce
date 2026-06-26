@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import type { DocGuide, DocSection } from './registry';
-import { resolve } from './registry';
+import { DOC_GUIDES, list, resolve } from './registry';
+import { SCREENSHOTS } from './screenshots';
+import screenshotManifest from './0.1.0/screenshot-manifest.json';
 import {
   markdownImages,
   markdownLinks,
   validateDocs,
   type ScreenshotManifest,
 } from './validation';
+
+const authoredScreenshotManifest = screenshotManifest as ScreenshotManifest;
 
 function guide(overrides: Partial<DocGuide> & Pick<DocGuide, 'slug' | 'screenshotNames'>): DocGuide {
   const base: DocGuide = {
@@ -95,6 +99,17 @@ describe('markdown reference parsing', () => {
 });
 
 describe('docs integrity validation', () => {
+  it('accepts the authored English docs corpus and bundled screenshots', () => {
+    expect(
+      validateDocs(
+        list('en'),
+        DOC_GUIDES,
+        authoredScreenshotManifest,
+        Object.keys(SCREENSHOTS),
+      ),
+    ).toEqual([]);
+  });
+
   it('accepts a complete synthetic docs corpus', () => {
     expect(
       validateDocs(

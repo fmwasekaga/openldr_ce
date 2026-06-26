@@ -288,7 +288,7 @@ export const fr: EnShape = {
     },
     connectors: {
       heading: 'Connecteurs',
-      description: 'Configurez et testez les connecteurs de sortie (par ex. DHIS2). Les secrets sont chiffrés au repos et ne sont plus jamais affichés.',
+      description: 'Configurez et testez les connecteurs de sortie vers des systèmes externes. Les secrets sont chiffrés au repos et ne sont plus jamais affichés.',
       add: 'Ajouter un connecteur',
       empty: 'Aucun connecteur pour le moment.',
       colName: 'Nom',

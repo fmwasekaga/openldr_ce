@@ -32,26 +32,36 @@ export async function preparePage(page: Page, theme: 'dark' | 'light'): Promise<
 
 export async function runCaptureSteps(page: Page, steps: CaptureStep[]): Promise<void> {
   for (const step of steps) {
-    if (step.action === 'click') {
-      await page.getByRole(step.role as Parameters<Page['getByRole']>[0], { name: step.name }).click();
-    } else if (step.action === 'clickTestId') {
-      await page.getByTestId(step.testId).click();
-    } else if (step.action === 'fill') {
-      await page.getByLabel(step.label).fill(step.value);
-    } else if (step.action === 'selectText') {
-      await page.getByText(step.text, { exact: false }).first().click();
-    } else if (step.action === 'waitForText') {
-      await page.getByText(step.text, { exact: false }).first().waitFor({ state: 'visible' });
+    try {
+      if (step.action === 'click') {
+        await page.getByRole(step.role as Parameters<Page['getByRole']>[0], { name: step.name }).click({ timeout: 5_000 });
+      } else if (step.action === 'clickTestId') {
+        await page.getByTestId(step.testId).click({ timeout: 5_000 });
+      } else if (step.action === 'fill') {
+        await page.getByLabel(step.label).fill(step.value, { timeout: 5_000 });
+      } else if (step.action === 'fillTestId') {
+        await page.getByTestId(step.testId).fill(step.value, { timeout: 5_000 });
+      } else if (step.action === 'selectText') {
+        await page.getByText(step.text, { exact: false }).first().click({ timeout: 5_000 });
+      } else if (step.action === 'waitForText') {
+        await page.getByText(step.text, { exact: false }).first().waitFor({ state: 'visible', timeout: 5_000 });
+      }
+    } catch (error) {
+      throw new Error(`capture step failed: ${JSON.stringify(step)}`, { cause: error });
     }
   }
 }
 
 export async function waitUntilReady(page: Page, ready: ReadyTarget): Promise<void> {
-  if (ready.kind === 'selector') {
-    await page.locator(ready.value).first().waitFor({ state: 'visible' });
-    return;
+  try {
+    if (ready.kind === 'selector') {
+      await page.locator(ready.value).first().waitFor({ state: 'visible', timeout: 5_000 });
+      return;
+    }
+    await page.getByText(ready.value, { exact: false }).first().waitFor({ state: 'visible', timeout: 5_000 });
+  } catch (error) {
+    throw new Error(`ready target not visible: ${ready.kind} ${ready.value}`, { cause: error });
   }
-  await page.getByText(ready.value, { exact: false }).first().waitFor({ state: 'visible' });
 }
 
 export async function disableAnimations(page: Page): Promise<void> {
@@ -62,7 +72,9 @@ export async function addCallouts(page: Page, callouts: Callout[] = []): Promise
   await removeCallouts(page);
   for (const callout of callouts) {
     const target = page.locator(callout.selector).first();
-    await target.waitFor({ state: 'visible' });
+    await target.waitFor({ state: 'visible', timeout: 5_000 }).catch((error: unknown) => {
+      throw new Error(`callout ${callout.number} target not visible: ${callout.selector}`, { cause: error });
+    });
     const box = await target.boundingBox();
     if (!box) throw new Error(`callout ${callout.number} target has no bounding box: ${callout.selector}`);
     await page.evaluate(
