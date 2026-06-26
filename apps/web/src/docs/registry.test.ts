@@ -111,6 +111,12 @@ describe('docs registry', () => {
     );
   });
 
+  it('resolves every approved English guide once the web manual is authored', () => {
+    expect(list('en').map((section) => section.slug)).toEqual(
+      DOC_GUIDES.map((guide) => guide.slug),
+    );
+  });
+
   it('exposes the three locales', () => {
     expect(LOCALES).toEqual(['en', 'fr', 'pt']);
   });

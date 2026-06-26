@@ -230,4 +230,30 @@ describe('authored guide structure', () => {
   it('keeps workflows forms terminology guides procedural', () => {
     expectStepGuideStructure(['workflows', 'forms', 'terminology']);
   });
+
+  it('keeps users audit connectors marketplace guides procedural', () => {
+    expectStepGuideStructure(['users', 'audit', 'connectors', 'marketplace']);
+  });
+
+  it('keeps settings as a short routing guide', () => {
+    const resolved = resolve('en', 'settings');
+    expect(resolved, 'settings should resolve').not.toBeNull();
+    expect(resolved!.content).toContain('# Settings');
+    expect(resolved!.content).toContain('/docs/connectors');
+    expect(resolved!.content).toContain('/docs/marketplace');
+    expect(resolved!.content).not.toMatch(/!\[[^\]]*]\(/);
+  });
+
+  it('keeps advanced docs as a coming-soon placeholder', () => {
+    const resolved = resolve('en', 'advanced-docs');
+    expect(resolved, 'advanced-docs should resolve').not.toBeNull();
+    expect(resolved!.content).toContain('# Advanced Docs — Coming soon');
+    expect(resolved!.content).toContain('does not exist yet');
+    expect(resolved!.content).toContain('Installation and deployment');
+    expect(resolved!.content).toContain('Plugin and extension development');
+    expect(resolved!.content).toContain('/docs/start-here');
+    expect(resolved!.content).toContain('/docs/settings');
+    expect(resolved!.content).not.toMatch(/https?:\/\//);
+    expect(resolved!.content).not.toMatch(/!\[[^\]]*]\(/);
+  });
 });
