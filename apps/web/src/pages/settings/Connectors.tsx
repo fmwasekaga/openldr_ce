@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Bleed } from '@/components/ui/bleed';
 import {
   listConnectors, listSinkPlugins, createConnector, updateConnector, deleteConnector, testConnector,
   type Connector, type SinkPluginRef,
@@ -132,6 +133,7 @@ export function Connectors() {
       {rows.length === 0 ? (
         <div className="text-sm text-muted-foreground">{t('settings.connectors.empty')}</div>
       ) : (
+        <Bleed>
         <Table>
           <TableHeader>
             <TableRow>
@@ -171,6 +173,7 @@ export function Connectors() {
             ))}
           </TableBody>
         </Table>
+        </Bleed>
       )}
 
       <Dialog open={draft !== null} onOpenChange={(o) => { if (!o) setDraft(null); }}>

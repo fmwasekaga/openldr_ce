@@ -4,6 +4,7 @@ import { RefreshCw } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Divider } from '@/components/ui/bleed';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { AvailableArtifact, InstalledArtifact } from '@/api';
 import { PackageCard } from './PackageCard';
@@ -61,11 +62,6 @@ function FilterBar({ filter, setFilter, typeFilter, setTypeFilter, right }: {
       {right ? <div className="ml-auto flex items-center gap-2">{right}</div> : null}
     </div>
   );
-}
-
-/** Full-bleed divider between the toolbar and the cards (negates the page's p-4). */
-function Separator() {
-  return <div className="-mx-4 mb-4 border-b border-border" />;
 }
 
 export function MarketplaceTabs(props: MarketplaceTabsProps) {
@@ -129,7 +125,7 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
             <RefreshButton onClick={props.onRefresh} label={t('settings.marketplace.refresh')} testId="refresh-registry" />
           </>}
         />
-        <Separator />
+        <Divider className="mb-4" />
         {props.loadError ? (
           <div className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {t('settings.marketplace.registryUnreachable')}
@@ -151,7 +147,7 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
           filter={filter} setFilter={setFilter} typeFilter={typeFilter} setTypeFilter={setTypeFilter}
           right={<RefreshButton onClick={props.onRefresh} label={t('settings.marketplace.refresh')} testId="refresh-installed" />}
         />
-        <Separator />
+        <Divider className="mb-4" />
         {installedEntries.length === 0 ? (
           <div className="px-1 py-6 text-center text-sm text-muted-foreground">{t('settings.marketplace.emptyInstalled')}</div>
         ) : (
