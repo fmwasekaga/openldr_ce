@@ -32,13 +32,17 @@ export function capabilityLine(cap: unknown): string {
   return parts.join(' ') || JSON.stringify(cap);
 }
 
-export function availableToEntry(b: AvailableArtifact, installedIds: Set<string>): CardEntry {
+export function availableToEntry(b: AvailableArtifact, installed: Map<string, InstalledArtifact>): CardEntry {
+  // Merge the installed state so a Browse entry that is already installed carries the
+  // real enabled/active flags — otherwise the detail menu shows the wrong Enable/Disable
+  // label (and rollback visibility) for installed plugins viewed from Browse.
+  const inst = installed.get(b.id);
   return {
     ref: b.ref, id: b.id, version: b.version, type: b.type,
     publisher: b.publisher, description: b.description, license: b.license,
     capabilities: b.capabilities ?? [], valid: b.valid,
-    installed: installedIds.has(b.id), versions: b.versions ?? [],
-    registryName: b.registryName,
+    installed: Boolean(inst), enabled: inst?.enabled, active: inst?.active,
+    versions: b.versions ?? [], registryName: b.registryName,
   };
 }
 

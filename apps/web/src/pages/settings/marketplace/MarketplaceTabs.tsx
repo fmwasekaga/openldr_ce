@@ -74,7 +74,7 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
   const [typeFilter, setTypeFilter] = useState('all');
   const [selected, setSelected] = useState<CardEntry | null>(null);
 
-  const installedIds = useMemo(() => new Set(props.installed.map((a) => a.id)), [props.installed]);
+  const installedById = useMemo(() => new Map(props.installed.map((a) => [a.id, a])), [props.installed]);
 
   const browseEntries = useMemo(() => props.available
     .filter((b) => {
@@ -82,7 +82,7 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
       const typeMatch = typeFilter === 'all' || b.type === typeFilter;
       return textMatch && typeMatch;
     })
-    .map((b) => availableToEntry(b, installedIds)), [props.available, filter, typeFilter, installedIds]);
+    .map((b) => availableToEntry(b, installedById)), [props.available, filter, typeFilter, installedById]);
 
   const installedEntries = useMemo(() => props.installed
     .filter((a) => {
