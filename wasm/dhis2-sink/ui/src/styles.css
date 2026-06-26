@@ -101,7 +101,11 @@ body {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   padding: 0 12px;
+  /* Allow horizontal tab scrolling on narrow widths, but pin overflow-y: a bare
+     `overflow-x: auto` makes overflow-y compute to `auto` too, and the tabs'
+     margin-bottom:-1px (underline overlap) then triggers a spurious v-scrollbar. */
   overflow-x: auto;
+  overflow-y: hidden;
 }
 .dhis2-tab {
   font: inherit;
