@@ -226,4 +226,8 @@ describe('authored guide structure', () => {
   it('keeps the entry, dashboard, and reports guides procedural', () => {
     expectStepGuideStructure(['start-here', 'dashboard', 'reports']);
   });
+
+  it('keeps workflows forms terminology guides procedural', () => {
+    expectStepGuideStructure(['workflows', 'forms', 'terminology']);
+  });
 });
