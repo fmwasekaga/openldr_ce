@@ -24,6 +24,14 @@ export function Workflows() {
   const { id } = useParams();
   const setWorkflow = useWorkflowStore((s) => s.setWorkflow);
   const clear = useWorkflowStore((s) => s.clear);
+  const setConfigNode = useWorkflowStore((s) => s.setConfigNode);
+
+  // The store is a singleton that survives navigation, so a left-open config panel would
+  // reappear on return. Close it when entering/switching a workflow and when leaving the builder.
+  useEffect(() => {
+    setConfigNode(null);
+    return () => setConfigNode(null);
+  }, [id, setConfigNode]);
 
   useEffect(() => {
     if (!id || id === 'new') { clear(); return; }
