@@ -14,7 +14,7 @@ export interface LogEntry {
 export type RunEvent =
   | { type: 'node:start'; nodeId: string; nodeType: string }
   | { type: 'node:log'; entry: LogEntry }
-  | { type: 'node:success'; nodeId: string; nodeType: string; input: unknown; output: unknown; durationMs: number }
+  | { type: 'node:success'; nodeId: string; nodeType: string; input: unknown; output: unknown; durationMs: number; meta?: unknown }
   | { type: 'node:error'; nodeId: string; nodeType: string; error: string; durationMs: number }
   | { type: 'workflow:done'; status: 'completed' | 'failed' };
 

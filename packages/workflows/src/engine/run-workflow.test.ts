@@ -195,7 +195,7 @@ describe('runWorkflow', () => {
 
   it('plugin-node → materialize chain: sink receives the plugin items as rows', async () => {
     const materializeSpy = vi.fn().mockResolvedValue({ dataset: 'ds', rowCount: 1 });
-    const runPluginNode = vi.fn().mockResolvedValue({ items: [{ json: { a: 1 } }] });
+    const runPluginNode = vi.fn().mockResolvedValue({ items: [{ json: { a: 1 } }], meta: { kind: 'dataValueSet', dataValues: 1 } });
     const services = {
       runSql: async () => ({ columns: [], rows: [] }),
       fhirQuery: async () => ({ resources: [] }),
@@ -214,11 +214,20 @@ describe('runWorkflow', () => {
       { id: 'e1', source: 't', target: 'p' },
       { id: 'e2', source: 'p', target: 'm' },
     ];
-    const res = await runWorkflow(nodes, edges, { services: services as never });
+    const sink = collect();
+    const res = await runWorkflow(nodes, edges, { services: services as never, onEvent: sink.onEvent });
     expect(res.status).toBe('completed');
     // materializeDataset should have received rows: [{ a: 1 }]
     expect(materializeSpy).toHaveBeenCalledOnce();
     const [, , rows] = materializeSpy.mock.calls[0] as [string, unknown, Record<string, unknown>[]];
     expect(rows).toEqual([{ a: 1 }]);
+    // The plugin node's meta is threaded onto its results record + node:success event.
+    expect(res.results.find((r) => r.nodeId === 'p')?.meta).toEqual({ kind: 'dataValueSet', dataValues: 1 });
+    const pSuccess = sink.events.find(
+      (e): e is Extract<RunEvent, { type: 'node:success' }> => e.type === 'node:success' && e.nodeId === 'p',
+    );
+    expect(pSuccess?.meta).toEqual({ kind: 'dataValueSet', dataValues: 1 });
+    // Non-plugin nodes carry no meta.
+    expect(res.results.find((r) => r.nodeId === 'm')?.meta).toBeUndefined();
   });
 });

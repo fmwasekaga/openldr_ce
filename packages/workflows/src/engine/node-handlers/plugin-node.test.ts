@@ -38,6 +38,20 @@ describe('pluginNodeHandler', () => {
     expect(emit).toHaveBeenCalledWith(expect.objectContaining({ type: 'node:log' }));
   });
 
+  it('stashes result.meta onto ctx.nodeMeta keyed by node id', async () => {
+    const run = vi.fn().mockResolvedValue({ items: [{ json: { ok: true } }], meta: { kind: 'dataValueSet', dataValues: 3 } });
+    const ctx = ctxWith(run);
+    await pluginNodeHandler(node({ pluginId: 'p', nodeId: 'sink', kind: 'sink' }), ctx, []);
+    expect(ctx.nodeMeta.n1).toEqual({ kind: 'dataValueSet', dataValues: 3 });
+  });
+
+  it('leaves ctx.nodeMeta empty when no meta is returned', async () => {
+    const run = vi.fn().mockResolvedValue({ items: [{ json: { ok: true } }] });
+    const ctx = ctxWith(run);
+    await pluginNodeHandler(node({ pluginId: 'p', nodeId: 'echo' }), ctx, []);
+    expect(ctx.nodeMeta.n1).toBeUndefined();
+  });
+
   it('returns result.items', async () => {
     const run = vi.fn().mockResolvedValue({ items: [{ json: { ok: true } }], meta: { count: 1 } });
     const ctx = ctxWith(run);

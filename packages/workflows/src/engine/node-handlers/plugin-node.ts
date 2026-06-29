@@ -19,6 +19,9 @@ export const pluginNodeHandler: NodeHandler = async (node, ctx, input) => {
     ? (data.config as Record<string, unknown>) : {});
   const items: WorkflowItem[] = kind === 'source' ? [] : input;
   const result = await ctx.services.runPluginNode({ pluginId, nodeId, config, items });
+  // Stash structured meta (e.g. a sink's import summary) so the runner can thread it onto
+  // the node:success event + results record for the Output tab's "Result" block.
+  if (result.meta !== undefined) ctx.nodeMeta[node.id] = result.meta;
   if (result.meta && Object.keys(result.meta).length > 0) {
     const entry = { nodeId: node.id, level: 'info' as const, message: `plugin meta: ${JSON.stringify(result.meta)}`, ts: Date.now() };
     (ctx.logs[node.id] ??= []).push(entry);

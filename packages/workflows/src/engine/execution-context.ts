@@ -15,6 +15,8 @@ export interface ExecutionContext {
   input: unknown;
   /** Output items of every node that has run, keyed by node id. */
   nodeOutputs: Record<string, WorkflowItem[]>;
+  /** Optional structured result metadata per node (e.g. a sink's import summary), keyed by node id. */
+  nodeMeta: Record<string, unknown>;
   /** Branch decision (chosen sourceHandle, e.g. 'true'/'false') set by If/Filter; read by the runner for edge-pruning. */
   branches: Record<string, string>;
   /** Captured log lines per node. */
@@ -49,5 +51,5 @@ export function createContext(
   logger?: ExecutionContext['logger'],
   files?: Record<string, BinaryRef>,
 ): ExecutionContext {
-  return { input, nodeOutputs: {}, branches: {}, logs: {}, emit, edges, codeLimits, services, workflowId, logger, files };
+  return { input, nodeOutputs: {}, nodeMeta: {}, branches: {}, logs: {}, emit, edges, codeLimits, services, workflowId, logger, files };
 }

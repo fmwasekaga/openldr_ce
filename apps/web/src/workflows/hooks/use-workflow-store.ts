@@ -42,6 +42,8 @@ interface WorkflowState {
   nodeRunInput: Record<string, unknown>;
   /** What each node produced as output during the last run. */
   nodeRunOutput: Record<string, unknown>;
+  /** Structured result metadata per node (e.g. a plugin sink's import summary). */
+  nodeRunMeta: Record<string, unknown>;
   /**
    * True while the workflow is "armed" — the user has pressed Run and we're
    * now waiting for them to click a manual trigger to actually fire the
@@ -78,7 +80,7 @@ interface WorkflowState {
   resetRun: () => void;
   setNodeStatus: (id: string, status: NodeRunStatus, error?: string) => void;
   appendNodeLog: (entry: LogEntry) => void;
-  setNodeRunData: (id: string, input: unknown, output: unknown) => void;
+  setNodeRunData: (id: string, input: unknown, output: unknown, meta?: unknown) => void;
   setArmed: (armed: boolean) => void;
   setInteractionMode: (mode: 'pan' | 'select') => void;
 }
@@ -95,6 +97,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   nodeLogs: {},
   nodeRunInput: {},
   nodeRunOutput: {},
+  nodeRunMeta: {},
   armed: false,
   interactionMode: 'pan',
 
@@ -168,6 +171,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       nodeLogs: {},
       nodeRunInput: {},
       nodeRunOutput: {},
+      nodeRunMeta: {},
       armed: false,
     });
   },
@@ -183,12 +187,13 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       nodeLogs: {},
       nodeRunInput: {},
       nodeRunOutput: {},
+      nodeRunMeta: {},
       armed: false,
     });
   },
 
   resetRun: () => {
-    set({ nodeRunStatus: {}, nodeRunError: {}, nodeLogs: {}, nodeRunInput: {}, nodeRunOutput: {}, armed: false });
+    set({ nodeRunStatus: {}, nodeRunError: {}, nodeLogs: {}, nodeRunInput: {}, nodeRunOutput: {}, nodeRunMeta: {}, armed: false });
   },
 
   setNodeStatus: (id, status, error) => {
@@ -205,10 +210,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     });
   },
 
-  setNodeRunData: (id, input, output) => {
+  setNodeRunData: (id, input, output, meta) => {
     set({
       nodeRunInput: { ...get().nodeRunInput, [id]: input },
       nodeRunOutput: { ...get().nodeRunOutput, [id]: output },
+      nodeRunMeta: { ...get().nodeRunMeta, [id]: meta },
     });
   },
 

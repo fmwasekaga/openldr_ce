@@ -23,6 +23,8 @@ export interface NodeRunResult {
   type: string;
   status: 'success' | 'error' | 'skipped';
   output?: unknown;
+  /** Structured result metadata (e.g. a plugin sink's import summary). Undefined for most nodes. */
+  meta?: unknown;
   error?: string;
   durationMs: number;
   logs?: LogEntry[];
@@ -155,11 +157,13 @@ export async function runWorkflow(
       ctx.nodeOutputs[node.id] = output;
 
       const durationMs = Date.now() - start;
+      const meta = ctx.nodeMeta[node.id];
       results.push({
         nodeId: node.id,
         type: node.type,
         status: 'success',
         output,
+        meta,
         durationMs,
         logs: ctx.logs[node.id],
       });
@@ -169,6 +173,7 @@ export async function runWorkflow(
         nodeType: node.type,
         input,
         output,
+        meta,
         durationMs,
       });
 

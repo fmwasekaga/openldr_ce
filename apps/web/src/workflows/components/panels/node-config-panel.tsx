@@ -22,6 +22,7 @@ export function NodeConfigPanel() {
   const setConfigNode = useWorkflowStore((s) => s.setConfigNode);
   const nodeRunInput = useWorkflowStore((s) => s.nodeRunInput);
   const nodeRunOutput = useWorkflowStore((s) => s.nodeRunOutput);
+  const nodeRunMeta = useWorkflowStore((s) => s.nodeRunMeta);
   const nodeRunError = useWorkflowStore((s) => s.nodeRunError);
 
   const [tab, setTab] = useState<Tab>('config');
@@ -63,6 +64,7 @@ export function NodeConfigPanel() {
 
   const runInput = configNodeId ? nodeRunInput[configNodeId] : undefined;
   const runOutput = configNodeId ? nodeRunOutput[configNodeId] : undefined;
+  const runMeta = configNodeId ? nodeRunMeta[configNodeId] : undefined;
   const runError = configNodeId ? nodeRunError[configNodeId] : undefined;
 
   return (
@@ -128,6 +130,15 @@ export function NodeConfigPanel() {
                 <Download className="h-3.5 w-3.5" /> {f.fileName}
               </button>
             ))}
+            {runMeta !== undefined && runMeta !== null && (
+              <div className="space-y-1">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Result</p>
+                <JsonView data={runMeta} emptyLabel="" />
+              </div>
+            )}
+            {runMeta !== undefined && runMeta !== null && (
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Items</p>
+            )}
             <JsonView data={runOutput} emptyLabel="Run the workflow to see output data." />
           </div>
         )}

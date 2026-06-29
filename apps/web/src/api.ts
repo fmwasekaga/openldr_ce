@@ -967,6 +967,8 @@ export interface NodeRunResult {
   type: string;
   status: 'success' | 'error' | 'skipped';
   output?: unknown;
+  /** Structured result metadata (e.g. a plugin sink's import summary). Undefined for most nodes. */
+  meta?: unknown;
   error?: string;
   durationMs: number;
   logs?: LogEntry[];
@@ -982,7 +984,7 @@ export interface ExecuteResponse {
 export type RunEvent =
   | { type: 'node:start'; nodeId: string; nodeType: string }
   | { type: 'node:log'; entry: LogEntry }
-  | { type: 'node:success'; nodeId: string; nodeType: string; input: unknown; output: unknown; durationMs: number }
+  | { type: 'node:success'; nodeId: string; nodeType: string; input: unknown; output: unknown; durationMs: number; meta?: unknown }
   | { type: 'node:error'; nodeId: string; nodeType: string; error: string; durationMs: number }
   | { type: 'workflow:done'; status: 'completed' | 'failed' };
 

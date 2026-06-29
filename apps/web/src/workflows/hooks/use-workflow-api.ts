@@ -190,7 +190,7 @@ export function useWorkflowApi() {
           switch (evt.type) {
             case 'node:start': store.setNodeStatus(evt.nodeId, 'running'); break;
             case 'node:log': store.appendNodeLog(evt.entry); break;
-            case 'node:success': store.setNodeStatus(evt.nodeId, 'success'); store.setNodeRunData(evt.nodeId, evt.input, evt.output); break;
+            case 'node:success': store.setNodeStatus(evt.nodeId, 'success'); store.setNodeRunData(evt.nodeId, evt.input, evt.output, evt.meta); break;
             case 'node:error': store.setNodeStatus(evt.nodeId, 'error', evt.error); break;
             case 'workflow:done': break;
           }
@@ -213,7 +213,7 @@ export function useWorkflowApi() {
             break;
           case 'node:success':
             store.setNodeStatus(evt.nodeId, 'success');
-            store.setNodeRunData(evt.nodeId, evt.input, evt.output);
+            store.setNodeRunData(evt.nodeId, evt.input, evt.output, evt.meta);
             break;
           case 'node:error':
             store.setNodeStatus(evt.nodeId, 'error', evt.error);
