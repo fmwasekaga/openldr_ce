@@ -64,3 +64,38 @@ fn cell_str(c: &calamine::Data) -> String {
         _ => String::new(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn read_rows_parses_tiny_csv() {
+        let rows = read_rows(b"a,b\n1,2\n", None).unwrap();
+        assert_eq!(rows.len(), 1);
+        let r = &rows[0];
+        assert_eq!(r.len(), 2);
+        assert_eq!(r.get("a").map(String::as_str), Some("1"));
+        assert_eq!(r.get("b").map(String::as_str), Some("2"));
+    }
+
+    #[test]
+    fn read_rows_multiple_records_and_trim() {
+        let rows = read_rows(b"a, b\n 1 ,2\n3, 4 \n", None).unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].get("a").map(String::as_str), Some("1")); // trimmed value
+        assert_eq!(rows[0].get("b").map(String::as_str), Some("2")); // trimmed header
+        assert_eq!(rows[1].get("a").map(String::as_str), Some("3"));
+        assert_eq!(rows[1].get("b").map(String::as_str), Some("4"));
+    }
+
+    #[test]
+    fn read_rows_serializes_to_json_object() {
+        // Mirrors the rows-mode wasm path: each Row -> a JSON object.
+        let rows = read_rows(b"a,b\n1,2\n", None).unwrap();
+        let v = serde_json::to_value(&rows[0]).unwrap();
+        assert!(v.is_object());
+        assert_eq!(v["a"], "1");
+        assert_eq!(v["b"], "2");
+    }
+}
