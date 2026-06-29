@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { cn } from '@/lib/cn';
 import type { NodeFormProps } from './index';
 import { FormField, TextInput, Select, inputClass } from './shared';
 import { fetchWorkflowNodes, fetchNodeOptions, fetchNodeDetail, type WorkflowNodeConfigField, type WorkflowNodeOption } from '@/api';
@@ -141,6 +142,38 @@ function PluginField({
             </label>
           ))}
         </div>
+      </FormField>
+    );
+  }
+
+  if (field.type === 'json') {
+    // One <PluginField> renders a single field, so this hook sits at a stable
+    // position within this component instance (Rules of Hooks hold).
+    const [text, setText] = useState(() => (value === undefined ? '' : JSON.stringify(value, null, 2)));
+    const [err, setErr] = useState<string | null>(null);
+    return (
+      <FormField label={field.label}>
+        <textarea
+          className={cn(inputClass, 'min-h-[120px] font-mono text-xs')}
+          value={text}
+          onChange={(e) => {
+            const t = e.target.value;
+            setText(t);
+            if (t.trim() === '') {
+              setErr(null);
+              onChange(undefined);
+              return;
+            }
+            try {
+              const parsed = JSON.parse(t);
+              setErr(null);
+              onChange(parsed);
+            } catch (ex) {
+              setErr(ex instanceof Error ? ex.message : 'invalid JSON');
+            }
+          }}
+        />
+        {err && <p className="text-[11px] text-destructive">{err}</p>}
       </FormField>
     );
   }

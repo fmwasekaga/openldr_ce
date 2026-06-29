@@ -873,7 +873,7 @@ export function buildOntology(
 export interface WorkflowNodeConfigField {
   key: string;
   label: string;
-  type: 'text' | 'number' | 'boolean' | 'select' | 'multiselect' | 'file';
+  type: 'text' | 'number' | 'boolean' | 'select' | 'multiselect' | 'file' | 'json';
   required?: boolean;
   default?: unknown;
   options?: { value: string; label: string }[];

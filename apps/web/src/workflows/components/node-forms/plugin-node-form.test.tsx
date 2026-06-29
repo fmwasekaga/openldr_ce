@@ -49,6 +49,49 @@ describe('PluginNodeForm', () => {
     await waitFor(() => expect(update).toHaveBeenCalled());
   });
 
+  it('persists a parsed object when valid JSON is typed into a json field', async () => {
+    const jsonDescriptor = {
+      ...descriptor,
+      config: [{ key: 'mapping', label: 'Mapping', type: 'json' }],
+    };
+    (api.fetchWorkflowNodes as ReturnType<typeof vi.fn>).mockResolvedValue([jsonDescriptor]);
+    const jsonNode = { id: 'n3', type: 'plugin-node', data: { label: 'Echo', pluginId: 'test-sink', nodeId: 'echo', kind: 'transform', config: {} } } as never;
+    const update = vi.fn();
+    const { container } = render(<PluginNodeForm node={jsonNode} update={update} />);
+    await waitFor(() => expect(screen.getByText('Mapping')).toBeInTheDocument());
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: '{"a":1}' } });
+    await waitFor(() => {
+      const call = update.mock.calls.find(
+        ([arg]) => (arg as { config?: Record<string, unknown> }).config?.mapping !== undefined,
+      );
+      expect(call).toBeTruthy();
+      const cfg = (call![0] as { config: Record<string, unknown> }).config;
+      expect(cfg.mapping).toEqual({ a: 1 });
+    });
+  });
+
+  it('does not persist a broken value and shows an error when invalid JSON is typed', async () => {
+    const jsonDescriptor = {
+      ...descriptor,
+      config: [{ key: 'mapping', label: 'Mapping', type: 'json' }],
+    };
+    (api.fetchWorkflowNodes as ReturnType<typeof vi.fn>).mockResolvedValue([jsonDescriptor]);
+    const jsonNode = { id: 'n4', type: 'plugin-node', data: { label: 'Echo', pluginId: 'test-sink', nodeId: 'echo', kind: 'transform', config: {} } } as never;
+    const update = vi.fn();
+    const { container } = render(<PluginNodeForm node={jsonNode} update={update} />);
+    await waitFor(() => expect(screen.getByText('Mapping')).toBeInTheDocument());
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: '{bad' } });
+    // No update call should set config.mapping to the broken raw text or any value.
+    const badCall = update.mock.calls.find(
+      ([arg]) => 'mapping' in ((arg as { config?: Record<string, unknown> }).config ?? {}),
+    );
+    expect(badCall).toBeFalsy();
+    // An error message is surfaced.
+    await waitFor(() => expect(screen.getByText(/JSON|Unexpected|token/i)).toBeInTheDocument());
+  });
+
   it('merges the resolved detail into config when a detailSource select changes', async () => {
     (api.fetchWorkflowNodes as ReturnType<typeof vi.fn>).mockResolvedValue([detailDescriptor]);
     (api.fetchNodeOptions as ReturnType<typeof vi.fn>).mockResolvedValue([{ value: 'm1', label: 'M1' }]);

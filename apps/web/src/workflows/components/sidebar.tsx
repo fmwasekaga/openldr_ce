@@ -148,8 +148,8 @@ export function Sidebar() {
   const [search, setSearch] = useState('');
   const [pluginCats, setPluginCats] = useState<NodeCategory[]>([]);
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>(() =>
-    // Default: every category expanded so the library is browsable on first load.
-    Object.fromEntries(nodeCategories.map((c) => [c.name, true])),
+    // Default: every category collapsed so the library reads as a compact index on first load.
+    Object.fromEntries(nodeCategories.map((c) => [c.name, false])),
   );
 
   useEffect(() => {
@@ -194,10 +194,10 @@ export function Sidebar() {
 
   // When searching, force the synthetic results category open.
   const isExpanded = (name: string) =>
-    search.trim().length > 0 ? true : expandedCategories[name] ?? true;
+    search.trim().length > 0 ? true : expandedCategories[name] ?? false;
 
   const toggleCategory = (name: string) => {
-    setExpandedCategories((prev) => ({ ...prev, [name]: !(prev[name] ?? true) }));
+    setExpandedCategories((prev) => ({ ...prev, [name]: !(prev[name] ?? false) }));
   };
 
   if (collapsed) {
