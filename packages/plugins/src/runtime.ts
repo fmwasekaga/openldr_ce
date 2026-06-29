@@ -154,8 +154,12 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
     const cached = sinkCache.get(key);
     if (cached) return cached;
     const manifest = pluginManifestFromRow(row);
-    if (manifest.kind !== 'sink') {
-      throw new Error(`plugin ${row.id}@${row.version} is not a sink (kind=${manifest.kind})`);
+    // A sink loads outright; a non-sink (e.g. a `kind:'source'` converter) is also invokable
+    // as long as it declares named entrypoints — the workflow engine calls those via
+    // invokeBytes(entrypoint, …). createWasmSink's allowlist still governs WHICH entrypoints
+    // are callable, so this stays safe.
+    if (manifest.kind !== 'sink' && manifest.entrypoints.length === 0) {
+      throw new Error(`plugin ${row.id}@${row.version} is not invokable (kind=${manifest.kind}, no entrypoints)`);
     }
     const wasm = await loadWasm(row);
     const grant = readGrant(row.manifest);

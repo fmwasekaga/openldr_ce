@@ -438,13 +438,33 @@ describe('loadSink', () => {
     expect(await rt.loadSink('nope')).toBeUndefined();
   });
 
-  it('throws when loadSink targets a source plugin (without fetching its wasm)', async () => {
+  it('throws when loadSink targets a source plugin with no entrypoints (without fetching its wasm)', async () => {
     const store = fakeStore([{ id: 'demo', version: '0.1.0', sha256: sha, manifest: fullManifest(), status: 'installed', enabled: true, active: true, approvedBy: null }]);
     const blob = fakeBlob(new Map());
     const rt = createPluginRuntime({ blob, store, runner: okRunner, logger, ...defaultNewDeps() });
-    await expect(rt.loadSink('demo')).rejects.toThrow(/not a sink/);
-    // The kind check must precede the blob fetch, so a source plugin is rejected without I/O.
+    await expect(rt.loadSink('demo')).rejects.toThrow(/not invokable/);
+    // The kind/entrypoint check must precede the blob fetch, so a non-invokable plugin is rejected without I/O.
     expect(((blob as any).get).mock.calls.length).toBe(0);
+  });
+
+  it('loadSink loads a source plugin that exposes named entrypoints', async () => {
+    const convWasm = new TextEncoder().encode('\0asm convert bytes');
+    const convSha = sha256Hex(convWasm);
+    const sourceRow: PluginRow = {
+      id: 'whonet-sqlite', version: '0.1.0', sha256: convSha,
+      manifest: {
+        id: 'whonet-sqlite', version: '0.1.0', kind: 'source', entrypoint: 'convert',
+        entrypoints: ['wf_convert'], wasmSha256: convSha,
+        description: '', license: 'x', wasi: true, limits: { memoryMb: 256, timeoutMs: 30000 },
+      },
+      status: 'installed', enabled: true, active: true, approvedBy: null,
+    };
+    const blobMap = new Map<string, Uint8Array>([['plugins/whonet-sqlite/0.1.0/plugin.wasm', convWasm]]);
+    const store = fakeStore([sourceRow]);
+    const rt = createPluginRuntime({ blob: fakeBlob(blobMap), store, runner: okRunner, logger, ...defaultNewDeps() });
+    const sink = await rt.loadSink('whonet-sqlite');
+    expect(sink).toBeDefined();
+    expect(sink!.entrypoints).toContain('wf_convert');
   });
 
   it('caches the loaded sink (one blob fetch across two loads)', async () => {
