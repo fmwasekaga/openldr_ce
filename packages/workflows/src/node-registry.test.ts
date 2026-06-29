@@ -103,4 +103,18 @@ describe('createWorkflowNodeRegistry', () => {
     const nodes = await registry.list();
     expect(nodes.find((n) => n.id === 'p:aggregate-push')).toBeDefined();
   });
+
+  it('passes through abi and binaryField on a discovered plugin node', async () => {
+    const CONVERT = {
+      id: 'convert', label: 'C', kind: 'transform', entrypoint: 'wf_convert',
+      abi: 'bytes', binaryField: 'file',
+      ports: { inputs: [{ name: 'file' }], outputs: [{ name: 'out' }] },
+      capabilities: [],
+    };
+    const { registry } = reg([pluginRow({ id: 'whonet-plugin', workflowNodes: [CONVERT] })]);
+    const nodes = await registry.list();
+    const n = nodes.find((d) => d.id === 'whonet-plugin:convert');
+    expect(n?.abi).toBe('bytes');
+    expect(n?.binaryField).toBe('file');
+  });
 });

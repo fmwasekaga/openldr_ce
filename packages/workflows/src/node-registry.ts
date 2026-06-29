@@ -97,6 +97,8 @@ export function createWorkflowNodeRegistry(deps: WorkflowNodeRegistryDeps): Work
             ports: decl.ports,
             capabilities: decl.capabilities,
             config: decl.config,
+            abi: decl.abi,
+            binaryField: decl.binaryField,
           });
         }
       }

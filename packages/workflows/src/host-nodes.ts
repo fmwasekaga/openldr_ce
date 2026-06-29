@@ -15,6 +15,10 @@ export interface WorkflowNodeDescriptor {
   ports: { inputs: WorkflowPort[]; outputs: WorkflowPort[] };
   capabilities: string[];
   config: WorkflowConfigField[];
+  /** Wire ABI for plugin nodes ('items' default, 'bytes' = binary converter). Host nodes omit it. */
+  abi?: 'items' | 'bytes';
+  /** For abi:'bytes' — the binary field name on the input item (default 'file'). */
+  binaryField?: string;
 }
 
 /** A non-binary port. Inputs and outputs share the same wire shape in v1. */
