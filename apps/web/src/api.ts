@@ -904,8 +904,9 @@ export async function fetchWorkflowNodes(): Promise<WorkflowNodeDescriptor[]> {
   const body = (await r.json()) as { nodes: WorkflowNodeDescriptor[] };
   return body.nodes;
 }
-export async function fetchNodeOptions(source: string): Promise<WorkflowNodeOption[]> {
-  const r = await authFetch(`/api/workflows/node-options/${encodeURIComponent(source)}`);
+export async function fetchNodeOptions(source: string, pluginId?: string): Promise<WorkflowNodeOption[]> {
+  const q = pluginId ? `?pluginId=${encodeURIComponent(pluginId)}` : '';
+  const r = await authFetch(`/api/workflows/node-options/${encodeURIComponent(source)}${q}`);
   if (!r.ok) return [];
   return (await r.json()) as WorkflowNodeOption[];
 }

@@ -124,7 +124,7 @@ function secretEquals(token: string, secret: string): boolean {
 export function registerWorkflowRoutes(
   app: FastifyInstance<any, any, any, any>,
   ctx: AppContext,
-  deps?: { connectors: { list(): Promise<Array<{ id: string; name: string }>> } },
+  deps?: { connectors: { list(): Promise<Array<{ id: string; name: string; pluginId: string }>> } },
 ): void {
   const MANAGE = { preHandler: requireRole('lab_admin', 'lab_manager') };
 
@@ -287,6 +287,7 @@ export function registerWorkflowRoutes(
   // Resolves connectors, datasets, dhis2-mappings, fhir-resource-types; unknown → []; never throws.
   app.get('/api/workflows/node-options/:source', MANAGE, async (req) => {
     const { source } = req.params as { source: string };
+    const pluginId = String((req.query as { pluginId?: string }).pluginId ?? '') || undefined;
     return resolveNodeOptions(source, {
       connectors: deps?.connectors ?? { list: async () => [] },
       datasets: { list: () => ctx.workflows.datasets.list() },
@@ -297,7 +298,7 @@ export function registerWorkflowRoutes(
           return { id: d.id ?? r.key, name: d.name ?? d.id ?? r.key };
         });
       },
-    });
+    }, { pluginId });
   });
 
   // detailSource resolver for declarative config fields that denormalize a picked

@@ -52,6 +52,7 @@ export function PluginNodeForm({ node, update }: NodeFormProps) {
         <PluginField
           key={f.key}
           field={f}
+          pluginId={data.pluginId}
           value={config[f.key]}
           onChange={(v) => setField(f.key, v)}
           onChangeMerge={(v, merge) => setField(f.key, v, merge)}
@@ -63,11 +64,14 @@ export function PluginNodeForm({ node, update }: NodeFormProps) {
 
 function PluginField({
   field,
+  pluginId,
   value,
   onChange,
   onChangeMerge,
 }: {
   field: WorkflowNodeConfigField;
+  /** The node's plugin id — scopes plugin-specific option sources (e.g. connectors). */
+  pluginId?: string;
   value: unknown;
   onChange: (v: unknown) => void;
   /** Set the field value AND merge extra resolved keys into config in a single update. */
@@ -77,11 +81,11 @@ function PluginField({
 
   useEffect(() => {
     if ((field.type === 'select' || field.type === 'multiselect') && field.optionsSource) {
-      void fetchNodeOptions(field.optionsSource)
+      void fetchNodeOptions(field.optionsSource, pluginId)
         .then(setOptions)
         .catch(() => setOptions([]));
     }
-  }, [field.optionsSource, field.type]);
+  }, [field.optionsSource, field.type, pluginId]);
 
   if (field.type === 'boolean') {
     return (

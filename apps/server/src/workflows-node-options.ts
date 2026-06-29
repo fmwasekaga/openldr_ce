@@ -2,7 +2,7 @@
 export interface NodeOption { value: string; label: string }
 
 export interface NodeOptionsDeps {
-  connectors: { list(): Promise<Array<{ id: string; name: string }>> };
+  connectors: { list(): Promise<Array<{ id: string; name: string; pluginId: string }>> };
   datasets: { list(): Promise<Array<{ name: string }>> };
   /** dhis2-sink mappings from plugin_data (id/name). */
   dhis2Mappings(): Promise<Array<{ id: string; name: string }>>;
@@ -36,12 +36,21 @@ export async function resolveNodeDetail(source: string, value: string, deps: Nod
   }
 }
 
-/** Resolve a named optionsSource to options. Unknown source → []. Never throws (best-effort). */
-export async function resolveNodeOptions(source: string, deps: NodeOptionsDeps): Promise<NodeOption[]> {
+/** Resolve a named optionsSource to options. Unknown source → []. Never throws (best-effort).
+ *  `opts.pluginId` (the node's plugin) scopes plugin-specific sources — connectors are filtered to
+ *  the ones targeting that plugin, so a dhis2-sink node only lists dhis2-sink connectors. */
+export async function resolveNodeOptions(
+  source: string,
+  deps: NodeOptionsDeps,
+  opts?: { pluginId?: string },
+): Promise<NodeOption[]> {
   try {
     switch (source) {
-      case 'connectors':
-        return (await deps.connectors.list()).map((c) => ({ value: c.id, label: c.name }));
+      case 'connectors': {
+        const all = await deps.connectors.list();
+        const scoped = opts?.pluginId ? all.filter((c) => c.pluginId === opts.pluginId) : all;
+        return scoped.map((c) => ({ value: c.id, label: c.name }));
+      }
       case 'datasets':
         return (await deps.datasets.list()).map((d) => ({ value: d.name, label: d.name }));
       case 'dhis2-mappings':
