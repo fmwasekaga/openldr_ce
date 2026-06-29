@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { runWorkflow } from './run-workflow';
 import type { RunEvent } from '../types';
 
@@ -11,7 +11,7 @@ describe('runWorkflow', () => {
   it('runs nodes in topological order and emits the event protocol', async () => {
     const nodes = [
       { id: 't', type: 'trigger', data: { triggerType: 'manual' } },
-      { id: 'l', type: 'action', data: { action: 'log', message: 'hi {{ $input.triggered }}' } },
+      { id: 'l', type: 'action', data: { action: 'log', message: 'hi {{ $json.triggered }}' } },
     ];
     const edges = [{ id: 'e1', source: 't', target: 'l' }];
     const sink = collect();
@@ -23,6 +23,10 @@ describe('runWorkflow', () => {
       'node:start', 'node:log', 'node:success',
       'workflow:done',
     ]);
+    // outputs are WorkflowItem[]
+    const tOut = res.results.find((r) => r.nodeId === 't')?.output as { json: Record<string, unknown> }[];
+    expect(Array.isArray(tOut)).toBe(true);
+    expect(tOut[0]?.json.triggered).toBe(true);
   });
 
   it('prunes the untaken condition branch', async () => {
@@ -50,7 +54,7 @@ describe('runWorkflow', () => {
     expect(res.status).toBe('failed');
   });
 
-  it('runs a SQL source node and feeds rows downstream', async () => {
+  it('runs a SQL source node and feeds rows downstream as items', async () => {
     const services = {
       runSql: async () => ({ columns: [{ key: 'name', label: 'name' }], rows: [{ name: 'alice' }] }),
       fhirQuery: async () => ({ resources: [] }),
@@ -62,7 +66,7 @@ describe('runWorkflow', () => {
     const nodes = [
       { id: 't', type: 'trigger', data: {} },
       { id: 'q', type: 'action', data: { action: 'sql-query', config: { sql: 'select name from x' } } },
-      { id: 'l', type: 'action', data: { action: 'log', message: 'first={{ $input.rows.0.name }}' } },
+      { id: 'l', type: 'action', data: { action: 'log', message: 'first={{ $json.name }}' } },
     ];
     const edges = [
       { id: 'e1', source: 't', target: 'q' },
@@ -105,7 +109,7 @@ describe('runWorkflow', () => {
     const nodes = [
       { id: 't', type: 'trigger', data: {} },
       { id: 'c', type: 'code', data: { code: "console.log('in code'); return { n: 42 };" } },
-      { id: 'l', type: 'action', data: { action: 'log', message: 'n={{ $input.n }}' } },
+      { id: 'l', type: 'action', data: { action: 'log', message: 'n={{ $json.n }}' } },
     ];
     const edges = [
       { id: 'e1', source: 't', target: 'c' },
@@ -118,8 +122,103 @@ describe('runWorkflow', () => {
       codeLimits: { timeoutMs: 5000, memoryMb: 128, enabled: true },
     });
     expect(res.status).toBe('completed');
-    const cOut = res.results.find((r) => r.nodeId === 'c')?.output;
-    expect(cOut).toEqual({ n: 42 });
+    const cOut = res.results.find((r) => r.nodeId === 'c')?.output as { json: Record<string, unknown> }[];
+    expect(Array.isArray(cOut)).toBe(true);
+    expect(cOut[0]?.json.n).toBe(42);
     expect(events.some((e) => e.type === 'node:log' && e.entry.message === 'in code')).toBe(true);
+  });
+
+  it('merges items from two upstream sources (multi-input)', async () => {
+    // two parallel sources feeding a merge node
+    const nodes = [
+      { id: 'a', type: 'trigger', data: {} },
+      { id: 'b', type: 'trigger', data: {} },
+      { id: 'm', type: 'action', data: { action: 'merge', config: { mode: 'append' } } },
+    ];
+    const edges = [
+      { id: 'e1', source: 'a', target: 'm' },
+      { id: 'e2', source: 'b', target: 'm' },
+    ];
+    const res = await runWorkflow(nodes, edges, {});
+    expect(res.status).toBe('completed');
+    const mOut = res.results.find((r) => r.nodeId === 'm')?.output as { json: Record<string, unknown> }[];
+    // each trigger produces 1 item → merge appends → 2 items
+    expect(Array.isArray(mOut)).toBe(true);
+    expect(mOut.length).toBe(2);
+  });
+
+  it('prunes the not-taken If branch downstream node (true condition → false handle skipped)', async () => {
+    const nodes = [
+      { id: 't', type: 'trigger', data: {} },
+      { id: 'i', type: 'condition', data: { templateId: 'if', condition: 'true' } },
+      { id: 'yes', type: 'action', data: { action: 'no-op' } },
+      { id: 'no', type: 'action', data: { action: 'no-op' } },
+    ];
+    const edges = [
+      { id: 'e1', source: 't', target: 'i' },
+      { id: 'e2', source: 'i', target: 'yes', sourceHandle: 'true' },
+      { id: 'e3', source: 'i', target: 'no', sourceHandle: 'false' },
+    ];
+    const res = await runWorkflow(nodes, edges, {});
+    expect(res.status).toBe('completed');
+    expect(res.results.find((r) => r.nodeId === 'yes')?.status).toBe('success');
+    expect(res.results.find((r) => r.nodeId === 'no')?.status).toBe('skipped');
+  });
+
+  it('prunes Filter true-handle downstream when all items are dropped', async () => {
+    const nodes = [
+      { id: 't', type: 'trigger', data: {} },
+      // filter condition that always fails: triggered=true but we check for false
+      { id: 'f', type: 'condition', data: { templateId: 'filter', condition: '$json.triggered === false' } },
+      { id: 'd', type: 'action', data: { action: 'no-op' } },
+    ];
+    const edges = [
+      { id: 'e1', source: 't', target: 'f' },
+      { id: 'e2', source: 'f', target: 'd', sourceHandle: 'true' },
+    ];
+    const res = await runWorkflow(nodes, edges, {});
+    expect(res.status).toBe('completed');
+    expect(res.results.find((r) => r.nodeId === 'f')?.status).toBe('success');
+    expect(res.results.find((r) => r.nodeId === 'd')?.status).toBe('skipped');
+  });
+
+  it('threads files through runWorkflow so the trigger item carries the binary lane', async () => {
+    const files = { file: { objectKey: 'uploads/x', contentType: 'application/octet-stream', byteSize: 5 } };
+    const nodes = [{ id: 't', type: 'trigger', data: {} }];
+    const edges: never[] = [];
+    const res = await runWorkflow(nodes, edges, { files });
+    expect(res.status).toBe('completed');
+    const tOut = res.results.find((r) => r.nodeId === 't')?.output as { json: Record<string, unknown>; binary?: unknown }[];
+    expect(Array.isArray(tOut)).toBe(true);
+    expect(tOut[0]?.binary).toEqual(files);
+  });
+
+  it('plugin-node → materialize chain: sink receives the plugin items as rows', async () => {
+    const materializeSpy = vi.fn().mockResolvedValue({ dataset: 'ds', rowCount: 1 });
+    const runPluginNode = vi.fn().mockResolvedValue({ items: [{ json: { a: 1 } }] });
+    const services = {
+      runSql: async () => ({ columns: [], rows: [] }),
+      fhirQuery: async () => ({ resources: [] }),
+      httpFetch: async () => ({ status: 200, headers: {}, data: null }),
+      materializeDataset: materializeSpy,
+      exportArtifact: async () => ({ objectKey: 'k', format: 'csv', byteSize: 0 }),
+      loadDataset: async () => ({ columns: [], rows: [] }),
+      runPluginNode,
+    };
+    const nodes = [
+      { id: 't', type: 'trigger', data: {} },
+      { id: 'p', type: 'plugin-node', data: { pluginId: 'my-plugin', nodeId: 'my-node', kind: 'transform', config: {} } },
+      { id: 'm', type: 'action', data: { action: 'materialize-dataset', config: { datasetName: 'ds' } } },
+    ];
+    const edges = [
+      { id: 'e1', source: 't', target: 'p' },
+      { id: 'e2', source: 'p', target: 'm' },
+    ];
+    const res = await runWorkflow(nodes, edges, { services: services as never });
+    expect(res.status).toBe('completed');
+    // materializeDataset should have received rows: [{ a: 1 }]
+    expect(materializeSpy).toHaveBeenCalledOnce();
+    const [, , rows] = materializeSpy.mock.calls[0] as [string, unknown, Record<string, unknown>[]];
+    expect(rows).toEqual([{ a: 1 }]);
   });
 });

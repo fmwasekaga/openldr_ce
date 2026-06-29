@@ -70,6 +70,21 @@ describe('handleIngestEvent', () => {
     await expect(handleIngestEvent(d, { type: 'ingest.received', payload: { batchId: 'b1', blobKey: 'k', source: 'test', converter: 'nope' } })).rejects.toThrow();
     expect(d.batches.markFailed).toHaveBeenCalled();
   });
+
+  it('onBatchDone carries the blob ref for downstream binary consumers', async () => {
+    const onBatchDone = vi.fn(async () => {});
+    // Use a valid FHIR bundle payload so the converter succeeds; assert byteSize matches the raw bytes returned.
+    const blobPayload = enc({ resourceType: 'Bundle', type: 'collection', entry: [{ resource: { resourceType: 'Patient', id: 'p1' } }] });
+    const d = {
+      ...deps(),
+      blob: {
+        get: vi.fn(async () => blobPayload),
+      } as never,
+      onBatchDone,
+    };
+    await handleIngestEvent(d, { type: 'ingest.received', payload: { batchId: 'b1', blobKey: 'uploads/b1', source: 'WHONET', converter: 'fhir-bundle' } });
+    expect(onBatchDone).toHaveBeenCalledWith(expect.objectContaining({ batchId: 'b1', blobKey: 'uploads/b1', byteSize: blobPayload.byteLength }));
+  });
 });
 
 describe('config threading', () => {

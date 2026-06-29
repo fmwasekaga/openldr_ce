@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@openldr/db": "workspace:*",
+    "@openldr/marketplace": "workspace:*",
     "@openldr/ports": "workspace:*",
     "cron-parser": "^4.9.0",
     "kysely": "^0.27.5",

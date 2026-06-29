@@ -87,6 +87,8 @@ export const ConfigSchema = z
     // Publish materialized workflow datasets as real `wf_ds_<name>` tables in the
     // target store (Postgres only) so the SQL node + dashboards can query them.
     WORKFLOW_DATASET_PUBLISH_ENABLED: envBoolean(false),
+    // Max byte size of a file uploaded to a workflow run (upload route + webhook body).
+    WORKFLOW_FILE_MAX_BYTES: z.coerce.number().int().positive().default(52_428_800),
 
     // Plugin-UI surface master switch. When false the broker refuses all calls and the host
     // serves no plugin nav/UI (kill-switch for the whole webview surface).
@@ -98,6 +100,11 @@ export const ConfigSchema = z
     // (storage.put doc, invoke/push/validate payloads). Generous default (8 MB) so the DHIS2
     // metadata-cache doc (full metadata snapshot) still writes; bounds a memory-DoS otherwise.
     PLUGIN_DATA_MAX_DOC_BYTES: z.coerce.number().int().positive().default(8_388_608),
+    // Directory for durable plugin crash markers. When an Extism worker (or any plugin) crashes
+    // the whole Node process, the in-app audit DB write can't flush in time, so the process
+    // crash handler appends a synchronous JSON marker here naming the in-flight plugin; the next
+    // boot drains these into the audit trail (action plugin.crash). Created on first write.
+    PLUGIN_CRASH_LOG_DIR: z.string().default('.openldr/crash'),
 
     // Marketplace artifact security.
     MARKETPLACE_DEV_ALLOW_UNSIGNED: envBoolean(false),

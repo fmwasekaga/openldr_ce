@@ -3,11 +3,13 @@ import { ArrowLeft, CheckCircle2, XCircle, Download } from 'lucide-react';
 import {
   fetchWorkflowRuns,
   fetchWorkflowRun,
+  downloadWorkflowArtifact,
   type WorkflowRunSummary,
   type ExecuteResponse,
   type NodeRunResult,
   type LogEntry,
 } from '@/api';
+import { outputBinaries } from '../../lib/output-binaries';
 import { cn } from '@/lib/cn';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
@@ -254,37 +256,28 @@ function RunDetail({ run, loading, error }: { run: WorkflowRunSummary; loading: 
             )}
           </div>
 
-          {results.some((r) => {
-            const o = r.output as Record<string, unknown> | null | undefined;
-            return o && typeof o === 'object' && typeof o.objectKey === 'string';
-          }) && (
-            <div className="border-t border-border px-4 py-3">
-              <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Artifacts
-              </h4>
-              <div className="flex flex-col gap-1.5">
-                {results
-                  .filter((r) => {
-                    const o = r.output as Record<string, unknown> | null | undefined;
-                    return o && typeof o === 'object' && typeof o.objectKey === 'string';
-                  })
-                  .map((r) => {
-                    const o = r.output as { objectKey: string; format?: string };
-                    return (
-                      <a
-                        key={r.nodeId}
-                        href={`/api/workflows/artifacts/${o.objectKey}`}
-                        download
-                        className="inline-flex items-center gap-1.5 self-start rounded px-2 py-1 text-xs font-medium text-violet-400 transition-colors hover:bg-violet-500/10 hover:text-violet-300"
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                        Download {o.format ? o.format.toUpperCase() : 'artifact'} ({r.nodeId})
-                      </a>
-                    );
-                  })}
+          {(() => {
+            const produced = results.flatMap((r) => outputBinaries(r.output).map((f) => ({ nodeId: r.nodeId, f })));
+            if (produced.length === 0) return null;
+            return (
+              <div className="border-t border-border px-4 py-3">
+                <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Produced files</h4>
+                <div className="flex flex-col gap-1.5">
+                  {produced.map(({ nodeId, f }) => (
+                    <button
+                      key={`${nodeId}:${f.field}`}
+                      type="button"
+                      onClick={() => void downloadWorkflowArtifact(f.objectKey, f.fileName)}
+                      className="inline-flex items-center gap-1.5 self-start rounded px-2 py-1 text-xs font-medium text-violet-400 transition-colors hover:bg-violet-500/10 hover:text-violet-300"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      {f.fileName} ({nodeId})
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {logs.length > 0 && (
             <div className="px-4 pb-4">

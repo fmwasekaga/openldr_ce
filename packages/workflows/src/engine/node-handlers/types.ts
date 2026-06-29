@@ -1,4 +1,5 @@
 import type { ExecutionContext } from '../execution-context';
+import type { WorkflowItem } from '../items';
 
 export interface RunnerNode {
   id: string;
@@ -10,5 +11,5 @@ export interface RunnerNode {
 export type NodeHandler = (
   node: RunnerNode,
   ctx: ExecutionContext,
-  upstreamOutput: unknown,
-) => Promise<unknown> | unknown;
+  input: WorkflowItem[],
+) => Promise<WorkflowItem[]> | WorkflowItem[];

@@ -1,5 +1,6 @@
 import type { RunEvent } from '../types';
 import type { WorkflowServices } from './services';
+import type { WorkflowItem, BinaryRef } from './items';
 
 /** Code node sandbox limits plus the SEC-01 master enable flag (default off). */
 export interface CodeLimits {
@@ -12,8 +13,10 @@ export interface CodeLimits {
 export interface ExecutionContext {
   /** Initial input — e.g. a manual trigger payload. */
   input: unknown;
-  /** Output of every node that has run, keyed by node id. */
-  nodeOutputs: Record<string, unknown>;
+  /** Output items of every node that has run, keyed by node id. */
+  nodeOutputs: Record<string, WorkflowItem[]>;
+  /** Branch decision (chosen sourceHandle, e.g. 'true'/'false') set by If/Filter; read by the runner for edge-pruning. */
+  branches: Record<string, string>;
   /** Captured log lines per node. */
   logs: Record<string, import('../types').LogEntry[]>;
   /** Stream an event out to listeners (SSE + buffer). */
@@ -32,6 +35,8 @@ export interface ExecutionContext {
   services?: WorkflowServices;
   /** ID of the persisted workflow record — threaded through so sink nodes can stamp datasets. */
   workflowId?: string;
+  /** Per-run file attachments (BinaryRefs), seeded onto the trigger's item. */
+  files?: Record<string, BinaryRef>;
 }
 
 export function createContext(
@@ -42,6 +47,7 @@ export function createContext(
   services?: WorkflowServices,
   workflowId?: string,
   logger?: ExecutionContext['logger'],
+  files?: Record<string, BinaryRef>,
 ): ExecutionContext {
-  return { input, nodeOutputs: {}, logs: {}, emit, edges, codeLimits, services, workflowId, logger };
+  return { input, nodeOutputs: {}, branches: {}, logs: {}, emit, edges, codeLimits, services, workflowId, logger, files };
 }

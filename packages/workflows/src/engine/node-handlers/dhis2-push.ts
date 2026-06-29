@@ -1,6 +1,6 @@
 import type { NodeHandler } from './types';
 
-export const dhis2PushHandler: NodeHandler = async (node, ctx) => {
+export const dhis2PushHandler: NodeHandler = async (node, ctx, input) => {
   if (!ctx.services?.dhis2Push) {
     throw new Error('DHIS2 push not available (DHIS2 is not the configured reporting target)');
   }
@@ -8,5 +8,6 @@ export const dhis2PushHandler: NodeHandler = async (node, ctx) => {
   const mappingId = String(config.mappingId ?? '').trim();
   const period = String(config.period ?? '').trim();
   if (!mappingId || !period) throw new Error('DHIS2 push node: mappingId and period are required');
-  return ctx.services.dhis2Push({ mappingId, period, dryRun: Boolean(config.dryRun) });
+  await ctx.services.dhis2Push({ mappingId, period, dryRun: Boolean(config.dryRun) });
+  return input;
 };

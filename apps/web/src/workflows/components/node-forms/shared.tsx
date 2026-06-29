@@ -40,12 +40,12 @@ export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
 
 /**
  * A text input that hints at templating support — used wherever a field
- * accepts `{{ $input.body.foo }}` substitution.
+ * accepts `{{ $json.foo }}` substitution.
  */
 export function ExpressionInput(props: InputHTMLAttributes<HTMLInputElement>) {
   return (
-    <FormField label={typeof props['aria-label'] === 'string' ? props['aria-label'] : 'Value'} hint="Templates: {{ $input.foo }} or {{ $node('id').bar }}">
-      <TextInput {...props} placeholder={props.placeholder ?? '{{ $input.body }}'} />
+    <FormField label={typeof props['aria-label'] === 'string' ? props['aria-label'] : 'Value'} hint="Templates: {{ $json.foo }} or {{ $node('id').0.json.bar }}">
+      <TextInput {...props} placeholder={props.placeholder ?? '{{ $json.body }}'} />
     </FormField>
   );
 }

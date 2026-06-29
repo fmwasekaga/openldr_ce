@@ -1,10 +1,11 @@
-﻿import { useMemo, useState, type DragEvent } from 'react';
+﻿import { useEffect, useMemo, useState, type DragEvent } from 'react';
 import { ChevronDown, ChevronRight, ChevronsLeft, ChevronsRight, Search, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { nodeCategories, IMPLEMENTED_TEMPLATE_IDS } from '../constants';
 import type { NodeCategory, NodeTemplate } from '../lib/types';
 import type { NodeVariant } from './node-types/base-node';
 import { NodeIcon, resolveLucideIcon } from '../lib/icons';
+import { fetchWorkflowNodes, pluginNodeDeclId, type WorkflowNodeDescriptor } from '@/api';
 
 const VARIANT_ICON_COLORS: Record<NodeVariant, string> = {
   trigger: 'text-emerald-400',
@@ -24,7 +25,8 @@ function NodeCard({ template }: { template: NodeTemplate }) {
   const iconColor = iconColorFor(template.type);
   // Only templates with a backing handler in this slice are draggable; the rest
   // render disabled ("coming soon") until a later slice adds the handler.
-  const available = IMPLEMENTED_TEMPLATE_IDS.has(template.id);
+  // Plugin nodes are always available (their handler is the generic plugin-node engine handler).
+  const available = template.type === 'plugin-node' || IMPLEMENTED_TEMPLATE_IDS.has(template.id);
 
   const onDragStart = (event: DragEvent) => {
     event.dataTransfer.setData('application/reactflow-type', template.type);
@@ -119,21 +121,56 @@ function CategorySection({ category, expanded, onToggle }: CategorySectionProps)
 const COLLAPSED_WIDTH = 'w-12';
 const EXPANDED_WIDTH = 'w-72';
 
+function pluginTemplate(d: WorkflowNodeDescriptor): NodeTemplate {
+  const defaults: Record<string, unknown> = {};
+  for (const f of d.config) if (f.default !== undefined) defaults[f.key] = f.default;
+  return {
+    id: d.id,
+    type: 'plugin-node',
+    label: d.label,
+    description: d.description || `${d.kind} node from ${d.pluginId}`,
+    icon: 'Puzzle',
+    keywords: [d.pluginId ?? '', d.kind],
+    defaultData: {
+      label: d.label,
+      pluginId: d.pluginId,
+      nodeId: pluginNodeDeclId(d),
+      kind: d.kind,
+      config: defaults,
+      iconName: 'Puzzle',
+      templateId: 'plugin-node',
+    } as never,
+  };
+}
+
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [search, setSearch] = useState('');
+  const [pluginCats, setPluginCats] = useState<NodeCategory[]>([]);
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>(() =>
     // Default: every category expanded so the library is browsable on first load.
     Object.fromEntries(nodeCategories.map((c) => [c.name, true])),
   );
 
+  useEffect(() => {
+    void fetchWorkflowNodes()
+      .then((nodes) => {
+        const plugins = nodes.filter((n) => n.source === 'plugin');
+        if (plugins.length === 0) { setPluginCats([]); return; }
+        setPluginCats([{ name: 'Plugins', icon: 'Puzzle', items: plugins.map(pluginTemplate) }]);
+      })
+      .catch(() => setPluginCats([]));
+  }, []);
+
+  const allCats = useMemo(() => [...nodeCategories, ...pluginCats], [pluginCats]);
+
   /** When a search term is entered, build a single synthetic "Search results" category. */
   const visibleCategories: NodeCategory[] = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return nodeCategories;
+    if (!q) return allCats;
 
     const matches: NodeTemplate[] = [];
-    for (const cat of nodeCategories) {
+    for (const cat of allCats) {
       for (const item of cat.items) {
         const haystack = [
           item.label,
@@ -153,7 +190,7 @@ export function Sidebar() {
         items: matches,
       },
     ];
-  }, [search]);
+  }, [search, allCats]);
 
   // When searching, force the synthetic results category open.
   const isExpanded = (name: string) =>

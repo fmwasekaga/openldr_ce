@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { capabilitySchema } from './capabilities';
+import { workflowNodeDeclSchema } from './workflow-node';
 
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 const HEX64 = /^[0-9a-f]{64}$/;
@@ -45,6 +46,9 @@ const pluginPayload = z.object({
   limits: z.object({ memoryMb: z.number().int().positive().default(256), timeoutMs: z.number().int().positive().default(30_000) })
     .default({ memoryMb: 256, timeoutMs: 30_000 }),
   ui: uiContributionSchema.optional(),
+  // Workflow-builder nodes this plugin contributes (SP-1). Part of the signed payload; absent
+  // ⇒ no nodes, so existing signed plugin artifacts stay byte-identical and verify.
+  workflowNodes: z.array(workflowNodeDeclSchema).optional(),
 });
 const formPayload = z.object({ kind: z.literal('form-template'), questionnaireSha256: z.string().regex(HEX64) });
 const reportPayload = z.object({ kind: z.literal('report-template'), templateSha256: z.string().regex(HEX64) });
@@ -84,6 +88,7 @@ export interface LegacyPluginManifest {
   limits?: { memoryMb: number; timeoutMs: number };
   capabilities?: unknown;
   ui?: unknown;
+  workflowNodes?: unknown;
 }
 
 /** Adapt a legacy plugin manifest to an (unsigned, publisher-less) artifact manifest.
@@ -109,6 +114,7 @@ export function pluginManifestToArtifact(m: LegacyPluginManifest): ArtifactManif
       wasi: m.wasi ?? false,
       limits: m.limits ?? { memoryMb: 256, timeoutMs: 30_000 },
       ...(m.ui !== undefined ? { ui: m.ui } : {}),
+      ...(m.workflowNodes !== undefined ? { workflowNodes: m.workflowNodes } : {}),
     },
   });
 }

@@ -97,6 +97,7 @@ function artifactToPluginManifest(a: ArtifactManifest): PluginManifest {
     license: a.license,
     wasi: p.wasi,
     limits: p.limits,
+    ...(p.workflowNodes !== undefined ? { workflowNodes: p.workflowNodes } : {}),
   });
 }
 

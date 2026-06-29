@@ -84,7 +84,7 @@ export const sampleNodes: WorkflowNode[] = [
     position: { x: 540, y: 260 },
     data: {
       label: 'Is premium?',
-      condition: '$input.data && $input.data.id > 0',
+      condition: '$json.data && $json.data.id > 0',
       templateId: 'if',
       iconName: 'GitBranch',
     },
@@ -100,7 +100,7 @@ export const sampleNodes: WorkflowNode[] = [
     data: {
       label: 'Log premium',
       action: 'log',
-      message: 'Premium user: {{ $input.data.name }}',
+      message: 'Premium user: {{ $json.data.name }}',
       level: 'info',
       config: {},
       templateId: 'log',
@@ -129,7 +129,7 @@ export const sampleNodes: WorkflowNode[] = [
     position: { x: 1040, y: 140 },
     data: {
       label: 'Build report',
-      code: 'console.log("Building report for", $input);\nreturn { report: "done", ts: Date.now() };',
+      code: 'console.log("Building report for", $json);\nreturn { report: "done", ts: Date.now() };',
       language: 'javascript',
       templateId: 'code',
       iconName: 'Code',
@@ -173,7 +173,7 @@ export const sampleNodes: WorkflowNode[] = [
     position: { x: 1400, y: 260 },
     data: {
       label: 'Has data?',
-      condition: '$input && $input.length > 0',
+      condition: '$items && $items.length > 0',
       templateId: 'filter',
       iconName: 'Filter',
     },

@@ -1,11 +1,13 @@
 /**
  * Tiny `{{ expression }}` template resolver. Used by node handlers to let
  * users reference upstream node output from their config (e.g. a Log node
- * whose `message` field is `received {{ $input.body.name }}`).
+ * whose `message` field is `received {{ $json.body.name }}`).
  *
  * Supported syntax (intentionally minimal — no arithmetic, no fn calls):
- *   {{ $input.path.to.value }}        — output of the immediate upstream node
- *   {{ $json.path.to.value }}         — alias for $input (n8n compat)
+ *   {{ $json.path.to.value }}         — first input item's json
+ *   {{ $items }}                      — array of all input items' json objects
+ *   {{ $input }}                      — the WorkflowItem[] array itself
+ *   {{ $input.0.json.name }}          — indexed access into the items array
  *   {{ $node('node-id').path }}       — output of any prior node by id
  *
  * Missing paths resolve to an empty string (consistent with most template
@@ -13,6 +15,7 @@
  */
 
 import type { ExecutionContext } from './execution-context';
+import type { WorkflowItem } from './items';
 
 const EXPR_RE = /\{\{\s*(.*?)\s*\}\}/g;
 const NODE_CALL_RE = /^\$node\(\s*['"]([^'"]+)['"]\s*\)(.*)$/;
@@ -34,13 +37,12 @@ function readPath(value: unknown, path: string): unknown {
 
 /**
  * Resolve a single `{{ ... }}` expression against the execution context.
- * `upstreamOutput` is the output of the node feeding into the current one
- * (used by $input / $json). Pass `undefined` for source nodes like triggers.
+ * `input` is the WorkflowItem[] feeding into the current node.
  */
 export function resolveExpression(
   expression: string,
   ctx: ExecutionContext,
-  upstreamOutput: unknown,
+  input: WorkflowItem[],
 ): unknown {
   const trimmed = expression.trim();
 
@@ -48,15 +50,18 @@ export function resolveExpression(
   const nodeMatch = trimmed.match(NODE_CALL_RE);
   if (nodeMatch) {
     const [, nodeId, rest] = nodeMatch;
-    const output = ctx.nodeOutputs[nodeId];
-    return readPath(output, rest);
+    return readPath(ctx.nodeOutputs[nodeId], rest);
   }
 
+  // $items is checked before $input so startsWith doesn't mis-match
+  if (trimmed.startsWith('$items')) {
+    return readPath(input.map((i) => i.json), trimmed.slice('$items'.length));
+  }
   if (trimmed.startsWith('$input')) {
-    return readPath(upstreamOutput, trimmed.slice('$input'.length));
+    return readPath(input, trimmed.slice('$input'.length));
   }
   if (trimmed.startsWith('$json')) {
-    return readPath(upstreamOutput, trimmed.slice('$json'.length));
+    return readPath(input[0]?.json, trimmed.slice('$json'.length));
   }
 
   // Unknown expression — return the raw text so users see their typo.
@@ -70,11 +75,11 @@ export function resolveExpression(
 export function resolveTemplate(
   input: string,
   ctx: ExecutionContext,
-  upstreamOutput: unknown,
+  items: WorkflowItem[],
 ): string {
   if (!input.includes('{{')) return input;
   return input.replace(EXPR_RE, (_match, expr: string) => {
-    const value = resolveExpression(expr, ctx, upstreamOutput);
+    const value = resolveExpression(expr, ctx, items);
     if (value === undefined || value === null) return '';
     if (typeof value === 'string') return value;
     try {
@@ -93,18 +98,18 @@ export function resolveTemplate(
 export function resolveTemplatesDeep<T>(
   value: T,
   ctx: ExecutionContext,
-  upstreamOutput: unknown,
+  input: WorkflowItem[],
 ): T {
   if (typeof value === 'string') {
-    return resolveTemplate(value, ctx, upstreamOutput) as unknown as T;
+    return resolveTemplate(value, ctx, input) as unknown as T;
   }
   if (Array.isArray(value)) {
-    return value.map((v) => resolveTemplatesDeep(v, ctx, upstreamOutput)) as unknown as T;
+    return value.map((v) => resolveTemplatesDeep(v, ctx, input)) as unknown as T;
   }
   if (value && typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      out[k] = resolveTemplatesDeep(v, ctx, upstreamOutput);
+      out[k] = resolveTemplatesDeep(v, ctx, input);
     }
     return out as unknown as T;
   }

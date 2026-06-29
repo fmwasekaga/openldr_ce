@@ -83,7 +83,7 @@ export function SetForm({ node, update }: NodeFormProps) {
               <TextInput
                 value={field.value}
                 onChange={(e) => updateField(i, { value: e.target.value })}
-                placeholder="{{ $input.foo }}"
+                placeholder="{{ $json.foo }}"
                 className="!mt-0 font-mono text-xs"
               />
             </div>

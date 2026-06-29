@@ -4,7 +4,7 @@ import { FormField, TextInput } from './shared';
 
 /**
  * Stop and Error node form. Configures the error message that halts the
- * workflow. Supports {{ $input.foo }} templates.
+ * workflow. Supports {{ $json.foo }} templates.
  */
 export function StopErrorForm({ node, update }: NodeFormProps) {
   const data = node.data as ActionNodeData;
@@ -25,7 +25,7 @@ export function StopErrorForm({ node, update }: NodeFormProps) {
 
       <FormField
         label="Error Message"
-        hint="Supports templates: {{ $input.reason }}. The workflow stops with this error."
+        hint="Supports templates: {{ $json.reason }}. The workflow stops with this error."
       >
         <TextInput
           value={errorMessage}

@@ -14,6 +14,7 @@ import { pickHandler, type RunnerNode } from './node-handlers';
 import { createContext, type CodeLimits, type ExecutionContext } from './execution-context';
 import type { RunEvent, LogEntry, WorkflowEdge } from '../types';
 import type { WorkflowServices } from './services';
+import type { WorkflowItem } from './items';
 
 export type WorkflowNode = RunnerNode;
 
@@ -70,23 +71,24 @@ export function topologicalSort(
 }
 
 /**
- * Pick the immediate upstream node's output to feed into the next handler.
- * If a node has multiple incoming edges we just take the first that has run;
- * good enough for the linear workflows the UI builds today and matches the
- * `$input` mental model. The `nodeOutputs` map is also available to handlers
- * via `ctx` for richer routing later.
+ * Feed each node the concatenation of all ran, non-skipped upstream edges' item
+ * arrays. Single-input → that node's items; multi-input → concatenation (Merge
+ * relies on this). Sources with no upstream get [].
  */
-function upstreamOutputFor(
+function upstreamItemsFor(
   node: WorkflowNode,
   edges: WorkflowEdge[],
-  nodeOutputs: Record<string, unknown>,
-): unknown {
+  nodeOutputs: Record<string, WorkflowItem[]>,
+  skippedEdges: Set<string>,
+): WorkflowItem[] {
+  const out: WorkflowItem[] = [];
   for (const edge of edges) {
-    if (edge.target === node.id && edge.source in nodeOutputs) {
-      return nodeOutputs[edge.source];
-    }
+    if (edge.target !== node.id) continue;
+    if (skippedEdges.has(edge.id)) continue;
+    const items = nodeOutputs[edge.source];
+    if (Array.isArray(items)) out.push(...items);
   }
-  return undefined;
+  return out;
 }
 
 export interface RunWorkflowOptions {
@@ -102,6 +104,8 @@ export interface RunWorkflowOptions {
   workflowId?: string;
   /** Optional logger so an enabled Code node can warn about host-level execution. */
   logger?: ExecutionContext['logger'];
+  /** Per-run file attachments seeded onto the trigger item. */
+  files?: Record<string, import('./items').BinaryRef>;
 }
 
 export async function runWorkflow(
@@ -110,7 +114,7 @@ export async function runWorkflow(
   opts: RunWorkflowOptions = {},
 ): Promise<WorkflowRunResult> {
   const startedAt = new Date().toISOString();
-  const ctx = createContext(opts.input, opts.onEvent ?? (() => {}), edges, opts.codeLimits, opts.services, opts.workflowId, opts.logger);
+  const ctx = createContext(opts.input, opts.onEvent ?? (() => {}), edges, opts.codeLimits, opts.services, opts.workflowId, opts.logger, opts.files);
   const sorted = topologicalSort(nodes, edges);
   const results: NodeRunResult[] = [];
 
@@ -145,9 +149,9 @@ export async function runWorkflow(
 
     const start = Date.now();
     try {
-      const upstream = upstreamOutputFor(node, edges, ctx.nodeOutputs);
+      const input = upstreamItemsFor(node, edges, ctx.nodeOutputs, skippedEdges);
       const handler = pickHandler(node);
-      const output = await handler(node, ctx, upstream);
+      const output = await handler(node, ctx, input);
       ctx.nodeOutputs[node.id] = output;
 
       const durationMs = Date.now() - start;
@@ -163,25 +167,16 @@ export async function runWorkflow(
         type: 'node:success',
         nodeId: node.id,
         nodeType: node.type,
-        input: upstream,
+        input,
         output,
         durationMs,
       });
 
-      // Condition node: prune the unused branch.
-      if (
-        node.type === 'condition' &&
-        output &&
-        typeof output === 'object' &&
-        'branch' in (output as Record<string, unknown>)
-      ) {
-        const branch = (output as Record<string, unknown>).branch as
-          | 'true'
-          | 'false';
+      // Branch pruning: If/Filter record their chosen handle in ctx.branches.
+      const branch = ctx.branches[node.id];
+      if (branch !== undefined) {
         for (const e of edges.filter((edge) => edge.source === node.id)) {
-          if (e.sourceHandle && e.sourceHandle !== branch) {
-            skippedEdges.add(e.id);
-          }
+          if (e.sourceHandle && e.sourceHandle !== branch) skippedEdges.add(e.id);
         }
       }
     } catch (err) {

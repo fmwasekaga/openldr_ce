@@ -2,10 +2,11 @@ import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { ZodError } from 'zod';
 import type { AppContext } from '@openldr/bootstrap';
-import { WorkflowSchema, WorkflowDefinitionSchema, runWorkflow, type RunEvent } from '@openldr/workflows';
+import { WorkflowSchema, WorkflowDefinitionSchema, runWorkflow, type RunEvent, createWorkflowNodeRegistry, HOST_NODE_DESCRIPTORS } from '@openldr/workflows';
 import { toCsv } from '@openldr/reporting';
 import { recordAudit } from './audit-helper';
 import { requireRole } from './rbac';
+import { resolveNodeOptions } from './workflows-node-options';
 
 /** Sync a workflow's trigger nodes into the derived registries (webhooks + schedules). */
 async function syncWorkflowTriggers(ctx: AppContext, workflow: { id: string; definition: unknown }): Promise<void> {
@@ -76,6 +77,30 @@ function redactWorkflowSecrets(definition: unknown): unknown {
   return { ...def, nodes };
 }
 
+/** Reads the request body (Buffer or async-iterable stream) into a Buffer, enforcing the byte cap. */
+async function readBinaryBody(body: unknown, maxBytes: number): Promise<Buffer> {
+  if (Buffer.isBuffer(body)) {
+    if (body.length > maxBytes) throw Object.assign(new Error('file too large'), { statusCode: 413 });
+    return body;
+  }
+  if (body && typeof (body as AsyncIterable<Buffer>)[Symbol.asyncIterator] === 'function') {
+    const chunks: Buffer[] = []; let total = 0;
+    for await (const c of body as AsyncIterable<Buffer | string>) {
+      const buf = Buffer.isBuffer(c) ? c : Buffer.from(c);
+      total += buf.length;
+      if (total > maxBytes) throw Object.assign(new Error('file too large'), { statusCode: 413 });
+      chunks.push(buf);
+    }
+    return Buffer.concat(chunks);
+  }
+  throw Object.assign(new Error('expected a binary body'), { statusCode: 400 });
+}
+
+function sanitizeFilename(name: string): string {
+  const base = name.split(/[\\/]/).pop() ?? 'upload';
+  return base.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 128) || 'upload';
+}
+
 /** Headers stripped before forwarding webhook request headers into workflow input (SEC-07). */
 const FORWARD_STRIP_HEADERS = new Set(['x-webhook-token', 'authorization', 'cookie', 'proxy-authorization']);
 
@@ -96,8 +121,32 @@ function secretEquals(token: string, secret: string): boolean {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function registerWorkflowRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
+export function registerWorkflowRoutes(
+  app: FastifyInstance<any, any, any, any>,
+  ctx: AppContext,
+  deps?: { connectors: { list(): Promise<Array<{ id: string; name: string }>> } },
+): void {
   const MANAGE = { preHandler: requireRole('lab_admin', 'lab_manager') };
+
+  // Octet-stream passthrough parser (stream → body). Guard prevents double-registration
+  // when terminology-admin (or another route file) already added this parser to the app.
+  if (!app.hasContentTypeParser('application/octet-stream')) {
+    app.addContentTypeParser('application/octet-stream', (_req, payload, done) => done(null, payload));
+  }
+
+  // Upload a binary file for use as a workflow trigger input. Returns a BinaryRef that can be
+  // passed into execute-stream's `files` map or as a webhook body substitute.
+  app.post('/api/workflows/:id/uploads', MANAGE, async (req, reply) => {
+    const max = ctx.cfg.WORKFLOW_FILE_MAX_BYTES;
+    let buf: Buffer;
+    try { buf = await readBinaryBody(req.body, max); }
+    catch (err) { const code = (err as { statusCode?: number }).statusCode ?? 400; reply.code(code); return { error: (err as Error).message }; }
+    const filename = sanitizeFilename(((req.query as { filename?: string }).filename) ?? 'upload');
+    const objectKey = `workflow-uploads/${randomUUID()}/${filename}`;
+    const contentType = (req.headers['content-type'] as string | undefined) ?? 'application/octet-stream';
+    await ctx.blob.put(objectKey, new Uint8Array(buf), contentType);
+    return { objectKey, contentType, fileName: filename, byteSize: buf.length };
+  });
 
   // SEC-06: workflow definitions are manager-level config (they can embed
   // webhook secrets, HTTP auth headers, tokens, and SQL). Reads require the same
@@ -156,7 +205,7 @@ export function registerWorkflowRoutes(app: FastifyInstance<any, any, any, any>,
     const workflow = await ctx.workflows.store.get(id);
     if (!workflow) { reply.code(404); return { error: `unknown workflow: ${id}` }; }
 
-    const body = (req.body ?? {}) as { input?: unknown };
+    const body = (req.body ?? {}) as { input?: unknown; files?: Record<string, unknown> };
     const def = WorkflowDefinitionSchema.parse(workflow.definition);
 
     reply.hijack();
@@ -170,6 +219,7 @@ export function registerWorkflowRoutes(app: FastifyInstance<any, any, any, any>,
     try {
       const result = await runWorkflow(def.nodes, def.edges, {
         input: body.input,
+        files: body.files as Record<string, import('@openldr/workflows').BinaryRef> | undefined,
         onEvent: send,
         codeLimits: { timeoutMs: ctx.cfg.WORKFLOW_CODE_TIMEOUT_MS, memoryMb: ctx.cfg.WORKFLOW_CODE_MEMORY_MB, enabled: ctx.cfg.WORKFLOW_CODE_ENABLED },
         services: ctx.workflows.services,
@@ -218,6 +268,35 @@ export function registerWorkflowRoutes(app: FastifyInstance<any, any, any, any>,
     return rows.map((r) => {
       const d = r.doc as { id?: string; name?: string; definition?: { connectorId?: string } };
       return { id: d.id ?? r.key, name: d.name ?? d.id ?? r.key, connectorId: d.definition?.connectorId ?? null };
+    });
+  });
+
+  // Node registry: built-in host nodes merged with nodes scanned from installed+enabled plugins.
+  // Discovery only (SP-1) — no execution, no builder changes. Invalid plugin nodes are dropped
+  // + logged inside the registry, never crashing the listing.
+  app.get('/api/workflows/nodes', MANAGE, async () => {
+    const registry = createWorkflowNodeRegistry({
+      plugins: ctx.plugins,
+      hostNodes: HOST_NODE_DESCRIPTORS,
+      logger: { warn: (obj: unknown, msg: string) => ctx.logger.warn(obj as object, msg) },
+    });
+    return { nodes: await registry.list() };
+  });
+
+  // optionsSource resolver for declarative `select`/`multiselect` config fields.
+  // Resolves connectors, datasets, dhis2-mappings, fhir-resource-types; unknown → []; never throws.
+  app.get('/api/workflows/node-options/:source', MANAGE, async (req) => {
+    const { source } = req.params as { source: string };
+    return resolveNodeOptions(source, {
+      connectors: deps?.connectors ?? { list: async () => [] },
+      datasets: { list: () => ctx.workflows.datasets.list() },
+      dhis2Mappings: async () => {
+        const rows = await ctx.pluginData.list('dhis2-sink', 'mappings');
+        return rows.map((r) => {
+          const d = r.doc as { id?: string; name?: string };
+          return { id: d.id ?? r.key, name: d.name ?? d.id ?? r.key };
+        });
+      },
     });
   });
 
@@ -275,10 +354,22 @@ export function registerWorkflowRoutes(app: FastifyInstance<any, any, any, any>,
     if (!entry.secret) { reply.code(401); return { error: 'webhook has no secret configured' }; }
     const token = (req.headers['x-webhook-token'] as string | undefined) ?? '';
     if (!secretEquals(token, entry.secret)) { reply.code(401); return { error: 'invalid webhook token' }; }
+    let files: Record<string, import('@openldr/workflows').BinaryRef> | undefined;
+    let webhookBody: unknown = req.body;
+    const ct = String(req.headers['content-type'] ?? '');
+    if (!ct.includes('application/json') && req.body && (Buffer.isBuffer(req.body) || typeof (req.body as AsyncIterable<unknown>)[Symbol.asyncIterator] === 'function')) {
+      let buf: Buffer;
+      try { buf = await readBinaryBody(req.body, ctx.cfg.WORKFLOW_FILE_MAX_BYTES); }
+      catch (err) { const code = (err as { statusCode?: number }).statusCode ?? 400; reply.code(code); return { error: (err as Error).message }; }
+      const objectKey = `workflow-uploads/${randomUUID()}/webhook`;
+      await ctx.blob.put(objectKey, new Uint8Array(buf), 'application/octet-stream');
+      files = { file: { objectKey, contentType: 'application/octet-stream', fileName: 'webhook', byteSize: buf.length } };
+      webhookBody = undefined;
+    }
     await ctx.workflows.runner.runAndRecord(entry.workflowId, 'webhook', {
-      method: req.method, body: req.body,
+      method: req.method, body: webhookBody,
       headers: stripAuthHeaders(req.headers as Record<string, unknown>), query: req.query,
-    });
+    }, files);
     return { ok: true };
   });
 }

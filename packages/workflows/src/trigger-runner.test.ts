@@ -189,4 +189,48 @@ describe('workflow trigger runner', () => {
     await runner.reconcile(ev.port as never);
     expect(ev.published.length).toBe(0);
   });
+
+  it('ingest event with a blob ref runs the workflow with a file on the trigger', async () => {
+    const ev = fakeEventing();
+    const runWorkflowSpy = vi.fn().mockResolvedValue({
+      status: 'completed',
+      startedAt: new Date().toISOString(),
+      finishedAt: new Date().toISOString(),
+      results: [],
+    });
+    const runner = createWorkflowTriggerRunner({
+      store: {
+        get: async () => wfWith([{ id: 'i', type: 'trigger', data: { triggerType: 'ingest' } }]),
+      } as never,
+      runs: { record: async () => {} } as never,
+      schedules: {
+        list: async () => [],
+        get: async () => undefined,
+        setNextDue: async () => {},
+      } as never,
+      webhooks: { resolve: () => undefined } as never,
+      runWorkflow: runWorkflowSpy as never,
+      logger: { error: () => {}, warn: () => {} },
+    });
+
+    runner.setIngestWorkflowIds(['w1']);
+    await runner.registerRunner(ev.port as never);
+    await ev.handlers.get('ingest.batch.done')!({
+      type: 'ingest.batch.done',
+      payload: { source: 'WHONET', count: 1, blobKey: 'ingest/b1/whonet.sqlite', byteSize: 10 },
+    });
+
+    expect(runWorkflowSpy).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        files: {
+          file: expect.objectContaining({
+            objectKey: 'ingest/b1/whonet.sqlite',
+            byteSize: 10,
+          }),
+        },
+      }),
+    );
+  });
 });

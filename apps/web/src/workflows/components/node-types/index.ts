@@ -5,6 +5,7 @@ import { ConditionNode } from './condition-node';
 import { LoopNode } from './loop-node';
 import { WebhookNode } from './webhook-node';
 import { CodeNode } from './code-node';
+import { PluginNode } from './plugin-node';
 
 export const nodeTypes: NodeTypes = {
   trigger: TriggerNode,
@@ -13,4 +14,5 @@ export const nodeTypes: NodeTypes = {
   loop: LoopNode,
   webhook: WebhookNode,
   code: CodeNode,
+  'plugin-node': PluginNode,
 };

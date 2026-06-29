@@ -21,6 +21,7 @@
  */
 import { Worker } from 'node:worker_threads';
 import type { LogLevel } from '../types';
+import type { WorkflowItem } from './items';
 
 export interface SandboxLimits {
   timeoutMs: number;
@@ -28,8 +29,8 @@ export interface SandboxLimits {
 }
 
 export interface RunInSandboxOpts {
-  input: unknown;
-  nodeOutputs: Record<string, unknown>;
+  input: WorkflowItem[];
+  nodeOutputs: Record<string, WorkflowItem[]>;
   limits: SandboxLimits;
   onLog: (level: LogLevel, message: string) => void;
 }
@@ -53,6 +54,8 @@ function stringify(args) {
 const mk = (level) => (...args) => parentPort.postMessage({ kind: 'log', level, message: stringify(args) });
 const sandbox = {
   $input: input,
+  $json: (input && input[0]) ? input[0].json : undefined,
+  $items: Array.isArray(input) ? input.map((i) => i && i.json) : [],
   input,
   $node: (id) => (nodeOutputs && Object.prototype.hasOwnProperty.call(nodeOutputs, id)) ? nodeOutputs[id] : undefined,
   console: { log: mk('log'), info: mk('info'), warn: mk('warn'), error: mk('error'), debug: mk('log') },

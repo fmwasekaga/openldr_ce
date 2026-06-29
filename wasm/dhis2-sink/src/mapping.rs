@@ -12,17 +12,19 @@ pub fn build_data_value_set(
     let mut data_values = Vec::new();
     let mut skipped = Vec::new();
     for (i, row) in rows.iter().enumerate() {
-        let facility = row.get(&mapping.org_unit_column);
         // Only a string facility maps (mirrors `typeof facility === 'string'`).
-        let org_unit = facility
-            .and_then(|v| v.as_str())
-            .and_then(|f| org_unit_map.get(f))
-            .cloned();
+        let facility = row.get(&mapping.org_unit_column).and_then(|v| v.as_str());
+        let org_unit = facility.and_then(|f| org_unit_map.get(f)).cloned();
         let org_unit = match org_unit {
             Some(ou) => ou,
             None => {
-                let f = facility.map(value_to_string).unwrap_or_else(|| "undefined".to_string());
-                skipped.push(SkipRecord { row: i, reason: format!("no orgUnit mapping for facility '{f}'") });
+                // Distinguish "the row has no value for this column" (e.g. the report output lacks
+                // the column entirely) from "the facility value is present but has no org-unit map".
+                let reason = match facility {
+                    Some(f) => format!("no orgUnit mapping for facility '{f}'"),
+                    None => format!("no value for org-unit column '{}'", mapping.org_unit_column),
+                };
+                skipped.push(SkipRecord { row: i, reason });
                 continue;
             }
         };
@@ -84,6 +86,21 @@ mod tests {
         let (dv, skipped) = build_data_value_set(&rows, &mapping(), &org_map(), "2026Q1");
         assert!(dv.is_empty());
         assert!(skipped[0].reason.to_lowercase().contains("orgunit"));
+        // The present-but-unmapped case names the actual facility value.
+        assert!(skipped[0].reason.contains("unmapped"));
+    }
+
+    #[test]
+    fn skips_row_missing_orgunit_column_with_a_distinct_message() {
+        // The org-unit column is absent from the row (e.g. a report that produces no `facility`
+        // column). This must read differently from an unmapped facility, and must NOT say
+        // "facility 'undefined'" — it should name the missing column so the operator knows the
+        // report output lacks it.
+        let rows = vec![row(json!({ "tested": 1, "r": 0 }))];
+        let (dv, skipped) = build_data_value_set(&rows, &mapping(), &org_map(), "2026Q1");
+        assert!(dv.is_empty());
+        assert_eq!(skipped[0].reason, "no value for org-unit column 'facility'");
+        assert!(!skipped[0].reason.contains("undefined"));
     }
 
     #[test]

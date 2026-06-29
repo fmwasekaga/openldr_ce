@@ -21,6 +21,7 @@ import { MaterializeForm } from './materialize-form';
 import { ExportForm } from './export-form';
 import { Dhis2PushForm } from './dhis2-push-form';
 import { LoadDatasetForm } from './load-dataset-form';
+import { PluginNodeForm } from './plugin-node-form';
 
 export interface NodeFormProps {
   node: WorkflowNode;
@@ -56,6 +57,7 @@ const FORMS: Record<string, ComponentType<NodeFormProps>> = {
   'export-artifact': ExportForm,
   'dhis2-push': Dhis2PushForm,
   'load-dataset': LoadDatasetForm,
+  'plugin-node': PluginNodeForm,
 };
 
 export function pickForm(node: WorkflowNode): ComponentType<NodeFormProps> {
@@ -70,6 +72,7 @@ export function pickForm(node: WorkflowNode): ComponentType<NodeFormProps> {
   if (node.type === 'webhook') return WebhookForm;
   if (node.type === 'loop') return LoopForm;
   if (node.type === 'action' && data.action === 'log') return LogForm;
+  if (node.type === 'plugin-node') return PluginNodeForm;
 
   return DefaultForm;
 }

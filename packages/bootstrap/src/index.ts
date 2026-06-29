@@ -9,7 +9,7 @@ import { createLogger, HealthRegistry, redact, type Logger } from '@openldr/core
 import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, deriveSystemCode, resolveSeedPublisherId, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
-import { createAuditStore, type AuditStore } from '@openldr/audit';
+import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore, createUserProfileStore, type UserProfileStore } from '@openldr/users';
 import { createFormStore, type FormStore } from '@openldr/forms';
 import { getReport, reportSummaries, getEventSource, eventSourceCatalog, toCsv, type ReportResult, type ReportSummary } from '@openldr/reporting';
@@ -33,6 +33,7 @@ import { createConnectorStore, createPluginDataStore, type PluginDataStore } fro
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { policyFromConfig } from './policy';
 import { createPluginTarget } from './connector-target';
+import { createPluginNodeService } from './plugin-node-service';
 import { createDhis2Orchestration } from './dhis2-orchestration';
 import { buildDhis2PushService } from './dhis2-push-service';
 import { selectTargetStore } from './target-store';
@@ -192,7 +193,10 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   const runReport = async (id: string, rawParams: unknown): Promise<ReportResult> => {
     const def = getReport(id);
     if (!def) throw new ReportNotFoundError(id);
-    const params = def.params.parse(rawParams);
+    // Defense-in-depth: report param schemas are z.object(...) which throw "Required" on undefined.
+    // "No params" is a valid input (all report fields are optional) → normalise undefined/null to {}.
+    // The DHIS2 push path (dispatchReportSource) is the source fix; this guards every other caller.
+    const params = def.params.parse(rawParams ?? {});
     const data = await def.run(reportingDb, params);
     return { ...data, meta: { generatedAt: new Date().toISOString(), rowCount: data.rows.length } };
   };
@@ -402,6 +406,17 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   // the host did) so the dhis2-push handler resolves the service at run time. Deployment-agnostic:
   // it reads the dhis2-sink plugin's mappings/org-units, no longer gated on the host DHIS2 context.
   workflowServices.dhis2Push = buildDhis2PushService({ pluginData, push: (input) => dhis2Orch.push(input) });
+  // Generic plugin-node executor: resolves the node's plugin + connector, enforces capabilities,
+  // and invokes the wasm {items,config} entrypoint. Mutates the same workflowServices object the
+  // runner already references (like dhis2Push), so plugin-node handlers resolve it at run time.
+  workflowServices.runPluginNode = createPluginNodeService({
+    plugins,
+    connectors: connectorStore,
+    secretsKey: cfg.SECRETS_ENCRYPTION_KEY,
+    policy: () => ({ egressEnabled: cfg.PLUGIN_EGRESS_ENABLED }),
+    blob,
+    maxFileBytes: cfg.WORKFLOW_FILE_MAX_BYTES,
+  });
   const pluginBroker = createPluginBroker({
     plugins,
     pluginData,
@@ -449,6 +464,15 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     logger,
     maxDocBytes: cfg.PLUGIN_DATA_MAX_DOC_BYTES,
     policy: () => policyFromConfig(cfg),
+    // Audit the broker's security boundary: every denial (capability/role/policy/egress gate or a
+    // malformed op) and every completed sensitive op (wasm invoke / live egress). High-frequency
+    // reads (storage/reports/fhir/list) are not emitted. safeRecord is best-effort (never throws).
+    audit: (e) => safeRecord(audit, logger, {
+      actorType: 'user', actorId: e.principal.id, actorName: e.principal.username ?? e.principal.id,
+      action: e.outcome === 'denied' ? 'plugin.broker.denied' : 'plugin.broker.access',
+      entityType: 'plugin', entityId: e.pluginId,
+      metadata: { op: e.op, outcome: e.outcome, roles: e.principal.roles, ...(e.reason ? { reason: e.reason } : {}) },
+    }),
   });
 
   return {
@@ -491,4 +515,5 @@ export * from './target-store';
 export * from './terminology-context';
 export * from './seed';
 export * from './plugin-broker';
+export * from './crash-audit';
 export * from './policy';

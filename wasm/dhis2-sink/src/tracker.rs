@@ -12,13 +12,17 @@ pub fn build_events(
     let mut events = Vec::new();
     let mut skipped = Vec::new();
     for (i, row) in rows.iter().enumerate() {
-        let facility = row.get(&mapping.org_unit_column);
-        let org_unit = facility.and_then(|v| v.as_str()).and_then(|f| org_unit_map.get(f)).cloned();
+        let facility = row.get(&mapping.org_unit_column).and_then(|v| v.as_str());
+        let org_unit = facility.and_then(|f| org_unit_map.get(f)).cloned();
         let org_unit = match org_unit {
             Some(ou) => ou,
             None => {
-                let f = facility.map(value_to_string).unwrap_or_else(|| "undefined".to_string());
-                skipped.push(SkipRecord { row: i, reason: format!("no orgUnit mapping for facility '{f}'") });
+                // Distinguish a missing org-unit column from a present-but-unmapped facility value.
+                let reason = match facility {
+                    Some(f) => format!("no orgUnit mapping for facility '{f}'"),
+                    None => format!("no value for org-unit column '{}'", mapping.org_unit_column),
+                };
+                skipped.push(SkipRecord { row: i, reason });
                 continue;
             }
         };
@@ -84,6 +88,16 @@ mod tests {
         let (events, skipped) = build_events(&rows, &mapping(), &org_map());
         assert!(events.is_empty());
         assert!(skipped[0].reason.to_lowercase().contains("orgunit"));
+        assert!(skipped[0].reason.contains("nope"));
+    }
+
+    #[test]
+    fn skips_row_missing_orgunit_column_with_a_distinct_message() {
+        let rows = vec![row(json!({ "id": "o", "eventDate": "2026-01-10" }))];
+        let (events, skipped) = build_events(&rows, &mapping(), &org_map());
+        assert!(events.is_empty());
+        assert_eq!(skipped[0].reason, "no value for org-unit column 'facility'");
+        assert!(!skipped[0].reason.contains("undefined"));
     }
 
     #[test]

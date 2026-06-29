@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { uiContributionSchema } from '@openldr/marketplace';
+import { uiContributionSchema, workflowNodeDeclSchema } from '@openldr/marketplace';
 
 export const pluginManifestSchema = z.object({
   id: z.string().min(1),
@@ -21,6 +21,9 @@ export const pluginManifestSchema = z.object({
     .object({ memoryMb: z.number().int().positive().default(256), timeoutMs: z.number().int().positive().default(30_000) })
     .default({ memoryMb: 256, timeoutMs: 30_000 }),
   ui: uiContributionSchema.optional(),
+  // Workflow-builder nodes this plugin contributes (SP-1). Absent ⇒ no nodes; existing
+  // manifests stay byte-identical. Each entry is validated by the shared marketplace schema.
+  workflowNodes: z.array(workflowNodeDeclSchema).optional(),
 });
 
 export type PluginManifest = z.infer<typeof pluginManifestSchema>;

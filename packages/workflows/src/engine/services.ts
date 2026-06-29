@@ -1,3 +1,17 @@
+import type { WorkflowItem } from './items';
+
+export interface RunPluginNodeInput {
+  pluginId: string;
+  /** The node decl id within the plugin (NOT the `${pluginId}:${id}` composite). */
+  nodeId: string;
+  config: Record<string, unknown>;
+  items: WorkflowItem[];
+}
+export interface RunPluginNodeOutput {
+  items: WorkflowItem[];
+  meta?: Record<string, unknown>;
+}
+
 export interface SqlResult {
   columns: { key: string; label: string }[];
   rows: Record<string, unknown>[];
@@ -45,6 +59,9 @@ export interface WorkflowServices {
   ): Promise<{ dataset: string; rowCount: number }>;
   exportArtifact(input: ExportArtifactInput): Promise<ExportArtifactResult>;
   dhis2Push?(input: Dhis2PushInput): Promise<unknown>;
+  /** Execute a plugin-contributed workflow node. Injected at bootstrap (like dhis2Push); absent in
+   *  pure-engine tests and legacy paths. */
+  runPluginNode?(input: RunPluginNodeInput): Promise<RunPluginNodeOutput>;
   loadDataset(name: string): Promise<{ columns: { key: string; label: string }[]; rows: Record<string, unknown>[] }>;
 }
 

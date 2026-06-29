@@ -1,24 +1,23 @@
 import type { NodeHandler } from './types';
 import { resolveTemplate } from '../template';
+import type { WorkflowItem } from '../items';
 
 /**
  * Build a new object from user-configured field mappings. Each value supports
- * `{{ $input.foo }}` templates. When `keepExisting` is true, the upstream
- * object is spread first so unmapped fields survive.
+ * `{{ $json.foo }}` templates resolved per-item. When `keepExisting` is true, the
+ * item's existing json fields survive. Produces one output item per input item.
  */
-export const setHandler: NodeHandler = async (node, ctx, upstream) => {
+export const setHandler: NodeHandler = async (node, ctx, input) => {
   const config = (node.data.config as Record<string, unknown>) ?? {};
   const fields = (config.fields as Array<{ name: string; value: string }>) ?? [];
   const keepExisting = Boolean(config.keepExisting);
-
-  const base: Record<string, unknown> = keepExisting && upstream && typeof upstream === 'object'
-    ? { ...(upstream as Record<string, unknown>) }
-    : {};
-
-  for (const field of fields) {
-    if (!field.name) continue;
-    base[field.name] = resolveTemplate(field.value ?? '', ctx, upstream);
-  }
-
-  return base;
+  const sources: WorkflowItem[] = input.length > 0 ? input : [{ json: {} }];
+  return sources.map((item) => {
+    const base: Record<string, unknown> = keepExisting ? { ...item.json } : {};
+    for (const field of fields) {
+      if (!field.name) continue;
+      base[field.name] = resolveTemplate(field.value ?? '', ctx, [item]);
+    }
+    return { json: base };
+  });
 };

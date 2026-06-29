@@ -4,7 +4,7 @@ import { FormField, Select, TextArea, TextInput } from './shared';
 
 /**
  * HTTP Request node form. Configures method, URL, headers, body, and
- * response type. All string fields support `{{ $input.foo }}` templates.
+ * response type. All string fields support `{{ $json.foo }}` templates.
  */
 export function HttpRequestForm({ node, update }: NodeFormProps) {
   const data = node.data as ActionNodeData;
@@ -40,7 +40,7 @@ export function HttpRequestForm({ node, update }: NodeFormProps) {
         </Select>
       </FormField>
 
-      <FormField label="URL" hint="Supports templates: {{ $input.baseUrl }}/users — only allow-listed hosts are reachable (set WORKFLOW_HTTP_ALLOWLIST on the server).">
+      <FormField label="URL" hint="Supports templates: {{ $json.baseUrl }}/users — only allow-listed hosts are reachable (set WORKFLOW_HTTP_ALLOWLIST on the server).">
         <TextInput
           value={url}
           onChange={(e) => patchConfig({ url: e.target.value })}
@@ -50,7 +50,7 @@ export function HttpRequestForm({ node, update }: NodeFormProps) {
 
       <FormField
         label="Headers"
-        hint='JSON object, e.g. { "Authorization": "Bearer {{ $input.token }}" }'
+        hint='JSON object, e.g. { "Authorization": "Bearer {{ $json.token }}" }'
       >
         <TextArea
           className="h-20 resize-none font-mono text-xs leading-relaxed"
@@ -62,12 +62,12 @@ export function HttpRequestForm({ node, update }: NodeFormProps) {
       </FormField>
 
       {showBody && (
-        <FormField label="Body" hint="Request body. Supports {{ $input.foo }} templates.">
+        <FormField label="Body" hint="Request body. Supports {{ $json.foo }} templates.">
           <TextArea
             className="h-24 resize-none font-mono text-xs leading-relaxed"
             value={body}
             onChange={(e) => patchConfig({ body: e.target.value })}
-            placeholder='{ "name": "{{ $input.name }}" }'
+            placeholder='{ "name": "{{ $json.name }}" }'
             spellCheck={false}
           />
         </FormField>

@@ -7,6 +7,7 @@ import type { WebhookRegistry } from './webhook-registry';
 import type { runWorkflow as RunWorkflowFn } from './engine/run-workflow';
 import type { WorkflowServices } from './engine/services';
 import type { CodeLimits } from './engine/execution-context';
+import type { BinaryRef } from './engine/items';
 import { WorkflowDefinitionSchema, type TriggerSource, type WorkflowRun } from './types';
 import { nextCronDate } from './cron';
 
@@ -28,13 +29,13 @@ export interface WorkflowTriggerRunner {
   registerRunner(eventing: EventingPort): Promise<void>;
   reconcile(eventing: EventingPort): Promise<void>;
   setIngestWorkflowIds(ids: string[]): void;
-  runAndRecord(workflowId: string, source: TriggerSource, input: unknown): Promise<void>;
+  runAndRecord(workflowId: string, source: TriggerSource, input: unknown, files?: Record<string, BinaryRef>): Promise<void>;
 }
 
 export function createWorkflowTriggerRunner(deps: RunnerDeps): WorkflowTriggerRunner {
   let ingestIds = new Set<string>();
 
-  async function runAndRecord(workflowId: string, source: TriggerSource, input: unknown): Promise<void> {
+  async function runAndRecord(workflowId: string, source: TriggerSource, input: unknown, files?: Record<string, BinaryRef>): Promise<void> {
     const wf = await deps.store.get(workflowId);
     if (!wf || !wf.enabled) return;
     const def = WorkflowDefinitionSchema.parse(wf.definition);
@@ -43,6 +44,7 @@ export function createWorkflowTriggerRunner(deps: RunnerDeps): WorkflowTriggerRu
     try {
       result = await deps.runWorkflow(def.nodes, def.edges, {
         input,
+        files,
         codeLimits: deps.codeLimits,
         services: deps.services,
         workflowId,
@@ -124,13 +126,15 @@ export function createWorkflowTriggerRunner(deps: RunnerDeps): WorkflowTriggerRu
       });
 
       await eventing.subscribe(INGEST_DONE, async (event) => {
-        const source = String((event.payload as { source?: unknown } | undefined)?.source ?? '')
-          .trim()
-          .toLowerCase();
+        const payload = (event.payload ?? {}) as { source?: unknown; blobKey?: unknown; byteSize?: unknown };
+        const source = String(payload.source ?? '').trim().toLowerCase();
+        const files = (typeof payload.blobKey === 'string' && typeof payload.byteSize === 'number')
+          ? { file: { objectKey: payload.blobKey, contentType: 'application/octet-stream', fileName: payload.blobKey.split('/').pop() ?? 'payload', byteSize: payload.byteSize } as BinaryRef }
+          : undefined;
         for (const workflowId of ingestIds) {
           try {
             if (!(await ingestNodeMatches(workflowId, source))) continue;
-            await runAndRecord(workflowId, 'ingest', event.payload);
+            await runAndRecord(workflowId, 'ingest', event.payload, files);
           } catch (err) {
             deps.logger.error({ err, workflowId }, 'ingest-triggered workflow run failed');
           }

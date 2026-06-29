@@ -11,7 +11,7 @@ export function SqlForm({ node, update }: NodeFormProps) {
       </FormField>
       <FormField
         label="SQL (SELECT only)"
-        hint="Runs over the reporting schema (read-only, row-capped). Use {{ $input.x }} to template values. Published datasets are queryable as wf_ds_<name> (one data jsonb column) — e.g. select data->>'col' from wf_ds_amr."
+        hint="Runs over the reporting schema (read-only, row-capped). Use {{ $json.x }} to template values. Published datasets are queryable as wf_ds_<name> (one data jsonb column) — e.g. select data->>'col' from wf_ds_amr."
       >
         <TextArea
           className="h-48 resize-none font-mono text-xs"

@@ -25,10 +25,10 @@ export function DefaultForm({ node, update }: NodeFormProps) {
       </FormField>
 
       {data.condition !== undefined && (
-        <FormField label="Condition" hint="JavaScript expression. `$input` references the upstream node's output.">
+        <FormField label="Condition" hint="JavaScript expression. `$json` is the first upstream item's fields; `$items` is all items.">
           <TextInput
             value={(data.condition as string) ?? ''}
-            placeholder="$input.user.plan === 'premium'"
+            placeholder="$json.user.plan === 'premium'"
             onChange={(e) => update({ condition: e.target.value })}
           />
         </FormField>

@@ -5,6 +5,7 @@ import { sha256Hex } from './hash';
 import type { PluginStore, PluginRow } from './store';
 import type { PluginRunner } from './runner';
 import { generatePublisherKeypair, signManifest, createTrustStore, pluginManifestToArtifact } from '@openldr/marketplace';
+import { parseManifest } from './manifest';
 
 const logger = { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() } as never;
 const wasm = new TextEncoder().encode('\0asm fake bytes');
@@ -383,6 +384,27 @@ describe('runtime load() — emit-fhir enforcement', () => {
     await rt.install(wasmBytes2, legacyWithCaps);
     const converter = await rt.load('whonet-sqlite', '0.1.0');
     await expect(converter!.convert(new Uint8Array(), { batchId: 'test' })).rejects.toThrow(/not permitted|capability|Organization/i);
+  });
+});
+
+describe('workflowNodes survive the manifest round-trip', () => {
+  it('legacy manifest → artifact payload → legacy manifest preserves workflowNodes', () => {
+    const node = {
+      id: 'src', label: 'Src', kind: 'source', entrypoint: 'convert',
+      ports: { inputs: [], outputs: [{ name: 'out' }] }, capabilities: [],
+    };
+    const artifact = pluginManifestToArtifact({
+      id: 'p', version: '1.0.0', wasmSha256: 'a'.repeat(64), workflowNodes: [node],
+    });
+    const payload = artifact.payload as { wasmSha256: string; workflowNodes?: { id: string }[] };
+    expect(payload.workflowNodes![0].id).toBe('src');
+
+    // Re-derive the flat manifest the way runtime.ts does for the install return value.
+    const flat = parseManifest({
+      id: artifact.id, version: artifact.version, wasmSha256: payload.wasmSha256,
+      workflowNodes: payload.workflowNodes,
+    });
+    expect(flat.workflowNodes).toHaveLength(1);
   });
 });
 

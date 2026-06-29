@@ -66,7 +66,7 @@ export function SwitchForm({ node, update }: NodeFormProps) {
               <TextInput
                 value={rule.condition}
                 onChange={(e) => updateRule(i, { condition: e.target.value })}
-                placeholder="$input.status === 200"
+                placeholder="$json.status === 200"
                 className="!mt-0 font-mono text-xs"
               />
             </div>

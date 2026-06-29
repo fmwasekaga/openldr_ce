@@ -1,16 +1,30 @@
 import { loadConfig } from '@openldr/config';
-import { createAppContext, createIngestContext, createDbContext, seedDatabase } from '@openldr/bootstrap';
-import { createLogger } from '@openldr/core';
+import { createAppContext, createIngestContext, createDbContext, seedDatabase, drainCrashMarkersToAudit } from '@openldr/bootstrap';
+import { createLogger, makeCrashHandler } from '@openldr/core';
 import { buildApp } from './app';
 
 async function main(): Promise<void> {
   const cfg = loadConfig();
+  const logger = createLogger({ level: cfg.LOG_LEVEL });
+
+  // Durable plugin-crash capture: a crashing Extism worker can take the whole process down
+  // before the in-app audit DB write flushes. These handlers synchronously append a crash
+  // marker (naming the in-flight plugin via the in-flight registry) to PLUGIN_CRASH_LOG_DIR,
+  // then exit — replacing Node's default crash-and-die with capture-then-die. The next boot
+  // drains the markers into the audit trail (see drainCrashMarkersToAudit below).
+  process.on('uncaughtException', makeCrashHandler({
+    dir: cfg.PLUGIN_CRASH_LOG_DIR, kind: 'uncaughtException',
+    log: (m) => logger.fatal({ marker: m }, 'uncaughtException — wrote crash marker, exiting'),
+  }));
+  process.on('unhandledRejection', makeCrashHandler({
+    dir: cfg.PLUGIN_CRASH_LOG_DIR, kind: 'unhandledRejection',
+    log: (m) => logger.fatal({ marker: m }, 'unhandledRejection — wrote crash marker, exiting'),
+  }));
 
   // Self-migrate on startup when enabled (single-port prod deployment). migrateToLatest is
   // idempotent, so a fresh DB gets its schema and an already-migrated one is a no-op. Runs
   // before any context that queries tables, so the app never serves 500s on an unmigrated DB.
   if (cfg.MIGRATE_ON_START) {
-    const logger = createLogger({ level: cfg.LOG_LEVEL });
     const dbCtx = await createDbContext(cfg);
     try {
       const res = await dbCtx.migrateAll();
@@ -27,11 +41,19 @@ async function main(): Promise<void> {
 
   const ctx = await createAppContext(cfg);
 
+  // Ingest any crash markers left by a previous process-FATAL plugin crash into the audit
+  // trail (action plugin.crash / system.crash). Best-effort: a drain failure must not block
+  // startup. Runs once the audit store is available.
+  try {
+    await drainCrashMarkersToAudit({ dir: cfg.PLUGIN_CRASH_LOG_DIR, audit: ctx.audit, logger: ctx.logger });
+  } catch (err) {
+    ctx.logger.warn({ err }, 'crash-marker audit drain failed at startup (continuing)');
+  }
+
   // Seed idempotent sample data after migration when enabled (prod demo). Needs the forms
   // store (AppContext) for sample forms and a DbContext for the FHIR resources. Idempotent:
   // dedups by name, so a populated DB is a no-op.
   if (cfg.SEED_ON_START) {
-    const logger = createLogger({ level: cfg.LOG_LEVEL });
     const dbCtx = await createDbContext(cfg);
     try {
       const { resources, formsSeeded, workflowsSeeded } = await seedDatabase(dbCtx, ctx);

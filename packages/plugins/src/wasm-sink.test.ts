@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { currentInFlight } from '@openldr/core';
 import { createWasmSink } from './wasm-sink';
 import { parseManifest } from './manifest';
 import type { PluginRunner } from './runner';
@@ -71,5 +72,45 @@ describe('createWasmSink', () => {
     const sink = createWasmSink(sinkManifest, new Uint8Array(), runner, logger); // no grant -> legacy/unrestricted
     await sink.invoke('push_aggregate', {}, { allowedHosts: ['x:443'] });
     expect((runner.run as any).mock.calls[0][2].allowedHosts).toEqual(['x:443']);
+  });
+
+  it('marks the op in-flight (pluginId + entrypoint) while the wasm runs and clears it after', async () => {
+    let seenDuringRun: ReturnType<typeof currentInFlight> = [];
+    const runner: PluginRunner = {
+      run: vi.fn(async () => {
+        seenDuringRun = currentInFlight();
+        return enc('{}');
+      }),
+    };
+    const sink = createWasmSink(sinkManifest, new Uint8Array(), runner, logger);
+    await sink.invoke('health_check', {});
+    expect(seenDuringRun.some((o) => o.pluginId === 'dhis2-sink' && o.entrypoint === 'health_check')).toBe(true);
+    // Cleared once the call completes — no leak into the registry.
+    expect(currentInFlight().some((o) => o.pluginId === 'dhis2-sink' && o.entrypoint === 'health_check')).toBe(false);
+  });
+
+  it('clears the in-flight op even when the runner throws', async () => {
+    const runner: PluginRunner = { run: vi.fn(async () => { throw new Error('worker died'); }) };
+    const sink = createWasmSink(sinkManifest, new Uint8Array(), runner, logger);
+    await expect(sink.invoke('health_check', {})).rejects.toThrow(/worker died/);
+    expect(currentInFlight().some((o) => o.pluginId === 'dhis2-sink' && o.entrypoint === 'health_check')).toBe(false);
+  });
+});
+
+describe('invokeBytes', () => {
+  it('passes raw bytes to the runner and parses the JSON result', async () => {
+    let received: Uint8Array | undefined;
+    const runner = { run: async (_w: Uint8Array, input: Uint8Array) => { received = input; return new TextEncoder().encode('{"items":[{"json":{"line":"a"}}]}'); } };
+    const manifest = parseManifest({ id: 'p', version: '1.0.0', kind: 'sink', entrypoints: ['wf_convert'], wasmSha256: 'a'.repeat(64) });
+    const sink = createWasmSink(manifest, new Uint8Array([1, 2, 3]), runner as never, logger, []);
+    const out = await sink.invokeBytes('wf_convert', new Uint8Array([9, 9]));
+    expect(Array.from(received!)).toEqual([9, 9]);   // raw bytes, NOT JSON-encoded
+    expect(out).toEqual({ items: [{ json: { line: 'a' } }] });
+  });
+  it('rejects an unknown entrypoint', async () => {
+    const runner = { run: async () => new Uint8Array() };
+    const manifest = parseManifest({ id: 'p', version: '1.0.0', kind: 'sink', entrypoints: ['wf_convert'], wasmSha256: 'a'.repeat(64) });
+    const sink = createWasmSink(manifest, new Uint8Array(), runner as never, logger, []);
+    await expect(sink.invokeBytes('nope', new Uint8Array())).rejects.toThrow(/unknown entrypoint/);
   });
 });

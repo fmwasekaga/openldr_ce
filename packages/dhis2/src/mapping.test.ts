@@ -14,8 +14,15 @@ const mapping: AggregateMapping = {
 };
 
 describe('dispatchReportSource', () => {
-  it('returns the report descriptor for a report source', () => {
-    expect(dispatchReportSource(mapping.source)).toEqual({ reportId: 'amr-resistance', params: undefined });
+  it('defaults missing params to {} so the report params schema (z.object) does not throw on undefined', () => {
+    // A report source legitimately omits `params`; `reporting.run`'s `def.params.parse(...)` is a
+    // z.object which throws "Required" on `undefined` (but accepts `{}`). Normalising here keeps the
+    // DHIS2 push dry-run/push from failing with the redacted "operation connectors.push failed".
+    expect(dispatchReportSource(mapping.source)).toEqual({ reportId: 'amr-resistance', params: {} });
+  });
+  it('preserves explicitly-supplied params', () => {
+    expect(dispatchReportSource({ kind: 'report', reportId: 'amr-resistance', params: { region: 'north' } }))
+      .toEqual({ reportId: 'amr-resistance', params: { region: 'north' } });
   });
   it('throws on an unsupported source kind', () => {
     expect(() => dispatchReportSource({ kind: 'query' } as never)).toThrow(/unsupported/i);

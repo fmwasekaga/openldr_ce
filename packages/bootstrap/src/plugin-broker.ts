@@ -1,4 +1,6 @@
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { beginOp } from '@openldr/core';
 import { readGrant, type Capability } from '@openldr/marketplace';
 import type { PluginDataStore } from '@openldr/db';
 import type { PluginPolicy } from './policy';
@@ -8,6 +10,19 @@ import { policyAllows } from './policy';
 export interface BrokerPrincipal {
   id: string;
   roles: string[];
+  /** Display name for the audit trail; falls back to id when absent. */
+  username?: string;
+}
+
+/** A security-relevant broker event for the audit trail. `outcome:'denied'` is a blocked op
+ *  (capability/role/policy/egress gate or a malformed op); `outcome:'ok'` is a completed
+ *  SENSITIVE op (wasm invoke or a live egress op). High-frequency reads are not emitted. */
+export interface BrokerAuditEvent {
+  pluginId: string;
+  principal: BrokerPrincipal;
+  op: string;
+  outcome: 'denied' | 'ok';
+  reason?: string;
 }
 
 /** Operations a plugin UI may request. storage.* is private (namespaced by the trusted
@@ -154,6 +169,9 @@ export interface PluginBrokerDeps {
   maxDocBytes?: number;
   /** Optional: server-side sink for redacted host-op error detail (never sent to the plugin). */
   logger?: { warn(obj: unknown, msg: string): void };
+  /** Optional: best-effort audit sink for security-relevant broker events (denials + sensitive
+   *  ops). Wired to ctx.audit in the AppContext. Must never throw into the broker. */
+  audit?: (event: BrokerAuditEvent) => Promise<void>;
 }
 
 export interface PluginBroker {
@@ -167,20 +185,32 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
 
   const brokerOpSchema = buildBrokerOpSchema(deps.maxDocBytes ?? DEFAULT_MAX_DOC_BYTES);
 
+  // Best-effort audit — never throws into the broker (audit must not break or block-fail an op).
+  async function emit(pluginId: string, principal: BrokerPrincipal, op: string, outcome: 'denied' | 'ok', reason?: string): Promise<void> {
+    try {
+      await deps.audit?.({ pluginId, principal, op, outcome, reason });
+    } catch { /* swallow — auditing a security event must not break the op */ }
+  }
+
   return {
     async handle(pluginId, principal, rawOp) {
+      // Records the denial to the audit trail, then returns the structured error.
+      const deny = async (op: string, reason: string): Promise<BrokerResult> => {
+        await emit(pluginId, principal, op, 'denied', reason);
+        return { ok: false, error: reason };
+      };
       // Parse FIRST so a malformed op can't probe installed-plugin state or dispatch.
       const parsed = brokerOpSchema.safeParse(rawOp);
       if (!parsed.success) {
         const msg = parsed.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ').slice(0, 300);
-        return { ok: false, error: `invalid operation: ${msg}` };
+        return deny('(unparsed)', `invalid operation: ${msg}`);
       }
       const op: BrokerOp = parsed.data as BrokerOp;
       try {
         // 1. Plugin must be installed + enabled.
         const rows = await deps.plugins.list();
         const row = rows.find((r) => r.id === pluginId && r.enabled);
-        if (!row) return { ok: false, error: `plugin ${pluginId} is not installed or disabled` };
+        if (!row) return deny(op.kind, `plugin ${pluginId} is not installed or disabled`);
 
         // 1b. Plugin-level required-roles gate — applies to EVERY op (incl. storage.*/invoke),
         // independent of and in addition to the per-op rolesFor() gate below. This is the
@@ -188,37 +218,45 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
         // ui.requiredRoles:['lab_admin'] is fully off-limits to callers lacking those roles.
         const requiredRoles = (row.manifest as { payload?: { ui?: { requiredRoles?: string[] } } }).payload?.ui?.requiredRoles;
         if (requiredRoles?.length && !requiredRoles.some((r) => principal.roles.includes(r))) {
-          return { ok: false, error: `plugin ${pluginId} requires one of roles: ${requiredRoles.join(', ')}` };
+          return deny(op.kind, `plugin ${pluginId} requires one of roles: ${requiredRoles.join(', ')}`);
         }
 
         // 2. Global policy (kill-switches) — checked on EVERY call.
         const gate = gateFor(op);
         if (!policyAllows(deps.policy(), gate)) {
-          return { ok: false, error: `operation ${op.kind} is disabled by global policy` };
+          return deny(op.kind, `operation ${op.kind} is disabled by global policy`);
         }
 
         // 2b. Egress kill-switch — connector ops gate to host:connectors (not net-egress), so
         // policyAllows can't see them; enforce PLUGIN_EGRESS_ENABLED for them here, before
         // capability/role/dispatch, so a false kill-switch blocks every outbound connector op.
         if (egresses(op) && !deps.policy().egressEnabled) {
-          return { ok: false, error: `operation ${op.kind} is disabled by the egress kill-switch` };
+          return deny(op.kind, `operation ${op.kind} is disabled by the egress kill-switch`);
         }
 
         // 3. Capability grant. Legacy rows (no capabilities field) are grandfathered.
         if (gate) {
           const grant = readGrant(row.manifest);
           if (!grant.legacy && !hasCapability(grant.capabilities, gate)) {
-            return { ok: false, error: `operation ${op.kind} requires the ${gate} capability, which plugin ${pluginId} was not granted` };
+            return deny(op.kind, `operation ${op.kind} requires the ${gate} capability, which plugin ${pluginId} was not granted`);
           }
         }
 
         // Role gate: capability is the plugin's ceiling; the CALLER's role is a separate axis.
         const need = rolesFor(op);
         if (need.length > 0 && !need.some((r) => principal.roles.includes(r))) {
-          return { ok: false, error: `operation ${op.kind} requires one of roles: ${need.join(', ')}` };
+          return deny(op.kind, `operation ${op.kind} requires one of roles: ${need.join(', ')}`);
         }
 
         // 4. Dispatch. Storage is namespaced by the trusted pluginId argument.
+        // Stamp wasm-invoking / egress ops in the in-flight registry (pluginId + op kind +
+        // entrypoint) so a process-FATAL plugin crash mid-dispatch leaves a culprit trail the
+        // uncaughtException handler can snapshot. The wasm boundary (createWasmSink) stamps too;
+        // this adds the broker's richer op-kind label. Cleared in `finally`.
+        const stamp = op.kind === 'invoke' || egresses(op)
+          ? beginOp({ pluginId, op: op.kind, entrypoint: op.kind === 'invoke' ? op.entrypoint : undefined })
+          : undefined;
+        try {
         switch (op.kind) {
           case 'storage.get': return { ok: true, data: await deps.pluginData.get(pluginId, op.collection, op.key) };
           case 'storage.put': await deps.pluginData.put(pluginId, op.collection, op.key, op.doc); return { ok: true, data: null };
@@ -227,7 +265,9 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
           case 'invoke': {
             const sink = await deps.plugins.loadSink(pluginId, row.version);
             if (!sink) return { ok: false, error: `plugin ${pluginId} exposes no invokable wasm` };
-            return { ok: true, data: await sink.invoke(op.entrypoint, op.input) };
+            const data = await sink.invoke(op.entrypoint, op.input);
+            await emit(pluginId, principal, `invoke:${op.entrypoint}`, 'ok'); // wasm execution
+            return { ok: true, data };
           }
           case 'reports.list': return { ok: true, data: deps.reporting.list() };
           case 'reports.columns': return { ok: true, data: await deps.reporting.columns(op.id) };
@@ -236,19 +276,27 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
           case 'connectors.list': return { ok: true, data: await deps.connectors.list() };
           case 'connectors.test': {
             if (!deps.testConnector) return { ok: false, error: 'connectors.test is unavailable' };
-            return { ok: true, data: await deps.testConnector(op.id) };
+            const data = await deps.testConnector(op.id);
+            await emit(pluginId, principal, `connectors.test:${op.id}`, 'ok'); // live egress
+            return { ok: true, data };
           }
           case 'connectors.metadata': {
             if (!deps.connectorMetadata) return { ok: false, error: 'connectors.metadata unavailable' };
-            return { ok: true, data: await deps.connectorMetadata(op.id) };
+            const data = await deps.connectorMetadata(op.id);
+            await emit(pluginId, principal, `connectors.metadata:${op.id}`, 'ok'); // live egress
+            return { ok: true, data };
           }
           case 'connectors.push': {
             if (!deps.connectorPush) return { ok: false, error: 'connectors.push unavailable' };
-            return { ok: true, data: await deps.connectorPush({ connectorId: op.connectorId, mapping: op.mapping, orgUnitMap: op.orgUnitMap, period: op.period, dryRun: op.dryRun }) };
+            const data = await deps.connectorPush({ connectorId: op.connectorId, mapping: op.mapping, orgUnitMap: op.orgUnitMap, period: op.period, dryRun: op.dryRun });
+            await emit(pluginId, principal, `connectors.push:${op.connectorId}`, 'ok', op.dryRun ? 'dry-run' : 'live'); // live egress
+            return { ok: true, data };
           }
           case 'connectors.validate': {
             if (!deps.connectorValidate) return { ok: false, error: 'connectors.validate unavailable' };
-            return { ok: true, data: await deps.connectorValidate({ connectorId: op.connectorId, mapping: op.mapping }) };
+            const data = await deps.connectorValidate({ connectorId: op.connectorId, mapping: op.mapping });
+            await emit(pluginId, principal, `connectors.validate:${op.connectorId}`, 'ok'); // live egress
+            return { ok: true, data };
           }
           case 'fhir.facilities': {
             if (!deps.facilities) return { ok: false, error: 'fhir.facilities unavailable' };
@@ -268,12 +316,19 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
           }
           default: return { ok: false, error: `unknown operation` };
         }
+        } finally {
+          stamp?.();
+        }
       } catch (err) {
         const detail = err instanceof Error ? err.message : String(err);
         // Redact secret/egress-bearing host-op errors before they reach the untrusted plugin.
+        // The plugin (and its UI) only sees a generic message + a correlation id; the full detail
+        // goes to the server log under the SAME id, so an operator can grep the log for the ref
+        // shown in the UI without any secret ever reaching the iframe.
         if (gateFor(op) === 'host:connectors') {
-          deps.logger?.warn({ op: op.kind, pluginId, detail }, 'plugin broker host op failed');
-          return { ok: false, error: `operation ${op.kind} failed` };
+          const correlationId = randomUUID().slice(0, 8);
+          deps.logger?.warn({ op: op.kind, pluginId, correlationId, detail }, 'plugin broker host op failed');
+          return { ok: false, error: `operation ${op.kind} failed (ref: ${correlationId})` };
         }
         return { ok: false, error: detail };
       }

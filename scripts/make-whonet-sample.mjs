@@ -19,10 +19,11 @@ db.exec(`
     patient_id TEXT, sex TEXT, birth_date TEXT,
     spec_num TEXT, spec_type TEXT, spec_date TEXT,
     organism TEXT, organism_code TEXT, location_type TEXT,
+    laboratory TEXT,
     ab_AMP TEXT, ab_CIP TEXT, ab_GEN TEXT
   );
 `);
-const insert = db.prepare('INSERT INTO isolates VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
+const insert = db.prepare('INSERT INTO isolates VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)');
 
 // Deterministic generator (no Math.random) so runs are reproducible.
 const SEX = ['F', 'M'];
@@ -34,6 +35,9 @@ const ORG = [
   ['Pseudomonas aeruginosa', 'pae'],
 ];
 const LOC = ['i', 'o'];
+// WHONET "Laboratory" → FHIR Patient.managingOrganization (the facility dimension). Cycling a few
+// labs gives the per-facility reports + the DHIS2 aggregate push real org units to map to.
+const LAB = ['LAB-FTN', 'LAB-BO', 'LAB-KEN'];
 const SIR = ['R', 'I', 'S'];
 const pad = (n) => String(n).padStart(4, '0');
 const day = (n) => String((n % 27) + 1).padStart(2, '0');
@@ -50,6 +54,7 @@ for (let i = 0; i < ROWS; i++) {
     org,
     code,
     LOC[i % 2],
+    LAB[i % LAB.length],
     SIR[i % 3],
     SIR[(i + 1) % 3],
     SIR[(i + 2) % 3],

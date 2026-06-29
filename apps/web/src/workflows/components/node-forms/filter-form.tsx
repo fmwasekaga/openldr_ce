@@ -20,12 +20,12 @@ export function FilterForm({ node, update }: NodeFormProps) {
 
       <FormField
         label="Condition"
-        hint="Items passing this test continue. Use $input to reference upstream data. E.g. $input.status === 200"
+        hint="Items passing this test continue. Use $json to reference the first item. E.g. $json.status === 200"
       >
         <TextInput
           value={data.condition ?? ''}
           onChange={(e) => update({ condition: e.target.value })}
-          placeholder="$input.active === true"
+          placeholder="$json.active === true"
         />
       </FormField>
     </div>

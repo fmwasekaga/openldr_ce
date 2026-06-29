@@ -16,7 +16,8 @@ function generateSecret(): string {
 /**
  * Webhook trigger form. Saving the workflow re-registers the path + secret with
  * the backend so `POST /api/workflows/hooks/<path>` resolves to this workflow.
- * The incoming request body becomes `$input.body` for downstream nodes.
+ * The incoming request payload becomes the trigger's item, so downstream nodes read
+ * the request body via `$json.body`.
  *
  * Field-name contract (read by the server's `syncWorkflowTriggers`):
  *   data.path   → the path segment under /api/workflows/hooks/

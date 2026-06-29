@@ -84,9 +84,10 @@ function fakePlugins() {
   };
 }
 
-function fakeCtx(plugins: unknown, cfg: Record<string, unknown>, internalDb: unknown, marketplaceForms?: unknown): AppContext {
+function fakeCtx(plugins: unknown, cfg: Record<string, unknown>, internalDb: unknown, marketplaceForms?: unknown, audited?: unknown[]): AppContext {
   return {
-    cfg, plugins, internalDb, audit: { record: async () => ({}) },
+    cfg, plugins, internalDb, logger: { error() {}, warn() {}, info() {}, debug() {} },
+    audit: { record: async (e: unknown) => { audited?.push(e); } },
     marketplaceForms: marketplaceForms ?? { install: async () => ({ id: 'x', version: '1', targetFormId: 'form-1' }), detach: async () => {}, list: async () => [] },
   } as unknown as AppContext;
 }
@@ -108,8 +109,9 @@ async function appWith(
   app.addHook('onRequest', async (req) => {
     req.user = { id: 'admin', username: 'admin', displayName: null, roles } as never;
   });
-  registerMarketplaceRoutes(app, fakeCtx(plugins, cfg, db, marketplaceForms), fetchImpl);
-  return { app, db, store };
+  const audited: Array<{ action: string; entityType: string; entityId: string; metadata?: Record<string, unknown> }> = [];
+  registerMarketplaceRoutes(app, fakeCtx(plugins, cfg, db, marketplaceForms, audited), fetchImpl);
+  return { app, db, store, audited };
 }
 
 // The single-bundle local registry every "happy path" test uses.
@@ -346,7 +348,7 @@ describe('marketplace routes', () => {
   describe('registries CRUD', () => {
     it('POST creates → GET lists → PUT disables → DELETE removes', async () => {
       const { runtime } = fakePlugins();
-      const { app } = await appWith({}, runtime);
+      const { app, audited } = await appWith({}, runtime);
 
       // create
       const created = await app.inject({ method: 'POST', url: '/api/marketplace/registries', payload: { name: 'Public', kind: 'http', location: 'https://example.org/reg' } });
@@ -370,6 +372,12 @@ describe('marketplace routes', () => {
       expect(deleted.json()).toEqual({ ok: true });
       const after = await app.inject({ method: 'GET', url: '/api/marketplace/registries' });
       expect(after.json().map((r: any) => r.id)).not.toContain(reg.id);
+
+      // A registry is a SOURCE of installable code — each lifecycle change is audited.
+      expect(audited.map((a) => a.action)).toEqual([
+        'marketplace.registry.create', 'marketplace.registry.update', 'marketplace.registry.delete',
+      ]);
+      expect(audited[0].metadata).toMatchObject({ name: 'Public', kind: 'http', location: 'https://example.org/reg' });
     });
 
     it('POST 400s on invalid input', async () => {

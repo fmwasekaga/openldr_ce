@@ -14,6 +14,7 @@ import { materializeHandler } from './materialize';
 import { exportHandler } from './export';
 import { dhis2PushHandler } from './dhis2-push';
 import { loadDatasetHandler } from './load-dataset';
+import { pluginNodeHandler } from './plugin-node';
 
 /** Action subtype → handler. New actions (http-request, code, …) land in later slices. */
 const ACTION_HANDLERS: Record<string, NodeHandler> = {
@@ -33,6 +34,7 @@ const ACTION_HANDLERS: Record<string, NodeHandler> = {
 const TYPE_HANDLERS: Record<string, NodeHandler> = {
   trigger: triggerHandler,
   code: codeHandler,
+  'plugin-node': pluginNodeHandler,
 };
 
 export function pickHandler(node: RunnerNode): NodeHandler {

@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsup",
     "build:check": "tsup && node scripts/smoke.mjs",
-    "dev": "tsx watch src/index.ts",
+    "dev": "node --watch dev.mjs",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

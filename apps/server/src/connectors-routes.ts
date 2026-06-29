@@ -6,6 +6,7 @@ import { createPluginTarget } from '@openldr/bootstrap';
 import type { ConnectorStore } from '@openldr/db';
 import { redact } from '@openldr/core';
 import { requireRole } from './rbac';
+import { recordAudit } from './audit-helper';
 
 export interface ConnectorsRouteDeps {
   connectors: ConnectorStore;
@@ -92,12 +93,19 @@ export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any
       catch (e) { reply.code(400); return { error: redact(e instanceof Error ? e.message : 'invalid connector baseUrl') }; }
     }
     const id = randomUUID();
+    const pinnedHost = hostFor(config, allowedHost);
     try {
-      await connectors.create({ id, name, pluginId, kind: 'sink', config, allowedHost: hostFor(config, allowedHost) }, key());
+      await connectors.create({ id, name, pluginId, kind: 'sink', config, allowedHost: pinnedHost }, key());
     } catch (e) {
       reply.code(400);
       return { error: redact(e instanceof Error ? e.message : String(e)) };
     }
+    // Audit: a connector binds an egress host + (encrypted) credentials. Record metadata only —
+    // never the config values (secrets).
+    await recordAudit(ctx, req, {
+      action: 'connector.create', entityType: 'connector', entityId: id,
+      metadata: { name, pluginId, allowedHost: pinnedHost, configKeys: Object.keys(config) },
+    });
     return connectors.get(id);
   });
 
@@ -119,12 +127,26 @@ export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any
       reply.code(400);
       return { error: redact(e instanceof Error ? e.message : String(e)) };
     }
+    // Audit: record which fields changed (and whether secrets were rotated) — never the values.
+    await recordAudit(ctx, req, {
+      action: 'connector.update', entityType: 'connector', entityId: id,
+      metadata: {
+        fields: Object.keys(patch),
+        secretsRotated: patch.config !== undefined,
+        ...(allowedHost !== undefined ? { allowedHost } : {}),
+      },
+    });
     return connectors.get(id);
   });
 
   app.delete('/api/connectors/:id', { preHandler: requireRole('lab_admin') }, async (req) => {
     const { id } = req.params as { id: string };
+    const existing = await connectors.get(id);
     await connectors.remove(id);
+    await recordAudit(ctx, req, {
+      action: 'connector.delete', entityType: 'connector', entityId: id,
+      metadata: { name: existing?.name, pluginId: existing?.pluginId },
+    });
     return { ok: true };
   });
 
@@ -133,14 +155,22 @@ export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any
     const { id } = req.params as { id: string };
     const connector = await connectors.get(id);
     if (!connector) { reply.code(404); return { error: 'connector not found' }; }
+    // Audit the live test as a security event: it decrypts the stored credentials and makes a
+    // live outbound connection to the pinned host. Record outcome (never the secrets/metadata body).
+    const auditTest = (outcome: 'ok' | 'failed', detail?: string): Promise<void> =>
+      recordAudit(ctx, req, {
+        action: 'connector.test', entityType: 'connector', entityId: id,
+        metadata: { outcome, pluginId: connector.pluginId, host: connector.allowedHost, ...(detail ? { detail } : {}) },
+      });
     try {
       const config = await connectors.getDecryptedConfig(id, key());
       const sink = await ctx.plugins.loadSink(connector.pluginId);
-      if (!sink) return { ok: false, error: `sink plugin '${connector.pluginId}' is not installed` };
+      if (!sink) { await auditTest('failed', 'sink not installed'); return { ok: false, error: `sink plugin '${connector.pluginId}' is not installed` }; }
       const target = createPluginTarget(sink, config, connector.allowedHost);
       const health = await target.healthCheck();
-      if (health.status !== 'up') return { ok: false, error: redact(health.detail ?? 'unreachable') };
+      if (health.status !== 'up') { await auditTest('failed', 'unreachable'); return { ok: false, error: redact(health.detail ?? 'unreachable') }; }
       const md = await target.pullMetadata();
+      await auditTest('ok');
       return {
         ok: true,
         metadata: {
@@ -152,6 +182,7 @@ export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any
         },
       };
     } catch (e) {
+      await auditTest('failed', 'error');
       return { ok: false, error: redact(e instanceof Error ? e.message : String(e)) };
     }
   });

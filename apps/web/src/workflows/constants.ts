@@ -155,7 +155,7 @@ export const nodeCategories: NodeCategory[] = [
       }),
       node('log', 'action', 'Log', 'Terminal', 'Print a templated message to the console', {
         keywords: ['print', 'console', 'debug'],
-        data: { message: '{{ $input }}', level: 'log' },
+        data: { message: '{{ $json }}', level: 'log' },
       }),
       node('http-request', 'action', 'HTTP Request', 'Send', 'Call any REST API', {
         keywords: ['api', 'rest', 'fetch'],

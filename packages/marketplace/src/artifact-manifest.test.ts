@@ -199,3 +199,34 @@ describe('ui tiers', () => {
     })).toThrow();
   });
 });
+
+describe('artifact manifest workflowNodes', () => {
+  const NODE = {
+    id: 'aggregate-push', label: 'Push', kind: 'sink', entrypoint: 'wf_push_aggregate',
+    ports: { inputs: [{ name: 'in' }], outputs: [] }, capabilities: ['host:connectors'],
+  };
+
+  it('omits payload.workflowNodes when the legacy manifest has none (byte-identical)', () => {
+    const a = pluginManifestToArtifact({ id: 'p', version: '1.0.0', wasmSha256: 'a'.repeat(64) });
+    expect('workflowNodes' in (a.payload as Record<string, unknown>)).toBe(false);
+  });
+
+  it('carries workflowNodes through the legacy→artifact adapter', () => {
+    const a = pluginManifestToArtifact({
+      id: 'p', version: '1.0.0', wasmSha256: 'a'.repeat(64), kind: 'sink',
+      entrypoints: ['wf_push_aggregate'], workflowNodes: [NODE],
+    });
+    const payload = a.payload as { workflowNodes?: unknown[] };
+    expect(payload.workflowNodes).toHaveLength(1);
+  });
+
+  it('validates payload.workflowNodes on a full artifact manifest', () => {
+    const a = parseArtifactManifest({
+      schemaVersion: 1, type: 'plugin', id: 'p', version: '1.0.0',
+      compatibility: { ceVersion: '*' },
+      payload: { kind: 'plugin', wasmSha256: 'a'.repeat(64), workflowNodes: [NODE] },
+    });
+    const payload = a.payload as { workflowNodes?: { id: string }[] };
+    expect(payload.workflowNodes![0].id).toBe('aggregate-push');
+  });
+});

@@ -1,19 +1,20 @@
 import type { NodeHandler } from './types';
 import { runInSandbox } from '../sandbox';
+import { toItems } from '../items';
 
 /**
  * Run the node's JavaScript in the worker+vm sandbox. Console output streams
- * live as node:log; the return value becomes the node output. Limits come from
- * ctx.codeLimits (config-driven).
+ * live as node:log; the return value is normalized to WorkflowItem[] via toItems.
+ * Limits come from ctx.codeLimits (config-driven).
  *
  * SECURITY (SEC-01): `vm` is NOT a security boundary — Code nodes execute with
  * host-level privileges (fs/net/env). Execution is gated behind
  * WORKFLOW_CODE_ENABLED (ctx.codeLimits.enabled), default OFF. We refuse here —
  * BEFORE the worker is ever started — when the flag is off.
  */
-export const codeHandler: NodeHandler = async (node, ctx, upstream) => {
+export const codeHandler: NodeHandler = async (node, ctx, input) => {
   const code = (node.data.code as string | undefined) ?? '';
-  if (!code.trim()) return { executed: true, output: undefined };
+  if (!code.trim()) return input;
 
   if (!ctx.codeLimits.enabled) {
     throw new Error(
@@ -34,8 +35,8 @@ export const codeHandler: NodeHandler = async (node, ctx, upstream) => {
   }
 
   try {
-    return await runInSandbox(code, {
-      input: upstream,
+    const result = await runInSandbox(code, {
+      input,
       nodeOutputs: ctx.nodeOutputs,
       limits: ctx.codeLimits,
       onLog: (level, message) => {
@@ -44,6 +45,7 @@ export const codeHandler: NodeHandler = async (node, ctx, upstream) => {
         ctx.emit({ type: 'node:log', entry });
       },
     });
+    return toItems(result);
   } catch (err) {
     throw new Error(`Code node error: ${err instanceof Error ? err.message : String(err)}`);
   }

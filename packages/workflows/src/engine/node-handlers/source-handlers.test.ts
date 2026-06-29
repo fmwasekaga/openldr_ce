@@ -4,6 +4,7 @@ import { fhirHandler } from './fhir';
 import { httpHandler } from './http';
 import { createContext } from '../execution-context';
 import type { WorkflowServices } from '../services';
+import type { WorkflowItem } from '../items';
 
 const services: WorkflowServices = {
   runSql: vi.fn(async (sql: string) => ({ columns: [{ key: 'n', label: 'n' }], rows: [{ n: 1, sql }] })),
@@ -21,23 +22,28 @@ const ctxWith = (svc?: WorkflowServices) => {
 describe('source handlers', () => {
   it('sqlHandler templates the query and delegates to runSql', async () => {
     const ctx = ctxWith(services);
-    const out = await sqlHandler({ id: 's', type: 'action', data: { action: 'sql-query', config: { sql: 'select {{ $input.n }}' } } }, ctx, { n: 5 });
-    expect((out as { rows: { sql: string }[] }).rows[0].sql).toBe('select 5');
+    const input: WorkflowItem[] = [{ json: { n: 5 } }];
+    const out = await sqlHandler({ id: 's', type: 'action', data: { action: 'sql-query', config: { sql: 'select {{ $json.n }}' } } }, ctx, input);
+    // out is WorkflowItem[]; sql row had field `sql` = the resolved query
+    expect(Array.isArray(out)).toBe(true);
+    expect((out[0].json as { sql: string }).sql).toBe('select 5');
   });
   it('fhirHandler delegates to fhirQuery', async () => {
     const ctx = ctxWith(services);
-    const out = await fhirHandler({ id: 'f', type: 'action', data: { action: 'fhir-query', config: { resourceType: 'Observation', limit: 10 } } }, ctx, undefined);
-    expect(out).toEqual({ resources: [{ resourceType: 'Observation', limit: 10 }] });
+    const out = await fhirHandler({ id: 'f', type: 'action', data: { action: 'fhir-query', config: { resourceType: 'Observation', limit: 10 } } }, ctx, []);
+    expect(out).toEqual([{ json: { resourceType: 'Observation', limit: 10 } }]);
   });
   it('httpHandler delegates to httpFetch with resolved url', async () => {
     const ctx = ctxWith(services);
-    const out = await httpHandler({ id: 'h', type: 'action', data: { action: 'http-request', config: { url: 'https://x/{{ $input.id }}', method: 'GET' } } }, ctx, { id: 'abc' });
-    expect((out as { data: { url: string } }).data.url).toBe('https://x/abc');
+    const input: WorkflowItem[] = [{ json: { id: 'abc' } }];
+    const out = await httpHandler({ id: 'h', type: 'action', data: { action: 'http-request', config: { url: 'https://x/{{ $json.id }}', method: 'GET' } } }, ctx, input);
+    expect(Array.isArray(out)).toBe(true);
+    expect((out[0].json.data as { url: string }).url).toBe('https://x/abc');
   });
   it('each throws a clear error when services are absent', async () => {
     const ctx = ctxWith(undefined);
-    await expect(sqlHandler({ id: 's', type: 'action', data: { config: { sql: 'x' } } }, ctx, undefined)).rejects.toThrow(/requires server services/);
-    await expect(fhirHandler({ id: 'f', type: 'action', data: { config: { resourceType: 'X' } } }, ctx, undefined)).rejects.toThrow(/requires server services/);
-    await expect(httpHandler({ id: 'h', type: 'action', data: { config: { url: 'https://x' } } }, ctx, undefined)).rejects.toThrow(/requires server services/);
+    await expect(sqlHandler({ id: 's', type: 'action', data: { config: { sql: 'x' } } }, ctx, [])).rejects.toThrow(/requires server services/);
+    await expect(fhirHandler({ id: 'f', type: 'action', data: { config: { resourceType: 'X' } } }, ctx, [])).rejects.toThrow(/requires server services/);
+    await expect(httpHandler({ id: 'h', type: 'action', data: { config: { url: 'https://x' } } }, ctx, [])).rejects.toThrow(/requires server services/);
   });
 });

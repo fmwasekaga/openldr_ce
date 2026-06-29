@@ -25,7 +25,7 @@ const manifest = {
   id: 'test-sink',
   version: ver,
   kind: 'sink',
-  entrypoints: ['health_check', 'push_aggregate'],
+  entrypoints: ['health_check', 'push_aggregate', 'wf_echo', 'wf_convert', 'wf_emit'],
   wasmSha256: sha,
   description: 'Trivial sink ABI test plugin',
   license: 'Apache-2.0',
@@ -34,6 +34,24 @@ const manifest = {
   limits: { memoryMb: 256, timeoutMs: 30000 },
   // Declares net-egress intent (empty allowedHosts = host pins the concrete host at runtime).
   capabilities: [{ kind: 'net-egress', allowedHosts: [] }],
+  // SP-1/SP-2: contribute a workflow-builder transform node backed by the wf_echo entrypoint.
+  workflowNodes: [
+    {
+      id: 'echo', label: 'Echo', kind: 'transform', entrypoint: 'wf_echo',
+      ports: { inputs: [{ name: 'in' }], outputs: [{ name: 'out' }] }, capabilities: [],
+      config: [{ key: 'note', label: 'Note', type: 'text' }],
+    },
+    {
+      id: 'convert', label: 'Convert Lines', kind: 'transform', entrypoint: 'wf_convert',
+      abi: 'bytes', binaryField: 'file',
+      ports: { inputs: [{ name: 'in' }], outputs: [{ name: 'out' }] }, capabilities: [],
+      config: [],
+    },
+    {
+      id: 'emit', label: 'Emit File', kind: 'transform', entrypoint: 'wf_emit',
+      ports: { inputs: [{ name: 'in' }], outputs: [{ name: 'out' }] }, capabilities: [], config: [],
+    },
+  ],
 };
 writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 process.stdout.write(`staged ${staged} (sha256 ${sha}) + manifest.json\n`);

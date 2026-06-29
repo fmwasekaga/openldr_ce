@@ -14,6 +14,7 @@ import {
 import { createRegistryStore, type RegistryRecord } from '@openldr/db';
 import { redact } from '@openldr/core';
 import { requireRole } from './rbac';
+import { recordAudit } from './audit-helper';
 
 function actor(req: FastifyRequest): { id?: string | null; name: string } {
   return { id: req.user?.id ?? null, name: req.user?.username ?? 'unknown' };
@@ -217,6 +218,11 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
     if (!p.success) { reply.code(400); return { error: 'invalid registry' }; }
     const id = randomUUID();
     await registries.create({ id, ...p.data });
+    // Audit: a registry is a SOURCE of installable code — adding one is security-relevant.
+    await recordAudit(ctx, req, {
+      action: 'marketplace.registry.create', entityType: 'marketplace.registry', entityId: id,
+      metadata: { name: p.data.name, kind: p.data.kind, location: p.data.location, enabled: p.data.enabled ?? true },
+    });
     return registries.get(id);
   });
 
@@ -226,11 +232,21 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
     if (!p.success) { reply.code(400); return { error: 'invalid patch' }; }
     if (!(await registries.get(id))) { reply.code(404); return { error: 'registry not found' }; }
     await registries.update(id, p.data);
+    await recordAudit(ctx, req, {
+      action: 'marketplace.registry.update', entityType: 'marketplace.registry', entityId: id,
+      metadata: { fields: Object.keys(p.data), ...p.data },
+    });
     return registries.get(id);
   });
 
   app.delete('/api/marketplace/registries/:id', { preHandler: requireRole('lab_admin') }, async (req) => {
-    await registries.remove((req.params as { id: string }).id);
+    const { id } = req.params as { id: string };
+    const existing = await registries.get(id);
+    await registries.remove(id);
+    await recordAudit(ctx, req, {
+      action: 'marketplace.registry.delete', entityType: 'marketplace.registry', entityId: id,
+      metadata: { name: existing?.name, kind: existing?.kind, location: existing?.location },
+    });
     return { ok: true };
   });
 

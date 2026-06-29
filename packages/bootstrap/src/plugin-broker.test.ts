@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { currentInFlight } from '@openldr/core';
 import { createPluginBroker, buildBrokerOpSchema } from './plugin-broker';
 
 function memData() {
@@ -37,7 +38,10 @@ function broker(opts: {
   const manifest: any = opts.caps === undefined ? {} : { capabilities: opts.caps };
   if (opts.requiredRoles) manifest.payload = { ui: { requiredRoles: opts.requiredRoles } };
   const row = { id: 'p1', version: '1.0.0', enabled: true, manifest };
+  const audited: Array<{ pluginId: string; op: string; outcome: string; reason?: string }> = [];
+  const logged: Array<{ obj: any; msg: string }> = [];
   const b = createPluginBroker({
+    audit: async (e) => { audited.push({ pluginId: e.pluginId, op: e.op, outcome: e.outcome, reason: e.reason }); },
     plugins: { list: async () => [row], loadSink: opts.loadSink ?? (async () => undefined) } as any,
     pluginData: data.store as any,
     reporting: { ...defaultReporting(), ...(opts.reporting ?? {}) },
@@ -49,9 +53,10 @@ function broker(opts: {
     facilities: opts.facilities,
     schedules: opts.schedules,
     maxDocBytes: opts.maxDocBytes,
+    logger: { warn: (obj: unknown, msg: string) => { logged.push({ obj, msg }); } },
     policy: () => ({ uiEnabled: opts.uiEnabled ?? true, egressEnabled: opts.egressEnabled ?? true }),
   });
-  return { b, data };
+  return { b, data, audited, logged };
 }
 
 const principal = { id: 'u1', roles: ['lab_admin'] };
@@ -100,6 +105,32 @@ describe('plugin broker', () => {
     const { b } = broker({ caps: [], loadSink: async () => ({ invoke: async (_e: string, input: unknown) => ({ echoed: input }) }) });
     const r = await b.handle('p1', principal, { kind: 'invoke', entrypoint: 'echo', input: { hi: 1 } });
     expect(r).toEqual({ ok: true, data: { echoed: { hi: 1 } } });
+  });
+
+  it('marks an invoke op in-flight (pluginId + op + entrypoint) while the wasm dispatches', async () => {
+    let seen: ReturnType<typeof currentInFlight> = [];
+    const loadSink = async () => ({ invoke: async () => { seen = currentInFlight(); return { ok: true }; } });
+    const { b } = broker({ caps: [], loadSink });
+    await b.handle('p1', principal, { kind: 'invoke', entrypoint: 'do_it', input: {} });
+    expect(seen.some((o) => o.pluginId === 'p1' && o.op === 'invoke' && o.entrypoint === 'do_it')).toBe(true);
+    expect(currentInFlight().some((o) => o.pluginId === 'p1' && o.op === 'invoke')).toBe(false);
+  });
+
+  it('marks a connector egress op in-flight during dispatch and clears it after', async () => {
+    let seen: ReturnType<typeof currentInFlight> = [];
+    const connectorPush = async () => { seen = currentInFlight(); return { ok: true }; };
+    const { b } = broker({ caps: [{ kind: 'host:connectors' }], connectorPush });
+    await b.handle('p1', principal, { kind: 'connectors.push', connectorId: 'c1', mapping: {}, period: '202401', dryRun: true });
+    expect(seen.some((o) => o.pluginId === 'p1' && o.op === 'connectors.push')).toBe(true);
+    expect(currentInFlight().some((o) => o.pluginId === 'p1' && o.op === 'connectors.push')).toBe(false);
+  });
+
+  it('clears the in-flight stamp even when the dispatched op throws', async () => {
+    const connectorPush = async () => { throw new Error('egress blew up'); };
+    const { b } = broker({ caps: [{ kind: 'host:connectors' }], connectorPush });
+    const r = await b.handle('p1', principal, { kind: 'connectors.push', connectorId: 'c1', mapping: {}, period: '202401', dryRun: false });
+    expect(r.ok).toBe(false); // host-op errors are redacted but still return a result
+    expect(currentInFlight().some((o) => o.pluginId === 'p1' && o.op === 'connectors.push')).toBe(false);
   });
 
   it('legacy (capabilities===undefined) rows are grandfathered unrestricted', async () => {
@@ -265,6 +296,25 @@ describe('plugin broker', () => {
     expect((r as any).error).toMatch(/connectors\.test failed/);
   });
 
+  it('tags a redacted host-op error with a correlation id present in BOTH the plugin error and the server log', async () => {
+    const { b, logged } = broker({
+      caps: [{ kind: 'host:connectors' }],
+      connectorPush: async () => { throw new Error('boom ECONNREFUSED password=s3cr3t'); },
+    });
+    const r = await b.handle('p1', { id: 'u', roles: ['lab_admin'] },
+      { kind: 'connectors.push', connectorId: 'c1', mapping: {}, period: '202601', dryRun: true });
+    expect(r.ok).toBe(false);
+    // The plugin-facing message carries a ref but no secret detail.
+    const m = (r as any).error.match(/operation connectors\.push failed \(ref: ([0-9a-f]+)\)/);
+    expect(m).not.toBeNull();
+    expect((r as any).error).not.toMatch(/s3cr3t/);
+    // The same ref is on the server-side log line (alongside the full detail) so an operator can grep it.
+    const entry = logged.find((l) => l.msg === 'plugin broker host op failed');
+    expect(entry).toBeDefined();
+    expect((entry!.obj as any).correlationId).toBe(m![1]);
+    expect((entry!.obj as any).detail).toMatch(/s3cr3t/); // server log keeps the real detail
+  });
+
   // ── SEC-03: plugin-level required-roles gate (applies to ALL ops incl. storage.*/invoke) ──
   describe('plugin required-roles gate (SEC-03)', () => {
     const tech = { id: 'u-tech', roles: ['lab_technician'] };
@@ -411,6 +461,41 @@ describe('plugin broker', () => {
       const schema = buildBrokerOpSchema(1024);
       expect(schema.safeParse({ kind: 'storage.get', collection: 'c', key: 'k' }).success).toBe(true);
       expect(schema.safeParse({ kind: 'bogus' }).success).toBe(false);
+    });
+  });
+
+  describe('audit trail', () => {
+    it('records a capability denial with the reason', async () => {
+      const { b, audited } = broker({ caps: [] }); // no host:reports capability
+      await b.handle('p1', principal, { kind: 'reports.list' });
+      expect(audited).toHaveLength(1);
+      expect(audited[0]).toMatchObject({ pluginId: 'p1', op: 'reports.list', outcome: 'denied' });
+      expect(audited[0].reason).toMatch(/host:reports capability/);
+    });
+
+    it('records a role-gate denial', async () => {
+      const { b, audited } = broker({ caps: [{ kind: 'host:connectors' }], connectors: { list: async () => [], get: async () => null } });
+      await b.handle('p1', { id: 'u2', roles: ['data_analyst'] }, { kind: 'connectors.list' });
+      expect(audited[0]).toMatchObject({ op: 'connectors.list', outcome: 'denied' });
+    });
+
+    it('records a malformed op as a denial', async () => {
+      const { b, audited } = broker({ caps: [] });
+      await b.handle('p1', principal, { kind: 'bogus' } as any);
+      expect(audited[0]).toMatchObject({ op: '(unparsed)', outcome: 'denied' });
+    });
+
+    it('records a completed sensitive op (live connector test) as outcome ok', async () => {
+      const { b, audited } = broker({ caps: [{ kind: 'host:connectors' }], testConnector: async () => ({ ok: true }) });
+      const r = await b.handle('p1', principal, { kind: 'connectors.test', id: 'c1' });
+      expect(r.ok).toBe(true);
+      expect(audited[0]).toMatchObject({ op: 'connectors.test:c1', outcome: 'ok' });
+    });
+
+    it('does NOT audit high-frequency reads (storage.get)', async () => {
+      const { b, audited } = broker({ caps: [] });
+      await b.handle('p1', principal, { kind: 'storage.get', collection: 'c', key: 'k' });
+      expect(audited).toHaveLength(0);
     });
   });
 });

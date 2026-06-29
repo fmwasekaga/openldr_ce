@@ -1,9 +1,11 @@
 ﻿import { useState } from 'react';
-import { X, Settings2, ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
+import { X, Settings2, ArrowDownToLine, ArrowUpFromLine, Download } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { downloadWorkflowArtifact } from '@/api';
 import { useWorkflowStore } from '../../hooks/use-workflow-store';
 import { pickForm } from '../node-forms';
 import type { WorkflowNodeData } from '../../lib/types';
+import { outputBinaries } from '../../lib/output-binaries';
 
 type Tab = 'config' | 'input' | 'output';
 
@@ -82,6 +84,12 @@ export function NodeConfigPanel() {
                 <span className="font-semibold">Error:</span> {runError}
               </div>
             )}
+            {outputBinaries(runOutput).map((f) => (
+              <button key={f.field} type="button" onClick={() => void downloadWorkflowArtifact(f.objectKey, f.fileName)}
+                className="inline-flex items-center gap-1.5 rounded border border-border px-2 py-1 text-xs font-medium text-violet-400 hover:bg-violet-500/10">
+                <Download className="h-3.5 w-3.5" /> {f.fileName}
+              </button>
+            ))}
             <JsonView data={runOutput} emptyLabel="Run the workflow to see output data." />
           </div>
         )}

@@ -1,52 +1,30 @@
 import type { NodeHandler } from './types';
+import type { WorkflowItem } from '../items';
 
 /**
- * Merge data from multiple incoming branches. Uses `ctx.edges` to discover
- * all source nodes feeding into this merge node, then combines their outputs
- * based on the configured mode.
+ * Merge items from multiple incoming branches. Uses `ctx.edges` + `ctx.nodeOutputs`
+ * to discover all source nodes feeding into this merge node, then combines based on mode.
  */
-export const mergeHandler: NodeHandler = async (node, ctx, _upstream) => {
+export const mergeHandler: NodeHandler = async (node, ctx, _input) => {
   const config = (node.data.config as Record<string, unknown>) ?? {};
   const mode = (config.mode as string) ?? 'append';
-
-  // Collect outputs from all incoming edges
-  const incomingNodeIds = ctx.edges
+  const branches: WorkflowItem[][] = ctx.edges
     .filter((e) => e.target === node.id)
-    .map((e) => e.source);
-
-  const inputs = incomingNodeIds
-    .map((id) => ctx.nodeOutputs[id])
-    .filter((v) => v !== undefined);
+    .map((e) => ctx.nodeOutputs[e.source])
+    .filter((v): v is WorkflowItem[] => Array.isArray(v));
 
   switch (mode) {
     case 'combine': {
-      // Deep-merge all objects into one
       const merged: Record<string, unknown> = {};
-      for (const input of inputs) {
-        if (input && typeof input === 'object' && !Array.isArray(input)) {
-          Object.assign(merged, input);
-        }
-      }
-      return merged;
+      for (const items of branches) for (const it of items) Object.assign(merged, it.json);
+      return [{ json: merged }];
     }
-
     case 'chooseBranch': {
       const index = Number(config.preferredBranch ?? 0);
-      return inputs[index] ?? inputs[0] ?? null;
+      return branches[index] ?? branches[0] ?? [];
     }
-
     case 'append':
-    default: {
-      // Collect all inputs into a flat array
-      const result: unknown[] = [];
-      for (const input of inputs) {
-        if (Array.isArray(input)) {
-          result.push(...input);
-        } else {
-          result.push(input);
-        }
-      }
-      return result;
-    }
+    default:
+      return branches.flat();
   }
 };

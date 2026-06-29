@@ -1,4 +1,4 @@
-import type { Logger } from '@openldr/core';
+import { beginOp, type Logger } from '@openldr/core';
 import { validateResource, type FhirResource } from '@openldr/fhir';
 import type { Converter, ConvertContext } from '@openldr/ingest';
 import type { Capability } from '@openldr/marketplace';
@@ -48,15 +48,23 @@ export function createWasmConverter(
     id: manifest.id,
     version: manifest.version,
     async convert(raw: Uint8Array, ctx: ConvertContext): Promise<FhirResource[]> {
-      const out = await runner.run(wasm, raw, {
-        entrypoint: manifest.entrypoint,
-        wasi: manifest.wasi,
-        memoryMb: manifest.limits.memoryMb,
-        timeoutMs: manifest.limits.timeoutMs,
-        config: ctx.config,
-        host,
-        allowedHosts: hosts,
-      });
+      // Stamp the converter run as in-flight for the crash-capture trail (see wasm-sink.ts);
+      // if the Extism worker takes the process down here, the crash marker names this plugin.
+      const doneOp = beginOp({ pluginId: manifest.id, op: 'convert', entrypoint: manifest.entrypoint });
+      let out: Uint8Array;
+      try {
+        out = await runner.run(wasm, raw, {
+          entrypoint: manifest.entrypoint,
+          wasi: manifest.wasi,
+          memoryMb: manifest.limits.memoryMb,
+          timeoutMs: manifest.limits.timeoutMs,
+          config: ctx.config,
+          host,
+          allowedHosts: hosts,
+        });
+      } finally {
+        doneOp();
+      }
       const resources = parseNdjson(out);
       if (allowTypes !== null) {
         for (const r of resources) {

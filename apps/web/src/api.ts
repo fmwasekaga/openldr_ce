@@ -881,6 +881,72 @@ export function buildOntology(
 
 // ── Workflow types & API client ───────────────────────────────────────────────
 
+// ── Workflow node catalog (plugin-contributed + host) ──────────────────────────
+export interface WorkflowNodeConfigField {
+  key: string;
+  label: string;
+  type: 'text' | 'number' | 'boolean' | 'select' | 'multiselect' | 'file';
+  required?: boolean;
+  default?: unknown;
+  options?: { value: string; label: string }[];
+  optionsSource?: string;
+}
+export interface WorkflowNodeDescriptor {
+  id: string;                 // composite `${pluginId}:${declId}` for plugin nodes
+  source: 'host' | 'plugin';
+  pluginId?: string;
+  label: string;
+  kind: 'source' | 'transform' | 'sink';
+  description: string;
+  entrypoint?: string;
+  ports: { inputs: { name: string }[]; outputs: { name: string }[] };
+  capabilities: string[];
+  config: WorkflowNodeConfigField[];
+  /** Wire ABI for plugin nodes: 'items' = JSON {items,config} (default); 'bytes' = raw binary. */
+  abi?: 'items' | 'bytes';
+  /** For abi:'bytes' — the binary field name on the trigger item (default 'file'). */
+  binaryField?: string;
+}
+export interface WorkflowNodeOption { value: string; label: string }
+
+export async function fetchWorkflowNodes(): Promise<WorkflowNodeDescriptor[]> {
+  const r = await authFetch('/api/workflows/nodes');
+  if (!r.ok) throw new Error(`workflow nodes failed: ${r.status}`);
+  const body = (await r.json()) as { nodes: WorkflowNodeDescriptor[] };
+  return body.nodes;
+}
+export async function fetchNodeOptions(source: string): Promise<WorkflowNodeOption[]> {
+  const r = await authFetch(`/api/workflows/node-options/${encodeURIComponent(source)}`);
+  if (!r.ok) return [];
+  return (await r.json()) as WorkflowNodeOption[];
+}
+/** The bare decl id for a plugin descriptor (strip the `${pluginId}:` prefix). */
+export function pluginNodeDeclId(d: WorkflowNodeDescriptor): string {
+  return d.pluginId && d.id.startsWith(`${d.pluginId}:`) ? d.id.slice(d.pluginId.length + 1) : d.id;
+}
+
+/** A server-side binary reference returned by the upload endpoint. */
+export interface WorkflowBinaryRef {
+  objectKey: string;
+  contentType: string;
+  fileName?: string;
+  byteSize: number;
+}
+
+/**
+ * Upload a file as an octet-stream body, scoped to a specific workflow.
+ * Returns a `WorkflowBinaryRef` that can be passed to `executeWorkflowStream`
+ * as a `files` entry so the engine seeds it onto the trigger item.
+ */
+export async function uploadWorkflowFile(workflowId: string, file: File): Promise<WorkflowBinaryRef> {
+  const r = await authFetch(
+    `/api/workflows/${encodeURIComponent(workflowId)}/uploads?filename=${encodeURIComponent(file.name)}`,
+    { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: file },
+  );
+  if (!r.ok) throw new Error(`upload failed: ${r.status}`);
+  return r.json() as Promise<WorkflowBinaryRef>;
+}
+
 export interface Workflow {
   id: string;
   name: string;
@@ -968,13 +1034,15 @@ export async function deleteWorkflow(id: string): Promise<void> {
 export async function executeWorkflowStream(
   id: string,
   onEvent: (evt: RunEvent) => void,
-  opts: { input?: unknown; signal?: AbortSignal } = {},
+  opts: { input?: unknown; signal?: AbortSignal; files?: Record<string, WorkflowBinaryRef> } = {},
 ): Promise<ExecuteResponse | null> {
   const token = getAccessToken();
+  const body: Record<string, unknown> = { input: opts.input };
+  if (opts.files) body.files = opts.files;
   const res = await fetch(`/api/workflows/${encodeURIComponent(id)}/execute-stream`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: JSON.stringify({ input: opts.input }),
+    body: JSON.stringify(body),
     signal: opts.signal,
   });
   if (!res.ok || !res.body) throw new Error(`execute failed: ${res.status}`);
@@ -1095,6 +1163,19 @@ export const deleteConnector = (id: string): Promise<void> =>
   apiDelete(`/api/connectors/${encodeURIComponent(id)}`, 'delete connector');
 export const testConnector = (id: string): Promise<ConnectorTestResult> =>
   authFetch(`/api/connectors/${encodeURIComponent(id)}/test`, { method: 'POST' }).then((r) => okJson<ConnectorTestResult>(r, 'test connector'));
+
+/** Authenticated download of a produced workflow artifact (objectKey under workflow-artifacts/). */
+export async function downloadWorkflowArtifact(objectKey: string, fileName: string): Promise<void> {
+  const path = objectKey.split('/').map(encodeURIComponent).join('/');
+  const r = await authFetch(`/api/workflows/artifacts/${path}`);
+  if (!r.ok) throw new Error(`download failed: ${r.status}`);
+  const blob = await r.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = fileName;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
 
 // ── Plugin UI surface (SP-A1b) ─────────────────────────────────────────────────
 

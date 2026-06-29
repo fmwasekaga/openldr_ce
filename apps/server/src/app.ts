@@ -67,7 +67,7 @@ export function buildApp(ctx: AppContext) {
   registerMarketplaceRoutes(app, ctx);
   registerPluginUiRoutes(app, ctx);
   registerConnectorsRoutes(app, ctx, { connectors: createConnectorStore(ctx.internalDb) });
-  registerWorkflowRoutes(app, ctx);
+  registerWorkflowRoutes(app, ctx, { connectors: createConnectorStore(ctx.internalDb) });
 
   // Serve the built SPA if present. API + health are registered first and win.
   // WEB_DIST_DIR overrides the location for container deploys (the SPA may not sit at

@@ -1,5 +1,6 @@
 import type { ReportDefinition, ReportSummary } from './types';
 import { amrResistance } from './reports/amr-resistance';
+import { amrFacilitySummary } from './reports/amr-facility-summary';
 import { testVolume } from './reports/test-volume';
 import { patientDemographics } from './reports/patient-demographics';
 import { turnaroundTime } from './reports/turnaround-time';
@@ -7,7 +8,7 @@ import { amrAntibiogram } from './reports/amr-antibiogram';
 import { amrFirstIsolateSummary } from './reports/amr-first-isolate-summary';
 import { amrGlassRis } from './reports/amr-glass-ris';
 
-const REPORTS: ReportDefinition[] = [amrResistance, testVolume, patientDemographics, turnaroundTime, amrAntibiogram, amrFirstIsolateSummary, amrGlassRis] as ReportDefinition[];
+const REPORTS: ReportDefinition[] = [amrResistance, amrFacilitySummary, testVolume, patientDemographics, turnaroundTime, amrAntibiogram, amrFirstIsolateSummary, amrGlassRis] as ReportDefinition[];
 
 export function reportCatalog(): ReportDefinition[] {
   return REPORTS;

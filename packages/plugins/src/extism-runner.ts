@@ -29,6 +29,17 @@ import type { PluginRunner, RunOptions } from './runner';
  * - The 1.0.3 JS SDK exposes no memory-page/timeout option. The watchdog below bounds
  *   async overruns; on the worker path `plugin.close()` terminates the worker (a hard
  *   stop), on the foreground path it cannot interrupt a synchronous runaway.
+ *
+ * Crash capture: the SDK spawns its worker internally and does not expose the `Worker`
+ * instance, so we cannot attach a direct `worker.on('error')` here. A worker that throws
+ * *synchronously* surfaces as a rejected `plugin.call` (caught by the caller — a normal
+ * failure, not a process crash); a worker that emits an uncaught async 'error' propagates to
+ * the main thread and kills the process before any handler in this function can run. That
+ * fatal case is captured out-of-band: every wasm call is stamped in the in-flight registry by
+ * the call-path wrapper (`createWasmSink` / `createWasmConverter` via `@openldr/core` `beginOp`),
+ * and apps/server's `uncaughtException` handler snapshots that registry into a durable crash
+ * marker — so the marker names the plugin id + entrypoint that was running when the worker
+ * took the process down.
  */
 export function createExtismRunner(): PluginRunner {
   return {

@@ -1,4 +1,4 @@
-import type { Logger } from '@openldr/core';
+import { beginOp, type Logger } from '@openldr/core';
 import type { Capability } from '@openldr/marketplace';
 import type { PluginManifest } from './manifest';
 import type { PluginRunner, RunnerHostFns } from './runner';
@@ -21,6 +21,7 @@ export interface WasmSink {
   version: string;
   entrypoints: string[];
   invoke(entrypoint: string, input: unknown, opts?: SinkInvokeOptions): Promise<unknown>;
+  invokeBytes(entrypoint: string, bytes: Uint8Array, opts?: SinkInvokeOptions): Promise<unknown>;
 }
 
 export function createWasmSink(
@@ -44,29 +45,33 @@ export function createWasmSink(
   const enforced = grant !== undefined;
   const hasNetEgress = enforced && grant.some((c) => c.kind === 'net-egress');
 
-  return {
-    id: manifest.id,
-    version: manifest.version,
-    entrypoints: manifest.entrypoints,
-    async invoke(entrypoint: string, input: unknown, opts: SinkInvokeOptions = {}): Promise<unknown> {
-      if (!manifest.entrypoints.includes(entrypoint)) {
-        throw new Error(
-          `sink ${manifest.id}: unknown entrypoint '${entrypoint}' (declared: ${manifest.entrypoints.join(', ') || 'none'})`,
-        );
-      }
-      // Egress model (deliberately differs from the converter): the connector pins the
-      // CONCRETE host at runtime via opts.allowedHosts — trusted host-side config from the
-      // resolved connector. The plugin's net-egress capability is an INTENT/presence gate
-      // only; its declared allowedHosts list is usually empty ("host decides"), so we must
-      // NOT replace opts.allowedHosts with allowedHosts(grant) (that would pin [] = deny-all
-      // and break every real push). Extism enforces that only the pinned host is reachable.
-      // Fail-closed: a host may only be pinned if the plugin declared net-egress intent.
-      if (opts.allowedHosts && opts.allowedHosts.length > 0 && enforced && !hasNetEgress) {
-        throw new Error(
-          `sink ${manifest.id}: egress to ${opts.allowedHosts.join(', ')} requested but the plugin has no net-egress capability`,
-        );
-      }
-      const out = await runner.run(wasm, encoder.encode(JSON.stringify(input ?? {})), {
+  async function runEntrypoint(entrypoint: string, inputBytes: Uint8Array, opts: SinkInvokeOptions): Promise<unknown> {
+    if (!manifest.entrypoints.includes(entrypoint)) {
+      throw new Error(
+        `sink ${manifest.id}: unknown entrypoint '${entrypoint}' (declared: ${manifest.entrypoints.join(', ') || 'none'})`,
+      );
+    }
+    // Egress model (deliberately differs from the converter): the connector pins the
+    // CONCRETE host at runtime via opts.allowedHosts — trusted host-side config from the
+    // resolved connector. The plugin's net-egress capability is an INTENT/presence gate
+    // only; its declared allowedHosts list is usually empty ("host decides"), so we must
+    // NOT replace opts.allowedHosts with allowedHosts(grant) (that would pin [] = deny-all
+    // and break every real push). Extism enforces that only the pinned host is reachable.
+    // Fail-closed: a host may only be pinned if the plugin declared net-egress intent.
+    if (opts.allowedHosts && opts.allowedHosts.length > 0 && enforced && !hasNetEgress) {
+      throw new Error(
+        `sink ${manifest.id}: egress to ${opts.allowedHosts.join(', ')} requested but the plugin has no net-egress capability`,
+      );
+    }
+    // Stamp the op as in-flight (pluginId + entrypoint) for the crash-capture trail: if the
+    // Extism worker async-crashes the whole process during this call, the uncaughtException
+    // handler (apps/server) reads this snapshot so the crash marker names the culprit. Every
+    // wasm execution flows through here (broker invoke, connector egress, headless schedule
+    // pushes, dry-runs), so this is the single authoritative stamp. Cleared in `finally`.
+    const doneOp = beginOp({ pluginId: manifest.id, op: 'invoke', entrypoint });
+    let out: Uint8Array;
+    try {
+      out = await runner.run(wasm, inputBytes, {
         entrypoint,
         wasi: manifest.wasi,
         memoryMb: manifest.limits.memoryMb,
@@ -75,15 +80,25 @@ export function createWasmSink(
         host,
         allowedHosts: opts.allowedHosts,
       });
-      const text = decoder.decode(out).trim();
-      if (!text) return {};
-      try {
-        return JSON.parse(text) as unknown;
-      } catch (err) {
-        throw new Error(
-          `sink ${manifest.id} entrypoint '${entrypoint}' returned invalid JSON: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
-    },
+    } finally {
+      doneOp();
+    }
+    const text = decoder.decode(out).trim();
+    if (!text) return {};
+    try {
+      return JSON.parse(text) as unknown;
+    } catch (err) {
+      throw new Error(
+        `sink ${manifest.id} entrypoint '${entrypoint}' returned invalid JSON: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  return {
+    id: manifest.id,
+    version: manifest.version,
+    entrypoints: manifest.entrypoints,
+    invoke: (entrypoint, input, opts = {}) => runEntrypoint(entrypoint, encoder.encode(JSON.stringify(input ?? {})), opts),
+    invokeBytes: (entrypoint, bytes, opts = {}) => runEntrypoint(entrypoint, bytes, opts),
   };
 }

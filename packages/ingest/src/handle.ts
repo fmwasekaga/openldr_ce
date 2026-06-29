@@ -21,7 +21,7 @@ export interface HandleDeps {
   batches: BatchStore;
   logger: Logger;
   audit?: AuditHook;
-  onBatchDone?: (info: { batchId: string; source: string; converter: string; count: number }) => Promise<void>;
+  onBatchDone?: (info: { batchId: string; source: string; converter: string; count: number; blobKey: string; byteSize: number }) => Promise<void>;
 }
 
 interface IngestPayload {
@@ -52,7 +52,7 @@ export async function handleIngestEvent(deps: HandleDeps, event: EventEnvelope):
       entityId: batchId,
       metadata: { source, converter, pluginId: c.id, pluginVersion: c.version, count: resources.length },
     });
-    await deps.onBatchDone?.({ batchId, source, converter, count: resources.length });
+    await deps.onBatchDone?.({ batchId, source, converter, count: resources.length, blobKey, byteSize: raw.byteLength });
   } catch (err) {
     const msg = redact(errorMessage(err));
     await deps.batches.markFailed(batchId, msg);

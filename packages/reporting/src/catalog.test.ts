@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { reportCatalog, getReport, reportSummaries } from './catalog';
 
 describe('catalog', () => {
-  it('exposes the seven reports', () => {
-    expect(reportCatalog().map((r) => r.id).sort()).toEqual(['amr-antibiogram', 'amr-first-isolate-summary', 'amr-glass-ris', 'amr-resistance', 'patient-demographics', 'test-volume', 'turnaround-time']);
+  it('exposes the eight reports', () => {
+    expect(reportCatalog().map((r) => r.id).sort()).toEqual(['amr-antibiogram', 'amr-facility-summary', 'amr-first-isolate-summary', 'amr-glass-ris', 'amr-resistance', 'patient-demographics', 'test-volume', 'turnaround-time']);
   });
   it('getReport finds and misses', () => {
     expect(getReport('amr-resistance')?.name).toBe('AMR Resistance Rate');

@@ -1,4 +1,5 @@
 import type { NodeHandler } from './types';
+import type { WorkflowItem } from '../items';
 
 export const fhirHandler: NodeHandler = async (node, ctx) => {
   if (!ctx.services) throw new Error('FHIR node requires server services');
@@ -6,5 +7,6 @@ export const fhirHandler: NodeHandler = async (node, ctx) => {
   const resourceType = String(config.resourceType ?? '').trim();
   if (!resourceType) throw new Error('FHIR node: resourceType is required');
   const limit = Number(config.limit ?? 100);
-  return ctx.services.fhirQuery(resourceType, Number.isFinite(limit) && limit > 0 ? limit : 100);
+  const { resources } = await ctx.services.fhirQuery(resourceType, Number.isFinite(limit) && limit > 0 ? limit : 100);
+  return resources.map((r): WorkflowItem => ({ json: (r && typeof r === 'object' && !Array.isArray(r) ? r : { value: r }) as Record<string, unknown> }));
 };

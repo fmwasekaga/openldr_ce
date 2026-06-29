@@ -29,7 +29,7 @@ export interface ActionNodeData extends NodeVisualMeta {
   label: string;
   action: string;
   config: Record<string, unknown>;
-  /** For `action: 'log'` nodes — template message, e.g. `got {{ $input.body.name }}`. */
+  /** For `action: 'log'` nodes — template message, e.g. `got {{ $json.body.name }}`. */
   message?: string;
   level?: 'log' | 'info' | 'warn' | 'error';
   [key: string]: unknown;

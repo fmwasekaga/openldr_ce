@@ -1,45 +1,39 @@
 //! WHONET isolate row → FHIR resources.
 use openldr_plugin_sdk::fhir;
 use rusqlite::Connection;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 pub fn map_isolates(conn: &Connection) -> rusqlite::Result<Vec<Value>> {
-    // Discover ab_* columns from the table schema.
-    let ab_cols: Vec<String> = {
-        let mut cols = Vec::new();
+    // Discover ab_* columns + presence of optional base columns from the table schema.
+    let mut ab_cols: Vec<String> = Vec::new();
+    let mut has_location = false;
+    let mut has_laboratory = false;
+    {
         let mut stmt = conn.prepare("PRAGMA table_info(isolates)")?;
         let rows = stmt.query_map([], |r| r.get::<_, String>(1))?;
         for name in rows {
             let name = name?;
-            if name.starts_with("ab_") {
-                cols.push(name);
-            }
+            if name.starts_with("ab_") { ab_cols.push(name); }
+            else if name == "location_type" { has_location = true; }
+            else if name == "laboratory" { has_laboratory = true; }
         }
-        cols
-    };
+    }
 
-    let has_location: bool = {
-        let mut stmt = conn.prepare("PRAGMA table_info(isolates)")?;
-        let rows = stmt.query_map([], |r| r.get::<_, String>(1))?;
-        let mut found = false;
-        for name in rows { if name? == "location_type" { found = true; } }
-        found
-    };
+    // Fixed base columns, then any present optional columns (tracked by their select index so the
+    // index math stays correct whatever combination of optional columns the input DB has), then
+    // the ab_* columns starting at `ab_base`.
+    let mut base_cols: Vec<&str> = vec![
+        "patient_id", "sex", "birth_date", "spec_num", "spec_type", "spec_date", "organism", "organism_code",
+    ];
+    let loc_idx = if has_location { base_cols.push("location_type"); Some(base_cols.len() - 1) } else { None };
+    let lab_idx = if has_laboratory { base_cols.push("laboratory"); Some(base_cols.len() - 1) } else { None };
+    let ab_base = base_cols.len();
 
-    let base = if has_location {
-        "patient_id, sex, birth_date, spec_num, spec_type, spec_date, organism, organism_code, location_type"
-    } else {
-        "patient_id, sex, birth_date, spec_num, spec_type, spec_date, organism, organism_code"
-    };
-    // Discovered ab_* names come from the (untrusted) input DB schema; quote them as
-    // SQLite identifiers (doubling any embedded quote) so an unusual column name can
-    // neither break nor inject into the query.
-    let select = if ab_cols.is_empty() {
-        base.to_string()
-    } else {
-        let quoted = ab_cols.iter().map(|c| format!("\"{}\"", c.replace('"', "\"\""))).collect::<Vec<_>>().join(", ");
-        format!("{base}, {quoted}")
-    };
+    // Discovered ab_* names come from the (untrusted) input DB schema; quote them as SQLite
+    // identifiers (doubling any embedded quote) so an unusual column name can neither break nor
+    // inject into the query. The fixed base columns are trusted literals.
+    let quoted_ab = ab_cols.iter().map(|c| format!("\"{}\"", c.replace('"', "\"\"")));
+    let select = base_cols.iter().map(|c| c.to_string()).chain(quoted_ab).collect::<Vec<_>>().join(", ");
     let sql = format!("SELECT {select} FROM isolates");
 
     let mut out = Vec::new();
@@ -56,13 +50,13 @@ pub fn map_isolates(conn: &Connection) -> rusqlite::Result<Vec<Value>> {
         let spec_date: Option<String> = row.get(5)?;
         let organism: Option<String> = row.get(6)?;
         let organism_code: Option<String> = row.get(7)?;
-        let location_type: Option<String> = if has_location { row.get(8)? } else { None };
+        let location_type: Option<String> = match loc_idx { Some(i) => row.get(i)?, None => None };
         let origin = location_type.as_deref().map(|l| match l.to_ascii_lowercase().as_str() {
             "i" | "in" | "inpatient" => "inpatient",
             "o" | "out" | "outpatient" => "outpatient",
             _ => "unknown",
         });
-        let ab_base = if has_location { 9 } else { 8 };
+        let laboratory: Option<String> = match lab_idx { Some(i) => row.get(i)?, None => None };
 
         let pid = format!("whonet-pat-{patient_id}");
         let sid = format!("whonet-spec-{spec_num}");
@@ -75,7 +69,14 @@ pub fn map_isolates(conn: &Connection) -> rusqlite::Result<Vec<Value>> {
             _ => "unknown",
         });
 
-        out.push(fhir::patient(&pid, None, None, gender, birth_date.as_deref()));
+        // Facility dimension: WHONET "Laboratory" → Patient.managingOrganization. The flat store
+        // projects this reference string into patients.managing_organization, which the AMR
+        // by-facility report + the DHIS2 aggregate org-unit mapping key off.
+        let mut pat = fhir::patient(&pid, None, None, gender, birth_date.as_deref());
+        if let Some(lab) = laboratory.as_deref().map(str::trim).filter(|l| !l.is_empty()) {
+            pat["managingOrganization"] = json!({ "reference": format!("Organization/{lab}") });
+        }
+        out.push(pat);
         out.push(fhir::specimen(&sid, &patient_ref, spec_type.as_deref(), spec_date.as_deref(), origin));
 
         if let Some(org) = organism.as_deref() {

@@ -41,9 +41,13 @@ function fakeSink(metadataCounts = { dataElements: 2, orgUnits: 1, categoryOptio
   };
 }
 
-function fakeCtx(over: Partial<{ key: string | undefined; loadSink: (id: string) => Promise<unknown>; pluginRows: unknown[] }> = {}): AppContext {
+type AuditRecord = { action: string; entityType: string; entityId: string; metadata?: Record<string, unknown> };
+
+function fakeCtx(over: Partial<{ key: string | undefined; loadSink: (id: string) => Promise<unknown>; pluginRows: unknown[]; audited: AuditRecord[] }> = {}): AppContext {
   return {
     cfg: { SECRETS_ENCRYPTION_KEY: 'key' in over ? over.key : 'a'.repeat(44) },
+    logger: { error() {}, warn() {}, info() {}, debug() {} },
+    audit: { record: async (e: AuditRecord) => { over.audited?.push(e); } },
     plugins: {
       loadSink: over.loadSink ?? (async () => fakeSink()),
       list: async () => over.pluginRows ?? [
@@ -127,6 +131,38 @@ describe('connectors routes', () => {
     const res = await app.inject({ method: 'POST', url: `/api/connectors/${id}/test` });
     expect(res.json()).toMatchObject({ ok: false });
     expect(res.json().error).toMatch(/not installed/);
+  });
+
+  describe('audit trail', () => {
+    it('records create/update/delete + test outcomes, and never logs secret values', async () => {
+      const audited: AuditRecord[] = [];
+      const store = fakeStore();
+      const app = appWith(store, fakeCtx({ audited }));
+      const secretBody = { name: 'C', pluginId: 'dhis2-sink', config: { baseUrl: 'https://dhis.example/', username: 'admin', password: 'hunter2' } };
+      const id = (await app.inject({ method: 'POST', url: '/api/connectors', payload: secretBody })).json().id;
+      await app.inject({ method: 'PUT', url: `/api/connectors/${id}`, payload: { config: { baseUrl: 'https://dhis.example/', username: 'admin', password: 'rotated' } } });
+      await app.inject({ method: 'POST', url: `/api/connectors/${id}/test` });
+      await app.inject({ method: 'DELETE', url: `/api/connectors/${id}` });
+
+      const actions = audited.map((a) => a.action);
+      expect(actions).toEqual(['connector.create', 'connector.update', 'connector.test', 'connector.delete']);
+      // The password must never appear anywhere in the audit metadata.
+      expect(JSON.stringify(audited)).not.toContain('hunter2');
+      expect(JSON.stringify(audited)).not.toContain('rotated');
+      expect(audited[0].metadata).toMatchObject({ pluginId: 'dhis2-sink', allowedHost: 'dhis.example' });
+      expect(audited[1].metadata).toMatchObject({ secretsRotated: true });
+      expect(audited[2].metadata).toMatchObject({ outcome: 'ok' });
+    });
+
+    it('records a failed test outcome', async () => {
+      const audited: AuditRecord[] = [];
+      const store = fakeStore();
+      const app = appWith(store, fakeCtx({ audited, loadSink: async () => undefined }));
+      const id = (await app.inject({ method: 'POST', url: '/api/connectors', payload: newBody })).json().id;
+      await app.inject({ method: 'POST', url: `/api/connectors/${id}/test` });
+      const test = audited.find((a) => a.action === 'connector.test');
+      expect(test?.metadata).toMatchObject({ outcome: 'failed' });
+    });
   });
 
   it('404s an unknown connector', async () => {

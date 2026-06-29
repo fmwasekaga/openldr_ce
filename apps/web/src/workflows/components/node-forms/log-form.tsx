@@ -3,7 +3,7 @@ import type { ActionNodeData } from '../../lib/types';
 import { FormField, Select, TextArea, TextInput } from './shared';
 
 /**
- * Log node form. The message field accepts `{{ $input.body.foo }}` style
+ * Log node form. The message field accepts `{{ $json.body.foo }}` style
  * templates; values are resolved server-side by the log handler before the
  * line is streamed back as a `node:log` event.
  */
@@ -35,13 +35,13 @@ export function LogForm({ node, update }: NodeFormProps) {
 
       <FormField
         label="Message"
-        hint="Templates: {{ $input }}, {{ $input.body.name }}, {{ $node('trigger-1').foo }}. Non-string values are JSON-stringified."
+        hint="Templates: {{ $json.field }}, {{ $items }}, {{ $node('trigger-1').0.json.foo }}. Non-string values are JSON-stringified."
       >
         <TextArea
           className="h-24 resize-none font-mono text-xs leading-relaxed"
           value={message}
           onChange={(e) => update({ message: e.target.value })}
-          placeholder="got {{ $input.body.name }}"
+          placeholder="got {{ $json.body.name }}"
           spellCheck={false}
         />
       </FormField>

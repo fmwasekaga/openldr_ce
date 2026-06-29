@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import Fastify from 'fastify';
 import { registerWorkflowRoutes } from './workflows-routes';
 
@@ -50,7 +50,7 @@ function fakeWorkflowExtras() {
     runner: {
       setIngestWorkflowIds: (ids: string[]) => { ingestIds = ids; },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      runAndRecord: async (workflowId: string, source: string, input: unknown) => { runAndRecordCalls.push({ workflowId, source, input }); },
+      runAndRecord: async (workflowId: string, source: string, input: unknown, files?: unknown) => { runAndRecordCalls.push({ workflowId, source, input, files }); },
       registerRunner: async () => {},
       reconcile: async () => {},
     },
@@ -86,10 +86,11 @@ function fakeCtx() {
       services: undefined,
       datasets: extras.datasets,
     },
-    blob: { get: async () => Buffer.from('artifact-bytes') },
+    blob: { put: vi.fn().mockResolvedValue(undefined), get: async () => Buffer.from('artifact-bytes') },
     // dhis2-sink mappings for the workflow dhis2-push picker. Empty by default; tests override.
     pluginData: { list: async () => [] },
-    cfg: { WORKFLOW_CODE_TIMEOUT_MS: 5000, WORKFLOW_CODE_MEMORY_MB: 128, WORKFLOW_CODE_ENABLED: true },
+    plugins: { list: async () => [] as any[] },
+    cfg: { WORKFLOW_CODE_TIMEOUT_MS: 5000, WORKFLOW_CODE_MEMORY_MB: 128, WORKFLOW_CODE_ENABLED: true, WORKFLOW_FILE_MAX_BYTES: 52_428_800 },
     audit: { record: async (e: unknown) => { auditEvents.push(e); return e; } },
     logger: { error() {}, warn() {}, info() {} },
     __auditEvents: auditEvents,
@@ -512,5 +513,119 @@ describe('workflow routes', () => {
     const res = await app.inject({ method: 'GET', url: '/api/workflows/artifacts/workflow-artifacts/abc/export.csv' });
     expect(res.statusCode).toBe(200);
     expect(calledWith).toBe('workflow-artifacts/abc/export.csv');
+  });
+
+  it('GET /api/workflows/nodes returns the host node descriptors', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    const ctx = fakeCtx();
+    registerWorkflowRoutes(app, ctx);
+    const res = await app.inject({ method: 'GET', url: '/api/workflows/nodes' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { nodes: Array<{ id: string; source: string; kind: string }> };
+    expect(body.nodes.length).toBeGreaterThan(0);
+    expect(body.nodes.some((n) => n.id === 'dhis2-push' && n.source === 'host')).toBe(true);
+  });
+
+  it('GET /api/workflows/nodes merges enabled plugin nodes', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    const ctx = fakeCtx();
+    ctx.plugins.list = async () => [{
+      id: 'dhis2-sink', enabled: true,
+      manifest: {
+        schemaVersion: 1, type: 'plugin', id: 'dhis2-sink', version: '1.0.0',
+        compatibility: { ceVersion: '*' },
+        capabilities: [{ kind: 'host:connectors' }],
+        payload: {
+          kind: 'plugin', wasmSha256: 'a'.repeat(64),
+          workflowNodes: [
+            { id: 'aggregate-push', label: 'Push', kind: 'sink', entrypoint: 'wf_push_aggregate',
+              ports: { inputs: [{ name: 'in' }], outputs: [] }, capabilities: ['host:connectors'] },
+          ],
+        },
+      },
+    }];
+    registerWorkflowRoutes(app, ctx);
+    const res = await app.inject({ method: 'GET', url: '/api/workflows/nodes' });
+    const body = res.json() as { nodes: Array<{ id: string; source: string; pluginId?: string }> };
+    const pluginNode = body.nodes.find((n) => n.id === 'dhis2-sink:aggregate-push');
+    expect(pluginNode).toBeDefined();
+    expect(pluginNode!.source).toBe('plugin');
+    expect(pluginNode!.pluginId).toBe('dhis2-sink');
+  });
+
+  it('GET /api/workflows/node-options/:source resolves fhir-resource-types', async () => {
+    const app = Fastify(); app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    const ctx = fakeCtx(); registerWorkflowRoutes(app, ctx, { connectors: { list: async () => [{ id: 'c1', name: 'DHIS2 Demo' }] } });
+    const res = await app.inject({ method: 'GET', url: '/api/workflows/node-options/fhir-resource-types' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual(expect.arrayContaining([{ value: 'Patient', label: 'Patient' }]));
+  });
+
+  it('GET /api/workflows/node-options/connectors maps the connector list', async () => {
+    const app = Fastify(); app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    const ctx = fakeCtx(); registerWorkflowRoutes(app, ctx, { connectors: { list: async () => [{ id: 'c1', name: 'DHIS2 Demo' }] } });
+    const res = await app.inject({ method: 'GET', url: '/api/workflows/node-options/connectors' });
+    expect(res.json()).toEqual([{ value: 'c1', label: 'DHIS2 Demo' }]);
+  });
+
+  it('GET /api/workflows/node-options/:source returns [] for unknown source', async () => {
+    const app = Fastify(); app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    const ctx = fakeCtx(); registerWorkflowRoutes(app, ctx, { connectors: { list: async () => [] } });
+    const res = await app.inject({ method: 'GET', url: '/api/workflows/node-options/unknown-source' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([]);
+  });
+
+  it('GET /api/workflows/node-options/:source is role-gated (technician 403)', async () => {
+    const app = Fastify(); app.addHook('onRequest', async (req: any) => { req.user = TECHNICIAN_USER; });
+    const ctx = fakeCtx(); registerWorkflowRoutes(app, ctx, { connectors: { list: async () => [] } });
+    const res = await app.inject({ method: 'GET', url: '/api/workflows/node-options/connectors' });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('GET /api/workflows/nodes is role-gated (technician forbidden)', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = TECHNICIAN_USER; });
+    const ctx = fakeCtx();
+    registerWorkflowRoutes(app, ctx);
+    const res = await app.inject({ method: 'GET', url: '/api/workflows/nodes' });
+    expect(res.statusCode).toBe(403);
+  });
+
+  // --- Binary upload route ---
+
+  it('POST /uploads stores an octet-stream body and returns a BinaryRef', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    const ctx = fakeCtx();
+    registerWorkflowRoutes(app, ctx);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/workflows/w1/uploads?filename=a.csv',
+      headers: { 'content-type': 'application/octet-stream' },
+      payload: Buffer.from('hello'),
+    });
+    expect(res.statusCode).toBe(200);
+    const ref = res.json();
+    expect(ref).toMatchObject({ contentType: 'application/octet-stream', fileName: 'a.csv', byteSize: 5 });
+    expect(ref.objectKey).toMatch(/^workflow-uploads\//);
+    expect(ctx.blob.put).toHaveBeenCalled();
+  });
+
+  it('POST /uploads rejects an over-cap body with 413', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    const ctx = fakeCtx();
+    ctx.cfg.WORKFLOW_FILE_MAX_BYTES = 2;
+    registerWorkflowRoutes(app, ctx);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/workflows/w1/uploads',
+      headers: { 'content-type': 'application/octet-stream' },
+      payload: Buffer.from('toolong'),
+    });
+    expect(res.statusCode).toBe(413);
   });
 });

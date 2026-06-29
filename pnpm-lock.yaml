@@ -934,6 +934,9 @@ importers:
       '@openldr/db':
         specifier: workspace:*
         version: link:../db
+      '@openldr/marketplace':
+        specifier: workspace:*
+        version: link:../marketplace
       '@openldr/ports':
         specifier: workspace:*
         version: link:../ports
