@@ -21,7 +21,9 @@ export function Switch({ checked, onCheckedChange, disabled, ...rest }: SwitchPr
         'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         disabled && 'cursor-not-allowed opacity-50',
-        checked ? 'border-primary bg-primary' : 'border-muted-foreground/40 bg-muted hover:border-muted-foreground/60',
+        // off-state uses --input (a visible gray) not --muted, which equals --sidebar and is
+        // nearly identical to the panel bg → the track would otherwise disappear.
+        checked ? 'border-primary bg-primary' : 'border-input bg-input hover:border-muted-foreground/50',
       )}
     >
       <span
