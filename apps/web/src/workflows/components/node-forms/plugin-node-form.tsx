@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { cn } from '@/lib/cn';
 import type { NodeFormProps } from './index';
 import { FormField, TextInput, Select, inputClass } from './shared';
+import { CodeEditor } from './code-editor';
 import { fetchWorkflowNodes, fetchNodeOptions, fetchNodeDetail, type WorkflowNodeConfigField, type WorkflowNodeOption } from '@/api';
 
 export function PluginNodeForm({ node, update }: NodeFormProps) {
@@ -153,11 +153,11 @@ function PluginField({
     const [err, setErr] = useState<string | null>(null);
     return (
       <FormField label={field.label}>
-        <textarea
-          className={cn(inputClass, 'min-h-[120px] font-mono text-xs')}
+        <CodeEditor
+          language="json"
           value={text}
-          onChange={(e) => {
-            const t = e.target.value;
+          minHeight="8rem"
+          onChange={(t) => {
             setText(t);
             if (t.trim() === '') {
               setErr(null);

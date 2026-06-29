@@ -1,5 +1,6 @@
 import type { NodeFormProps } from './index';
-import { FormField, TextArea, TextInput } from './shared';
+import { FormField, TextInput } from './shared';
+import { CodeEditor } from './code-editor';
 
 export function SqlForm({ node, update }: NodeFormProps) {
   const data = node.data as { label?: string; config?: { sql?: string } };
@@ -13,12 +14,12 @@ export function SqlForm({ node, update }: NodeFormProps) {
         label="SQL (SELECT only)"
         hint="Runs over the reporting schema (read-only, row-capped). Use {{ $json.x }} to template values. Published datasets are queryable as wf_ds_<name> (one data jsonb column) — e.g. select data->>'col' from wf_ds_amr."
       >
-        <TextArea
-          className="h-48 resize-none font-mono text-xs"
+        <CodeEditor
+          language="sql"
           value={config.sql ?? ''}
-          onChange={(e) => update({ config: { ...config, sql: e.target.value } })}
-          spellCheck={false}
+          onChange={(v) => update({ config: { ...config, sql: v } })}
           placeholder={'select specimen_type, count(*) as n\nfrom lab_results\ngroup by specimen_type'}
+          minHeight="12rem"
         />
       </FormField>
     </div>

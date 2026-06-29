@@ -1,13 +1,13 @@
 import type { NodeFormProps } from './index';
 import type { CodeNodeData } from '../../lib/types';
-import { FormField, Select, TextArea, TextInput } from './shared';
+import { FormField, Select, TextInput } from './shared';
+import { CodeEditor } from './code-editor';
 
 /**
- * Code node form. We intentionally use a plain monospace textarea instead of
- * importing Monaco here — dragging the full editor into the right-side panel
- * is heavy, and Monaco is already available on the dedicated Code Editor
- * page if users want a richer editing experience. Templating tips and
- * `$json`/`$items`/`$input` usage are called out in the field hint.
+ * Code node form. We use a lightweight CodeMirror editor (not Monaco) for the
+ * right-side panel — Monaco is reserved for the dedicated Code Editor page.
+ * Templating tips and `$json`/`$items`/`$input` usage are called out in the
+ * field hint.
  */
 export function CodeForm({ node, update }: NodeFormProps) {
   const data = node.data as CodeNodeData;
@@ -35,12 +35,12 @@ export function CodeForm({ node, update }: NodeFormProps) {
         label="Code"
         hint="Use `$json` (first item's fields), `$items` (all items' fields), or `$input` (raw WorkflowItem[]). Use `console.log(...)` — output streams to the Logs tab. Last expression or explicit `return` becomes this node's output."
       >
-        <TextArea
-          className="h-56 resize-none font-mono text-xs leading-relaxed"
+        <CodeEditor
+          language="javascript"
           value={data.code ?? ''}
-          onChange={(e) => update({ code: e.target.value })}
-          spellCheck={false}
+          onChange={(v) => update({ code: v })}
           placeholder={'console.log("hi", $json);\nreturn { doubled: $json.n * 2 };'}
+          minHeight="14rem"
         />
       </FormField>
     </div>

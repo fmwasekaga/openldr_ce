@@ -24,6 +24,31 @@ export function NodeConfigPanel() {
   const nodeRunError = useWorkflowStore((s) => s.nodeRunError);
 
   const [tab, setTab] = useState<Tab>('config');
+  const [width, setWidth] = useState<number>(() => {
+    const v = Number(localStorage.getItem('wf.configPanelWidth'));
+    return v >= 280 && v <= 760 ? v : 320;
+  });
+
+  const startResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = width;
+    const onMove = (ev: MouseEvent) => {
+      const next = Math.min(760, Math.max(280, startW + (startX - ev.clientX)));
+      setWidth(next);
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      // persist the latest width
+      setWidth((w) => {
+        localStorage.setItem('wf.configPanelWidth', String(w));
+        return w;
+      });
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
 
   const configNode = nodes.find((n) => n.id === configNodeId);
   if (!configNode) return null;
@@ -40,7 +65,19 @@ export function NodeConfigPanel() {
   const runError = configNodeId ? nodeRunError[configNodeId] : undefined;
 
   return (
-    <aside className="flex h-full w-80 shrink-0 flex-col border-l border-border bg-card">
+    <aside
+      style={{ width }}
+      className="relative flex h-full shrink-0 flex-col border-l border-border bg-card"
+    >
+      <div
+        onMouseDown={startResize}
+        onDoubleClick={() => {
+          setWidth(320);
+          localStorage.setItem('wf.configPanelWidth', '320');
+        }}
+        title="Drag to resize · double-click to reset"
+        className="absolute left-0 top-0 z-10 h-full w-1.5 -translate-x-1/2 cursor-col-resize bg-transparent hover:bg-violet-500/40"
+      />
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
           <Settings2 className="h-4 w-4 text-violet-400" />

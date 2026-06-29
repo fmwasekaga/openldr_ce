@@ -5,6 +5,14 @@ import * as api from '@/api';
 
 vi.mock('@/api', async (orig) => ({ ...(await orig<typeof api>()), fetchWorkflowNodes: vi.fn(), fetchNodeOptions: vi.fn(), fetchNodeDetail: vi.fn() }));
 
+// CodeMirror renders a contenteditable (not a textarea) and is awkward in jsdom,
+// so we mock the editor with a plain textarea that forwards onChange.
+vi.mock('./code-editor', () => ({
+  CodeEditor: ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
+    <textarea data-testid="code-editor" value={value} onChange={(e) => onChange(e.target.value)} />
+  ),
+}));
+
 const descriptor = {
   id: 'test-sink:echo', source: 'plugin', pluginId: 'test-sink', label: 'Echo', kind: 'transform',
   description: '', entrypoint: 'wf_echo', ports: { inputs: [{ name: 'in' }], outputs: [{ name: 'out' }] },
