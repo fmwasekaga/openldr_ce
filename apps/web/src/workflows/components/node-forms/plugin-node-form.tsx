@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { NodeFormProps } from './index';
-import { FormField, TextInput, Select, inputClass } from './shared';
+import { FormField, TextInput, Select } from './shared';
 import { CodeEditor } from './code-editor';
+import { Switch } from '@/components/ui/switch';
 import { fetchWorkflowNodes, fetchNodeOptions, fetchNodeDetail, type WorkflowNodeConfigField, type WorkflowNodeOption } from '@/api';
 
 export function PluginNodeForm({ node, update }: NodeFormProps) {
@@ -84,17 +85,9 @@ function PluginField({
 
   if (field.type === 'boolean') {
     return (
-      <div className="flex items-center gap-2">
-        <input
-          id={`f-${field.key}`}
-          type="checkbox"
-          className={inputClass + ' mt-0 h-4 w-4 cursor-pointer'}
-          checked={Boolean(value)}
-          onChange={(e) => onChange(e.target.checked)}
-        />
-        <label htmlFor={`f-${field.key}`} className="cursor-pointer text-sm text-foreground">
-          {field.label}
-        </label>
+      <div className="flex items-center justify-between gap-3 py-0.5">
+        <span className="text-sm text-foreground">{field.label}</span>
+        <Switch checked={Boolean(value)} onCheckedChange={onChange} aria-label={field.label} />
       </div>
     );
   }
