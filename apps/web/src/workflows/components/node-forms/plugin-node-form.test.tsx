@@ -13,6 +13,31 @@ vi.mock('./code-editor', () => ({
   ),
 }));
 
+// The shared Select is now backed by Radix (a div-based combobox), which does not
+// respond to `fireEvent.change`. Render it as a native <select> in this test so the
+// existing change-driven assertions (detailSource/optionsSource) stay simple.
+vi.mock('@/components/ui/select', () => ({
+  Select: ({
+    children,
+    value,
+    onValueChange,
+  }: {
+    children: React.ReactNode;
+    value?: string;
+    onValueChange?: (v: string) => void;
+  }) => (
+    <select role="combobox" value={value ?? ''} onChange={(e) => onValueChange?.(e.target.value)}>
+      {children}
+    </select>
+  ),
+  SelectTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  SelectValue: () => null,
+  SelectContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  SelectItem: ({ value, children }: { value: string; children: React.ReactNode }) => (
+    <option value={value}>{children}</option>
+  ),
+}));
+
 const descriptor = {
   id: 'test-sink:echo', source: 'plugin', pluginId: 'test-sink', label: 'Echo', kind: 'transform',
   description: '', entrypoint: 'wf_echo', ports: { inputs: [{ name: 'in' }], outputs: [{ name: 'out' }] },
