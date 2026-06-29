@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Check, Copy } from 'lucide-react';
 import { Compartment, EditorState } from '@codemirror/state';
 import { EditorView, placeholder as cmPlaceholder } from '@codemirror/view';
 import { basicSetup } from 'codemirror';
@@ -7,6 +8,39 @@ import { javascript } from '@codemirror/lang-javascript';
 import { json } from '@codemirror/lang-json';
 import { sql } from '@codemirror/lang-sql';
 import { cn } from '@/lib/cn';
+
+/** Copy-to-clipboard affordance: shows a Copy icon that flips to a green Check (with a brief pop)
+ *  for ~1.5s after a successful copy. Reads the text lazily so it copies the live editor content. */
+function CopyButton({ getText }: { getText: () => string }) {
+  const [copied, setCopied] = useState(false);
+  const onCopy = async () => {
+    const text = getText();
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard unavailable (non-secure context) — fail quietly
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={onCopy}
+      title={copied ? 'Copied!' : 'Copy'}
+      aria-label={copied ? 'Copied' : 'Copy to clipboard'}
+      className={cn(
+        'absolute right-2 top-2 z-10 rounded border bg-background/80 p-1 opacity-70 backdrop-blur transition-all duration-150 hover:opacity-100',
+        copied
+          ? 'scale-110 border-emerald-500/50 text-emerald-400'
+          : 'border-border text-muted-foreground hover:bg-secondary hover:text-foreground',
+      )}
+    >
+      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+    </button>
+  );
+}
 
 type Lang = 'javascript' | 'json' | 'sql';
 
@@ -53,6 +87,7 @@ export function CodeEditor({
   placeholder,
   minHeight = '14rem',
   readOnly = false,
+  copyable = true,
   className,
 }: {
   value: string;
@@ -61,6 +96,7 @@ export function CodeEditor({
   placeholder?: string;
   minHeight?: string;
   readOnly?: boolean;
+  copyable?: boolean;
   className?: string;
 }) {
   const host = useRef<HTMLDivElement>(null);
@@ -125,11 +161,13 @@ export function CodeEditor({
 
   return (
     <div
-      ref={host}
       className={cn(
-        'overflow-hidden rounded-md border border-border bg-background/40 [&_.cm-editor]:max-h-[60vh]',
+        'relative overflow-hidden rounded-md border border-border bg-background/40 [&_.cm-editor]:max-h-[60vh]',
         className,
       )}
-    />
+    >
+      {copyable && <CopyButton getText={() => viewRef.current?.state.doc.toString() ?? value} />}
+      <div ref={host} />
+    </div>
   );
 }
