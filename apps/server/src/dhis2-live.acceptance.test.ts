@@ -49,7 +49,7 @@ function buildSink(): WasmSink {
   const wasm = new Uint8Array(readFileSync(wasmPath));
   const manifest = parseManifest({
     id: 'dhis2-sink', version: '0.1.0', kind: 'sink',
-    entrypoints: ['health_check', 'pull_metadata', 'push_aggregate', 'push_tracker'],
+    entrypoints: ['health_check', 'pull_metadata', 'push_aggregate', 'push_tracker', 'wf_push'],
     wasmSha256: sha256Hex(wasm), wasi: true,
   });
   const logger = { info() {}, error() {}, warn() {}, debug() {} } as never;
@@ -139,6 +139,49 @@ describe.skipIf(!LIVE)('DHIS2 live acceptance (SP-6)', () => {
     );
     const landed = (back.dataValues ?? []).find((d) => d.dataElement === de && d.orgUnit === ou && d.period === PERIOD);
     expect(landed?.value).toBe(VALUE);
+
+    // Best-effort cleanup of the test dataValue.
+    try { await fetch(`${BASE}/api/dataValues?de=${de}&pe=${PERIOD}&ou=${ou}&co=${coc}`, { method: 'DELETE', headers: { authorization: auth } }); } catch { /* ignore */ }
+  });
+
+  // The SP-5a workflow node: the engine forwards upstream items + the denormalized
+  // mapping/orgUnitMap as `config` to the `wf_push` entrypoint, resolving only the
+  // connector (decrypted config + pinned egress host) — exactly what we pass here.
+  it('wf_push (workflow node) dry-run builds dataValues, then REAL push lands + served back (SP-5a)', async () => {
+    const config = await connectors.getDecryptedConfig(connectorId, KEY);
+    const sink = buildSink();
+    const WF_VALUE = '9';
+    const node = (dryRun: boolean) => ({
+      items: [{ json: { ou, val: WF_VALUE } }],
+      config: {
+        mapping: { orgUnitColumn: 'ou', columns: [{ column: 'val', dataElement: de, categoryOptionCombo: coc }] },
+        orgUnitMap: { [ou]: ou }, period: PERIOD, dryRun,
+      },
+    });
+
+    // Dry-run: items -> 1 dataValue, no egress, no import result (allowedHosts empty).
+    const dry = (await sink.invoke('wf_push', node(true), { config, allowedHosts: [] })) as
+      { items: unknown[]; meta: { kind: string; dataValues: number; result: unknown } };
+    expect(dry.meta.kind).toBe('aggregate');
+    expect(dry.meta.dataValues).toBe(1);
+    expect(dry.meta.result).toBeNull();
+    expect(dry.items).toHaveLength(1);
+
+    // Real push: worker-path HTTP egress to the pinned host; import summary in meta.result.
+    const live = (await sink.invoke('wf_push', node(false), { config, allowedHosts: [HOST] })) as
+      { meta: { result?: { status?: string; imported?: number; updated?: number } } };
+    const r = live.meta.result;
+    // eslint-disable-next-line no-console
+    console.log('  wf_push import result =', JSON.stringify(r));
+    expect(r).toBeTruthy();
+    expect((r!.status ?? '').toLowerCase()).not.toBe('error');
+    expect((r!.imported ?? 0) + (r!.updated ?? 0)).toBeGreaterThanOrEqual(1);
+
+    const back = await dhis2<{ dataValues?: { dataElement: string; orgUnit: string; period: string; value: string }[] }>(
+      `/api/dataValueSets.json?dataElement=${de}&orgUnit=${ou}&period=${PERIOD}`,
+    );
+    const landed = (back.dataValues ?? []).find((d) => d.dataElement === de && d.orgUnit === ou && d.period === PERIOD);
+    expect(landed?.value).toBe(WF_VALUE);
 
     // Best-effort cleanup of the test dataValue.
     try { await fetch(`${BASE}/api/dataValues?de=${de}&pe=${PERIOD}&ou=${ou}&co=${coc}`, { method: 'DELETE', headers: { authorization: auth } }); } catch { /* ignore */ }
