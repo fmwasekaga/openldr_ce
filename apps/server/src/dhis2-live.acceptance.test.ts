@@ -56,6 +56,19 @@ function buildSink(): WasmSink {
   return createWasmSink(manifest, wasm, createExtismRunner(), logger, [{ kind: 'net-egress', allowedHosts: [] }]);
 }
 
+// The whonet-sqlite source plugin's wf_convert (bytes ABI): raw WHONET SQLite bytes +
+// config {output:'rows'|'fhir'} → { items:[{json}] }. No egress (empty grant).
+function buildWhonetSink(): WasmSink {
+  const wpath = join(here, '..', '..', '..', 'reference-plugins', 'whonet-sqlite', 'plugin.wasm');
+  const wasm = new Uint8Array(readFileSync(wpath));
+  const manifest = parseManifest({
+    id: 'whonet-sqlite', version: '0.1.0', kind: 'source', entrypoint: 'convert',
+    entrypoints: ['wf_convert'], wasmSha256: sha256Hex(wasm), wasi: true,
+  });
+  const logger = { info() {}, error() {}, warn() {}, debug() {} } as never;
+  return createWasmSink(manifest, wasm, createExtismRunner(), logger, [{ kind: 'net-egress', allowedHosts: [] }]);
+}
+
 describe.skipIf(!LIVE)('DHIS2 live acceptance (SP-6)', () => {
   let internal: ReturnType<typeof createInternalDb>;
   let connectors: ConnectorStore;
@@ -109,6 +122,50 @@ describe.skipIf(!LIVE)('DHIS2 live acceptance (SP-6)', () => {
     coc = (await dhis2<{ categoryOptionCombos: { id: string }[] }>(`/api/categoryCombos/${ccId}.json?fields=categoryOptionCombos[id]`)).categoryOptionCombos[0].id;
     ou = (await dhis2<{ organisationUnits: { id: string }[] }>('/api/organisationUnits.json?filter=level:eq:4&fields=id&paging=true&pageSize=1')).organisationUnits[0].id;
     expect(de && coc && ou).toBeTruthy();
+  });
+
+  // North-star: drive the whole plugin pipeline end-to-end with NO host transform code —
+  // whonet-sqlite wf_convert(rows) produces isolate-row items, dhis2-sink wf_push maps
+  // them to dataValues and pushes to live DHIS2 (worker-path egress, pinned host).
+  it('north-star: whonet wf_convert(rows) -> dhis2-sink wf_push lands in live DHIS2 (SP-5b)', async () => {
+    const whonetBytes = readFileSync(join(here, '..', '..', '..', 'samples', 'whonet-sample.sqlite'));
+    const conv = (await buildWhonetSink().invokeBytes('wf_convert', new Uint8Array(whonetBytes), { config: { output: 'rows' } })) as { items: { json: Record<string, unknown> }[] };
+    expect(conv.items.length).toBeGreaterThan(0);
+    const row0 = conv.items[0].json;
+    // eslint-disable-next-line no-console
+    console.log('  whonet row0 columns =', JSON.stringify(Object.keys(row0)));
+
+    // Pick a string column on the row to use as the org-unit key. Prefer a facility-ish column; fall back to the first string column.
+    const strCols = Object.keys(row0).filter((k) => typeof row0[k] === 'string' && (row0[k] as string).length > 0);
+    const facCol = ['laboratory', 'location_type', 'location', 'institution', 'facility', 'patient_id'].find((c) => strCols.includes(c)) ?? strCols[0];
+    expect(facCol).toBeTruthy();
+    const facVal = String(row0[facCol]);
+
+    // WHONET isolate columns are categorical (no numeric measure), so synthesize a count of 1 per row and push that.
+    const pushItems = [{ json: { ...row0, __count: '1' } }];
+    const config = await connectors.getDecryptedConfig(connectorId, KEY);
+    const out = (await buildSink().invoke('wf_push', {
+      items: pushItems,
+      config: {
+        mapping: { orgUnitColumn: facCol, columns: [{ column: '__count', dataElement: de, categoryOptionCombo: coc }] },
+        orgUnitMap: { [facVal]: ou }, period: PERIOD, dryRun: false,
+      },
+    }, { config, allowedHosts: [HOST] })) as { meta: { kind: string; dataValues: number; result?: { status?: string; imported?: number; updated?: number } } };
+    // eslint-disable-next-line no-console
+    console.log('  whonet->dhis2 import result =', JSON.stringify(out.meta.result));
+    expect(out.meta.dataValues).toBe(1);
+    const r = out.meta.result;
+    expect((r?.status ?? '').toLowerCase()).not.toBe('error');
+    expect((r?.imported ?? 0) + (r?.updated ?? 0)).toBeGreaterThanOrEqual(1);
+
+    const back = await dhis2<{ dataValues?: { dataElement: string; orgUnit: string; period: string; value: string }[] }>(
+      `/api/dataValueSets.json?dataElement=${de}&orgUnit=${ou}&period=${PERIOD}`,
+    );
+    const landed = (back.dataValues ?? []).find((d) => d.dataElement === de && d.orgUnit === ou && d.period === PERIOD);
+    expect(landed?.value).toBe('1');
+
+    // Best-effort cleanup.
+    try { await fetch(`${BASE}/api/dataValues?de=${de}&pe=${PERIOD}&ou=${ou}&co=${coc}`, { method: 'DELETE', headers: { authorization: auth } }); } catch { /* ignore */ }
   });
 
   it('push_aggregate dry-run maps rows to dataValues with no egress (SP-2)', async () => {
