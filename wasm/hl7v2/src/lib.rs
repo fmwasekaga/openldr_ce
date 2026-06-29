@@ -41,4 +41,28 @@ mod plugin {
         }
         Ok(to_ndjson(&resources))
     }
+
+    /// Workflow entrypoint: consume HL7 v2 text bytes and return `{ items: [{ json: <value> }, ...] }`.
+    /// Dispatches on the Extism config `output`: `"rows"` emits one flat `project_row` record per
+    /// HL7 message; otherwise (default `"fhir"`) emits the FHIR resources from `map_message`.
+    #[plugin_fn]
+    pub fn wf_convert(input: Vec<u8>) -> FnResult<String> {
+        if input.is_empty() {
+            return Ok(serde_json::json!({ "items": [] }).to_string());
+        }
+        let text = String::from_utf8(input).map_err(|e| WithReturnCode::new(Error::msg(format!("utf8: {e}")), 1))?;
+        let cfg = load_config();
+        let output = config::get("output").ok().flatten().unwrap_or_else(|| "fhir".to_string());
+        let mut items: Vec<serde_json::Value> = Vec::new();
+        for (i, segs) in parser::parse_messages(&text).into_iter().enumerate() {
+            if output == "rows" {
+                items.push(serde_json::json!({ "json": mapping::project_row(&segs, &cfg, i + 1) }));
+            } else {
+                for res in mapping::map_message(&segs, &cfg, i + 1) {
+                    items.push(serde_json::json!({ "json": res }));
+                }
+            }
+        }
+        Ok(serde_json::json!({ "items": items }).to_string())
+    }
 }

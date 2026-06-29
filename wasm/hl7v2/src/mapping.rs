@@ -125,6 +125,110 @@ pub fn map_message(segs: &[Segment], cfg: &Config, seq: usize) -> Vec<Value> {
     out
 }
 
+/// Project one flat record per HL7 message: the key fields `map_message` reads (patient id,
+/// specimen type/date, organism, AST antibiotic→interpretation, message metadata), as a JSON
+/// object. One record per message. Mirrors the same field accessors `map_message` uses so the
+/// row projection stays in lockstep with the FHIR mapping. Absent fields are skipped.
+pub fn project_row(segs: &[Segment], cfg: &Config, seq: usize) -> serde_json::Map<String, Value> {
+    let mut row = serde_json::Map::new();
+    let put = |row: &mut serde_json::Map<String, Value>, k: &str, v: String| {
+        if !v.is_empty() {
+            row.insert(k.to_string(), Value::String(v));
+        }
+    };
+
+    let msh = match segs.iter().find(|s| s.name == "MSH") {
+        Some(m) => m,
+        None => return row,
+    };
+    let msg_type = msh.component(9, 1);
+    let ctrl = msh.value(10);
+    let key = if ctrl.is_empty() { format!("hl7-{seq}") } else { ctrl.clone() };
+
+    put(&mut row, "message_type", msg_type.clone());
+    put(&mut row, "message_control_id", ctrl);
+    if let Some(d) = hl7_date(&msh.value(7)) {
+        put(&mut row, "message_date", d);
+    }
+
+    // Patient (PID-3 id, PID-5 name, PID-7 birth date, PID-8 sex) — same accessors as map_message.
+    let pid = segs.iter().find(|s| s.name == "PID");
+    let patient_id = pid
+        .map(|p| {
+            let v = p.component(3, 1);
+            if v.is_empty() { format!("pat-{key}") } else { v }
+        })
+        .unwrap_or_else(|| format!("pat-{key}"));
+    put(&mut row, "patient_id", patient_id);
+    if let Some(p) = pid {
+        put(&mut row, "patient_family", p.component(5, 1));
+        put(&mut row, "patient_given", p.component(5, 2));
+        if let Some(s) = sex(&p.value(8)) {
+            put(&mut row, "patient_sex", s.to_string());
+        }
+        if let Some(b) = hl7_date(&p.value(7)) {
+            put(&mut row, "patient_birth_date", b);
+        }
+    }
+
+    // Visit origin (PV1-2) — same accessor as map_message.
+    if let Some(o) = segs.iter().find(|s| s.name == "PV1").and_then(|pv1| origin_from_pv1(&pv1.value(2))) {
+        put(&mut row, "origin", o.to_string());
+    }
+
+    // Order (OBR-4 code/text) — same accessor as map_message.
+    if let Some(obr) = segs.iter().find(|s| s.name == "OBR") {
+        put(&mut row, "order_code", obr.component(4, 1));
+        put(&mut row, "order_text", obr.component(4, 2));
+    }
+
+    // Specimen (SPM-4 type, SPM-17 collection date) — same accessors as map_message.
+    if let Some(spm) = segs.iter().find(|s| s.name == "SPM") {
+        put(&mut row, "specimen_type", spm.component(4, 1));
+        if let Some(d) = hl7_date(&spm.value(17)) {
+            put(&mut row, "specimen_date", d);
+        }
+    }
+
+    // Organism + AST results from OBX segments — same classification logic as map_message.
+    let mut organisms: Vec<Value> = Vec::new();
+    let mut ast = serde_json::Map::new();
+    for obx in segs.iter().filter(|s| s.name == "OBX") {
+        let interp = obx.value(8).to_ascii_uppercase();
+        let obs3_code = obx.component(3, 1);
+        let obs3_text = obx.component(3, 2);
+        if cfg.ast_interp.contains(&interp) {
+            let ab = if obs3_code.is_empty() { obs3_text.clone() } else { obs3_code.clone() };
+            if ab.is_empty() {
+                continue;
+            }
+            ast.insert(ab, Value::String(interp));
+        } else if cfg.organism_codes.contains(&obs3_code)
+            && matches!(obx.value(2).as_str(), "CE" | "CWE" | "CF")
+        {
+            let org_code = obx.component(5, 1);
+            let org_text = obx.component(5, 2);
+            let code = if org_code.is_empty() { org_text.clone() } else { org_code };
+            let text = if org_text.is_empty() { code.clone() } else { org_text };
+            if code.is_empty() {
+                continue;
+            }
+            let mut org = serde_json::Map::new();
+            org.insert("code".to_string(), Value::String(code));
+            org.insert("text".to_string(), Value::String(text));
+            organisms.push(Value::Object(org));
+        }
+    }
+    if !organisms.is_empty() {
+        row.insert("organisms".to_string(), Value::Array(organisms));
+    }
+    if !ast.is_empty() {
+        row.insert("ast".to_string(), Value::Object(ast));
+    }
+
+    row
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -147,6 +251,42 @@ mod tests {
         assert!(obs.iter().any(|o| o["interpretation"][0]["coding"][0]["code"] == "R"));
         let spec = res.iter().find(|r| r["resourceType"] == "Specimen").unwrap();
         assert_eq!(spec["extension"][0]["valueCode"], "inpatient");
+    }
+
+    #[test]
+    fn project_row_flattens_key_fields() {
+        let cfg = Config::default();
+        let segs = &parser::parse_messages(ORU)[0];
+        let row = project_row(segs, &cfg, 1);
+        assert_eq!(row["patient_id"], "P001");
+        assert_eq!(row["patient_family"], "Doe");
+        assert_eq!(row["patient_given"], "Jane");
+        assert_eq!(row["patient_sex"], "female");
+        assert_eq!(row["patient_birth_date"], "1990-01-01");
+        assert_eq!(row["origin"], "inpatient");
+        assert_eq!(row["specimen_type"], "BLOOD");
+        assert_eq!(row["specimen_date"], "2026-01-10");
+        assert_eq!(row["message_type"], "ORU");
+        assert_eq!(row["order_code"], "CULT");
+        // Organism (OBX-1 634-6 -> Escherichia coli).
+        let orgs = row["organisms"].as_array().unwrap();
+        assert!(orgs.iter().any(|o| o["code"] == "eco" && o["text"] == "Escherichia coli"));
+        // AST antibiotic -> interpretation (OBX-2 Ampicillin -> R).
+        assert_eq!(row["ast"]["AMP"], "R");
+    }
+
+    #[test]
+    fn project_row_skips_absent_fields() {
+        let cfg = Config::default();
+        let orm = "MSH|^~\\&|LIS|LAB|||20260110||ORM^O01|2|P|2.5.1\rPID|1||P002\rORC|NW\rOBR|1||2|CULT^Culture";
+        let segs = &parser::parse_messages(orm)[0];
+        let row = project_row(segs, &cfg, 1);
+        assert_eq!(row["patient_id"], "P002");
+        assert_eq!(row["message_type"], "ORM");
+        assert_eq!(row["order_code"], "CULT");
+        assert!(!row.contains_key("specimen_type"));
+        assert!(!row.contains_key("organisms"));
+        assert!(!row.contains_key("ast"));
     }
 
     #[test]
