@@ -157,3 +157,39 @@ pub struct TrackerPushOutput {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub result: Option<PushResult>,
 }
+
+// ── Workflow-node envelope I/O (wf_push) ─────────────────────────────────────
+/// One workflow item: a `.json` payload plus optional binary handle. A sink
+/// passes items through unchanged; only `.json` feeds the push. Any other fields
+/// an item carries are absorbed into `extra` (flatten) so they survive the
+/// echo round-trip unchanged.
+#[derive(Debug, Deserialize, Serialize)]
+pub struct WfPushItem {
+    pub json: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub binary: Option<Value>,
+    #[serde(flatten)]
+    pub extra: Map<String, Value>,
+}
+
+/// The workflow-node `config` block. `mapping` stays an opaque `Value` so the
+/// envelope can dispatch on `mapping.kind` before deserializing to the concrete
+/// `AggregateMapping`/`TrackerMapping`.
+#[derive(Debug, Deserialize)]
+pub struct WfPushConfig {
+    pub mapping: Value,
+    #[serde(rename = "orgUnitMap", default)]
+    pub org_unit_map: HashMap<String, String>,
+    #[serde(default)]
+    pub period: String,
+    #[serde(rename = "dryRun", default)]
+    pub dry_run: bool,
+}
+
+/// The generic workflow-node items envelope consumed by `wf_push`.
+#[derive(Debug, Deserialize)]
+pub struct WfPushInput {
+    #[serde(default)]
+    pub items: Vec<WfPushItem>,
+    pub config: WfPushConfig,
+}

@@ -12,7 +12,6 @@ import { fhirHandler } from './fhir';
 import { httpHandler } from './http';
 import { materializeHandler } from './materialize';
 import { exportHandler } from './export';
-import { dhis2PushHandler } from './dhis2-push';
 import { loadDatasetHandler } from './load-dataset';
 import { pluginNodeHandler } from './plugin-node';
 
@@ -27,7 +26,6 @@ const ACTION_HANDLERS: Record<string, NodeHandler> = {
   'no-op': defaultHandler,
   'materialize-dataset': materializeHandler,
   'export-artifact': exportHandler,
-  'dhis2-push': dhis2PushHandler,
   'load-dataset': loadDatasetHandler,
 };
 

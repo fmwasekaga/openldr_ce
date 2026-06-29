@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { materializeHandler } from './materialize';
 import { exportHandler } from './export';
-import { dhis2PushHandler } from './dhis2-push';
 import { createContext } from '../execution-context';
 import type { WorkflowServices } from '../services';
 import type { WorkflowItem } from '../items';
@@ -12,7 +11,6 @@ const base: WorkflowServices = {
   httpFetch: vi.fn(),
   materializeDataset: vi.fn(async (name, _c, rows) => ({ dataset: name, rowCount: rows.length })),
   exportArtifact: vi.fn(async (i) => ({ objectKey: `k/${i.format}`, format: i.format, byteSize: 10 })),
-  dhis2Push: vi.fn(async () => ({ status: 'OK', imported: 1 })),
   loadDataset: async () => ({ columns: [], rows: [] }),
 } as never;
 
@@ -47,30 +45,6 @@ describe('sink handlers', () => {
     expect(out).toHaveLength(1);
     expect(out[0].json).toEqual({ a: 1 });
     expect(out[0].binary!.export).toEqual({ objectKey: 'k/csv', contentType: 'text/csv', fileName: 'export.csv', byteSize: 10 });
-  });
-
-  it('dhis2-push delegates when available', async () => {
-    const ctx = ctxWith(base);
-    const input: WorkflowItem[] = [{ json: { facility: 'f1', value: 2 } }];
-    const out = await dhis2PushHandler(
-      { id: 'd', type: 'action', data: { action: 'dhis2-push', config: { mappingId: 'map1', period: '202401' } } },
-      ctx,
-      input,
-    );
-    // handler returns input items unchanged
-    expect(out).toEqual(input);
-    expect(base.dhis2Push).toHaveBeenCalledWith({ mappingId: 'map1', period: '202401', dryRun: false });
-  });
-
-  it('dhis2-push throws when capability is absent', async () => {
-    const ctx = ctxWith({ ...base, dhis2Push: undefined });
-    await expect(
-      dhis2PushHandler(
-        { id: 'd', type: 'action', data: { config: { mappingId: 'm', period: 'p' } } },
-        ctx,
-        [],
-      ),
-    ).rejects.toThrow(/not available/);
   });
 
   it('each throws when services are absent', async () => {

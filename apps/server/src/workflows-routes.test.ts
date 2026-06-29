@@ -524,7 +524,7 @@ describe('workflow routes', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json() as { nodes: Array<{ id: string; source: string; kind: string }> };
     expect(body.nodes.length).toBeGreaterThan(0);
-    expect(body.nodes.some((n) => n.id === 'dhis2-push' && n.source === 'host')).toBe(true);
+    expect(body.nodes.some((n) => n.id === 'export-artifact' && n.source === 'host')).toBe(true);
   });
 
   it('GET /api/workflows/nodes merges enabled plugin nodes', async () => {
@@ -582,6 +582,24 @@ describe('workflow routes', () => {
     const app = Fastify(); app.addHook('onRequest', async (req: any) => { req.user = TECHNICIAN_USER; });
     const ctx = fakeCtx(); registerWorkflowRoutes(app, ctx, { connectors: { list: async () => [] } });
     const res = await app.inject({ method: 'GET', url: '/api/workflows/node-options/connectors' });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('GET /api/workflows/node-detail/dhis2-mapping returns {mapping,orgUnitMap} from plugin_data', async () => {
+    const app = Fastify(); app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    const ctx = fakeCtx();
+    ctx.pluginData.get = vi.fn().mockResolvedValue({ id: 'm1', definition: { orgUnitColumn: 'facility', columns: [] } });
+    ctx.pluginData.list = vi.fn().mockResolvedValue([{ doc: { facilityId: 'fac-1', orgUnitId: 'OU_AAA' } }]);
+    registerWorkflowRoutes(app, ctx);
+    const res = await app.inject({ method: 'GET', url: '/api/workflows/node-detail/dhis2-mapping?value=m1' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ mapping: { orgUnitColumn: 'facility', columns: [] }, orgUnitMap: { 'fac-1': 'OU_AAA' } });
+  });
+
+  it('GET /api/workflows/node-detail/:source is role-gated (technician 403)', async () => {
+    const app = Fastify(); app.addHook('onRequest', async (req: any) => { req.user = TECHNICIAN_USER; });
+    registerWorkflowRoutes(app, fakeCtx());
+    const res = await app.inject({ method: 'GET', url: '/api/workflows/node-detail/dhis2-mapping?value=m1' });
     expect(res.statusCode).toBe(403);
   });
 

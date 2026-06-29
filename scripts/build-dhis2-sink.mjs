@@ -47,7 +47,7 @@ const manifest = {
   id: 'dhis2-sink',
   version: ver,
   kind: 'sink',
-  entrypoints: ['health_check', 'pull_metadata', 'push_aggregate', 'push_tracker'],
+  entrypoints: ['health_check', 'pull_metadata', 'push_aggregate', 'push_tracker', 'wf_push'],
   wasmSha256: sha,
   description: 'DHIS2 aggregate + tracker sink (mapping, metadata, push)',
   license: 'Apache-2.0',
@@ -63,6 +63,21 @@ const manifest = {
     { kind: 'host:connectors' },
     { kind: 'host:schedule' },
     { kind: 'host:fhir' },
+  ],
+  // Plugin-contributed workflow nodes: advertised via workflowNodes[]. The registry enforces
+  // that each node's capabilities[] is a subset of the manifest-level capabilities grant above.
+  workflowNodes: [
+    {
+      id: 'push', label: 'DHIS2 Push', kind: 'sink', entrypoint: 'wf_push', abi: 'items',
+      capabilities: ['net-egress', 'host:connectors'],
+      ports: { inputs: [{ name: 'in' }], outputs: [] },
+      config: [
+        { key: 'mappingId', label: 'Mapping', type: 'select', optionsSource: 'dhis2-mappings', detailSource: 'dhis2-mapping', required: true },
+        { key: 'connectorId', label: 'Connector', type: 'select', optionsSource: 'connectors', required: true },
+        { key: 'period', label: 'Period', type: 'text', required: true },
+        { key: 'dryRun', label: 'Dry run', type: 'boolean' },
+      ],
+    },
   ],
   // Plugin-contributed UI: the host renders ui.html in a sandboxed iframe and contributes a nav entry.
   // requiredRoles gates the whole UI + every broker op to lab_admin (restores the native

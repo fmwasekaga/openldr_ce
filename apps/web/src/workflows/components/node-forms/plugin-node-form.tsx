@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { NodeFormProps } from './index';
 import { FormField, TextInput, Select, inputClass } from './shared';
-import { fetchWorkflowNodes, fetchNodeOptions, type WorkflowNodeConfigField, type WorkflowNodeOption } from '@/api';
+import { fetchWorkflowNodes, fetchNodeOptions, fetchNodeDetail, type WorkflowNodeConfigField, type WorkflowNodeOption } from '@/api';
 
 export function PluginNodeForm({ node, update }: NodeFormProps) {
   const data = node.data as { label?: string; pluginId?: string; nodeId?: string; config?: Record<string, unknown> };
@@ -30,8 +30,8 @@ export function PluginNodeForm({ node, update }: NodeFormProps) {
       });
   }, [data.pluginId, data.nodeId]);
 
-  const setField = (key: string, value: unknown) =>
-    update({ config: { ...config, [key]: value } } as never);
+  const setField = (key: string, value: unknown, merge?: Record<string, unknown>) =>
+    update({ config: { ...config, [key]: value, ...merge } } as never);
 
   return (
     <div className="space-y-4">
@@ -47,7 +47,13 @@ export function PluginNodeForm({ node, update }: NodeFormProps) {
         <p className="text-xs text-muted-foreground">Loading configuration…</p>
       )}
       {fields?.map((f) => (
-        <PluginField key={f.key} field={f} value={config[f.key]} onChange={(v) => setField(f.key, v)} />
+        <PluginField
+          key={f.key}
+          field={f}
+          value={config[f.key]}
+          onChange={(v) => setField(f.key, v)}
+          onChangeMerge={(v, merge) => setField(f.key, v, merge)}
+        />
       ))}
     </div>
   );
@@ -57,10 +63,13 @@ function PluginField({
   field,
   value,
   onChange,
+  onChangeMerge,
 }: {
   field: WorkflowNodeConfigField;
   value: unknown;
   onChange: (v: unknown) => void;
+  /** Set the field value AND merge extra resolved keys into config in a single update. */
+  onChangeMerge: (v: unknown, merge: Record<string, unknown>) => void;
 }) {
   const [options, setOptions] = useState<WorkflowNodeOption[]>(field.options ?? []);
 
@@ -92,7 +101,16 @@ function PluginField({
   if (field.type === 'select') {
     return (
       <FormField label={field.label}>
-        <Select value={String(value ?? '')} onChange={(e) => onChange(e.target.value)}>
+        <Select
+          value={String(value ?? '')}
+          onChange={(e) => {
+            const v = e.target.value;
+            onChange(v);
+            if (field.detailSource && v) {
+              void fetchNodeDetail(field.detailSource, v).then((detail) => onChangeMerge(v, detail));
+            }
+          }}
+        >
           <option value="">Select…</option>
           {options.map((o) => (
             <option key={o.value} value={o.value}>

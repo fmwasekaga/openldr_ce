@@ -14,6 +14,28 @@ export const FHIR_RESOURCE_TYPES = [
   'DiagnosticReport', 'Organization', 'Location', 'Practitioner', 'ServiceRequest',
 ];
 
+export interface NodeDetailDeps {
+  /** Read the dhis2-sink mapping definition + org-unit map from plugin_data. */
+  dhis2Mapping(value: string): Promise<{ mapping: unknown; orgUnitMap: Record<string, string> } | null>;
+}
+
+/**
+ * Resolve a named detailSource to a config-detail object (e.g. a denormalized
+ * mapping + org-unit map to inline into a sink node's config). Unknown source or
+ * missing data → null. Never throws (best-effort).
+ */
+export async function resolveNodeDetail(source: string, value: string, deps: NodeDetailDeps): Promise<Record<string, unknown> | null> {
+  try {
+    if (source === 'dhis2-mapping') {
+      const d = await deps.dhis2Mapping(value);
+      return d ? { mapping: d.mapping, orgUnitMap: d.orgUnitMap } : null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 /** Resolve a named optionsSource to options. Unknown source → []. Never throws (best-effort). */
 export async function resolveNodeOptions(source: string, deps: NodeOptionsDeps): Promise<NodeOption[]> {
   try {

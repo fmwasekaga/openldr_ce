@@ -19,7 +19,6 @@ import { LoopForm } from './loop-form';
 import { ExecuteWorkflowForm } from './execute-workflow-form';
 import { MaterializeForm } from './materialize-form';
 import { ExportForm } from './export-form';
-import { Dhis2PushForm } from './dhis2-push-form';
 import { LoadDatasetForm } from './load-dataset-form';
 import { PluginNodeForm } from './plugin-node-form';
 
@@ -55,7 +54,6 @@ const FORMS: Record<string, ComponentType<NodeFormProps>> = {
   'execute-workflow': ExecuteWorkflowForm,
   'materialize-dataset': MaterializeForm,
   'export-artifact': ExportForm,
-  'dhis2-push': Dhis2PushForm,
   'load-dataset': LoadDatasetForm,
   'plugin-node': PluginNodeForm,
 };

@@ -6,7 +6,7 @@ import { WorkflowSchema, WorkflowDefinitionSchema, runWorkflow, type RunEvent, c
 import { toCsv } from '@openldr/reporting';
 import { recordAudit } from './audit-helper';
 import { requireRole } from './rbac';
-import { resolveNodeOptions } from './workflows-node-options';
+import { resolveNodeOptions, resolveNodeDetail } from './workflows-node-options';
 
 /** Sync a workflow's trigger nodes into the derived registries (webhooks + schedules). */
 async function syncWorkflowTriggers(ctx: AppContext, workflow: { id: string; definition: unknown }): Promise<void> {
@@ -258,7 +258,7 @@ export function registerWorkflowRoutes(
     return run;
   });
 
-  // DHIS2 mapping picker for the dhis2-push node. The workflow builder is a HOST page
+  // DHIS2 mapping picker for the dhis2-sink:push node. The workflow builder is a HOST page
   // (not a plugin iframe), so it reads the dhis2-sink plugin's mappings directly from
   // plugin_data instead of through the broker. Returns the connectorId too so the form's
   // "Test connection" works without the host dhis2-context. Empty when dhis2-sink isn't
@@ -298,6 +298,29 @@ export function registerWorkflowRoutes(
         });
       },
     });
+  });
+
+  // detailSource resolver for declarative config fields that denormalize a picked
+  // value into the node config (e.g. dhis2-mapping → mapping definition + org-unit map).
+  // Reads plugin_data (the dhis2-sink plugin's mappings). Missing → 404; never throws.
+  app.get('/api/workflows/node-detail/:source', MANAGE, async (req, reply) => {
+    const { source } = req.params as { source: string };
+    const value = String((req.query as { value?: string }).value ?? '');
+    const detail = await resolveNodeDetail(source, value, {
+      dhis2Mapping: async (id) => {
+        const mDoc = (await ctx.pluginData.get('dhis2-sink', 'mappings', id)) as { definition?: unknown } | null;
+        if (!mDoc?.definition) return null;
+        const entries = await ctx.pluginData.list('dhis2-sink', 'orgUnitMaps');
+        const orgUnitMap: Record<string, string> = {};
+        for (const e of entries) {
+          const d = e.doc as { facilityId?: string; orgUnitId?: string };
+          if (typeof d.facilityId === 'string' && typeof d.orgUnitId === 'string') orgUnitMap[d.facilityId] = d.orgUnitId;
+        }
+        return { mapping: mDoc.definition, orgUnitMap };
+      },
+    });
+    if (!detail) { reply.code(404); return { error: `no detail for ${source}/${value}` }; }
+    return detail;
   });
 
   // Materialized datasets produced by workflow sink nodes.

@@ -38,14 +38,4 @@ export const HOST_NODE_DESCRIPTORS: WorkflowNodeDescriptor[] = [
   // Sinks
   { id: 'materialize-dataset', source: 'host', label: 'Materialize Dataset', kind: 'sink', description: 'Persist items as a dataset.', ports: { inputs: [port('in')], outputs: [] }, capabilities: [], config: [] },
   { id: 'export-artifact', source: 'host', label: 'Export Artifact', kind: 'sink', description: 'Export items to CSV/XLSX/PDF.', ports: { inputs: [port('in')], outputs: [] }, capabilities: [], config: [] },
-  {
-    id: 'dhis2-push', source: 'host', label: 'DHIS2 Push', kind: 'sink',
-    description: 'Push aggregate rows to DHIS2 via a mapping.',
-    ports: { inputs: [port('in')], outputs: [] }, capabilities: [],
-    config: [
-      { key: 'mappingId', label: 'Mapping', type: 'select', optionsSource: 'dhis2-mappings', required: true },
-      { key: 'period', label: 'Period', type: 'text', required: true },
-      { key: 'dryRun', label: 'Dry run', type: 'boolean', required: false, default: false },
-    ],
-  },
 ];

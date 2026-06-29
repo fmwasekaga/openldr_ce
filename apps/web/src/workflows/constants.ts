@@ -19,7 +19,7 @@ export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
   // conditions
   'if', 'filter',
   // sinks
-  'materialize-dataset', 'export-artifact', 'dhis2-push',
+  'materialize-dataset', 'export-artifact',
 ]);
 
 /**
@@ -208,10 +208,6 @@ export const nodeCategories: NodeCategory[] = [
       node('export-artifact', 'action', 'Export File', 'Download', 'Export results as CSV, XLSX, or PDF', {
         keywords: ['csv', 'xlsx', 'pdf', 'download', 'export', 'sink'],
         data: { action: 'export-artifact', config: { format: 'csv', filename: '' } },
-      }),
-      node('dhis2-push', 'action', 'DHIS2 Push', 'Share2', 'Push aggregate data to DHIS2', {
-        keywords: ['dhis2', 'push', 'aggregate', 'sink'],
-        data: { action: 'dhis2-push', config: { mappingId: '', period: '', dryRun: false } },
       }),
     ],
   },

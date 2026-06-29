@@ -70,3 +70,15 @@ describe('workflowNodeDeclSchema abi', () => {
     expect(() => workflowNodeDeclSchema.parse({ id: 'n', label: 'N', kind: 'transform', entrypoint: 'e', abi: 'stream' })).toThrow();
   });
 });
+
+describe('workflowConfigFieldSchema detailSource', () => {
+  it('accepts a detailSource on a config field', () => {
+    const d = workflowNodeDeclSchema.parse({ id: 'n', label: 'N', kind: 'sink', entrypoint: 'wf_push',
+      config: [{ key: 'mappingId', label: 'Mapping', type: 'select', optionsSource: 'dhis2-mappings', detailSource: 'dhis2-mapping' }] });
+    expect(d.config[0].detailSource).toBe('dhis2-mapping');
+  });
+  it('defaults detailSource to undefined', () => {
+    const d = workflowNodeDeclSchema.parse({ id: 'n', label: 'N', kind: 'sink', entrypoint: 'e', config: [{ key: 'k', label: 'K', type: 'text' }] });
+    expect(d.config[0].detailSource).toBeUndefined();
+  });
+});

@@ -14,13 +14,6 @@ describe('HOST_NODE_DESCRIPTORS', () => {
     }
   });
 
-  it('includes the dhis2-push sink with its config fields', () => {
-    const push = HOST_NODE_DESCRIPTORS.find((d) => d.id === 'dhis2-push');
-    expect(push).toBeDefined();
-    expect(push!.kind).toBe('sink');
-    expect(push!.config.map((c) => c.key)).toEqual(expect.arrayContaining(['mappingId', 'period', 'dryRun']));
-  });
-
   it('has unique ids', () => {
     const ids = HOST_NODE_DESCRIPTORS.map((d) => d.id);
     expect(new Set(ids).size).toBe(ids.length);

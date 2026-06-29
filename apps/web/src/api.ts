@@ -714,18 +714,6 @@ export const ontologyAnswerOptions = (id: string, loinc: string): Promise<Answer
 export const ontologySpecimenCodes = (id: string, loinc: string): Promise<SpecimenCode[]> =>
   apiGet(`/api/terminology/ontology/${id}/specimens?loinc=${encodeURIComponent(loinc)}`, 'ontology specimen codes');
 
-// ── DHIS2 workflow mapping picker ───────────────────────────────────────────────
-// DHIS2 mapping picker for the workflow dhis2-push node. Sourced from the dhis2-sink
-// plugin datastore via a host endpoint (the builder is a host page, not a plugin iframe),
-// so it stays available after the host DHIS2 screens/API are removed. Carries connectorId
-// so the node form can Test the connection without the host dhis2-context.
-export interface WorkflowDhis2Mapping { id: string; name: string; connectorId: string | null }
-export async function listDhis2PushMappings(): Promise<WorkflowDhis2Mapping[]> {
-  const r = await authFetch('/api/workflows/dhis2-mappings');
-  if (!r.ok) throw new Error(`dhis2 mappings list failed: ${r.status}`);
-  return r.json();
-}
-
 // ── Marketplace (SP-4) ─────────────────────────────────────────────────────────
 export interface AvailableArtifact {
   ref: string;
@@ -890,6 +878,7 @@ export interface WorkflowNodeConfigField {
   default?: unknown;
   options?: { value: string; label: string }[];
   optionsSource?: string;
+  detailSource?: string;
 }
 export interface WorkflowNodeDescriptor {
   id: string;                 // composite `${pluginId}:${declId}` for plugin nodes
@@ -919,6 +908,11 @@ export async function fetchNodeOptions(source: string): Promise<WorkflowNodeOpti
   const r = await authFetch(`/api/workflows/node-options/${encodeURIComponent(source)}`);
   if (!r.ok) return [];
   return (await r.json()) as WorkflowNodeOption[];
+}
+export async function fetchNodeDetail(source: string, value: string): Promise<Record<string, unknown>> {
+  const r = await authFetch(`/api/workflows/node-detail/${encodeURIComponent(source)}?value=${encodeURIComponent(value)}`);
+  if (!r.ok) return {};
+  return (await r.json()) as Record<string, unknown>;
 }
 /** The bare decl id for a plugin descriptor (strip the `${pluginId}:` prefix). */
 export function pluginNodeDeclId(d: WorkflowNodeDescriptor): string {

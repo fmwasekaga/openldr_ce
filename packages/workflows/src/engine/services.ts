@@ -40,12 +40,6 @@ export interface ExportArtifactResult {
   format: string;
   byteSize: number;
 }
-export interface Dhis2PushInput {
-  mappingId: string;
-  period: string;
-  dryRun?: boolean;
-}
-
 /** Capabilities the server injects so source handlers can reach lab data. */
 export interface WorkflowServices {
   runSql(sql: string): Promise<SqlResult>;
@@ -58,8 +52,7 @@ export interface WorkflowServices {
     workflowId: string | null,
   ): Promise<{ dataset: string; rowCount: number }>;
   exportArtifact(input: ExportArtifactInput): Promise<ExportArtifactResult>;
-  dhis2Push?(input: Dhis2PushInput): Promise<unknown>;
-  /** Execute a plugin-contributed workflow node. Injected at bootstrap (like dhis2Push); absent in
+  /** Execute a plugin-contributed workflow node. Injected at bootstrap; absent in
    *  pure-engine tests and legacy paths. */
   runPluginNode?(input: RunPluginNodeInput): Promise<RunPluginNodeOutput>;
   loadDataset(name: string): Promise<{ columns: { key: string; label: string }[]; rows: Record<string, unknown>[] }>;

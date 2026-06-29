@@ -17,6 +17,9 @@ export const workflowConfigFieldSchema = z.object({
   options: z.array(z.object({ value: z.string(), label: z.string() })).optional(),
   /** Host-owned dynamic option source (e.g. 'connectors', 'dhis2-mappings', 'reports'). Resolved in SP-3. */
   optionsSource: z.string().min(1).optional(),
+  /** For a select: a resolver name whose detail object is merged into the node config when a value
+   *  is picked (build-time denormalization). See GET /api/workflows/node-detail/:source. */
+  detailSource: z.string().min(1).optional(),
 });
 export type WorkflowConfigField = z.infer<typeof workflowConfigFieldSchema>;
 
