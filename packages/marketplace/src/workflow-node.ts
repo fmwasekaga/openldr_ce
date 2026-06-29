@@ -7,7 +7,7 @@ export type WorkflowNodeKind = (typeof WORKFLOW_NODE_KINDS)[number];
 
 /** Declarative config-field types the builder renders (v1). `select`/`multiselect` use either
  *  static `options` or a host-resolved `optionsSource`; `file` is the binary lane (SP-4). */
-export const WORKFLOW_CONFIG_FIELD_TYPES = ['text', 'number', 'boolean', 'select', 'multiselect', 'file'] as const;
+export const WORKFLOW_CONFIG_FIELD_TYPES = ['text', 'number', 'boolean', 'select', 'multiselect', 'file', 'json'] as const;
 export const workflowConfigFieldSchema = z.object({
   key: z.string().min(1),
   label: z.string().min(1),

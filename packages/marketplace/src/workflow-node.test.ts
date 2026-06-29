@@ -82,3 +82,11 @@ describe('workflowConfigFieldSchema detailSource', () => {
     expect(d.config[0].detailSource).toBeUndefined();
   });
 });
+
+describe('workflowConfigFieldSchema json type', () => {
+  it('accepts a json config field', () => {
+    const d = workflowNodeDeclSchema.parse({ id: 'n', label: 'N', kind: 'transform', entrypoint: 'wf_convert',
+      config: [{ key: 'mapping', label: 'Mapping', type: 'json', required: true }] });
+    expect(d.config[0].type).toBe('json');
+  });
+});
