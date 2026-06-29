@@ -4,6 +4,7 @@ import { cn } from '@/lib/cn';
 import { downloadWorkflowArtifact } from '@/api';
 import { useWorkflowStore } from '../../hooks/use-workflow-store';
 import { pickForm } from '../node-forms';
+import { CodeEditor } from '../node-forms/code-editor';
 import type { WorkflowNodeData } from '../../lib/types';
 import { outputBinaries } from '../../lib/output-binaries';
 
@@ -174,9 +175,5 @@ function JsonView({ data, emptyLabel }: { data: unknown; emptyLabel: string }) {
     formatted = String(data);
   }
 
-  return (
-    <pre className="max-h-[60vh] overflow-auto rounded-md border border-border bg-background/60 p-3 font-mono text-[11px] leading-relaxed text-foreground/90 whitespace-pre-wrap wrap-break-word">
-      {formatted}
-    </pre>
-  );
+  return <CodeEditor language="json" value={formatted} onChange={() => {}} readOnly minHeight="8rem" />;
 }
