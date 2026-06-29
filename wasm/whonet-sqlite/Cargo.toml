@@ -6,7 +6,7 @@ license.workspace = true
 description = "WHONET SQLite -> FHIR R4 AMR reference plugin"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 openldr-plugin-sdk = { path = "../openldr-plugin-sdk" }

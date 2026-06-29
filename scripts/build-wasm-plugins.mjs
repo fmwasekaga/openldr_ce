@@ -50,6 +50,7 @@ const manifest = {
   id: 'whonet-sqlite',
   version: ver,
   entrypoint: 'convert',
+  entrypoints: ['wf_convert'],
   wasmSha256: sha,
   description: 'WHONET SQLite -> FHIR R4 AMR reference plugin',
   license: 'Apache-2.0',
@@ -63,6 +64,17 @@ const manifest = {
   capabilities: [
     { kind: 'read-input', formats: ['sqlite'] },
     { kind: 'emit-fhir', resourceTypes: ['Patient', 'Specimen', 'Observation'] },
+  ],
+  workflowNodes: [
+    {
+      id: 'convert', label: 'WHONET → items', kind: 'transform', entrypoint: 'wf_convert', abi: 'bytes', binaryField: 'file',
+      capabilities: [],
+      ports: { inputs: [{ name: 'file' }], outputs: [{ name: 'out' }] },
+      config: [
+        { key: 'output', label: 'Output', type: 'select', required: true, default: 'fhir',
+          options: [{ value: 'fhir', label: 'FHIR resources' }, { value: 'rows', label: 'Parsed rows' }] },
+      ],
+    },
   ],
 };
 writeFileSync(join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
