@@ -284,7 +284,7 @@ export function registerWorkflowRoutes(
   });
 
   // optionsSource resolver for declarative `select`/`multiselect` config fields.
-  // Resolves connectors, datasets, dhis2-mappings, fhir-resource-types; unknown → []; never throws.
+  // Resolves connectors, datasets, dhis2-mappings, fhir-resource-types, forms; unknown → []; never throws.
   app.get('/api/workflows/node-options/:source', MANAGE, async (req) => {
     const { source } = req.params as { source: string };
     const pluginId = String((req.query as { pluginId?: string }).pluginId ?? '') || undefined;
@@ -298,6 +298,7 @@ export function registerWorkflowRoutes(
           return { id: d.id ?? r.key, name: d.name ?? d.id ?? r.key };
         });
       },
+      forms: { listPublished: () => ctx.forms.listPublished() },
     }, { pluginId });
   });
 

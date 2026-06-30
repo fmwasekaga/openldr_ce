@@ -90,6 +90,7 @@ function fakeCtx() {
     // dhis2-sink mappings for the workflow dhis2-push picker. Empty by default; tests override.
     pluginData: { list: async () => [] },
     plugins: { list: async () => [] as any[] },
+    forms: { listPublished: async () => [] as any[] },
     cfg: { WORKFLOW_CODE_TIMEOUT_MS: 5000, WORKFLOW_CODE_MEMORY_MB: 128, WORKFLOW_CODE_ENABLED: true, WORKFLOW_FILE_MAX_BYTES: 52_428_800 },
     audit: { record: async (e: unknown) => { auditEvents.push(e); return e; } },
     logger: { error() {}, warn() {}, info() {} },
