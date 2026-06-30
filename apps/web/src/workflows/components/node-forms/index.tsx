@@ -20,7 +20,7 @@ import { ExecuteWorkflowForm } from './execute-workflow-form';
 import { MaterializeForm } from './materialize-form';
 import { ExportForm } from './export-form';
 import { LoadDatasetForm } from './load-dataset-form';
-import { PluginNodeForm } from './plugin-node-form';
+import { DeclarativeNodeForm } from './plugin-node-form';
 
 export interface NodeFormProps {
   node: WorkflowNode;
@@ -55,7 +55,9 @@ const FORMS: Record<string, ComponentType<NodeFormProps>> = {
   'materialize-dataset': MaterializeForm,
   'export-artifact': ExportForm,
   'load-dataset': LoadDatasetForm,
-  'plugin-node': PluginNodeForm,
+  'plugin-node': DeclarativeNodeForm,
+  'form-validate': DeclarativeNodeForm,
+  'persist-store': DeclarativeNodeForm,
 };
 
 export function pickForm(node: WorkflowNode): ComponentType<NodeFormProps> {
@@ -70,7 +72,11 @@ export function pickForm(node: WorkflowNode): ComponentType<NodeFormProps> {
   if (node.type === 'webhook') return WebhookForm;
   if (node.type === 'loop') return LoopForm;
   if (node.type === 'action' && data.action === 'log') return LogForm;
-  if (node.type === 'plugin-node') return PluginNodeForm;
+  if (node.type === 'plugin-node') return DeclarativeNodeForm;
+
+  // Any unregistered host action node renders its descriptor config[] declaratively
+  // (and degrades to label-only if it has none).
+  if (node.type === 'action') return DeclarativeNodeForm;
 
   return DefaultForm;
 }
