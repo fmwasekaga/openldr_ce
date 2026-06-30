@@ -1,4 +1,5 @@
-import { sql } from 'kysely';
+import { sql, type Kysely } from 'kysely';
+import type { TargetSchema } from '@openldr/ports';
 import { createDbStore } from '@openldr/adapter-db-store';
 import { createMssqlStore } from '@openldr/adapter-mssql-store';
 
@@ -8,32 +9,50 @@ export interface ConnectorDb {
   close(): Promise<void>;
 }
 
+export function validatePort(raw: string | undefined, fallback: number): number {
+  const port = Number(raw ?? fallback);
+  if (!Number.isFinite(port) || port < 1 || port > 65535) throw new Error(`invalid connector port: ${raw}`);
+  return port;
+}
+
+export function buildPgUrl(config: Record<string, string>): string {
+  const host = config.host ?? 'localhost';
+  // hostname / IPv4, or IPv6 (raw or bracketed)
+  if (!/^[A-Za-z0-9.\-]+$/.test(host) && !/^\[?[0-9A-Fa-f:]+\]?$/.test(host)) {
+    throw new Error(`invalid connector host: ${host}`);
+  }
+  const hostPart = host.includes(':') && !host.startsWith('[') ? `[${host}]` : host; // bracket IPv6
+  const port = validatePort(config.port, 5432);
+  const user = encodeURIComponent(config.user ?? '');
+  const pass = encodeURIComponent(config.password ?? '');
+  const dbName = encodeURIComponent(config.database ?? '');
+  const ssl = config.ssl === 'true' ? '?sslmode=require' : '';
+  return `postgresql://${user}:${pass}@${hostPart}:${port}/${dbName}${ssl}`;
+}
+
+function wrap(store: { db: Kysely<TargetSchema>; close(): Promise<void> }): ConnectorDb {
+  return {
+    async query(rawSql) { const r = await sql.raw(rawSql).execute(store.db); return { rows: r.rows as Record<string, unknown>[] }; },
+    close: () => store.close(),
+  };
+}
+
 /** Build an ephemeral DB connection for a host connector by type + decrypted config.
  *  Caller MUST call close() (use try/finally). */
 export function createConnectorDb(type: string, config: Record<string, string>): ConnectorDb {
   if (type === 'postgres') {
-    const ssl = config.ssl === 'true';
-    const url = `postgresql://${encodeURIComponent(config.user ?? '')}:${encodeURIComponent(config.password ?? '')}@${config.host ?? 'localhost'}:${config.port ?? '5432'}/${encodeURIComponent(config.database ?? '')}${ssl ? '?sslmode=require' : ''}`;
-    const store = createDbStore({ url });
-    return {
-      async query(rawSql) { const r = await sql.raw(rawSql).execute(store.db); return { rows: r.rows as Record<string, unknown>[] }; },
-      close: () => store.close(),
-    };
+    return wrap(createDbStore({ url: buildPgUrl(config) }));
   }
   if (type === 'microsoft-sql') {
-    const store = createMssqlStore({
+    return wrap(createMssqlStore({
       host: config.host ?? 'localhost',
-      port: Number(config.port ?? 1433),
+      port: validatePort(config.port, 1433),
       database: config.database ?? '',
       user: config.user ?? '',
       password: config.password ?? '',
       encrypt: config.encrypt !== 'false',
       trustServerCertificate: config.trustServerCertificate === 'true',
-    });
-    return {
-      async query(rawSql) { const r = await sql.raw(rawSql).execute(store.db); return { rows: r.rows as Record<string, unknown>[] }; },
-      close: () => store.close(),
-    };
+    }));
   }
   throw new Error(`unsupported connector type: ${type}`);
 }
