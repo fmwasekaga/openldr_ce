@@ -1,5 +1,6 @@
 import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 import type { NodeHandler } from './types';
+import type { WorkflowItem } from '../items';
 
 /** Extract text + page count from a PDF on binary[sourceField]. */
 export const readPdfHandler: NodeHandler = async (node, ctx, input) => {
@@ -8,7 +9,7 @@ export const readPdfHandler: NodeHandler = async (node, ctx, input) => {
   const sourceField = (config.sourceField as string) || 'file';
   const outputField = (config.outputField as string) || 'text';
 
-  const results = [];
+  const results: WorkflowItem[] = [];
   for (const item of input) {
     const ref = item.binary?.[sourceField];
     if (!ref) throw new Error(`Read PDF: no file on the input item (field '${sourceField}')`);

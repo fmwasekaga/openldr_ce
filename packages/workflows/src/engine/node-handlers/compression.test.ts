@@ -33,6 +33,18 @@ describe('compressionHandler', () => {
     const z = await JSZip.loadAsync(store.get(zipRef.objectKey)!);
     expect(Object.keys(z.files).sort()).toEqual(['a.txt', 'b.txt']);
   });
+  it('disambiguates colliding entry names so no file is lost', async () => {
+    const { ctx, store } = fakeBinaryCtx();
+    const a = await ctx.services!.writeBinary!({ bytes: new TextEncoder().encode('FIRST'), fileName: 'dup.txt', contentType: 'text/plain' });
+    const b = await ctx.services!.writeBinary!({ bytes: new TextEncoder().encode('SECOND'), fileName: 'dup.txt', contentType: 'text/plain' });
+    const result = await compressionHandler(node({ operation: 'zip', sourceField: 'file', binaryField: 'zip', fileName: 'out.zip' }), ctx, [
+      { json: {}, binary: { file: a } },
+      { json: {}, binary: { file: b } },
+    ]);
+    const zipRef = (result[0].binary as Record<string, BinaryRef>).zip;
+    const z = await JSZip.loadAsync(store.get(zipRef.objectKey)!);
+    expect(Object.keys(z.files).sort()).toEqual(['1-dup.txt', 'dup.txt']);
+  });
   it('unzips an archive into per-entry items', async () => {
     const { ctx, store } = fakeBinaryCtx();
     const zip = new JSZip();

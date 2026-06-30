@@ -10,6 +10,7 @@ export const compressionHandler: NodeHandler = async (node, ctx, input) => {
   const sourceField = (config.sourceField as string) || 'file';
 
   if (operation === 'unzip') {
+    // Unzip reads a single archive from the first input item.
     const ref = input[0]?.binary?.[sourceField];
     if (!ref) throw new Error(`Compression: no file on the input item (field '${sourceField}')`);
     const bytes = await ctx.services.readBinary(ref.objectKey);
@@ -29,12 +30,16 @@ export const compressionHandler: NodeHandler = async (node, ctx, input) => {
   const binaryField = (config.binaryField as string) || 'zip';
   const fileName = (config.fileName as string) || 'archive.zip';
   const zip = new JSZip();
+  const used = new Set<string>();
   let added = 0;
   for (const item of input) {
     const ref = item.binary?.[sourceField];
     if (!ref) continue;
     const bytes = await ctx.services.readBinary(ref.objectKey);
-    zip.file(ref.fileName ?? `file-${added}`, bytes);
+    let name = ref.fileName ?? `file-${added}`;
+    if (used.has(name)) name = `${added}-${name}`;
+    used.add(name);
+    zip.file(name, bytes);
     added += 1;
   }
   if (added === 0) throw new Error(`Compression: no files found on input items (field '${sourceField}')`);
