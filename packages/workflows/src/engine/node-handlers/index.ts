@@ -41,6 +41,7 @@ import { compressionHandler } from './compression';
 import { connectorSqlHandler } from './connector-sql';
 import { mongoHandler } from './mongo';
 import { redisHandler } from './redis';
+import { emailHandler } from './email';
 
 /** Action subtype → handler. New actions (http-request, code, …) land in later slices. */
 const ACTION_HANDLERS: Record<string, NodeHandler> = {
@@ -82,6 +83,9 @@ const ACTION_HANDLERS: Record<string, NodeHandler> = {
   'mysql': connectorSqlHandler,
   'mongodb': mongoHandler,
   'redis': redisHandler,
+  'send-email': emailHandler,
+  'gmail': emailHandler,
+  'outlook': emailHandler,
 };
 
 const TYPE_HANDLERS: Record<string, NodeHandler> = {

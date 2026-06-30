@@ -33,6 +33,8 @@ export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
   'postgres', 'microsoft-sql', 'mysql',
   // databases (slice E)
   'mongodb', 'redis',
+  // communication (slice F)
+  'send-email', 'gmail', 'outlook',
 ]);
 
 /**
@@ -243,11 +245,15 @@ export const nodeCategories: NodeCategory[] = [
     items: [
       node('gmail', 'action', 'Gmail', 'Mail', 'Send & read Gmail messages', {
         keywords: ['email', 'google'],
+        data: { config: { connectorId: '', to: '', subject: '', body: '', cc: '', html: false } },
       }),
       node('outlook', 'action', 'Microsoft Outlook', 'Mail', 'Send & read Outlook mail', {
         keywords: ['email', 'microsoft'],
+        data: { config: { connectorId: '', to: '', subject: '', body: '', cc: '', html: false } },
       }),
-      node('send-email', 'action', 'Send Email (SMTP)', 'AtSign', 'Send email over SMTP'),
+      node('send-email', 'action', 'Send Email (SMTP)', 'AtSign', 'Send email over SMTP', {
+        data: { config: { connectorId: '', to: '', subject: '', body: '', cc: '', html: false } },
+      }),
       node('email-trigger', 'trigger', 'Email Trigger (IMAP)', 'Inbox', 'Trigger on new emails'),
     ],
   },
