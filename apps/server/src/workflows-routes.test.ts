@@ -12,11 +12,13 @@ function fakeWorkflowExtras() {
   const webhookEntries = new Map<string, { workflowId: string; secret: string | null }>();
   const norm = (p: string) => p.replace(/^\/+/, '').replace(/\/+$/, '');
   let ingestIds: string[] = [];
+  let eventIds: string[] = [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const runAndRecordCalls: any[] = [];
   return {
     runRecords, scheduleRows, webhookEntries, runAndRecordCalls,
     getIngestIds: () => ingestIds,
+    getEventIds: () => eventIds,
     runs: {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       record: async (r: any) => { runRecords.push(r); },
@@ -49,6 +51,7 @@ function fakeWorkflowExtras() {
     },
     runner: {
       setIngestWorkflowIds: (ids: string[]) => { ingestIds = ids; },
+      setEventWorkflowIds: (ids: string[]) => { eventIds = ids; },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       runAndRecord: async (workflowId: string, source: string, input: unknown, files?: unknown) => { runAndRecordCalls.push({ workflowId, source, input, files }); },
       registerRunner: async () => {},
@@ -659,5 +662,25 @@ describe('workflow routes', () => {
       payload: Buffer.from('toolong'),
     });
     expect(res.statusCode).toBe(413);
+  });
+
+  it('indexes a workflow with an event trigger on create', async () => {
+    const app = Fastify();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    const ctx = fakeCtx();
+    registerWorkflowRoutes(app, ctx);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/workflows',
+      payload: {
+        ...SAMPLE_WORKFLOW,
+        id: 'wf-evt',
+        definition: { nodes: [{ id: 'e', type: 'trigger', data: { triggerType: 'event', config: {} } }], edges: [] },
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(ctx.__extras.getEventIds()).toContain('wf-evt');
   });
 });

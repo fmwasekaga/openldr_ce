@@ -36,6 +36,16 @@ async function listIngestWorkflowIds(ctx: AppContext): Promise<string[]> {
   }).map((w) => w.id);
 }
 
+/** Scan all saved workflows for event trigger nodes; returns the ids that should fire on data.persisted. */
+async function listEventWorkflowIds(ctx: AppContext): Promise<string[]> {
+  const all = await ctx.workflows.store.list();
+  return all.filter((w) => {
+    const def = WorkflowDefinitionSchema.parse(w.definition);
+    return (def.nodes as Array<{ type?: string; data?: Record<string, unknown> }>).some(
+      (n) => n.type === 'trigger' && n.data?.triggerType === 'event');
+  }).map((w) => w.id);
+}
+
 /**
  * Defense-in-depth redaction for the LIST response (SEC-06). Workflow
  * definitions can embed secrets; the list surface only needs id/name/enabled +
@@ -169,6 +179,7 @@ export function registerWorkflowRoutes(
       const created = await ctx.workflows.store.create(WorkflowSchema.parse(req.body));
       await syncWorkflowTriggers(ctx, created);
       ctx.workflows.runner.setIngestWorkflowIds(await listIngestWorkflowIds(ctx));
+      ctx.workflows.runner.setEventWorkflowIds(await listEventWorkflowIds(ctx));
       await recordAudit(ctx, req, { action: 'workflow.create', entityType: 'workflow', entityId: created.id, before: null, after: created });
       return created;
     } catch (err) { return mapError(err, reply); }
@@ -181,6 +192,7 @@ export function registerWorkflowRoutes(
       const updated = await ctx.workflows.store.update(id, WorkflowSchema.parse(req.body));
       await syncWorkflowTriggers(ctx, updated);
       ctx.workflows.runner.setIngestWorkflowIds(await listIngestWorkflowIds(ctx));
+      ctx.workflows.runner.setEventWorkflowIds(await listEventWorkflowIds(ctx));
       await recordAudit(ctx, req, { action: 'workflow.update', entityType: 'workflow', entityId: id, before, after: updated });
       return updated;
     } catch (err) { return mapError(err, reply); }
@@ -193,6 +205,7 @@ export function registerWorkflowRoutes(
     ctx.workflows.webhooks.clear(id);
     await ctx.workflows.schedules.removeForWorkflow(id);
     ctx.workflows.runner.setIngestWorkflowIds(await listIngestWorkflowIds(ctx));
+    ctx.workflows.runner.setEventWorkflowIds(await listEventWorkflowIds(ctx));
     if (before) {
       await recordAudit(ctx, req, { action: 'workflow.delete', entityType: 'workflow', entityId: id, before, after: null });
     }

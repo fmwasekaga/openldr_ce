@@ -96,6 +96,11 @@ async function main(): Promise<void> {
         .filter((w) => JSON.stringify(w.definition).includes('"triggerType":"ingest"'))
         .map((w) => w.id),
     );
+    ctx.workflows.runner.setEventWorkflowIds(
+      (await ctx.workflows.store.list())
+        .filter((w) => JSON.stringify(w.definition).includes('"triggerType":"event"'))
+        .map((w) => w.id),
+    );
     // Rebuild the webhook registry from saved workflows.
     for (const w of await ctx.workflows.store.list()) ctx.workflows.webhooks.sync(w.id, (w.definition as { nodes: unknown[] }).nodes ?? []);
     await ctx.workflows.runner.reconcile(ingest.eventing);
