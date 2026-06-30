@@ -16,7 +16,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
-import { Bleed, Divider } from '@/components/ui/bleed';
+import { Bleed } from '@/components/ui/bleed';
 import { TablePagination } from '@/components/ui/table-pagination';
 
 interface Props {
@@ -248,7 +248,10 @@ export function RunDetail({ run, loading, error }: { run: WorkflowRunSummary; lo
                   {results.map((r) => (
                     <TableRow
                       key={r.nodeId}
-                      className={cn('cursor-pointer', selected?.nodeId === r.nodeId && 'bg-secondary/60')}
+                      className={cn(
+                        'cursor-pointer',
+                        selected?.nodeId === r.nodeId && 'bg-violet-500/15 hover:bg-violet-500/20',
+                      )}
                       onClick={() => setSelectedId(r.nodeId)}
                     >
                       <TableCell>
@@ -283,9 +286,8 @@ export function RunDetail({ run, loading, error }: { run: WorkflowRunSummary; lo
 
           {/* Detail: selected node's data. */}
           {selected && (
-            <div className="flex min-h-0 flex-1 flex-col px-4 pt-3">
-              <div className="mb-2 text-[11px] font-medium text-foreground">{selected.label ?? selected.nodeId}</div>
-              <div className="flex gap-4 text-[11px]">
+            <div className="flex min-h-0 flex-1 flex-col border-t border-border">
+              <div className="flex gap-4 px-4 pt-2 text-[11px]">
                 {(['output', 'result', 'logs'] as const).map((t) => (
                   <button
                     key={t}
@@ -302,8 +304,8 @@ export function RunDetail({ run, loading, error }: { run: WorkflowRunSummary; lo
                   </button>
                 ))}
               </div>
-              <Divider className="mb-2" />
-              <div className="min-h-0 flex-1 overflow-auto pb-4">
+              <div className="border-b border-border" />
+              <div className="min-h-0 flex-1 overflow-auto pt-2 pb-4">
                 {tab === 'output' && (
                   <div className="space-y-2">
                     <JsonView data={selected.output} emptyLabel="No output recorded." />
