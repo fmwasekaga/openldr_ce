@@ -171,6 +171,10 @@ export const en = {
       fieldDatabase: 'Database',
       fieldUser: 'User',
       fieldSsl: 'Use SSL',
+      fieldEncrypt: 'Encrypt',
+      fieldTrustServerCert: 'Trust server certificate',
+      fieldAuthSource: 'Auth source',
+      fieldDb: 'DB index',
     },
     marketplace: {
       heading: 'Marketplace',

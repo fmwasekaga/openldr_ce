@@ -159,4 +159,83 @@ describe('Connectors page', () => {
     // db connector shows type
     expect(screen.getByText('postgres')).toBeTruthy();
   });
+
+  it('category=Database + type=MongoDB renders authSource field', async () => {
+    (api.listConnectors as any).mockResolvedValue([]);
+    (api.listSinkPlugins as any).mockResolvedValue([]);
+    render(<MemoryRouter><Connectors /></MemoryRouter>);
+
+    fireEvent.click(await screen.findByTestId('add-connector'));
+
+    // Switch to Database category
+    fireEvent.keyDown(screen.getByTestId('connector-category'), { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: /database/i }));
+
+    // Switch type to MongoDB
+    fireEvent.keyDown(await screen.findByTestId('connector-type'), { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: /mongodb/i }));
+
+    expect(await screen.findByTestId('connector-db-authSource')).toBeTruthy();
+    // host/port/database/user/password should also render for mongodb
+    expect(screen.getByTestId('connector-db-host')).toBeTruthy();
+    expect(screen.getByTestId('connector-db-password')).toBeTruthy();
+  });
+
+  it('type=Redis renders db+password, does NOT render database or user', async () => {
+    (api.listConnectors as any).mockResolvedValue([]);
+    (api.listSinkPlugins as any).mockResolvedValue([]);
+    render(<MemoryRouter><Connectors /></MemoryRouter>);
+
+    fireEvent.click(await screen.findByTestId('add-connector'));
+
+    // Switch to Database category
+    fireEvent.keyDown(screen.getByTestId('connector-category'), { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: /database/i }));
+
+    // Switch type to Redis
+    fireEvent.keyDown(await screen.findByTestId('connector-type'), { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: /redis/i }));
+
+    expect(await screen.findByTestId('connector-db-host')).toBeTruthy();
+    expect(screen.getByTestId('connector-db-password')).toBeTruthy();
+    expect(screen.getByTestId('connector-db-db')).toBeTruthy();
+    expect(screen.queryByTestId('connector-db-database')).toBeNull();
+    expect(screen.queryByTestId('connector-db-user')).toBeNull();
+  });
+
+  it('saves a Redis connector with correct shape — no database/user keys', async () => {
+    (api.listConnectors as any).mockResolvedValue([]);
+    (api.listSinkPlugins as any).mockResolvedValue([]);
+    (api.createConnector as any).mockResolvedValue({ id: 'c4', name: 'Cache', type: 'redis', kind: 'host', allowedHost: null, enabled: true, createdAt: '', updatedAt: '' });
+    render(<MemoryRouter><Connectors /></MemoryRouter>);
+
+    fireEvent.click(await screen.findByTestId('add-connector'));
+    fireEvent.change(await screen.findByTestId('connector-name'), { target: { value: 'Cache' } });
+
+    // Switch to Database category
+    fireEvent.keyDown(screen.getByTestId('connector-category'), { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: /database/i }));
+
+    // Switch type to Redis
+    fireEvent.keyDown(await screen.findByTestId('connector-type'), { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: /redis/i }));
+
+    fireEvent.change(await screen.findByTestId('connector-db-host'), { target: { value: 'redis.example.org' } });
+    fireEvent.change(screen.getByTestId('connector-db-port'), { target: { value: '6379' } });
+    fireEvent.change(screen.getByTestId('connector-db-password'), { target: { value: 'secret' } });
+    fireEvent.change(screen.getByTestId('connector-db-db'), { target: { value: '0' } });
+
+    fireEvent.click(screen.getByTestId('connector-save'));
+
+    await waitFor(() => expect(api.createConnector).toHaveBeenCalledWith({
+      name: 'Cache',
+      type: 'redis',
+      config: { host: 'redis.example.org', port: '6379', password: 'secret', db: '0' },
+    }));
+
+    // Verify no database or user keys in the config
+    const callArg = (api.createConnector as any).mock.calls[0][0] as { config: Record<string, string> };
+    expect(callArg.config).not.toHaveProperty('database');
+    expect(callArg.config).not.toHaveProperty('user');
+  });
 });

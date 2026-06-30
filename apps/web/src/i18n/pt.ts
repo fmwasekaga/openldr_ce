@@ -175,6 +175,10 @@ export const pt: EnShape = {
       fieldDatabase: 'Base de dados',
       fieldUser: 'Utilizador',
       fieldSsl: 'Usar SSL',
+      fieldEncrypt: 'Encriptar',
+      fieldTrustServerCert: 'Confiar no certificado do servidor',
+      fieldAuthSource: 'Fonte de autenticação',
+      fieldDb: 'Índice de BD',
     },
     marketplace: {
       heading: 'Marketplace',

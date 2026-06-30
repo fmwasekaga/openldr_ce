@@ -18,9 +18,12 @@ type FieldKind = 'text' | 'number' | 'password' | 'boolean';
 interface TypeField { key: string; labelKey: string; kind: FieldKind }
 const HOST_TYPES: Array<{ value: string; label: string }> = [
   { value: 'postgres', label: 'Postgres' },
+  { value: 'mysql', label: 'MySQL' },
   { value: 'microsoft-sql', label: 'Microsoft SQL' },
+  { value: 'mongodb', label: 'MongoDB' },
+  { value: 'redis', label: 'Redis' },
 ];
-const DB_FIELDS: TypeField[] = [
+const SQL_FIELDS: TypeField[] = [
   { key: 'host', labelKey: 'settings.connectors.fieldHost', kind: 'text' },
   { key: 'port', labelKey: 'settings.connectors.fieldPort', kind: 'number' },
   { key: 'database', labelKey: 'settings.connectors.fieldDatabase', kind: 'text' },
@@ -28,6 +31,33 @@ const DB_FIELDS: TypeField[] = [
   { key: 'password', labelKey: 'settings.connectors.fieldPassword', kind: 'password' },
   { key: 'ssl', labelKey: 'settings.connectors.fieldSsl', kind: 'boolean' },
 ];
+const CONNECTOR_TYPE_FIELDS: Record<string, TypeField[]> = {
+  postgres: SQL_FIELDS,
+  mysql: SQL_FIELDS,
+  'microsoft-sql': [
+    { key: 'host', labelKey: 'settings.connectors.fieldHost', kind: 'text' },
+    { key: 'port', labelKey: 'settings.connectors.fieldPort', kind: 'number' },
+    { key: 'database', labelKey: 'settings.connectors.fieldDatabase', kind: 'text' },
+    { key: 'user', labelKey: 'settings.connectors.fieldUser', kind: 'text' },
+    { key: 'password', labelKey: 'settings.connectors.fieldPassword', kind: 'password' },
+    { key: 'encrypt', labelKey: 'settings.connectors.fieldEncrypt', kind: 'boolean' },
+    { key: 'trustServerCertificate', labelKey: 'settings.connectors.fieldTrustServerCert', kind: 'boolean' },
+  ],
+  mongodb: [
+    { key: 'host', labelKey: 'settings.connectors.fieldHost', kind: 'text' },
+    { key: 'port', labelKey: 'settings.connectors.fieldPort', kind: 'number' },
+    { key: 'database', labelKey: 'settings.connectors.fieldDatabase', kind: 'text' },
+    { key: 'user', labelKey: 'settings.connectors.fieldUser', kind: 'text' },
+    { key: 'password', labelKey: 'settings.connectors.fieldPassword', kind: 'password' },
+    { key: 'authSource', labelKey: 'settings.connectors.fieldAuthSource', kind: 'text' },
+  ],
+  redis: [
+    { key: 'host', labelKey: 'settings.connectors.fieldHost', kind: 'text' },
+    { key: 'port', labelKey: 'settings.connectors.fieldPort', kind: 'number' },
+    { key: 'password', labelKey: 'settings.connectors.fieldPassword', kind: 'password' },
+    { key: 'db', labelKey: 'settings.connectors.fieldDb', kind: 'number' },
+  ],
+};
 
 interface DraftState {
   id: string | null; // null = create
@@ -95,20 +125,18 @@ export function Connectors() {
     setBusy(true);
     try {
       if (draft.category === 'database') {
-        // DB path: require host+database+user+password on create; on edit blank = keep
-        const dbPassword = draft.dbConfig['password'] ?? '';
+        // DB path: require host on create (universal across all types); on edit blank = keep
+        const typeFields = CONNECTOR_TYPE_FIELDS[draft.type] ?? SQL_FIELDS;
         const dbHost = draft.dbConfig['host'] ?? '';
-        const dbDatabase = draft.dbConfig['database'] ?? '';
-        const dbUser = draft.dbConfig['user'] ?? '';
-        const requiredFilled = Boolean(dbHost && dbDatabase && dbUser && dbPassword);
-        const anyFilled = Boolean(dbHost || dbDatabase || dbUser || dbPassword);
+        const requiredFilled = Boolean(dbHost);
+        const anyFilled = Object.values(draft.dbConfig).some(Boolean);
         if (draft.id === null ? !requiredFilled : (anyFilled && !requiredFilled)) {
           toast.error(t('settings.connectors.partialSecrets'));
           return;
         }
         const config: Record<string, string> = {};
         if (requiredFilled) {
-          for (const field of DB_FIELDS) {
+          for (const field of typeFields) {
             const val = draft.dbConfig[field.key];
             if (val !== undefined && val !== '') config[field.key] = val;
           }
@@ -289,8 +317,8 @@ export function Connectors() {
                       </Select>
                     </label>
 
-                    {/* DB fields */}
-                    {DB_FIELDS.map((field) => {
+                    {/* DB fields — per-type */}
+                    {(CONNECTOR_TYPE_FIELDS[draft.type] ?? SQL_FIELDS).map((field) => {
                       const val = draft.dbConfig[field.key] ?? '';
                       const isEdit = draft.id !== null;
                       if (field.kind === 'boolean') {
