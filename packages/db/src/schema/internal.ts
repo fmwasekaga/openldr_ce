@@ -424,7 +424,8 @@ export interface WorkflowDatasetsTable {
 export interface ConnectorsTable {
   id: string;
   name: string;
-  plugin_id: string;
+  plugin_id: string | null;
+  type: string | null;
   kind: string;
   config_encrypted: string;
   allowed_host: string | null;
