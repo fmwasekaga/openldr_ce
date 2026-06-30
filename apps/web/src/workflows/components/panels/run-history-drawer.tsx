@@ -308,7 +308,11 @@ export function RunDetail({ run, loading, error }: { run: WorkflowRunSummary; lo
               <div className="min-h-0 flex-1 overflow-auto pt-2 pb-4">
                 {tab === 'output' && (
                   <div className="space-y-2">
-                    <JsonView data={selected.output} emptyLabel="No output recorded." />
+                    {selected.output == null ? (
+                      <p className="px-4 text-xs italic text-muted-foreground/70">No output recorded.</p>
+                    ) : (
+                      <JsonView data={selected.output} emptyLabel="" />
+                    )}
                     {selectedFiles.map((f) => (
                       <button
                         key={f.field}
@@ -322,7 +326,12 @@ export function RunDetail({ run, loading, error }: { run: WorkflowRunSummary; lo
                     ))}
                   </div>
                 )}
-                {tab === 'result' && <JsonView data={selected.meta} emptyLabel="No result data." />}
+                {tab === 'result' &&
+                  (selected.meta == null ? (
+                    <p className="px-4 text-xs italic text-muted-foreground/70">No result data.</p>
+                  ) : (
+                    <JsonView data={selected.meta} emptyLabel="" />
+                  ))}
                 {tab === 'logs' &&
                   (selectedLogs.length === 0 ? (
                     <p className="px-4 text-xs italic text-muted-foreground/70">No logs.</p>
