@@ -19,6 +19,8 @@ export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
   'load-dataset',
   // conditions
   'if', 'filter', 'switch',
+  // data transforms
+  'sort', 'limit', 'remove-duplicates', 'rename-keys', 'split-out',
   // sinks
   'materialize-dataset', 'export-artifact',
   'form-validate', 'persist-store',
@@ -282,14 +284,24 @@ export const nodeCategories: NodeCategory[] = [
     name: 'Data Transformation',
     icon: 'Shuffle',
     items: [
-      node('split-out', 'action', 'Split Out', 'SplitSquareHorizontal', 'Split array into items'),
+      node('split-out', 'action', 'Split Out', 'SplitSquareHorizontal', 'Split array into items', {
+        data: { config: { field: '' } },
+      }),
       node('aggregate', 'action', 'Aggregate', 'Combine', 'Collect items into one'),
       node('summarize', 'action', 'Summarize', 'Sigma', 'Sum, avg, min, max, count'),
-      node('remove-duplicates', 'action', 'Remove Duplicates', 'CopyMinus', 'Drop duplicate items'),
-      node('sort', 'action', 'Sort', 'ArrowDownUp', 'Order items by field'),
-      node('limit', 'action', 'Limit', 'Minimize2', 'Keep first N items'),
+      node('remove-duplicates', 'action', 'Remove Duplicates', 'CopyMinus', 'Drop duplicate items', {
+        data: { config: { field: '' } },
+      }),
+      node('sort', 'action', 'Sort', 'ArrowDownUp', 'Order items by field', {
+        data: { config: { field: '', order: 'asc' } },
+      }),
+      node('limit', 'action', 'Limit', 'Minimize2', 'Keep first N items', {
+        data: { config: { maxItems: 50, keep: 'first' } },
+      }),
       node('compare-datasets', 'action', 'Compare Datasets', 'GitCompare', 'Diff two item lists'),
-      node('rename-keys', 'action', 'Rename Keys', 'TextCursorInput', 'Rename object fields'),
+      node('rename-keys', 'action', 'Rename Keys', 'TextCursorInput', 'Rename object fields', {
+        data: { config: { renames: [] } },
+      }),
       node('html', 'action', 'HTML', 'Code2', 'Build or extract HTML'),
       node('html-extract', 'action', 'HTML Extract', 'CodeXml', 'Parse HTML with CSS selectors'),
       node('markdown', 'action', 'Markdown', 'FileText', 'Convert to/from Markdown'),

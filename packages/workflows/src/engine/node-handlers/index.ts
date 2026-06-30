@@ -18,6 +18,11 @@ import { formValidateHandler } from './form-validate';
 import { persistStoreHandler } from './persist-store';
 import { stopErrorHandler } from './stop-error';
 import { switchHandler } from './switch';
+import { sortHandler } from './sort';
+import { limitHandler } from './limit';
+import { removeDuplicatesHandler } from './remove-duplicates';
+import { renameKeysHandler } from './rename-keys';
+import { splitOutHandler } from './split-out';
 
 /** Action subtype → handler. New actions (http-request, code, …) land in later slices. */
 const ACTION_HANDLERS: Record<string, NodeHandler> = {
@@ -34,6 +39,11 @@ const ACTION_HANDLERS: Record<string, NodeHandler> = {
   'load-dataset': loadDatasetHandler,
   'form-validate': formValidateHandler,
   'persist-store': persistStoreHandler,
+  'sort': sortHandler,
+  'limit': limitHandler,
+  'remove-duplicates': removeDuplicatesHandler,
+  'rename-keys': renameKeysHandler,
+  'split-out': splitOutHandler,
 };
 
 const TYPE_HANDLERS: Record<string, NodeHandler> = {
