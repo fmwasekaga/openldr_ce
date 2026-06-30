@@ -32,7 +32,7 @@ export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
   // databases (slice D)
   'postgres', 'microsoft-sql', 'mysql',
   // databases (slice E)
-  'mongodb',
+  'mongodb', 'redis',
 ]);
 
 /**
@@ -277,7 +277,9 @@ export const nodeCategories: NodeCategory[] = [
       node('mongodb', 'action', 'MongoDB', 'Database', 'Documents & aggregations', {
         data: { config: { connectorId: '', operation: 'find', collection: '', query: {} } },
       }),
-      node('redis', 'action', 'Redis', 'Database', 'Key/value, pub-sub, streams'),
+      node('redis', 'action', 'Redis', 'Database', 'Key/value, pub-sub, streams', {
+        data: { config: { connectorId: '', operation: 'get', key: '', value: '', ttlSeconds: '' } },
+      }),
     ],
   },
 

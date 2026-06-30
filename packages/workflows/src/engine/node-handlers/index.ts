@@ -40,6 +40,7 @@ import { readPdfHandler } from './read-pdf';
 import { compressionHandler } from './compression';
 import { connectorSqlHandler } from './connector-sql';
 import { mongoHandler } from './mongo';
+import { redisHandler } from './redis';
 
 /** Action subtype → handler. New actions (http-request, code, …) land in later slices. */
 const ACTION_HANDLERS: Record<string, NodeHandler> = {
@@ -80,6 +81,7 @@ const ACTION_HANDLERS: Record<string, NodeHandler> = {
   'microsoft-sql': connectorSqlHandler,
   'mysql': connectorSqlHandler,
   'mongodb': mongoHandler,
+  'redis': redisHandler,
 };
 
 const TYPE_HANDLERS: Record<string, NodeHandler> = {
