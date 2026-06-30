@@ -38,6 +38,7 @@ import { extractFromFileHandler } from './extract-from-file';
 import { spreadsheetFileHandler } from './spreadsheet-file';
 import { readPdfHandler } from './read-pdf';
 import { compressionHandler } from './compression';
+import { connectorSqlHandler } from './connector-sql';
 
 /** Action subtype → handler. New actions (http-request, code, …) land in later slices. */
 const ACTION_HANDLERS: Record<string, NodeHandler> = {
@@ -74,6 +75,8 @@ const ACTION_HANDLERS: Record<string, NodeHandler> = {
   'spreadsheet-file': spreadsheetFileHandler,
   'read-pdf': readPdfHandler,
   'compression': compressionHandler,
+  'postgres': connectorSqlHandler,
+  'microsoft-sql': connectorSqlHandler,
 };
 
 const TYPE_HANDLERS: Record<string, NodeHandler> = {

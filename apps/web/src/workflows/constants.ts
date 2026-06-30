@@ -29,6 +29,8 @@ export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
   'crypto', 'jwt', 'xml', 'markdown', 'html-extract', 'html',
   // binary/file (slice C)
   'convert-to-file', 'extract-from-file', 'spreadsheet-file', 'read-pdf', 'compression',
+  // databases (slice D)
+  'postgres', 'microsoft-sql',
 ]);
 
 /**
@@ -260,10 +262,14 @@ export const nodeCategories: NodeCategory[] = [
     name: 'Databases',
     icon: 'Database',
     items: [
-      node('postgres', 'action', 'Postgres', 'Database', 'Run SQL on Postgres'),
+      node('postgres', 'action', 'Postgres', 'Database', 'Run SQL on Postgres', {
+        data: { config: { connectorId: '', sql: '' } },
+      }),
       node('postgres-trigger', 'trigger', 'Postgres Trigger', 'Database', 'Listen for row changes'),
       node('mysql', 'action', 'MySQL', 'Database', 'Run SQL on MySQL'),
-      node('microsoft-sql', 'action', 'Microsoft SQL', 'Database', 'Run queries on MSSQL'),
+      node('microsoft-sql', 'action', 'Microsoft SQL', 'Database', 'Run queries on MSSQL', {
+        data: { config: { connectorId: '', sql: '' } },
+      }),
       node('mongodb', 'action', 'MongoDB', 'Database', 'Documents & aggregations'),
       node('redis', 'action', 'Redis', 'Database', 'Key/value, pub-sub, streams'),
     ],
