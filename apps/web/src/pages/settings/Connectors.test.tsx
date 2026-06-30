@@ -15,7 +15,17 @@ import * as api from '@/api';
 import { toast } from 'sonner';
 import { Connectors } from './Connectors';
 
-const conn = { id: 'c1', name: 'Prod DHIS2', pluginId: 'dhis2-sink', kind: 'sink', allowedHost: 'dhis2.example.org', enabled: true, createdAt: '2026-06-24T00:00:00Z', updatedAt: '2026-06-24T00:00:00Z' };
+const conn = {
+  id: 'c1', name: 'Prod DHIS2', pluginId: 'dhis2-sink', type: null,
+  kind: 'sink', allowedHost: 'dhis2.example.org', enabled: true,
+  createdAt: '2026-06-24T00:00:00Z', updatedAt: '2026-06-24T00:00:00Z',
+};
+
+const dbConn = {
+  id: 'c2', name: 'Prod PG', pluginId: null, type: 'postgres',
+  kind: 'host', allowedHost: null, enabled: true,
+  createdAt: '2026-06-24T00:00:00Z', updatedAt: '2026-06-24T00:00:00Z',
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -30,7 +40,15 @@ describe('Connectors page', () => {
     expect(screen.getByText('dhis2.example.org')).toBeTruthy();
   });
 
-  it('creates a connector via the dialog', async () => {
+  it('Add button is always enabled even with no plugins', async () => {
+    (api.listConnectors as any).mockResolvedValue([]);
+    (api.listSinkPlugins as any).mockResolvedValue([]);
+    render(<MemoryRouter><Connectors /></MemoryRouter>);
+    const btn = await screen.findByTestId('add-connector');
+    expect((btn as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('creates a plugin connector via the dialog', async () => {
     (api.createConnector as any).mockResolvedValue({ ...conn, id: 'c2', name: 'New' });
     render(<MemoryRouter><Connectors /></MemoryRouter>);
     fireEvent.click(await screen.findByTestId('add-connector'));
@@ -50,12 +68,61 @@ describe('Connectors page', () => {
     }));
   });
 
-  it('tests a connector and shows the metadata summary', async () => {
+  it('creates a database connector (postgres) — category=Database, fills host fields, calls createConnector with type', async () => {
+    (api.listConnectors as any).mockResolvedValue([]);
+    (api.listSinkPlugins as any).mockResolvedValue([]);
+    (api.createConnector as any).mockResolvedValue({ ...dbConn, id: 'c3', name: 'Local PG' });
+    render(<MemoryRouter><Connectors /></MemoryRouter>);
+
+    // Open dialog
+    fireEvent.click(await screen.findByTestId('add-connector'));
+
+    // Fill name
+    fireEvent.change(await screen.findByTestId('connector-name'), { target: { value: 'Local PG' } });
+
+    // Switch category to Database via ArrowDown (Radix Select in jsdom)
+    fireEvent.keyDown(screen.getByTestId('connector-category'), { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: /database/i }));
+
+    // DB fields should now be visible
+    expect(await screen.findByTestId('connector-db-host')).toBeTruthy();
+    expect(screen.getByTestId('connector-db-port')).toBeTruthy();
+    expect(screen.getByTestId('connector-db-database')).toBeTruthy();
+    expect(screen.getByTestId('connector-db-user')).toBeTruthy();
+    expect(screen.getByTestId('connector-db-password')).toBeTruthy();
+    expect(screen.getByTestId('connector-db-ssl')).toBeTruthy();
+
+    // Fill required fields
+    fireEvent.change(screen.getByTestId('connector-db-host'), { target: { value: 'localhost' } });
+    fireEvent.change(screen.getByTestId('connector-db-port'), { target: { value: '5432' } });
+    fireEvent.change(screen.getByTestId('connector-db-database'), { target: { value: 'mydb' } });
+    fireEvent.change(screen.getByTestId('connector-db-user'), { target: { value: 'pguser' } });
+    fireEvent.change(screen.getByTestId('connector-db-password'), { target: { value: 'pgpass' } });
+
+    fireEvent.click(screen.getByTestId('connector-save'));
+
+    await waitFor(() => expect(api.createConnector).toHaveBeenCalledWith({
+      name: 'Local PG',
+      type: 'postgres',
+      config: { host: 'localhost', port: '5432', database: 'mydb', user: 'pguser', password: 'pgpass' },
+    }));
+  });
+
+  it('tests a plugin connector and shows the metadata summary', async () => {
     (api.testConnector as any).mockResolvedValue({ ok: true, metadata: { dataElements: 12, orgUnits: 5, categoryOptionCombos: 3, programs: 1, programStages: 2 } });
     render(<MemoryRouter><Connectors /></MemoryRouter>);
     fireEvent.click(await screen.findByTestId('test-c1'));
     await waitFor(() => expect(api.testConnector).toHaveBeenCalledWith('c1'));
     expect(await screen.findByText(/12 data elements/i)).toBeTruthy();
+  });
+
+  it('tests a host connector and shows testOkSimple when no metadata returned', async () => {
+    (api.listConnectors as any).mockResolvedValue([dbConn]);
+    (api.testConnector as any).mockResolvedValue({ ok: true });
+    render(<MemoryRouter><Connectors /></MemoryRouter>);
+    fireEvent.click(await screen.findByTestId('test-c2'));
+    await waitFor(() => expect(api.testConnector).toHaveBeenCalledWith('c2'));
+    expect(await screen.findByText(/connection ok/i)).toBeTruthy();
   });
 
   it('removes a connector after confirm', async () => {
@@ -75,12 +142,21 @@ describe('Connectors page', () => {
     await waitFor(() => expect(api.updateConnector).toHaveBeenCalledWith('c1', { name: 'Renamed', enabled: true }));
   });
 
-  it('rejects a partial connection-field re-entry on edit', async () => {
+  it('rejects a partial connection-field re-entry on edit (plugin)', async () => {
     render(<MemoryRouter><Connectors /></MemoryRouter>);
     fireEvent.click(await screen.findByTestId('edit-c1'));
     fireEvent.change(await screen.findByTestId('connector-baseurl'), { target: { value: 'https://new.example.org' } });
     fireEvent.click(screen.getByTestId('connector-save'));
     await waitFor(() => expect(toast.error).toHaveBeenCalled());
     expect(api.updateConnector).not.toHaveBeenCalled();
+  });
+
+  it('shows colType column with type or pluginId', async () => {
+    (api.listConnectors as any).mockResolvedValue([conn, dbConn]);
+    render(<MemoryRouter><Connectors /></MemoryRouter>);
+    // plugin connector shows pluginId in type column
+    expect(await screen.findByText('dhis2-sink')).toBeTruthy();
+    // db connector shows type
+    expect(screen.getByText('postgres')).toBeTruthy();
   });
 });

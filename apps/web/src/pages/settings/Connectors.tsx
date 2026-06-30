@@ -14,17 +14,46 @@ import {
   type Connector, type SinkPluginRef,
 } from '@/api';
 
+type FieldKind = 'text' | 'number' | 'password' | 'boolean';
+interface TypeField { key: string; labelKey: string; kind: FieldKind }
+const HOST_TYPES: Array<{ value: string; label: string }> = [
+  { value: 'postgres', label: 'Postgres' },
+  { value: 'microsoft-sql', label: 'Microsoft SQL' },
+];
+const DB_FIELDS: TypeField[] = [
+  { key: 'host', labelKey: 'settings.connectors.fieldHost', kind: 'text' },
+  { key: 'port', labelKey: 'settings.connectors.fieldPort', kind: 'number' },
+  { key: 'database', labelKey: 'settings.connectors.fieldDatabase', kind: 'text' },
+  { key: 'user', labelKey: 'settings.connectors.fieldUser', kind: 'text' },
+  { key: 'password', labelKey: 'settings.connectors.fieldPassword', kind: 'password' },
+  { key: 'ssl', labelKey: 'settings.connectors.fieldSsl', kind: 'boolean' },
+];
+
 interface DraftState {
   id: string | null; // null = create
+  category: 'plugin' | 'database';
   name: string;
   pluginId: string;
+  type: string; // host type when category==='database'
   baseUrl: string;
   username: string;
   password: string; // blank on edit = keep existing
+  dbConfig: Record<string, string>; // host fields
   enabled: boolean;
 }
 
-const emptyDraft = (): DraftState => ({ id: null, name: '', pluginId: '', baseUrl: '', username: '', password: '', enabled: true });
+const emptyDraft = (): DraftState => ({
+  id: null,
+  category: 'plugin',
+  name: '',
+  pluginId: '',
+  type: 'postgres',
+  baseUrl: '',
+  username: '',
+  password: '',
+  dbConfig: {},
+  enabled: true,
+});
 
 export function Connectors() {
   const { t } = useTranslation();
@@ -48,28 +77,63 @@ export function Connectors() {
 
   const openCreate = () => setDraft(emptyDraft());
   const openEdit = (c: Connector) =>
-    setDraft({ id: c.id, name: c.name, pluginId: c.pluginId, baseUrl: '', username: '', password: '', enabled: c.enabled });
+    setDraft({
+      id: c.id,
+      category: c.type ? 'database' : 'plugin',
+      name: c.name,
+      pluginId: c.pluginId ?? '',
+      type: c.type ?? 'postgres',
+      baseUrl: '',
+      username: '',
+      password: '',
+      dbConfig: {},
+      enabled: c.enabled,
+    });
 
   const onSave = useCallback(async () => {
     if (!draft || busy) return;
     setBusy(true);
     try {
-      const anyFilled = Boolean(draft.baseUrl || draft.username || draft.password);
-      const allFilled = Boolean(draft.baseUrl && draft.username && draft.password);
-      // Connection fields go all-or-nothing: the server replaces the whole encrypted
-      // config blob, and secrets can't be read back to pre-fill, so a partial re-entry
-      // would silently wipe the fields left blank.
-      if (draft.id === null ? !allFilled : (anyFilled && !allFilled)) {
-        toast.error(t('settings.connectors.partialSecrets'));
-        return;
-      }
-      const config: Record<string, string> = allFilled
-        ? { baseUrl: draft.baseUrl, username: draft.username, password: draft.password }
-        : {};
-      if (draft.id === null) {
-        await createConnector({ name: draft.name, pluginId: draft.pluginId, config });
+      if (draft.category === 'database') {
+        // DB path: require host+database+user+password on create; on edit blank = keep
+        const dbPassword = draft.dbConfig['password'] ?? '';
+        const dbHost = draft.dbConfig['host'] ?? '';
+        const dbDatabase = draft.dbConfig['database'] ?? '';
+        const dbUser = draft.dbConfig['user'] ?? '';
+        const requiredFilled = Boolean(dbHost && dbDatabase && dbUser && dbPassword);
+        const anyFilled = Boolean(dbHost || dbDatabase || dbUser || dbPassword);
+        if (draft.id === null ? !requiredFilled : (anyFilled && !requiredFilled)) {
+          toast.error(t('settings.connectors.partialSecrets'));
+          return;
+        }
+        const config: Record<string, string> = {};
+        if (requiredFilled) {
+          for (const field of DB_FIELDS) {
+            const val = draft.dbConfig[field.key];
+            if (val !== undefined && val !== '') config[field.key] = val;
+          }
+        }
+        if (draft.id === null) {
+          await createConnector({ name: draft.name, type: draft.type, config });
+        } else {
+          await updateConnector(draft.id, { name: draft.name, enabled: draft.enabled, ...(requiredFilled ? { config } : {}) });
+        }
       } else {
-        await updateConnector(draft.id, { name: draft.name, enabled: draft.enabled, ...(allFilled ? { config } : {}) });
+        // Plugin path (existing behavior)
+        const anyFilled = Boolean(draft.baseUrl || draft.username || draft.password);
+        const allFilled = Boolean(draft.baseUrl && draft.username && draft.password);
+        if (draft.id === null ? !allFilled : (anyFilled && !allFilled)) {
+          toast.error(t('settings.connectors.partialSecrets'));
+          return;
+        }
+        const config: Record<string, string> = allFilled
+          ? { baseUrl: draft.baseUrl, username: draft.username, password: draft.password }
+          : {};
+        if (draft.id === null) {
+          await createConnector({ name: draft.name, pluginId: draft.pluginId, config });
+        } else {
+          await updateConnector(draft.id, { name: draft.name, enabled: draft.enabled, ...(allFilled ? { config } : {}) });
+        }
       }
       toast.success(t('settings.connectors.savedToast', { name: draft.name }));
       setDraft(null);
@@ -94,8 +158,10 @@ export function Connectors() {
       setTestResult((r) => ({
         ...r,
         [c.id]: res.ok
-          ? t('settings.connectors.testOk', { dataElements: res.metadata.dataElements, orgUnits: res.metadata.orgUnits })
-          : t('settings.connectors.testFailed', { error: res.error }),
+          ? res.metadata
+            ? t('settings.connectors.testOk', { dataElements: res.metadata.dataElements, orgUnits: res.metadata.orgUnits })
+            : t('settings.connectors.testOkSimple')
+          : t('settings.connectors.testFailed', { error: (res as { ok: false; error: string }).error }),
       }));
     } catch (e) {
       setTestResult((r) => ({ ...r, [c.id]: t('settings.connectors.testFailed', { error: e instanceof Error ? e.message : String(e) }) }));
@@ -112,6 +178,10 @@ export function Connectors() {
     catch (e) { toast.error(t('settings.connectors.errorToast', { error: e instanceof Error ? e.message : String(e) })); }
   }, [pendingRemove, t, load]);
 
+  const saveDisabled = !draft
+    ? true
+    : busy || !draft.name || (draft.category === 'plugin' ? !draft.pluginId : !draft.type);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4" data-testid="connectors-page">
       <div className="flex items-center justify-between">
@@ -119,16 +189,10 @@ export function Connectors() {
           <h1 className="text-lg font-semibold">{t('settings.connectors.heading')}</h1>
           <p className="text-sm text-muted-foreground">{t('settings.connectors.description')}</p>
         </div>
-        <Button data-testid="add-connector" onClick={openCreate} disabled={plugins.length === 0}>
+        <Button data-testid="add-connector" onClick={openCreate}>
           {t('settings.connectors.add')}
         </Button>
       </div>
-
-      {plugins.length === 0 ? (
-        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700">
-          {t('settings.connectors.noPlugins')}
-        </div>
-      ) : null}
 
       {rows.length === 0 ? (
         <div className="text-sm text-muted-foreground">{t('settings.connectors.empty')}</div>
@@ -138,7 +202,7 @@ export function Connectors() {
           <TableHeader>
             <TableRow>
               <TableHead>{t('settings.connectors.colName')}</TableHead>
-              <TableHead>{t('settings.connectors.colPlugin')}</TableHead>
+              <TableHead>{t('settings.connectors.colType')}</TableHead>
               <TableHead>{t('settings.connectors.colHost')}</TableHead>
               <TableHead>{t('settings.connectors.colEnabled')}</TableHead>
               <TableHead className="text-right">{t('settings.connectors.colActions')}</TableHead>
@@ -148,7 +212,7 @@ export function Connectors() {
             {rows.map((c) => (
               <TableRow key={c.id} data-testid={`connector-row-${c.id}`}>
                 <TableCell className="font-medium">{c.name}</TableCell>
-                <TableCell className="text-muted-foreground">{c.pluginId}</TableCell>
+                <TableCell className="text-muted-foreground">{c.type ?? c.pluginId}</TableCell>
                 <TableCell className="text-muted-foreground">{c.allowedHost ?? '—'}</TableCell>
                 <TableCell>
                   <Switch checked={c.enabled} onCheckedChange={(v) => void onToggle(c, v)} aria-label={t('settings.connectors.enabledLabel')} />
@@ -181,36 +245,116 @@ export function Connectors() {
           <DialogTitle>{draft?.id === null ? t('settings.connectors.newTitle') : t('settings.connectors.editTitle')}</DialogTitle>
           {draft ? (
             <div className="text-sm">
-              {/* Two-column form so the dialog is wider than it is tall. Base URL spans both. */}
               <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+                {/* Name field — always shown */}
                 <label className="grid gap-1">
                   <span className="text-muted-foreground">{t('settings.connectors.fieldName')}</span>
                   <Input data-testid="connector-name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
                 </label>
+
+                {/* Category selector */}
                 <label className="grid gap-1">
-                  <span className="text-muted-foreground">{t('settings.connectors.fieldPlugin')}</span>
-                  <Select value={draft.pluginId} onValueChange={(v) => setDraft({ ...draft, pluginId: v })}>
-                    <SelectTrigger data-testid="connector-plugin"><SelectValue placeholder={t('settings.connectors.pickPlugin')} /></SelectTrigger>
+                  <span className="text-muted-foreground">{t('settings.connectors.category')}</span>
+                  <Select
+                    value={draft.category}
+                    onValueChange={(v) => setDraft({ ...draft, category: v as 'plugin' | 'database' })}
+                  >
+                    <SelectTrigger data-testid="connector-category">
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
-                      {plugins.map((p) => <SelectItem key={p.id} value={p.id}>{p.id}</SelectItem>)}
+                      <SelectItem value="plugin">{t('settings.connectors.categoryPlugin')}</SelectItem>
+                      <SelectItem value="database">{t('settings.connectors.categoryDatabase')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </label>
-                <label className="grid gap-1 sm:col-span-2">
-                  <span className="text-muted-foreground">{t('settings.connectors.fieldBaseUrl')}</span>
-                  <Input data-testid="connector-baseurl" value={draft.baseUrl} onChange={(e) => setDraft({ ...draft, baseUrl: e.target.value })}
-                    placeholder={draft.id === null ? 'https://external-system.example.org/api' : t('settings.connectors.secretSet')} />
-                </label>
-                <label className="grid gap-1">
-                  <span className="text-muted-foreground">{t('settings.connectors.fieldUsername')}</span>
-                  <Input data-testid="connector-username" value={draft.username} onChange={(e) => setDraft({ ...draft, username: e.target.value })}
-                    placeholder={draft.id === null ? '' : t('settings.connectors.secretSet')} />
-                </label>
-                <label className="grid gap-1">
-                  <span className="text-muted-foreground">{t('settings.connectors.fieldPassword')}</span>
-                  <Input data-testid="connector-password" type="password" value={draft.password} onChange={(e) => setDraft({ ...draft, password: e.target.value })}
-                    placeholder={draft.id === null ? '' : t('settings.connectors.secretSet')} />
-                </label>
+
+                {draft.category === 'database' ? (
+                  <>
+                    {/* Host type selector */}
+                    <label className="grid gap-1 sm:col-span-2">
+                      <span className="text-muted-foreground">{t('settings.connectors.pickType')}</span>
+                      <Select
+                        value={draft.type}
+                        onValueChange={(v) => setDraft({ ...draft, type: v })}
+                      >
+                        <SelectTrigger data-testid="connector-type">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {HOST_TYPES.map((ht) => (
+                            <SelectItem key={ht.value} value={ht.value}>{ht.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </label>
+
+                    {/* DB fields */}
+                    {DB_FIELDS.map((field) => {
+                      const val = draft.dbConfig[field.key] ?? '';
+                      const isEdit = draft.id !== null;
+                      if (field.kind === 'boolean') {
+                        return (
+                          <label key={field.key} className="flex items-center gap-2">
+                            <Switch
+                              data-testid={`connector-db-${field.key}`}
+                              checked={val === 'true'}
+                              onCheckedChange={(v) => setDraft({ ...draft, dbConfig: { ...draft.dbConfig, [field.key]: v ? 'true' : 'false' } })}
+                              aria-label={t(field.labelKey)}
+                            />
+                            <span className="text-muted-foreground">{t(field.labelKey)}</span>
+                          </label>
+                        );
+                      }
+                      return (
+                        <label key={field.key} className="grid gap-1">
+                          <span className="text-muted-foreground">{t(field.labelKey)}</span>
+                          <Input
+                            data-testid={`connector-db-${field.key}`}
+                            type={field.kind === 'password' ? 'password' : field.kind === 'number' ? 'number' : 'text'}
+                            value={val}
+                            onChange={(e) => setDraft({ ...draft, dbConfig: { ...draft.dbConfig, [field.key]: e.target.value } })}
+                            placeholder={field.kind === 'password' && isEdit ? t('settings.connectors.secretSet') : undefined}
+                          />
+                        </label>
+                      );
+                    })}
+                  </>
+                ) : (
+                  <>
+                    {/* Plugin selector */}
+                    <label className="grid gap-1">
+                      <span className="text-muted-foreground">{t('settings.connectors.fieldPlugin')}</span>
+                      <Select value={draft.pluginId} onValueChange={(v) => setDraft({ ...draft, pluginId: v })}>
+                        <SelectTrigger data-testid="connector-plugin"><SelectValue placeholder={t('settings.connectors.pickPlugin')} /></SelectTrigger>
+                        <SelectContent>
+                          {plugins.map((p) => <SelectItem key={p.id} value={p.id}>{p.id}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </label>
+                    {plugins.length === 0 ? (
+                      <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 sm:col-span-2">
+                        {t('settings.connectors.noPlugins')}
+                      </div>
+                    ) : null}
+                    <label className="grid gap-1 sm:col-span-2">
+                      <span className="text-muted-foreground">{t('settings.connectors.fieldBaseUrl')}</span>
+                      <Input data-testid="connector-baseurl" value={draft.baseUrl} onChange={(e) => setDraft({ ...draft, baseUrl: e.target.value })}
+                        placeholder={draft.id === null ? 'https://external-system.example.org/api' : t('settings.connectors.secretSet')} />
+                    </label>
+                    <label className="grid gap-1">
+                      <span className="text-muted-foreground">{t('settings.connectors.fieldUsername')}</span>
+                      <Input data-testid="connector-username" value={draft.username} onChange={(e) => setDraft({ ...draft, username: e.target.value })}
+                        placeholder={draft.id === null ? '' : t('settings.connectors.secretSet')} />
+                    </label>
+                    <label className="grid gap-1">
+                      <span className="text-muted-foreground">{t('settings.connectors.fieldPassword')}</span>
+                      <Input data-testid="connector-password" type="password" value={draft.password} onChange={(e) => setDraft({ ...draft, password: e.target.value })}
+                        placeholder={draft.id === null ? '' : t('settings.connectors.secretSet')} />
+                    </label>
+                  </>
+                )}
+
                 {draft.id !== null ? (
                   <label className="flex items-center gap-2 sm:col-span-2">
                     <Switch checked={draft.enabled} onCheckedChange={(v) => setDraft({ ...draft, enabled: v })} aria-label={t('settings.connectors.enabledLabel')} />
@@ -220,7 +364,7 @@ export function Connectors() {
               </div>
               <div className="mt-5 flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setDraft(null)}>{t('settings.connectors.cancel')}</Button>
-                <Button data-testid="connector-save" disabled={busy || !draft.name || !draft.pluginId} onClick={() => void onSave()}>
+                <Button data-testid="connector-save" disabled={saveDisabled} onClick={() => void onSave()}>
                   {t('settings.connectors.save')}
                 </Button>
               </div>

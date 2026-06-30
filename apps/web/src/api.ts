@@ -1128,7 +1128,8 @@ export async function fetchWorkflowDatasets(): Promise<WorkflowDatasetSummary[]>
 export interface Connector {
   id: string;
   name: string;
-  pluginId: string;
+  pluginId: string | null;
+  type: string | null;
   kind: string;
   allowedHost: string | null;
   enabled: boolean;
@@ -1140,10 +1141,10 @@ export interface ConnectorMetadataCounts {
   dataElements: number; orgUnits: number; categoryOptionCombos: number; programs: number; programStages: number;
 }
 export type ConnectorTestResult =
-  | { ok: true; metadata: ConnectorMetadataCounts }
+  | { ok: true; metadata?: ConnectorMetadataCounts }
   | { ok: false; error: string };
 export interface ConnectorCreateInput {
-  name: string; pluginId: string; config: Record<string, string>; allowedHost?: string;
+  name: string; pluginId?: string; type?: string; config: Record<string, string>; allowedHost?: string;
 }
 export interface ConnectorUpdateInput {
   name?: string; config?: Record<string, string>; allowedHost?: string | null; enabled?: boolean;

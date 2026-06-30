@@ -5,6 +5,7 @@ export interface SwitchProps {
   onCheckedChange: (checked: boolean) => void;
   disabled?: boolean;
   'aria-label'?: string;
+  'data-testid'?: string;
 }
 
 /** Minimal accessible toggle switch — no external dependency. */
@@ -15,6 +16,7 @@ export function Switch({ checked, onCheckedChange, disabled, ...rest }: SwitchPr
       role="switch"
       aria-checked={checked}
       aria-label={rest['aria-label']}
+      data-testid={rest['data-testid']}
       disabled={disabled}
       onClick={() => onCheckedChange(!checked)}
       className={cn(
