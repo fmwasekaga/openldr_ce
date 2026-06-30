@@ -98,6 +98,7 @@ export function createWorkflowTriggerRunner(deps: RunnerDeps): WorkflowTriggerRu
    * source/resourceType filters match everything; a set source matches the event
    * source case-insensitively; a set resourceType must be among the event's
    * resourceTypes.
+   * resourceType is matched exactly (FHIR resource type names are case-sensitive).
    */
   async function eventNodeMatches(
     workflowId: string,
@@ -113,7 +114,7 @@ export function createWorkflowTriggerRunner(deps: RunnerDeps): WorkflowTriggerRu
     const wantSource = String(cfg.source ?? '').trim().toLowerCase();
     const wantType = String(cfg.resourceType ?? '').trim();
     const evSource = String(payload.source ?? '').trim().toLowerCase();
-    const evTypes = Array.isArray(payload.resourceTypes) ? payload.resourceTypes.map((t) => String(t)) : [];
+    const evTypes = Array.isArray(payload.resourceTypes) ? payload.resourceTypes.map((t) => String(t).trim()) : [];
     if (wantSource !== '' && wantSource !== evSource) return false;
     if (wantType !== '' && !evTypes.includes(wantType)) return false;
     return true;
