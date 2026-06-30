@@ -28,7 +28,7 @@ export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
   // codecs (slice B)
   'crypto', 'jwt', 'xml', 'markdown', 'html-extract', 'html',
   // binary/file (slice C)
-  'convert-to-file', 'extract-from-file', 'spreadsheet-file',
+  'convert-to-file', 'extract-from-file', 'spreadsheet-file', 'read-pdf', 'compression',
 ]);
 
 /**
@@ -274,7 +274,9 @@ export const nodeCategories: NodeCategory[] = [
     icon: 'FolderOpen',
     items: [
       node('read-write-file', 'action', 'Read/Write File', 'FileCog', 'Disk file operations'),
-      node('read-pdf', 'action', 'Read PDF', 'FileText', 'Extract PDF text'),
+      node('read-pdf', 'action', 'Read PDF', 'FileText', 'Extract PDF text', {
+        data: { config: { sourceField: 'file', outputField: 'text' } },
+      }),
       node('convert-to-file', 'action', 'Convert to File', 'FileOutput', 'Encode data to a file', {
         keywords: ['csv', 'xlsx', 'json'],
         data: { config: { format: 'json', binaryField: 'data', fileName: '', textField: '' } },
@@ -285,7 +287,9 @@ export const nodeCategories: NodeCategory[] = [
       node('spreadsheet-file', 'action', 'Spreadsheet File', 'Sheet', 'Read / write CSV, XLSX', {
         data: { config: { operation: 'read', format: 'xlsx', sourceField: 'file', binaryField: 'data', fileName: '' } },
       }),
-      node('compression', 'action', 'Compression', 'FileArchive', 'Zip / unzip'),
+      node('compression', 'action', 'Compression', 'FileArchive', 'Zip / unzip', {
+        data: { config: { operation: 'zip', sourceField: 'file', binaryField: 'zip', fileName: '' } },
+      }),
       node('crypto', 'action', 'Crypto', 'KeyRound', 'Hash, HMAC', {
         data: { config: { operation: 'hash', algorithm: 'sha256', field: '', secret: '', encoding: 'hex', outputField: 'digest' } },
       }),

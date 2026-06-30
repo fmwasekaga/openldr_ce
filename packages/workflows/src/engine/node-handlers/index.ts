@@ -36,6 +36,7 @@ import { htmlHandler } from './html';
 import { convertToFileHandler } from './convert-to-file';
 import { extractFromFileHandler } from './extract-from-file';
 import { spreadsheetFileHandler } from './spreadsheet-file';
+import { readPdfHandler } from './read-pdf';
 
 /** Action subtype → handler. New actions (http-request, code, …) land in later slices. */
 const ACTION_HANDLERS: Record<string, NodeHandler> = {
@@ -70,6 +71,7 @@ const ACTION_HANDLERS: Record<string, NodeHandler> = {
   'convert-to-file': convertToFileHandler,
   'extract-from-file': extractFromFileHandler,
   'spreadsheet-file': spreadsheetFileHandler,
+  'read-pdf': readPdfHandler,
 };
 
 const TYPE_HANDLERS: Record<string, NodeHandler> = {
