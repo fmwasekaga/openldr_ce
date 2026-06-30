@@ -7,3 +7,5 @@ allowBuilds:
   esbuild: true
   '@extism/extism': true
   core-js: true
+  cpu-features: false
+  ssh2: false
