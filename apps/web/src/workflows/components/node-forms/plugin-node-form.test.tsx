@@ -1,6 +1,6 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PluginNodeForm } from './plugin-node-form';
+import { PluginNodeForm, DeclarativeNodeForm } from './plugin-node-form';
 import * as api from '@/api';
 
 vi.mock('@/api', async (orig) => ({ ...(await orig<typeof api>()), fetchWorkflowNodes: vi.fn(), fetchNodeOptions: vi.fn(), fetchNodeDetail: vi.fn() }));
@@ -147,5 +147,44 @@ describe('PluginNodeForm', () => {
       const cfg = (merged![0] as { config: Record<string, unknown> }).config;
       expect(cfg).toMatchObject({ mappingId: 'm1', mapping: { x: 1 }, orgUnitMap: { a: 'b' } });
     });
+  });
+});
+
+const hostDescriptor = {
+  id: 'form-validate', source: 'host', label: 'Form Validate', kind: 'transform',
+  description: '', ports: { inputs: [{ name: 'in' }], outputs: [{ name: 'out' }] },
+  capabilities: [], config: [{ key: 'formId', label: 'Form', type: 'select', required: true, optionsSource: 'forms' }],
+};
+const hostNode = { id: 'h1', type: 'action', data: { label: 'Form Validate', action: 'form-validate', templateId: 'form-validate', config: {} } } as never;
+
+describe('DeclarativeNodeForm (host nodes)', () => {
+  it('matches a host descriptor by id and renders its config with resolved options', async () => {
+    (api.fetchWorkflowNodes as ReturnType<typeof vi.fn>).mockResolvedValue([hostDescriptor]);
+    (api.fetchNodeOptions as ReturnType<typeof vi.fn>).mockResolvedValue([{ value: 'form-1', label: 'AMR Result' }]);
+    render(<DeclarativeNodeForm node={hostNode} update={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText('Form')).toBeInTheDocument());
+    expect(api.fetchNodeOptions).toHaveBeenCalledWith('forms', undefined);
+    await screen.findByRole('option', { name: 'AMR Result' });
+  });
+
+  it('writes config.formId when the select changes', async () => {
+    (api.fetchWorkflowNodes as ReturnType<typeof vi.fn>).mockResolvedValue([hostDescriptor]);
+    (api.fetchNodeOptions as ReturnType<typeof vi.fn>).mockResolvedValue([{ value: 'form-1', label: 'AMR Result' }]);
+    const update = vi.fn();
+    render(<DeclarativeNodeForm node={hostNode} update={update} />);
+    const select = await screen.findByRole('combobox');
+    await screen.findByRole('option', { name: 'AMR Result' });
+    fireEvent.change(select, { target: { value: 'form-1' } });
+    await waitFor(() => {
+      const call = update.mock.calls.find(([arg]) => (arg as { config?: Record<string, unknown> }).config?.formId === 'form-1');
+      expect(call).toBeTruthy();
+    });
+  });
+
+  it('renders label-only without an error when no descriptor matches a host node', async () => {
+    (api.fetchWorkflowNodes as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    render(<DeclarativeNodeForm node={hostNode} update={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText('Label')).toBeInTheDocument());
+    expect(screen.queryByText(/no longer installed/i)).not.toBeInTheDocument();
   });
 });

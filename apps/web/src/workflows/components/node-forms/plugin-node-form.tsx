@@ -5,32 +5,46 @@ import { CodeEditor } from './code-editor';
 import { Switch } from '@/components/ui/switch';
 import { fetchWorkflowNodes, fetchNodeOptions, fetchNodeDetail, type WorkflowNodeConfigField, type WorkflowNodeOption } from '@/api';
 
-export function PluginNodeForm({ node, update }: NodeFormProps) {
-  const data = node.data as { label?: string; pluginId?: string; nodeId?: string; config?: Record<string, unknown> };
+export function DeclarativeNodeForm({ node, update }: NodeFormProps) {
+  const data = node.data as {
+    label?: string;
+    pluginId?: string;
+    nodeId?: string;
+    action?: string;
+    templateId?: string;
+    config?: Record<string, unknown>;
+  };
   const config = data.config ?? {};
   const [fields, setFields] = useState<WorkflowNodeConfigField[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const isPlugin = Boolean(data.pluginId);
+  const hostId = data.action ?? data.templateId ?? data.nodeId;
+
   useEffect(() => {
     void fetchWorkflowNodes()
       .then((nodes) => {
-        const match = nodes.find(
-          (n) =>
-            n.pluginId === data.pluginId &&
-            (n.id === `${data.pluginId}:${data.nodeId}` || n.id === data.nodeId),
-        );
+        const match = isPlugin
+          ? nodes.find(
+              (n) =>
+                n.pluginId === data.pluginId &&
+                (n.id === `${data.pluginId}:${data.nodeId}` || n.id === data.nodeId),
+            )
+          : nodes.find((n) => n.source === 'host' && n.id === hostId);
         if (!match) {
-          setError('This plugin node is no longer installed.');
+          // Plugin nodes whose plugin was uninstalled show a warning; host nodes
+          // with no declarative config simply render label-only.
+          if (isPlugin) setError('This plugin node is no longer installed.');
           setFields([]);
           return;
         }
         setFields(match.config);
       })
       .catch(() => {
-        setError('Could not load node configuration.');
+        if (isPlugin) setError('Could not load node configuration.');
         setFields([]);
       });
-  }, [data.pluginId, data.nodeId]);
+  }, [data.pluginId, data.nodeId, isPlugin, hostId]);
 
   const setField = (key: string, value: unknown, merge?: Record<string, unknown>) =>
     update({ config: { ...config, [key]: value, ...merge } } as never);
@@ -61,6 +75,9 @@ export function PluginNodeForm({ node, update }: NodeFormProps) {
     </div>
   );
 }
+
+/** Back-compat alias — plugin nodes route here too. */
+export const PluginNodeForm = DeclarativeNodeForm;
 
 function PluginField({
   field,
