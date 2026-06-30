@@ -31,6 +31,7 @@ import { cryptoHandler } from './crypto';
 import { jwtHandler } from './jwt';
 import { xmlHandler } from './xml';
 import { markdownHandler } from './markdown';
+import { htmlExtractHandler } from './html-extract';
 
 /** Action subtype → handler. New actions (http-request, code, …) land in later slices. */
 const ACTION_HANDLERS: Record<string, NodeHandler> = {
@@ -60,6 +61,7 @@ const ACTION_HANDLERS: Record<string, NodeHandler> = {
   'jwt': jwtHandler,
   'xml': xmlHandler,
   'markdown': markdownHandler,
+  'html-extract': htmlExtractHandler,
 };
 
 const TYPE_HANDLERS: Record<string, NodeHandler> = {

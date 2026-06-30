@@ -314,7 +314,9 @@ export const nodeCategories: NodeCategory[] = [
         data: { config: { renames: [] } },
       }),
       node('html', 'action', 'HTML', 'Code2', 'Build or extract HTML'),
-      node('html-extract', 'action', 'HTML Extract', 'CodeXml', 'Parse HTML with CSS selectors'),
+      node('html-extract', 'action', 'HTML Extract', 'CodeXml', 'Parse HTML with CSS selectors', {
+        data: { config: { sourceField: 'html', extractions: [] } },
+      }),
       node('markdown', 'action', 'Markdown', 'FileText', 'Convert to/from Markdown', {
         data: { config: { operation: 'markdownToHtml', field: 'md', outputField: 'html' } },
       }),
