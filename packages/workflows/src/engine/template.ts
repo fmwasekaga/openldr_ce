@@ -62,7 +62,8 @@ export function resolveExpression(
     return readPath(top?.item, trimmed.slice('$item'.length));
   }
 
-  // $items is checked before $input so startsWith doesn't mis-match
+  // Order matters: $item / $item.<path> is above $items (so '$items' is not
+  // captured by the '$item.' guard), and $items is above $input.
   if (trimmed.startsWith('$items')) {
     return readPath(input.map((i) => i.json), trimmed.slice('$items'.length));
   }

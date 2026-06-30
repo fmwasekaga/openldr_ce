@@ -63,4 +63,17 @@ describe('loop template vars', () => {
     expect(resolveTemplate('i={{ $index }}', ctx, [])).toBe('i=');
     expect(resolveTemplate('n={{ $item.name }}', ctx, [])).toBe('n=');
   });
+
+  it('$items still resolves (not captured by the $item guard) when a loop is active', () => {
+    const ctx = createContext(undefined, () => {});
+    ctx.loopVars = [{ index: 0, item: { name: 'x' } }];
+    const items = [{ json: { a: 1 } }, { json: { a: 2 } }];
+    expect(resolveExpression('$items', ctx, items)).toEqual([{ a: 1 }, { a: 2 }]);
+  });
+
+  it('resolves bare $item to the whole current item object', () => {
+    const ctx = createContext(undefined, () => {});
+    ctx.loopVars = [{ index: 1, item: { name: 'inner' } }];
+    expect(resolveExpression('$item', ctx, [])).toEqual({ name: 'inner' });
+  });
 });
