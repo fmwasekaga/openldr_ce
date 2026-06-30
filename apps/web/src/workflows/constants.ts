@@ -31,6 +31,8 @@ export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
   'convert-to-file', 'extract-from-file', 'spreadsheet-file', 'read-pdf', 'compression',
   // databases (slice D)
   'postgres', 'microsoft-sql', 'mysql',
+  // databases (slice E)
+  'mongodb',
 ]);
 
 /**
@@ -272,7 +274,9 @@ export const nodeCategories: NodeCategory[] = [
       node('microsoft-sql', 'action', 'Microsoft SQL', 'Database', 'Run queries on MSSQL', {
         data: { config: { connectorId: '', sql: '' } },
       }),
-      node('mongodb', 'action', 'MongoDB', 'Database', 'Documents & aggregations'),
+      node('mongodb', 'action', 'MongoDB', 'Database', 'Documents & aggregations', {
+        data: { config: { connectorId: '', operation: 'find', collection: '', query: {} } },
+      }),
       node('redis', 'action', 'Redis', 'Database', 'Key/value, pub-sub, streams'),
     ],
   },

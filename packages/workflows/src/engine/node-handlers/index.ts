@@ -39,6 +39,7 @@ import { spreadsheetFileHandler } from './spreadsheet-file';
 import { readPdfHandler } from './read-pdf';
 import { compressionHandler } from './compression';
 import { connectorSqlHandler } from './connector-sql';
+import { mongoHandler } from './mongo';
 
 /** Action subtype → handler. New actions (http-request, code, …) land in later slices. */
 const ACTION_HANDLERS: Record<string, NodeHandler> = {
@@ -78,6 +79,7 @@ const ACTION_HANDLERS: Record<string, NodeHandler> = {
   'postgres': connectorSqlHandler,
   'microsoft-sql': connectorSqlHandler,
   'mysql': connectorSqlHandler,
+  'mongodb': mongoHandler,
 };
 
 const TYPE_HANDLERS: Record<string, NodeHandler> = {
