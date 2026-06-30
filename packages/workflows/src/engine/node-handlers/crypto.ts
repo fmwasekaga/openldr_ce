@@ -11,6 +11,10 @@ export const cryptoHandler: NodeHandler = async (node, _ctx, input) => {
   const encoding = ((config.encoding as string) || 'hex') as 'hex' | 'base64';
   const secret = (config.secret as string) ?? '';
 
+  if (!['sha256', 'sha512', 'sha1', 'md5'].includes(algorithm)) {
+    throw new Error('crypto: unsupported algorithm "' + algorithm + '"');
+  }
+
   return input.map((item) => {
     const value = String(item.json[field] ?? '');
     const digest = operation === 'hmac'

@@ -18,12 +18,20 @@ export const jwtHandler: NodeHandler = async (node, _ctx, input) => {
   const outputField = (config.outputField as string) || (operation === 'sign' ? 'token' : 'payload');
   const key = new TextEncoder().encode(secret);
 
+  if (!['HS256', 'HS384', 'HS512'].includes(algorithm)) {
+    throw new Error('jwt: unsupported algorithm "' + algorithm + '"');
+  }
+
   const out: WorkflowItem[] = [];
   for (const item of input) {
     if (operation === 'sign') {
-      const payload = (payloadField ? item.json[payloadField] : item.json) as Record<string, unknown>;
-      const token = await new SignJWT(payload ?? {}).setProtectedHeader({ alg: algorithm }).sign(key);
-      out.push({ json: { ...item.json, [outputField]: token } });
+      const payload = (payloadField ? item.json[payloadField] : item.json) as Record<string, unknown> | undefined;
+      try {
+        const token = await new SignJWT(payload ?? {}).setProtectedHeader({ alg: algorithm }).sign(key);
+        out.push({ json: { ...item.json, [outputField]: token } });
+      } catch (err) {
+        throw new Error('jwt sign failed: ' + (err instanceof Error ? err.message : String(err)));
+      }
     } else if (operation === 'verify') {
       const token = String(item.json[tokenField] ?? '');
       try {
