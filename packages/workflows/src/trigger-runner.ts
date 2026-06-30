@@ -24,16 +24,19 @@ interface RunnerDeps {
 
 const SCHEDULE_DUE = 'workflow.schedule.due';
 const INGEST_DONE = 'ingest.batch.done';
+const DATA_PERSISTED = 'data.persisted';
 
 export interface WorkflowTriggerRunner {
   registerRunner(eventing: EventingPort): Promise<void>;
   reconcile(eventing: EventingPort): Promise<void>;
   setIngestWorkflowIds(ids: string[]): void;
+  setEventWorkflowIds(ids: string[]): void;
   runAndRecord(workflowId: string, source: TriggerSource, input: unknown, files?: Record<string, BinaryRef>): Promise<void>;
 }
 
 export function createWorkflowTriggerRunner(deps: RunnerDeps): WorkflowTriggerRunner {
   let ingestIds = new Set<string>();
+  let eventIds = new Set<string>();
 
   async function runAndRecord(workflowId: string, source: TriggerSource, input: unknown, files?: Record<string, BinaryRef>): Promise<void> {
     const wf = await deps.store.get(workflowId);
@@ -90,6 +93,32 @@ export function createWorkflowTriggerRunner(deps: RunnerDeps): WorkflowTriggerRu
     return filter === '' || filter === source;
   }
 
+  /**
+   * Does this workflow's event trigger accept this data.persisted event? Empty
+   * source/resourceType filters match everything; a set source matches the event
+   * source case-insensitively; a set resourceType must be among the event's
+   * resourceTypes.
+   */
+  async function eventNodeMatches(
+    workflowId: string,
+    payload: { source?: unknown; resourceTypes?: unknown },
+  ): Promise<boolean> {
+    const wf = await deps.store.get(workflowId);
+    if (!wf || !wf.enabled) return false;
+    const def = WorkflowDefinitionSchema.parse(wf.definition);
+    const node = (def.nodes as Array<{ type?: string; data?: Record<string, unknown> }>).find(
+      (n) => n.type === 'trigger' && n.data?.triggerType === 'event',
+    );
+    const cfg = (node?.data?.config ?? {}) as { source?: unknown; resourceType?: unknown };
+    const wantSource = String(cfg.source ?? '').trim().toLowerCase();
+    const wantType = String(cfg.resourceType ?? '').trim();
+    const evSource = String(payload.source ?? '').trim().toLowerCase();
+    const evTypes = Array.isArray(payload.resourceTypes) ? payload.resourceTypes.map((t) => String(t)) : [];
+    if (wantSource !== '' && wantSource !== evSource) return false;
+    if (wantType !== '' && !evTypes.includes(wantType)) return false;
+    return true;
+  }
+
   async function arm(
     eventing: EventingPort,
     workflowId: string,
@@ -105,6 +134,10 @@ export function createWorkflowTriggerRunner(deps: RunnerDeps): WorkflowTriggerRu
   return {
     setIngestWorkflowIds(ids) {
       ingestIds = new Set(ids);
+    },
+
+    setEventWorkflowIds(ids) {
+      eventIds = new Set(ids);
     },
 
     runAndRecord,
@@ -137,6 +170,18 @@ export function createWorkflowTriggerRunner(deps: RunnerDeps): WorkflowTriggerRu
             await runAndRecord(workflowId, 'ingest', event.payload, files);
           } catch (err) {
             deps.logger.error({ err, workflowId }, 'ingest-triggered workflow run failed');
+          }
+        }
+      });
+
+      await eventing.subscribe(DATA_PERSISTED, async (event) => {
+        const payload = (event.payload ?? {}) as { source?: unknown; resourceTypes?: unknown };
+        for (const workflowId of eventIds) {
+          try {
+            if (!(await eventNodeMatches(workflowId, payload))) continue;
+            await runAndRecord(workflowId, 'event', event.payload);
+          } catch (err) {
+            deps.logger.error({ err, workflowId }, 'event-triggered workflow run failed');
           }
         }
       });

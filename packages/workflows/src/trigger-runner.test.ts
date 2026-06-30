@@ -234,3 +234,71 @@ describe('workflow trigger runner', () => {
     );
   });
 });
+
+const eventRunner = (nodes: unknown[], recorded: unknown[]) =>
+  createWorkflowTriggerRunner({
+    store: { get: async () => wfWith(nodes) } as never,
+    runs: { record: async (r: unknown) => { recorded.push(r); } } as never,
+    schedules: { list: async () => [], get: async () => undefined, setNextDue: async () => {} } as never,
+    webhooks: { resolve: () => undefined } as never,
+    runWorkflow,
+    logger: { error: () => {}, warn: () => {} },
+  });
+
+const fireDataPersisted = async (ev: ReturnType<typeof fakeEventing>, payload: unknown) =>
+  ev.handlers.get('data.persisted')!({ type: 'data.persisted', payload });
+
+describe('event trigger (data.persisted)', () => {
+  it('runs an event-trigger workflow when source + resourceType filters match', async () => {
+    const ev = fakeEventing();
+    const recorded: unknown[] = [];
+    const runner = eventRunner(
+      [{ id: 'e', type: 'trigger', data: { triggerType: 'event', config: { source: 'demo-lab', resourceType: 'Observation' } } }],
+      recorded,
+    );
+    runner.setEventWorkflowIds(['w1']);
+    await runner.registerRunner(ev.port as never);
+    await fireDataPersisted(ev, { source: 'demo-lab', resourceTypes: ['Observation'], count: 1 });
+    expect(recorded.length).toBe(1);
+    expect((recorded[0] as { triggerSource: string }).triggerSource).toBe('event');
+  });
+
+  it('skips when the source filter does not match', async () => {
+    const ev = fakeEventing();
+    const recorded: unknown[] = [];
+    const runner = eventRunner(
+      [{ id: 'e', type: 'trigger', data: { triggerType: 'event', config: { source: 'other' } } }],
+      recorded,
+    );
+    runner.setEventWorkflowIds(['w1']);
+    await runner.registerRunner(ev.port as never);
+    await fireDataPersisted(ev, { source: 'demo-lab', resourceTypes: ['Observation'], count: 1 });
+    expect(recorded.length).toBe(0);
+  });
+
+  it('skips when the resourceType filter is not among the event resource types', async () => {
+    const ev = fakeEventing();
+    const recorded: unknown[] = [];
+    const runner = eventRunner(
+      [{ id: 'e', type: 'trigger', data: { triggerType: 'event', config: { resourceType: 'ServiceRequest' } } }],
+      recorded,
+    );
+    runner.setEventWorkflowIds(['w1']);
+    await runner.registerRunner(ev.port as never);
+    await fireDataPersisted(ev, { source: 'demo-lab', resourceTypes: ['Observation'], count: 1 });
+    expect(recorded.length).toBe(0);
+  });
+
+  it('empty filters match any data.persisted event', async () => {
+    const ev = fakeEventing();
+    const recorded: unknown[] = [];
+    const runner = eventRunner(
+      [{ id: 'e', type: 'trigger', data: { triggerType: 'event', config: {} } }],
+      recorded,
+    );
+    runner.setEventWorkflowIds(['w1']);
+    await runner.registerRunner(ev.port as never);
+    await fireDataPersisted(ev, { source: 'anything', resourceTypes: ['Patient'], count: 9 });
+    expect(recorded.length).toBe(1);
+  });
+});
