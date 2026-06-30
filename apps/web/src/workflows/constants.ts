@@ -242,42 +242,6 @@ export const nodeCategories: NodeCategory[] = [
   },
 
   {
-    name: 'Productivity',
-    icon: 'Briefcase',
-    items: [
-      node('google-sheets', 'action', 'Google Sheets', 'Sheet', 'Read/write spreadsheet rows', {
-        keywords: ['excel', 'spreadsheet'],
-      }),
-      node('google-docs', 'action', 'Google Docs', 'FileText', 'Create & edit Google Docs'),
-      node('google-drive', 'action', 'Google Drive', 'HardDrive', 'Upload, move, share files'),
-      node('google-calendar', 'action', 'Google Calendar', 'Calendar', 'Events & scheduling'),
-      node('google-forms', 'action', 'Google Forms', 'ClipboardList', 'Read form responses'),
-      node('google-tasks', 'action', 'Google Tasks', 'ListTodo', 'Manage task lists'),
-      node('notion', 'action', 'Notion', 'BookOpen', 'Pages & databases'),
-      node('airtable', 'action', 'Airtable', 'Table', 'CRUD on Airtable bases'),
-      node('todoist', 'action', 'Todoist', 'ListChecks', 'Tasks & projects'),
-      node('trello', 'action', 'Trello', 'Trello', 'Boards, lists, cards'),
-      node('asana', 'action', 'Asana', 'CircleCheck', 'Tasks & projects'),
-      node('monday', 'action', 'monday.com', 'LayoutGrid', 'Work OS boards'),
-      node('clickup', 'action', 'ClickUp', 'SquareKanban', 'Tasks, docs, goals'),
-      node('jira', 'action', 'Jira', 'Bug', 'Issues & sprints', {
-        keywords: ['atlassian', 'ticket'],
-      }),
-      node('linear', 'action', 'Linear', 'GitPullRequest', 'Issue tracker'),
-      node('confluence', 'action', 'Confluence', 'FileStack', 'Wiki pages'),
-      node('microsoft-excel', 'action', 'Microsoft Excel 365', 'Sheet', 'Workbook rows & tables'),
-      node('microsoft-onedrive', 'action', 'OneDrive', 'Cloud', 'Files in OneDrive'),
-      node('dropbox', 'action', 'Dropbox', 'FolderArchive', 'Store & share files'),
-      node('box', 'action', 'Box', 'Package', 'Enterprise file storage'),
-      node('calendly', 'action', 'Calendly', 'CalendarCheck', 'Scheduled meetings'),
-      node('evernote', 'action', 'Evernote', 'StickyNote', 'Notes & notebooks'),
-      node('miro', 'action', 'Miro', 'SquarePen', 'Online whiteboard'),
-      node('clockify', 'action', 'Clockify', 'Timer', 'Time tracking'),
-      node('toggl', 'action', 'Toggl', 'Watch', 'Time tracking'),
-    ],
-  },
-
-  {
     name: 'Developer Tools',
     icon: 'Wrench',
     items: [
