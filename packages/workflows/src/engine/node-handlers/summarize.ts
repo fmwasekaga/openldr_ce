@@ -23,8 +23,8 @@ export const summarizeHandler: NodeHandler = async (node, _ctx, input) => {
     switch (operation) {
       case 'sum': return nums.reduce((a, b) => a + b, 0);
       case 'avg': return nums.reduce((a, b) => a + b, 0) / nums.length;
-      case 'min': return Math.min(...nums);
-      case 'max': return Math.max(...nums);
+      case 'min': return nums.reduce((a, b) => Math.min(a, b), Infinity);
+      case 'max': return nums.reduce((a, b) => Math.max(a, b), -Infinity);
       default: return items.length;
     }
   };

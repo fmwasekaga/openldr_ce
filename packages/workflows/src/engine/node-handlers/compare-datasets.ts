@@ -29,6 +29,7 @@ export const compareDatasetsHandler: NodeHandler = async (node, ctx, _input) => 
   for (const [k, itemA] of ma) {
     const itemB = mb.get(k);
     if (!itemB) out.push({ json: { ...itemA.json, __status: 'removed' } });
+    // NOTE: equality is JSON key-order sensitive; items from differing upstreams may false-positive as 'changed'.
     else if (JSON.stringify(itemA.json) !== JSON.stringify(itemB.json)) out.push({ json: { ...itemB.json, __status: 'changed' } });
     else out.push({ json: { ...itemA.json, __status: 'same' } });
   }
