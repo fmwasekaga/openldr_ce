@@ -6,8 +6,8 @@ import { createEventBus } from '@openldr/adapter-event-bus';
 import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import type { Config } from '@openldr/config';
 import { createLogger, HealthRegistry, redact, type Logger } from '@openldr/core';
-import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, deriveSystemCode, resolveSeedPublisherId, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore } from '@openldr/db';
-import type { ExternalSchema, InternalSchema } from '@openldr/db';
+import { createInternalDb, createFhirStore, createFlatWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, deriveSystemCode, resolveSeedPublisherId, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore } from '@openldr/db';
+import type { ExternalSchema, InternalSchema, Provenance } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore, createUserProfileStore, type UserProfileStore } from '@openldr/users';
@@ -34,6 +34,8 @@ import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { policyFromConfig } from './policy';
 import { createPluginTarget } from './connector-target';
 import { createPluginNodeService } from './plugin-node-service';
+import { createFormValidateService } from './form-validate-service';
+import { createPersistStoreService } from './persist-store-service';
 import { createDhis2Orchestration } from './dhis2-orchestration';
 import { selectTargetStore } from './target-store';
 import { createPluginRegistry } from './plugin-registry';
@@ -161,7 +163,8 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     forcePathStyle: cfg.S3_FORCE_PATH_STYLE,
   });
   const eventing = createEventBus({ url: cfg.INTERNAL_DATABASE_URL });
-  const { store } = selectTargetStore(cfg);
+  const { store, engine } = selectTargetStore(cfg);
+  const externalDb = store.db as unknown as Kysely<ExternalSchema>;
   const internal = createInternalDb(cfg.INTERNAL_DATABASE_URL);
   const audit = createAuditStore(internal.db);
   const reportRuns = createReportRunStore(internal.db);
@@ -171,6 +174,12 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   const userProfiles = createUserProfileStore(internal.db);
   const forms = createFormStore(internal.db);
   const marketplaceInstalls = createMarketplaceInstallStore(internal.db);
+
+  // Canonical persist for the Persist Store workflow node — same wiring as ingest-context.
+  const canonicalFhirStore = createFhirStore(internal.db);
+  const workflowFlatWriter = createFlatWriter(externalDb, engine);
+  const workflowPersist = (resources: unknown[], prov: Provenance) =>
+    persistResources({ fhirStore: canonicalFhirStore, flatWriter: workflowFlatWriter, logger }, resources, prov);
   const marketplaceForms = createFormArtifactInstaller({ forms, installStore: marketplaceInstalls, audit });
 
   // Seed a default marketplace registry from the legacy env vars the first time (table empty),
@@ -410,6 +419,11 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     policy: () => ({ egressEnabled: cfg.PLUGIN_EGRESS_ENABLED }),
     blob,
     maxFileBytes: cfg.WORKFLOW_FILE_MAX_BYTES,
+  });
+  workflowServices.validateForm = createFormValidateService({ forms });
+  workflowServices.persistStore = createPersistStoreService({
+    persist: workflowPersist,
+    publish: (event) => eventing.publish(event),
   });
   const pluginBroker = createPluginBroker({
     plugins,
