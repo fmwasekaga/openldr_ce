@@ -21,6 +21,7 @@ export type WorkflowNode = RunnerNode;
 export interface NodeRunResult {
   nodeId: string;
   type: string;
+  label?: string;
   status: 'success' | 'error' | 'skipped';
   output?: unknown;
   /** Structured result metadata (e.g. a plugin sink's import summary). Undefined for most nodes. */
@@ -161,6 +162,7 @@ export async function runWorkflow(
       results.push({
         nodeId: node.id,
         type: node.type,
+        label: node.data.label as string | undefined,
         status: 'success',
         output,
         meta,
@@ -191,6 +193,7 @@ export async function runWorkflow(
       results.push({
         nodeId: node.id,
         type: node.type,
+        label: node.data.label as string | undefined,
         status: 'error',
         error: message,
         durationMs,

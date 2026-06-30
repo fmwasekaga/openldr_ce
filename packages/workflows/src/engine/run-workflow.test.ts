@@ -193,6 +193,15 @@ describe('runWorkflow', () => {
     expect(tOut[0]?.binary).toEqual(files);
   });
 
+  it('records each node label in the run results', async () => {
+    const res = await runWorkflow(
+      [{ id: 'n1', type: 'action', data: { action: 'log', label: 'My Node', message: 'hi', level: 'log' } }],
+      [],
+      { onEvent: () => {} },
+    );
+    expect(res.results[0].label).toBe('My Node');
+  });
+
   it('plugin-node → materialize chain: sink receives the plugin items as rows', async () => {
     const materializeSpy = vi.fn().mockResolvedValue({ dataset: 'ds', rowCount: 1 });
     const runPluginNode = vi.fn().mockResolvedValue({ items: [{ json: { a: 1 } }], meta: { kind: 'dataValueSet', dataValues: 1 } });

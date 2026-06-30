@@ -966,6 +966,7 @@ export interface LogEntry {
 export interface NodeRunResult {
   nodeId: string;
   type: string;
+  label?: string;
   status: 'success' | 'error' | 'skipped';
   output?: unknown;
   /** Structured result metadata (e.g. a plugin sink's import summary). Undefined for most nodes. */
