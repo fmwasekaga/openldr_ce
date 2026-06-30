@@ -39,7 +39,9 @@ export const HOST_NODE_DESCRIPTORS: WorkflowNodeDescriptor[] = [
   { id: 'log', source: 'host', label: 'Log', kind: 'transform', description: 'Log items.', ports: { inputs: [port('in')], outputs: [port('out')] }, capabilities: [], config: [] },
   { id: 'if', source: 'host', label: 'If', kind: 'transform', description: 'Branch on a condition.', ports: { inputs: [port('in')], outputs: [port('true'), port('false')] }, capabilities: [], config: [] },
   { id: 'filter', source: 'host', label: 'Filter', kind: 'transform', description: 'Filter items by a condition.', ports: { inputs: [port('in')], outputs: [port('out')] }, capabilities: [], config: [] },
+  { id: 'form-validate', source: 'host', label: 'Form Validate', kind: 'transform', description: 'Validate items against a form and emit FHIR resources.', ports: { inputs: [port('in')], outputs: [port('out')] }, capabilities: [], config: [{ key: 'formId', label: 'Form', type: 'select', required: true, optionsSource: 'forms' }] },
   // Sinks
   { id: 'materialize-dataset', source: 'host', label: 'Materialize Dataset', kind: 'sink', description: 'Persist items as a dataset.', ports: { inputs: [port('in')], outputs: [] }, capabilities: [], config: [] },
   { id: 'export-artifact', source: 'host', label: 'Export Artifact', kind: 'sink', description: 'Export items to CSV/XLSX/PDF.', ports: { inputs: [port('in')], outputs: [] }, capabilities: [], config: [] },
+  { id: 'persist-store', source: 'host', label: 'Persist Store', kind: 'sink', description: 'Persist FHIR resources and emit a data.persisted event.', ports: { inputs: [port('in')], outputs: [] }, capabilities: [], config: [{ key: 'source', label: 'Source system', type: 'text', required: false }] },
 ];

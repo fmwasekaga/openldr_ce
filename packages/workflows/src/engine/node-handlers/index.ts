@@ -14,6 +14,8 @@ import { materializeHandler } from './materialize';
 import { exportHandler } from './export';
 import { loadDatasetHandler } from './load-dataset';
 import { pluginNodeHandler } from './plugin-node';
+import { formValidateHandler } from './form-validate';
+import { persistStoreHandler } from './persist-store';
 
 /** Action subtype → handler. New actions (http-request, code, …) land in later slices. */
 const ACTION_HANDLERS: Record<string, NodeHandler> = {
@@ -27,6 +29,8 @@ const ACTION_HANDLERS: Record<string, NodeHandler> = {
   'materialize-dataset': materializeHandler,
   'export-artifact': exportHandler,
   'load-dataset': loadDatasetHandler,
+  'form-validate': formValidateHandler,
+  'persist-store': persistStoreHandler,
 };
 
 const TYPE_HANDLERS: Record<string, NodeHandler> = {
