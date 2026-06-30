@@ -35,6 +35,13 @@ describe('formValidateHandler', () => {
       formValidateHandler({ id: 'fv', type: 'action', data: { action: 'form-validate', config: { formId: 'x' } } }, ctx, []),
     ).rejects.toThrow(/requires server services/);
   });
+
+  it('throws a distinct error when validateForm is not injected', async () => {
+    const ctx = createContext(undefined, () => {}, [], undefined, {} as unknown as WorkflowServices);
+    await expect(
+      formValidateHandler({ id: 'fv', type: 'action', data: { action: 'form-validate', config: { formId: 'x' } } }, ctx, []),
+    ).rejects.toThrow(/validateForm service not injected/);
+  });
 });
 
 describe('persistStoreHandler', () => {
@@ -60,5 +67,12 @@ describe('persistStoreHandler', () => {
     await expect(
       persistStoreHandler({ id: 'ps', type: 'action', data: { action: 'persist-store', config: {} } }, ctx, []),
     ).rejects.toThrow(/requires server services/);
+  });
+
+  it('throws a distinct error when persistStore is not injected', async () => {
+    const ctx = createContext(undefined, () => {}, [], undefined, {} as unknown as WorkflowServices);
+    await expect(
+      persistStoreHandler({ id: 'ps', type: 'action', data: { action: 'persist-store', config: {} } }, ctx, []),
+    ).rejects.toThrow(/persistStore service not injected/);
   });
 });
