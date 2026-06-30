@@ -134,7 +134,7 @@ function secretEquals(token: string, secret: string): boolean {
 export function registerWorkflowRoutes(
   app: FastifyInstance<any, any, any, any>,
   ctx: AppContext,
-  deps?: { connectors: { list(): Promise<Array<{ id: string; name: string; pluginId: string }>> } },
+  deps?: { connectors: { list(): Promise<Array<{ id: string; name: string; pluginId: string | null; type: string | null }>> } },
 ): void {
   const MANAGE = { preHandler: requireRole('lab_admin', 'lab_manager') };
 

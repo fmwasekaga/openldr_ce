@@ -155,6 +155,9 @@ export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any
     const { id } = req.params as { id: string };
     const connector = await connectors.get(id);
     if (!connector) { reply.code(404); return { error: 'connector not found' }; }
+    // Interim guard: host connectors carry pluginId=null and cannot be tested via loadSink.
+    // Task 7 will replace this with the host SELECT-1 branch.
+    if (!connector.pluginId) { reply.code(400); return { error: 'connector is not a plugin connector' }; }
     // Audit the live test as a security event: it decrypts the stored credentials and makes a
     // live outbound connection to the pinned host. Record outcome (never the secrets/metadata body).
     const auditTest = (outcome: 'ok' | 'failed', detail?: string): Promise<void> =>

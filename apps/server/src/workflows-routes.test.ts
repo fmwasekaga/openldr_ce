@@ -561,7 +561,7 @@ describe('workflow routes', () => {
 
   it('GET /api/workflows/node-options/:source resolves fhir-resource-types', async () => {
     const app = Fastify(); app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
-    const ctx = fakeCtx(); registerWorkflowRoutes(app, ctx, { connectors: { list: async () => [{ id: 'c1', name: 'DHIS2 Demo', pluginId: 'dhis2-sink' }] } });
+    const ctx = fakeCtx(); registerWorkflowRoutes(app, ctx, { connectors: { list: async () => [{ id: 'c1', name: 'DHIS2 Demo', pluginId: 'dhis2-sink', type: null }] } });
     const res = await app.inject({ method: 'GET', url: '/api/workflows/node-options/fhir-resource-types' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual(expect.arrayContaining([{ value: 'Patient', label: 'Patient' }]));
@@ -569,7 +569,7 @@ describe('workflow routes', () => {
 
   it('GET /api/workflows/node-options/connectors maps the connector list', async () => {
     const app = Fastify(); app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
-    const ctx = fakeCtx(); registerWorkflowRoutes(app, ctx, { connectors: { list: async () => [{ id: 'c1', name: 'DHIS2 Demo', pluginId: 'dhis2-sink' }] } });
+    const ctx = fakeCtx(); registerWorkflowRoutes(app, ctx, { connectors: { list: async () => [{ id: 'c1', name: 'DHIS2 Demo', pluginId: 'dhis2-sink', type: null }] } });
     const res = await app.inject({ method: 'GET', url: '/api/workflows/node-options/connectors' });
     expect(res.json()).toEqual([{ value: 'c1', label: 'DHIS2 Demo' }]);
   });
@@ -578,8 +578,8 @@ describe('workflow routes', () => {
     const app = Fastify(); app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
     const ctx = fakeCtx();
     registerWorkflowRoutes(app, ctx, { connectors: { list: async () => [
-      { id: 'c1', name: 'DHIS2 Demo', pluginId: 'dhis2-sink' },
-      { id: 'c2', name: 'Other Sink', pluginId: 'foo-sink' },
+      { id: 'c1', name: 'DHIS2 Demo', pluginId: 'dhis2-sink', type: null },
+      { id: 'c2', name: 'Other Sink', pluginId: 'foo-sink', type: null },
     ] } });
     const all = await app.inject({ method: 'GET', url: '/api/workflows/node-options/connectors' });
     expect(all.json()).toEqual([{ value: 'c1', label: 'DHIS2 Demo' }, { value: 'c2', label: 'Other Sink' }]);

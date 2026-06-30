@@ -2,7 +2,7 @@
 export interface NodeOption { value: string; label: string }
 
 export interface NodeOptionsDeps {
-  connectors: { list(): Promise<Array<{ id: string; name: string; pluginId: string }>> };
+  connectors: { list(): Promise<Array<{ id: string; name: string; pluginId: string | null; type: string | null }>> };
   datasets: { list(): Promise<Array<{ name: string }>> };
   /** dhis2-sink mappings from plugin_data (id/name). */
   dhis2Mappings(): Promise<Array<{ id: string; name: string }>>;

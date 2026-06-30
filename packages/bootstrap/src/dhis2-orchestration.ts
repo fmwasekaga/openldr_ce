@@ -74,6 +74,7 @@ export function createDhis2Orchestration(deps: Dhis2OrchestrationDeps): Dhis2Orc
     if (!connector) throw new OpenLdrError(`connector ${connectorId} not found`);
     if (!connector.enabled) throw new OpenLdrError(`connector ${connectorId} is disabled`);
     const config = await deps.connectors.getDecryptedConfig(connectorId, deps.secretsKey);
+    if (!connector.pluginId) throw new OpenLdrError(`connector ${connector.id ?? ''} is not a plugin connector`);
     const sink = await deps.loadSink(connector.pluginId);
     if (!sink) throw new OpenLdrError(`sink plugin '${connector.pluginId}' for connector ${connectorId} is not installed`);
     return { target: deps.createTarget(sink, config, connector.allowedHost), connector };

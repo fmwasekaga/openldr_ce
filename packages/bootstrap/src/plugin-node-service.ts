@@ -14,7 +14,7 @@ export interface PluginNodeServiceDeps {
     loadSink(id: string, version?: string): Promise<SinkLike | undefined>;
   };
   connectors: {
-    get(id: string): Promise<{ pluginId: string; allowedHost: string | null; enabled: boolean } | null>;
+    get(id: string): Promise<{ pluginId: string | null; allowedHost: string | null; enabled: boolean } | null>;
     getDecryptedConfig(id: string, key: string | undefined): Promise<Record<string, string>>;
   };
   secretsKey: string | undefined;

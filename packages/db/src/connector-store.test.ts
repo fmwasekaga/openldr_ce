@@ -98,4 +98,12 @@ describe('connector store — host connectors', () => {
     expect((await store.get('p1'))?.type).toBeNull();
     await db.destroy();
   });
+
+  it('rejects create with neither, or both, of pluginId and type', async () => {
+    const db = await makeMigratedDb();
+    const store = createConnectorStore(db);
+    await expect(store.create({ id: 'x', name: 'neither', kind: 'sink', config: cfg }, key)).rejects.toThrow(/exactly one/);
+    await expect(store.create({ id: 'y', name: 'both', pluginId: 'dhis2-sink', type: 'postgres', kind: 'sink', config: cfg }, key)).rejects.toThrow(/exactly one/);
+    await db.destroy();
+  });
 });

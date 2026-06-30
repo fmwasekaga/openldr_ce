@@ -6,5 +6,6 @@ export async function up(db: Kysely<unknown>): Promise<void> {
 }
 
 export async function down(db: Kysely<unknown>): Promise<void> {
+  // NOT NULL on plugin_id is intentionally NOT restored: host rows have plugin_id=null and would violate it.
   await db.schema.alterTable('connectors').dropColumn('type').execute();
 }

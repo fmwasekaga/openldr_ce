@@ -463,6 +463,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       const c = await connectorStore.get(id);
       if (!c || !c.enabled) throw new Error(`connector ${id} not found or disabled`);
       const config = await connectorStore.getDecryptedConfig(id, cfg.SECRETS_ENCRYPTION_KEY);
+      if (!c.pluginId) throw new Error(`connector ${id} is not a plugin connector`);
       const sink = await plugins.loadSink(c.pluginId);
       if (!sink) throw new Error(`sink plugin ${c.pluginId} is not installed`);
       const target = createPluginTarget(sink, config, c.allowedHost);

@@ -67,6 +67,11 @@ function toRecord(r: {
 export function createConnectorStore(db: Kysely<InternalSchema>): ConnectorStore {
   return {
     async create(input, key) {
+      // A connector is EITHER a plugin connector (pluginId set, type null) OR a host connector
+      // (type set, pluginId null) — never both, never neither.
+      if (Boolean(input.pluginId) === Boolean(input.type)) {
+        throw new OpenLdrError('connector requires exactly one of pluginId or type');
+      }
       const sealed = seal(JSON.stringify(input.config), keyOf(key));
       await db.insertInto('connectors').values({
         id: input.id, name: input.name, plugin_id: input.pluginId ?? null, type: input.type ?? null,

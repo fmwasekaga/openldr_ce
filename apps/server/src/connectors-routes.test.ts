@@ -12,7 +12,7 @@ function fakeStore(): ConnectorStore {
     async create(input: NewConnector, key) {
       requireKey(key);
       rows.set(input.id, {
-        rec: { id: input.id, name: input.name, pluginId: input.pluginId, kind: input.kind, allowedHost: input.allowedHost ?? null, enabled: true, createdAt: new Date(), updatedAt: new Date() },
+        rec: { id: input.id, name: input.name, pluginId: input.pluginId ?? null, type: input.type ?? null, kind: input.kind, allowedHost: input.allowedHost ?? null, enabled: true, createdAt: new Date(), updatedAt: new Date() },
         config: input.config,
       });
     },
