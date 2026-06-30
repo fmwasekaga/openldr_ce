@@ -91,6 +91,8 @@ export interface WorkflowServices {
   runConnectorSql?(input: { connectorId: string; sql: string }): Promise<SqlResult>;
   /** Run a MongoDB operation against a host connector. Host-injected. */
   runConnectorMongo?(input: { connectorId: string; operation: string; collection: string; query: unknown }): Promise<{ rows: Record<string, unknown>[]; meta?: Record<string, unknown> }>;
+  /** Run a Redis operation against a host connector. Host-injected. */
+  runConnectorRedis?(input: { connectorId: string; operation: string; key: string; value?: string; ttlSeconds?: number }): Promise<{ result: unknown }>;
   /** Read raw bytes for a stored BinaryRef objectKey. Host-injected (binary nodes). */
   readBinary?(objectKey: string): Promise<Uint8Array>;
   /** Persist raw bytes as a run artifact under workflow-artifacts/ → BinaryRef. Host-injected (binary nodes). */

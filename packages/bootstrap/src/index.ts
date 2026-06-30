@@ -38,6 +38,7 @@ import { createFormValidateService } from './form-validate-service';
 import { createPersistStoreService } from './persist-store-service';
 import { createConnectorSqlRunner } from './connector-sql-service';
 import { createConnectorMongoRunner } from './connector-mongo-service';
+import { createConnectorRedisRunner } from './connector-redis-service';
 import { createDhis2Orchestration } from './dhis2-orchestration';
 import { selectTargetStore } from './target-store';
 import { createPluginRegistry } from './plugin-registry';
@@ -330,6 +331,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   const connectorStore = createConnectorStore(internal.db);
   const connectorSqlRunner = createConnectorSqlRunner({ connectors: connectorStore, secretsKey: cfg.SECRETS_ENCRYPTION_KEY });
   const connectorMongoRunner = createConnectorMongoRunner({ connectors: connectorStore, secretsKey: cfg.SECRETS_ENCRYPTION_KEY });
+  const connectorRedisRunner = createConnectorRedisRunner({ connectors: connectorStore, secretsKey: cfg.SECRETS_ENCRYPTION_KEY });
 
   const workflowServices: WorkflowServices = {
     runSql: async (sql) => {
@@ -397,6 +399,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     },
     runConnectorSql: (input) => connectorSqlRunner(input),
     runConnectorMongo: (input) => connectorMongoRunner(input),
+    runConnectorRedis: (input) => connectorRedisRunner(input),
   };
   const workflowRunner = createWorkflowTriggerRunner({
     store: workflowStore, runs: workflowRuns, schedules: workflowSchedules,
