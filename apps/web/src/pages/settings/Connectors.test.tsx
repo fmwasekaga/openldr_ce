@@ -82,7 +82,7 @@ describe('Connectors page', () => {
 
     // Switch category to Database via ArrowDown (Radix Select in jsdom)
     fireEvent.keyDown(screen.getByTestId('connector-category'), { key: 'ArrowDown' });
-    fireEvent.click(await screen.findByRole('option', { name: /database/i }));
+    fireEvent.click(await screen.findByRole('option', { name: /host/i }));
 
     // DB fields should now be visible
     expect(await screen.findByTestId('connector-db-host')).toBeTruthy();
@@ -169,7 +169,7 @@ describe('Connectors page', () => {
 
     // Switch to Database category
     fireEvent.keyDown(screen.getByTestId('connector-category'), { key: 'ArrowDown' });
-    fireEvent.click(await screen.findByRole('option', { name: /database/i }));
+    fireEvent.click(await screen.findByRole('option', { name: /host/i }));
 
     // Switch type to MongoDB
     fireEvent.keyDown(await screen.findByTestId('connector-type'), { key: 'ArrowDown' });
@@ -190,7 +190,7 @@ describe('Connectors page', () => {
 
     // Switch to Database category
     fireEvent.keyDown(screen.getByTestId('connector-category'), { key: 'ArrowDown' });
-    fireEvent.click(await screen.findByRole('option', { name: /database/i }));
+    fireEvent.click(await screen.findByRole('option', { name: /host/i }));
 
     // Switch type to Redis
     fireEvent.keyDown(await screen.findByTestId('connector-type'), { key: 'ArrowDown' });
@@ -201,6 +201,79 @@ describe('Connectors page', () => {
     expect(screen.getByTestId('connector-db-db')).toBeTruthy();
     expect(screen.queryByTestId('connector-db-database')).toBeNull();
     expect(screen.queryByTestId('connector-db-user')).toBeNull();
+  });
+
+  it('type=Gmail renders clientId/clientSecret/refreshToken and NOT host', async () => {
+    (api.listConnectors as any).mockResolvedValue([]);
+    (api.listSinkPlugins as any).mockResolvedValue([]);
+    render(<MemoryRouter><Connectors /></MemoryRouter>);
+
+    fireEvent.click(await screen.findByTestId('add-connector'));
+
+    // Switch to Host category
+    fireEvent.keyDown(screen.getByTestId('connector-category'), { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: /host/i }));
+
+    // Switch type to Gmail
+    fireEvent.keyDown(await screen.findByTestId('connector-type'), { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: /gmail/i }));
+
+    expect(await screen.findByTestId('connector-db-clientId')).toBeTruthy();
+    expect(screen.getByTestId('connector-db-clientSecret')).toBeTruthy();
+    expect(screen.getByTestId('connector-db-refreshToken')).toBeTruthy();
+    expect(screen.queryByTestId('connector-db-host')).toBeNull();
+  });
+
+  it('type=SFTP renders host/port/user/password', async () => {
+    (api.listConnectors as any).mockResolvedValue([]);
+    (api.listSinkPlugins as any).mockResolvedValue([]);
+    render(<MemoryRouter><Connectors /></MemoryRouter>);
+
+    fireEvent.click(await screen.findByTestId('add-connector'));
+
+    // Switch to Host category
+    fireEvent.keyDown(screen.getByTestId('connector-category'), { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: /host/i }));
+
+    // Switch type to SFTP
+    fireEvent.keyDown(await screen.findByTestId('connector-type'), { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: /sftp/i }));
+
+    expect(await screen.findByTestId('connector-db-host')).toBeTruthy();
+    expect(screen.getByTestId('connector-db-port')).toBeTruthy();
+    expect(screen.getByTestId('connector-db-user')).toBeTruthy();
+    expect(screen.getByTestId('connector-db-password')).toBeTruthy();
+  });
+
+  it('saves an SMTP connector with correct shape', async () => {
+    (api.listConnectors as any).mockResolvedValue([]);
+    (api.listSinkPlugins as any).mockResolvedValue([]);
+    (api.createConnector as any).mockResolvedValue({ id: 'c5', name: 'Mail Relay', type: 'smtp', kind: 'host', allowedHost: null, enabled: true, createdAt: '', updatedAt: '' });
+    render(<MemoryRouter><Connectors /></MemoryRouter>);
+
+    fireEvent.click(await screen.findByTestId('add-connector'));
+    fireEvent.change(await screen.findByTestId('connector-name'), { target: { value: 'Mail Relay' } });
+
+    // Switch to Host category
+    fireEvent.keyDown(screen.getByTestId('connector-category'), { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: /host/i }));
+
+    // Switch type to SMTP
+    fireEvent.keyDown(await screen.findByTestId('connector-type'), { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: /smtp email/i }));
+
+    fireEvent.change(await screen.findByTestId('connector-db-host'), { target: { value: 'smtp.example.org' } });
+    fireEvent.change(screen.getByTestId('connector-db-port'), { target: { value: '587' } });
+    fireEvent.change(screen.getByTestId('connector-db-user'), { target: { value: 'relay@example.org' } });
+    fireEvent.change(screen.getByTestId('connector-db-password'), { target: { value: 'pass123' } });
+
+    fireEvent.click(screen.getByTestId('connector-save'));
+
+    await waitFor(() => expect(api.createConnector).toHaveBeenCalledWith({
+      name: 'Mail Relay',
+      type: 'smtp',
+      config: { host: 'smtp.example.org', port: '587', user: 'relay@example.org', password: 'pass123' },
+    }));
   });
 
   it('saves a Redis connector with correct shape — no database/user keys', async () => {
@@ -214,7 +287,7 @@ describe('Connectors page', () => {
 
     // Switch to Database category
     fireEvent.keyDown(screen.getByTestId('connector-category'), { key: 'ArrowDown' });
-    fireEvent.click(await screen.findByRole('option', { name: /database/i }));
+    fireEvent.click(await screen.findByRole('option', { name: /host/i }));
 
     // Switch type to Redis
     fireEvent.keyDown(await screen.findByTestId('connector-type'), { key: 'ArrowDown' });

@@ -179,6 +179,12 @@ export const fr: EnShape = {
       fieldTrustServerCert: 'Faire confiance au certificat serveur',
       fieldAuthSource: 'Source d\'authentification',
       fieldDb: 'Index de base de données',
+      fieldSecure: 'Utiliser TLS',
+      fieldClientId: 'ID client',
+      fieldClientSecret: 'Secret client',
+      fieldRefreshToken: 'Jeton de rafraîchissement',
+      fieldTenant: 'Locataire',
+      categoryHost: 'Hôte',
     },
     marketplace: {
       heading: 'Marketplace',

@@ -175,6 +175,12 @@ export const en = {
       fieldTrustServerCert: 'Trust server certificate',
       fieldAuthSource: 'Auth source',
       fieldDb: 'DB index',
+      fieldSecure: 'Use TLS',
+      fieldClientId: 'Client ID',
+      fieldClientSecret: 'Client secret',
+      fieldRefreshToken: 'Refresh token',
+      fieldTenant: 'Tenant',
+      categoryHost: 'Host',
     },
     marketplace: {
       heading: 'Marketplace',

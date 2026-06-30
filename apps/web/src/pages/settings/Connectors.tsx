@@ -22,6 +22,10 @@ const HOST_TYPES: Array<{ value: string; label: string }> = [
   { value: 'microsoft-sql', label: 'Microsoft SQL' },
   { value: 'mongodb', label: 'MongoDB' },
   { value: 'redis', label: 'Redis' },
+  { value: 'smtp', label: 'SMTP Email' },
+  { value: 'gmail', label: 'Gmail' },
+  { value: 'outlook', label: 'Microsoft Outlook' },
+  { value: 'sftp', label: 'SFTP' },
 ];
 const SQL_FIELDS: TypeField[] = [
   { key: 'host', labelKey: 'settings.connectors.fieldHost', kind: 'text' },
@@ -56,6 +60,32 @@ const CONNECTOR_TYPE_FIELDS: Record<string, TypeField[]> = {
     { key: 'port', labelKey: 'settings.connectors.fieldPort', kind: 'number' },
     { key: 'password', labelKey: 'settings.connectors.fieldPassword', kind: 'password' },
     { key: 'db', labelKey: 'settings.connectors.fieldDb', kind: 'number' },
+  ],
+  smtp: [
+    { key: 'host', labelKey: 'settings.connectors.fieldHost', kind: 'text' },
+    { key: 'port', labelKey: 'settings.connectors.fieldPort', kind: 'number' },
+    { key: 'user', labelKey: 'settings.connectors.fieldUser', kind: 'text' },
+    { key: 'password', labelKey: 'settings.connectors.fieldPassword', kind: 'password' },
+    { key: 'secure', labelKey: 'settings.connectors.fieldSecure', kind: 'boolean' },
+  ],
+  gmail: [
+    { key: 'user', labelKey: 'settings.connectors.fieldUser', kind: 'text' },
+    { key: 'clientId', labelKey: 'settings.connectors.fieldClientId', kind: 'text' },
+    { key: 'clientSecret', labelKey: 'settings.connectors.fieldClientSecret', kind: 'password' },
+    { key: 'refreshToken', labelKey: 'settings.connectors.fieldRefreshToken', kind: 'password' },
+  ],
+  outlook: [
+    { key: 'user', labelKey: 'settings.connectors.fieldUser', kind: 'text' },
+    { key: 'clientId', labelKey: 'settings.connectors.fieldClientId', kind: 'text' },
+    { key: 'clientSecret', labelKey: 'settings.connectors.fieldClientSecret', kind: 'password' },
+    { key: 'refreshToken', labelKey: 'settings.connectors.fieldRefreshToken', kind: 'password' },
+    { key: 'tenant', labelKey: 'settings.connectors.fieldTenant', kind: 'text' },
+  ],
+  sftp: [
+    { key: 'host', labelKey: 'settings.connectors.fieldHost', kind: 'text' },
+    { key: 'port', labelKey: 'settings.connectors.fieldPort', kind: 'number' },
+    { key: 'user', labelKey: 'settings.connectors.fieldUser', kind: 'text' },
+    { key: 'password', labelKey: 'settings.connectors.fieldPassword', kind: 'password' },
   ],
 };
 
@@ -125,10 +155,10 @@ export function Connectors() {
     setBusy(true);
     try {
       if (draft.category === 'database') {
-        // DB path: require host on create (universal across all types); on edit blank = keep
+        // DB path: require first field of the active type's schema on create; on edit blank = keep
         const typeFields = CONNECTOR_TYPE_FIELDS[draft.type] ?? SQL_FIELDS;
-        const dbHost = draft.dbConfig['host'] ?? '';
-        const requiredFilled = Boolean(dbHost);
+        const firstKey = (CONNECTOR_TYPE_FIELDS[draft.type] ?? [])[0]?.key;
+        const requiredFilled = firstKey ? Boolean(String(draft.dbConfig[firstKey] ?? '').trim()) : true;
         const anyFilled = Object.values(draft.dbConfig).some(Boolean);
         if (draft.id === null ? !requiredFilled : (anyFilled && !requiredFilled)) {
           toast.error(t('settings.connectors.partialSecrets'));
@@ -292,7 +322,7 @@ export function Connectors() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="plugin">{t('settings.connectors.categoryPlugin')}</SelectItem>
-                      <SelectItem value="database">{t('settings.connectors.categoryDatabase')}</SelectItem>
+                      <SelectItem value="database">{t('settings.connectors.categoryHost')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </label>
