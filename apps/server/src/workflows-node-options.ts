@@ -47,6 +47,11 @@ export async function resolveNodeOptions(
   opts?: { pluginId?: string },
 ): Promise<NodeOption[]> {
   try {
+    if (source.startsWith('connectors:')) {
+      const type = source.slice('connectors:'.length);
+      const all = await deps.connectors.list();
+      return all.filter((c) => c.type === type).map((c) => ({ value: c.id, label: c.name }));
+    }
     switch (source) {
       case 'connectors': {
         const all = await deps.connectors.list();

@@ -21,3 +21,24 @@ describe('resolveNodeOptions forms', () => {
     expect(await resolveNodeOptions('nope', deps())).toEqual([]);
   });
 });
+
+const typedDeps = {
+  connectors: { list: async () => [
+    { id: 'a', name: 'PG One', pluginId: null, type: 'postgres' },
+    { id: 'b', name: 'MSSQL', pluginId: null, type: 'microsoft-sql' },
+    { id: 'c', name: 'DHIS2', pluginId: 'dhis2-sink', type: null },
+  ] },
+  datasets: { list: async () => [] },
+  dhis2Mappings: async () => [],
+  forms: { listPublished: async () => [] },
+} as unknown as NodeOptionsDeps;
+
+describe('resolveNodeOptions connectors:<type>', () => {
+  it('filters connectors by type', async () => {
+    expect(await resolveNodeOptions('connectors:postgres', typedDeps)).toEqual([{ value: 'a', label: 'PG One' }]);
+    expect(await resolveNodeOptions('connectors:microsoft-sql', typedDeps)).toEqual([{ value: 'b', label: 'MSSQL' }]);
+  });
+  it('bare connectors lists all when no pluginId scope', async () => {
+    expect((await resolveNodeOptions('connectors', typedDeps)).map((o) => o.value)).toEqual(['a', 'b', 'c']);
+  });
+});
