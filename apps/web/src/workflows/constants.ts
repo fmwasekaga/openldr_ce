@@ -18,7 +18,7 @@ export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
   'sql-query', 'fhir-query', 'http-request',
   'load-dataset',
   // conditions
-  'if', 'filter',
+  'if', 'filter', 'switch',
   // sinks
   'materialize-dataset', 'export-artifact',
   'form-validate', 'persist-store',

@@ -17,6 +17,7 @@ import { pluginNodeHandler } from './plugin-node';
 import { formValidateHandler } from './form-validate';
 import { persistStoreHandler } from './persist-store';
 import { stopErrorHandler } from './stop-error';
+import { switchHandler } from './switch';
 
 /** Action subtype → handler. New actions (http-request, code, …) land in later slices. */
 const ACTION_HANDLERS: Record<string, NodeHandler> = {
@@ -49,6 +50,7 @@ export function pickHandler(node: RunnerNode): NodeHandler {
   if (node.type === 'condition') {
     const templateId = (node.data.templateId as string | undefined) ?? '';
     if (templateId === 'filter') return filterHandler;
+    if (templateId === 'switch') return switchHandler;
     return ifHandler;
   }
   return TYPE_HANDLERS[node.type] ?? defaultHandler;
