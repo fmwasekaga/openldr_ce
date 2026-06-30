@@ -46,6 +46,8 @@ describe('extractTerminalItems', () => {
       mk('b', 'success', [{ json: { b: 1 } }]),
       mk('c', 'success', [{ json: { c: 1 } }]),
       mk('d', 'error', undefined),
+      // leaf with a successful but non-array (object) output → must be skipped.
+      mk('e', 'success', { json: { not: 'an array' } }),
     ];
     expect(extractTerminalItems(twoLeafEdges, results)).toEqual([{ json: { b: 1 } }, { json: { c: 1 } }]);
   });
