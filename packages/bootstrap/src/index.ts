@@ -36,6 +36,7 @@ import { createPluginTarget } from './connector-target';
 import { createPluginNodeService } from './plugin-node-service';
 import { createFormValidateService } from './form-validate-service';
 import { createPersistStoreService } from './persist-store-service';
+import { createConnectorSqlRunner } from './connector-sql-service';
 import { createDhis2Orchestration } from './dhis2-orchestration';
 import { selectTargetStore } from './target-store';
 import { createPluginRegistry } from './plugin-registry';
@@ -325,6 +326,9 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     },
   };
 
+  const connectorStore = createConnectorStore(internal.db);
+  const connectorSqlRunner = createConnectorSqlRunner({ connectors: connectorStore, secretsKey: cfg.SECRETS_ENCRYPTION_KEY });
+
   const workflowServices: WorkflowServices = {
     runSql: async (sql) => {
       const r = await dashboards.query({ mode: 'sql', sql });
@@ -389,6 +393,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       await blob.put(objectKey, bytes, contentType);
       return { objectKey, contentType, fileName: safe, byteSize: bytes.byteLength };
     },
+    runConnectorSql: (input) => connectorSqlRunner(input),
   };
   const workflowRunner = createWorkflowTriggerRunner({
     store: workflowStore, runs: workflowRuns, schedules: workflowSchedules,
@@ -399,7 +404,6 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   const workflows = { store: workflowStore, runs: workflowRuns, schedules: workflowSchedules, webhooks: workflowWebhooks, runner: workflowRunner, services: workflowServices, datasets: workflowDatasets };
 
   const pluginData = createPluginDataStore(internal.db);
-  const connectorStore = createConnectorStore(internal.db);
   // Generic, caller-driven DHIS2 push orchestration (mapping/orgUnitMap supplied by the
   // plugin UI through the broker). Mirrors the host dhis2-context runMapping behaviour.
   const dhis2Orch = createDhis2Orchestration({

@@ -87,6 +87,8 @@ export interface WorkflowServices {
   /** Persist FHIR resource items + emit data.persisted. Host-injected. */
   persistStore?(input: RunPersistStoreInput): Promise<RunPersistStoreOutput>;
   loadDataset(name: string): Promise<{ columns: { key: string; label: string }[]; rows: Record<string, unknown>[] }>;
+  /** Run a raw SQL query against a host database connector → rows. Host-injected (database nodes). */
+  runConnectorSql?(input: { connectorId: string; sql: string }): Promise<SqlResult>;
   /** Read raw bytes for a stored BinaryRef objectKey. Host-injected (binary nodes). */
   readBinary?(objectKey: string): Promise<Uint8Array>;
   /** Persist raw bytes as a run artifact under workflow-artifacts/ → BinaryRef. Host-injected (binary nodes). */
