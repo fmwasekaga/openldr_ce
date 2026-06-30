@@ -27,6 +27,9 @@ import { aggregateHandler } from './aggregate';
 import { summarizeHandler } from './summarize';
 import { dateTimeHandler } from './date-time';
 import { compareDatasetsHandler } from './compare-datasets';
+import { cryptoHandler } from './crypto';
+import { jwtHandler } from './jwt';
+import { xmlHandler } from './xml';
 
 /** Action subtype → handler. New actions (http-request, code, …) land in later slices. */
 const ACTION_HANDLERS: Record<string, NodeHandler> = {
@@ -52,6 +55,9 @@ const ACTION_HANDLERS: Record<string, NodeHandler> = {
   'summarize': summarizeHandler,
   'date-time': dateTimeHandler,
   'compare-datasets': compareDatasetsHandler,
+  'crypto': cryptoHandler,
+  'jwt': jwtHandler,
+  'xml': xmlHandler,
 };
 
 const TYPE_HANDLERS: Record<string, NodeHandler> = {

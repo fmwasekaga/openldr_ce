@@ -25,6 +25,8 @@ export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
   // sinks
   'materialize-dataset', 'export-artifact',
   'form-validate', 'persist-store',
+  // codecs (slice B)
+  'crypto', 'jwt', 'xml',
 ]);
 
 /**
@@ -277,7 +279,9 @@ export const nodeCategories: NodeCategory[] = [
       node('extract-from-file', 'action', 'Extract from File', 'FileInput', 'Parse file contents'),
       node('spreadsheet-file', 'action', 'Spreadsheet File', 'Sheet', 'Read / write CSV, XLSX'),
       node('compression', 'action', 'Compression', 'FileArchive', 'Zip / unzip'),
-      node('crypto', 'action', 'Crypto', 'KeyRound', 'Hash, HMAC, encrypt'),
+      node('crypto', 'action', 'Crypto', 'KeyRound', 'Hash, HMAC', {
+        data: { config: { operation: 'hash', algorithm: 'sha256', field: '', secret: '', encoding: 'hex', outputField: 'digest' } },
+      }),
     ],
   },
 
@@ -312,11 +316,15 @@ export const nodeCategories: NodeCategory[] = [
       node('html', 'action', 'HTML', 'Code2', 'Build or extract HTML'),
       node('html-extract', 'action', 'HTML Extract', 'CodeXml', 'Parse HTML with CSS selectors'),
       node('markdown', 'action', 'Markdown', 'FileText', 'Convert to/from Markdown'),
-      node('xml', 'action', 'XML', 'FileCode', 'Parse & build XML'),
+      node('xml', 'action', 'XML', 'FileCode', 'Parse & build XML', {
+        data: { config: { operation: 'parse', field: 'xml', outputField: 'data' } },
+      }),
       node('date-time', 'action', 'Date & Time', 'Clock4', 'Format, parse, offset dates', {
         data: { config: { operation: 'format', field: '', amount: 0, unit: 'days', outputField: 'date' } },
       }),
-      node('jwt', 'action', 'JWT', 'KeyRound', 'Sign / verify JSON Web Tokens'),
+      node('jwt', 'action', 'JWT', 'KeyRound', 'Sign / verify JSON Web Tokens', {
+        data: { config: { operation: 'sign', secret: '', algorithm: 'HS256', payloadField: '', tokenField: 'token', outputField: 'token' } },
+      }),
     ],
   },
 ];
