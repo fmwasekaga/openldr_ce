@@ -1,8 +1,8 @@
-import { sql, MysqlDialect, Kysely } from 'kysely';
+import { sql, MysqlDialect, Kysely, type MysqlPool } from 'kysely';
 import type { TargetSchema } from '@openldr/ports';
 import { createDbStore } from '@openldr/adapter-db-store';
 import { createMssqlStore } from '@openldr/adapter-mssql-store';
-import { createPool } from 'mysql2/promise';
+import { createPool } from 'mysql2';
 
 /** A connector-backed DB connection: run one raw query, then close. */
 export interface ConnectorDb {
@@ -65,7 +65,8 @@ export function createConnectorDb(type: string, config: Record<string, string>):
       host, port, user: config.user ?? '', password: config.password ?? '', database: config.database ?? '',
       ...(config.ssl === 'true' ? { ssl: { rejectUnauthorized: false } } : {}),
     });
-    const db = new Kysely<TargetSchema>({ dialect: new MysqlDialect({ pool }) });
+    // mysql2 callback Pool is runtime-correct for kysely (getConnection(callback)); cast bridges the structural type gap.
+    const db = new Kysely<TargetSchema>({ dialect: new MysqlDialect({ pool: pool as unknown as MysqlPool }) });
     return wrap({ db, close: () => db.destroy() });
   }
   throw new Error(`unsupported connector type: ${type}`);
