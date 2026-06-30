@@ -76,3 +76,26 @@ describe('connector store', () => {
     await db.destroy();
   });
 });
+
+describe('connector store — host connectors', () => {
+  it('creates and round-trips a host (typed, plugin-less) connector', async () => {
+    const db = await makeMigratedDb();
+    const store = createConnectorStore(db);
+    const dbCfg = { host: 'db.internal', port: '5432', database: 'lab', user: 'svc', password: 's3cr3t' };
+    await store.create({ id: 'h1', name: 'Lab PG', type: 'postgres', kind: 'database', config: dbCfg }, key);
+
+    const r = await store.get('h1');
+    expect(r).toMatchObject({ name: 'Lab PG', type: 'postgres', kind: 'database', pluginId: null, allowedHost: null });
+    expect(JSON.stringify(r)).not.toContain('s3cr3t');
+    expect(await store.getDecryptedConfig('h1', key)).toEqual(dbCfg);
+    await db.destroy();
+  });
+
+  it('keeps type null for a plugin connector', async () => {
+    const db = await makeMigratedDb();
+    const store = createConnectorStore(db);
+    await store.create({ id: 'p1', name: 'D', pluginId: 'dhis2-sink', kind: 'sink', config: cfg }, key);
+    expect((await store.get('p1'))?.type).toBeNull();
+    await db.destroy();
+  });
+});

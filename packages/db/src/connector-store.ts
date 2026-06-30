@@ -6,7 +6,8 @@ import type { InternalSchema } from './schema/internal';
 export interface ConnectorRecord {
   id: string;
   name: string;
-  pluginId: string;
+  pluginId: string | null;
+  type: string | null;
   kind: string;
   allowedHost: string | null;
   enabled: boolean;
@@ -17,7 +18,8 @@ export interface ConnectorRecord {
 export interface NewConnector {
   id: string;
   name: string;
-  pluginId: string;
+  pluginId?: string | null;
+  type?: string | null;
   kind: string;
   /** Secret connection config (e.g. { baseUrl, username, password }) — sealed at rest. */
   config: Record<string, string>;
@@ -43,7 +45,7 @@ export interface ConnectorStore {
 
 // Columns returned to callers — config_encrypted is deliberately excluded so secrets
 // (even ciphertext) never leave the store except via getDecryptedConfig.
-const SAFE_COLUMNS = ['id', 'name', 'plugin_id', 'kind', 'allowed_host', 'enabled', 'created_at', 'updated_at'] as const;
+const SAFE_COLUMNS = ['id', 'name', 'plugin_id', 'type', 'kind', 'allowed_host', 'enabled', 'created_at', 'updated_at'] as const;
 
 function keyOf(key: string | undefined): Buffer {
   if (!key) {
@@ -53,11 +55,11 @@ function keyOf(key: string | undefined): Buffer {
 }
 
 function toRecord(r: {
-  id: string; name: string; plugin_id: string; kind: string;
+  id: string; name: string; plugin_id: string | null; type: string | null; kind: string;
   allowed_host: string | null; enabled: boolean; created_at: Date; updated_at: Date;
 }): ConnectorRecord {
   return {
-    id: r.id, name: r.name, pluginId: r.plugin_id, kind: r.kind,
+    id: r.id, name: r.name, pluginId: r.plugin_id, type: r.type, kind: r.kind,
     allowedHost: r.allowed_host, enabled: r.enabled, createdAt: r.created_at, updatedAt: r.updated_at,
   };
 }
@@ -67,8 +69,8 @@ export function createConnectorStore(db: Kysely<InternalSchema>): ConnectorStore
     async create(input, key) {
       const sealed = seal(JSON.stringify(input.config), keyOf(key));
       await db.insertInto('connectors').values({
-        id: input.id, name: input.name, plugin_id: input.pluginId, kind: input.kind,
-        config_encrypted: sealed, allowed_host: input.allowedHost ?? null,
+        id: input.id, name: input.name, plugin_id: input.pluginId ?? null, type: input.type ?? null,
+        kind: input.kind, config_encrypted: sealed, allowed_host: input.allowedHost ?? null,
       }).execute();
     },
 
