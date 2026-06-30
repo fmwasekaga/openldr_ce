@@ -23,6 +23,10 @@ import { limitHandler } from './limit';
 import { removeDuplicatesHandler } from './remove-duplicates';
 import { renameKeysHandler } from './rename-keys';
 import { splitOutHandler } from './split-out';
+import { aggregateHandler } from './aggregate';
+import { summarizeHandler } from './summarize';
+import { dateTimeHandler } from './date-time';
+import { compareDatasetsHandler } from './compare-datasets';
 
 /** Action subtype → handler. New actions (http-request, code, …) land in later slices. */
 const ACTION_HANDLERS: Record<string, NodeHandler> = {
@@ -44,6 +48,10 @@ const ACTION_HANDLERS: Record<string, NodeHandler> = {
   'remove-duplicates': removeDuplicatesHandler,
   'rename-keys': renameKeysHandler,
   'split-out': splitOutHandler,
+  'aggregate': aggregateHandler,
+  'summarize': summarizeHandler,
+  'date-time': dateTimeHandler,
+  'compare-datasets': compareDatasetsHandler,
 };
 
 const TYPE_HANDLERS: Record<string, NodeHandler> = {

@@ -21,6 +21,7 @@ export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
   'if', 'filter', 'switch',
   // data transforms
   'sort', 'limit', 'remove-duplicates', 'rename-keys', 'split-out',
+  'aggregate', 'summarize', 'date-time', 'compare-datasets',
   // sinks
   'materialize-dataset', 'export-artifact',
   'form-validate', 'persist-store',
@@ -287,8 +288,12 @@ export const nodeCategories: NodeCategory[] = [
       node('split-out', 'action', 'Split Out', 'SplitSquareHorizontal', 'Split array into items', {
         data: { config: { field: '' } },
       }),
-      node('aggregate', 'action', 'Aggregate', 'Combine', 'Collect items into one'),
-      node('summarize', 'action', 'Summarize', 'Sigma', 'Sum, avg, min, max, count'),
+      node('aggregate', 'action', 'Aggregate', 'Combine', 'Collect items into one', {
+        data: { config: { field: '', outputField: '' } },
+      }),
+      node('summarize', 'action', 'Summarize', 'Sigma', 'Sum, avg, min, max, count', {
+        data: { config: { groupBy: '', field: '', operation: 'count' } },
+      }),
       node('remove-duplicates', 'action', 'Remove Duplicates', 'CopyMinus', 'Drop duplicate items', {
         data: { config: { field: '' } },
       }),
@@ -298,7 +303,9 @@ export const nodeCategories: NodeCategory[] = [
       node('limit', 'action', 'Limit', 'Minimize2', 'Keep first N items', {
         data: { config: { maxItems: 50, keep: 'first' } },
       }),
-      node('compare-datasets', 'action', 'Compare Datasets', 'GitCompare', 'Diff two item lists'),
+      node('compare-datasets', 'action', 'Compare Datasets', 'GitCompare', 'Diff two item lists', {
+        data: { config: { key: '' } },
+      }),
       node('rename-keys', 'action', 'Rename Keys', 'TextCursorInput', 'Rename object fields', {
         data: { config: { renames: [] } },
       }),
@@ -306,7 +313,9 @@ export const nodeCategories: NodeCategory[] = [
       node('html-extract', 'action', 'HTML Extract', 'CodeXml', 'Parse HTML with CSS selectors'),
       node('markdown', 'action', 'Markdown', 'FileText', 'Convert to/from Markdown'),
       node('xml', 'action', 'XML', 'FileCode', 'Parse & build XML'),
-      node('date-time', 'action', 'Date & Time', 'Clock4', 'Format, parse, offset dates'),
+      node('date-time', 'action', 'Date & Time', 'Clock4', 'Format, parse, offset dates', {
+        data: { config: { operation: 'format', field: '', amount: 0, unit: 'days', outputField: 'date' } },
+      }),
       node('jwt', 'action', 'JWT', 'KeyRound', 'Sign / verify JSON Web Tokens'),
     ],
   },
