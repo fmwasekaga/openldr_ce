@@ -1,3 +1,4 @@
+/// <reference path="../../pdf-parse.d.ts" />
 import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 import type { NodeHandler } from './types';
 import type { WorkflowItem } from '../items';
