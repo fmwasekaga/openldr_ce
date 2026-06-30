@@ -21,3 +21,4 @@ export * from './lifecycle';
 export * from './normalize';
 export * from './samples/forms';
 export * from './store';
+export * from './validate-answers';
