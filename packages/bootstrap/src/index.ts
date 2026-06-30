@@ -21,7 +21,7 @@ import {
   createWebhookRegistry, type WebhookRegistry,
   createWorkflowTriggerRunner, type WorkflowTriggerRunner,
   createWorkflowDatasetStore, type WorkflowDatasetStore,
-  runWorkflow,
+  runWorkflow, WorkflowDefinitionSchema, assertSubWorkflowAllowed, extractTerminalItems,
   guardedFetch, type WorkflowServices,
 } from '@openldr/workflows';
 import { renderReportPdf } from '@openldr/report-pdf';
@@ -452,6 +452,28 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     publish: (event) => eventing.publish(event),
     newId: () => randomUUID(),
   });
+  // Execute Workflow node: run another saved workflow as a sub-workflow. Re-enters the
+  // runner with the recursion chain extended (cycle + depth guard) and returns the
+  // sub-run's terminal (leaf-node) items so the parent flow can chain onward.
+  workflowServices.runSubWorkflow = async ({ workflowId, input, callStack }) => {
+    assertSubWorkflowAllowed(workflowId, callStack);
+    const rec = await workflowStore.get(workflowId);
+    if (!rec) throw new Error(`Execute Workflow: unknown workflow: ${workflowId}`);
+    const def = WorkflowDefinitionSchema.parse(rec.definition);
+    const result = await runWorkflow(def.nodes, def.edges, {
+      input,
+      services: workflowServices,
+      codeLimits: { timeoutMs: cfg.WORKFLOW_CODE_TIMEOUT_MS, memoryMb: cfg.WORKFLOW_CODE_MEMORY_MB, enabled: cfg.WORKFLOW_CODE_ENABLED },
+      workflowId,
+      logger: { warn: (msg: string) => logger.warn(msg) },
+      callStack: [...callStack, workflowId],
+    });
+    if (result.status === 'failed') {
+      const failed = result.results.find((r) => r.status === 'error');
+      throw new Error(`Execute Workflow: sub-workflow ${workflowId} failed: ${failed?.error ?? 'unknown error'}`);
+    }
+    return { items: extractTerminalItems(def.edges, result.results), status: result.status };
+  };
   const pluginBroker = createPluginBroker({
     plugins,
     pluginData,
