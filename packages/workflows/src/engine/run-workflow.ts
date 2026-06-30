@@ -109,6 +109,8 @@ export interface RunWorkflowOptions {
   logger?: ExecutionContext['logger'];
   /** Per-run file attachments seeded onto the trigger item. */
   files?: Record<string, import('./items').BinaryRef>;
+  /** Workflow-id recursion chain forwarded to the execution context (execute-workflow guard). Defaults to []. */
+  callStack?: string[];
 }
 
 export async function runWorkflow(
@@ -117,7 +119,7 @@ export async function runWorkflow(
   opts: RunWorkflowOptions = {},
 ): Promise<WorkflowRunResult> {
   const startedAt = new Date().toISOString();
-  const ctx = createContext(opts.input, opts.onEvent ?? (() => {}), edges, opts.codeLimits, opts.services, opts.workflowId, opts.logger, opts.files);
+  const ctx = createContext(opts.input, opts.onEvent ?? (() => {}), edges, opts.codeLimits, opts.services, opts.workflowId, opts.logger, opts.files, opts.callStack ?? []);
   const sorted = topologicalSort(nodes, edges);
   const results: NodeRunResult[] = [];
 

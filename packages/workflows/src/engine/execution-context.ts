@@ -39,6 +39,8 @@ export interface ExecutionContext {
   workflowId?: string;
   /** Per-run file attachments (BinaryRefs), seeded onto the trigger's item. */
   files?: Record<string, BinaryRef>;
+  /** Workflow-id recursion chain for the execute-workflow node (empty at the top level). */
+  callStack: string[];
 }
 
 export function createContext(
@@ -50,6 +52,7 @@ export function createContext(
   workflowId?: string,
   logger?: ExecutionContext['logger'],
   files?: Record<string, BinaryRef>,
+  callStack: string[] = [],
 ): ExecutionContext {
-  return { input, nodeOutputs: {}, nodeMeta: {}, branches: {}, logs: {}, emit, edges, codeLimits, services, workflowId, logger, files };
+  return { input, nodeOutputs: {}, nodeMeta: {}, branches: {}, logs: {}, emit, edges, codeLimits, services, workflowId, logger, files, callStack };
 }
