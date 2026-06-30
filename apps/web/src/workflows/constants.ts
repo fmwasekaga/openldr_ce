@@ -34,7 +34,7 @@ export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
   // databases (slice E)
   'mongodb', 'redis',
   // communication (slice F)
-  'send-email', 'gmail', 'outlook',
+  'send-email', 'gmail', 'outlook', 'ftp',
 ]);
 
 /**
@@ -262,7 +262,9 @@ export const nodeCategories: NodeCategory[] = [
     name: 'Developer Tools',
     icon: 'Wrench',
     items: [
-      node('ftp', 'action', 'FTP / SFTP', 'FolderUp', 'File transfer'),
+      node('ftp', 'action', 'FTP / SFTP', 'FolderUp', 'File transfer', {
+        data: { config: { connectorId: '', operation: 'download', remotePath: '', toPath: '', binaryField: 'file' } },
+      }),
     ],
   },
 

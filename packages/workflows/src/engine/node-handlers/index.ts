@@ -42,6 +42,7 @@ import { connectorSqlHandler } from './connector-sql';
 import { mongoHandler } from './mongo';
 import { redisHandler } from './redis';
 import { emailHandler } from './email';
+import { ftpHandler } from './ftp';
 
 /** Action subtype → handler. New actions (http-request, code, …) land in later slices. */
 const ACTION_HANDLERS: Record<string, NodeHandler> = {
@@ -86,6 +87,7 @@ const ACTION_HANDLERS: Record<string, NodeHandler> = {
   'send-email': emailHandler,
   'gmail': emailHandler,
   'outlook': emailHandler,
+  'ftp': ftpHandler,
 };
 
 const TYPE_HANDLERS: Record<string, NodeHandler> = {
