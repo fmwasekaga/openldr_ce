@@ -12,10 +12,13 @@ import type { LogLevel } from '../../types';
  */
 export const executeWorkflowHandler: NodeHandler = async (node, ctx, input) => {
   const config = (node.data.config as Record<string, unknown>) ?? {};
-  const workflowId = ((config.workflowId as string | undefined) ?? '').trim();
+  // Only honour a string workflowId; any non-string (number, object, …) is treated
+  // as absent so it yields the friendly error rather than a raw TypeError.
+  const raw = config.workflowId;
+  const workflowId = (typeof raw === 'string' ? raw : '').trim();
   if (!workflowId) throw new Error('Execute Workflow: workflowId is required');
   if (!ctx.services?.runSubWorkflow) {
-    throw new Error('Execute Workflow requires server services');
+    throw new Error('Execute Workflow node requires server services');
   }
 
   if (config.waitForCompletion === false) {
@@ -30,5 +33,8 @@ export const executeWorkflowHandler: NodeHandler = async (node, ctx, input) => {
   }
 
   const result = await ctx.services.runSubWorkflow({ workflowId, input, callStack: ctx.callStack });
+  if (result.status === 'failed') {
+    throw new Error(`Execute Workflow: sub-workflow "${workflowId}" failed`);
+  }
   return result.items;
 };

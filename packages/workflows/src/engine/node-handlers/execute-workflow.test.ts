@@ -18,6 +18,7 @@ describe('executeWorkflowHandler', () => {
     const out = await executeWorkflowHandler(node({ workflowId: 'wf-1', waitForCompletion: true }), ctx, input);
     expect(runSubWorkflow).toHaveBeenCalledWith({ workflowId: 'wf-1', input, callStack: [] });
     expect(out).toEqual([{ json: { ok: true } }]);
+    expect(ctx.logs['x']).toBeUndefined();
   });
 
   it('forwards the current callStack', async () => {
@@ -38,6 +39,17 @@ describe('executeWorkflowHandler', () => {
   it('throws when the service is absent', async () => {
     const ctx = createContext(undefined, () => {});
     await expect(executeWorkflowHandler(node({ workflowId: 'wf-1' }), ctx, [])).rejects.toThrow(/requires server services/);
+  });
+
+  it('throws when the sub-workflow returns a failed status', async () => {
+    const runSubWorkflow = vi.fn(async () => ({ items: [], status: 'failed' as const }));
+    const ctx = createContext(undefined, () => {}, [], undefined, { runSubWorkflow } as unknown as WorkflowServices);
+    await expect(executeWorkflowHandler(node({ workflowId: 'wf-1' }), ctx, [])).rejects.toThrow(/sub-workflow "wf-1" failed/);
+  });
+
+  it('throws the friendly error (not a TypeError) for a non-string workflowId', async () => {
+    const ctx = createContext(undefined, () => {}, [], undefined, { runSubWorkflow: vi.fn() } as unknown as WorkflowServices);
+    await expect(executeWorkflowHandler(node({ workflowId: 42 as unknown as string }), ctx, [])).rejects.toThrow(/workflowId is required/);
   });
 
   it('logs a note and still runs when waitForCompletion is false', async () => {
