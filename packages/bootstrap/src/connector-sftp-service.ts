@@ -1,3 +1,4 @@
+/// <reference path="./ssh2-sftp-client.d.ts" />
 import Client from 'ssh2-sftp-client';
 
 export interface SftpLike {
@@ -16,7 +17,7 @@ function validatePort(raw: string | undefined, fallback: number): number {
   return port;
 }
 
-async function defaultConnect(config: Record<string, string>): Promise<SftpLike> {
+export async function connectSftp(config: Record<string, string>): Promise<SftpLike> {
   const client = new Client() as unknown as SftpLike;
   await client.connect({ host: config.host || 'localhost', port: validatePort(config.port, 22), username: config.user ?? '', password: config.password ?? '' });
   return client;
@@ -29,7 +30,7 @@ export interface ConnectorSftpDeps {
 }
 
 export function createConnectorSftpRunner(deps: ConnectorSftpDeps) {
-  const connect = deps.connect ?? defaultConnect;
+  const connect = deps.connect ?? connectSftp;
   return async ({ connectorId, operation, remotePath, toPath, bytes }: { connectorId: string; operation: string; remotePath: string; toPath?: string; bytes?: Uint8Array }) => {
     const c = await deps.connectors.get(connectorId);
     if (!c || !c.enabled) throw new Error(`connector ${connectorId} not found or disabled`);
