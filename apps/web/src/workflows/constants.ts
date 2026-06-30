@@ -18,7 +18,7 @@ export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
   'sql-query', 'fhir-query', 'http-request',
   'load-dataset',
   // engine control-flow
-  'wait',
+  'wait', 'execute-workflow',
   // conditions
   'if', 'filter', 'switch',
   // data transforms

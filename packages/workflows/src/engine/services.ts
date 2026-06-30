@@ -101,6 +101,8 @@ export interface WorkflowServices {
   runConnectorEmail?(input: { connectorId: string; to: string; subject: string; body: string; html?: boolean; cc?: string }): Promise<{ messageId: string; accepted: string[]; rejected: string[] }>;
   /** Run an SFTP operation against a host connector. Host-injected. */
   runConnectorSftp?(input: { connectorId: string; operation: string; remotePath: string; toPath?: string; bytes?: Uint8Array }): Promise<{ bytes?: Uint8Array; fileName?: string; entries?: { name: string; size: number; type: string }[]; ok?: boolean }>;
+  /** Run another saved workflow as a sub-workflow → its terminal items. Host-injected (execute-workflow node). */
+  runSubWorkflow?(input: { workflowId: string; input: WorkflowItem[]; callStack: string[] }): Promise<{ items: WorkflowItem[]; status: 'completed' | 'failed' }>;
 }
 
 export function parseAllowlist(raw: string): string[] {

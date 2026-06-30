@@ -44,6 +44,7 @@ import { redisHandler } from './redis';
 import { emailHandler } from './email';
 import { ftpHandler } from './ftp';
 import { waitHandler } from './wait';
+import { executeWorkflowHandler } from './execute-workflow';
 
 /** Action subtype → handler. New actions (http-request, code, …) land in later slices. */
 const ACTION_HANDLERS: Record<string, NodeHandler> = {
@@ -56,6 +57,7 @@ const ACTION_HANDLERS: Record<string, NodeHandler> = {
   'no-op': defaultHandler,
   'stop-error': stopErrorHandler,
   'wait': waitHandler,
+  'execute-workflow': executeWorkflowHandler,
   'materialize-dataset': materializeHandler,
   'export-artifact': exportHandler,
   'load-dataset': loadDatasetHandler,
