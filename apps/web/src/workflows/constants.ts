@@ -279,7 +279,9 @@ export const nodeCategories: NodeCategory[] = [
         keywords: ['csv', 'xlsx', 'json'],
         data: { config: { format: 'json', binaryField: 'data', fileName: '', textField: '' } },
       }),
-      node('extract-from-file', 'action', 'Extract from File', 'FileInput', 'Parse file contents'),
+      node('extract-from-file', 'action', 'Extract from File', 'FileInput', 'Parse file contents', {
+        data: { config: { format: 'json', sourceField: 'file', outputField: 'data' } },
+      }),
       node('spreadsheet-file', 'action', 'Spreadsheet File', 'Sheet', 'Read / write CSV, XLSX'),
       node('compression', 'action', 'Compression', 'FileArchive', 'Zip / unzip'),
       node('crypto', 'action', 'Crypto', 'KeyRound', 'Hash, HMAC', {
