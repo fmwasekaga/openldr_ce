@@ -99,6 +99,8 @@ export interface WorkflowServices {
   writeBinary?(input: { bytes: Uint8Array; fileName: string; contentType: string }): Promise<BinaryRef>;
   /** Send an email via a host connector (smtp/gmail/outlook). Host-injected. */
   runConnectorEmail?(input: { connectorId: string; to: string; subject: string; body: string; html?: boolean; cc?: string }): Promise<{ messageId: string; accepted: string[]; rejected: string[] }>;
+  /** Run an SFTP operation against a host connector. Host-injected. */
+  runConnectorSftp?(input: { connectorId: string; operation: string; remotePath: string; toPath?: string; bytes?: Uint8Array }): Promise<{ bytes?: Uint8Array; fileName?: string; entries?: { name: string; size: number; type: string }[]; ok?: boolean }>;
 }
 
 export function parseAllowlist(raw: string): string[] {
