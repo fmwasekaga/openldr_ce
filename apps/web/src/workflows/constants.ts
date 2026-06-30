@@ -313,7 +313,9 @@ export const nodeCategories: NodeCategory[] = [
       node('rename-keys', 'action', 'Rename Keys', 'TextCursorInput', 'Rename object fields', {
         data: { config: { renames: [] } },
       }),
-      node('html', 'action', 'HTML', 'Code2', 'Build or extract HTML'),
+      node('html', 'action', 'HTML', 'Code2', 'Convert HTML to text', {
+        data: { config: { field: 'html', outputField: 'text' } },
+      }),
       node('html-extract', 'action', 'HTML Extract', 'CodeXml', 'Parse HTML with CSS selectors', {
         data: { config: { sourceField: 'html', extractions: [] } },
       }),

@@ -32,6 +32,7 @@ import { jwtHandler } from './jwt';
 import { xmlHandler } from './xml';
 import { markdownHandler } from './markdown';
 import { htmlExtractHandler } from './html-extract';
+import { htmlHandler } from './html';
 
 /** Action subtype → handler. New actions (http-request, code, …) land in later slices. */
 const ACTION_HANDLERS: Record<string, NodeHandler> = {
@@ -62,6 +63,7 @@ const ACTION_HANDLERS: Record<string, NodeHandler> = {
   'xml': xmlHandler,
   'markdown': markdownHandler,
   'html-extract': htmlExtractHandler,
+  'html': htmlHandler,
 };
 
 const TYPE_HANDLERS: Record<string, NodeHandler> = {
