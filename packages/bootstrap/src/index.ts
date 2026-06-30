@@ -424,6 +424,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   workflowServices.persistStore = createPersistStoreService({
     persist: workflowPersist,
     publish: (event) => eventing.publish(event),
+    newId: () => randomUUID(),
   });
   const pluginBroker = createPluginBroker({
     plugins,

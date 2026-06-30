@@ -33,6 +33,7 @@ export interface RunPersistStoreOutput {
   items: WorkflowItem[];
   meta: {
     persisted: number;
+    batchId: string;
     flattened: { written: number; skipped: number; degraded: number };
     resourceTypes: string[];
   };
