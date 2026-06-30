@@ -10,6 +10,7 @@ export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
   'schedule-trigger',
   'webhook-trigger',
   'ingest',
+  'event-trigger',
   // code
   'code',
   // actions
@@ -153,6 +154,10 @@ export const nodeCategories: NodeCategory[] = [
         // Field names match the server's `syncWorkflowTriggers` contract:
         // ingest node → data.triggerType:'ingest', data.config.sourceFilter.
         data: { triggerType: 'ingest', config: {} },
+      }),
+      node('event-trigger', 'trigger', 'Event Trigger', 'Radio', 'Run when a domain event fires (e.g. data persisted)', {
+        keywords: ['event', 'trigger', 'data.persisted', 'notify'],
+        data: { triggerType: 'event', config: { event: 'data.persisted', source: '', resourceType: '' } },
       }),
       node('log', 'action', 'Log', 'Terminal', 'Print a templated message to the console', {
         keywords: ['print', 'console', 'debug'],

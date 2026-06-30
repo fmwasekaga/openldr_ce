@@ -6,6 +6,7 @@ import { LogForm } from './log-form';
 import { WebhookForm } from './webhook-form';
 import { ScheduleForm } from './schedule-form';
 import { IngestForm } from './ingest-form';
+import { EventTriggerForm } from './event-trigger-form';
 import { HttpRequestForm } from './http-request-form';
 import { SqlForm } from './sql-form';
 import { FhirForm } from './fhir-form';
@@ -41,6 +42,7 @@ const FORMS: Record<string, ComponentType<NodeFormProps>> = {
   'webhook-trigger': WebhookForm,
   'schedule-trigger': ScheduleForm,
   ingest: IngestForm,
+  'event-trigger': EventTriggerForm,
   'http-request': HttpRequestForm,
   'sql-query': SqlForm,
   'fhir-query': FhirForm,
