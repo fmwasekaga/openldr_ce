@@ -20,7 +20,12 @@ export const extractFromFileHandler: NodeHandler = async (node, ctx, input) => {
     } else if (format === 'text') {
       out.push({ json: { [outputField]: new TextDecoder().decode(bytes) } });
     } else {
-      const parsed = JSON.parse(new TextDecoder().decode(bytes));
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(new TextDecoder().decode(bytes));
+      } catch (err) {
+        throw new Error(`Extract from File: invalid JSON in '${sourceField}': ${err instanceof Error ? err.message : String(err)}`);
+      }
       if (Array.isArray(parsed)) {
         for (const r of parsed) out.push({ json: (r && typeof r === 'object' && !Array.isArray(r)) ? r as Record<string, unknown> : { [outputField]: r } });
       } else {

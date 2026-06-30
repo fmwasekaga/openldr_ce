@@ -1,4 +1,5 @@
 import type { NodeHandler } from './types';
+import type { WorkflowItem } from '../items';
 import { itemsToCsv, itemsToXlsx, fileToRows } from './file-codecs';
 
 const CONTENT_TYPE: Record<string, string> = {
@@ -24,8 +25,12 @@ export const spreadsheetFileHandler: NodeHandler = async (node, ctx, input) => {
 
   if (!ctx.services?.readBinary) throw new Error('Spreadsheet File requires server services');
   const sourceField = (config.sourceField as string) || 'file';
-  const ref = input[0]?.binary?.[sourceField];
-  if (!ref) throw new Error(`Spreadsheet File: no file on the input item (field '${sourceField}')`);
-  const bytes = await ctx.services.readBinary(ref.objectKey);
-  return fileToRows(bytes).map((row) => ({ json: row }));
+  const out: WorkflowItem[] = [];
+  for (const item of input) {
+    const ref = item.binary?.[sourceField];
+    if (!ref) throw new Error(`Spreadsheet File: no file on the input item (field '${sourceField}')`);
+    const bytes = await ctx.services.readBinary(ref.objectKey);
+    for (const row of fileToRows(bytes)) out.push({ json: row });
+  }
+  return out;
 };

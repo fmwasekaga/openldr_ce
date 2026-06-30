@@ -28,6 +28,16 @@ describe('spreadsheetFileHandler', () => {
     const result = await spreadsheetFileHandler(node({ operation: 'read', sourceField: 'file' }), ctx, [{ json: {}, binary: { file: ref('k1') } }]);
     expect(result).toEqual([{ json: { name: 'Ann', age: 30 } }]);
   });
+  it('reads rows from every input item', async () => {
+    const { ctx, store } = fakeBinaryCtx();
+    store.set('k1', itemsToXlsx([{ json: { name: 'Ann' } }]));
+    store.set('k2', itemsToXlsx([{ json: { name: 'Bob' } }]));
+    const result = await spreadsheetFileHandler(node({ operation: 'read', sourceField: 'file' }), ctx, [
+      { json: {}, binary: { file: ref('k1') } },
+      { json: {}, binary: { file: ref('k2') } },
+    ]);
+    expect(result).toEqual([{ json: { name: 'Ann' } }, { json: { name: 'Bob' } }]);
+  });
   it('writes items to an xlsx file', async () => {
     const { ctx, store } = fakeBinaryCtx();
     const result = await spreadsheetFileHandler(node({ operation: 'write', format: 'xlsx', binaryField: 'data', fileName: 'sheet.xlsx' }), ctx, [{ json: { a: 1 } }]);

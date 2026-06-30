@@ -36,4 +36,9 @@ describe('extractFromFileHandler', () => {
     const ctx = fakeCtxWith('k4', new Uint8Array());
     await expect(extractFromFileHandler(node({ format: 'json', sourceField: 'file' }), ctx, [{ json: {} }])).rejects.toThrow(/no file/);
   });
+  it('throws a clear error for invalid JSON', async () => {
+    const bytes = new TextEncoder().encode('{not json');
+    const ctx = fakeCtxWith('k5', bytes);
+    await expect(extractFromFileHandler(node({ format: 'json', sourceField: 'file' }), ctx, [{ json: {}, binary: { file: ref('k5') } }])).rejects.toThrow(/invalid JSON/);
+  });
 });
