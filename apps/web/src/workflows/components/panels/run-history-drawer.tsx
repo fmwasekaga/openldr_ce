@@ -325,20 +325,20 @@ export function RunDetail({ run, loading, error }: { run: WorkflowRunSummary; lo
                 {tab === 'result' && <JsonView data={selected.meta} emptyLabel="No result data." />}
                 {tab === 'logs' &&
                   (selectedLogs.length === 0 ? (
-                    <p className="text-xs italic text-muted-foreground/70">No logs.</p>
+                    <p className="px-4 text-xs italic text-muted-foreground/70">No logs.</p>
                   ) : (
-                    <div className="rounded-md bg-[#0a0a0b] px-3 py-2 font-mono text-[11px] leading-relaxed">
+                    <div className="bg-muted px-4 py-2 font-mono text-[11px] leading-relaxed">
                       {selectedLogs.map((entry, i) => (
                         <div
                           key={`${entry.ts}-${i}`}
                           className={cn(
                             'whitespace-pre-wrap break-words py-0.5',
                             entry.level === 'error'
-                              ? 'text-rose-400'
+                              ? 'text-rose-600 dark:text-rose-400'
                               : entry.level === 'warn'
-                                ? 'text-amber-400'
+                                ? 'text-amber-600 dark:text-amber-400'
                                 : entry.level === 'info'
-                                  ? 'text-sky-400'
+                                  ? 'text-sky-600 dark:text-sky-400'
                                   : 'text-foreground',
                           )}
                         >
