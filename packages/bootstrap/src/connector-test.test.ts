@@ -26,4 +26,17 @@ describe('testConnector', () => {
   it('throws for an unknown type', async () => {
     await expect(testConnector('mystery', {})).rejects.toThrow(/unsupported connector type/);
   });
+  it('verifies for email types', async () => {
+    const verify = vi.fn(async () => true);
+    const close = vi.fn(() => {});
+    await testConnector('smtp', {}, { email: () => ({ verify, close }) as never });
+    expect(verify).toHaveBeenCalled();
+  });
+  it('connects + lists for sftp', async () => {
+    const list = vi.fn(async () => []);
+    const end = vi.fn(async () => {});
+    await testConnector('sftp', {}, { sftp: async () => ({ list, end }) as never });
+    expect(list).toHaveBeenCalledWith('.');
+    expect(end).toHaveBeenCalled();
+  });
 });

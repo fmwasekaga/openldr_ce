@@ -1,14 +1,19 @@
 import { createConnectorDb, type ConnectorDb } from './connector-db';
 import { createConnectorMongo, type MongoConn } from './connector-mongo';
 import { createConnectorRedis } from './connector-redis';
+import { createEmailTransport } from './connector-email';
+import { connectSftp } from './connector-sftp-service';
 import type Redis from 'ioredis';
 
 const SQL_TYPES = new Set(['postgres', 'microsoft-sql', 'mysql']);
+const EMAIL_TYPES = new Set(['smtp', 'gmail', 'outlook']);
 
 export interface ConnectorTestDeps {
   sqlDb?: (type: string, config: Record<string, string>) => ConnectorDb;
   mongo?: (config: Record<string, string>) => Promise<MongoConn>;
   redis?: (config: Record<string, string>) => Redis;
+  email?: (type: string, config: Record<string, string>) => { verify(): Promise<unknown>; close(): void };
+  sftp?: (config: Record<string, string>) => Promise<{ list(p: string): Promise<unknown>; end(): Promise<void> }>;
 }
 
 /** Probe a host connector by type (SELECT 1 / mongo ping / redis PING). Throws on failure; always closes. */
@@ -26,6 +31,16 @@ export async function testConnector(type: string, config: Record<string, string>
   if (type === 'redis') {
     const client = (deps.redis ?? createConnectorRedis)(config);
     try { await client.ping(); } finally { await client.quit(); }
+    return;
+  }
+  if (EMAIL_TYPES.has(type)) {
+    const transport = (deps.email ?? ((t, c) => createEmailTransport(t, c) as unknown as { verify(): Promise<unknown>; close(): void }))(type, config);
+    try { await transport.verify(); } finally { transport.close(); }
+    return;
+  }
+  if (type === 'sftp') {
+    const client = await (deps.sftp ?? (connectSftp as unknown as (c: Record<string, string>) => Promise<{ list(p: string): Promise<unknown>; end(): Promise<void> }>))(config);
+    try { await client.list('.'); } finally { await client.end(); }
     return;
   }
   throw new Error(`unsupported connector type: ${type}`);
