@@ -33,6 +33,7 @@ import { xmlHandler } from './xml';
 import { markdownHandler } from './markdown';
 import { htmlExtractHandler } from './html-extract';
 import { htmlHandler } from './html';
+import { convertToFileHandler } from './convert-to-file';
 
 /** Action subtype → handler. New actions (http-request, code, …) land in later slices. */
 const ACTION_HANDLERS: Record<string, NodeHandler> = {
@@ -64,6 +65,7 @@ const ACTION_HANDLERS: Record<string, NodeHandler> = {
   'markdown': markdownHandler,
   'html-extract': htmlExtractHandler,
   'html': htmlHandler,
+  'convert-to-file': convertToFileHandler,
 };
 
 const TYPE_HANDLERS: Record<string, NodeHandler> = {

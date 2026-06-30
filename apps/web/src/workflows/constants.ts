@@ -27,6 +27,8 @@ export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
   'form-validate', 'persist-store',
   // codecs (slice B)
   'crypto', 'jwt', 'xml', 'markdown', 'html-extract', 'html',
+  // binary/file (slice C)
+  'convert-to-file', 'extract-from-file', 'spreadsheet-file',
 ]);
 
 /**
@@ -275,6 +277,7 @@ export const nodeCategories: NodeCategory[] = [
       node('read-pdf', 'action', 'Read PDF', 'FileText', 'Extract PDF text'),
       node('convert-to-file', 'action', 'Convert to File', 'FileOutput', 'Encode data to a file', {
         keywords: ['csv', 'xlsx', 'json'],
+        data: { config: { format: 'json', binaryField: 'data', fileName: '', textField: '' } },
       }),
       node('extract-from-file', 'action', 'Extract from File', 'FileInput', 'Parse file contents'),
       node('spreadsheet-file', 'action', 'Spreadsheet File', 'Sheet', 'Read / write CSV, XLSX'),
