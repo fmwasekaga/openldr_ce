@@ -43,6 +43,7 @@ import { mongoHandler } from './mongo';
 import { redisHandler } from './redis';
 import { emailHandler } from './email';
 import { ftpHandler } from './ftp';
+import { waitHandler } from './wait';
 
 /** Action subtype → handler. New actions (http-request, code, …) land in later slices. */
 const ACTION_HANDLERS: Record<string, NodeHandler> = {
@@ -54,6 +55,7 @@ const ACTION_HANDLERS: Record<string, NodeHandler> = {
   'http-request': httpHandler,
   'no-op': defaultHandler,
   'stop-error': stopErrorHandler,
+  'wait': waitHandler,
   'materialize-dataset': materializeHandler,
   'export-artifact': exportHandler,
   'load-dataset': loadDatasetHandler,
