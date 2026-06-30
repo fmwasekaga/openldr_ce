@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowLeft, CheckCircle2, XCircle, Download } from 'lucide-react';
 import {
   fetchWorkflowRuns,
@@ -16,6 +16,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
+import { Bleed, Divider } from '@/components/ui/bleed';
 import { TablePagination } from '@/components/ui/table-pagination';
 
 interface Props {
@@ -179,15 +180,29 @@ export function RunHistoryDrawer({ open, workflowId, onClose }: Props) {
 }
 
 export function RunDetail({ run, loading, error }: { run: WorkflowRunSummary; loading: boolean; error?: string }) {
-  const [expanded, setExpanded] = useState<string | null>(null);
   const exec = asExecuteResponse(run.result);
   const results: NodeRunResult[] = exec?.results ?? [];
-  const logs: { nodeId: string; entry: LogEntry }[] = results.flatMap((r) =>
-    (r.logs ?? []).map((entry) => ({ nodeId: r.nodeId, entry })),
-  );
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [tab, setTab] = useState<'output' | 'result' | 'logs'>('output');
+
+  // Reset selection + tab when a different run is opened.
+  useEffect(() => {
+    setSelectedId(null);
+    setTab('output');
+  }, [run.id]);
+
+  // Selected node: explicit click, else the first failed node, else the first node.
+  const selected =
+    results.find((r) => r.nodeId === selectedId) ??
+    results.find((r) => r.status === 'error') ??
+    results[0] ??
+    null;
+
+  const selectedFiles = selected ? outputBinaries(selected.output) : [];
+  const selectedLogs: LogEntry[] = selected?.logs ?? [];
 
   return (
-    <div className="min-h-0 flex-1 overflow-auto">
+    <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3 text-xs text-muted-foreground">
         <span className="inline-flex items-center gap-1.5 font-medium">
           {run.status === 'completed' ? (
@@ -213,123 +228,122 @@ export function RunDetail({ run, loading, error }: { run: WorkflowRunSummary; lo
         <div className="p-4 text-sm text-muted-foreground">Loading detail…</div>
       ) : error ? (
         <div className="p-4 text-sm text-destructive">{error}</div>
+      ) : results.length === 0 ? (
+        <div className="p-4 text-sm text-muted-foreground">No per-node results recorded.</div>
       ) : (
         <>
-          <div className="px-4 py-3">
-            <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Nodes
-            </h4>
-            {results.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No per-node results recorded.</p>
-            ) : (
-              <table className="w-full text-xs">
-                <thead className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  <tr>
-                    <th className="py-1 text-left">Node</th>
-                    <th className="py-1 text-left">Type</th>
-                    <th className="py-1 text-left">Status</th>
-                    <th className="py-1 text-right">Duration</th>
-                  </tr>
-                </thead>
-                <tbody>
+          {/* Master: node table (edge-to-edge row rules via Bleed). */}
+          <div className="px-4 pt-3">
+            <Bleed>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Node</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Duration</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {results.map((r) => (
-                    <Fragment key={r.nodeId}>
-                      <tr
-                        className="cursor-pointer border-t border-border/50 hover:bg-secondary/40"
-                        onClick={() => setExpanded(expanded === r.nodeId ? null : r.nodeId)}
-                      >
-                        <td className="py-1.5 font-mono text-muted-foreground">{r.nodeId}</td>
-                        <td className="py-1.5 text-foreground">{r.type}</td>
-                        <td className="py-1.5">
-                          <span
-                            className={cn(
-                              'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium',
-                              r.status === 'success'
-                                ? 'bg-emerald-500/15 text-emerald-400'
-                                : r.status === 'skipped'
-                                  ? 'bg-muted text-muted-foreground'
-                                  : 'bg-rose-500/15 text-rose-400',
-                            )}
-                            title={r.error ?? ''}
-                          >
-                            {r.status}
-                          </span>
-                        </td>
-                        <td className="py-1.5 text-right font-mono text-muted-foreground">{r.durationMs}ms</td>
-                      </tr>
-                      {expanded === r.nodeId && (
-                        <tr>
-                          <td colSpan={4} className="bg-secondary/20 px-2 py-2">
-                            <div className="space-y-2">
-                              <div>
-                                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Output</p>
-                                <JsonView data={r.output} emptyLabel="(no output recorded)" />
-                              </div>
-                              {r.meta !== undefined && r.meta !== null && (
-                                <div>
-                                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Result</p>
-                                  <JsonView data={r.meta} emptyLabel="" />
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
+                    <TableRow
+                      key={r.nodeId}
+                      className={cn('cursor-pointer', selected?.nodeId === r.nodeId && 'bg-secondary/60')}
+                      onClick={() => setSelectedId(r.nodeId)}
+                    >
+                      <TableCell>
+                        <span className="text-foreground">{r.label ?? r.nodeId}</span>
+                        {r.label && (
+                          <span className="ml-1.5 font-mono text-[10px] text-muted-foreground/50">{r.nodeId}</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{r.type}</TableCell>
+                      <TableCell>
+                        <span
+                          className={cn(
+                            'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium',
+                            r.status === 'success'
+                              ? 'bg-emerald-500/15 text-emerald-400'
+                              : r.status === 'skipped'
+                                ? 'bg-muted text-muted-foreground'
+                                : 'bg-rose-500/15 text-rose-400',
+                          )}
+                          title={r.error ?? ''}
+                        >
+                          {r.status}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-muted-foreground">{r.durationMs}ms</TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
-            )}
+                </TableBody>
+              </Table>
+            </Bleed>
           </div>
 
-          {(() => {
-            const produced = results.flatMap((r) => outputBinaries(r.output).map((f) => ({ nodeId: r.nodeId, f })));
-            if (produced.length === 0) return null;
-            return (
-              <div className="border-t border-border px-4 py-3">
-                <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Produced files</h4>
-                <div className="flex flex-col gap-1.5">
-                  {produced.map(({ nodeId, f }) => (
-                    <button
-                      key={`${nodeId}:${f.field}`}
-                      type="button"
-                      onClick={() => void downloadWorkflowArtifact(f.objectKey, f.fileName)}
-                      className="inline-flex items-center gap-1.5 self-start rounded px-2 py-1 text-xs font-medium text-violet-400 transition-colors hover:bg-violet-500/10 hover:text-violet-300"
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                      {f.fileName} ({nodeId})
-                    </button>
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
-
-          {logs.length > 0 && (
-            <div className="px-4 pb-4">
-              <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Logs
-              </h4>
-              <div className="max-h-64 overflow-y-auto rounded-md bg-[#0a0a0b] px-3 py-2 font-mono text-[11px] leading-relaxed">
-                {logs.map(({ nodeId, entry }, i) => (
-                  <div key={`${nodeId}-${entry.ts}-${i}`} className="flex items-start gap-2 py-0.5">
-                    <span className="shrink-0 select-none text-muted-foreground/60">[{nodeId}]</span>
-                    <span
-                      className={cn(
-                        'whitespace-pre-wrap break-words',
-                        entry.level === 'error'
-                          ? 'text-rose-400'
-                          : entry.level === 'warn'
-                            ? 'text-amber-400'
-                            : entry.level === 'info'
-                              ? 'text-sky-400'
-                              : 'text-foreground',
-                      )}
-                    >
-                      {entry.message}
-                    </span>
-                  </div>
+          {/* Detail: selected node's data. */}
+          {selected && (
+            <div className="flex min-h-0 flex-1 flex-col px-4 pt-3">
+              <div className="flex gap-4 text-[11px]">
+                {(['output', 'result', 'logs'] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setTab(t)}
+                    className={cn(
+                      'pb-1.5 capitalize',
+                      tab === t
+                        ? 'border-b-2 border-violet-500 text-foreground'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {t}
+                  </button>
                 ))}
+              </div>
+              <Divider className="mb-2" />
+              <div className="min-h-0 flex-1 overflow-auto pb-4">
+                {tab === 'output' && (
+                  <div className="space-y-2">
+                    <JsonView data={selected.output} emptyLabel="No output recorded." />
+                    {selectedFiles.map((f) => (
+                      <button
+                        key={f.field}
+                        type="button"
+                        onClick={() => void downloadWorkflowArtifact(f.objectKey, f.fileName)}
+                        className="inline-flex items-center gap-1.5 self-start rounded px-2 py-1 text-xs font-medium text-violet-400 transition-colors hover:bg-violet-500/10 hover:text-violet-300"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        {f.fileName}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {tab === 'result' && <JsonView data={selected.meta} emptyLabel="No result data." />}
+                {tab === 'logs' &&
+                  (selectedLogs.length === 0 ? (
+                    <p className="text-xs italic text-muted-foreground/70">No logs.</p>
+                  ) : (
+                    <div className="rounded-md bg-[#0a0a0b] px-3 py-2 font-mono text-[11px] leading-relaxed">
+                      {selectedLogs.map((entry, i) => (
+                        <div
+                          key={`${entry.ts}-${i}`}
+                          className={cn(
+                            'whitespace-pre-wrap break-words py-0.5',
+                            entry.level === 'error'
+                              ? 'text-rose-400'
+                              : entry.level === 'warn'
+                                ? 'text-amber-400'
+                                : entry.level === 'info'
+                                  ? 'text-sky-400'
+                                  : 'text-foreground',
+                          )}
+                        >
+                          {entry.message}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
               </div>
             </div>
           )}
