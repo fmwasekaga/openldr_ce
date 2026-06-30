@@ -26,7 +26,7 @@ export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
   'materialize-dataset', 'export-artifact',
   'form-validate', 'persist-store',
   // codecs (slice B)
-  'crypto', 'jwt', 'xml',
+  'crypto', 'jwt', 'xml', 'markdown', 'html-extract', 'html',
 ]);
 
 /**
@@ -315,7 +315,9 @@ export const nodeCategories: NodeCategory[] = [
       }),
       node('html', 'action', 'HTML', 'Code2', 'Build or extract HTML'),
       node('html-extract', 'action', 'HTML Extract', 'CodeXml', 'Parse HTML with CSS selectors'),
-      node('markdown', 'action', 'Markdown', 'FileText', 'Convert to/from Markdown'),
+      node('markdown', 'action', 'Markdown', 'FileText', 'Convert to/from Markdown', {
+        data: { config: { operation: 'markdownToHtml', field: 'md', outputField: 'html' } },
+      }),
       node('xml', 'action', 'XML', 'FileCode', 'Parse & build XML', {
         data: { config: { operation: 'parse', field: 'xml', outputField: 'data' } },
       }),

@@ -30,6 +30,7 @@ import { compareDatasetsHandler } from './compare-datasets';
 import { cryptoHandler } from './crypto';
 import { jwtHandler } from './jwt';
 import { xmlHandler } from './xml';
+import { markdownHandler } from './markdown';
 
 /** Action subtype → handler. New actions (http-request, code, …) land in later slices. */
 const ACTION_HANDLERS: Record<string, NodeHandler> = {
@@ -58,6 +59,7 @@ const ACTION_HANDLERS: Record<string, NodeHandler> = {
   'crypto': cryptoHandler,
   'jwt': jwtHandler,
   'xml': xmlHandler,
+  'markdown': markdownHandler,
 };
 
 const TYPE_HANDLERS: Record<string, NodeHandler> = {
