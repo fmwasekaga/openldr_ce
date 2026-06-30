@@ -16,6 +16,7 @@ import { loadDatasetHandler } from './load-dataset';
 import { pluginNodeHandler } from './plugin-node';
 import { formValidateHandler } from './form-validate';
 import { persistStoreHandler } from './persist-store';
+import { stopErrorHandler } from './stop-error';
 
 /** Action subtype → handler. New actions (http-request, code, …) land in later slices. */
 const ACTION_HANDLERS: Record<string, NodeHandler> = {
@@ -26,6 +27,7 @@ const ACTION_HANDLERS: Record<string, NodeHandler> = {
   'fhir-query': fhirHandler,
   'http-request': httpHandler,
   'no-op': defaultHandler,
+  'stop-error': stopErrorHandler,
   'materialize-dataset': materializeHandler,
   'export-artifact': exportHandler,
   'load-dataset': loadDatasetHandler,

@@ -14,7 +14,7 @@ export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
   // code
   'code',
   // actions
-  'set', 'log', 'merge', 'no-op',
+  'set', 'log', 'merge', 'no-op', 'stop-error',
   'sql-query', 'fhir-query', 'http-request',
   'load-dataset',
   // conditions
