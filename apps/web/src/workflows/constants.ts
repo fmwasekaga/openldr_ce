@@ -14,7 +14,7 @@ export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
   // code
   'code',
   // actions
-  'set', 'log', 'merge',
+  'set', 'log', 'merge', 'no-op',
   'sql-query', 'fhir-query', 'http-request',
   'load-dataset',
   // conditions
@@ -282,7 +282,6 @@ export const nodeCategories: NodeCategory[] = [
     name: 'Data Transformation',
     icon: 'Shuffle',
     items: [
-      node('edit-fields', 'action', 'Edit Fields (Set)', 'Pencil', 'Set field values'),
       node('split-out', 'action', 'Split Out', 'SplitSquareHorizontal', 'Split array into items'),
       node('aggregate', 'action', 'Aggregate', 'Combine', 'Collect items into one'),
       node('summarize', 'action', 'Summarize', 'Sigma', 'Sum, avg, min, max, count'),
@@ -296,7 +295,6 @@ export const nodeCategories: NodeCategory[] = [
       node('markdown', 'action', 'Markdown', 'FileText', 'Convert to/from Markdown'),
       node('xml', 'action', 'XML', 'FileCode', 'Parse & build XML'),
       node('date-time', 'action', 'Date & Time', 'Clock4', 'Format, parse, offset dates'),
-      node('item-lists', 'action', 'Item Lists', 'List', 'Array helpers'),
       node('jwt', 'action', 'JWT', 'KeyRound', 'Sign / verify JSON Web Tokens'),
     ],
   },
