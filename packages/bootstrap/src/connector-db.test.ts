@@ -25,3 +25,14 @@ describe('createConnectorDb', () => {
     expect(() => createConnectorDb('postgres', { host: 'h', port: 'abc', database: 'd', user: 'u', password: 'p' })).toThrow(/invalid connector port/);
   });
 });
+
+describe('createConnectorDb — mysql', () => {
+  it('builds a mysql connection object with query + close', () => {
+    const conn = createConnectorDb('mysql', { host: 'h', port: '3306', database: 'd', user: 'u', password: 'p' });
+    expect(typeof conn.query).toBe('function');
+    expect(typeof conn.close).toBe('function');
+  });
+  it('rejects an invalid mysql port', () => {
+    expect(() => createConnectorDb('mysql', { host: 'h', port: 'abc', database: 'd', user: 'u', password: 'p' })).toThrow(/invalid connector port/);
+  });
+});

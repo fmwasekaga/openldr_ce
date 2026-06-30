@@ -30,7 +30,7 @@ export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
   // binary/file (slice C)
   'convert-to-file', 'extract-from-file', 'spreadsheet-file', 'read-pdf', 'compression',
   // databases (slice D)
-  'postgres', 'microsoft-sql',
+  'postgres', 'microsoft-sql', 'mysql',
 ]);
 
 /**
@@ -266,7 +266,9 @@ export const nodeCategories: NodeCategory[] = [
         data: { config: { connectorId: '', sql: '' } },
       }),
       node('postgres-trigger', 'trigger', 'Postgres Trigger', 'Database', 'Listen for row changes'),
-      node('mysql', 'action', 'MySQL', 'Database', 'Run SQL on MySQL'),
+      node('mysql', 'action', 'MySQL', 'Database', 'Run SQL on MySQL', {
+        data: { config: { connectorId: '', sql: '' } },
+      }),
       node('microsoft-sql', 'action', 'Microsoft SQL', 'Database', 'Run queries on MSSQL', {
         data: { config: { connectorId: '', sql: '' } },
       }),

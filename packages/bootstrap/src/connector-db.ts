@@ -1,7 +1,8 @@
-import { sql, type Kysely } from 'kysely';
+import { sql, MysqlDialect, Kysely } from 'kysely';
 import type { TargetSchema } from '@openldr/ports';
 import { createDbStore } from '@openldr/adapter-db-store';
 import { createMssqlStore } from '@openldr/adapter-mssql-store';
+import { createPool } from 'mysql2/promise';
 
 /** A connector-backed DB connection: run one raw query, then close. */
 export interface ConnectorDb {
@@ -53,6 +54,19 @@ export function createConnectorDb(type: string, config: Record<string, string>):
       encrypt: config.encrypt !== 'false',
       trustServerCertificate: config.trustServerCertificate === 'true',
     }));
+  }
+  if (type === 'mysql') {
+    const port = validatePort(config.port, 3306);
+    const host = config.host ?? 'localhost';
+    if (!/^[A-Za-z0-9.\-]+$/.test(host) && !/^\[?[0-9A-Fa-f:]+\]?$/.test(host)) {
+      throw new Error(`invalid connector host: ${host}`);
+    }
+    const pool = createPool({
+      host, port, user: config.user ?? '', password: config.password ?? '', database: config.database ?? '',
+      ...(config.ssl === 'true' ? { ssl: { rejectUnauthorized: false } } : {}),
+    });
+    const db = new Kysely<TargetSchema>({ dialect: new MysqlDialect({ pool }) });
+    return wrap({ db, close: () => db.destroy() });
   }
   throw new Error(`unsupported connector type: ${type}`);
 }

@@ -77,6 +77,7 @@ const ACTION_HANDLERS: Record<string, NodeHandler> = {
   'compression': compressionHandler,
   'postgres': connectorSqlHandler,
   'microsoft-sql': connectorSqlHandler,
+  'mysql': connectorSqlHandler,
 };
 
 const TYPE_HANDLERS: Record<string, NodeHandler> = {
