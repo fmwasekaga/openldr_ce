@@ -195,13 +195,13 @@ describe('connectors routes', () => {
       expect(res.statusCode).toBe(400);
     });
 
-    it('test endpoint runs SELECT 1 for a host connector and returns ok:true', async () => {
+    it('test endpoint routes a host connector to the SELECT 1 path (200 with ok)', async () => {
       const store = fakeStore();
       const app = appWith(store);
       const id = (await app.inject({ method: 'POST', url: '/api/connectors', payload: pgBody })).json().id;
-      // createConnectorDb is mocked via vi.mock below — the test just verifies the route branches correctly.
       const res = await app.inject({ method: 'POST', url: `/api/connectors/${id}/test` });
-      // Without a real DB the connector will error; we expect ok:false with an error string (not 400/404).
+      // No live DB here, so the real connection errors → ok:false with an error string (not 400/404).
+      // This asserts the route branches to the host SELECT 1 path rather than the plugin path.
       expect(res.statusCode).toBe(200);
       expect(res.json()).toHaveProperty('ok');
     });
