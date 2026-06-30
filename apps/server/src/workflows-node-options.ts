@@ -6,6 +6,8 @@ export interface NodeOptionsDeps {
   datasets: { list(): Promise<Array<{ name: string }>> };
   /** dhis2-sink mappings from plugin_data (id/name). */
   dhis2Mappings(): Promise<Array<{ id: string; name: string }>>;
+  /** Published forms for the Form Validate node picker. */
+  forms: { listPublished(): Promise<Array<{ id: string; name: string }>> };
 }
 
 /** Static FHIR resource types offered to source-node selects. */
@@ -57,6 +59,8 @@ export async function resolveNodeOptions(
         return (await deps.dhis2Mappings()).map((m) => ({ value: m.id, label: m.name }));
       case 'fhir-resource-types':
         return FHIR_RESOURCE_TYPES.map((t) => ({ value: t, label: t }));
+      case 'forms':
+        return (await deps.forms.listPublished()).map((f) => ({ value: f.id, label: f.name }));
       default:
         return [];
     }
