@@ -1,4 +1,4 @@
-import type { WorkflowItem } from './items';
+import type { WorkflowItem, BinaryRef } from './items';
 
 export interface RunPluginNodeInput {
   pluginId: string;
@@ -87,6 +87,10 @@ export interface WorkflowServices {
   /** Persist FHIR resource items + emit data.persisted. Host-injected. */
   persistStore?(input: RunPersistStoreInput): Promise<RunPersistStoreOutput>;
   loadDataset(name: string): Promise<{ columns: { key: string; label: string }[]; rows: Record<string, unknown>[] }>;
+  /** Read raw bytes for a stored BinaryRef objectKey. Host-injected (binary nodes). */
+  readBinary?(objectKey: string): Promise<Uint8Array>;
+  /** Persist raw bytes as a run artifact under workflow-artifacts/ → BinaryRef. Host-injected (binary nodes). */
+  writeBinary?(input: { bytes: Uint8Array; fileName: string; contentType: string }): Promise<BinaryRef>;
 }
 
 export function parseAllowlist(raw: string): string[] {

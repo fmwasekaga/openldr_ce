@@ -379,6 +379,16 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       await blob.put(objectKey, bytes, contentType);
       return { objectKey, format, byteSize: bytes.length };
     },
+    readBinary: async (objectKey) => blob.get(objectKey),
+    writeBinary: async ({ bytes, fileName, contentType }) => {
+      if (bytes.byteLength > cfg.WORKFLOW_FILE_MAX_BYTES) {
+        throw new Error(`file exceeds the ${cfg.WORKFLOW_FILE_MAX_BYTES}-byte limit`);
+      }
+      const safe = (fileName.split(/[\\/]/).pop() ?? 'output').replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 128) || 'output';
+      const objectKey = `workflow-artifacts/${randomUUID()}/${safe}`;
+      await blob.put(objectKey, bytes, contentType);
+      return { objectKey, contentType, fileName: safe, byteSize: bytes.byteLength };
+    },
   };
   const workflowRunner = createWorkflowTriggerRunner({
     store: workflowStore, runs: workflowRuns, schedules: workflowSchedules,
