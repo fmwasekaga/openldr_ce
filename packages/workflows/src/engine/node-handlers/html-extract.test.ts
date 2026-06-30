@@ -19,4 +19,8 @@ describe('htmlExtractHandler', () => {
     const result = await htmlExtractHandler(node({ sourceField: 'html', extractions: [{ key: 'missing', selector: '.nope', returnValue: 'text' }] }), ctx(), [{ json: { html } }]);
     expect((result[0].json as Record<string, unknown>).missing).toBe('');
   });
+  it('extracts inner html by selector', async () => {
+    const result = await htmlExtractHandler(node({ sourceField: 'html', extractions: [{ key: 'inner', selector: 'h1.t', returnValue: 'html' }] }), ctx(), [{ json: { html } }]);
+    expect((result[0].json as Record<string, unknown>).inner).toBe('Hello');
+  });
 });

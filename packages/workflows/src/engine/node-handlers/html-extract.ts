@@ -8,7 +8,9 @@ interface Extraction {
   attribute?: string;
 }
 
-/** Extract values from an HTML field using CSS-selector rules. Each rule writes `key` onto the item. */
+/** Extract values from an HTML field using CSS-selector rules. Each rule writes `key` onto the item.
+ *  When a selector matches multiple elements, `text` concatenates all matches while `html`/`attribute`
+ *  use the first match (mirrors n8n). An invalid selector yields `null` for that key. */
 export const htmlExtractHandler: NodeHandler = async (node, _ctx, input) => {
   const config = (node.data.config as Record<string, unknown>) ?? {};
   const sourceField = (config.sourceField as string) || 'html';
@@ -19,10 +21,14 @@ export const htmlExtractHandler: NodeHandler = async (node, _ctx, input) => {
     const extracted: Record<string, unknown> = {};
     for (const rule of extractions) {
       if (!rule.key || !rule.selector) continue;
-      const el = $(rule.selector);
-      if (rule.returnValue === 'html') extracted[rule.key] = el.html() ?? '';
-      else if (rule.returnValue === 'attribute') extracted[rule.key] = el.attr(rule.attribute ?? '') ?? '';
-      else extracted[rule.key] = el.text().trim();
+      try {
+        const el = $(rule.selector);
+        if (rule.returnValue === 'html') extracted[rule.key] = el.html() ?? '';
+        else if (rule.returnValue === 'attribute') extracted[rule.key] = el.attr(rule.attribute ?? '') ?? '';
+        else extracted[rule.key] = el.text().trim();
+      } catch {
+        extracted[rule.key] = null;
+      }
     }
     return { json: { ...item.json, ...extracted } };
   });

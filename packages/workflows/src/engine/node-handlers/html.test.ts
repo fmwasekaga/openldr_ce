@@ -14,4 +14,8 @@ describe('htmlHandler', () => {
     const result = await htmlHandler(node({ field: 'html', outputField: 'text' }), ctx(), [{ json: { html: '' } }]);
     expect((result[0].json as Record<string, unknown>).text).toBe('');
   });
+  it('drops script and style content', async () => {
+    const result = await htmlHandler(node({ field: 'html', outputField: 'text' }), ctx(), [{ json: { html: '<style>body{color:red}</style><script>alert(1)</script><p>Hello</p>' } }]);
+    expect((result[0].json as Record<string, unknown>).text).toBe('Hello');
+  });
 });

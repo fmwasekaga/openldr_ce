@@ -15,7 +15,7 @@ export const markdownHandler: NodeHandler = async (node, _ctx, input) => {
     const value = String(item.json[field] ?? '');
     const converted = operation === 'htmlToMarkdown'
       ? turndown.turndown(value)
-      : (marked.parse(value) as string);
+      : marked.parse(value, { async: false });
     return { json: { ...item.json, [outputField]: converted } };
   });
 };
