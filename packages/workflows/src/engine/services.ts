@@ -89,6 +89,8 @@ export interface WorkflowServices {
   loadDataset(name: string): Promise<{ columns: { key: string; label: string }[]; rows: Record<string, unknown>[] }>;
   /** Run a raw SQL query against a host database connector → rows. Host-injected (database nodes). */
   runConnectorSql?(input: { connectorId: string; sql: string }): Promise<SqlResult>;
+  /** Run a MongoDB operation against a host connector. Host-injected. */
+  runConnectorMongo?(input: { connectorId: string; operation: string; collection: string; query: unknown }): Promise<{ rows: Record<string, unknown>[]; meta?: Record<string, unknown> }>;
   /** Read raw bytes for a stored BinaryRef objectKey. Host-injected (binary nodes). */
   readBinary?(objectKey: string): Promise<Uint8Array>;
   /** Persist raw bytes as a run artifact under workflow-artifacts/ → BinaryRef. Host-injected (binary nodes). */
