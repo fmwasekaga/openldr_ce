@@ -4,8 +4,8 @@ import { cn } from '@/lib/cn';
 import { downloadWorkflowArtifact } from '@/api';
 import { useWorkflowStore } from '../../hooks/use-workflow-store';
 import { pickForm } from '../node-forms';
-import { CodeEditor } from '../node-forms/code-editor';
 import type { WorkflowNodeData } from '../../lib/types';
+import { JsonView } from './json-view';
 import { outputBinaries } from '../../lib/output-binaries';
 
 type Tab = 'config' | 'input' | 'output';
@@ -170,21 +170,4 @@ function TabButton({
       {children}
     </button>
   );
-}
-
-function JsonView({ data, emptyLabel }: { data: unknown; emptyLabel: string }) {
-  if (data === undefined || data === null) {
-    return (
-      <p className="text-xs text-muted-foreground/70 italic">{emptyLabel}</p>
-    );
-  }
-
-  let formatted: string;
-  try {
-    formatted = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
-  } catch {
-    formatted = String(data);
-  }
-
-  return <CodeEditor language="json" value={formatted} onChange={() => {}} readOnly minHeight="8rem" />;
 }
