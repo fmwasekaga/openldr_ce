@@ -20,6 +20,7 @@ export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
   'if', 'filter',
   // sinks
   'materialize-dataset', 'export-artifact',
+  'form-validate', 'persist-store',
 ]);
 
 /**
@@ -204,6 +205,14 @@ export const nodeCategories: NodeCategory[] = [
       node('materialize-dataset', 'action', 'Materialize Dataset', 'Save', 'Write results to an internal dataset', {
         keywords: ['save', 'dataset', 'store', 'sink'],
         data: { action: 'materialize-dataset', config: { datasetName: '' } },
+      }),
+      node('form-validate', 'action', 'Form Validate', 'ClipboardCheck', 'Validate items against a form → FHIR resources', {
+        keywords: ['form', 'validate', 'fhir', 'ingest'],
+        data: { action: 'form-validate', config: {} },
+      }),
+      node('persist-store', 'action', 'Persist Store', 'Database', 'Persist FHIR resources and emit data.persisted', {
+        keywords: ['persist', 'save', 'fhir', 'store', 'sink'],
+        data: { action: 'persist-store', config: {} },
       }),
       node('export-artifact', 'action', 'Export File', 'Download', 'Export results as CSV, XLSX, or PDF', {
         keywords: ['csv', 'xlsx', 'pdf', 'download', 'export', 'sink'],
