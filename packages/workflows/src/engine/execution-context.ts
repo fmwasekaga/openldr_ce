@@ -2,6 +2,8 @@ import type { RunEvent } from '../types';
 import type { WorkflowServices } from './services';
 import type { WorkflowItem, BinaryRef } from './items';
 
+export const DEFAULT_LOOP_MAX_ITEMS = 100_000;
+
 /** Code node sandbox limits plus the SEC-01 master enable flag (default off). */
 export interface CodeLimits {
   timeoutMs: number;
@@ -41,6 +43,10 @@ export interface ExecutionContext {
   files?: Record<string, BinaryRef>;
   /** Workflow-id recursion chain for the execute-workflow node (empty at the top level). */
   callStack: string[];
+  /** Loop iteration stack (innermost loop on top) for $index/$item templating. */
+  loopVars: Array<{ index: number; item?: Record<string, unknown> }>;
+  /** Hard cap on a loop node's accumulated output items. */
+  loopMaxItems: number;
 }
 
 export function createContext(
@@ -54,5 +60,5 @@ export function createContext(
   files?: Record<string, BinaryRef>,
   callStack: string[] = [],
 ): ExecutionContext {
-  return { input, nodeOutputs: {}, nodeMeta: {}, branches: {}, logs: {}, emit, edges, codeLimits, services, workflowId, logger, files, callStack };
+  return { input, nodeOutputs: {}, nodeMeta: {}, branches: {}, logs: {}, emit, edges, codeLimits, services, workflowId, logger, files, callStack, loopVars: [], loopMaxItems: DEFAULT_LOOP_MAX_ITEMS };
 }

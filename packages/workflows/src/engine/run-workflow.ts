@@ -111,6 +111,10 @@ export interface RunWorkflowOptions {
   files?: Record<string, import('./items').BinaryRef>;
   /** Workflow-id recursion chain forwarded to the execution context (execute-workflow guard). Defaults to []. */
   callStack?: string[];
+  /** Seed the loop iteration stack (nested-loop recursion forwards this). */
+  loopVars?: Array<{ index: number; item?: Record<string, unknown> }>;
+  /** Override the loop accumulation cap (from cfg.WORKFLOW_LOOP_MAX_ITEMS). */
+  loopMaxItems?: number;
 }
 
 export async function runWorkflow(
@@ -120,6 +124,8 @@ export async function runWorkflow(
 ): Promise<WorkflowRunResult> {
   const startedAt = new Date().toISOString();
   const ctx = createContext(opts.input, opts.onEvent ?? (() => {}), edges, opts.codeLimits, opts.services, opts.workflowId, opts.logger, opts.files, opts.callStack ?? []);
+  if (opts.loopVars) ctx.loopVars = opts.loopVars;
+  if (opts.loopMaxItems != null) ctx.loopMaxItems = opts.loopMaxItems;
   const sorted = topologicalSort(nodes, edges);
   const results: NodeRunResult[] = [];
 

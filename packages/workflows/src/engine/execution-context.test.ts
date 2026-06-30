@@ -14,3 +14,11 @@ describe('createContext callStack', () => {
     expect(ctx.callStack).toEqual(['wf-a', 'wf-b']);
   });
 });
+
+describe('createContext loop fields', () => {
+  it('defaults loopVars to [] and loopMaxItems to 100000', () => {
+    const ctx = createContext(undefined, () => {});
+    expect(ctx.loopVars).toEqual([]);
+    expect(ctx.loopMaxItems).toBe(100_000);
+  });
+});
