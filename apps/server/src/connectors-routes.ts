@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '@openldr/bootstrap';
-import { createPluginTarget, createConnectorDb } from '@openldr/bootstrap';
+import { createPluginTarget, testConnector } from '@openldr/bootstrap';
 import type { ConnectorStore } from '@openldr/db';
 import { redact } from '@openldr/core';
 import { requireRole } from './rbac';
@@ -178,12 +178,11 @@ export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any
         action: 'connector.test', entityType: 'connector', entityId: id,
         metadata: { outcome, pluginId: connector.pluginId, host: connector.allowedHost, ...(detail ? { detail } : {}) },
       });
-    // Host (database) connector — run a SELECT 1 to verify connectivity.
+    // Host (database) connector — probe by type (SELECT 1 / mongo ping / redis PING).
     if (connector.type) {
       try {
         const config = await connectors.getDecryptedConfig(id, key());
-        const conn = createConnectorDb(connector.type, config);
-        try { await conn.query('select 1'); } finally { await conn.close(); }
+        await testConnector(connector.type, config);
         await auditTest('ok');
         return { ok: true };
       } catch (e) {
