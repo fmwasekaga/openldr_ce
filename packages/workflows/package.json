@@ -18,12 +18,16 @@
     "cron-parser": "^4.9.0",
     "fast-xml-parser": "^4.5.0",
     "jose": "^5.9.6",
+    "jszip": "^3.10.1",
     "kysely": "^0.27.5",
     "marked": "^14.1.0",
+    "pdf-parse": "^1.1.1",
     "turndown": "^7.2.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zod": "3.24.0"
   },
   "devDependencies": {
+    "@types/pdf-parse": "^1.1.4",
     "@types/turndown": "^5.0.5",
     "pg-mem": "^3.0.14",
     "typescript": "5.7.2",
