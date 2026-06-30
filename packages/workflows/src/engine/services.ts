@@ -12,6 +12,32 @@ export interface RunPluginNodeOutput {
   meta?: Record<string, unknown>;
 }
 
+export interface RunFormValidateInput {
+  formId: string;
+  items: WorkflowItem[];
+}
+export interface FormValidateInvalid {
+  index: number;
+  errors: Array<{ fieldId: string; reason: string }>;
+}
+export interface RunFormValidateOutput {
+  items: WorkflowItem[];
+  meta: { formId: string; validated: number; invalid: FormValidateInvalid[] };
+}
+
+export interface RunPersistStoreInput {
+  items: WorkflowItem[];
+  source?: string;
+}
+export interface RunPersistStoreOutput {
+  items: WorkflowItem[];
+  meta: {
+    persisted: number;
+    flattened: { written: number; skipped: number; degraded: number };
+    resourceTypes: string[];
+  };
+}
+
 export interface SqlResult {
   columns: { key: string; label: string }[];
   rows: Record<string, unknown>[];
@@ -55,6 +81,10 @@ export interface WorkflowServices {
   /** Execute a plugin-contributed workflow node. Injected at bootstrap; absent in
    *  pure-engine tests and legacy paths. */
   runPluginNode?(input: RunPluginNodeInput): Promise<RunPluginNodeOutput>;
+  /** Validate items against a form definition → FHIR resource items. Host-injected. */
+  validateForm?(input: RunFormValidateInput): Promise<RunFormValidateOutput>;
+  /** Persist FHIR resource items + emit data.persisted. Host-injected. */
+  persistStore?(input: RunPersistStoreInput): Promise<RunPersistStoreOutput>;
   loadDataset(name: string): Promise<{ columns: { key: string; label: string }[]; rows: Record<string, unknown>[] }>;
 }
 
