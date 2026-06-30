@@ -1083,7 +1083,7 @@ export async function executeWorkflowStream(
 export interface WorkflowRunSummary {
   id: string;
   workflowId: string;
-  triggerSource: 'manual' | 'schedule' | 'webhook' | 'ingest';
+  triggerSource: 'manual' | 'schedule' | 'webhook' | 'ingest' | 'event';
   status: 'completed' | 'failed';
   startedAt: string;
   finishedAt: string;

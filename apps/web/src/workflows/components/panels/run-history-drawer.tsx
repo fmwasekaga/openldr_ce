@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { ArrowLeft, CheckCircle2, XCircle, Download } from 'lucide-react';
 import {
   fetchWorkflowRuns,
@@ -10,6 +10,7 @@ import {
   type LogEntry,
 } from '@/api';
 import { outputBinaries } from '../../lib/output-binaries';
+import { JsonView } from './json-view';
 import { cn } from '@/lib/cn';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
@@ -28,6 +29,7 @@ const SOURCE_VARIANT: Record<WorkflowRunSummary['triggerSource'], string> = {
   schedule: 'border-sky-500/40 text-sky-300',
   webhook: 'border-amber-500/40 text-amber-300',
   ingest: 'border-emerald-500/40 text-emerald-300',
+  event: 'border-fuchsia-500/40 text-fuchsia-300',
 };
 
 /** Coerce the opaque `run.result` into the per-node execution shape, if present. */
@@ -176,7 +178,8 @@ export function RunHistoryDrawer({ open, workflowId, onClose }: Props) {
   );
 }
 
-function RunDetail({ run, loading, error }: { run: WorkflowRunSummary; loading: boolean; error?: string }) {
+export function RunDetail({ run, loading, error }: { run: WorkflowRunSummary; loading: boolean; error?: string }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
   const exec = asExecuteResponse(run.result);
   const results: NodeRunResult[] = exec?.results ?? [];
   const logs: { nodeId: string; entry: LogEntry }[] = results.flatMap((r) =>
@@ -230,26 +233,49 @@ function RunDetail({ run, loading, error }: { run: WorkflowRunSummary; loading: 
                 </thead>
                 <tbody>
                   {results.map((r) => (
-                    <tr key={r.nodeId} className="border-t border-border/50">
-                      <td className="py-1.5 font-mono text-muted-foreground">{r.nodeId}</td>
-                      <td className="py-1.5 text-foreground">{r.type}</td>
-                      <td className="py-1.5">
-                        <span
-                          className={cn(
-                            'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium',
-                            r.status === 'success'
-                              ? 'bg-emerald-500/15 text-emerald-400'
-                              : r.status === 'skipped'
-                                ? 'bg-muted text-muted-foreground'
-                                : 'bg-rose-500/15 text-rose-400',
-                          )}
-                          title={r.error ?? ''}
-                        >
-                          {r.status}
-                        </span>
-                      </td>
-                      <td className="py-1.5 text-right font-mono text-muted-foreground">{r.durationMs}ms</td>
-                    </tr>
+                    <Fragment key={r.nodeId}>
+                      <tr
+                        className="cursor-pointer border-t border-border/50 hover:bg-secondary/40"
+                        onClick={() => setExpanded(expanded === r.nodeId ? null : r.nodeId)}
+                      >
+                        <td className="py-1.5 font-mono text-muted-foreground">{r.nodeId}</td>
+                        <td className="py-1.5 text-foreground">{r.type}</td>
+                        <td className="py-1.5">
+                          <span
+                            className={cn(
+                              'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium',
+                              r.status === 'success'
+                                ? 'bg-emerald-500/15 text-emerald-400'
+                                : r.status === 'skipped'
+                                  ? 'bg-muted text-muted-foreground'
+                                  : 'bg-rose-500/15 text-rose-400',
+                            )}
+                            title={r.error ?? ''}
+                          >
+                            {r.status}
+                          </span>
+                        </td>
+                        <td className="py-1.5 text-right font-mono text-muted-foreground">{r.durationMs}ms</td>
+                      </tr>
+                      {expanded === r.nodeId && (
+                        <tr>
+                          <td colSpan={4} className="bg-secondary/20 px-2 py-2">
+                            <div className="space-y-2">
+                              <div>
+                                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Output</p>
+                                <JsonView data={r.output} emptyLabel="(no output recorded)" />
+                              </div>
+                              {r.meta !== undefined && r.meta !== null && (
+                                <div>
+                                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Result</p>
+                                  <JsonView data={r.meta} emptyLabel="" />
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
