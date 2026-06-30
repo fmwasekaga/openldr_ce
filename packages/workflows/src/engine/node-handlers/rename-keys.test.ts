@@ -18,4 +18,16 @@ describe('renameKeysHandler', () => {
     const result = await renameKeysHandler(node([{ from: 'a', to: '' }]), ctx(), [{ json: { a: 1 } }]);
     expect(result).toEqual([{ json: { a: 1 } }]);
   });
+  it('overwrites an existing target key', async () => {
+    const result = await renameKeysHandler(node([{ from: 'a', to: 'b' }]), ctx(), [{ json: { a: 1, b: 2 } }]);
+    expect(result).toEqual([{ json: { b: 1 } }]);
+  });
+  it('applies chained renames in order so each sees prior results', async () => {
+    const result = await renameKeysHandler(
+      node([{ from: 'a', to: 'b' }, { from: 'b', to: 'c' }]),
+      ctx(),
+      [{ json: { a: 1, b: 2 } }],
+    );
+    expect(result).toEqual([{ json: { c: 1 } }]);
+  });
 });
