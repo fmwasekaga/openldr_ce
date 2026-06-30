@@ -530,6 +530,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
 export { CE_VERSION } from './plugin-registry';
 export * from './db-context';
 export { createPluginTarget } from './connector-target';
+export { createConnectorDb, type ConnectorDb } from './connector-db';
 export * from './ingest-context';
 export * from './target-store';
 export * from './terminology-context';
