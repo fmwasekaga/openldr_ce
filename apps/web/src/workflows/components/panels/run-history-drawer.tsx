@@ -284,6 +284,7 @@ export function RunDetail({ run, loading, error }: { run: WorkflowRunSummary; lo
           {/* Detail: selected node's data. */}
           {selected && (
             <div className="flex min-h-0 flex-1 flex-col px-4 pt-3">
+              <div className="mb-2 text-[11px] font-medium text-foreground">{selected.label ?? selected.nodeId}</div>
               <div className="flex gap-4 text-[11px]">
                 {(['output', 'result', 'logs'] as const).map((t) => (
                   <button

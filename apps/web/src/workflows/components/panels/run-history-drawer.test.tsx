@@ -23,7 +23,7 @@ const run = mkRun([
 describe('RunDetail master-detail', () => {
   it('shows node labels (not just ids) in the table', () => {
     render(<RunDetail run={run} loading={false} />);
-    expect(screen.getByText('Query batch rows')).toBeInTheDocument();
+    expect(screen.getAllByText('Query batch rows').length).toBeGreaterThan(0);
     expect(screen.getByText('Log')).toBeInTheDocument();
   });
 
