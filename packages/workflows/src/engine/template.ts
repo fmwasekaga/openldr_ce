@@ -53,6 +53,15 @@ export function resolveExpression(
     return readPath(ctx.nodeOutputs[nodeId], rest);
   }
 
+  if (trimmed === '$index') {
+    const top = ctx.loopVars[ctx.loopVars.length - 1];
+    return top ? top.index : undefined;
+  }
+  if (trimmed === '$item' || trimmed.startsWith('$item.')) {
+    const top = ctx.loopVars[ctx.loopVars.length - 1];
+    return readPath(top?.item, trimmed.slice('$item'.length));
+  }
+
   // $items is checked before $input so startsWith doesn't mis-match
   if (trimmed.startsWith('$items')) {
     return readPath(input.map((i) => i.json), trimmed.slice('$items'.length));

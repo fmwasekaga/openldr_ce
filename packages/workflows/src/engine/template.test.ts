@@ -46,3 +46,21 @@ describe('resolveTemplate', () => {
     expect(resolveTemplate('hello world', ctx(), items)).toBe('hello world');
   });
 });
+
+describe('loop template vars', () => {
+  it('resolves $index and $item from the loopVars stack (innermost on top)', () => {
+    const ctx = createContext(undefined, () => {});
+    ctx.loopVars = [
+      { index: 0, item: { name: 'outer' } },
+      { index: 3, item: { name: 'inner' } },
+    ];
+    expect(resolveExpression('$index', ctx, [])).toBe(3);
+    expect(resolveExpression('$item.name', ctx, [])).toBe('inner');
+  });
+
+  it('returns empty string for $index/$item with no active loop', () => {
+    const ctx = createContext(undefined, () => {});
+    expect(resolveTemplate('i={{ $index }}', ctx, [])).toBe('i=');
+    expect(resolveTemplate('n={{ $item.name }}', ctx, [])).toBe('n=');
+  });
+});
