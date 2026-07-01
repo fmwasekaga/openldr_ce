@@ -27,8 +27,8 @@ function persistedSqlTemplates(prev: Dashboard | undefined): Set<string> {
 // exact-matches a persisted template is unchanged/vetted and passes; a new or edited template
 // does not match and is rejected. The server-seeded sample is inserted via the store directly,
 // bypassing this route.
-function assertSqlAuthoringAllowed(cfg: AppContext['cfg'], d: Dashboard, prevTemplates: Set<string>): void {
-  if (cfg.DASHBOARD_SQL_ENABLED) return;
+function assertSqlAuthoringAllowed(sqlEnabled: boolean, d: Dashboard, prevTemplates: Set<string>): void {
+  if (sqlEnabled) return;
   for (const w of d.widgets) {
     if (w.query.mode === 'sql') {
       const sql = typeof w.query.sql === 'string' ? w.query.sql.trim() : '';
@@ -63,7 +63,8 @@ export function registerDashboardRoutes(app: FastifyInstance<any, any, any, any>
     try {
       const parsed = DashboardSchema.parse(req.body);
       // CREATE: no prior dashboard, so no SQL is vetted — any sql-mode widget is new and gated.
-      assertSqlAuthoringAllowed(ctx.cfg, parsed, new Set());
+      const sqlEnabled = await ctx.featureFlags.get('dashboard.raw_sql');
+      assertSqlAuthoringAllowed(sqlEnabled, parsed, new Set());
       const created = await ctx.dashboards.store.create(parsed);
       await recordAudit(ctx, req, { action: 'dashboard.create', entityType: 'dashboard', entityId: created.id, before: null, after: created });
       return created;
@@ -77,7 +78,8 @@ export function registerDashboardRoutes(app: FastifyInstance<any, any, any, any>
       const before = await ctx.dashboards.store.get(id);
       // UPDATE: unchanged SQL widgets (SQL text matches what's already persisted) are exempt, so
       // layout/chart/config edits save; only genuinely new/changed SQL is authoring and gated.
-      assertSqlAuthoringAllowed(ctx.cfg, parsed, persistedSqlTemplates(before));
+      const sqlEnabled = await ctx.featureFlags.get('dashboard.raw_sql');
+      assertSqlAuthoringAllowed(sqlEnabled, parsed, persistedSqlTemplates(before));
       const updated = await ctx.dashboards.store.update(id, parsed);
       await recordAudit(ctx, req, { action: 'dashboard.update', entityType: 'dashboard', entityId: id, before, after: updated });
       return updated;

@@ -6,6 +6,7 @@ import './auth-plugin';
 function fakeCtx(cfg: { DASHBOARD_SQL_ENABLED?: boolean } = {}) {
   const data: any[] = [];
   const auditEvents: any[] = [];
+  const sqlEnabled = cfg.DASHBOARD_SQL_ENABLED ?? false;
   return {
     dashboards: {
       store: {
@@ -23,7 +24,8 @@ function fakeCtx(cfg: { DASHBOARD_SQL_ENABLED?: boolean } = {}) {
     },
     audit: { record: async (e: any) => { auditEvents.push(e); return e; } },
     logger: { error() {}, warn() {}, info() {} },
-    cfg: { DASHBOARD_SQL_ENABLED: cfg.DASHBOARD_SQL_ENABLED ?? false },
+    featureFlags: { get: async (_id: string) => sqlEnabled },
+    cfg: {},
     __auditEvents: auditEvents,
   } as any;
 }
