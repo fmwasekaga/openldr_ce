@@ -24,6 +24,7 @@ import { MaterializeForm } from './materialize-form';
 import { ExportForm } from './export-form';
 import { LoadDatasetForm } from './load-dataset-form';
 import { DeclarativeNodeForm } from './plugin-node-form';
+import { ReadWriteFileForm } from './read-write-file-form';
 
 export interface NodeFormProps {
   node: WorkflowNode;
@@ -64,6 +65,7 @@ const FORMS: Record<string, ComponentType<NodeFormProps>> = {
   'plugin-node': DeclarativeNodeForm,
   'form-validate': DeclarativeNodeForm,
   'persist-store': DeclarativeNodeForm,
+  'read-write-file': ReadWriteFileForm,
 };
 
 export function pickForm(node: WorkflowNode): ComponentType<NodeFormProps> {
