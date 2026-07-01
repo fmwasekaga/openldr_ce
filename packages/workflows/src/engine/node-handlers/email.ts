@@ -23,7 +23,7 @@ export const emailHandler: NodeHandler = async (node, ctx, input) => {
   if (ref) {
     if (!ctx.services.readBinary) throw new Error('Email node: readBinary unavailable for attachments');
     const content = await ctx.services.readBinary(ref.objectKey);
-    attachments = [{ filename: ref.fileName, content, contentType: ref.contentType }];
+    attachments = [{ filename: ref.fileName ?? 'attachment', content, contentType: ref.contentType }];
   }
 
   const result = await ctx.services.runConnectorEmail({ connectorId, to, subject, body, html, cc, ...(attachments ? { attachments } : {}) });
