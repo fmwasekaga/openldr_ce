@@ -1,0 +1,147 @@
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+:root {
+  --brand: #4682B4; --link: #5A9BD6; --link-hover: #7BB3D9; --brand-deep: #365F8A;
+  --brand-wash: rgba(70,130,180,0.15); --brand-border: rgba(70,130,180,0.3);
+  --success: #22c55e; --warning: #f59e0b; --danger: #ef4444;
+  --radius-sm: 4px; --radius: 6px; --radius-lg: 8px; --radius-pill: 9999px;
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', 'Fira Code', Menlo, monospace;
+}
+:root[data-theme='dark'] {
+  --bg: #171717; --sidebar: #1a1a1a; --card: #1e1e1e;
+  --border: #2e2e2e; --border-2: #363636; --rule: #242424;
+  --text: #fafafa; --text-muted: #898989; --table-head: #1a1a1a;
+}
+:root[data-theme='light'] {
+  --bg: #ffffff; --sidebar: #fafafa; --card: #ffffff;
+  --border: #e4e4e7; --border-2: #d4d4d8; --rule: #e4e4e7;
+  --text: #18181b; --text-muted: #71717a; --table-head: #f4f4f5;
+}
+* { box-sizing: border-box; }
+/* Base element typography lives in @layer base so Tailwind utilities (e.g. text-inherit,
+   text-foreground) and scoped .doc-content rules can override it — otherwise these
+   unlayered element selectors would outrank utilities (e.g. an `a` inside a card forcing
+   all its text to the link color). */
+@layer base {
+  body { margin: 0; font-family: var(--font); font-size: 14px; line-height: 1.5; background: var(--bg); color: var(--text); }
+  h1 { font-size: 24px; font-weight: 600; } h2 { font-size: 18px; font-weight: 600; } h3 { font-size: 16px; font-weight: 500; }
+  a { color: var(--link); text-decoration: none; }
+  code, .mono { font-family: var(--mono); font-size: 13px; }
+}
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; }
+.btn-primary { background: var(--brand); color: #fff; border: none; border-radius: var(--radius-pill); padding: 8px 24px; font: 500 14px var(--font); cursor: pointer; display: inline-block; }
+.btn-primary:hover { background: var(--link); }
+.btn-secondary { background: transparent; color: var(--text); border: 1px solid var(--border-2); border-radius: var(--radius); padding: 8px 16px; cursor: pointer; }
+.badge { border-radius: var(--radius-pill); padding: 2px 10px; font-size: 12px; font-weight: 500; }
+.badge-danger { background: rgba(239,68,68,0.15); color: var(--danger); }
+.badge-warning { background: rgba(245,158,11,0.15); color: var(--warning); }
+.badge-success { background: rgba(34,197,94,0.15); color: var(--success); }
+:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(70,130,180,0.5); }
+
+/* Themed scrollbars — replace the default white/gray OS scrollbar so it matches the
+   (dark by default) theme. Colors are theme vars, so they switch with data-theme. */
+* { scrollbar-width: thin; scrollbar-color: var(--border-2) transparent; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* Sidebar nav items */
+.nav-item { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: var(--radius); color: var(--text-muted); font-weight: 500; text-decoration: none; white-space: nowrap; overflow: hidden; }
+.nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+:root[data-theme='light'] .nav-item:hover { background: rgba(0,0,0,0.04); }
+.nav-item.active { background: var(--brand-wash); color: var(--link); }
+.nav-item.collapsed { gap: 0; padding: 0; width: 40px; justify-content: center; margin: 0 auto; }
+.nav-item.disabled { opacity: 0.4; cursor: default; }
+.nav-item.disabled:hover { background: transparent; color: var(--text-muted); }
+
+/* Ghost icon button (collapse toggle, theme toggle) */
+.icon-btn { display: inline-flex; align-items: center; justify-content: center; height: 32px; width: 32px; border: none; background: transparent; color: var(--text-muted); border-radius: var(--radius); cursor: pointer; }
+.icon-btn:hover { background: var(--brand-wash); color: var(--text); }
+
+/* Avatar */
+.avatar { display: inline-flex; align-items: center; justify-content: center; height: 28px; width: 28px; border-radius: var(--radius-pill); background: var(--brand); color: #fff; font-size: 11px; font-weight: 600; flex-shrink: 0; }
+
+/* Rendered markdown documentation */
+.doc-content { line-height: 1.6; color: var(--text); }
+.doc-content h1 { font-size: 24px; margin: 0 0 12px; }
+.doc-content h2 { font-size: 18px; margin: 24px 0 8px; border-bottom: 1px solid var(--rule); padding-bottom: 4px; }
+.doc-content h3 { font-size: 15px; margin: 16px 0 6px; }
+.doc-content p { margin: 8px 0; }
+.doc-content ul, .doc-content ol { margin: 8px 0; padding-left: 20px; }
+.doc-content li { margin: 2px 0; }
+.doc-content a { color: var(--link); text-decoration: none; }
+.doc-content a:hover { color: var(--link-hover); text-decoration: underline; }
+.doc-content code { background: var(--sidebar); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 13px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.doc-content pre { background: var(--sidebar); border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow: auto; }
+.doc-content pre code { background: none; border: none; padding: 0; }
+.doc-content table { border-collapse: collapse; margin: 12px 0; width: 100%; }
+.doc-content th, .doc-content td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; font-size: 13px; }
+.doc-content th { background: var(--table-head); }
+.doc-content img { margin: 12px 0; }
+
+/* shadcn token bridge — map shadcn's expected vars onto the existing palette.
+   These reference the existing theme vars, so they auto-switch with data-theme. */
+:root {
+  --background: var(--bg); --foreground: var(--text);
+  --card-foreground: var(--text);
+  --popover: var(--card); --popover-foreground: var(--text);
+  --primary: var(--brand); --primary-foreground: #ffffff;
+  --secondary: var(--sidebar); --secondary-foreground: var(--text);
+  --muted: var(--sidebar); --muted-foreground: var(--text-muted);
+  --accent: var(--brand-wash); --accent-foreground: var(--text);
+  --destructive: var(--danger); --destructive-foreground: #ffffff;
+  --input: var(--border-2); --ring: rgba(70,130,180,0.5);
+}
+/* Map the bridged vars into Tailwind's color/radius utilities. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius-lg);
+}
+/* Minimal base shadcn assumes — we ship Tailwind WITHOUT global preflight (to protect
+   the existing token-CSS pages), so we add back only the control resets shadcn relies
+   on. Without these, native button/input chrome leaks: ghost and icon buttons show the
+   browser's gray/white buttonface background and bevel instead of a flat control.
+   These live in @layer base, which is OUTRANKED both by Tailwind utility classes (the
+   bg and border utilities) and by the existing unlayered .btn and .icon-btn classes,
+   so both still win exactly as before. */
+@layer base {
+  .ui-scope, .ui-scope * { border-color: var(--border); }
+  button, [type='button'], [type='reset'], [type='submit'] {
+    -webkit-appearance: none;
+    appearance: none;
+    background-color: transparent;
+    background-image: none;
+    border: 0 solid;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+  }
+  input, select, textarea { font: inherit; color: inherit; }
+}
