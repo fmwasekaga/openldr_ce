@@ -78,18 +78,26 @@ export function buildApp(ctx: AppContext) {
   registerWorkflowRoutes(app, ctx, { connectors: createConnectorStore(ctx.internalDb) });
   registerSettingsRoutes(app, ctx);
 
-  // Serve the built SPA if present. API + health are registered first and win.
+  // Serve the built SPA under /studio/* — the landing site owns /.
+  // API + health routes are registered above and always win.
   // WEB_DIST_DIR overrides the location for container deploys (the SPA may not sit at
   // ../../studio/dist relative to the bundled server entry); defaults to the workspace layout.
   const webDist = process.env.WEB_DIST_DIR ?? resolve(dirname(fileURLToPath(import.meta.url)), '../../studio/dist');
   if (existsSync(webDist)) {
-    void app.register(fastifyStatic, { root: webDist });
+    void app.register(fastifyStatic, { root: webDist, prefix: '/studio/' });
     app.setNotFoundHandler((req, reply) => {
-      if (req.raw.url && req.raw.url.startsWith('/api')) {
+      const url = req.raw.url ?? '';
+      if (url.startsWith('/api')) {
         void reply.code(404).send({ error: 'not found' });
         return;
       }
-      void reply.sendFile('index.html');
+      if (url.startsWith('/studio')) {
+        // SPA client-side route: serve the shell from webDist/index.html
+        void reply.sendFile('index.html');
+        return;
+      }
+      // Everything else (e.g. /) is owned by the landing container
+      void reply.code(404).send({ error: 'not found' });
     });
   }
 

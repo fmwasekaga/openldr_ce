@@ -439,7 +439,7 @@ describe('GET /health', () => {
 });
 
 describe('SPA static root (WEB_DIST_DIR)', () => {
-  it('serves index.html from WEB_DIST_DIR when set', async () => {
+  it('serves the studio SPA under /studio and 404s unknown non-/studio non-/api paths', async () => {
     const { mkdtempSync, writeFileSync } = await import('node:fs');
     const { tmpdir } = await import('node:os');
     const { join } = await import('node:path');
@@ -448,9 +448,22 @@ describe('SPA static root (WEB_DIST_DIR)', () => {
     process.env.WEB_DIST_DIR = dir;
     try {
       const app = buildApp(ctxWith('up'));
-      const res = await app.inject({ method: 'GET', url: '/' });
-      expect(res.statusCode).toBe(200);
-      expect(res.body).toContain('id="root"');
+      await app.ready();
+
+      // Client-side route under /studio → SPA shell
+      const spa = await app.inject({ method: 'GET', url: '/studio/dashboard' });
+      expect(spa.statusCode).toBe(200);
+      expect(spa.body).toContain('id="root"');
+
+      // Unknown /api path → 404 JSON
+      const apiMiss = await app.inject({ method: 'GET', url: '/api/nope' });
+      expect(apiMiss.statusCode).toBe(404);
+      expect(apiMiss.json()).toMatchObject({ error: 'not found' });
+
+      // Root (/) → 404 — landing owns it, not the app
+      const root = await app.inject({ method: 'GET', url: '/' });
+      expect(root.statusCode).toBe(404);
+
       await app.close();
     } finally {
       delete process.env.WEB_DIST_DIR;
