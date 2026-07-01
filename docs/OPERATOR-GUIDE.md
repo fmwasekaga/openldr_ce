@@ -50,7 +50,7 @@ pnpm e2e:seed
 
 ## Dashboards
 
-Use dashboards when users need repeatable operational views over warehouse data. The builder mode works across PostgreSQL and SQL Server warehouses. The raw SQL tab is advanced, PostgreSQL-only, and gated by `DASHBOARD_SQL_ENABLED=true`.
+Use dashboards when users need repeatable operational views over warehouse data. The builder mode works across PostgreSQL and SQL Server warehouses. The raw SQL tab is advanced, PostgreSQL-only, and enabled via **Settings → General → Feature Flags** (admin-only, default off).
 
 Worked example:
 
@@ -61,7 +61,7 @@ pnpm openldr target-store test --json
 
 Troubleshooting:
 
-- If SQL widgets are not visible, check `DASHBOARD_SQL_ENABLED` and `TARGET_STORE_ADAPTER=pg`.
+- If SQL widgets are not visible, enable the `dashboard.raw_sql` feature flag in **Settings → General → Feature Flags** (admin-only) and ensure `TARGET_STORE_ADAPTER=pg`.
 - If widgets time out or return too much data, tune `DASHBOARD_SQL_TIMEOUT_MS` and `DASHBOARD_SQL_ROW_CAP`.
 
 ## Reports

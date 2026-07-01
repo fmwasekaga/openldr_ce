@@ -96,9 +96,10 @@ there are no DHIS2 env vars. Connector credentials are stored encrypted in the d
 
 ## Dashboards
 
+Dashboard raw SQL is toggled at runtime in **Settings → General → Feature Flags** (admin-only, default off).
+
 | Variable | Type | Default | Effect |
 |---|---:|---:|---|
-| `DASHBOARD_SQL_ENABLED` | boolean string | `false` | Enables raw SQL widgets when the target store is PostgreSQL. |
 | `DASHBOARD_SQL_TIMEOUT_MS` | positive integer | `5000` | Statement timeout for raw dashboard SQL. |
 | `DASHBOARD_SQL_ROW_CAP` | positive integer | `10000` | Row cap for raw dashboard SQL. |
 
@@ -159,4 +160,4 @@ pnpm -C apps/studio dev
 | DHIS2 push fails with a connector error | No connector configured, the connector is disabled, or `SECRETS_ENCRYPTION_KEY` is unset. | Create/enable a connector under Settings ▸ Connectors and set `SECRETS_ENCRYPTION_KEY`. |
 | HTTP Request workflow node cannot reach a host | `WORKFLOW_HTTP_ALLOWLIST` does not include the hostname. | Set a comma-separated allowlist, for example `WORKFLOW_HTTP_ALLOWLIST=api.example.org,dhis2.local`. |
 | Built server serves API but not SPA | `WEB_DIST_DIR` points to a missing directory. | Build web with `pnpm -C apps/studio build` and set `WEB_DIST_DIR` to that `dist` path if using a custom layout. |
-| Raw SQL dashboard tab is hidden | `DASHBOARD_SQL_ENABLED=false` or target store is not PostgreSQL. | Use builder mode, or set `DASHBOARD_SQL_ENABLED=true` with `TARGET_STORE_ADAPTER=pg`. |
+| Raw SQL dashboard tab is hidden | Feature flag `dashboard.raw_sql` is off or target store is not PostgreSQL. | Enable the flag in **Settings → General → Feature Flags** (admin-only) and ensure `TARGET_STORE_ADAPTER=pg`. |

@@ -67,8 +67,8 @@ export const ConfigSchema = z
     AUTH_DEV_USERNAME: z.string().min(1).default('dev-admin'),
     AUTH_DEV_ROLES: z.string().default('lab_admin'),
 
-    // Custom dashboards — gated raw-SQL widget escape hatch (Postgres warehouse only).
-    DASHBOARD_SQL_ENABLED: envBoolean(false),
+    // Custom dashboards — raw-SQL widget escape hatch is now the `dashboard.raw_sql`
+    // feature flag (Settings → General), not an env var. Timeout/row-cap remain env-tunable.
     DASHBOARD_SQL_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
     DASHBOARD_SQL_ROW_CAP: z.coerce.number().int().positive().default(10000),
 

@@ -51,14 +51,10 @@ describe('workflow code sandbox config', () => {
 });
 
 describe('dashboard SQL config', () => {
-  it('defaults DASHBOARD_SQL_ENABLED to false', () => {
+  it('defaults DASHBOARD_SQL_TIMEOUT_MS and DASHBOARD_SQL_ROW_CAP', () => {
     const cfg = ConfigSchema.parse(base);
-    expect(cfg.DASHBOARD_SQL_ENABLED).toBe(false);
     expect(cfg.DASHBOARD_SQL_TIMEOUT_MS).toBeGreaterThan(0);
     expect(cfg.DASHBOARD_SQL_ROW_CAP).toBeGreaterThan(0);
-  });
-  it('parses DASHBOARD_SQL_ENABLED=true', () => {
-    expect(ConfigSchema.parse({ ...base, DASHBOARD_SQL_ENABLED: 'true' }).DASHBOARD_SQL_ENABLED).toBe(true);
   });
 });
 
