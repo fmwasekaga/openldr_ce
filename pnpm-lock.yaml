@@ -109,7 +109,7 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.19.21)(jsdom@25.0.1)(lightningcss@1.32.0)
 
-  apps/web:
+  apps/studio:
     dependencies:
       '@codemirror/lang-javascript':
         specifier: ^6.2.5
@@ -167,7 +167,7 @@ importers:
         version: 2.3.0(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@radix-ui/react-slot':
         specifier: ^1.1.2
-        version: 1.2.5(@types/react@18.3.31)(react@18.3.1)
+        version: 1.3.0(@types/react@18.3.31)(react@18.3.1)
       '@radix-ui/react-tabs':
         specifier: ^1.1.15
         version: 1.1.15(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -224,7 +224,7 @@ importers:
         version: 1.5.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       react-i18next:
         specifier: ^15.1.3
-        version: 15.7.4(i18next@23.16.8)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3)
+        version: 15.7.4(i18next@23.16.8)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.7.2)
       react-markdown:
         specifier: ^10.1.0
         version: 10.1.0(@types/react@18.3.31)(react@18.3.1)
@@ -255,7 +255,7 @@ importers:
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.0.0
-        version: 4.3.1(vite@6.4.3(@types/node@22.19.21)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4))
+        version: 4.3.1(vite@6.4.3(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4))
       '@testing-library/jest-dom':
         specifier: ^6.6.3
         version: 6.9.1
@@ -273,7 +273,7 @@ importers:
         version: 1.3.6
       '@vitejs/plugin-react':
         specifier: ^4.3.4
-        version: 4.7.0(vite@6.4.3(@types/node@22.19.21)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4))
+        version: 4.7.0(vite@6.4.3(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4))
       jsdom:
         specifier: ^25.0.1
         version: 25.0.1
@@ -282,13 +282,13 @@ importers:
         version: 4.3.1
       typescript:
         specifier: ^5.7.2
-        version: 5.9.3
+        version: 5.7.2
       vite:
         specifier: ^6.0.0
-        version: 6.4.3(@types/node@22.19.21)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)
+        version: 6.4.3(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)
       vitest:
         specifier: ^2.1.8
-        version: 2.1.9(@types/node@22.19.21)(jsdom@25.0.1)(lightningcss@1.32.0)
+        version: 2.1.8(@types/node@25.9.3)(jsdom@25.0.1)(lightningcss@1.32.0)
 
   e2e:
     dependencies:
@@ -8108,12 +8108,12 @@ snapshots:
       '@tailwindcss/oxide-win32-arm64-msvc': 4.3.1
       '@tailwindcss/oxide-win32-x64-msvc': 4.3.1
 
-  '@tailwindcss/vite@4.3.1(vite@6.4.3(@types/node@22.19.21)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4))':
+  '@tailwindcss/vite@4.3.1(vite@6.4.3(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4))':
     dependencies:
       '@tailwindcss/node': 4.3.1
       '@tailwindcss/oxide': 4.3.1
       tailwindcss: 4.3.1
-      vite: 6.4.3(@types/node@22.19.21)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)
+      vite: 6.4.3(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)
 
   '@testing-library/dom@10.4.1':
     dependencies:
@@ -8342,7 +8342,7 @@ snapshots:
 
   '@ungap/structured-clone@1.3.1': {}
 
-  '@vitejs/plugin-react@4.7.0(vite@6.4.3(@types/node@22.19.21)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4))':
+  '@vitejs/plugin-react@4.7.0(vite@6.4.3(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4))':
     dependencies:
       '@babel/core': 7.29.7
       '@babel/plugin-transform-react-jsx-self': 7.29.7(@babel/core@7.29.7)
@@ -8350,7 +8350,7 @@ snapshots:
       '@rolldown/pluginutils': 1.0.0-beta.27
       '@types/babel__core': 7.20.5
       react-refresh: 0.17.0
-      vite: 6.4.3(@types/node@22.19.21)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)
+      vite: 6.4.3(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)
     transitivePeerDependencies:
       - supports-color
 
@@ -8368,13 +8368,13 @@ snapshots:
       chai: 5.3.3
       tinyrainbow: 1.2.0
 
-  '@vitest/mocker@2.1.8(vite@5.4.21(@types/node@22.19.21)(lightningcss@1.32.0))':
+  '@vitest/mocker@2.1.8(vite@5.4.21(@types/node@25.9.3)(lightningcss@1.32.0))':
     dependencies:
       '@vitest/spy': 2.1.8
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 5.4.21(@types/node@22.19.21)(lightningcss@1.32.0)
+      vite: 5.4.21(@types/node@25.9.3)(lightningcss@1.32.0)
 
   '@vitest/mocker@2.1.9(vite@5.4.21(@types/node@22.19.21)(lightningcss@1.32.0))':
     dependencies:
@@ -10756,7 +10756,7 @@ snapshots:
       react-resizable: 3.2.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       resize-observer-polyfill: 1.5.1
 
-  react-i18next@15.7.4(i18next@23.16.8)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3):
+  react-i18next@15.7.4(i18next@23.16.8)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.7.2):
     dependencies:
       '@babel/runtime': 7.29.7
       html-parse-stringify: 3.0.1
@@ -10764,7 +10764,7 @@ snapshots:
       react: 18.3.1
     optionalDependencies:
       react-dom: 18.3.1(react@18.3.1)
-      typescript: 5.9.3
+      typescript: 5.7.2
 
   react-is@16.13.1: {}
 
@@ -11584,7 +11584,7 @@ snapshots:
       fsevents: 2.3.3
       lightningcss: 1.32.0
 
-  vite@6.4.3(@types/node@22.19.21)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4):
+  vite@6.4.3(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4):
     dependencies:
       esbuild: 0.25.12
       fdir: 6.5.0(picomatch@4.0.4)
@@ -11593,7 +11593,7 @@ snapshots:
       rollup: 4.61.1
       tinyglobby: 0.2.17
     optionalDependencies:
-      '@types/node': 22.19.21
+      '@types/node': 25.9.3
       fsevents: 2.3.3
       jiti: 2.7.0
       lightningcss: 1.32.0
@@ -11602,7 +11602,7 @@ snapshots:
   vitest@2.1.8(@types/node@25.9.3)(jsdom@25.0.1)(lightningcss@1.32.0):
     dependencies:
       '@vitest/expect': 2.1.8
-      '@vitest/mocker': 2.1.8(vite@5.4.21(@types/node@22.19.21)(lightningcss@1.32.0))
+      '@vitest/mocker': 2.1.8(vite@5.4.21(@types/node@25.9.3)(lightningcss@1.32.0))
       '@vitest/pretty-format': 2.1.9
       '@vitest/runner': 2.1.8
       '@vitest/snapshot': 2.1.8
