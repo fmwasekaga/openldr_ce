@@ -1,3 +1,4 @@
+/// <reference path="../../xlsx-populate.d.ts" />
 import XlsxPopulate from 'xlsx-populate';
 import type { NodeHandler } from './types';
 import { resolveTemplate } from '../template';
