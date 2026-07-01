@@ -1,12 +1,12 @@
-# OpenLDR CE single-HTTPS-port reverse proxy.
-# nginx terminates TLS on 443 and proxies ALL routes to the fastify app, which already
-# serves the SPA (+ SPA fallback), /api, and the auth callback single-origin.
+# OpenLDR CE gateway: nginx terminates TLS and path-routes to landing / studio+api / keycloak.
 # Rendered by the nginx image's envsubst entrypoint (${SERVER_NAME}).
 
 server {
     listen 80 default_server;
     server_name ${SERVER_NAME};
-    return 301 https://$host$request_uri;
+    # Let's Encrypt http-01 challenge (certbot webroot); everything else redirects to https.
+    location /.well-known/acme-challenge/ { root /var/www/certbot; }
+    location / { return 301 https://$host$request_uri; }
 }
 
 server {
@@ -25,15 +25,18 @@ server {
     add_header X-Frame-Options SAMEORIGIN always;
     add_header Referrer-Policy strict-origin-when-cross-origin always;
 
-    location / {
-        proxy_pass http://app:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Host              $host;
-        proxy_set_header X-Real-IP         $remote_addr;
-        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header Upgrade           $http_upgrade;
-        proxy_set_header Connection        "upgrade";
-        proxy_read_timeout 120s;
-    }
+    proxy_http_version 1.1;
+    proxy_set_header Host              $host;
+    proxy_set_header X-Real-IP         $remote_addr;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Upgrade           $http_upgrade;
+    proxy_set_header Connection        "upgrade";
+    proxy_read_timeout 120s;
+
+    location /        { proxy_pass http://landing:80; }
+    location /studio  { proxy_pass http://app:3000; }
+    location /api      { proxy_pass http://app:3000; }
+    location = /health { proxy_pass http://app:3000/health; }
+    location /auth     { proxy_pass http://keycloak:8080; }
 }
