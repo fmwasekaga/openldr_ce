@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { loadCaptureManifest } from './manifest';
 
 const REGISTRY_PATH = fileURLToPath(
-  new URL('../../apps/web/src/docs/registry.ts', import.meta.url),
+  new URL('../../apps/studio/src/docs/registry.ts', import.meta.url),
 );
 const FIXTURES = [
   'base',

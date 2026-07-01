@@ -49,10 +49,10 @@ export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
  *  - `type`: the ReactFlow node type ('trigger' | 'action' | 'condition' | 'loop' | 'code' | 'webhook').
  *  - `icon`: the lucide-react icon name used in the sidebar (used as default if defaultData.iconName is unset).
  *  - `defaultData.iconName`: propagated onto the rendered node on the canvas.
- *  - optional `iconUrl`: if you drop brand SVGs/PNGs into `apps/web/public/node-icons/`,
+ *  - optional `iconUrl`: if you drop brand SVGs/PNGs into `apps/studio/public/node-icons/`,
  *    set this to `/node-icons/<file>` and the sidebar + canvas node will use the real logo.
  *
- * To add a brand logo later: download e.g. `slack.svg` to `apps/web/public/node-icons/`
+ * To add a brand logo later: download e.g. `slack.svg` to `apps/studio/public/node-icons/`
  * then set `iconUrl: '/node-icons/slack.svg'` on that template (and mirror it on defaultData).
  */
 

@@ -5,11 +5,11 @@ RUN corepack enable
 WORKDIR /repo
 COPY . .
 RUN pnpm install --frozen-lockfile
-RUN pnpm turbo build --filter @openldr/web --filter @openldr/server
+RUN pnpm turbo build --filter @openldr/studio --filter @openldr/server
 # pnpm deploy resolves the server's workspace deps into a self-contained dir (/deploy).
 RUN pnpm --filter @openldr/server deploy --prod --legacy /deploy
 # Stage the built SPA where WEB_DIST_DIR points — decoupled from the server-dist layout.
-RUN mkdir -p /deploy/web && cp -r apps/web/dist/. /deploy/web/
+RUN mkdir -p /deploy/web && cp -r apps/studio/dist/. /deploy/web/
 
 # ---- runtime: slim node, non-root, single-origin (SPA + API + auth) ----
 FROM node:22-bookworm-slim AS runtime

@@ -30,7 +30,7 @@ export interface CaptureManifest {
 }
 
 const MANIFEST_PATH = fileURLToPath(
-  new URL('../../apps/web/src/docs/0.1.0/screenshot-manifest.json', import.meta.url),
+  new URL('../../apps/studio/src/docs/0.1.0/screenshot-manifest.json', import.meta.url),
 );
 
 function isRecord(value: unknown): value is Record<string, unknown> {

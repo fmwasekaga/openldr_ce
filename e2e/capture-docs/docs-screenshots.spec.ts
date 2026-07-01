@@ -19,7 +19,7 @@ import { BASE_URL } from '../support/config';
 // Doc screenshots are COMMITTED into the SPA bundle (unlike e2e/artifacts/, which is
 // gitignored). They land beside the versioned markdown so Vite emits them as hashed
 // assets and DocMarkdown resolves them by basename.
-const OUT = fileURLToPath(new URL('../../apps/web/src/docs/0.1.0/screenshots/', import.meta.url));
+const OUT = fileURLToPath(new URL('../../apps/studio/src/docs/0.1.0/screenshots/', import.meta.url));
 mkdirSync(OUT, { recursive: true });
 
 const manifest = await loadCaptureManifest();

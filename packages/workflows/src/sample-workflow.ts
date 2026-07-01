@@ -2,7 +2,7 @@ import type { Workflow } from './types';
 
 // Example workflow showcasing the core node library — seeded so the Workflows list isn't
 // empty on a fresh install (the builder used to render this from hardcoded state before the
-// list page existed). Mirrors apps/web/src/workflows/lib/sample-workflow.ts; the server stores
+// list page existed). Mirrors apps/studio/src/workflows/lib/sample-workflow.ts; the server stores
 // `definition` as opaque JSON, so the node `data` shapes (templateId/iconName/config) are
 // preserved as-is. Edges omit the web-only `type:'custom'` (the persisted schema drops it).
 //

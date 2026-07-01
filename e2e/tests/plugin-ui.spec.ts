@@ -14,7 +14,7 @@ import { test, expect } from '@playwright/test';
  *   - Full stack up (postgres + minio, AUTH_DEV_BYPASS=true)
  *   - Reference plugin installed:
  *       pnpm openldr plugin install reference-plugins/ui-reference/plugin.wasm
- *   - Server built: pnpm turbo build --filter=@openldr/server --filter=@openldr/web
+ *   - Server built: pnpm turbo build --filter=@openldr/server --filter=@openldr/studio
  */
 test('reference plugin UI loads, calls a gated host service, and round-trips storage', async ({ page }) => {
   await page.goto('/x/ui-reference');
