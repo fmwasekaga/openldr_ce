@@ -126,8 +126,39 @@ export const fr: EnShape = {
   settings: {
     title: 'Paramètres',
     subNav: {
+      general: 'Général',
       connectors: 'Connecteurs',
       marketplace: 'Marketplace',
+    },
+    general: {
+      heading: 'Général',
+      description: "Informations sur l'application, indicateurs de fonctionnalités et actions administratives.",
+      about: {
+        title: 'À propos',
+        version: 'Version',
+        environment: 'Environnement',
+        license: 'Licence',
+        services: 'Services',
+      },
+      flags: {
+        title: 'Indicateurs de fonctionnalités',
+        description: 'Activez ou désactivez des capacités optionnelles. Les modifications prennent effet immédiatement.',
+        saved: 'Enregistré',
+        saveFailed: "Impossible d'enregistrer : {{error}}",
+        dashboardRawSql: {
+          label: 'SQL brut pour les tableaux de bord',
+          description: "Autoriser la création et l'exécution de requêtes SQL arbitraires en lecture seule dans les widgets de tableau de bord (entrepôt Postgres uniquement). Désactivé par défaut.",
+        },
+      },
+      danger: {
+        title: 'Zone dangereuse',
+        description: "Actions irréversibles sur la base de données interne. Les données externes et l'identité ne sont jamais affectées.",
+        resetDashboards: { label: 'Réinitialiser les tableaux de bord', description: "Supprimer tous les tableaux de bord et restaurer l'exemple.", button: 'Réinitialiser', confirm: 'réinitialiser tableaux de bord', title: 'Réinitialiser les tableaux de bord ?', warning: "Cela supprime tous les tableaux de bord et recrée l'exemple intégré. Cette action est irréversible." },
+        clearAudit: { label: "Vider le journal d'audit", description: "Vider la piste d'audit et l'historique des exécutions de flux de travail.", button: 'Vider', confirm: 'vider audit', title: "Vider le journal d'audit ?", warning: "Cela supprime définitivement tous les événements d'audit et l'historique des exécutions de flux de travail." },
+        factoryReset: { label: 'Réinitialisation usine', description: "Effacer toute la base de données interne et restaurer les paramètres d'usine.", button: 'Réinitialisation usine', confirm: 'réinitialisation usine', title: 'Réinitialisation usine ?', warning: "Cela efface TOUTES les données internes — formulaires, connecteurs, tableaux de bord, flux de travail, terminologie, utilisateurs, audit — et réinitialise les valeurs par défaut. Les données cibles externes et Keycloak ne sont pas affectés. Cette action est irréversible." },
+        done: '{{action}} terminé',
+        failed: "{{action}} a échoué : {{error}}",
+      },
     },
     connectors: {
       heading: 'Connecteurs',

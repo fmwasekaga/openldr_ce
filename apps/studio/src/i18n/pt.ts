@@ -126,8 +126,39 @@ export const pt: EnShape = {
   settings: {
     title: 'Definições',
     subNav: {
+      general: 'Geral',
       connectors: 'Conectores',
       marketplace: 'Marketplace',
+    },
+    general: {
+      heading: 'Geral',
+      description: 'Informações da aplicação, indicadores de funcionalidades e ações administrativas.',
+      about: {
+        title: 'Sobre',
+        version: 'Versão',
+        environment: 'Ambiente',
+        license: 'Licença',
+        services: 'Serviços',
+      },
+      flags: {
+        title: 'Indicadores de funcionalidades',
+        description: 'Ative ou desative capacidades opcionais. As alterações têm efeito imediato.',
+        saved: 'Guardado',
+        saveFailed: 'Não foi possível guardar: {{error}}',
+        dashboardRawSql: {
+          label: 'SQL bruto no painel',
+          description: 'Permitir a criação e execução de SQL arbitrário de leitura apenas em widgets de painel (apenas armazém Postgres). Desativado por predefinição.',
+        },
+      },
+      danger: {
+        title: 'Zona de perigo',
+        description: 'Ações irreversíveis na base de dados interna. Os dados externos e a identidade nunca são afetados.',
+        resetDashboards: { label: 'Repor painéis', description: 'Eliminar todos os painéis e restaurar o exemplo.', button: 'Repor', confirm: 'repor painéis', title: 'Repor painéis?', warning: 'Isto elimina todos os painéis e recria o exemplo integrado. Esta ação não pode ser desfeita.' },
+        clearAudit: { label: 'Limpar registo de auditoria', description: 'Esvaziar o registo de auditoria e o histórico de execuções de fluxos de trabalho.', button: 'Limpar', confirm: 'limpar auditoria', title: 'Limpar registo de auditoria?', warning: 'Isto elimina permanentemente todos os eventos de auditoria e o histórico de execuções de fluxos de trabalho.' },
+        factoryReset: { label: 'Redefinição de fábrica', description: 'Apagar toda a base de dados interna e restaurar as predefinições de fábrica.', button: 'Redefinição de fábrica', confirm: 'redefinição de fábrica', title: 'Redefinição de fábrica?', warning: 'Isto apaga TODOS os dados internos — formulários, conectores, painéis, fluxos de trabalho, terminologia, utilizadores, auditoria — e redefine as predefinições. Os dados externos e o Keycloak não são afetados. Esta ação não pode ser desfeita.' },
+        done: '{{action}} concluído',
+        failed: '{{action}} falhou: {{error}}',
+      },
     },
     connectors: {
       heading: 'Conectores',

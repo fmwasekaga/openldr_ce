@@ -122,8 +122,39 @@ export const en = {
   settings: {
     title: 'Settings',
     subNav: {
+      general: 'General',
       connectors: 'Connectors',
       marketplace: 'Marketplace',
+    },
+    general: {
+      heading: 'General',
+      description: 'Application information, feature flags, and administrative actions.',
+      about: {
+        title: 'About',
+        version: 'Version',
+        environment: 'Environment',
+        license: 'License',
+        services: 'Services',
+      },
+      flags: {
+        title: 'Feature Flags',
+        description: 'Toggle optional capabilities. Changes take effect immediately.',
+        saved: 'Saved',
+        saveFailed: 'Could not save: {{error}}',
+        dashboardRawSql: {
+          label: 'Dashboard raw SQL',
+          description: 'Allow authoring and running arbitrary read-only SQL in dashboard widgets (Postgres warehouse only). Off by default.',
+        },
+      },
+      danger: {
+        title: 'Danger Zone',
+        description: 'Irreversible actions on the internal database. External data and identity are never touched.',
+        resetDashboards: { label: 'Reset dashboards', description: 'Delete all dashboards and restore the sample.', button: 'Reset', confirm: 'reset dashboards', title: 'Reset dashboards?', warning: 'This deletes every dashboard and re-creates the built-in sample. This cannot be undone.' },
+        clearAudit: { label: 'Clear audit log', description: 'Empty the audit trail and workflow run history.', button: 'Clear', confirm: 'clear audit', title: 'Clear audit log?', warning: 'This permanently deletes all audit events and workflow run history.' },
+        factoryReset: { label: 'Factory reset', description: 'Wipe the entire internal database and restore factory defaults.', button: 'Factory reset', confirm: 'factory reset', title: 'Factory reset?', warning: 'This wipes ALL internal data — forms, connectors, dashboards, workflows, terminology, users, audit — and reseeds defaults. External target data and Keycloak are not touched. This cannot be undone.' },
+        done: '{{action}} complete',
+        failed: '{{action}} failed: {{error}}',
+      },
     },
     connectors: {
       heading: 'Connectors',
