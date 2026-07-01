@@ -10,6 +10,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { getAuditEvent, queryAudit, type AuditEvent, type AuditQuery } from '@/api';
+import { JsonView } from '@/workflows/components/panels/json-view';
 
 interface AuditFilters {
   action: string;
@@ -214,18 +215,21 @@ function DetailRow({ label, value, mono = false }: { label: string; value: strin
 }
 
 function JsonSection({ title, value }: { title: string; value?: unknown }) {
-  const rendered = value == null ? '' : JSON.stringify(value, null, 2);
+  const hasValue = value != null;
   return (
     <section className="border-t border-border">
       <div className="flex items-center justify-between px-4 py-2">
         <h3 className="text-xs font-semibold uppercase text-muted-foreground">{title}</h3>
-        {rendered ? <CopyButton value={rendered} label={title} /> : null}
       </div>
-      {rendered ? (
-        <pre className="mx-4 mb-4 max-h-72 overflow-auto rounded-md border border-border bg-muted/30 p-3 text-xs leading-relaxed">{rendered}</pre>
-      ) : (
-        <p className="px-4 pb-4 text-xs text-muted-foreground">None recorded.</p>
-      )}
+      <div className="mx-4 mb-4">
+        {hasValue ? (
+          // Read-only, theme-aware CodeMirror JSON viewer (its own copy button lives
+          // top-right). max-h-72 + internal scroller keeps long payloads inside the sheet.
+          <JsonView data={value} emptyLabel="None recorded." />
+        ) : (
+          <p className="text-xs text-muted-foreground">None recorded.</p>
+        )}
+      </div>
     </section>
   );
 }

@@ -4,6 +4,13 @@ import { MemoryRouter } from 'react-router-dom';
 import { Audit } from './Audit';
 import * as api from '../api';
 
+// The Before/After panels render via a read-only CodeMirror (JsonView -> CodeEditor),
+// which is awkward in jsdom. Render it as a plain textarea exposing the value so we can
+// still assert the JSON payload is shown. Mirrors run-history-drawer.test.
+vi.mock('../workflows/components/node-forms/code-editor', () => ({
+  CodeEditor: ({ value }: { value: string }) => <textarea data-testid="json" readOnly value={value} />,
+}));
+
 const event = {
   id: 'audit-1',
   occurredAt: '2026-01-01T00:00:00.000Z',
@@ -39,6 +46,9 @@ describe('Audit page', () => {
     fireEvent.click(screen.getByText('form-1'));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('audit-1')).toBeInTheDocument();
-    expect(within(dialog).getByText(/"status": "published"/)).toBeInTheDocument();
+    const jsonPanels = within(dialog).getAllByTestId('json').map((el) => (el as HTMLTextAreaElement).value);
+    // Before shows the pre-change state, After shows the post-change state.
+    expect(jsonPanels.some((v) => v.includes('"status": "draft"'))).toBe(true);
+    expect(jsonPanels.some((v) => v.includes('"status": "published"'))).toBe(true);
   });
 });
