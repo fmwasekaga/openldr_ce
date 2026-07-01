@@ -22,8 +22,11 @@ function Die($m) { Write-Error "X $m"; exit 1 }
 # 1. Preflight
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Die "git is not installed." }
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) { Die "Node.js >=20 is not installed. See https://nodejs.org/" }
-$nodeMajor = [int](node -p 'process.versions.node.split(".")[0]')
-if ($nodeMajor -lt 20) { Die "Node.js >=20 required (found $(node -v))." }
+# Parse `node -v` (e.g. v24.6.0) in PowerShell — passing a quoted JS snippet to
+# node via the native-arg path mangles the embedded quotes under PowerShell.
+$nodeVer = (node -v)
+$nodeMajor = [int]($nodeVer.TrimStart('v').Split('.')[0])
+if ($nodeMajor -lt 20) { Die "Node.js >=20 required (found $nodeVer)." }
 if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
   if (Get-Command corepack -ErrorAction SilentlyContinue) { Write-Host "-> Enabling pnpm via corepack"; corepack enable *> $null }
   if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) { Die "pnpm not found. See https://pnpm.io/installation (or run: corepack enable)." }
@@ -35,7 +38,7 @@ if (-not $NoServices) {
 }
 
 # 2. Clone (or reuse an existing checkout)
-if ((Test-Path package.json) -and ((node -p "require('./package.json').name") -eq 'openldr')) {
+if ((Test-Path package.json) -and (((Get-Content package.json -Raw | ConvertFrom-Json).name) -eq 'openldr')) {
   Write-Host "-> Running inside an existing openldr checkout - skipping clone"
   $repoDir = (Get-Location).Path
 } elseif (Test-Path "$Dir/.git") {
