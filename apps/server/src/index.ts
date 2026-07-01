@@ -104,6 +104,7 @@ async function main(): Promise<void> {
     // Rebuild the webhook registry from saved workflows.
     for (const w of await ctx.workflows.store.list()) ctx.workflows.webhooks.sync(w.id, (w.definition as { nodes: unknown[] }).nodes ?? []);
     await ctx.workflows.runner.reconcile(ingest.eventing);
+    await ctx.workflows.listeners.reconcile();
   } catch (err) {
     ctx.logger.warn({ err }, 'workflow trigger reconcile failed at startup (continuing)');
   }

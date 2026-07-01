@@ -41,6 +41,9 @@ import { createConnectorMongoRunner } from './connector-mongo-service';
 import { createConnectorRedisRunner } from './connector-redis-service';
 import { createConnectorEmailRunner } from './connector-email-service';
 import { createConnectorSftpRunner } from './connector-sftp-service';
+import { createWorkflowListenerManager } from './workflow-listeners';
+import { createPostgresListenerDriver } from './listener-postgres';
+import { createEmailListenerDriver } from './listener-email';
 import { createDhis2Orchestration } from './dhis2-orchestration';
 import { selectTargetStore } from './target-store';
 import { createPluginRegistry } from './plugin-registry';
@@ -142,6 +145,7 @@ export interface AppContext {
     runner: WorkflowTriggerRunner;
     services: WorkflowServices;
     datasets: WorkflowDatasetStore;
+    listeners: { reconcile(): Promise<void>; stopAll(): Promise<void> };
   };
   plugins: PluginRuntime;
   pluginData: PluginDataStore;
@@ -414,7 +418,23 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     loopMaxItems: cfg.WORKFLOW_LOOP_MAX_ITEMS,
     services: workflowServices,
   });
-  const workflows = { store: workflowStore, runs: workflowRuns, schedules: workflowSchedules, webhooks: workflowWebhooks, runner: workflowRunner, services: workflowServices, datasets: workflowDatasets };
+  const workflowListeners = createWorkflowListenerManager({
+    store: { list: () => workflowStore.list() },
+    runAndRecord: (id, source, input, files) => workflowRunner.runAndRecord(id, source, input, files),
+    logger,
+    cfg,
+    drivers: {
+      postgres: createPostgresListenerDriver({ connectors: connectorStore, secretsKey: cfg.SECRETS_ENCRYPTION_KEY, logger }),
+      email: createEmailListenerDriver({
+        connectors: connectorStore,
+        secretsKey: cfg.SECRETS_ENCRYPTION_KEY,
+        writeBinary: (i) => workflowServices.writeBinary!(i),
+        logger,
+        cfg,
+      }),
+    },
+  });
+  const workflows = { store: workflowStore, runs: workflowRuns, schedules: workflowSchedules, webhooks: workflowWebhooks, runner: workflowRunner, services: workflowServices, datasets: workflowDatasets, listeners: workflowListeners };
 
   const pluginData = createPluginDataStore(internal.db);
   // Generic, caller-driven DHIS2 push orchestration (mapping/orgUnitMap supplied by the
@@ -562,6 +582,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     pluginBroker,
     cfg,
     async close() {
+      await workflowListeners.stopAll();
       await Promise.allSettled([eventing.close(), store.close(), internal.close()]);
     },
   };

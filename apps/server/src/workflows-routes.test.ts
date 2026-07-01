@@ -61,6 +61,10 @@ function fakeWorkflowExtras() {
       list: async () => [],
       getByName: async () => undefined,
     },
+    listeners: {
+      reconcile: async () => {},
+      stopAll: async () => {},
+    },
   };
 }
 
@@ -88,6 +92,7 @@ function fakeCtx() {
       runner: extras.runner,
       services: undefined,
       datasets: extras.datasets,
+      listeners: extras.listeners,
     },
     blob: { put: vi.fn().mockResolvedValue(undefined), get: async () => Buffer.from('artifact-bytes') },
     // dhis2-sink mappings for the workflow dhis2-push picker. Empty by default; tests override.

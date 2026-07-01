@@ -180,6 +180,7 @@ export function registerWorkflowRoutes(
       await syncWorkflowTriggers(ctx, created);
       ctx.workflows.runner.setIngestWorkflowIds(await listIngestWorkflowIds(ctx));
       ctx.workflows.runner.setEventWorkflowIds(await listEventWorkflowIds(ctx));
+      await ctx.workflows.listeners.reconcile();
       await recordAudit(ctx, req, { action: 'workflow.create', entityType: 'workflow', entityId: created.id, before: null, after: created });
       return created;
     } catch (err) { return mapError(err, reply); }
@@ -193,6 +194,7 @@ export function registerWorkflowRoutes(
       await syncWorkflowTriggers(ctx, updated);
       ctx.workflows.runner.setIngestWorkflowIds(await listIngestWorkflowIds(ctx));
       ctx.workflows.runner.setEventWorkflowIds(await listEventWorkflowIds(ctx));
+      await ctx.workflows.listeners.reconcile();
       await recordAudit(ctx, req, { action: 'workflow.update', entityType: 'workflow', entityId: id, before, after: updated });
       return updated;
     } catch (err) { return mapError(err, reply); }
@@ -206,6 +208,7 @@ export function registerWorkflowRoutes(
     await ctx.workflows.schedules.removeForWorkflow(id);
     ctx.workflows.runner.setIngestWorkflowIds(await listIngestWorkflowIds(ctx));
     ctx.workflows.runner.setEventWorkflowIds(await listEventWorkflowIds(ctx));
+    await ctx.workflows.listeners.reconcile();
     if (before) {
       await recordAudit(ctx, req, { action: 'workflow.delete', entityType: 'workflow', entityId: id, before, after: null });
     }
