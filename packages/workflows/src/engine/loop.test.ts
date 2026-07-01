@@ -39,6 +39,16 @@ describe('computeLoopBody', () => {
     ];
     expect(() => computeLoopBody('loop', escNodes, escEdges)).toThrow(/must not connect back into the main flow/);
   });
+
+  it('throws when a body node points back to the loop node (no back-edges)', () => {
+    const nodes2 = [N('t', 'trigger'), N('loop', 'loop'), N('b1')];
+    const edges2 = [
+      E('e0', 't', 'loop'),
+      E('e1', 'loop', 'b1', 'loop'),
+      E('e2', 'b1', 'loop'),   // back-edge → escape
+    ];
+    expect(() => computeLoopBody('loop', nodes2, edges2)).toThrow(/must not connect back into the main flow/);
+  });
 });
 
 describe('planIterations', () => {

@@ -64,6 +64,9 @@ export function computeLoopBody(loopNodeId: string, nodes: RunnerNode[], edges: 
     }
   }
 
+  // Includes the loop-node's entry edge(s) (source = loop node) as well as
+  // internal body edges — the runner needs the entry so the synthetic trigger
+  // feeds the body's first nodes.
   const bodyEdges = edges.filter((e) => bodyNodeIds.has(e.target));
   return { bodyNodeIds, bodyEdges };
 }
