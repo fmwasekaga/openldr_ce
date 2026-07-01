@@ -49,6 +49,15 @@ describe('postgres listener driver', () => {
     expect(client.end).toHaveBeenCalled();
   });
 
+  it('throws when the connector is missing or disabled', async () => {
+    const driver = createPostgresListenerDriver({
+      connectors: { get: vi.fn(async () => null), getDecryptedConfig: vi.fn(async () => ({})) },
+      secretsKey: 'k', logger: { error: vi.fn(), warn: vi.fn() }, makeClient: () => ({} as never),
+    });
+    await expect(driver.start({ workflowId: 'w', nodeId: 'n', triggerType: 'postgres', config: { connectorId: 'c1', channel: 'ch' } }, vi.fn()))
+      .rejects.toThrow(/not found or disabled/);
+  });
+
   it('throws when the connector is the wrong type', async () => {
     const driver = createPostgresListenerDriver({
       connectors: { get: vi.fn(async () => ({ type: 'mysql', enabled: true })), getDecryptedConfig: vi.fn(async () => ({})) },
