@@ -91,6 +91,12 @@ export const ConfigSchema = z
     WORKFLOW_FILE_MAX_BYTES: z.coerce.number().int().positive().default(52_428_800),
     // Max accumulated output items a single loop node may emit on its done handle.
     WORKFLOW_LOOP_MAX_ITEMS: z.coerce.number().int().positive().default(100_000),
+    // Master switch for external listener triggers (postgres LISTEN / IMAP poll).
+    WORKFLOW_LISTENERS_ENABLED: envBoolean(true),
+    // Floor for an email-trigger's poll interval (seconds).
+    WORKFLOW_EMAIL_POLL_MIN_SECONDS: z.coerce.number().int().positive().default(30),
+    // Max unseen messages processed per email-trigger poll.
+    WORKFLOW_EMAIL_MAX_PER_POLL: z.coerce.number().int().positive().default(50),
 
     // Plugin-UI surface master switch. When false the broker refuses all calls and the host
     // serves no plugin nav/UI (kill-switch for the whole webview surface).

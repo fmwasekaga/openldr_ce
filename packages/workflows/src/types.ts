@@ -54,7 +54,7 @@ export const WorkflowSchema = z.object({
 });
 export type Workflow = z.infer<typeof WorkflowSchema>;
 
-export const TRIGGER_SOURCES = ['manual', 'schedule', 'webhook', 'ingest', 'event'] as const;
+export const TRIGGER_SOURCES = ['manual', 'schedule', 'webhook', 'ingest', 'event', 'postgres', 'email'] as const;
 export type TriggerSource = (typeof TRIGGER_SOURCES)[number];
 
 export const WorkflowRunSchema = z.object({

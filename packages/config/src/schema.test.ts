@@ -26,6 +26,18 @@ describe('workflow code sandbox config', () => {
   it('coerces WORKFLOW_LOOP_MAX_ITEMS string override', () => {
     expect(ConfigSchema.parse({ ...base, WORKFLOW_LOOP_MAX_ITEMS: '250' }).WORKFLOW_LOOP_MAX_ITEMS).toBe(250);
   });
+  it('defaults listener knobs', () => {
+    const c = ConfigSchema.parse(base);
+    expect(c.WORKFLOW_LISTENERS_ENABLED).toBe(true);
+    expect(c.WORKFLOW_EMAIL_POLL_MIN_SECONDS).toBe(30);
+    expect(c.WORKFLOW_EMAIL_MAX_PER_POLL).toBe(50);
+  });
+  it('coerces listener knob overrides', () => {
+    const c = ConfigSchema.parse({ ...base, WORKFLOW_EMAIL_POLL_MIN_SECONDS: '15', WORKFLOW_EMAIL_MAX_PER_POLL: '10', WORKFLOW_LISTENERS_ENABLED: 'false' });
+    expect(c.WORKFLOW_EMAIL_POLL_MIN_SECONDS).toBe(15);
+    expect(c.WORKFLOW_EMAIL_MAX_PER_POLL).toBe(10);
+    expect(c.WORKFLOW_LISTENERS_ENABLED).toBe(false);
+  });
 });
 
 describe('dashboard SQL config', () => {
