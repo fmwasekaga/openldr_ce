@@ -40,7 +40,17 @@ export function createDashboardStore(db: Kysely<InternalSchema>): DashboardStore
       return r ? fromRow(r as Record<string, unknown>) : undefined;
     },
     async create(d) {
-      await db.insertInto('dashboards').values(toRow(d) as never).execute();
+      // Idempotent insert: React StrictMode double-fires the empty-list seed effect, so two
+      // concurrent POSTs of the same id race on the PK. ON CONFLICT DO NOTHING lets the loser
+      // no-op instead of hitting a unique-violation (which mapError surfaced as a 500). If no
+      // row comes back (a concurrent insert won), read the existing row and return it.
+      const inserted = await db
+        .insertInto('dashboards')
+        .values(toRow(d) as never)
+        .onConflict((oc) => oc.column('id').doNothing())
+        .returningAll()
+        .executeTakeFirst();
+      if (inserted) return fromRow(inserted as Record<string, unknown>);
       return (await store.get(d.id))!;
     },
     async update(id, d) {

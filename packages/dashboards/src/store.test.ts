@@ -29,4 +29,16 @@ describe('DashboardStore', () => {
     await store.remove('d1');
     expect(await store.get('d1')).toBeUndefined();
   });
+
+  it('create is idempotent on id — the second create returns the existing row, not a PK error', async () => {
+    const store = createDashboardStore(db);
+    const first = await store.create({ id: 'default', name: 'Sample', layout: [], widgets: [], filters: [], refreshIntervalSec: 0, isDefault: true, ownerId: null });
+    // Simulates the StrictMode double-seed: a second create of the same id must not throw.
+    const second = await store.create({ id: 'default', name: 'Different Name', layout: [], widgets: [], filters: [], refreshIntervalSec: 99, isDefault: false, ownerId: null });
+    expect(second.id).toBe('default');
+    // ON CONFLICT DO NOTHING: the first-write wins; the existing row is returned unchanged.
+    expect(second.name).toBe(first.name);
+    expect(second.refreshIntervalSec).toBe(0);
+    expect((await store.list()).length).toBe(1);
+  });
 });

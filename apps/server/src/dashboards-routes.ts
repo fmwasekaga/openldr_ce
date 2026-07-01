@@ -58,6 +58,11 @@ function mapError(err: unknown, reply: FastifyReply): { error: string } {
   if (err instanceof DashboardQueryError || (err instanceof Error && err.name === 'DashboardQueryError')) {
     reply.code(400); return { error: (err as Error).message };
   }
+  // Postgres unique-violation (SQLSTATE 23505): a concurrent create hit a unique constraint
+  // (e.g. the id PK or a name index). That is a conflict, not a server fault — surface 409.
+  if (typeof err === 'object' && err !== null && (err as { code?: unknown }).code === '23505') {
+    reply.code(409); return { error: 'already exists' };
+  }
   const msg = err instanceof Error ? err.message : String(err);
   const isConn = /ECONNREFUSED|ETIMEDOUT|connection|connect/i.test(msg);
   reply.code(isConn ? 503 : 500);
