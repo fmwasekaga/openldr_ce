@@ -29,7 +29,7 @@ import { createReportScheduler, type ReportScheduler } from './report-scheduler'
 import { createPluginScheduleApi, createPluginScheduleRunner, type PluginScheduleRunner } from './plugin-schedule';
 import { createFormArtifactInstaller, type FormArtifactInstaller } from './form-artifact-install';
 import { type PluginRuntime } from '@openldr/plugins';
-import { createConnectorStore, createPluginDataStore, type PluginDataStore } from '@openldr/db';
+import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore } from '@openldr/db';
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { policyFromConfig } from './policy';
 import { createPluginTarget } from './connector-target';
@@ -151,6 +151,7 @@ export interface AppContext {
   plugins: PluginRuntime;
   pluginData: PluginDataStore;
   pluginBroker: PluginBroker;
+  connectors: ConnectorStore;
   cfg: Config;
   close(): Promise<void>;
 }
@@ -594,6 +595,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     plugins,
     pluginData,
     pluginBroker,
+    connectors: connectorStore,
     cfg,
     async close() {
       await workflowListeners.stopAll();
