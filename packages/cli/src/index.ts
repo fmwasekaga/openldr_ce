@@ -16,6 +16,7 @@ import { runTargetStoreTest } from './target-store';
 import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, runTerminologyExpand, runTerminologyTranslate, runPublisherList, runPublisherCreate, runSystemList, runSystemCreate, runTermList, runValueSetList, runOntologyBuild, runOntologyRebuild, runOntologyList, runOntologyUnlink } from './terminology';
 import { runMarketVerify, runMarketInstall, runMarketList, runMarketRollback, runMarketEnable, runMarketDisable, runMarketRemove } from './market';
 import { runArtifactKeygen, runArtifactNew, runArtifactBuild, runArtifactPack, runArtifactSign, runArtifactTest, runArtifactPublish } from './artifact';
+import { runSettingsFlagsList, runSettingsFlagsSet, runSettingsDanger } from './settings';
 
 const program = new Command();
 program.name('openldr').description('OpenLDR CE operator CLI');
@@ -106,6 +107,24 @@ db.command('seed')
       process.stderr.write(`db seed failed: ${redactError(err)}\n`);
       process.exitCode = 1;
     }
+  });
+
+const settings = program.command('settings').description('App settings — feature flags and danger-zone actions');
+const flags = settings.command('flags').description('Feature flags');
+flags.command('list').description('List all feature flags and their values').option('--json', 'emit JSON', false)
+  .action(async (opts: { json: boolean }) => {
+    try { process.exitCode = await runSettingsFlagsList(opts); } catch (err) { process.stderr.write(`settings flags list failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+flags.command('set <key> <value>').description('Set a feature flag (value: true|false)').option('--json', 'emit JSON', false)
+  .action(async (key: string, value: string, opts: { json: boolean }) => {
+    try { process.exitCode = await runSettingsFlagsSet(key, value, opts); } catch (err) { process.stderr.write(`settings flags set failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+settings.command('danger <action>')
+  .description('Run a danger-zone action: reset-dashboards | clear-audit | factory-reset (internal DB only)')
+  .option('--force', 'required — confirms the destructive action', false)
+  .option('--json', 'emit JSON', false)
+  .action(async (action: string, opts: { force: boolean; json: boolean }) => {
+    try { process.exitCode = await runSettingsDanger(action, opts); } catch (err) { process.stderr.write(`settings danger failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
 
 const targetStore = program.command('target-store').description('Target warehouse (Postgres/SQL Server) tools');

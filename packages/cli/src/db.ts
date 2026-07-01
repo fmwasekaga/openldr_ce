@@ -56,11 +56,11 @@ export async function runDbSeed(opts: JsonOpt): Promise<number> {
   const ctx = await createDbContext(cfg);
   const appCtx = await createAppContext(cfg);
   try {
-    const { resources, formsSeeded, workflowsSeeded, connectorsSeeded, dashboardsSeeded, terminology } = await seedDatabase(ctx, appCtx);
+    const { resources, formsSeeded, workflowsSeeded, connectorsSeeded, dashboardsSeeded, settingsSeeded, terminology } = await seedDatabase(ctx, appCtx);
     emit(
       opts.json,
-      { ok: true, results: resources, formsSeeded, workflowsSeeded, connectorsSeeded, dashboardsSeeded, terminology },
-      `seeded ${resources.length} resources, ${formsSeeded} forms, ${workflowsSeeded} workflow(s), ${connectorsSeeded} connector(s), ${dashboardsSeeded} dashboard(s), ${terminology.valueSetsImported} value set(s), ${terminology.ucumConceptsImported} UCUM concept(s)`,
+      { ok: true, results: resources, formsSeeded, workflowsSeeded, connectorsSeeded, dashboardsSeeded, settingsSeeded, terminology },
+      `seeded ${resources.length} resources, ${formsSeeded} forms, ${workflowsSeeded} workflow(s), ${connectorsSeeded} connector(s), ${dashboardsSeeded} dashboard(s), ${settingsSeeded} setting(s), ${terminology.valueSetsImported} value set(s), ${terminology.ucumConceptsImported} UCUM concept(s)`,
     );
     return 0;
   } finally {
