@@ -13,7 +13,7 @@ import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore, createUserProfileStore, type UserProfileStore } from '@openldr/users';
 import { createFormStore, type FormStore } from '@openldr/forms';
 import { getReport, reportSummaries, getEventSource, eventSourceCatalog, toCsv, type ReportResult, type ReportSummary } from '@openldr/reporting';
-import { createDashboardStore, getModel, listModels, runBuilderQuery, runSqlQuery, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, type DashboardStore, type WidgetQuery } from '@openldr/dashboards';
+import { createDashboardStore, getModel, listModels, runBuilderQuery, runSqlQuery, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, seedDefaultDashboard, type DashboardStore, type WidgetQuery } from '@openldr/dashboards';
 import {
   createWorkflowStore, type WorkflowStore,
   createWorkflowRunStore, type WorkflowRunStore,
@@ -25,6 +25,9 @@ import {
   guardedFetch, type WorkflowServices,
 } from '@openldr/workflows';
 import { renderReportPdf } from '@openldr/report-pdf';
+import { createDbContext } from './db-context';
+import { seedDatabase } from './seed';
+import { wipeInternalDatabase, clearAuditAndRunHistory } from './danger';
 import { createReportScheduler, type ReportScheduler } from './report-scheduler';
 import { createPluginScheduleApi, createPluginScheduleRunner, type PluginScheduleRunner } from './plugin-schedule';
 import { createFormArtifactInstaller, type FormArtifactInstaller } from './form-artifact-install';
@@ -636,3 +639,29 @@ export * from './seed';
 export * from './plugin-broker';
 export * from './crash-audit';
 export * from './policy';
+export { wipeInternalDatabase, clearAuditAndRunHistory, listInternalDataTables, buildTruncateSql } from './danger';
+
+/** Delete all dashboards and restore the built-in sample. Internal DB only. */
+export async function dangerResetDashboards(ctx: AppContext): Promise<void> {
+  for (const d of await ctx.dashboards.store.list()) await ctx.dashboards.store.remove(d.id);
+  await seedDefaultDashboard(ctx.dashboards.store);
+}
+
+/** Empty the audit log + workflow run history. Internal DB only. */
+export async function dangerClearAudit(ctx: AppContext): Promise<void> {
+  await clearAuditAndRunHistory(ctx.internalDb);
+}
+
+/** Wipe ALL internal-DB data and reseed factory defaults. Never touches the external target
+ *  store or Keycloak. Reseed uses a fresh DbContext exactly like the SEED_ON_START boot path. */
+export async function dangerFactoryReset(ctx: AppContext): Promise<void> {
+  const wiped = await wipeInternalDatabase(ctx.internalDb);
+  ctx.logger.warn({ tables: wiped.length }, 'factory reset: internal DB wiped, reseeding');
+  const dbCtx = await createDbContext(ctx.cfg);
+  try {
+    await seedDatabase(dbCtx, ctx);
+  } finally {
+    await dbCtx.close();
+  }
+  ctx.featureFlags.invalidate();
+}
