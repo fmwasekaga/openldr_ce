@@ -39,4 +39,15 @@ describe('testConnector', () => {
     expect(list).toHaveBeenCalledWith('.');
     expect(end).toHaveBeenCalled();
   });
+  it('probes an imap connector (connect + open INBOX + logout)', async () => {
+    const connect = vi.fn(async () => {});
+    const logout = vi.fn(async () => {});
+    const getMailboxLock = vi.fn(async () => ({ release: () => {} }));
+    await testConnector('imap', { host: 'h', port: '993', user: 'u', password: 'p', tls: 'true' }, {
+      imap: () => ({ connect, logout, getMailboxLock } as never),
+    });
+    expect(connect).toHaveBeenCalled();
+    expect(getMailboxLock).toHaveBeenCalledWith('INBOX');
+    expect(logout).toHaveBeenCalled();
+  });
 });
