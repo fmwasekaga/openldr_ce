@@ -46,6 +46,7 @@ import { ftpHandler } from './ftp';
 import { waitHandler } from './wait';
 import { executeWorkflowHandler } from './execute-workflow';
 import { readWriteFileHandler } from './read-write-file';
+import { excelTemplateHandler } from './excel-template';
 
 /** Action subtype → handler. New actions (http-request, code, …) land in later slices. */
 const ACTION_HANDLERS: Record<string, NodeHandler> = {
@@ -94,6 +95,7 @@ const ACTION_HANDLERS: Record<string, NodeHandler> = {
   'outlook': emailHandler,
   'ftp': ftpHandler,
   'read-write-file': readWriteFileHandler,
+  'excel-template': excelTemplateHandler,
 };
 
 const TYPE_HANDLERS: Record<string, NodeHandler> = {
