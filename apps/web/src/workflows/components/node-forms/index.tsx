@@ -26,6 +26,7 @@ import { LoadDatasetForm } from './load-dataset-form';
 import { DeclarativeNodeForm } from './plugin-node-form';
 import { ReadWriteFileForm } from './read-write-file-form';
 import { ExcelTemplateForm } from './excel-template-form';
+import { PivotForm } from './pivot-form';
 
 export interface NodeFormProps {
   node: WorkflowNode;
@@ -68,6 +69,7 @@ const FORMS: Record<string, ComponentType<NodeFormProps>> = {
   'persist-store': DeclarativeNodeForm,
   'read-write-file': ReadWriteFileForm,
   'excel-template': ExcelTemplateForm,
+  pivot: PivotForm,
 };
 
 export function pickForm(node: WorkflowNode): ComponentType<NodeFormProps> {

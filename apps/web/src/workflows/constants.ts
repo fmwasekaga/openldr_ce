@@ -24,7 +24,7 @@ export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
   'if', 'filter', 'switch',
   // data transforms
   'sort', 'limit', 'remove-duplicates', 'rename-keys', 'split-out',
-  'aggregate', 'summarize', 'date-time', 'compare-datasets',
+  'aggregate', 'summarize', 'pivot', 'date-time', 'compare-datasets',
   // sinks
   'materialize-dataset', 'export-artifact',
   'form-validate', 'persist-store',
@@ -345,6 +345,10 @@ export const nodeCategories: NodeCategory[] = [
       }),
       node('summarize', 'action', 'Summarize', 'Sigma', 'Sum, avg, min, max, count', {
         data: { config: { groupBy: '', field: '', operation: 'count' } },
+      }),
+      node('pivot', 'action', 'Pivot', 'Table2', 'Reshape long rows into wide columns', {
+        keywords: ['pivot', 'crosstab', 'wide', 'transpose'],
+        data: { action: 'pivot', config: { groupBy: [], pivotColumn: '', valueColumn: '', columns: [], carry: [], aggregate: 'max' } },
       }),
       node('remove-duplicates', 'action', 'Remove Duplicates', 'CopyMinus', 'Drop duplicate items', {
         data: { config: { field: '' } },
