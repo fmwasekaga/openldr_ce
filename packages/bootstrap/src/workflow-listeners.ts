@@ -66,9 +66,13 @@ export function createWorkflowListenerManager(deps: ListenerManagerDeps): Workfl
     try { await cur.handle.stop(); } catch (err) { deps.logger.warn({ err, key }, 'listener stop failed'); }
   }
 
+  async function stopAll(): Promise<void> {
+    for (const key of [...active.keys()]) await stopKey(key);
+  }
+
   return {
     async reconcile() {
-      if (!deps.cfg.WORKFLOW_LISTENERS_ENABLED) { await this.stopAll(); return; }
+      if (!deps.cfg.WORKFLOW_LISTENERS_ENABLED) { await stopAll(); return; }
       const specs = extractListenerSpecs(await deps.store.list());
       const desired = new Map(specs.map((s) => [keyOf(s), s]));
       for (const [key, cur] of [...active]) {
@@ -79,8 +83,6 @@ export function createWorkflowListenerManager(deps: ListenerManagerDeps): Workfl
         if (!active.has(key)) await startOne(spec);
       }
     },
-    async stopAll() {
-      for (const key of [...active.keys()]) await stopKey(key);
-    },
+    stopAll,
   };
 }
