@@ -13,7 +13,7 @@ import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore, createUserProfileStore, type UserProfileStore } from '@openldr/users';
 import { createFormStore, type FormStore } from '@openldr/forms';
 import { getReport, reportSummaries, getEventSource, eventSourceCatalog, toCsv, type ReportResult, type ReportSummary } from '@openldr/reporting';
-import { createDashboardStore, getModel, listModels, runBuilderQuery, runSqlQuery, type DashboardStore, type WidgetQuery } from '@openldr/dashboards';
+import { createDashboardStore, getModel, listModels, runBuilderQuery, runSqlQuery, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, type DashboardStore, type WidgetQuery } from '@openldr/dashboards';
 import {
   createWorkflowStore, type WorkflowStore,
   createWorkflowRunStore, type WorkflowRunStore,
@@ -261,10 +261,20 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       if (!model) throw new DashboardQueryError(`unknown model: ${q.model}`);
       data = await runBuilderQuery(reportingDb, model, q);
     } else {
-      if (!cfg.DASHBOARD_SQL_ENABLED || cfg.TARGET_STORE_ADAPTER !== 'pg') {
+      // Any SQL execution requires the Postgres warehouse.
+      if (cfg.TARGET_STORE_ADAPTER !== 'pg') {
         throw new DashboardQueryError('raw SQL widgets are disabled');
       }
-      data = await runSqlQuery(reportingDb, q.sql, { timeoutMs: cfg.DASHBOARD_SQL_TIMEOUT_MS, rowCap: cfg.DASHBOARD_SQL_ROW_CAP });
+      // `q.sql` is the STORED template verbatim (the client sends resolved filter `values`
+      // separately and the server applies the substitution). Vet the untouched template against
+      // the SQL persisted on stored dashboards so filtered widgets still match. Execution is
+      // allowed only when the flag is on OR the template is vetted (first-party/admin-authored).
+      const vetted = collectVettedSqlTemplates(await dashboardStore.list());
+      if (!isSqlExecutionAllowed(cfg.DASHBOARD_SQL_ENABLED, q.sql, vetted)) {
+        throw new DashboardQueryError('raw SQL widgets are disabled');
+      }
+      const finalSql = q.values ? applyTemplate(q.sql, resolveValues(q.values)) : q.sql;
+      data = await runSqlQuery(reportingDb, finalSql, { timeoutMs: cfg.DASHBOARD_SQL_TIMEOUT_MS, rowCap: cfg.DASHBOARD_SQL_ROW_CAP });
     }
     return { ...data, meta: { generatedAt: new Date().toISOString(), rowCount: data.rows.length } };
   };

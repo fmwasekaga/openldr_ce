@@ -18,17 +18,7 @@ import { DashboardGrid } from './DashboardGrid';
 import { DashboardFilterBar } from './filters/DashboardFilterBar';
 import { DashboardFilterEditor } from './filters/DashboardFilterEditor';
 import { exportDashboard, importDashboard } from './io';
-import sampleGeneral from './samples/openldr-general.json';
 import { WidgetEditorDialog } from './editor/WidgetEditorDialog';
-
-// The default dashboard is the bundled "Lab Overview (Sample)" — a full corlix-style board
-// (KPIs, gauge, charts, funnel, table) driven by the Period/Test/Priority filters.
-const DEFAULT_SEED = {
-  id: 'default',
-  ownerId: null,
-  isDefault: true,
-  ...sampleGeneral,
-} as unknown as Dashboard;
 
 function defaultsFor(filters: DashboardFilterDef[]): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -91,22 +81,14 @@ export function DashboardPage() {
   }, []);
 
   useEffect(() => {
+    // The vetted sample dashboard is server-seeded (id `default`), so we no longer POST a seed
+    // from the client. If the list is genuinely empty (seed didn't run), the page falls through
+    // to its empty/loading state gracefully instead of authoring a dashboard here.
     listDashboards()
-      .then(async (list) => {
-        if (list.length === 0) {
-          const seeded = await createDashboard(DEFAULT_SEED);
-          list = [seeded];
-        } else {
-          // One-time migration: replace the legacy 3-widget "Overview" seed (ids w-orders/
-          // w-trend/w-cat) with the new sample board. Self-clearing once migrated.
-          const stale = list.find((d) => d.id === 'default' && d.widgets.some((w) => w.id === 'w-orders'));
-          if (stale) {
-            const migrated = await saveDashboard({ ...DEFAULT_SEED, id: stale.id });
-            list = list.map((d) => (d.id === stale.id ? migrated : d));
-          }
-        }
+      .then((list) => {
         setAll(list);
-        setCurrent(list[0]);
+        if (list.length > 0) setCurrent(list[0]);
+        else setError('No dashboards found.');
       })
       .catch((e) => setError(String(e.message ?? e)));
   }, []);

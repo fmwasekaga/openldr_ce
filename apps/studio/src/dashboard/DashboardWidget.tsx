@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { runWidgetQuery, type ReportResult, type WidgetConfig, type WidgetQuery } from '../api';
 import { renderWidget } from './widgets';
-import { resolveValues, applyTemplate } from './template';
 
 function bindQuery(q: WidgetQuery, filterValues: Record<string, unknown>): WidgetQuery {
   if (q.mode === 'builder') {
@@ -13,13 +12,16 @@ function bindQuery(q: WidgetQuery, filterValues: Record<string, unknown>): Widge
     }
     return { ...q, filters };
   }
-  // SQL mode: always apply the shared template so {{var}} / [[ ... ]] never reach the DB raw,
-  // resolving bound dashboard-filter values (date-ranges split into _from/_to).
-  const values: Record<string, unknown> = {};
+  // SQL mode: send the STORED template `sql` verbatim plus the resolved dashboard-filter values.
+  // The SERVER applies the {{var}} / [[ ... ]] substitution — so the submitted `sql` stays
+  // byte-identical to the persisted widget and the server can vet it against stored dashboards
+  // even when filters are set (execution of vetted SQL is allowed with DASHBOARD_SQL_ENABLED off).
+  const values: Record<string, string | number | null | { from: string; to: string }> = {};
   for (const [varName, filterId] of Object.entries(q.variableBindings ?? {})) {
-    values[varName] = filterValues[filterId];
+    const v = filterValues[filterId];
+    values[varName] = (v ?? null) as string | number | null | { from: string; to: string };
   }
-  return { ...q, sql: applyTemplate(q.sql, resolveValues(values)) };
+  return { ...q, values };
 }
 
 export function DashboardWidget({ config, filterValues }: { config: WidgetConfig; filterValues: Record<string, unknown> }) {

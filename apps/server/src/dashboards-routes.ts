@@ -1,8 +1,19 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { ZodError } from 'zod';
 import { DashboardQueryError, type AppContext } from '@openldr/bootstrap';
-import { DashboardSchema, WidgetQuerySchema } from '@openldr/dashboards';
+import { DashboardSchema, WidgetQuerySchema, type Dashboard } from '@openldr/dashboards';
 import { recordAudit } from './audit-helper';
+
+// Authoring gate: when DASHBOARD_SQL_ENABLED is off, reject persisting a dashboard whose
+// widgets contain any `mode:'sql'` query. This stops an untrusted user (the dashboard routes
+// have no role gating) from storing arbitrary SQL and then executing it as "vetted" SQL. The
+// server-seeded sample is inserted via the store directly, bypassing this route.
+function assertSqlAuthoringAllowed(cfg: AppContext['cfg'], d: Dashboard): void {
+  if (cfg.DASHBOARD_SQL_ENABLED) return;
+  if (d.widgets.some((w) => w.query.mode === 'sql')) {
+    throw new DashboardQueryError('raw SQL widgets are disabled');
+  }
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerDashboardRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
@@ -26,7 +37,9 @@ export function registerDashboardRoutes(app: FastifyInstance<any, any, any, any>
 
   app.post('/api/dashboards', async (req, reply) => {
     try {
-      const created = await ctx.dashboards.store.create(DashboardSchema.parse(req.body));
+      const parsed = DashboardSchema.parse(req.body);
+      assertSqlAuthoringAllowed(ctx.cfg, parsed);
+      const created = await ctx.dashboards.store.create(parsed);
       await recordAudit(ctx, req, { action: 'dashboard.create', entityType: 'dashboard', entityId: created.id, before: null, after: created });
       return created;
     } catch (err) { return mapError(err, reply); }
@@ -35,8 +48,10 @@ export function registerDashboardRoutes(app: FastifyInstance<any, any, any, any>
   app.put('/api/dashboards/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
     try {
+      const parsed = DashboardSchema.parse(req.body);
+      assertSqlAuthoringAllowed(ctx.cfg, parsed);
       const before = await ctx.dashboards.store.get(id);
-      const updated = await ctx.dashboards.store.update(id, DashboardSchema.parse(req.body));
+      const updated = await ctx.dashboards.store.update(id, parsed);
       await recordAudit(ctx, req, { action: 'dashboard.update', entityType: 'dashboard', entityId: id, before, after: updated });
       return updated;
     } catch (err) { return mapError(err, reply); }

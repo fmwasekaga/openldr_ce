@@ -3,7 +3,7 @@ import Fastify from 'fastify';
 import { registerDashboardRoutes } from './dashboards-routes';
 import './auth-plugin';
 
-function fakeCtx() {
+function fakeCtx(cfg: { DASHBOARD_SQL_ENABLED?: boolean } = {}) {
   const data: any[] = [];
   const auditEvents: any[] = [];
   return {
@@ -23,9 +23,13 @@ function fakeCtx() {
     },
     audit: { record: async (e: any) => { auditEvents.push(e); return e; } },
     logger: { error() {}, warn() {}, info() {} },
+    cfg: { DASHBOARD_SQL_ENABLED: cfg.DASHBOARD_SQL_ENABLED ?? false },
     __auditEvents: auditEvents,
   } as any;
 }
+
+const sqlWidget = { id: 'w1', type: 'kpi', title: 'K', refreshIntervalSec: 0, visual: {}, query: { mode: 'sql', sql: 'select 1 as value' } };
+const dashWithSql = { id: 'd1', name: 'M', layout: [], widgets: [sqlWidget], filters: [], refreshIntervalSec: 0, isDefault: false, ownerId: null };
 
 describe('dashboard routes', () => {
   it('lists models', async () => {
@@ -49,6 +53,25 @@ describe('dashboard routes', () => {
     await app.inject({ method: 'POST', url: '/api/dashboards', payload: { id: 'd1', name: 'M', layout: [], widgets: [], filters: [], refreshIntervalSec: 0, isDefault: false, ownerId: null } });
     const res = await app.inject({ method: 'GET', url: '/api/dashboards' });
     expect(res.json().length).toBe(1);
+  });
+
+  it('authoring gate: rejects creating a dashboard with an sql widget when the flag is off', async () => {
+    const app = Fastify(); registerDashboardRoutes(app, fakeCtx({ DASHBOARD_SQL_ENABLED: false }));
+    const res = await app.inject({ method: 'POST', url: '/api/dashboards', payload: dashWithSql });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/raw SQL widgets are disabled/);
+  });
+
+  it('authoring gate: rejects updating a dashboard to add an sql widget when the flag is off', async () => {
+    const app = Fastify(); registerDashboardRoutes(app, fakeCtx({ DASHBOARD_SQL_ENABLED: false }));
+    const res = await app.inject({ method: 'PUT', url: '/api/dashboards/d1', payload: dashWithSql });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('authoring gate: allows persisting an sql widget when the flag is on', async () => {
+    const app = Fastify(); registerDashboardRoutes(app, fakeCtx({ DASHBOARD_SQL_ENABLED: true }));
+    const res = await app.inject({ method: 'POST', url: '/api/dashboards', payload: dashWithSql });
+    expect(res.statusCode).toBe(200);
   });
 
   it('audits create/update/delete with the request actor', async () => {

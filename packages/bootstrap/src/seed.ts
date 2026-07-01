@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { sampleForms, type FormStore } from '@openldr/forms';
 import { sampleWorkflow, type WorkflowStore } from '@openldr/workflows';
+import { seedDefaultDashboard, type DashboardStore } from '@openldr/dashboards';
 import type { ConnectorStore } from '@openldr/db';
 import type { DbContext } from './db-context';
 
@@ -9,6 +10,7 @@ export interface SeedResult {
   formsSeeded: number;
   workflowsSeeded: number;
   connectorsSeeded: number;
+  dashboardsSeeded: number;
 }
 
 /** Name used to dedup the default target-warehouse connector — idempotency key. */
@@ -23,6 +25,9 @@ export interface FormSeedTarget {
   // Host connector store + config, threaded from AppContext, so the seed can create a
   // default target-warehouse connector. Structural subset — AppContext satisfies it.
   connectors: Pick<ConnectorStore, 'list' | 'create'>;
+  // Dashboards store, threaded the same way so the seed can insert the vetted sample dashboard
+  // through the store (bypassing the authoring gate). AppContext.dashboards satisfies this.
+  dashboards: { store: Pick<DashboardStore, 'get' | 'create'> };
   cfg: { TARGET_DATABASE_URL?: string; SECRETS_ENCRYPTION_KEY?: string };
 }
 
@@ -101,7 +106,17 @@ export async function seedDatabase(db: DbContext, app: FormSeedTarget): Promise<
   // TARGET_DATABASE_URL so a fresh install has a connector for workflow DB nodes to select.
   const connectorsSeeded = await seedDefaultConnector(app);
 
-  return { resources, formsSeeded, workflowsSeeded, connectorsSeeded };
+  // Vetted sample dashboard — seeded through the store (id `default`) so the SQL widgets exist
+  // without going through the gated HTTP authoring path. Idempotent (store.create no-ops on
+  // conflict). Best-effort: a failure here must not abort the rest of the seed.
+  let dashboardsSeeded = 0;
+  try {
+    dashboardsSeeded = await seedDefaultDashboard(app.dashboards.store);
+  } catch (e) {
+    console.warn('[seed] sample dashboard seed skipped:', e instanceof Error ? e.message : String(e));
+  }
+
+  return { resources, formsSeeded, workflowsSeeded, connectorsSeeded, dashboardsSeeded };
 }
 
 // Seed one default host connector of type 'postgres', kind 'database' pointing at the target

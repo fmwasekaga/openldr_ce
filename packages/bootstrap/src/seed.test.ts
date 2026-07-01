@@ -7,6 +7,7 @@ function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
   const forms: { id: string; name: string; status: string }[] = [];
   const workflows: { id: string; name: string }[] = [];
   const connectors: { id: string; name: string; type: string | null; config: Record<string, string> }[] = [];
+  const dashboards: { id: string }[] = [];
   const app: FormSeedTarget = {
     forms: {
       list: async () => forms as never,
@@ -36,9 +37,18 @@ function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
         connectors.push({ id: input.id, name: input.name, type: input.type ?? null, config: input.config });
       },
     },
+    dashboards: {
+      store: {
+        get: async (id: string) => dashboards.find((d) => d.id === id) as never,
+        create: async (d: { id: string }) => {
+          if (!dashboards.some((x) => x.id === d.id)) dashboards.push({ id: d.id });
+          return d as never;
+        },
+      },
+    },
     cfg,
   };
-  return { app, workflows, connectors };
+  return { app, workflows, connectors, dashboards };
 }
 
 const fakeDb = { persist: vi.fn(async (r: { id: string }) => ({ flattened: JSON.stringify(r) })) } as unknown as DbContext;
@@ -95,5 +105,22 @@ describe('seedDatabase — default connector', () => {
     const res = await seedDatabase(fakeDb, app);
     expect(res.connectorsSeeded).toBe(0);
     expect(connectors).toHaveLength(0);
+  });
+});
+
+describe('seedDatabase — sample dashboard', () => {
+  it('seeds the vetted sample dashboard (id "default") once', async () => {
+    const { app, dashboards } = fakeApp();
+    const res = await seedDatabase(fakeDb, app);
+    expect(res.dashboardsSeeded).toBe(1);
+    expect(dashboards.map((d) => d.id)).toEqual(['default']);
+  });
+
+  it('is idempotent — re-running does not duplicate it', async () => {
+    const { app, dashboards } = fakeApp();
+    await seedDatabase(fakeDb, app);
+    const res2 = await seedDatabase(fakeDb, app);
+    expect(res2.dashboardsSeeded).toBe(0);
+    expect(dashboards).toHaveLength(1);
   });
 });

@@ -54,6 +54,14 @@ export const WidgetQuerySchema = z.discriminatedUnion('mode', [
     sql: z.string(),
     variableBindings: z.record(z.string()).optional(),
     variables: z.record(WidgetVariableDefSchema).optional(),
+    // Resolved dashboard-filter values (name → value / {from,to}). When present, `sql` is the
+    // STORED template (verbatim) and the server applies the `{{var}}`/`[[ ]]` substitution
+    // itself — so the submitted `sql` stays byte-identical to the persisted widget and can be
+    // vetted against stored dashboards even when filters are set.
+    values: z.record(z.union([
+      z.string(), z.number(), z.null(),
+      z.object({ from: z.string(), to: z.string() }),
+    ])).optional(),
   }),
 ]);
 export type WidgetQuery = z.infer<typeof WidgetQuerySchema>;

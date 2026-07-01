@@ -247,7 +247,8 @@ export type WidgetQuery =
   | { mode: 'builder'; model: string; metric: { key: string; label?: string; agg: string; column?: string };
       dimension?: { key: string; grain?: string }; filters: { dimension: string; op: string; value: unknown }[];
       variableBindings?: Record<string, string> }
-  | { mode: 'sql'; sql: string; variableBindings?: Record<string, string>; variables?: Record<string, WidgetVariableDef> };
+  | { mode: 'sql'; sql: string; variableBindings?: Record<string, string>; variables?: Record<string, WidgetVariableDef>;
+      values?: Record<string, string | number | null | { from: string; to: string }> };
 
 export interface WidgetConfig {
   id: string; type: string; title: string; query: WidgetQuery; refreshIntervalSec: number; visual: Record<string, unknown>;

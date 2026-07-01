@@ -1,11 +1,8 @@
-// Shared SQL-variable template logic, used by both the widget editor (preview, with local
-// test values) and the live widget (runtime, with bound dashboard-filter values), so a saved
-// `{{var}}` / `[[ ... ]]` widget resolves identically in both places.
-//
-// NOTE: an identical copy lives server-side in @openldr/dashboards/template so the query route
-// can apply the substitution to the STORED template (vetted stored-SQL execution). The studio
-// app deliberately does not depend on @openldr/dashboards (that would pull server-only DB deps
-// into the browser bundle), so this small, pure module is kept in sync by hand.
+// Shared SQL-variable template logic, used by BOTH the client (widget editor preview + live
+// widget) and the server (vetted stored-SQL execution), so a saved `{{var}}` / `[[ ... ]]`
+// widget resolves identically everywhere. Keeping this on the server lets the query route
+// receive the STORED template string (stable, vettable) plus opaque filter values, and apply
+// the substitution itself — the client never bakes arbitrary SQL into the submitted string.
 
 /** Resolve a name→value map into the flat key set the SQL template references, splitting a
  *  date-range value (`{from,to}`) into `name_from` / `name_to`. */
@@ -25,7 +22,8 @@ export function resolveValues(values: Record<string, unknown>): Record<string, s
 
 /** Apply `[[ ... {{var}} ... ]]` conditional clauses (kept only when every variable inside is
  *  set) then substitute `{{var}}` with a quoted literal (or `NULL`). Values become SQL literals;
- *  this path is admin-gated, Postgres-only and read-only. */
+ *  this path is vetted (template must match a persisted widget) or admin-gated, Postgres-only
+ *  and read-only. */
 export function applyTemplate(sql: string, resolved: Record<string, string | number | null>): string {
   const isSet = (v: string | number | null | undefined) => v !== null && v !== undefined && v !== '';
   const withClauses = sql.replace(/\[\[([\s\S]*?)\]\]/g, (_, clause: string) => {
