@@ -19,15 +19,22 @@ import { registerConnectorsRoutes } from './connectors-routes';
 import { registerPluginUiRoutes } from './plugin-ui-routes';
 import { createConnectorStore } from '@openldr/db';
 import { registerAuth } from './auth-plugin';
+import { readAppVersion } from './version';
 
 export function registerConfigRoute(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   app: FastifyInstance<any, any, any, any>,
-  ctx: { cfg: { DASHBOARD_SQL_ENABLED: boolean; TARGET_STORE_ADAPTER: string; AUTH_DEV_BYPASS: boolean; OIDC_ISSUER_URL: string; OIDC_WEB_CLIENT_ID: string; OIDC_AUDIENCE?: string } },
+  ctx: {
+    cfg: { TARGET_STORE_ADAPTER: string; AUTH_DEV_BYPASS: boolean; OIDC_ISSUER_URL: string; OIDC_WEB_CLIENT_ID: string; OIDC_AUDIENCE?: string };
+    featureFlags: { get(id: string): Promise<boolean> };
+  },
 ): void {
+  const version = readAppVersion();
   app.get('/api/config', async () => ({
-    dashboardSqlEnabled: ctx.cfg.DASHBOARD_SQL_ENABLED && ctx.cfg.TARGET_STORE_ADAPTER === 'pg',
+    dashboardSqlEnabled: (await ctx.featureFlags.get('dashboard.raw_sql')) && ctx.cfg.TARGET_STORE_ADAPTER === 'pg',
     authEnforced: !ctx.cfg.AUTH_DEV_BYPASS,
+    version,
+    environment: process.env.NODE_ENV ?? 'development',
     oidc: {
       issuerUrl: ctx.cfg.OIDC_ISSUER_URL,
       clientId: ctx.cfg.OIDC_WEB_CLIENT_ID,

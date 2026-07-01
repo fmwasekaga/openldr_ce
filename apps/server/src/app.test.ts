@@ -410,12 +410,12 @@ function ctxWith(status: 'up' | 'down'): AppContext {
     pluginBroker: {} as never,
     connectors: {} as never,
     appSettings: {} as never,
-    featureFlags: {} as never,
+    featureFlags: { get: async () => false } as never,
     marketplaceForms: {} as never,
     terminology: { ops: {} as never, admin: buildFakeAdmin(), ontology: buildFakeOntology(), loaders: buildFakeLoaders() },
     dashboards: {} as never,
     workflows: {} as never,
-    cfg: { AUTH_DEV_BYPASS: true, DASHBOARD_SQL_ENABLED: false, TARGET_STORE_ADAPTER: 'pg', OIDC_ISSUER_URL: 'https://kc.example/realms/openldr', OIDC_WEB_CLIENT_ID: 'openldr-web', OIDC_AUDIENCE: undefined } as never,
+    cfg: { AUTH_DEV_BYPASS: true, TARGET_STORE_ADAPTER: 'pg', OIDC_ISSUER_URL: 'https://kc.example/realms/openldr', OIDC_WEB_CLIENT_ID: 'openldr-web', OIDC_AUDIENCE: undefined } as never,
     async close() {},
   };
 }
