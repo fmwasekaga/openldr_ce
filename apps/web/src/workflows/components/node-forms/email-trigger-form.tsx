@@ -49,7 +49,7 @@ export function EmailTriggerForm({ node, update }: NodeFormProps) {
           type="number"
           value={pollSeconds}
           min={30}
-          onChange={(e) => patchConfig({ pollSeconds: Number(e.target.value) || 0 })}
+          onChange={(e) => patchConfig({ pollSeconds: Math.max(30, parseInt(e.target.value) || 60) })}
         />
       </FormField>
 
