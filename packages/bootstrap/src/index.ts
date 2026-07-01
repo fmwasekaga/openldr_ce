@@ -273,7 +273,8 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       // the SQL persisted on stored dashboards so filtered widgets still match. Execution is
       // allowed only when the flag is on OR the template is vetted (first-party/admin-authored).
       const vetted = collectVettedSqlTemplates(await dashboardStore.list());
-      if (!isSqlExecutionAllowed(cfg.DASHBOARD_SQL_ENABLED, q.sql, vetted)) {
+      const sqlEnabled = await featureFlags.get('dashboard.raw_sql');
+      if (!isSqlExecutionAllowed(sqlEnabled, q.sql, vetted)) {
         throw new DashboardQueryError('raw SQL widgets are disabled');
       }
       const finalSql = q.values ? applyTemplate(q.sql, resolveValues(q.values)) : q.sql;
