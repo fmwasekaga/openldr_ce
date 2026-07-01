@@ -27,6 +27,7 @@ import { DeclarativeNodeForm } from './plugin-node-form';
 import { ReadWriteFileForm } from './read-write-file-form';
 import { ExcelTemplateForm } from './excel-template-form';
 import { PivotForm } from './pivot-form';
+import { DatabaseForm } from './database-form';
 
 export interface NodeFormProps {
   node: WorkflowNode;
@@ -70,6 +71,9 @@ const FORMS: Record<string, ComponentType<NodeFormProps>> = {
   'read-write-file': ReadWriteFileForm,
   'excel-template': ExcelTemplateForm,
   pivot: PivotForm,
+  postgres: DatabaseForm,
+  'microsoft-sql': DatabaseForm,
+  mysql: DatabaseForm,
 };
 
 export function pickForm(node: WorkflowNode): ComponentType<NodeFormProps> {
