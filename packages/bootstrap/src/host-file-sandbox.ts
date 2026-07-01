@@ -24,6 +24,10 @@ function within(root: string, candidate: string): boolean {
  * Resolve `userPath` to a safe absolute path inside the sandbox root, or throw.
  * The single choke-point for all host file operations.
  */
+// NOTE (residual TOCTOU): paths are realpath-checked here, but resolve→open is not
+// atomic. An actor with write access INSIDE the sandbox root could swap a symlink
+// between this check and the caller's fs op. Acceptable for an off-by-default,
+// trusted-root feature; O_NOFOLLOW/openat hardening is out of scope.
 export function resolveWithinRoot(opts: ResolveOpts): string {
   if (!opts.enabled) throw new Error('Read/Write File: host file access is disabled');
   if (!opts.root) throw new Error('Read/Write File: WORKFLOW_FILE_ACCESS_ROOT is not configured');

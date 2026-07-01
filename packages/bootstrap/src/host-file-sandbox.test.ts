@@ -48,6 +48,17 @@ describe('resolveWithinRoot guards', () => {
     const p = ok('deep/newer/file.txt', false);
     expect(p.startsWith(fs.realpathSync(root))).toBe(true);
   });
+  it('rejects a sibling dir that shares a name prefix (prefix collision)', () => {
+    // A sibling like <root>-evil must never be treated as inside <root>.
+    const sibling = root + '-evil';
+    fs.mkdirSync(sibling, { recursive: true });
+    try {
+      // Reaching it requires .. which is rejected; assert the guard fires.
+      expect(() => resolveWithinRoot({ enabled: true, root, userPath: '../' + path.basename(sibling) + '/x', mustExist: false })).toThrow(/escapes the sandbox/);
+    } finally {
+      fs.rmSync(sibling, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('resolveWithinRoot symlink escape', () => {
@@ -58,6 +69,18 @@ describe('resolveWithinRoot symlink escape', () => {
     try { fs.symlinkSync(outside, link, 'dir'); } catch { return; } // skip if symlinks not permitted
     try {
       expect(() => resolveWithinRoot({ enabled: true, root, userPath: 'link/secret.txt', mustExist: true })).toThrow(/escapes the sandbox/);
+    } finally {
+      fs.rmSync(link, { force: true }); fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
+  it('rejects writing through an in-root symlinked dir pointing outside', () => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'rwf-wout-'));
+    const link = path.join(root, 'wlink');
+    try { fs.symlinkSync(outside, link, 'dir'); } catch { return; } // skip if symlinks not permitted
+    try {
+      // deepest existing ancestor is the symlink → realpath → outside → rejected,
+      // even for a deep non-existent tail.
+      expect(() => resolveWithinRoot({ enabled: true, root, userPath: 'wlink/a/b/new.txt', mustExist: false })).toThrow(/escapes the sandbox/);
     } finally {
       fs.rmSync(link, { force: true }); fs.rmSync(outside, { recursive: true, force: true });
     }
