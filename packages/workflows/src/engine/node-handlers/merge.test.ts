@@ -58,6 +58,32 @@ describe('mergeHandler — chooseBranch', () => {
   });
 });
 
+describe('mergeHandler — combineByKey', () => {
+  it('combineByKey left-joins branches on the key fields', async () => {
+    const left = [{ json: { requestid: 'R1', organism: 'E.coli', ward: 'A' } }, { json: { requestid: 'R2', organism: 'S.aureus', ward: 'B' } }];
+    const right = [{ json: { requestid: 'R1', organism: 'E.coli', Amikacin: 'S' } }];
+    const c = createContext(undefined, () => {}, [
+      { id: 'e1', source: 'L', target: 'm1' },
+      { id: 'e2', source: 'R', target: 'm1' },
+    ]);
+    c.nodeOutputs = { L: left, R: right };
+    const out = await mergeHandler({ id: 'm1', type: 'action', data: { config: { mode: 'combineByKey', joinKeys: ['requestid', 'organism'], joinType: 'left' } } } as any, c, []);
+    expect(out).toHaveLength(2);
+    expect(out[0].json).toEqual({ requestid: 'R1', organism: 'E.coli', ward: 'A', Amikacin: 'S' });
+    expect(out[1].json).toEqual({ requestid: 'R2', organism: 'S.aureus', ward: 'B' });
+  });
+
+  it('combineByKey inner join drops unmatched left rows', async () => {
+    const c = createContext(undefined, () => {}, [
+      { id: 'e1', source: 'L', target: 'm1' },
+      { id: 'e2', source: 'R', target: 'm1' },
+    ]);
+    c.nodeOutputs = { L: [{ json: { k: 1, a: 1 } }, { json: { k: 2, a: 2 } }], R: [{ json: { k: 1, b: 9 } }] };
+    const out = await mergeHandler({ id: 'm1', type: 'action', data: { config: { mode: 'combineByKey', joinKeys: ['k'], joinType: 'inner' } } } as any, c, []);
+    expect(out).toEqual([{ json: { k: 1, a: 1, b: 9 } }]);
+  });
+});
+
 describe('mergeHandler — missing outputs', () => {
   it('ignores edges whose source has no recorded output yet', async () => {
     const c = createContext(undefined, () => {}, [
