@@ -26,12 +26,13 @@ export function MergeForm({ node, update }: NodeFormProps) {
 
       <FormField
         label="Mode"
-        hint="Append: collect into array. Combine: merge objects. Choose Branch: pick one input."
+        hint="Append: collect into array. Combine: merge objects. Choose Branch: pick one input. Combine by key: SQL-style join on key fields."
       >
         <Select value={mode} onChange={(e) => patchConfig({ mode: e.target.value })}>
           <option value="append">Append</option>
           <option value="combine">Combine (merge objects)</option>
           <option value="chooseBranch">Choose Branch</option>
+          <option value="combineByKey">Combine by key (join)</option>
         </Select>
       </FormField>
 
@@ -43,6 +44,23 @@ export function MergeForm({ node, update }: NodeFormProps) {
             onChange={(e) => patchConfig({ preferredBranch: parseInt(e.target.value) || 0 })}
           />
         </FormField>
+      )}
+
+      {mode === 'combineByKey' && (
+        <>
+          <FormField label="Join keys" hint="Comma-separated fields matched between the two branches.">
+            <TextInput
+              value={Array.isArray(config.joinKeys) ? (config.joinKeys as string[]).join(', ') : ''}
+              onChange={(e) => patchConfig({ joinKeys: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
+            />
+          </FormField>
+          <FormField label="Join type" hint="Left keeps unmatched first-branch rows; inner drops them.">
+            <Select value={(config.joinType as string) ?? 'left'} onChange={(e) => patchConfig({ joinType: e.target.value })}>
+              <option value="left">Left</option>
+              <option value="inner">Inner</option>
+            </Select>
+          </FormField>
+        </>
       )}
     </div>
   );
