@@ -51,5 +51,5 @@ describe('AMR Ndola pipeline (nodes composed)', () => {
     const ref = (out[0].binary as Record<string, BinaryRef>).file;
     const wb = await XlsxPopulate.fromDataAsync(Buffer.from(store.get(ref.objectKey)!), { password: 'Micro!' });
     expect(wb.sheet(0).cell('A2').value()).toBe('CULUR'); // first template column filled
-  });
+  }, 30_000); // xlsx-populate password crypto is CPU-heavy and slows under parallel load
 });

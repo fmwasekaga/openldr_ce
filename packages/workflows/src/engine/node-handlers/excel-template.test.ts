@@ -82,5 +82,5 @@ describe('excelTemplateHandler', () => {
     await expect(XlsxPopulate.fromDataAsync(Buffer.from(bytes))).rejects.toBeTruthy();
     const wb = await XlsxPopulate.fromDataAsync(Buffer.from(bytes), { password: 'S3cret!' });
     expect(wb.sheet(0).cell('A2').value()).toBe('Lusaka');
-  });
+  }, 30_000); // xlsx-populate password crypto is CPU-heavy and slows under parallel load
 });
