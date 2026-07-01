@@ -93,6 +93,10 @@ export const ConfigSchema = z
     WORKFLOW_LOOP_MAX_ITEMS: z.coerce.number().int().positive().default(100_000),
     // Master switch for external listener triggers (postgres LISTEN / IMAP poll).
     WORKFLOW_LISTENERS_ENABLED: envBoolean(true),
+    // Master switch for the read-write-file node's host filesystem access (privilege risk → off by default).
+    WORKFLOW_FILE_ACCESS_ENABLED: envBoolean(false),
+    // The single sandbox root all host file operations are confined to (empty = unset).
+    WORKFLOW_FILE_ACCESS_ROOT: z.string().default(''),
     // Floor for an email-trigger's poll interval (seconds).
     WORKFLOW_EMAIL_POLL_MIN_SECONDS: z.coerce.number().int().positive().default(30),
     // Max unseen messages processed per email-trigger poll.

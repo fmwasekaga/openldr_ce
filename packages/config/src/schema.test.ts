@@ -38,6 +38,16 @@ describe('workflow code sandbox config', () => {
     expect(c.WORKFLOW_EMAIL_MAX_PER_POLL).toBe(10);
     expect(c.WORKFLOW_LISTENERS_ENABLED).toBe(false);
   });
+  it('defaults host file access knobs', () => {
+    const c = ConfigSchema.parse(base);
+    expect(c.WORKFLOW_FILE_ACCESS_ENABLED).toBe(false);
+    expect(c.WORKFLOW_FILE_ACCESS_ROOT).toBe('');
+  });
+  it('accepts host file access overrides', () => {
+    const c = ConfigSchema.parse({ ...base, WORKFLOW_FILE_ACCESS_ENABLED: 'true', WORKFLOW_FILE_ACCESS_ROOT: '/data/wf' });
+    expect(c.WORKFLOW_FILE_ACCESS_ENABLED).toBe(true);
+    expect(c.WORKFLOW_FILE_ACCESS_ROOT).toBe('/data/wf');
+  });
 });
 
 describe('dashboard SQL config', () => {

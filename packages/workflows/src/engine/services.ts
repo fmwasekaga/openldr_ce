@@ -103,6 +103,14 @@ export interface WorkflowServices {
   runConnectorSftp?(input: { connectorId: string; operation: string; remotePath: string; toPath?: string; bytes?: Uint8Array }): Promise<{ bytes?: Uint8Array; fileName?: string; entries?: { name: string; size: number; type: string }[]; ok?: boolean }>;
   /** Run another saved workflow as a sub-workflow → its terminal items. Host-injected (execute-workflow node). */
   runSubWorkflow?(input: { workflowId: string; input: WorkflowItem[]; callStack: string[] }): Promise<{ items: WorkflowItem[]; status: 'completed' | 'failed' }>;
+  /** Read a host file within the sandbox root → bytes. Host-injected (read-write-file node). */
+  hostFileRead?(path: string): Promise<{ bytes: Uint8Array }>;
+  /** Write bytes to a host file within the sandbox root. Host-injected. */
+  hostFileWrite?(path: string, bytes: Uint8Array): Promise<{ byteSize: number }>;
+  /** List a host directory within the sandbox root. Host-injected. */
+  hostFileList?(path: string): Promise<{ entries: { name: string; type: 'file' | 'dir'; size: number }[] }>;
+  /** Delete a host file (not a directory) within the sandbox root. Host-injected. */
+  hostFileDelete?(path: string): Promise<{ ok: true }>;
 }
 
 export function parseAllowlist(raw: string): string[] {
