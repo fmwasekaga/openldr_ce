@@ -38,9 +38,14 @@ fetch "infra/keycloak/openldr-realm.json" "$DIR/config/keycloak/openldr-realm.js
 fetch "scripts/init-target-db.sql" "$DIR/config/init-target-db.sql"
 
 # 3. Secrets + cert (only on first run — never overwrite an existing .env)
-rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24; }
+# Read a bounded block of /dev/urandom (not an unbounded stream) and take the
+# first 24 alnum chars with cut — cut consumes all of its input, so no early
+# pipe close can SIGPIPE an upstream reader even under `set -o pipefail`.
+rand() { head -c 3072 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | cut -c1-24; }
 if [ ! -f "$DIR/.env" ]; then
   PG_PW="$(rand)"; KC_PW="$(rand)"; S3_KEY="$(rand)"; S3_SECRET="$(rand)"
+  # Restrict before writing so the plaintext secrets are never briefly world-readable.
+  ( umask 077; : > "$DIR/.env" )
   cat > "$DIR/.env" <<EOF
 OPENLDR_VERSION=$VERSION
 SERVER_NAME=localhost

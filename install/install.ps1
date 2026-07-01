@@ -26,7 +26,15 @@ Fetch "infra/keycloak/openldr-realm.json" "$Dir/config/keycloak/openldr-realm.js
 Fetch "scripts/init-target-db.sql" "$Dir/config/init-target-db.sql"
 
 # 3. Secrets + cert (never overwrite an existing .env)
-function Rand { -join ((48..57)+(65..90)+(97..122) | Get-Random -Count 24 | ForEach-Object { [char]$_ }) }
+# Use a cryptographic RNG (Get-Random is a clock-seeded PRNG, unfit for secrets)
+# and sample WITH replacement so characters can repeat.
+function Rand {
+  $bytes = New-Object 'System.Byte[]' 24
+  $rng = [System.Security.Cryptography.RNGCryptoServiceProvider]::new()
+  try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
+  $chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+  -join ($bytes | ForEach-Object { $chars[$_ % $chars.Length] })
+}
 $envPath = "$Dir/.env"
 if (-not (Test-Path $envPath)) {
   $pg = Rand; $kc = Rand; $s3k = Rand; $s3s = Rand
@@ -49,6 +57,8 @@ OIDC_WEB_CLIENT_ID=openldr-web
 KEYCLOAK_ADMIN=admin
 KEYCLOAK_ADMIN_PASSWORD=$kc
 "@ | Out-File -FilePath $envPath -Encoding ascii
+  # Lock the secrets file down to the current user (drop inherited ACLs).
+  icacls $envPath /inheritance:r /grant:r "$($env:USERNAME):(R,W)" *> $null
   Write-Host "-> Wrote $envPath (generated secrets)"
 } else {
   Write-Host "-> Reusing existing $envPath"
@@ -69,8 +79,17 @@ if (-not (Test-Path $cert)) {
 # 4. Start
 if ($NoStart) { Write-Host "OK Scaffolded $Dir (-NoStart). Run: cd $Dir; docker compose up -d"; exit 0 }
 Push-Location $Dir
-if (-not $NoPull) { docker compose pull }
-docker compose up -d
-Pop-Location
+try {
+  # $ErrorActionPreference=Stop does NOT catch native exit codes, so check them
+  # explicitly — otherwise a failed pull/up would still print the success banner.
+  if (-not $NoPull) {
+    docker compose pull
+    if ($LASTEXITCODE -ne 0) { Die "docker compose pull failed (is the image published yet? see RELEASE.md)" }
+  }
+  docker compose up -d
+  if ($LASTEXITCODE -ne 0) { Die "docker compose up failed" }
+} finally { Pop-Location }
 Write-Host ""
 Write-Host "OK OpenLDR is starting. Open https://localhost"
+$kcLine = (Select-String -Path $envPath -Pattern '^KEYCLOAK_ADMIN_PASSWORD=').Line
+if ($kcLine) { Write-Host "   Keycloak admin password: $($kcLine -replace '^KEYCLOAK_ADMIN_PASSWORD=','')" }
