@@ -72,6 +72,7 @@ FRESH_ENV=0
 if [ ! -f .env ]; then
   cp .env.example .env
   printf '\n# --- added by development.sh: no-login dev mode (remove to use real Keycloak) ---\nAUTH_DEV_BYPASS=true\n' >> .env
+  printf 'SECRETS_ENCRYPTION_KEY=%s\n' "$(openssl rand -base64 32 2>/dev/null || head -c 32 /dev/urandom | base64 | tr -d '\n')" >> .env
   FRESH_ENV=1
   echo "→ Wrote .env (dev bypass enabled — loads as a dev admin)"
 else
@@ -95,6 +96,8 @@ else
     done
     echo "→ Resetting the database (pnpm openldr db reset)"
     pnpm openldr db reset || err "db reset failed"
+    echo "→ Seeding starter set (pnpm openldr db seed)"
+    pnpm openldr db seed || err "db seed failed"
     if [ "$SEED" -eq 1 ]; then
       echo "→ Seeding WHONET sample data (pnpm e2e:seed)"
       pnpm e2e:seed || err "seed failed"

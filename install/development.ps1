@@ -63,6 +63,10 @@ $freshEnv = $false
 if (-not (Test-Path .env)) {
   Copy-Item .env.example .env
   Add-Content -Path .env -Value "`n# --- added by development.ps1: no-login dev mode (remove to use real Keycloak) ---`nAUTH_DEV_BYPASS=true"
+  $devBytes = New-Object 'System.Byte[]' 32
+  $rngDev = [System.Security.Cryptography.RNGCryptoServiceProvider]::new()
+  try { $rngDev.GetBytes($devBytes) } finally { $rngDev.Dispose() }
+  Add-Content -Path .env -Value "SECRETS_ENCRYPTION_KEY=$([Convert]::ToBase64String($devBytes))"
   $freshEnv = $true
   Write-Host "-> Wrote .env (dev bypass enabled - loads as a dev admin)"
 } else {
@@ -88,6 +92,9 @@ if ($NoServices) {
     Write-Host "-> Resetting the database (pnpm openldr db reset)"
     pnpm openldr db reset
     if ($LASTEXITCODE -ne 0) { Die "db reset failed" }
+    Write-Host "-> Seeding starter set (pnpm openldr db seed)"
+    pnpm openldr db seed
+    if ($LASTEXITCODE -ne 0) { Die "db seed failed" }
     if ($Seed) {
       Write-Host "-> Seeding WHONET sample data (pnpm e2e:seed)"
       pnpm e2e:seed

@@ -44,6 +44,7 @@ fetch "scripts/init-target-db.sql" "$DIR/config/init-target-db.sql"
 rand() { head -c 3072 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | cut -c1-24; }
 if [ ! -f "$DIR/.env" ]; then
   PG_PW="$(rand)"; KC_PW="$(rand)"; S3_KEY="$(rand)"; S3_SECRET="$(rand)"
+  SECRETS_KEY="$(openssl rand -base64 32 2>/dev/null || head -c 32 /dev/urandom | base64 | tr -d '\n')"
   # Restrict before writing so the plaintext secrets are never briefly world-readable.
   ( umask 077; : > "$DIR/.env" )
   cat > "$DIR/.env" <<EOF
@@ -64,6 +65,9 @@ OIDC_ISSUER_URL=http://host.docker.internal:8180/realms/openldr
 OIDC_WEB_CLIENT_ID=openldr-web
 KEYCLOAK_ADMIN=admin
 KEYCLOAK_ADMIN_PASSWORD=$KC_PW
+SECRETS_ENCRYPTION_KEY=$SECRETS_KEY
+SEED_ON_START=true
+MARKETPLACE_REGISTRY_URL=https://raw.githubusercontent.com/fmwasekaga/openldr-ce-marketplace/main
 EOF
   echo "→ Wrote $DIR/.env (generated secrets)"
 else

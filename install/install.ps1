@@ -38,6 +38,10 @@ function Rand {
 $envPath = "$Dir/.env"
 if (-not (Test-Path $envPath)) {
   $pg = Rand; $kc = Rand; $s3k = Rand; $s3s = Rand
+  $secretBytes = New-Object 'System.Byte[]' 32
+  $rngKey = [System.Security.Cryptography.RNGCryptoServiceProvider]::new()
+  try { $rngKey.GetBytes($secretBytes) } finally { $rngKey.Dispose() }
+  $secretsKey = [Convert]::ToBase64String($secretBytes)
   @"
 OPENLDR_VERSION=$Version
 SERVER_NAME=localhost
@@ -56,6 +60,9 @@ OIDC_ISSUER_URL=http://host.docker.internal:8180/realms/openldr
 OIDC_WEB_CLIENT_ID=openldr-web
 KEYCLOAK_ADMIN=admin
 KEYCLOAK_ADMIN_PASSWORD=$kc
+SECRETS_ENCRYPTION_KEY=$secretsKey
+SEED_ON_START=true
+MARKETPLACE_REGISTRY_URL=https://raw.githubusercontent.com/fmwasekaga/openldr-ce-marketplace/main
 "@ | Out-File -FilePath $envPath -Encoding ascii
   # Lock the secrets file down to the current user (drop inherited ACLs).
   icacls $envPath /inheritance:r /grant:r "$($env:USERNAME):(R,W)" *> $null
