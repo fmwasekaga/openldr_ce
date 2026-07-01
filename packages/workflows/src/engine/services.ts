@@ -97,6 +97,8 @@ export interface WorkflowServices {
   readBinary?(objectKey: string): Promise<Uint8Array>;
   /** Persist raw bytes as a run artifact under workflow-artifacts/ → BinaryRef. Host-injected (binary nodes). */
   writeBinary?(input: { bytes: Uint8Array; fileName: string; contentType: string }): Promise<BinaryRef>;
+  /** Resolve a named secret from a connector's decrypted config (report passwords etc.). Host-injected. */
+  resolveSecret?(input: { connectorId: string; key: string }): Promise<string | undefined>;
   /** Send an email via a host connector (smtp/gmail/outlook). Host-injected. */
   runConnectorEmail?(input: { connectorId: string; to: string; subject: string; body: string; html?: boolean; cc?: string }): Promise<{ messageId: string; accepted: string[]; rejected: string[] }>;
   /** Run an SFTP operation against a host connector. Host-injected. */

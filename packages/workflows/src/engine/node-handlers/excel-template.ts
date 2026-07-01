@@ -62,7 +62,15 @@ export const excelTemplateHandler: NodeHandler = async (node, ctx, input) => {
     sheet.range(`${headerCell}:${endCol}${Math.max(endRow, hdr.row)}`).autoFilter();
   }
 
-  const out = (await wb.outputAsync()) as Buffer;
+  let password: string | undefined;
+  const pw = config.password as { connectorId?: string; key?: string } | undefined;
+  if (pw?.connectorId && pw.key) {
+    if (!ctx.services.resolveSecret) throw new Error('Excel Template: secret resolution unavailable');
+    password = await ctx.services.resolveSecret({ connectorId: pw.connectorId, key: pw.key });
+    if (!password) throw new Error(`Excel Template: password secret '${pw.key}' did not resolve`);
+  }
+
+  const out = (await wb.outputAsync(password ? { password } : undefined)) as Buffer;
   const ref = await ctx.services.writeBinary({ bytes: new Uint8Array(out), fileName, contentType: XLSX_CONTENT_TYPE });
   const items = input.length > 0 ? input : [{ json: {} }];
   return items.map((it, i) => (i === 0 ? { ...it, binary: { ...(it.binary ?? {}), [binaryField]: ref } } : it));

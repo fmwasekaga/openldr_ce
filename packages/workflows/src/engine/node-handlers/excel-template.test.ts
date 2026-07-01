@@ -58,4 +58,29 @@ describe('excelTemplateHandler', () => {
     await expect(excelTemplateHandler(node({ columns: ['a'] }), ctx, [{ json: {} }]))
       .rejects.toThrow(/templateRef is required/);
   });
+
+  it('encrypts the output when a password secret resolves', async () => {
+    const tpl = await blankTemplateBytes();
+    const store = new Map<string, Uint8Array>([['tpl-key', tpl]]);
+    let n = 0;
+    const services = {
+      readBinary: async (k: string) => store.get(k)!,
+      writeBinary: async ({ bytes, fileName, contentType }: { bytes: Uint8Array; fileName: string; contentType: string }) => {
+        const objectKey = `wf/${n++}/${fileName}`; store.set(objectKey, bytes);
+        return { objectKey, contentType, fileName, byteSize: bytes.byteLength };
+      },
+      resolveSecret: async ({ key }: { connectorId: string; key: string }) => (key === 'amr_pw' ? 'S3cret!' : undefined),
+    } as unknown as import('../services').WorkflowServices;
+    const ctx = createContext(undefined, () => {}, [], undefined, services);
+    const out = await excelTemplateHandler(
+      node({ templateRef: 'tpl-key', startCell: 'A2', columns: ['Province', 'Count'], fileName: 'p.xlsx',
+             password: { connectorId: 'c1', key: 'amr_pw' } }),
+      ctx, [{ json: { Province: 'Lusaka', Count: 1 } }],
+    );
+    const ref = (out[0].binary as Record<string, import('../items').BinaryRef>).file;
+    const bytes = store.get(ref.objectKey)!;
+    await expect(XlsxPopulate.fromDataAsync(Buffer.from(bytes))).rejects.toBeTruthy();
+    const wb = await XlsxPopulate.fromDataAsync(Buffer.from(bytes), { password: 'S3cret!' });
+    expect(wb.sheet(0).cell('A2').value()).toBe('Lusaka');
+  });
 });
