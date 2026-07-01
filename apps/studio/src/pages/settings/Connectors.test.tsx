@@ -15,6 +15,17 @@ import * as api from '@/api';
 import { toast } from 'sonner';
 import { Connectors } from './Connectors';
 
+// Row actions live behind a kebab (DropdownMenu). Open it the way Radix expects in
+// jsdom (pointerDown, fall back to Enter), then the menu items — which keep their
+// original data-testids — become queryable.
+function openRowActions(id: string) {
+  const trigger = screen.getByTestId(`actions-${id}`);
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+  if (!document.querySelector('[role="menu"]')) {
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+  }
+}
+
 const conn = {
   id: 'c1', name: 'Prod DHIS2', pluginId: 'dhis2-sink', type: null,
   kind: 'sink', allowedHost: 'dhis2.example.org', enabled: true,
@@ -111,6 +122,8 @@ describe('Connectors page', () => {
   it('tests a plugin connector and shows the metadata summary', async () => {
     (api.testConnector as any).mockResolvedValue({ ok: true, metadata: { dataElements: 12, orgUnits: 5, categoryOptionCombos: 3, programs: 1, programStages: 2 } });
     render(<MemoryRouter><Connectors /></MemoryRouter>);
+    await screen.findByTestId('actions-c1');
+    openRowActions('c1');
     fireEvent.click(await screen.findByTestId('test-c1'));
     await waitFor(() => expect(api.testConnector).toHaveBeenCalledWith('c1'));
     expect(await screen.findByText(/12 data elements/i)).toBeTruthy();
@@ -120,6 +133,8 @@ describe('Connectors page', () => {
     (api.listConnectors as any).mockResolvedValue([dbConn]);
     (api.testConnector as any).mockResolvedValue({ ok: true });
     render(<MemoryRouter><Connectors /></MemoryRouter>);
+    await screen.findByTestId('actions-c2');
+    openRowActions('c2');
     fireEvent.click(await screen.findByTestId('test-c2'));
     await waitFor(() => expect(api.testConnector).toHaveBeenCalledWith('c2'));
     expect(await screen.findByText(/connection ok/i)).toBeTruthy();
@@ -128,6 +143,8 @@ describe('Connectors page', () => {
   it('removes a connector after confirm', async () => {
     (api.deleteConnector as any).mockResolvedValue(undefined);
     render(<MemoryRouter><Connectors /></MemoryRouter>);
+    await screen.findByTestId('actions-c1');
+    openRowActions('c1');
     fireEvent.click(await screen.findByTestId('remove-c1'));
     fireEvent.click(await screen.findByRole('button', { name: 'Remove' }));
     await waitFor(() => expect(api.deleteConnector).toHaveBeenCalledWith('c1'));
@@ -136,6 +153,8 @@ describe('Connectors page', () => {
   it('updates name/enabled without resending secrets', async () => {
     (api.updateConnector as any).mockResolvedValue(conn);
     render(<MemoryRouter><Connectors /></MemoryRouter>);
+    await screen.findByTestId('actions-c1');
+    openRowActions('c1');
     fireEvent.click(await screen.findByTestId('edit-c1'));
     fireEvent.change(await screen.findByTestId('connector-name'), { target: { value: 'Renamed' } });
     fireEvent.click(screen.getByTestId('connector-save'));
@@ -144,6 +163,8 @@ describe('Connectors page', () => {
 
   it('rejects a partial connection-field re-entry on edit (plugin)', async () => {
     render(<MemoryRouter><Connectors /></MemoryRouter>);
+    await screen.findByTestId('actions-c1');
+    openRowActions('c1');
     fireEvent.click(await screen.findByTestId('edit-c1'));
     fireEvent.change(await screen.findByTestId('connector-baseurl'), { target: { value: 'https://new.example.org' } });
     fireEvent.click(screen.getByTestId('connector-save'));

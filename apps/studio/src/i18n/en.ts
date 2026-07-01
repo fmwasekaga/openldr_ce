@@ -135,6 +135,7 @@ export const en = {
       colHost: 'Host',
       colEnabled: 'Enabled',
       colActions: 'Actions',
+      actionsLabel: 'Actions for {{name}}',
       test: 'Test',
       edit: 'Edit',
       remove: 'Remove',

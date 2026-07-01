@@ -139,6 +139,7 @@ export const pt: EnShape = {
       colHost: 'Host',
       colEnabled: 'Ativado',
       colActions: 'Ações',
+      actionsLabel: 'Ações para {{name}}',
       test: 'Testar',
       edit: 'Editar',
       remove: 'Remover',
