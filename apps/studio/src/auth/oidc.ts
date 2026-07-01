@@ -26,8 +26,8 @@ export function createOidc(cfg: OidcConfig): OidcClient {
   const mgr = new UserManager({
     authority: cfg.issuerUrl,
     client_id: cfg.clientId,
-    redirect_uri: `${window.location.origin}/auth/callback`,
-    post_logout_redirect_uri: window.location.origin,
+    redirect_uri: `${window.location.origin}/studio/auth/callback`,
+    post_logout_redirect_uri: `${window.location.origin}/studio`,
     response_type: 'code',
     scope: 'openid profile email',
     automaticSilentRenew: true,
