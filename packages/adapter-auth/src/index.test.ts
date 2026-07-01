@@ -89,6 +89,41 @@ describe('verifyToken', () => {
     const token = await sign({}); // no aud claim
     await expect(auth.verifyToken(token)).rejects.toThrow();
   });
+
+  it('with internalJwksUrl: skips discovery, fetches JWKS from the internal url, validates the public issuer', async () => {
+    const { publicKey, privateKey } = await generateKeyPair('RS256');
+    const jwk = await exportJWK(publicKey);
+    jwk.kid = 'test-key'; jwk.alg = 'RS256';
+    const publicIssuer = 'https://host/auth/realms/openldr';
+    const internalJwks = 'http://keycloak:8080/auth/realms/openldr/protocol/openid-connect/certs';
+    let discoveryCalls = 0;
+    let jwksFactoryCalls: string[] = [];
+    // fetchFn: asserts discovery is never called (all traffic through fetchFn goes here).
+    const fetchFn = (async (url: string | URL | Request, _init?: RequestInit) => {
+      const u = String(url);
+      if (u.includes('.well-known')) { discoveryCalls++; throw new Error('discovery must not be called'); }
+      throw new Error(`unexpected fetch ${u}`);
+    }) as unknown as typeof fetch;
+    // remoteJwksFactory: seam that replaces createRemoteJWKSet; records which URL was requested
+    // and returns a local key set so no real network call is needed.
+    const remoteJwksFactory = (url: URL): JWTVerifyGetKey => {
+      jwksFactoryCalls.push(url.href);
+      return createLocalJWKSet({ keys: [jwk] });
+    };
+    const auth = createAuth(
+      { issuerUrl: publicIssuer, audience: 'openldr-api', internalJwksUrl: internalJwks },
+      { fetchFn, remoteJwksFactory },
+    );
+    const token = await new SignJWT({ preferred_username: 'ada' })
+      .setProtectedHeader({ alg: 'RS256', kid: 'test-key' }).setIssuedAt()
+      .setSubject('user-123').setIssuer(publicIssuer).setAudience('openldr-api').setExpirationTime('5m')
+      .sign(privateKey);
+    const claims = await auth.verifyToken(token);
+    expect(claims.sub).toBe('user-123');
+    expect(discoveryCalls).toBe(0);
+    expect(jwksFactoryCalls).toHaveLength(1);
+    expect(jwksFactoryCalls[0]).toBe(internalJwks);
+  });
 });
 
 function adminFetchMock() {
