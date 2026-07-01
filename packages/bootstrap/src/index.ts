@@ -411,6 +411,10 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     runConnectorRedis: (input) => connectorRedisRunner(input),
     runConnectorEmail: (input) => connectorEmailRunner(input),
     runConnectorSftp: (input) => connectorSftpRunner(input),
+    resolveSecret: async ({ connectorId, key }) => {
+      const config = await connectorStore.getDecryptedConfig(connectorId, cfg.SECRETS_ENCRYPTION_KEY);
+      return config[key];
+    },
   };
   const workflowRunner = createWorkflowTriggerRunner({
     store: workflowStore, runs: workflowRuns, schedules: workflowSchedules,
