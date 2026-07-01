@@ -16,6 +16,7 @@ import { registerFormsRoutes } from './forms-routes';
 import { registerMarketplaceRoutes } from './marketplace-routes';
 import { registerWorkflowRoutes } from './workflows-routes';
 import { registerConnectorsRoutes } from './connectors-routes';
+import { registerSettingsRoutes } from './settings-routes';
 import { registerPluginUiRoutes } from './plugin-ui-routes';
 import { createConnectorStore } from '@openldr/db';
 import { registerAuth } from './auth-plugin';
@@ -75,6 +76,7 @@ export function buildApp(ctx: AppContext) {
   registerPluginUiRoutes(app, ctx);
   registerConnectorsRoutes(app, ctx, { connectors: createConnectorStore(ctx.internalDb) });
   registerWorkflowRoutes(app, ctx, { connectors: createConnectorStore(ctx.internalDb) });
+  registerSettingsRoutes(app, ctx);
 
   // Serve the built SPA if present. API + health are registered first and win.
   // WEB_DIST_DIR overrides the location for container deploys (the SPA may not sit at
