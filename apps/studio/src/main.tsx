@@ -8,7 +8,7 @@ import { AuthProvider } from './auth/AuthProvider';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename="/studio">
       <AuthProvider>
         <App />
       </AuthProvider>

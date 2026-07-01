@@ -5,6 +5,7 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig(({ mode }) => ({
+  base: '/studio/',
   plugins: [react(), tailwindcss()],
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   // react-grid-layout / react-draggable / react-resizable reference `process.env.NODE_ENV`
