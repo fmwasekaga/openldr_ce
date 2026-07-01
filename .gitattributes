@@ -12,3 +12,6 @@ docker-compose*.yml        text eol=lf
 *.ps1   text eol=crlf
 *.cmd   text eol=crlf
 *.bat   text eol=crlf
+
+# Gzipped bundled fixtures are binary — never EOL-normalize (would corrupt the gzip stream).
+*.json.gz binary

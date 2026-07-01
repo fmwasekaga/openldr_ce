@@ -8,6 +8,43 @@ function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
   const workflows: { id: string; name: string }[] = [];
   const connectors: { id: string; name: string; type: string | null; config: Record<string, string> }[] = [];
   const dashboards: { id: string }[] = [];
+  // Terminology stores modelled just enough to exercise real idempotency: value sets deduped by
+  // url (as importFhirCatalog does), UCUM concepts deduped by (system, code) (as the loader does).
+  const valueSets: { url: string; publisherId: string | null }[] = [];
+  const concepts = new Set<string>(); // `${system}\t${code}`
+  const terminology: FormSeedTarget['terminology'] = {
+    ops: {
+      lookup: async (system: string, code: string) => ({ found: concepts.has(`${system}\t${code}`) }),
+    },
+    admin: {
+      valueSets: {
+        list: async (publisherId?: string) =>
+          valueSets.filter((v) => !publisherId || v.publisherId === publisherId) as never,
+        importFhirCatalog: async (resource: unknown) => {
+          const cat = resource as { valueSets?: { url: string }[] };
+          let imported = 0;
+          let skipped = 0;
+          for (const vs of cat.valueSets ?? []) {
+            if (valueSets.some((x) => x.url === vs.url)) { skipped += 1; continue; }
+            valueSets.push({ url: vs.url, publisherId: 'pub-hl7-fhir' });
+            imported += 1;
+          }
+          return { imported, skipped, valueSet: null } as never;
+        },
+      },
+    },
+    loaders: {
+      resource: async (json: unknown) => {
+        const cs = json as { url?: string; concept?: { code: string }[] };
+        let conceptsLoaded = 0;
+        for (const c of cs.concept ?? []) {
+          const key = `${cs.url}\t${c.code}`;
+          if (!concepts.has(key)) { concepts.add(key); conceptsLoaded += 1; }
+        }
+        return { conceptsLoaded };
+      },
+    },
+  };
   const app: FormSeedTarget = {
     forms: {
       list: async () => forms as never,
@@ -46,9 +83,10 @@ function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
         },
       },
     },
+    terminology,
     cfg,
   };
-  return { app, workflows, connectors, dashboards };
+  return { app, workflows, connectors, dashboards, valueSets, concepts };
 }
 
 const fakeDb = { persist: vi.fn(async (r: { id: string }) => ({ flattened: JSON.stringify(r) })) } as unknown as DbContext;
@@ -122,5 +160,58 @@ describe('seedDatabase — sample dashboard', () => {
     const res2 = await seedDatabase(fakeDb, app);
     expect(res2.dashboardsSeeded).toBe(0);
     expect(dashboards).toHaveLength(1);
+  });
+});
+
+describe('seedDatabase — bundled terminology', () => {
+  it('imports the bundled FHIR R4 catalog and full UCUM code system on first boot', async () => {
+    const { app, valueSets, concepts } = fakeApp();
+    const res = await seedDatabase(fakeDb, app);
+    // Hundreds of FHIR R4 value sets + hundreds of UCUM concepts from the real bundled fixtures.
+    expect(res.terminology.valueSetsImported).toBeGreaterThan(100);
+    expect(res.terminology.ucumConceptsImported).toBeGreaterThan(100);
+    expect(valueSets.length).toBe(res.terminology.valueSetsImported);
+    // meter is our UCUM presence marker — must be imported.
+    expect(concepts.has('http://unitsofmeasure.org\tm')).toBe(true);
+  });
+
+  it('is idempotent — re-running imports nothing and does not throw', async () => {
+    const { app, valueSets, concepts } = fakeApp();
+    const first = await seedDatabase(fakeDb, app);
+    const vsCount = valueSets.length;
+    const conceptCount = concepts.size;
+    const second = await seedDatabase(fakeDb, app);
+    expect(second.terminology.valueSetsImported).toBe(0);
+    expect(second.terminology.ucumConceptsImported).toBe(0);
+    // No duplicates: totals unchanged after the second run.
+    expect(valueSets.length).toBe(vsCount);
+    expect(concepts.size).toBe(conceptCount);
+    expect(first.terminology.valueSetsImported).toBeGreaterThan(0);
+  });
+
+  it('degrades gracefully when a fixture is missing (import throws → warning, seed continues)', async () => {
+    const { app } = fakeApp();
+    // Simulate a missing/broken fixture by making both importers throw.
+    app.terminology.admin.valueSets.importFhirCatalog = async () => { throw new Error('fixture missing'); };
+    app.terminology.loaders.resource = async () => { throw new Error('fixture missing'); };
+    app.terminology.ops.lookup = async () => ({ found: false });
+    app.terminology.admin.valueSets.list = async () => [] as never;
+    const res = await seedDatabase(fakeDb, app);
+    // The rest of the seed still succeeds; terminology counts fall back to 0.
+    expect(res.terminology).toEqual({ valueSetsImported: 0, ucumConceptsImported: 0 });
+    expect(res.workflowsSeeded).toBe(1);
+    expect(res.dashboardsSeeded).toBe(1);
+  });
+});
+
+describe('fhirValueSetCatalogToInputs — bundled R4 fixture parses', () => {
+  it('parses the bundled R4 catalog into value sets', async () => {
+    const { BUNDLED_TERMINOLOGY, readBundledTerminology, fhirValueSetCatalogToInputs } = await import('@openldr/db');
+    const catalog = await readBundledTerminology(BUNDLED_TERMINOLOGY.fhirR4Catalog);
+    expect(catalog).not.toBeNull();
+    const parsed = fhirValueSetCatalogToInputs(catalog);
+    expect(parsed.version).toBe('R4');
+    expect(parsed.valueSets.length).toBeGreaterThan(100);
+    expect(parsed.valueSets.every((v) => typeof v.url === 'string' && v.url.length > 0)).toBe(true);
   });
 });

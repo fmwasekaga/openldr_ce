@@ -17,6 +17,7 @@ export * from './ontology-store';
 export * from './value-set-expander';
 export { fhirValueSetCatalogToInputs, fhirValueSetToInput, isFhirValueSetCatalog, valueSetToFhirResource } from './fhir-value-set';
 export type { FhirValueSetCatalogInput, FhirValueSetInput, ValueSetCore, ValueSetStatus } from './fhir-value-set';
+export { BUNDLED_TERMINOLOGY, readBundledTerminology } from './bundled-terminology';
 export * from './resolve-publisher';
 export * from './seed-publishers';
 export * from './report-run-store';

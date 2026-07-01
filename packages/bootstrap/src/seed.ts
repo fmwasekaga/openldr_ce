@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { sampleForms, type FormStore } from '@openldr/forms';
 import { sampleWorkflow, type WorkflowStore } from '@openldr/workflows';
 import { seedDefaultDashboard, type DashboardStore } from '@openldr/dashboards';
-import type { ConnectorStore } from '@openldr/db';
+import type { ConnectorStore, TerminologyAdminStore } from '@openldr/db';
+import { BUNDLED_TERMINOLOGY, readBundledTerminology } from '@openldr/db';
 import type { DbContext } from './db-context';
 
 export interface SeedResult {
@@ -11,7 +12,18 @@ export interface SeedResult {
   workflowsSeeded: number;
   connectorsSeeded: number;
   dashboardsSeeded: number;
+  /** Bundled terminology auto-imported on first boot: value sets from the FHIR R4 catalog
+   *  and concepts from the full UCUM code system (0/0 once already present or on failure). */
+  terminology: { valueSetsImported: number; ucumConceptsImported: number };
 }
+
+/** UCUM canonical url — matches migration 017's `cs-ucum-seed`, so the bundled import merges. */
+const UCUM_URL = 'http://unitsofmeasure.org';
+/** Bundled-atomic UCUM code absent from migration 017's composed-unit starter — used as the
+ *  idempotency marker: if the meter concept exists, the full UCUM bundle is already imported. */
+const UCUM_PRESENCE_MARKER = 'm';
+/** Publisher stamped on every FHIR R4 catalog value set — used as the catalog presence marker. */
+const FHIR_PUBLISHER_ID = 'pub-hl7-fhir';
 
 /** Name used to dedup the default target-warehouse connector — idempotency key. */
 const DEFAULT_CONNECTOR_NAME = 'Target Warehouse (Postgres)';
@@ -28,6 +40,13 @@ export interface FormSeedTarget {
   // Dashboards store, threaded the same way so the seed can insert the vetted sample dashboard
   // through the store (bypassing the authoring gate). AppContext.dashboards satisfies this.
   dashboards: { store: Pick<DashboardStore, 'get' | 'create'> };
+  // Terminology surface, threaded so the seed can auto-import the bundled license-safe sets
+  // (FHIR R4 catalog + full UCUM) on first boot. Structural subset — AppContext satisfies it.
+  terminology: {
+    ops: { lookup(system: string, code: string): Promise<{ found: boolean; display?: string | null }> };
+    admin: { valueSets: Pick<TerminologyAdminStore['valueSets'], 'list' | 'importFhirCatalog'> };
+    loaders: { resource(json: unknown): Promise<{ conceptsLoaded: number }> };
+  };
   cfg: { TARGET_DATABASE_URL?: string; SECRETS_ENCRYPTION_KEY?: string };
 }
 
@@ -116,7 +135,63 @@ export async function seedDatabase(db: DbContext, app: FormSeedTarget): Promise<
     console.warn('[seed] sample dashboard seed skipped:', e instanceof Error ? e.message : String(e));
   }
 
-  return { resources, formsSeeded, workflowsSeeded, connectorsSeeded, dashboardsSeeded };
+  // Bundled license-safe terminology (FHIR R4 base catalog + full UCUM) — imported once on a
+  // fresh install so Forms coded-field authoring works out of the box. Idempotent (skips when
+  // already present) and best-effort (never aborts the rest of the seed).
+  const terminology = await seedBundledTerminology(app);
+
+  return { resources, formsSeeded, workflowsSeeded, connectorsSeeded, dashboardsSeeded, terminology };
+}
+
+// Auto-import the two bundled, freely-redistributable terminology sets on first boot:
+//   1. HL7 FHIR R4 base ValueSet catalog → admin.valueSets.importFhirCatalog (itself idempotent).
+//   2. Full UCUM CodeSystem → the generic resource-import loader (upserts by system+code).
+// Each step is independently guarded (cheap presence check first) AND independently wrapped so a
+// missing fixture or an import failure logs a warning and degrades gracefully — it must NOT abort
+// the surrounding seed. Reuses the existing import functions; no hand-rolled DB writes.
+async function seedBundledTerminology(app: FormSeedTarget): Promise<SeedResult['terminology']> {
+  let valueSetsImported = 0;
+  let ucumConceptsImported = 0;
+
+  // (a) FHIR R4 base ValueSet catalog.
+  try {
+    const existing = await app.terminology.admin.valueSets.list(FHIR_PUBLISHER_ID);
+    if (existing.length > 0) {
+      // already imported — skip re-reading the ~1MB fixture
+    } else {
+      const catalog = await readBundledTerminology(BUNDLED_TERMINOLOGY.fhirR4Catalog);
+      if (!catalog) {
+        console.warn('[seed] FHIR R4 catalog fixture missing — skipping value-set import');
+      } else {
+        const r = await app.terminology.admin.valueSets.importFhirCatalog(catalog);
+        valueSetsImported = r.imported;
+        if (r.imported) console.log(`[seed] imported ${r.imported} FHIR R4 value set(s) (${r.skipped} already present)`);
+      }
+    }
+  } catch (e) {
+    console.warn('[seed] FHIR R4 catalog import skipped:', e instanceof Error ? e.message : String(e));
+  }
+
+  // (b) Full UCUM code system.
+  try {
+    const marker = await app.terminology.ops.lookup(UCUM_URL, UCUM_PRESENCE_MARKER);
+    if (marker.found) {
+      // already imported — skip
+    } else {
+      const ucum = await readBundledTerminology(BUNDLED_TERMINOLOGY.ucumCodeSystem);
+      if (!ucum) {
+        console.warn('[seed] UCUM CodeSystem fixture missing — skipping UCUM import');
+      } else {
+        const r = await app.terminology.loaders.resource(ucum);
+        ucumConceptsImported = r.conceptsLoaded;
+        if (r.conceptsLoaded) console.log(`[seed] imported ${r.conceptsLoaded} UCUM concept(s)`);
+      }
+    }
+  } catch (e) {
+    console.warn('[seed] UCUM import skipped:', e instanceof Error ? e.message : String(e));
+  }
+
+  return { valueSetsImported, ucumConceptsImported };
 }
 
 // Seed one default host connector of type 'postgres', kind 'database' pointing at the target

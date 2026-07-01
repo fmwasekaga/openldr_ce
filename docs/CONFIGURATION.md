@@ -19,7 +19,29 @@ Source of truth: `packages/config/src/schema.ts`.
 | Variable | Type | Default | Effect |
 |---|---:|---:|---|
 | `MIGRATE_ON_START` | boolean string: `true`, `false`, `1`, `0` | `false` | Runs internal and external migrations before binding the server. |
-| `SEED_ON_START` | boolean string | `false` | Seeds sample operational data after migration. |
+| `SEED_ON_START` | boolean string | `false` | Seeds sample operational data (and the bundled license-safe terminology, see below) after migration. Idempotent. |
+
+## Bundled Terminology
+
+On a fresh install the seed (`openldr db seed`, or `SEED_ON_START=true`) auto-imports two
+**license-safe, freely-redistributable** terminology sets so Forms coded-field authoring works
+out of the box. The import is **idempotent** (skipped once already present) and **best-effort**
+(a terminology-import failure logs a warning and never aborts the rest of the seed):
+
+- **HL7 FHIR R4 base ValueSet catalog** — the FHIR R4 value sets, imported via the FHIR catalog
+  path (`packages/db/fixtures/fhir/R4.valuesets.json.gz`).
+- **Full UCUM code system** — every UCUM atomic unit + prefix as a FHIR `CodeSystem`
+  (`http://unitsofmeasure.org`), generated from `ucum-essence.xml` by
+  `scripts/make-ucum-codesystem.mjs` (`packages/db/fixtures/fhir/ucum.codesystem.json.gz`). UCUM is
+  © Regenstrief Institute and the UCUM Organization, redistributable with attribution.
+
+**LOINC, SNOMED CT and RxNorm are NOT bundled** — they carry usage licenses and remain
+user-provided. Import them yourself once you have accepted the relevant license, e.g.:
+
+```sh
+openldr terminology import loinc <dir> --accept-license
+openldr terminology import resource <codesystem.json>
+```
 
 ## Auth And OIDC
 
