@@ -28,7 +28,7 @@ export function DocsPage() {
           </Link>
         ))}
       </nav>
-      <article className="doc-content prose min-w-0 flex-1">
+      <article className="doc-content min-w-0 flex-1">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{PAGES[key].body}</ReactMarkdown>
       </article>
     </div>

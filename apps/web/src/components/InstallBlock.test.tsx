@@ -18,10 +18,15 @@ describe('InstallBlock', () => {
   });
 
   it('copies the active command to the clipboard', async () => {
+    const original = navigator.clipboard;
     const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.assign(navigator, { clipboard: { writeText } });
-    render(<InstallBlock />);
-    fireEvent.click(screen.getByRole('button', { name: /copy/i }));
-    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('install.sh'));
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    try {
+      render(<InstallBlock />);
+      fireEvent.click(screen.getByRole('button', { name: /copy/i }));
+      expect(writeText).toHaveBeenCalledWith(expect.stringContaining('install.sh'));
+    } finally {
+      Object.defineProperty(navigator, 'clipboard', { value: original, configurable: true });
+    }
   });
 });

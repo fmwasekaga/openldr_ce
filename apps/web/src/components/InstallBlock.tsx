@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Check, Copy } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -13,10 +13,22 @@ const COMMANDS: Record<string, string> = {
 
 function CommandRow({ command }: { command: string }) {
   const [copied, setCopied] = useState(false);
+  const resetTimer = useRef<ReturnType<typeof setTimeout>>();
+  // Clear a pending "copied" reset if the row unmounts (avoids a state update
+  // after unmount).
+  useEffect(() => () => clearTimeout(resetTimer.current), []);
   const copy = async () => {
-    await navigator.clipboard.writeText(command);
+    // navigator.clipboard is undefined in non-secure contexts (plain http://,
+    // some webviews). Fail silently rather than throwing an unhandled rejection.
+    if (!navigator.clipboard?.writeText) return;
+    try {
+      await navigator.clipboard.writeText(command);
+    } catch {
+      return;
+    }
     setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    clearTimeout(resetTimer.current);
+    resetTimer.current = setTimeout(() => setCopied(false), 1500);
   };
   return (
     <div className="flex items-center gap-2 rounded-md border border-border bg-card px-4 py-3 font-mono text-sm">
