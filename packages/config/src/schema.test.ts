@@ -20,6 +20,12 @@ describe('workflow code sandbox config', () => {
   it('defaults WORKFLOW_DATASET_PUBLISH_ENABLED to false', () => {
     expect(ConfigSchema.parse(base).WORKFLOW_DATASET_PUBLISH_ENABLED).toBe(false);
   });
+  it('defaults WORKFLOW_LOOP_MAX_ITEMS to 100000', () => {
+    expect(ConfigSchema.parse(base).WORKFLOW_LOOP_MAX_ITEMS).toBe(100000);
+  });
+  it('coerces WORKFLOW_LOOP_MAX_ITEMS string override', () => {
+    expect(ConfigSchema.parse({ ...base, WORKFLOW_LOOP_MAX_ITEMS: '250' }).WORKFLOW_LOOP_MAX_ITEMS).toBe(250);
+  });
 });
 
 describe('dashboard SQL config', () => {

@@ -89,6 +89,8 @@ export const ConfigSchema = z
     WORKFLOW_DATASET_PUBLISH_ENABLED: envBoolean(false),
     // Max byte size of a file uploaded to a workflow run (upload route + webhook body).
     WORKFLOW_FILE_MAX_BYTES: z.coerce.number().int().positive().default(52_428_800),
+    // Max accumulated output items a single loop node may emit on its done handle.
+    WORKFLOW_LOOP_MAX_ITEMS: z.coerce.number().int().positive().default(100_000),
 
     // Plugin-UI surface master switch. When false the broker refuses all calls and the host
     // serves no plugin nav/UI (kill-switch for the whole webview surface).

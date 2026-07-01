@@ -411,6 +411,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     store: workflowStore, runs: workflowRuns, schedules: workflowSchedules,
     webhooks: workflowWebhooks, runWorkflow, logger,
     codeLimits: { timeoutMs: cfg.WORKFLOW_CODE_TIMEOUT_MS, memoryMb: cfg.WORKFLOW_CODE_MEMORY_MB, enabled: cfg.WORKFLOW_CODE_ENABLED },
+    loopMaxItems: cfg.WORKFLOW_LOOP_MAX_ITEMS,
     services: workflowServices,
   });
   const workflows = { store: workflowStore, runs: workflowRuns, schedules: workflowSchedules, webhooks: workflowWebhooks, runner: workflowRunner, services: workflowServices, datasets: workflowDatasets };
@@ -464,6 +465,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       input,
       services: workflowServices,
       codeLimits: { timeoutMs: cfg.WORKFLOW_CODE_TIMEOUT_MS, memoryMb: cfg.WORKFLOW_CODE_MEMORY_MB, enabled: cfg.WORKFLOW_CODE_ENABLED },
+      loopMaxItems: cfg.WORKFLOW_LOOP_MAX_ITEMS,
       workflowId,
       logger: { warn: (msg: string) => logger.warn(msg) },
       callStack: [...callStack, workflowId],

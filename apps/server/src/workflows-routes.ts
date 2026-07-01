@@ -235,6 +235,7 @@ export function registerWorkflowRoutes(
         files: body.files as Record<string, import('@openldr/workflows').BinaryRef> | undefined,
         onEvent: send,
         codeLimits: { timeoutMs: ctx.cfg.WORKFLOW_CODE_TIMEOUT_MS, memoryMb: ctx.cfg.WORKFLOW_CODE_MEMORY_MB, enabled: ctx.cfg.WORKFLOW_CODE_ENABLED },
+        loopMaxItems: ctx.cfg.WORKFLOW_LOOP_MAX_ITEMS,
         services: ctx.workflows.services,
         workflowId: id,
         logger: { warn: (msg: string) => ctx.logger.warn(msg) },

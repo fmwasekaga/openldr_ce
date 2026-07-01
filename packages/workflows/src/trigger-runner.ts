@@ -19,6 +19,7 @@ interface RunnerDeps {
   runWorkflow: typeof RunWorkflowFn;
   logger: { error(o: unknown, m?: string): void; warn(o: unknown, m?: string): void };
   codeLimits?: CodeLimits;
+  loopMaxItems?: number;
   services?: WorkflowServices;
 }
 
@@ -49,6 +50,7 @@ export function createWorkflowTriggerRunner(deps: RunnerDeps): WorkflowTriggerRu
         input,
         files,
         codeLimits: deps.codeLimits,
+        loopMaxItems: deps.loopMaxItems,
         services: deps.services,
         workflowId,
         logger: { warn: (msg: string) => deps.logger.warn(msg) },
