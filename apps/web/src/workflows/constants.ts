@@ -31,7 +31,7 @@ export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
   // codecs (slice B)
   'crypto', 'jwt', 'xml', 'markdown', 'html-extract', 'html',
   // binary/file (slice C)
-  'convert-to-file', 'extract-from-file', 'spreadsheet-file', 'read-pdf', 'compression',
+  'convert-to-file', 'extract-from-file', 'spreadsheet-file', 'excel-template', 'read-pdf', 'compression',
   // databases (slice D)
   'postgres', 'microsoft-sql', 'mysql',
   // databases (slice E)
@@ -319,6 +319,10 @@ export const nodeCategories: NodeCategory[] = [
       }),
       node('spreadsheet-file', 'action', 'Spreadsheet File', 'Sheet', 'Read / write CSV, XLSX', {
         data: { config: { operation: 'read', format: 'xlsx', sourceField: 'file', binaryField: 'data', fileName: '' } },
+      }),
+      node('excel-template', 'action', 'Excel Template', 'Sheet', 'Fill a branded .xlsx template + autofilter + password', {
+        keywords: ['xlsx', 'template', 'report', 'password'],
+        data: { action: 'excel-template', config: { templateRef: '', sheetIndex: 0, startCell: 'A2', columns: [], autoFilter: '', fileName: '', binaryField: 'file' } },
       }),
       node('compression', 'action', 'Compression', 'FileArchive', 'Zip / unzip', {
         data: { config: { operation: 'zip', sourceField: 'file', binaryField: 'zip', fileName: '' } },
