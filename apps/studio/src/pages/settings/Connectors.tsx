@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { MoreHorizontal } from 'lucide-react';
@@ -7,6 +7,7 @@ import {
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -340,121 +341,109 @@ export function Connectors() {
           {draft ? (
             <>
               <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4 text-sm">
-                <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+                <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3">
                   {/* Name field — always shown */}
-                  <label className="grid gap-1">
-                    <span className="text-muted-foreground">{t('settings.connectors.fieldName')}</span>
-                    <Input data-testid="connector-name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-                  </label>
+                  <Label htmlFor="connector-name" className="whitespace-nowrap">{t('settings.connectors.fieldName')}</Label>
+                  <Input id="connector-name" data-testid="connector-name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
 
                   {/* Category selector */}
-                  <label className="grid gap-1">
-                    <span className="text-muted-foreground">{t('settings.connectors.category')}</span>
-                    <Select
-                      value={draft.category}
-                      onValueChange={(v) => setDraft({ ...draft, category: v as 'plugin' | 'database' })}
-                    >
-                      <SelectTrigger data-testid="connector-category">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="plugin">{t('settings.connectors.categoryPlugin')}</SelectItem>
-                        <SelectItem value="database">{t('settings.connectors.categoryHost')}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </label>
+                  <Label htmlFor="connector-category" className="whitespace-nowrap">{t('settings.connectors.category')}</Label>
+                  <Select
+                    value={draft.category}
+                    onValueChange={(v) => setDraft({ ...draft, category: v as 'plugin' | 'database' })}
+                  >
+                    <SelectTrigger id="connector-category" data-testid="connector-category">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="plugin">{t('settings.connectors.categoryPlugin')}</SelectItem>
+                      <SelectItem value="database">{t('settings.connectors.categoryHost')}</SelectItem>
+                    </SelectContent>
+                  </Select>
 
                   {draft.category === 'database' ? (
                     <>
                       {/* Host type selector */}
-                      <label className="grid gap-1 sm:col-span-2">
-                        <span className="text-muted-foreground">{t('settings.connectors.pickType')}</span>
-                        <Select
-                          value={draft.type}
-                          onValueChange={(v) => setDraft({ ...draft, type: v })}
-                        >
-                          <SelectTrigger data-testid="connector-type">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {HOST_TYPES.map((ht) => (
-                              <SelectItem key={ht.value} value={ht.value}>{ht.label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </label>
+                      <Label htmlFor="connector-type" className="whitespace-nowrap">{t('settings.connectors.pickType')}</Label>
+                      <Select
+                        value={draft.type}
+                        onValueChange={(v) => setDraft({ ...draft, type: v })}
+                      >
+                        <SelectTrigger id="connector-type" data-testid="connector-type">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {HOST_TYPES.map((ht) => (
+                            <SelectItem key={ht.value} value={ht.value}>{ht.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
 
                       {/* DB fields — per-type */}
                       {(CONNECTOR_TYPE_FIELDS[draft.type] ?? SQL_FIELDS).map((field) => {
                         const val = draft.dbConfig[field.key] ?? '';
                         const isEdit = draft.id !== null;
+                        const fieldId = `connector-db-${field.key}`;
                         if (field.kind === 'boolean') {
                           return (
-                            <label key={field.key} className="flex items-center gap-2">
+                            <div key={field.key} className="col-span-2 flex items-center gap-2">
                               <Switch
-                                data-testid={`connector-db-${field.key}`}
+                                data-testid={fieldId}
                                 checked={val === 'true'}
                                 onCheckedChange={(v) => setDraft({ ...draft, dbConfig: { ...draft.dbConfig, [field.key]: v ? 'true' : 'false' } })}
                                 aria-label={t(field.labelKey)}
                               />
-                              <span className="text-muted-foreground">{t(field.labelKey)}</span>
-                            </label>
+                              <Label className="text-muted-foreground">{t(field.labelKey)}</Label>
+                            </div>
                           );
                         }
                         return (
-                          <label key={field.key} className="grid gap-1">
-                            <span className="text-muted-foreground">{t(field.labelKey)}</span>
+                          <Fragment key={field.key}>
+                            <Label htmlFor={fieldId} className="whitespace-nowrap">{t(field.labelKey)}</Label>
                             <Input
-                              data-testid={`connector-db-${field.key}`}
+                              id={fieldId}
+                              data-testid={fieldId}
                               type={field.kind === 'password' ? 'password' : field.kind === 'number' ? 'number' : 'text'}
                               value={val}
                               onChange={(e) => setDraft({ ...draft, dbConfig: { ...draft.dbConfig, [field.key]: e.target.value } })}
                               placeholder={field.kind === 'password' && isEdit ? t('settings.connectors.secretSet') : undefined}
                             />
-                          </label>
+                          </Fragment>
                         );
                       })}
                     </>
                   ) : (
                     <>
                       {/* Plugin selector */}
-                      <label className="grid gap-1">
-                        <span className="text-muted-foreground">{t('settings.connectors.fieldPlugin')}</span>
-                        <Select value={draft.pluginId} onValueChange={(v) => setDraft({ ...draft, pluginId: v })}>
-                          <SelectTrigger data-testid="connector-plugin"><SelectValue placeholder={t('settings.connectors.pickPlugin')} /></SelectTrigger>
-                          <SelectContent>
-                            {plugins.map((p) => <SelectItem key={p.id} value={p.id}>{p.id}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </label>
+                      <Label htmlFor="connector-plugin" className="whitespace-nowrap">{t('settings.connectors.fieldPlugin')}</Label>
+                      <Select value={draft.pluginId} onValueChange={(v) => setDraft({ ...draft, pluginId: v })}>
+                        <SelectTrigger id="connector-plugin" data-testid="connector-plugin"><SelectValue placeholder={t('settings.connectors.pickPlugin')} /></SelectTrigger>
+                        <SelectContent>
+                          {plugins.map((p) => <SelectItem key={p.id} value={p.id}>{p.id}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
                       {plugins.length === 0 ? (
-                        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 sm:col-span-2">
+                        <div className="col-span-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700">
                           {t('settings.connectors.noPlugins')}
                         </div>
                       ) : null}
-                      <label className="grid gap-1 sm:col-span-2">
-                        <span className="text-muted-foreground">{t('settings.connectors.fieldBaseUrl')}</span>
-                        <Input data-testid="connector-baseurl" value={draft.baseUrl} onChange={(e) => setDraft({ ...draft, baseUrl: e.target.value })}
-                          placeholder={draft.id === null ? 'https://external-system.example.org/api' : t('settings.connectors.secretSet')} />
-                      </label>
-                      <label className="grid gap-1">
-                        <span className="text-muted-foreground">{t('settings.connectors.fieldUsername')}</span>
-                        <Input data-testid="connector-username" value={draft.username} onChange={(e) => setDraft({ ...draft, username: e.target.value })}
-                          placeholder={draft.id === null ? '' : t('settings.connectors.secretSet')} />
-                      </label>
-                      <label className="grid gap-1">
-                        <span className="text-muted-foreground">{t('settings.connectors.fieldPassword')}</span>
-                        <Input data-testid="connector-password" type="password" value={draft.password} onChange={(e) => setDraft({ ...draft, password: e.target.value })}
-                          placeholder={draft.id === null ? '' : t('settings.connectors.secretSet')} />
-                      </label>
+                      <Label htmlFor="connector-baseurl" className="whitespace-nowrap">{t('settings.connectors.fieldBaseUrl')}</Label>
+                      <Input id="connector-baseurl" data-testid="connector-baseurl" value={draft.baseUrl} onChange={(e) => setDraft({ ...draft, baseUrl: e.target.value })}
+                        placeholder={draft.id === null ? 'https://external-system.example.org/api' : t('settings.connectors.secretSet')} />
+                      <Label htmlFor="connector-username" className="whitespace-nowrap">{t('settings.connectors.fieldUsername')}</Label>
+                      <Input id="connector-username" data-testid="connector-username" value={draft.username} onChange={(e) => setDraft({ ...draft, username: e.target.value })}
+                        placeholder={draft.id === null ? '' : t('settings.connectors.secretSet')} />
+                      <Label htmlFor="connector-password" className="whitespace-nowrap">{t('settings.connectors.fieldPassword')}</Label>
+                      <Input id="connector-password" data-testid="connector-password" type="password" value={draft.password} onChange={(e) => setDraft({ ...draft, password: e.target.value })}
+                        placeholder={draft.id === null ? '' : t('settings.connectors.secretSet')} />
                     </>
                   )}
 
                   {draft.id !== null ? (
-                    <label className="flex items-center gap-2 sm:col-span-2">
+                    <div className="col-span-2 flex items-center gap-2">
                       <Switch checked={draft.enabled} onCheckedChange={(v) => setDraft({ ...draft, enabled: v })} aria-label={t('settings.connectors.enabledLabel')} />
-                      <span className="text-muted-foreground">{t('settings.connectors.enabledLabel')}</span>
-                    </label>
+                      <Label className="text-muted-foreground">{t('settings.connectors.enabledLabel')}</Label>
+                    </div>
                   ) : null}
                 </div>
               </div>
