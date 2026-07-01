@@ -6,7 +6,7 @@ import { createEventBus } from '@openldr/adapter-event-bus';
 import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import type { Config } from '@openldr/config';
 import { createLogger, HealthRegistry, redact, type Logger } from '@openldr/core';
-import { createInternalDb, createFhirStore, createFlatWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, deriveSystemCode, resolveSeedPublisherId, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore } from '@openldr/db';
+import { createInternalDb, createFhirStore, createFlatWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema, Provenance } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
@@ -30,6 +30,7 @@ import { createPluginScheduleApi, createPluginScheduleRunner, type PluginSchedul
 import { createFormArtifactInstaller, type FormArtifactInstaller } from './form-artifact-install';
 import { type PluginRuntime } from '@openldr/plugins';
 import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore } from '@openldr/db';
+import { createFeatureFlags, type FeatureFlags } from './feature-flags';
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { policyFromConfig } from './policy';
 import { createPluginTarget } from './connector-target';
@@ -152,6 +153,8 @@ export interface AppContext {
   pluginData: PluginDataStore;
   pluginBroker: PluginBroker;
   connectors: ConnectorStore;
+  appSettings: AppSettingStore;
+  featureFlags: FeatureFlags;
   cfg: Config;
   close(): Promise<void>;
 }
@@ -347,6 +350,8 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   };
 
   const connectorStore = createConnectorStore(internal.db);
+  const appSettings = createAppSettingsStore(internal.db);
+  const featureFlags = createFeatureFlags(appSettings);
   const connectorSqlRunner = createConnectorSqlRunner({ connectors: connectorStore, secretsKey: cfg.SECRETS_ENCRYPTION_KEY });
   const connectorMongoRunner = createConnectorMongoRunner({ connectors: connectorStore, secretsKey: cfg.SECRETS_ENCRYPTION_KEY });
   const connectorRedisRunner = createConnectorRedisRunner({ connectors: connectorStore, secretsKey: cfg.SECRETS_ENCRYPTION_KEY });
@@ -606,6 +611,8 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     pluginData,
     pluginBroker,
     connectors: connectorStore,
+    appSettings,
+    featureFlags,
     cfg,
     async close() {
       await workflowListeners.stopAll();
@@ -614,6 +621,8 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   };
 }
 
+export { createFeatureFlags } from './feature-flags';
+export type { FeatureFlags, ResolvedFlag } from './feature-flags';
 export { CE_VERSION } from './plugin-registry';
 export * from './db-context';
 export { createPluginTarget } from './connector-target';

@@ -56,8 +56,8 @@ async function main(): Promise<void> {
   if (cfg.SEED_ON_START) {
     const dbCtx = await createDbContext(cfg);
     try {
-      const { resources, formsSeeded, workflowsSeeded, connectorsSeeded, dashboardsSeeded, terminology } = await seedDatabase(dbCtx, ctx);
-      logger.info({ resources: resources.length, formsSeeded, workflowsSeeded, connectorsSeeded, dashboardsSeeded, terminology }, 'startup seed complete');
+      const { resources, formsSeeded, workflowsSeeded, connectorsSeeded, dashboardsSeeded, settingsSeeded, terminology } = await seedDatabase(dbCtx, ctx);
+      logger.info({ resources: resources.length, formsSeeded, workflowsSeeded, connectorsSeeded, dashboardsSeeded, settingsSeeded, terminology }, 'startup seed complete');
     } finally {
       await dbCtx.close();
     }

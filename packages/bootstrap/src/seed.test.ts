@@ -45,7 +45,15 @@ function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
       },
     },
   };
+  const settings = new Map<string, string>();
   const app: FormSeedTarget = {
+    appSettings: {
+      get: async (key: string) => {
+        const value = settings.get(key);
+        return value !== undefined ? { key, value, updatedAt: new Date(), updatedBy: 'system' } : null;
+      },
+      set: async (key: string, value: string) => { settings.set(key, value); },
+    },
     forms: {
       list: async () => forms as never,
       create: async (f: { name: string; status?: string }) => {
@@ -86,7 +94,7 @@ function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
     terminology,
     cfg,
   };
-  return { app, workflows, connectors, dashboards, valueSets, concepts };
+  return { app, workflows, connectors, dashboards, valueSets, concepts, settings };
 }
 
 const fakeDb = { persist: vi.fn(async (r: { id: string }) => ({ flattened: JSON.stringify(r) })) } as unknown as DbContext;

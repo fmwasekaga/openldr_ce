@@ -2,8 +2,9 @@ import { randomUUID } from 'node:crypto';
 import { sampleForms, type FormStore } from '@openldr/forms';
 import { sampleWorkflow, type WorkflowStore } from '@openldr/workflows';
 import { seedDefaultDashboard, type DashboardStore } from '@openldr/dashboards';
-import type { ConnectorStore, TerminologyAdminStore } from '@openldr/db';
+import type { ConnectorStore, TerminologyAdminStore, AppSettingStore } from '@openldr/db';
 import { BUNDLED_TERMINOLOGY, readBundledTerminology } from '@openldr/db';
+import { FEATURE_FLAGS } from '@openldr/config';
 import type { DbContext } from './db-context';
 
 export interface SeedResult {
@@ -12,6 +13,7 @@ export interface SeedResult {
   workflowsSeeded: number;
   connectorsSeeded: number;
   dashboardsSeeded: number;
+  settingsSeeded: number;
   /** Bundled terminology auto-imported on first boot: value sets from the FHIR R4 catalog
    *  and concepts from the full UCUM code system (0/0 once already present or on failure). */
   terminology: { valueSetsImported: number; ucumConceptsImported: number };
@@ -47,6 +49,7 @@ export interface FormSeedTarget {
     admin: { valueSets: Pick<TerminologyAdminStore['valueSets'], 'list' | 'importFhirCatalog'> };
     loaders: { resource(json: unknown): Promise<{ conceptsLoaded: number }> };
   };
+  appSettings: Pick<AppSettingStore, 'get' | 'set'>;
   cfg: { TARGET_DATABASE_URL?: string; SECRETS_ENCRYPTION_KEY?: string };
 }
 
@@ -140,7 +143,18 @@ export async function seedDatabase(db: DbContext, app: FormSeedTarget): Promise<
   // already present) and best-effort (never aborts the rest of the seed).
   const terminology = await seedBundledTerminology(app);
 
-  return { resources, formsSeeded, workflowsSeeded, connectorsSeeded, dashboardsSeeded, terminology };
+  // Feature-flag defaults — reference config, not demo data. Idempotent: only writes a row
+  // when absent, so an operator's later toggle is never clobbered on reseed.
+  let settingsSeeded = 0;
+  for (const f of FEATURE_FLAGS) {
+    const existing = await app.appSettings.get(f.id);
+    if (!existing) {
+      await app.appSettings.set(f.id, f.default ? 'true' : 'false', 'system');
+      settingsSeeded++;
+    }
+  }
+
+  return { resources, formsSeeded, workflowsSeeded, connectorsSeeded, dashboardsSeeded, settingsSeeded, terminology };
 }
 
 // Auto-import the two bundled, freely-redistributable terminology sets on first boot:
