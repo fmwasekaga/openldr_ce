@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { FEATURE_FLAGS } from '@openldr/config';
 import { seedDatabase, type FormSeedTarget } from './seed';
 import type { DbContext } from './db-context';
 
@@ -168,6 +169,19 @@ describe('seedDatabase — sample dashboard', () => {
     const res2 = await seedDatabase(fakeDb, app);
     expect(res2.dashboardsSeeded).toBe(0);
     expect(dashboards).toHaveLength(1);
+  });
+});
+
+describe('seedDatabase — feature-flag defaults', () => {
+  it('seeds every registry flag once and is idempotent on reseed', async () => {
+    const { app } = fakeApp();
+    // First run against an empty appSettings fake writes one row per registry flag.
+    const first = await seedDatabase(fakeDb, app);
+    expect(first.settingsSeeded).toBe(FEATURE_FLAGS.length);
+    // Reusing the SAME fake app (persisted settings Map) — the second run finds every
+    // flag already present and re-writes nothing, so an operator's later toggle survives.
+    const second = await seedDatabase(fakeDb, app);
+    expect(second.settingsSeeded).toBe(0);
   });
 });
 
