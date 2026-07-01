@@ -168,6 +168,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   const auth = createAuth({
     issuerUrl: cfg.OIDC_ISSUER_URL,
     audience: cfg.OIDC_AUDIENCE,
+    internalJwksUrl: cfg.OIDC_INTERNAL_JWKS_URL,
     adminClientId: cfg.KEYCLOAK_ADMIN_CLIENT_ID,
     adminClientSecret: cfg.KEYCLOAK_ADMIN_CLIENT_SECRET,
   });

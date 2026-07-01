@@ -55,6 +55,10 @@ export const ConfigSchema = z
     OIDC_ISSUER_URL: z.string().url(),
     OIDC_WEB_CLIENT_ID: z.string().min(1).default('openldr-web'),
     OIDC_AUDIENCE: z.string().min(1).optional(),
+    // Internal (back-channel) JWKS URL. When set, the app fetches signing keys from this
+    // docker-network URL instead of via discovery on the public issuer (which may sit behind
+    // the gateway with a self-signed cert). Issuer CLAIM validation still uses OIDC_ISSUER_URL.
+    OIDC_INTERNAL_JWKS_URL: z.string().url().optional(),
     KEYCLOAK_ADMIN_CLIENT_ID: z.string().min(1).optional(),
     KEYCLOAK_ADMIN_CLIENT_SECRET: z.string().min(1).optional(),
 
