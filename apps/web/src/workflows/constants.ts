@@ -38,6 +38,8 @@ export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
   'mongodb', 'redis',
   // communication (slice F)
   'send-email', 'gmail', 'outlook', 'ftp',
+  // host filesystem (slice J)
+  'read-write-file',
 ]);
 
 /**
@@ -302,7 +304,9 @@ export const nodeCategories: NodeCategory[] = [
     name: 'Files & Storage',
     icon: 'FolderOpen',
     items: [
-      node('read-write-file', 'action', 'Read/Write File', 'FileCog', 'Disk file operations'),
+      node('read-write-file', 'action', 'Read/Write File', 'FileCog', 'Sandboxed host disk file operations', {
+        data: { action: 'read-write-file', config: { operation: 'read', path: '', asText: false } },
+      }),
       node('read-pdf', 'action', 'Read PDF', 'FileText', 'Extract PDF text', {
         data: { config: { sourceField: 'file', outputField: 'text' } },
       }),
