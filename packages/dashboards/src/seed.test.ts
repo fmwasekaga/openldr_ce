@@ -22,6 +22,17 @@ describe('SAMPLE_DASHBOARD', () => {
     expect(SAMPLE_DASHBOARD.name).toBe('Lab Overview (Sample)');
     expect(SAMPLE_DASHBOARD.widgets.every((w) => w.query.mode === 'sql')).toBe(true);
   });
+
+  it('declares the period variable as date-range (not text) on every widget that uses it', () => {
+    const periodWidgets = SAMPLE_DASHBOARD.widgets.filter(
+      (w) => w.query.mode === 'sql' && w.query.sql.includes('{{period_from}}'),
+    );
+    expect(periodWidgets.length).toBeGreaterThan(0);
+    for (const w of periodWidgets) {
+      const vars = w.query.mode === 'sql' ? w.query.variables : undefined;
+      expect(vars?.period?.type).toBe('date-range');
+    }
+  });
 });
 
 describe('seedDefaultDashboard', () => {

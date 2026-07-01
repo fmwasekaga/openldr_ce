@@ -31,7 +31,12 @@
       "query": {
         "mode": "sql",
         "sql": "SELECT COUNT(*) AS value FROM service_requests\nWHERE 1=1\n[[AND substring(authored_on,1,10) >= {{period_from}}]]\n[[AND substring(authored_on,1,10) <= {{period_to}}]]\n[[AND code_text = {{test}}]]\n[[AND priority = {{priority}}]]",
-        "variableBindings": { "period": "period", "test": "test", "priority": "priority" }
+        "variableBindings": { "period": "period", "test": "test", "priority": "priority" },
+        "variables": {
+          "period": { "type": "date-range", "label": "Period" },
+          "test": { "type": "text", "label": "Test" },
+          "priority": { "type": "text", "label": "Priority", "options": ["routine", "urgent", "asap", "stat"] }
+        }
       }
     },
     {
@@ -43,7 +48,12 @@
       "query": {
         "mode": "sql",
         "sql": "SELECT COUNT(DISTINCT subject_ref) AS value FROM service_requests\nWHERE 1=1\n[[AND substring(authored_on,1,10) >= {{period_from}}]]\n[[AND substring(authored_on,1,10) <= {{period_to}}]]\n[[AND code_text = {{test}}]]\n[[AND priority = {{priority}}]]",
-        "variableBindings": { "period": "period", "test": "test", "priority": "priority" }
+        "variableBindings": { "period": "period", "test": "test", "priority": "priority" },
+        "variables": {
+          "period": { "type": "date-range", "label": "Period" },
+          "test": { "type": "text", "label": "Test" },
+          "priority": { "type": "text", "label": "Priority", "options": ["routine", "urgent", "asap", "stat"] }
+        }
       }
     },
     {
@@ -55,7 +65,11 @@
       "query": {
         "mode": "sql",
         "sql": "SELECT COUNT(*) AS value FROM observations\nWHERE 1=1\n[[AND substring(effective_date_time,1,10) >= {{period_from}}]]\n[[AND substring(effective_date_time,1,10) <= {{period_to}}]]\n[[AND code_text = {{test}}]]",
-        "variableBindings": { "period": "period", "test": "test" }
+        "variableBindings": { "period": "period", "test": "test" },
+        "variables": {
+          "period": { "type": "date-range", "label": "Period" },
+          "test": { "type": "text", "label": "Test" }
+        }
       }
     },
     {
@@ -78,7 +92,11 @@
       "query": {
         "mode": "sql",
         "sql": "SELECT code_text AS label, COUNT(*) AS value FROM service_requests\nWHERE code_text IS NOT NULL\n[[AND substring(authored_on,1,10) >= {{period_from}}]]\n[[AND substring(authored_on,1,10) <= {{period_to}}]]\n[[AND priority = {{priority}}]]\nGROUP BY code_text\nORDER BY value DESC\nLIMIT 15",
-        "variableBindings": { "period": "period", "priority": "priority" }
+        "variableBindings": { "period": "period", "priority": "priority" },
+        "variables": {
+          "period": { "type": "date-range", "label": "Period" },
+          "priority": { "type": "text", "label": "Priority", "options": ["routine", "urgent", "asap", "stat"] }
+        }
       }
     },
     {
@@ -90,7 +108,11 @@
       "query": {
         "mode": "sql",
         "sql": "SELECT substring(authored_on,1,10) AS label, COUNT(*) AS value FROM service_requests\nWHERE authored_on >= to_char(now() - interval '30 days', 'YYYY-MM-DD')\n[[AND code_text = {{test}}]]\n[[AND priority = {{priority}}]]\nGROUP BY substring(authored_on,1,10)\nORDER BY label",
-        "variableBindings": { "test": "test", "priority": "priority" }
+        "variableBindings": { "test": "test", "priority": "priority" },
+        "variables": {
+          "test": { "type": "text", "label": "Test" },
+          "priority": { "type": "text", "label": "Priority", "options": ["routine", "urgent", "asap", "stat"] }
+        }
       }
     },
     {
@@ -102,7 +124,12 @@
       "query": {
         "mode": "sql",
         "sql": "SELECT status AS label, COUNT(*) AS value FROM service_requests\nWHERE 1=1\n[[AND substring(authored_on,1,10) >= {{period_from}}]]\n[[AND substring(authored_on,1,10) <= {{period_to}}]]\n[[AND code_text = {{test}}]]\n[[AND priority = {{priority}}]]\nGROUP BY status\nORDER BY value DESC",
-        "variableBindings": { "period": "period", "test": "test", "priority": "priority" }
+        "variableBindings": { "period": "period", "test": "test", "priority": "priority" },
+        "variables": {
+          "period": { "type": "date-range", "label": "Period" },
+          "test": { "type": "text", "label": "Test" },
+          "priority": { "type": "text", "label": "Priority", "options": ["routine", "urgent", "asap", "stat"] }
+        }
       }
     },
     {
@@ -114,7 +141,11 @@
       "query": {
         "mode": "sql",
         "sql": "SELECT priority AS label, COUNT(*) AS value FROM service_requests\nWHERE priority IS NOT NULL\n[[AND substring(authored_on,1,10) >= {{period_from}}]]\n[[AND substring(authored_on,1,10) <= {{period_to}}]]\n[[AND code_text = {{test}}]]\nGROUP BY priority\nORDER BY value DESC",
-        "variableBindings": { "period": "period", "test": "test" }
+        "variableBindings": { "period": "period", "test": "test" },
+        "variables": {
+          "period": { "type": "date-range", "label": "Period" },
+          "test": { "type": "text", "label": "Test" }
+        }
       }
     },
     {
@@ -137,7 +168,10 @@
       "query": {
         "mode": "sql",
         "sql": "SELECT COUNT(*) AS value FROM observations\nWHERE interpretation_code IN ('H','HH','L','LL','A','AA')\n[[AND substring(effective_date_time,1,10) >= {{period_from}}]]\n[[AND substring(effective_date_time,1,10) <= {{period_to}}]]",
-        "variableBindings": { "period": "period" }
+        "variableBindings": { "period": "period" },
+        "variables": {
+          "period": { "type": "date-range", "label": "Period" }
+        }
       }
     },
     {
@@ -149,7 +183,10 @@
       "query": {
         "mode": "sql",
         "sql": "SELECT substring(effective_date_time,1,10) AS label, COUNT(*) AS value FROM observations\nWHERE effective_date_time >= to_char(now() - interval '30 days', 'YYYY-MM-DD')\n[[AND code_text = {{test}}]]\nGROUP BY substring(effective_date_time,1,10)\nORDER BY label",
-        "variableBindings": { "test": "test" }
+        "variableBindings": { "test": "test" },
+        "variables": {
+          "test": { "type": "text", "label": "Test" }
+        }
       }
     },
     {
@@ -181,7 +218,12 @@
       "query": {
         "mode": "sql",
         "sql": "SELECT identifier_value AS order_id, code_text AS test, status, priority, substring(authored_on,1,10) AS authored\nFROM service_requests\nWHERE 1=1\n[[AND substring(authored_on,1,10) >= {{period_from}}]]\n[[AND substring(authored_on,1,10) <= {{period_to}}]]\n[[AND code_text = {{test}}]]\n[[AND priority = {{priority}}]]\nORDER BY authored_on DESC\nLIMIT 50",
-        "variableBindings": { "period": "period", "test": "test", "priority": "priority" }
+        "variableBindings": { "period": "period", "test": "test", "priority": "priority" },
+        "variables": {
+          "period": { "type": "date-range", "label": "Period" },
+          "test": { "type": "text", "label": "Test" },
+          "priority": { "type": "text", "label": "Priority", "options": ["routine", "urgent", "asap", "stat"] }
+        }
       }
     }
   ]
