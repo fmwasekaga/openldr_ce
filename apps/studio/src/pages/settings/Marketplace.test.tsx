@@ -23,7 +23,9 @@ beforeEach(() => {
 const oneBundle = {
   configured: true,
   source: 'local', host: 'local',
-  bundles: [{ ref: 'whonet-narrow', id: 'whonet-sqlite', version: '1.0.0', type: 'plugin', publisher: { id: 'p', name: 'P' }, capabilities: [{ kind: 'emit-fhir', resourceTypes: ['Patient'] }], compatibility: { ceVersion: '*' }, valid: true }],
+  // The real /available (list) endpoint does NOT carry capabilities — they live only in the
+  // signed per-bundle DETAIL. Mirror that here so the test exercises the detail-gated install.
+  bundles: [{ ref: 'whonet-narrow', id: 'whonet-sqlite', version: '1.0.0', type: 'plugin', publisher: { id: 'p', name: 'P' }, compatibility: { ceVersion: '*' }, valid: true }],
 };
 
 function mockDetail() {

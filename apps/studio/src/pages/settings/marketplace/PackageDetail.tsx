@@ -58,10 +58,19 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
     return () => { active = false; };
   }, [selectedRef, entry.id, entry.installed, entry.type]);
 
+  // The registry LIST endpoint does not carry capabilities (they live only in the signed
+  // per-bundle DETAIL). So for a Browse (ref-bearing) item, entry.capabilities is always []
+  // and only detail.capabilities is authoritative. We must therefore gate install on detail
+  // having loaded — otherwise onInstall would capture the empty list, the consent dialog would
+  // read "no permissions", and the server (which requires acknowledged == requested) rejects.
   const capabilities = (detail?.capabilities ?? entry.capabilities) as unknown[];
   const publisher = detail?.publisher ?? entry.publisher;
   const installableType = entry.type === 'plugin' || entry.type === 'form-template';
-  const canInstall = Boolean(entry.ref) && !entry.installed && installableType && (detail ? detail.valid : entry.valid !== false);
+  // For registry items, detail must be loaded so the acknowledged capabilities are the real,
+  // signed set. Installed/local items (no ref) carry their capabilities on the entry already.
+  const detailReadyForInstall = entry.ref ? detail !== null : true;
+  const canInstall =
+    Boolean(entry.ref) && !entry.installed && installableType && detailReadyForInstall && (detail ? detail.valid : entry.valid !== false);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -91,6 +100,12 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
             ) : null}
             {canInstall ? (
               <Button data-testid="detail-install" disabled={detail ? !detail.compatible : false} onClick={() => onInstall({ ...entry, ref: selectedRef, version: detail?.version ?? entry.version }, capabilities)}>
+                {t('settings.marketplace.install')}
+              </Button>
+            ) : entry.ref && installableType && !entry.installed && !detailReadyForInstall && (entry.valid !== false) ? (
+              // Detail (the authoritative capability set) is still loading — show a disabled
+              // install button rather than nothing, so the control does not flicker in.
+              <Button data-testid="detail-install" disabled>
                 {t('settings.marketplace.install')}
               </Button>
             ) : entry.ref && !installableType && !entry.installed ? (

@@ -50,6 +50,32 @@ describe('PackageDetail', () => {
     ));
   });
 
+  it('acknowledges the DETAIL capabilities even when the list entry carries none', async () => {
+    // Regression: the registry LIST endpoint omits capabilities, so a real Browse entry
+    // arrives with capabilities: []. Install must wait for the signed DETAIL and acknowledge
+    // its real capability set — otherwise the server rejects (acknowledged != requested).
+    mockDetail({ capabilities: [
+      { kind: 'emit-fhir', resourceTypes: ['Patient', 'Specimen', 'Observation', 'DiagnosticReport', 'ServiceRequest'] },
+      { kind: 'net-egress', allowedHosts: [] },
+    ] });
+    const listEntry: CardEntry = { ...entry, capabilities: [] };
+    const onInstall = vi.fn();
+    render(<PackageDetail entry={listEntry} onBack={() => {}} onInstall={onInstall} onToggleEnabled={() => {}} onRollback={() => {}} onRemove={() => {}} />);
+    // The consent trigger surfaces the REAL capabilities, not "none".
+    const btn = await screen.findByTestId('detail-install');
+    await waitFor(() => expect(btn).not.toBeDisabled());
+    expect(screen.getByText(/emit-fhir/)).toBeTruthy();
+    expect(screen.getByText(/net-egress/)).toBeTruthy();
+    fireEvent.click(btn);
+    await waitFor(() => expect(onInstall).toHaveBeenCalledWith(
+      expect.objectContaining({ ref: 'whonet-narrow' }),
+      [
+        { kind: 'emit-fhir', resourceTypes: ['Patient', 'Specimen', 'Observation', 'DiagnosticReport', 'ServiceRequest'] },
+        { kind: 'net-egress', allowedHosts: [] },
+      ],
+    ));
+  });
+
   it('Back calls onBack', async () => {
     mockDetail();
     const onBack = vi.fn();
