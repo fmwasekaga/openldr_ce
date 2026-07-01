@@ -7,6 +7,7 @@ import { DashboardPage } from './dashboard/DashboardPage';
 import { Audit } from './pages/Audit';
 import { Users } from './pages/Users';
 import { SettingsShell } from '@/pages/settings/SettingsShell';
+import { General } from '@/pages/settings/General';
 import { Marketplace } from '@/pages/settings/Marketplace';
 import { Connectors } from '@/pages/settings/Connectors';
 import { Forms } from './pages/Forms';
@@ -31,8 +32,9 @@ export function App() {
       <Route path="/workflows/:id" element={<RequireRole roles={['lab_admin', 'lab_manager']}><Workflows /></RequireRole>} />
       <Route path="/terminology" element={<Terminology />} />
       <Route path="/users" element={<RequireRole role="lab_admin"><Users /></RequireRole>} />
-      <Route path="/settings" element={<RequireRole role="lab_admin"><SettingsShell /></RequireRole>}>
-        <Route index element={<Navigate to="connectors" replace />} />
+      <Route path="/settings" element={<RequireRole><SettingsShell /></RequireRole>}>
+        <Route index element={<Navigate to="general" replace />} />
+        <Route path="general" element={<RequireRole><General /></RequireRole>} />
         <Route path="marketplace" element={<RequireRole role="lab_admin"><Marketplace /></RequireRole>} />
         <Route path="connectors" element={<RequireRole role="lab_admin"><Connectors /></RequireRole>} />
       </Route>
