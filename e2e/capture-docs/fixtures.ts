@@ -60,6 +60,53 @@ const workflowPayload = {
   },
 };
 
+const reportMaterializePayload = {
+  id: 'docs-report-materialize',
+  name: 'AMR Report — Materialize (sample)',
+  description: 'Documentation fixture: build an optimized dataset from a database.',
+  enabled: true,
+  definition: {
+    nodes: [
+      { id: 'r-trigger', type: 'trigger', position: { x: 0, y: 120 }, data: { label: 'Monthly', triggerType: 'schedule', templateId: 'schedule-trigger', iconName: 'Clock', config: {} } },
+      { id: 'r-dates', type: 'action', position: { x: 240, y: 120 }, data: { label: 'Date bounds', action: 'set', templateId: 'set', iconName: 'Pencil', config: { keepExisting: true, fields: [{ name: 'periodStart', value: '2026-06-01' }, { name: 'periodEnd', value: '2026-07-01' }] } } },
+      { id: 'r-isolates', type: 'action', position: { x: 480, y: 20 }, data: { label: 'Isolates', action: 'postgres', templateId: 'postgres', iconName: 'Database', config: { connectorId: '', sql: "select r.requestid, l.limsrptresult as organism\nfrom requests r\njoin labresults l on r.requestid = l.requestid\nwhere r.registered >= '{{ $json.periodStart }}'\n  and r.registered <  '{{ $json.periodEnd }}'" } } },
+      { id: 'r-ast', type: 'action', position: { x: 480, y: 240 }, data: { label: 'AST (long)', action: 'postgres', templateId: 'postgres', iconName: 'Database', config: { connectorId: '', sql: 'select requestid, organism, limssubstancename, astvalue\nfrom astresults' } } },
+      { id: 'r-pivot', type: 'action', position: { x: 720, y: 240 }, data: { label: 'Pivot antibiotics', action: 'pivot', templateId: 'pivot', iconName: 'Table2', config: { groupBy: ['requestid', 'organism'], pivotColumn: 'limssubstancename', valueColumn: 'astvalue', columns: ['Amikacin', 'Ampicillin', 'Ceftriaxone'], aggregate: 'max' } } },
+      { id: 'r-join', type: 'action', position: { x: 960, y: 120 }, data: { label: 'Join isolates + AST', action: 'merge', templateId: 'merge', iconName: 'Combine', config: { mode: 'combineByKey', joinKeys: ['requestid', 'organism'], joinType: 'left' } } },
+      { id: 'r-materialize', type: 'action', position: { x: 1200, y: 120 }, data: { label: 'Materialize', action: 'materialize-dataset', templateId: 'materialize-dataset', iconName: 'Save', config: { datasetName: 'amr_monthly' } } },
+    ],
+    edges: [
+      { id: 'e-t-d', source: 'r-trigger', target: 'r-dates' },
+      { id: 'e-d-i', source: 'r-dates', target: 'r-isolates' },
+      { id: 'e-d-a', source: 'r-dates', target: 'r-ast' },
+      { id: 'e-a-p', source: 'r-ast', target: 'r-pivot' },
+      { id: 'e-i-j', source: 'r-isolates', target: 'r-join' },
+      { id: 'e-p-j', source: 'r-pivot', target: 'r-join' },
+      { id: 'e-j-m', source: 'r-join', target: 'r-materialize' },
+    ],
+  },
+};
+
+const reportDeliverPayload = {
+  id: 'docs-report-deliver',
+  name: 'AMR Report — Report & email (sample)',
+  description: 'Documentation fixture: fill an Excel template and email it.',
+  enabled: true,
+  definition: {
+    nodes: [
+      { id: 'd-trigger', type: 'trigger', position: { x: 0, y: 80 }, data: { label: 'Monthly', triggerType: 'schedule', templateId: 'schedule-trigger', iconName: 'Clock', config: {} } },
+      { id: 'd-load', type: 'action', position: { x: 260, y: 80 }, data: { label: 'Load dataset', action: 'load-dataset', templateId: 'load-dataset', iconName: 'Database', config: { datasetName: 'amr_monthly' } } },
+      { id: 'd-xlsx', type: 'action', position: { x: 520, y: 80 }, data: { label: 'Fill AMR template', action: 'excel-template', templateId: 'excel-template', iconName: 'Sheet', config: { templateRef: '', startCell: 'A2', columns: ['organism', 'Amikacin', 'Ampicillin'], autoFilter: 'A1', fileName: 'AMR_report.xlsx', binaryField: 'file' } } },
+      { id: 'd-email', type: 'action', position: { x: 780, y: 80 }, data: { label: 'Email report', action: 'send-email', templateId: 'send-email', iconName: 'AtSign', config: { connectorId: '', to: 'lab@example.org', subject: 'AMR monthly report', body: 'Please find the report attached.', attachBinaryField: 'file' } } },
+    ],
+    edges: [
+      { id: 'e-t-l', source: 'd-trigger', target: 'd-load' },
+      { id: 'e-l-x', source: 'd-load', target: 'd-xlsx' },
+      { id: 'e-x-e', source: 'd-xlsx', target: 'd-email' },
+    ],
+  },
+};
+
 const formSchema = {
   id: 'training-intake',
   name: 'Training intake',
@@ -140,6 +187,15 @@ async function ensureWorkflow(api: APIRequestContext): Promise<void> {
   else await post(api, '/api/workflows', workflowPayload);
 }
 
+async function ensureReportWorkflows(api: APIRequestContext): Promise<void> {
+  const workflows = await json<Array<{ id: string }>>(await api.get('/api/workflows'), 'GET /api/workflows');
+  for (const payload of [reportMaterializePayload, reportDeliverPayload]) {
+    const existing = workflows.find((workflow) => workflow.id === payload.id);
+    if (existing) await put(api, `/api/workflows/${payload.id}`, payload);
+    else await post(api, '/api/workflows', payload);
+  }
+}
+
 async function ensureForm(api: APIRequestContext): Promise<string> {
   const forms = await json<Array<{ id: string; name: string }>>(await api.get('/api/forms'), 'GET /api/forms');
   const payload = {
@@ -209,6 +265,7 @@ async function ensureMarketplaceRegistry(api: APIRequestContext): Promise<void> 
 
 export async function ensureDocsFixtures(api: APIRequestContext): Promise<DocsFixtureResult> {
   await ensureWorkflow(api);
+  await ensureReportWorkflows(api);
   const formId = await ensureForm(api);
   await ensureUser(api);
   await ensureConnector(api);

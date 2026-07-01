@@ -103,7 +103,7 @@ export const DOC_GUIDES: DocGuide[] = [
     estimatedMinutes: 15,
     difficulty: 'intermediate',
     relatedSlugs: ['workflows', 'connectors', 'reports'],
-    screenshotNames: [],
+    screenshotNames: ['report-materialize-builder.png', 'report-excel-template.png'],
     status: 'published',
   },
   {

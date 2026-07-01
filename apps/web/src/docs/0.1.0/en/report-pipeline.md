@@ -24,6 +24,8 @@ A branded, optionally password-protected `.xlsx` report is generated from live d
 
 Build this graph (trigger → set → two SQL extracts → reshape → materialize):
 
+![The Materialize workflow: schedule, date bounds, two database extracts, a pivot, a join, and materialize](report-materialize-builder.png)
+
 1. **Schedule trigger** — set the cron for how often the data should rebuild.
 2. **Edit Fields** — compute the reporting window, e.g. `periodStart` = first of last month, `periodEnd` = first of this month. These feed the queries.
 3. **Database node(s)** — one or more **Postgres / Microsoft SQL** nodes, each with your source **connector** and a plain `SELECT`. Inject the window with templates:
@@ -48,6 +50,8 @@ Build this graph (trigger → load → template → email):
 
 1. **Schedule trigger** — set it to fire after Part A has refreshed the dataset.
 2. **Load Dataset** — the same name you materialized (`amr_ndola_monthly`).
+![The Excel Template node's configuration, including the Upload template button](report-excel-template.png)
+
 3. **Excel Template**:
    - Click **Upload template** and choose your `.xlsx` — the *Template artifact key* fills in automatically. *(The workflow must be saved first, because the upload is stored against it.)*
    - **Start cell** — where data begins, e.g. `A2`.
