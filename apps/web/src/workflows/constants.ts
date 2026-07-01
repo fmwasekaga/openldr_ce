@@ -11,6 +11,7 @@ export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
   'webhook-trigger',
   'ingest',
   'event-trigger',
+  'postgres-trigger', 'email-trigger',
   // code
   'code',
   // actions
@@ -256,7 +257,9 @@ export const nodeCategories: NodeCategory[] = [
       node('send-email', 'action', 'Send Email (SMTP)', 'AtSign', 'Send email over SMTP', {
         data: { config: { connectorId: '', to: '', subject: '', body: '', cc: '', html: false } },
       }),
-      node('email-trigger', 'trigger', 'Email Trigger (IMAP)', 'Inbox', 'Trigger on new emails'),
+      node('email-trigger', 'trigger', 'Email Trigger (IMAP)', 'Inbox', 'Trigger on new emails (IMAP poll)', {
+        data: { triggerType: 'email', config: { folder: 'INBOX', pollSeconds: 60, markSeen: true } },
+      }),
     ],
   },
 
@@ -277,7 +280,9 @@ export const nodeCategories: NodeCategory[] = [
       node('postgres', 'action', 'Postgres', 'Database', 'Run SQL on Postgres', {
         data: { config: { connectorId: '', sql: '' } },
       }),
-      node('postgres-trigger', 'trigger', 'Postgres Trigger', 'Database', 'Listen for row changes'),
+      node('postgres-trigger', 'trigger', 'Postgres Trigger', 'Database', 'Listen on a NOTIFY channel', {
+        data: { triggerType: 'postgres', config: { channel: '' } },
+      }),
       node('mysql', 'action', 'MySQL', 'Database', 'Run SQL on MySQL', {
         data: { config: { connectorId: '', sql: '' } },
       }),

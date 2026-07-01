@@ -23,6 +23,7 @@ const HOST_TYPES: Array<{ value: string; label: string }> = [
   { value: 'mongodb', label: 'MongoDB' },
   { value: 'redis', label: 'Redis' },
   { value: 'smtp', label: 'SMTP Email' },
+  { value: 'imap', label: 'IMAP Email' },
   { value: 'gmail', label: 'Gmail' },
   { value: 'outlook', label: 'Microsoft Outlook' },
   { value: 'sftp', label: 'SFTP' },
@@ -67,6 +68,13 @@ const CONNECTOR_TYPE_FIELDS: Record<string, TypeField[]> = {
     { key: 'user', labelKey: 'settings.connectors.fieldUser', kind: 'text' },
     { key: 'password', labelKey: 'settings.connectors.fieldPassword', kind: 'password' },
     { key: 'secure', labelKey: 'settings.connectors.fieldSecure', kind: 'boolean' },
+  ],
+  imap: [
+    { key: 'host', labelKey: 'settings.connectors.fieldHost', kind: 'text' },
+    { key: 'port', labelKey: 'settings.connectors.fieldPort', kind: 'number' },
+    { key: 'user', labelKey: 'settings.connectors.fieldUser', kind: 'text' },
+    { key: 'password', labelKey: 'settings.connectors.fieldPassword', kind: 'password' },
+    { key: 'tls', labelKey: 'settings.connectors.fieldSecure', kind: 'boolean' },
   ],
   gmail: [
     { key: 'user', labelKey: 'settings.connectors.fieldUser', kind: 'text' },

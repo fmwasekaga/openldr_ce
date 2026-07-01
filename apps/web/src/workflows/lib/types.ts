@@ -10,7 +10,7 @@ export interface NodeVisualMeta {
 
 export interface TriggerNodeData extends NodeVisualMeta {
   label: string;
-  triggerType: 'manual' | 'webhook' | 'schedule' | 'ingest';
+  triggerType: 'manual' | 'webhook' | 'schedule' | 'ingest' | 'event' | 'postgres' | 'email';
   config: Record<string, unknown>;
   /** For schedule triggers — cron expression read by the server scheduler. */
   cron?: string;
