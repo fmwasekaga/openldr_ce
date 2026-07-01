@@ -9,7 +9,9 @@
 - **General page scope:** About card + admin **Feature flags** card + admin **Danger Zone** card. (Corlix's desktop-specific MFL/sync/auto-updater/backup-to-file are out of scope for server CE.)
 - **`DASHBOARD_SQL_ENABLED`:** **replace the env var entirely** — DB-backed flag only, default **false**.
 - **Storage:** a **generic feature-flags / app-settings store** (reusable for future flags), not a one-off setting.
-- **Danger Zone actions (all four, admin-only, typed confirmation):** reset dashboards to default; purge lab/ingested data; factory reset (wipe + reseed); clear audit log / run history.
+- **Danger Zone actions (three, admin-only, typed confirmation):** reset dashboards to default; factory reset (wipe **internal DB** + reseed); clear audit log / run history. **`purge-data` is dropped** — the external target/ingested store is the operator's to manage; the app never truncates external target-DB data.
+- **Scope of destructive actions:** all Danger Zone actions touch the **internal app DB only**. They never truncate the external target store (`TARGET_DATABASE_URL`) and never touch the external IdP (Keycloak realm/users).
+- **App version:** read the root `package.json` version at server boot and expose it on `/config`; the About card reads it from there.
 - **Sequencing:** implement AFTER the in-flight round-2 fixes, since it re-touches the dashboard SQL-gate files.
 
 ## Design
@@ -39,19 +41,20 @@
 ### 3. Settings → General page
 
 - New sub-nav item in `apps/studio/src/pages/settings/SettingsShell.tsx` — **General**, placed first. About is visible to all authenticated users; Feature-flags + Danger Zone are `lab_admin`-only (gated in-page, matching corlix).
-- **About** card: app version (from the server, e.g. a `/api/health`/`/config` field or package version), environment (`NODE_ENV`), license (Apache-2.0), and backing-service reachability (Postgres/MinIO/Keycloak) if cheaply available; else omit service status.
+- **About** card: app version (read the root `package.json` version at server boot, exposed as a `/config` field), environment (`NODE_ENV`), license (Apache-2.0), and backing-service reachability (Postgres/MinIO/Keycloak) if cheaply available; else omit service status.
 - **Feature flags** card (admin): `Switch` list built from the flags registry + current values; toggling calls `PUT /api/settings/flags/:key`, shows saved/failed state, and refetches `/config`. "Dashboard raw SQL" is the first flag, with a clear description of what enabling it does (allows authoring + running arbitrary read-only SQL in dashboards).
-- **Danger Zone** card (admin): four actions, each a destructive `Button` that opens a typed-confirmation dialog (reuse the app's confirm-dialog pattern; require typing a phrase). Design follows the app's sheet/dialog + edge-to-edge conventions; corlix is the design source of truth.
+- **Danger Zone** card (admin): three actions, each a destructive `Button` that opens a typed-confirmation dialog (reuse the app's confirm-dialog pattern; require typing a phrase). Design follows the app's sheet/dialog + edge-to-edge conventions; corlix is the design source of truth.
 
 ### 4. Danger Zone action implementations (admin API, audited)
 
-Each is a `POST /api/settings/danger/<action>` (`requireRole('lab_admin')`, audited):
+Each is a `POST /api/settings/danger/<action>` (`requireRole('lab_admin')`, audited). **All operate on the internal app DB only — never the external target store (`TARGET_DATABASE_URL`), never the external Keycloak IdP.**
 - **reset-dashboards** — delete all dashboards; re-seed the sample via the existing `seedDefaultDashboard`.
-- **purge-data** — truncate the ingested/analytics data (the target-store FHIR-projected tables in `TARGET_DATABASE_URL`), keeping config/forms/connectors/users/terminology. Reuse or mirror the target-DB init/truncate logic; enumerate the data tables explicitly (do NOT drop config/reference tables).
-- **factory-reset** — wipe all data and re-seed defaults. **Implement as truncate-all-data-tables + `seedDatabase()`**, NOT a schema drop/recreate — the server holds live connections, so truncating rows (in dependency order, or `TRUNCATE ... CASCADE`) then re-seeding is safe at runtime, whereas dropping/recreating the schema mid-connection is not.
+- **factory-reset** — wipe **all internal app-DB data** and re-seed defaults. **Implement as truncate-all-data-tables + `seedDatabase()`**, NOT a schema drop/recreate — the server holds live connections, so truncating rows (in dependency order, or `TRUNCATE ... CASCADE`) then re-seeding is safe at runtime, whereas dropping/recreating the schema mid-connection is not. Scope is the internal DB (dashboards, forms, connectors, workflows, registries, feature-flags, audit, run history, etc.); it does **not** truncate the external target store and does **not** delete Keycloak users/realm.
 - **clear-audit** — truncate the audit-log and workflow-run-history tables, keeping everything else.
 
-All four require typed confirmation client-side AND are `lab_admin`-gated server-side; each writes an audit row describing the action + actor.
+**Dropped:** `purge-data` (truncating external ingested/analytics data). The external target store is the operator's to manage; the app does not offer a button to wipe it.
+
+All three require typed confirmation client-side AND are `lab_admin`-gated server-side; each writes an audit row describing the action + actor.
 
 ### 5. Migration + seed
 
@@ -63,6 +66,8 @@ All four require typed confirmation client-side AND are `lab_admin`-gated server
 - Corlix desktop features that don't map to server CE: auto-updater, local backup-to-file, MFL sync, data-sync status, facility config.
 - New flags beyond `dashboard.raw_sql` (the registry makes adding more trivial later).
 - Fine-grained RBAC beyond `lab_admin` for settings writes.
+- **Purging / wiping the external target store (`TARGET_DATABASE_URL`).** No Danger Zone action truncates external ingested data — operators manage that store themselves.
+- **Deleting Keycloak users/realm** from factory-reset (external IdP; out of scope for a DB-level wipe).
 
 ## Testing
 
@@ -70,4 +75,4 @@ All four require typed confirmation client-side AND are `lab_admin`-gated server
 - API: admin-gating (non-admin `PUT`/danger → 403), flag round-trip, danger actions perform + audit.
 - Gate rewire: with `dashboard.raw_sql` false → authoring blocked, stored SQL still executes (unchanged behavior); toggling true → authoring allowed; `/config` reflects the live value.
 - General page: renders About; Feature-flags toggle calls API + refetches; Danger Zone actions require typed confirmation before firing.
-- Danger actions (integration): reset-dashboards leaves exactly the sample; purge-data clears data but keeps forms/connector; clear-audit empties audit; factory-reset wipes + reseeds (assert seeded entities present).
+- Danger actions (integration): reset-dashboards leaves exactly the sample; clear-audit empties audit + run history but keeps forms/connectors/dashboards; factory-reset wipes internal DB + reseeds (assert seeded entities present, assert external target store untouched).
