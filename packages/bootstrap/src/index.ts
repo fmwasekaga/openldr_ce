@@ -41,6 +41,7 @@ import { createConnectorMongoRunner } from './connector-mongo-service';
 import { createConnectorRedisRunner } from './connector-redis-service';
 import { createConnectorEmailRunner } from './connector-email-service';
 import { createConnectorSftpRunner } from './connector-sftp-service';
+import { createHostFileService } from './host-file-service';
 import { createWorkflowListenerManager } from './workflow-listeners';
 import { createPostgresListenerDriver } from './listener-postgres';
 import { createEmailListenerDriver } from './listener-email';
@@ -496,6 +497,15 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     }
     return { items: extractTerminalItems(def.edges, result.results), status: result.status };
   };
+  const hostFiles = createHostFileService({
+    enabled: cfg.WORKFLOW_FILE_ACCESS_ENABLED,
+    root: cfg.WORKFLOW_FILE_ACCESS_ROOT,
+    maxBytes: cfg.WORKFLOW_FILE_MAX_BYTES,
+  });
+  workflowServices.hostFileRead = hostFiles.hostFileRead;
+  workflowServices.hostFileWrite = hostFiles.hostFileWrite;
+  workflowServices.hostFileList = hostFiles.hostFileList;
+  workflowServices.hostFileDelete = hostFiles.hostFileDelete;
   const pluginBroker = createPluginBroker({
     plugins,
     pluginData,
