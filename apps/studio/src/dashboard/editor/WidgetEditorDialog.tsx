@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { sql as sqlLang } from '@codemirror/lang-sql';
 import { oneDark } from '@codemirror/theme-one-dark';
@@ -193,7 +194,6 @@ function EmptyPanel({ text }: { text: string }) {
 export function WidgetEditorDialog({
   open,
   initial,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   sqlEnabled = true,
   dashboardFilters = [],
   onClose,
@@ -229,11 +229,17 @@ export function WidgetEditorDialog({
   const [showVariables, setShowVariables] = useState(false);
   const [expandedTable, setExpandedTable] = useState<string | null>(null);
 
+  // When SQL authoring is disabled, the SQL text is read-only: the user can preview and tweak
+  // chart/table/config, but cannot change the (vetted) query. Editing SQL requires the flag on.
+  const sqlReadOnly = !sqlEnabled;
+
   const view = useRef<EditorView>();
   const sqlRef = useRef(sqlText);
   sqlRef.current = sqlText;
   const testValuesRef = useRef(testValues);
   testValuesRef.current = testValues;
+  const sqlReadOnlyRef = useRef(sqlReadOnly);
+  sqlReadOnlyRef.current = sqlReadOnly;
 
   useEffect(() => {
     listModels().then(setModels).catch(() => {});
@@ -276,6 +282,9 @@ export function WidgetEditorDialog({
             basicSetup,
             sqlLang(),
             oneDark,
+            // Read-only (flag off): block edits and hide the caret; preview/config stay usable.
+            EditorState.readOnly.of(sqlReadOnlyRef.current),
+            EditorView.editable.of(!sqlReadOnlyRef.current),
             EditorView.updateListener.of((u) => {
               if (u.docChanged) setSqlText(u.state.doc.toString());
             }),
@@ -292,9 +301,25 @@ export function WidgetEditorDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Stored (vetted) SQL template for this widget, if editing an existing sql-mode widget.
+  const storedTemplate = initial?.query.mode === 'sql' ? initial.query.sql : undefined;
+
   const run = () => {
-    const resolved = resolveValues(testValuesRef.current);
-    const q: WidgetQuery = { mode: 'sql', sql: applyTemplate(sqlRef.current, resolved), variableBindings: bindings };
+    let q: WidgetQuery;
+    if (sqlReadOnlyRef.current && storedTemplate != null) {
+      // Flag off: SQL is read-only, so `sqlText` equals the persisted template. Send the STORED
+      // template verbatim plus resolved test `values` and let the server substitute + vet it —
+      // the exact same path the live widget uses — so an unchanged widget previews successfully.
+      const values: Record<string, string | number | null | { from: string; to: string }> = {};
+      for (const [name, val] of Object.entries(testValuesRef.current)) {
+        values[name] = (val ?? null) as string | number | null | { from: string; to: string };
+      }
+      q = { mode: 'sql', sql: storedTemplate, variableBindings: bindings, values };
+    } else {
+      // Flag on (authoring): substitute client-side; raw SQL execution is permitted.
+      const resolved = resolveValues(testValuesRef.current);
+      q = { mode: 'sql', sql: applyTemplate(sqlRef.current, resolved), variableBindings: bindings };
+    }
     setRunning(true);
     runWidgetQuery(q)
       .then((r) => {
@@ -367,7 +392,7 @@ export function WidgetEditorDialog({
               )}
               <div className="min-h-0 flex-1 overflow-hidden">
                 <div ref={onEditorMount} className="h-full" />
-                <textarea aria-label="SQL" className="sr-only" value={sqlText} onChange={(e) => setSqlText(e.target.value)} />
+                <textarea aria-label="SQL" className="sr-only" readOnly={sqlReadOnly} value={sqlText} onChange={(e) => setSqlText(e.target.value)} />
               </div>
               <div className="flex items-center border-t border-border px-2 py-1">
                 <span className="text-[11px] tabular-nums text-muted-foreground">{(preview?.rows.length ?? 0).toLocaleString()} rows</span>

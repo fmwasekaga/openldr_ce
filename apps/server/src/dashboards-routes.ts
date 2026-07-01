@@ -4,14 +4,38 @@ import { DashboardQueryError, type AppContext } from '@openldr/bootstrap';
 import { DashboardSchema, WidgetQuerySchema, type Dashboard } from '@openldr/dashboards';
 import { recordAudit } from './audit-helper';
 
+// Collect the set of already-vetted SQL templates (trimmed) from a persisted dashboard. On
+// UPDATE these are the SQL widgets the user is allowed to keep — layout/chart/config edits to
+// them must save even with the flag off; only NEW or CHANGED SQL is authoring and gated.
+function persistedSqlTemplates(prev: Dashboard | undefined): Set<string> {
+  const set = new Set<string>();
+  if (!prev) return set;
+  for (const w of prev.widgets) {
+    if (w.query.mode === 'sql' && typeof w.query.sql === 'string') set.add(w.query.sql.trim());
+  }
+  return set;
+}
+
 // Authoring gate: when DASHBOARD_SQL_ENABLED is off, reject persisting a dashboard whose
-// widgets contain any `mode:'sql'` query. This stops an untrusted user (the dashboard routes
-// have no role gating) from storing arbitrary SQL and then executing it as "vetted" SQL. The
-// server-seeded sample is inserted via the store directly, bypassing this route.
-function assertSqlAuthoringAllowed(cfg: AppContext['cfg'], d: Dashboard): void {
+// widgets introduce NEW or CHANGED `mode:'sql'` queries. This stops an untrusted user (the
+// dashboard routes have no role gating) from storing arbitrary SQL and then executing it as
+// "vetted" SQL. Non-SQL edits — and edits to non-SQL fields of an already-persisted SQL widget
+// (chart type, layout, config) — are allowed: only the SQL text itself is gated.
+//
+// `prevTemplates` is the set of SQL templates already persisted (empty on CREATE, so any
+// sql-mode widget is new and rejected). On UPDATE, an incoming sql widget whose (trimmed) SQL
+// exact-matches a persisted template is unchanged/vetted and passes; a new or edited template
+// does not match and is rejected. The server-seeded sample is inserted via the store directly,
+// bypassing this route.
+function assertSqlAuthoringAllowed(cfg: AppContext['cfg'], d: Dashboard, prevTemplates: Set<string>): void {
   if (cfg.DASHBOARD_SQL_ENABLED) return;
-  if (d.widgets.some((w) => w.query.mode === 'sql')) {
-    throw new DashboardQueryError('raw SQL widgets are disabled');
+  for (const w of d.widgets) {
+    if (w.query.mode === 'sql') {
+      const sql = typeof w.query.sql === 'string' ? w.query.sql.trim() : '';
+      if (!prevTemplates.has(sql)) {
+        throw new DashboardQueryError('raw SQL widgets are disabled');
+      }
+    }
   }
 }
 
@@ -38,7 +62,8 @@ export function registerDashboardRoutes(app: FastifyInstance<any, any, any, any>
   app.post('/api/dashboards', async (req, reply) => {
     try {
       const parsed = DashboardSchema.parse(req.body);
-      assertSqlAuthoringAllowed(ctx.cfg, parsed);
+      // CREATE: no prior dashboard, so no SQL is vetted — any sql-mode widget is new and gated.
+      assertSqlAuthoringAllowed(ctx.cfg, parsed, new Set());
       const created = await ctx.dashboards.store.create(parsed);
       await recordAudit(ctx, req, { action: 'dashboard.create', entityType: 'dashboard', entityId: created.id, before: null, after: created });
       return created;
@@ -49,8 +74,10 @@ export function registerDashboardRoutes(app: FastifyInstance<any, any, any, any>
     const { id } = req.params as { id: string };
     try {
       const parsed = DashboardSchema.parse(req.body);
-      assertSqlAuthoringAllowed(ctx.cfg, parsed);
       const before = await ctx.dashboards.store.get(id);
+      // UPDATE: unchanged SQL widgets (SQL text matches what's already persisted) are exempt, so
+      // layout/chart/config edits save; only genuinely new/changed SQL is authoring and gated.
+      assertSqlAuthoringAllowed(ctx.cfg, parsed, persistedSqlTemplates(before));
       const updated = await ctx.dashboards.store.update(id, parsed);
       await recordAudit(ctx, req, { action: 'dashboard.update', entityType: 'dashboard', entityId: id, before, after: updated });
       return updated;
