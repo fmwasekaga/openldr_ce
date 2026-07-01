@@ -77,4 +77,15 @@ describe('settings routes', () => {
     const res = await app.inject({ method: 'POST', url: '/api/settings/danger/nuke-everything' });
     expect(res.statusCode).toBe(404);
   });
+
+  it('failed danger op still audits the attempt (ok: false) and returns 500', async () => {
+    const { ctx, deps } = fakeCtx();
+    deps.clearAudit = async () => { throw new Error('reseed blew up'); };
+    const app = appWithUser(['lab_admin'], (a) => registerSettingsRoutes(a, ctx, deps));
+    const res = await app.inject({ method: 'POST', url: '/api/settings/danger/clear-audit' });
+    expect(res.statusCode).toBe(500);
+    const row = (ctx as any).__audit.find((e: any) => e.action === 'settings.danger.clear-audit');
+    expect(row).toBeTruthy();
+    expect(row.metadata.ok).toBe(false);
+  });
 });

@@ -25,14 +25,15 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
   app.put('/api/settings/flags/:key', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
     const { key } = req.params as { key: string };
     const { value } = req.body as { value: boolean };
+    const after = Boolean(value);
     const before = await ctx.featureFlags.get(key);
-    await ctx.featureFlags.set(key, Boolean(value), req.user?.id ?? null);
+    await ctx.featureFlags.set(key, after, req.user?.id ?? null);
     await recordAudit(ctx, req, {
       action: 'settings.flag.update', entityType: 'app_setting', entityId: key,
-      metadata: { key, before, after: Boolean(value) },
+      metadata: { key, before, after },
     });
     reply.code(200);
-    return { key, value: Boolean(value) };
+    return { key, value: after };
   });
 
   const DANGER: Record<string, keyof DangerDeps> = {
@@ -45,11 +46,20 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
     const { action } = req.params as { action: string };
     const fn = DANGER[action];
     if (!fn) { reply.code(404); return { error: 'unknown action' }; }
-    await deps[fn](ctx);
-    await recordAudit(ctx, req, {
-      action: `settings.danger.${action}`, entityType: 'app_settings', entityId: 'internal-db',
-      metadata: { action },
-    });
+    let ok = true;
+    try {
+      await deps[fn](ctx);
+    } catch (e) {
+      ok = false;
+      throw e;
+    } finally {
+      // Record the attempt regardless of outcome — a partial factory-reset (tables wiped, reseed
+      // errors) must still leave an audit trace. `ok` distinguishes success from failure.
+      await recordAudit(ctx, req, {
+        action: `settings.danger.${action}`, entityType: 'app_settings', entityId: 'internal-db',
+        metadata: { action, ok },
+      });
+    }
     reply.code(200);
     return { ok: true, action };
   });
