@@ -18,7 +18,7 @@ export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
   'sql-query', 'fhir-query', 'http-request',
   'load-dataset',
   // engine control-flow
-  'wait', 'execute-workflow',
+  'wait', 'execute-workflow', 'loop',
   // conditions
   'if', 'filter', 'switch',
   // data transforms
@@ -199,7 +199,7 @@ export const nodeCategories: NodeCategory[] = [
         data: { rules: [{ name: 'case-0', condition: '' }], fallbackOutput: 'fallback' },
       }),
       node('loop', 'loop', 'Loop Over Items', 'Repeat', 'Iterate over items', {
-        data: { loopMode: 'count' },
+        data: { loopMode: 'count', iterations: 10, batchSize: 1 },
       }),
       node('code', 'code', 'Code', 'Code', 'Run JavaScript / Python'),
       node('set', 'action', 'Edit Fields', 'Pencil', 'Set / transform field values', {

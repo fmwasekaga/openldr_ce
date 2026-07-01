@@ -49,6 +49,8 @@ export interface LoopNodeData extends NodeVisualMeta {
   label: string;
   iterations: number;
   loopMode?: 'count' | 'items';
+  /** items mode — number of items per iteration (default 1). */
+  batchSize?: number;
   [key: string]: unknown;
 }
 

@@ -42,11 +42,21 @@ export function LoopForm({ node, update }: NodeFormProps) {
       )}
 
       {loopMode === 'items' && (
-        <p className="text-[10px] leading-snug text-muted-foreground/80">
-          Each item in the upstream array will be processed. Access the current item
-          via <code className="rounded bg-secondary px-1 font-mono">$item</code> and
-          index via <code className="rounded bg-secondary px-1 font-mono">$index</code>.
-        </p>
+        <>
+          <FormField label="Batch size" hint="Items per iteration. Default 1.">
+            <TextInput
+              type="number"
+              value={data.batchSize ?? 1}
+              onChange={(e) => update({ batchSize: parseInt(e.target.value) || 1 })}
+              min={1}
+            />
+          </FormField>
+          <p className="text-[10px] leading-snug text-muted-foreground/80">
+            The body runs once per batch. Access the current item via{' '}
+            <code className="rounded bg-secondary px-1 font-mono">$item</code> and the iteration
+            index via <code className="rounded bg-secondary px-1 font-mono">$index</code>.
+          </p>
+        </>
       )}
     </div>
   );
