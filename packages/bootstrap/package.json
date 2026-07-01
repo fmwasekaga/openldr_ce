@@ -3,38 +3,50 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
-  "scripts": { "typecheck": "tsc --noEmit", "test": "vitest run", "lint": "echo \"no lint\"" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "echo \"no lint\""
+  },
   "dependencies": {
-    "@openldr/audit": "workspace:*",
-    "@openldr/users": "workspace:*",
     "@openldr/adapter-auth": "workspace:*",
     "@openldr/adapter-db-store": "workspace:*",
-    "@openldr/adapter-mssql-store": "workspace:*",
     "@openldr/adapter-event-bus": "workspace:*",
+    "@openldr/adapter-mssql-store": "workspace:*",
     "@openldr/adapter-s3-bucket": "workspace:*",
+    "@openldr/audit": "workspace:*",
     "@openldr/config": "workspace:*",
+    "@openldr/core": "workspace:*",
+    "@openldr/dashboards": "workspace:*",
     "@openldr/db": "workspace:*",
     "@openldr/dhis2": "workspace:*",
-    "@openldr/terminology": "workspace:*",
     "@openldr/forms": "workspace:*",
-    "@openldr/core": "workspace:*",
     "@openldr/ingest": "workspace:*",
+    "@openldr/marketplace": "workspace:*",
     "@openldr/plugins": "workspace:*",
     "@openldr/ports": "workspace:*",
-    "@openldr/reporting": "workspace:*",
     "@openldr/report-pdf": "workspace:*",
-    "@openldr/dashboards": "workspace:*",
+    "@openldr/reporting": "workspace:*",
+    "@openldr/terminology": "workspace:*",
+    "@openldr/users": "workspace:*",
     "@openldr/workflows": "workspace:*",
-    "@openldr/marketplace": "workspace:*",
     "ioredis": "^5.4.1",
     "kysely": "^0.27.5",
     "mongodb": "^6.10.0",
     "mysql2": "^3.11.0",
     "nodemailer": "^6.9.15",
+    "pg": "^8.21.0",
     "ssh2-sftp-client": "^11.0.0",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zod": "^3.24.1"
   },
-  "devDependencies": { "@types/nodemailer": "^6.4.16", "typescript": "^5.7.2", "vitest": "^2.1.8" }
+  "devDependencies": {
+    "@types/nodemailer": "^6.4.16",
+    "@types/pg": "^8.20.0",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
 }
