@@ -66,6 +66,15 @@ and imports via the existing `importFhirCatalog` path
 (idempotent; only when the FHIR catalog hasn't been imported). LOINC/SNOMED/RxNorm
 stay behind the license-gated CLI — documented, never bundled.
 
+**UCUM (decided: bundle the FULL set this batch).** UCUM is freely
+redistributable. Today only a ~26-unit starter set ships (migration
+`017_reference_terminology_seeds.ts`, CodeSystem `cs-ucum-seed`); there is no
+full UCUM source or importer in-repo. This unit sources the official
+`ucum-essence` distribution, converts it to a bundled FHIR CodeSystem JSON
+(gzipped fixture alongside R4), and auto-imports it on first boot via the generic
+CodeSystem import path (`openldr terminology import resource` /
+`importTerminologyResource`). Idempotent; supersedes/extends the starter units.
+
 ### 4. Audit — JSON in CodeMirror
 
 **Findings.** The audit detail panel renders before/after JSON as plain `<pre>`.
