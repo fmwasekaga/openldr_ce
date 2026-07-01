@@ -14,6 +14,7 @@ declare module 'xlsx-populate' {
 
   interface Sheet {
     cell(ref: string): Cell;
+    cell(rowNumber: number, columnNameOrNumber: number | string): Cell;
     range(ref: string): Range;
   }
 
