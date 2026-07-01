@@ -118,7 +118,7 @@ pnpm openldr db migrate
 pnpm -C apps/server dev
 
 # Start the web app (terminal 2)
-pnpm -C apps/web dev
+pnpm -C apps/studio dev
 ```
 
 ### The CLI

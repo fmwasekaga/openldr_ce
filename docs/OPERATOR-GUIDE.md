@@ -23,7 +23,7 @@ pnpm -C apps/server dev
 Start the web app in a second shell:
 
 ```powershell
-pnpm -C apps/web dev
+pnpm -C apps/studio dev
 ```
 
 Bash:
@@ -39,7 +39,7 @@ pnpm -C apps/server dev
 Start the web app in a second shell:
 
 ```bash
-pnpm -C apps/web dev
+pnpm -C apps/studio dev
 ```
 
 For screenshot/e2e data, seed WHONET sample data:

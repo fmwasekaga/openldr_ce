@@ -12,7 +12,7 @@ Source of truth: `packages/config/src/schema.ts`.
 | `INTERNAL_DATABASE_URL` | URL | required | Operational PostgreSQL database for users, audit, eventing, plugins, workflows, forms, marketplace, and schedules. |
 | `TARGET_STORE_ADAPTER` | `pg\|mssql` | `pg` | Analytics warehouse adapter. |
 | `TARGET_DATABASE_URL` | URL | required when `TARGET_STORE_ADAPTER=pg` | PostgreSQL analytics warehouse. |
-| `WEB_DIST_DIR` | path | `apps/web/dist` relative to built server | Overrides where the server serves the built SPA from. This is read directly by `apps/server/src/app.ts`. |
+| `WEB_DIST_DIR` | path | `apps/studio/dist` relative to built server | Overrides where the server serves the built SPA from. This is read directly by `apps/server/src/app.ts`. |
 
 ## Startup Flags
 
@@ -126,7 +126,7 @@ pnpm -C apps/server dev
 Run the web app separately:
 
 ```bash
-pnpm -C apps/web dev
+pnpm -C apps/studio dev
 ```
 
 ## Troubleshooting
@@ -136,5 +136,5 @@ pnpm -C apps/web dev
 | Config validation fails on `TARGET_DATABASE_URL` | `TARGET_STORE_ADAPTER` defaults to `pg`, which requires `TARGET_DATABASE_URL`. | Set `TARGET_DATABASE_URL` or switch to `TARGET_STORE_ADAPTER=mssql` and provide all `MSSQL_*` keys. |
 | DHIS2 push fails with a connector error | No connector configured, the connector is disabled, or `SECRETS_ENCRYPTION_KEY` is unset. | Create/enable a connector under Settings ▸ Connectors and set `SECRETS_ENCRYPTION_KEY`. |
 | HTTP Request workflow node cannot reach a host | `WORKFLOW_HTTP_ALLOWLIST` does not include the hostname. | Set a comma-separated allowlist, for example `WORKFLOW_HTTP_ALLOWLIST=api.example.org,dhis2.local`. |
-| Built server serves API but not SPA | `WEB_DIST_DIR` points to a missing directory. | Build web with `pnpm -C apps/web build` and set `WEB_DIST_DIR` to that `dist` path if using a custom layout. |
+| Built server serves API but not SPA | `WEB_DIST_DIR` points to a missing directory. | Build web with `pnpm -C apps/studio build` and set `WEB_DIST_DIR` to that `dist` path if using a custom layout. |
 | Raw SQL dashboard tab is hidden | `DASHBOARD_SQL_ENABLED=false` or target store is not PostgreSQL. | Use builder mode, or set `DASHBOARD_SQL_ENABLED=true` with `TARGET_STORE_ADAPTER=pg`. |
