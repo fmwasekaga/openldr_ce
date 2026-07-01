@@ -25,6 +25,7 @@ export * from './marketplace-install-store';
 export * from './connector-store';
 export * from './registry-store';
 export * from './plugin-data-store';
+export * from './app-settings-store';
 export {
   createReportScheduleStore,
   type ScheduleFrequency,
