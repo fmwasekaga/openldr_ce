@@ -15,6 +15,8 @@ import { createContext, type CodeLimits, type ExecutionContext } from './executi
 import type { RunEvent, LogEntry, WorkflowEdge } from '../types';
 import type { WorkflowServices } from './services';
 import type { WorkflowItem } from './items';
+import { computeLoopBody, planIterations, buildIterationNodes, type LoopBody } from './loop';
+import { extractTerminalItems } from './sub-workflow';
 
 export type WorkflowNode = RunnerNode;
 
@@ -127,6 +129,22 @@ export async function runWorkflow(
   if (opts.loopVars) ctx.loopVars = opts.loopVars;
   if (opts.loopMaxItems != null) ctx.loopMaxItems = opts.loopMaxItems;
   const sorted = topologicalSort(nodes, edges);
+
+  // Loop pre-pass: compute each loop node's body region and exclude body nodes
+  // from the main pass. A malformed loop defers its error to when the loop node runs.
+  const loopInfo = new Map<string, LoopBody | { error: string }>();
+  const excludedBody = new Set<string>();
+  for (const n of nodes) {
+    if (n.type !== 'loop') continue;
+    try {
+      const info = computeLoopBody(n.id, nodes, edges);
+      loopInfo.set(n.id, info);
+      for (const id of info.bodyNodeIds) excludedBody.add(id);
+    } catch (err) {
+      loopInfo.set(n.id, { error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
   const results: NodeRunResult[] = [];
 
   // Track edges we should ignore because their source's `branch` output
@@ -138,6 +156,8 @@ export async function runWorkflow(
   let failed = false;
 
   for (const node of sorted) {
+    if (excludedBody.has(node.id)) continue;
+
     // If every incoming edge to this node was skipped, skip the node too.
     const incoming = edges.filter((e) => e.target === node.id);
     if (incoming.length > 0 && incoming.every((e) => skippedEdges.has(e.id))) {
@@ -161,9 +181,16 @@ export async function runWorkflow(
     const start = Date.now();
     try {
       const input = upstreamItemsFor(node, edges, ctx.nodeOutputs, skippedEdges);
-      const handler = pickHandler(node);
-      const output = await handler(node, ctx, input);
-      ctx.nodeOutputs[node.id] = output;
+      let output: WorkflowItem[];
+      if (node.type === 'loop') {
+        output = await executeLoopNode(node, ctx, input, nodes, loopInfo.get(node.id)!);
+        ctx.nodeOutputs[node.id] = output;
+        ctx.branches[node.id] = 'done'; // prune the loop-handle edges in the main pass
+      } else {
+        const handler = pickHandler(node);
+        output = await handler(node, ctx, input);
+        ctx.nodeOutputs[node.id] = output;
+      }
 
       const durationMs = Date.now() - start;
       const meta = ctx.nodeMeta[node.id];
@@ -228,4 +255,43 @@ export async function runWorkflow(
     finishedAt: new Date().toISOString(),
     results,
   };
+}
+
+async function executeLoopNode(
+  node: WorkflowNode,
+  ctx: ExecutionContext,
+  input: WorkflowItem[],
+  nodes: WorkflowNode[],
+  info: LoopBody | { error: string },
+): Promise<WorkflowItem[]> {
+  if ('error' in info) throw new Error(info.error);
+  const { bodyNodeIds, bodyEdges } = info;
+  const iterNodes = buildIterationNodes(node, bodyNodeIds, nodes);
+  const plan = planIterations(node.data as { loopMode?: string; iterations?: number; batchSize?: number }, input);
+
+  const accumulated: WorkflowItem[] = [];
+  for (const { index, item, batch } of plan) {
+    const result = await runWorkflow(iterNodes, bodyEdges, {
+      input: batch,
+      services: ctx.services,
+      codeLimits: ctx.codeLimits,
+      loopMaxItems: ctx.loopMaxItems,
+      callStack: ctx.callStack,
+      loopVars: [...ctx.loopVars, { index, item }],
+      workflowId: ctx.workflowId,
+      logger: ctx.logger,
+      // Stream body node events to the same sink, but swallow the per-iteration
+      // workflow:done so the UI sees one terminal event for the whole run.
+      onEvent: (e) => { if (e.type !== 'workflow:done') ctx.emit(e); },
+    });
+    if (result.status === 'failed') {
+      const failed = result.results.find((r) => r.status === 'error');
+      throw new Error(`Loop: iteration ${index} failed: ${failed?.error ?? 'unknown error'}`);
+    }
+    accumulated.push(...extractTerminalItems(bodyEdges, result.results));
+    if (accumulated.length > ctx.loopMaxItems) {
+      throw new Error(`Loop: accumulated items exceeded the limit (${ctx.loopMaxItems})`);
+    }
+  }
+  return accumulated;
 }
