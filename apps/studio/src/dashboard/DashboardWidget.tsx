@@ -15,7 +15,7 @@ function bindQuery(q: WidgetQuery, filterValues: Record<string, unknown>): Widge
   // SQL mode: send the STORED template `sql` verbatim plus the resolved dashboard-filter values.
   // The SERVER applies the {{var}} / [[ ... ]] substitution — so the submitted `sql` stays
   // byte-identical to the persisted widget and the server can vet it against stored dashboards
-  // even when filters are set (execution of vetted SQL is allowed with DASHBOARD_SQL_ENABLED off).
+  // even when filters are set (execution of vetted SQL is allowed with the `dashboard.raw_sql` flag off).
   const values: Record<string, string | number | null | { from: string; to: string }> = {};
   for (const [varName, filterId] of Object.entries(q.variableBindings ?? {})) {
     const v = filterValues[filterId];

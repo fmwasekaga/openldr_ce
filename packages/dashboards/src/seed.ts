@@ -5,7 +5,7 @@ import { SAMPLE_DASHBOARD } from './samples';
 /**
  * Build the vetted SQL-template set from a list of stored dashboards: every `mode:'sql'` widget
  * SQL string (trimmed). These templates are first-party — the server-seeded sample plus anything
- * an admin persisted while DASHBOARD_SQL_ENABLED was on (the authoring gate blocks untrusted SQL
+ * an admin persisted while the `dashboard.raw_sql` feature flag was on (the authoring gate blocks untrusted SQL
  * when the flag is off). A submitted SQL template that exact-matches this set is safe to execute
  * even with the flag off, because it can only be admin-authored SQL.
  */

@@ -16,7 +16,7 @@ function persistedSqlTemplates(prev: Dashboard | undefined): Set<string> {
   return set;
 }
 
-// Authoring gate: when DASHBOARD_SQL_ENABLED is off, reject persisting a dashboard whose
+// Authoring gate: when the `dashboard.raw_sql` feature flag is off, reject persisting a dashboard whose
 // widgets introduce NEW or CHANGED `mode:'sql'` queries. This stops an untrusted user (the
 // dashboard routes have no role gating) from storing arbitrary SQL and then executing it as
 // "vetted" SQL. Non-SQL edits — and edits to non-SQL fields of an already-persisted SQL widget
