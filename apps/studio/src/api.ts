@@ -290,12 +290,32 @@ export async function deleteDashboard(id: string): Promise<void> {
 }
 
 export interface OidcConfig { issuerUrl: string; clientId: string; audience: string | null }
-export interface ClientConfig { dashboardSqlEnabled: boolean; authEnforced: boolean; oidc: OidcConfig | null }
+export interface ClientConfig { dashboardSqlEnabled: boolean; authEnforced: boolean; version: string; environment: string; oidc: OidcConfig | null }
 export async function fetchClientConfig(): Promise<ClientConfig> {
   const r = await authFetch('/api/config');
-  if (!r.ok) return { dashboardSqlEnabled: false, authEnforced: false, oidc: null };
+  if (!r.ok) return { dashboardSqlEnabled: false, authEnforced: false, version: '', environment: '', oidc: null };
   return r.json();
 }
+
+export interface FeatureFlag { id: string; labelKey: string; descriptionKey: string; value: boolean }
+
+export const fetchFeatureFlags = (): Promise<FeatureFlag[]> =>
+  authFetch('/api/settings/flags').then((r) => okJson<FeatureFlag[]>(r, 'list feature flags'));
+
+export const setFeatureFlag = (key: string, value: boolean): Promise<{ key: string; value: boolean }> =>
+  authFetch(`/api/settings/flags/${encodeURIComponent(key)}`, jbody({ value }, 'PUT'))
+    .then((r) => okJson<{ key: string; value: boolean }>(r, 'set feature flag'));
+
+export type DangerAction = 'reset-dashboards' | 'factory-reset' | 'clear-audit';
+
+export const runDangerAction = (action: DangerAction): Promise<{ ok: boolean; action: string }> =>
+  authFetch(`/api/settings/danger/${action}`, jbody({}, 'POST'))
+    .then((r) => okJson<{ ok: boolean; action: string }>(r, `danger:${action}`));
+
+export interface HealthCheckResult { status: string; latencyMs: number; detail?: string }
+export interface HealthReport { status: string; checks: Record<string, HealthCheckResult> }
+export const fetchHealth = (): Promise<HealthReport> =>
+  authFetch('/health').then((r) => r.json() as Promise<HealthReport>);
 
 // Audit
 export interface AuditEvent {
