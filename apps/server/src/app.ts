@@ -72,7 +72,7 @@ export function buildApp(ctx: AppContext) {
   // Serve the built SPA if present. API + health are registered first and win.
   // WEB_DIST_DIR overrides the location for container deploys (the SPA may not sit at
   // ../../web/dist relative to the bundled server entry); defaults to the workspace layout.
-  const webDist = process.env.WEB_DIST_DIR ?? resolve(dirname(fileURLToPath(import.meta.url)), '../../web/dist');
+  const webDist = process.env.WEB_DIST_DIR ?? resolve(dirname(fileURLToPath(import.meta.url)), '../../studio/dist');
   if (existsSync(webDist)) {
     void app.register(fastifyStatic, { root: webDist });
     app.setNotFoundHandler((req, reply) => {
