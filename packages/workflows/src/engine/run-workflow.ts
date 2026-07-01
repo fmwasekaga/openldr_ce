@@ -271,6 +271,9 @@ async function executeLoopNode(
 
   const accumulated: WorkflowItem[] = [];
   for (const { index, item, batch } of plan) {
+    // NOTE: each iteration re-runs topologicalSort + the loop pre-pass on iterNodes
+    // (O(body) per iteration). Acceptable for MVP; revisit if very large bodies with
+    // thousands of iterations become a perf concern.
     const result = await runWorkflow(iterNodes, bodyEdges, {
       input: batch,
       services: ctx.services,
@@ -282,16 +285,23 @@ async function executeLoopNode(
       logger: ctx.logger,
       // Stream body node events to the same sink, but swallow the per-iteration
       // workflow:done so the UI sees one terminal event for the whole run.
-      onEvent: (e) => { if (e.type !== 'workflow:done') ctx.emit(e); },
+      onEvent: (e) => {
+        if (e.type === 'workflow:done') return;
+        // The synthetic trigger reuses the loop node's id; drop its redundant
+        // lifecycle events so only the parent loop node's own start/success show.
+        if ((e.type === 'node:start' || e.type === 'node:success') && 'nodeId' in e && e.nodeId === node.id) return;
+        ctx.emit(e);
+      },
     });
     if (result.status === 'failed') {
       const failed = result.results.find((r) => r.status === 'error');
       throw new Error(`Loop: iteration ${index} failed: ${failed?.error ?? 'unknown error'}`);
     }
-    accumulated.push(...extractTerminalItems(bodyEdges, result.results));
-    if (accumulated.length > ctx.loopMaxItems) {
+    const iterationItems = extractTerminalItems(bodyEdges, result.results);
+    if (accumulated.length + iterationItems.length > ctx.loopMaxItems) {
       throw new Error(`Loop: accumulated items exceeded the limit (${ctx.loopMaxItems})`);
     }
+    accumulated.push(...iterationItems);
   }
   return accumulated;
 }
