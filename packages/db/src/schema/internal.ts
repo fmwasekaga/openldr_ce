@@ -452,6 +452,13 @@ export interface PluginDataTable {
   updated_at: Generated<Date>;
 }
 
+export interface AppSettingsTable {
+  key: string;
+  value: string;
+  updated_at: Generated<Date>;
+  updated_by: string | null;
+}
+
 export interface InternalSchema {
   fhir_resources: FhirResourcesTable;
   outbox_events: OutboxEventsTable;
@@ -493,4 +500,5 @@ export interface InternalSchema {
   connectors: ConnectorsTable;
   registries: RegistriesTable;
   plugin_data: PluginDataTable;
+  app_settings: AppSettingsTable;
 }

@@ -36,6 +36,7 @@ import * as m034 from './034_marketplace_registries';
 import * as m035 from './035_plugin_data';
 import * as m036 from './036_dhis2_to_plugin_data';
 import * as m037 from './037_connectors_host_type';
+import * as m038 from './038_app_settings';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -75,4 +76,5 @@ export const internalMigrations: Record<string, Migration> = {
   '035_plugin_data': { up: m035.up, down: m035.down },
   '036_dhis2_to_plugin_data': { up: m036.up, down: m036.down },
   '037_connectors_host_type': { up: m037.up, down: m037.down },
+  '038_app_settings': { up: m038.up, down: m038.down },
 };
