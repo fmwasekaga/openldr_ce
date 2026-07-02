@@ -1,6 +1,6 @@
 import { appendFileSync, mkdirSync, readFileSync, renameSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 
 /**
  * Durable, best-effort crash capture for plugin-induced process-FATAL crashes.
@@ -41,6 +41,8 @@ export interface CrashMarker {
   kind: 'uncaughtException' | 'unhandledRejection' | (string & {});
   error: string;
   stack?: string;
+  /** Stable hash of (kind + normalized message + top stack frame) — groups repeat crashes on drain. */
+  fingerprint: string;
   /** Snapshot of the plugin ops that were in flight at crash time (likely culprits). */
   inFlight: InFlightOp[];
 }
@@ -95,14 +97,73 @@ export function drainCrashMarkers(dir: string): CrashMarker[] {
   return markers;
 }
 
+/** Read crash markers WITHOUT clearing them (used by the boot-time crash-loop check, which must
+ *  run before the audit store exists and must not consume markers the later drain will audit). */
+export function readCrashMarkers(dir: string): CrashMarker[] {
+  const file = join(dir, CRASH_FILE);
+  if (!existsSync(file)) return [];
+  let content = '';
+  try { content = readFileSync(file, 'utf8'); } catch { return []; }
+  const markers: CrashMarker[] = [];
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try { markers.push(JSON.parse(trimmed) as CrashMarker); } catch { /* skip torn line */ }
+  }
+  return markers;
+}
+
+export interface CrashLoopVerdict {
+  tripped: boolean;
+  /** How many crashes fell within the window. */
+  count: number;
+  firstAt?: string;
+  lastAt?: string;
+}
+
+/** Decide whether the recent crash history constitutes a restart loop: >= `threshold` crashes
+ *  within the last `windowSec` seconds. Pure + injectable clock for tests. Ignores `crash.loop`
+ *  markers themselves so the breaker doesn't feed on its own output. */
+export function detectCrashLoop(
+  markers: CrashMarker[],
+  opts: { nowMs: number; windowSec: number; threshold: number },
+): CrashLoopVerdict {
+  const cutoff = opts.nowMs - opts.windowSec * 1000;
+  const recent = markers
+    .filter((m) => m.kind !== 'crash.loop')
+    .filter((m) => { const t = Date.parse(m.at); return Number.isFinite(t) && t >= cutoff; })
+    .sort((a, b) => a.at.localeCompare(b.at));
+  return {
+    tripped: recent.length >= opts.threshold,
+    count: recent.length,
+    ...(recent.length ? { firstAt: recent[0].at, lastAt: recent[recent.length - 1].at } : {}),
+  };
+}
+
+/** Normalize a crash into a stable fingerprint so a restart loop of the SAME crash coalesces.
+ *  Volatile tokens (numbers, uuids, hex, ports, paths) are stripped so incidental differences
+ *  (a changing IP or pid) don't fragment the group. */
+export function crashFingerprint(kind: string, message: string, stack?: string): string {
+  const topFrame = (stack ?? '').split('\n').find((l) => l.trim().startsWith('at ')) ?? '';
+  const normalized = `${kind}|${message}|${topFrame}`
+    .replace(/0x[0-9a-fA-F]+/g, '0x#')
+    .replace(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/g, '#uuid')
+    .replace(/\d+/g, '#')
+    .toLowerCase();
+  return createHash('sha1').update(normalized).digest('hex').slice(0, 12);
+}
+
 /** Assemble a crash marker from a thrown value plus the current in-flight snapshot. */
 export function buildCrashMarker(kind: CrashMarker['kind'], err: unknown): CrashMarker {
   const e = err instanceof Error ? err : undefined;
+  const error = e ? e.message : String(err);
+  const stack = e?.stack;
   return {
     at: new Date().toISOString(),
     kind,
-    error: e ? e.message : String(err),
-    ...(e?.stack ? { stack: e.stack } : {}),
+    error,
+    ...(stack ? { stack } : {}),
+    fingerprint: crashFingerprint(kind, error, stack),
     inFlight: currentInFlight(),
   };
 }
