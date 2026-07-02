@@ -43,7 +43,7 @@ sh deploy/nginx/gen-selfsigned.sh localhost
 # 2. Environment
 cp .env.prod.example .env.prod          # then edit secrets (SECRETS_ENCRYPTION_KEY, etc.)
 # 3. Build + run
-docker compose -f docker-compose.prod.yml -p openldr up -d --build
+docker compose --env-file .env.prod -f docker-compose.prod.yml -p openldr up -d --build
 ```
 
 Browse **https://localhost** (accept the self-signed warning). On Windows, generate the cert inside a
@@ -63,7 +63,7 @@ DNS for your domain must point at this host and ports 80/443 must be reachable f
 pnpm run init            # Domain → your.domain → TLS: Let's Encrypt → email
 
 # 2. Bring the stack up (starts on the self-signed placeholder; :80 serves the ACME challenge)
-docker compose -f docker-compose.prod.yml -p openldr up -d --build
+docker compose --env-file .env.prod -f docker-compose.prod.yml -p openldr up -d --build
 
 # 3. Issue the real cert, install it for nginx, and reload — one command
 pnpm run cert            # = sh deploy/letsencrypt.sh  (reads domain+email from .env.prod)
@@ -108,9 +108,9 @@ curl -k  https://localhost/api/workflows   # → 401 without a token (auth enfor
 ## Upgrade / teardown
 
 ```sh
-docker compose -f docker-compose.prod.yml -p openldr up -d --build   # rebuild + restart
-docker compose -f docker-compose.prod.yml -p openldr down            # stop (keeps volumes)
-docker compose -f docker-compose.prod.yml -p openldr down -v         # stop + drop data volumes
+docker compose --env-file .env.prod -f docker-compose.prod.yml -p openldr up -d --build   # rebuild + restart
+docker compose --env-file .env.prod -f docker-compose.prod.yml -p openldr down            # stop (keeps volumes)
+docker compose --env-file .env.prod -f docker-compose.prod.yml -p openldr down -v         # stop + drop data volumes
 ```
 
 nginx re-resolves backing containers at runtime (Docker DNS), so recreating `app` on redeploy does

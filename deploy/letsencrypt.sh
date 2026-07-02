@@ -17,7 +17,9 @@ set -eu
 DOMAIN="${1:-$(grep -E '^SERVER_NAME=' .env.prod | head -1 | cut -d= -f2- | tr -d '\r')}"
 EMAIL="${2:-$(grep -E '^LETSENCRYPT_EMAIL=' .env.prod | head -1 | cut -d= -f2- | tr -d '\r')}"
 PROJECT="${PROJECT:-openldr}"
-COMPOSE="docker compose -f docker-compose.prod.yml -p ${PROJECT}"
+# --env-file .env.prod so compose ${VAR} substitutions (nginx SERVER_NAME, gateway ports, etc.)
+# resolve from .env.prod, matching how the stack was brought up.
+COMPOSE="docker compose --env-file .env.prod -f docker-compose.prod.yml -p ${PROJECT}"
 
 if [ -z "${DOMAIN}" ] || [ -z "${EMAIL}" ]; then
   echo "error: need a domain and email. Pass them as args, or set SERVER_NAME + LETSENCRYPT_EMAIL in .env.prod (pnpm run init does this)." >&2
