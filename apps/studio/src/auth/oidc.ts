@@ -1,6 +1,6 @@
 import { UserManager, WebStorageStateStore, type User } from 'oidc-client-ts';
 import type { OidcConfig } from '@/api';
-import { setAccessToken } from './token';
+import { setAccessToken, setUnauthorizedHandler } from './token';
 
 let singleton: OidcClient | null = null;
 let singletonKey = '';
@@ -38,6 +38,21 @@ export function createOidc(cfg: OidcConfig): OidcClient {
   // Keep the token seam in sync on load + silent renew + expiry.
   mgr.events.addUserLoaded((u: User) => setAccessToken(u.access_token));
   mgr.events.addAccessTokenExpired(() => setAccessToken(null));
+
+  // When any API call comes back 401 (silent-renew failed / SSO session ended), redirect to
+  // login instead of leaving the UI showing raw "authentication required" errors. Guarded so
+  // the many simultaneous 401s a page can emit don't fire multiple redirects, and debounced via
+  // sessionStorage so a still-401 state right after login can't become a tight redirect loop.
+  let reauthing = false;
+  setUnauthorizedHandler(() => {
+    if (reauthing) return;
+    const last = Number(sessionStorage.getItem('oidc:last-reauth') ?? '0');
+    if (Date.now() - last < 5000) return;
+    sessionStorage.setItem('oidc:last-reauth', String(Date.now()));
+    reauthing = true;
+    setAccessToken(null);
+    void mgr.signinRedirect().catch(() => { reauthing = false; });
+  });
 
   // The authorization code + PKCE state are single-use. React StrictMode invokes the
   // callback effect twice in dev; dedupe so the second invocation reuses the first

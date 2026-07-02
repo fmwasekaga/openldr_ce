@@ -1,13 +1,23 @@
-import { getAccessToken } from './auth/token';
+import { getAccessToken, notifyUnauthorized } from './auth/token';
 import type { PluginBrokerOp, PluginRpcResult } from '@openldr/plugin-ui-sdk';
 
 /** fetch wrapper that attaches the bearer token when one is present. */
-export function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+export async function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const token = getAccessToken();
-  if (!token) return init !== undefined ? fetch(input, init) : fetch(input);
-  const headers = new Headers(init?.headers);
-  headers.set('Authorization', `Bearer ${token}`);
-  return fetch(input, { ...init, headers });
+  let res: Response;
+  if (!token) {
+    res = init !== undefined ? await fetch(input, init) : await fetch(input);
+  } else {
+    const headers = new Headers(init?.headers);
+    headers.set('Authorization', `Bearer ${token}`);
+    res = await fetch(input, { ...init, headers });
+  }
+  // A 401 means the session expired or was invalidated (silent-renew failed / SSO ended). Notify
+  // the auth layer to re-trigger login instead of surfacing raw "authentication required" errors
+  // on every page/widget. Public endpoints (/api/config, /health) return 200, so this won't fire
+  // during the pre-login bootstrap.
+  if (res.status === 401) notifyUnauthorized();
+  return res;
 }
 
 export type ReportCategory = 'amr' | 'operational' | 'quality' | 'regulatory';

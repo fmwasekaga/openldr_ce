@@ -13,9 +13,9 @@ vi.mock('oidc-client-ts', () => ({
   })),
   WebStorageStateStore: vi.fn(),
 }));
-vi.mock('./token', () => ({ setAccessToken: vi.fn(), getAccessToken: vi.fn() }));
+vi.mock('./token', () => ({ setAccessToken: vi.fn(), getAccessToken: vi.fn(), setUnauthorizedHandler: vi.fn() }));
 import { UserManager } from 'oidc-client-ts';
-import { setAccessToken } from './token';
+import { setAccessToken, setUnauthorizedHandler } from './token';
 import { createOidc, getOidc, __resetOidc } from './oidc';
 
 const oidcCfg = { issuerUrl: 'https://kc/realms/openldr', clientId: 'openldr-web', audience: 'openldr-api' };
@@ -23,6 +23,20 @@ const oidcCfg = { issuerUrl: 'https://kc/realms/openldr', clientId: 'openldr-web
 beforeEach(() => {
   vi.clearAllMocks();
   __resetOidc();
+  sessionStorage.clear();
+});
+
+describe('createOidc 401 handler', () => {
+  it('registers a handler that clears the token + redirects to login, once per debounce window', () => {
+    signinRedirect.mockResolvedValue(undefined);
+    createOidc(oidcCfg);
+    const handler = vi.mocked(setUnauthorizedHandler).mock.calls[0]?.[0];
+    expect(handler).toBeTypeOf('function');
+    handler!();
+    handler!(); // second call inside the debounce/guard window must NOT redirect again
+    expect(setAccessToken).toHaveBeenCalledWith(null);
+    expect(signinRedirect).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('createOidc', () => {
