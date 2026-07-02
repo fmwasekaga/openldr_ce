@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync, existsSync, copyFileSync, mkdirSync } from 'node:fs';
 import { execSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { select, input, confirm } from '@inquirer/prompts';
 import { formatIpChoices, isValidFqdn } from './init/host-detect.mjs';
 import { isPortFree } from './init/port-check.mjs';
@@ -49,7 +50,16 @@ async function main() {
 
   // .env.prod: create from example on first run, then merge (preserves secrets).
   if (!existsSync('.env.prod')) copyFileSync('.env.prod.example', '.env.prod');
-  writeFileSync('.env.prod', mergeEnv(readFileSync('.env.prod', 'utf8'), env));
+  let envText = readFileSync('.env.prod', 'utf8');
+  // Generate a persistent secrets-encryption key on first run (needed by connectors/DHIS2 secrets).
+  // Idempotent: never rotate an existing key, so re-running init doesn't invalidate stored secrets.
+  if (!/^SECRETS_ENCRYPTION_KEY=.+/m.test(envText)) {
+    const key = randomBytes(32).toString('base64');
+    envText = /^#?\s*SECRETS_ENCRYPTION_KEY=/m.test(envText)
+      ? envText.replace(/^#?\s*SECRETS_ENCRYPTION_KEY=.*/m, `SECRETS_ENCRYPTION_KEY=${key}`)
+      : `${envText}\nSECRETS_ENCRYPTION_KEY=${key}\n`;
+  }
+  writeFileSync('.env.prod', mergeEnv(envText, env));
 
   // rendered realm import
   mkdirSync('deploy/nginx/certs', { recursive: true });
@@ -62,7 +72,12 @@ async function main() {
   const plan = planCerts({ tlsMode, host, email, certPath, keyPath });
   if (plan.kind === 'exec') execSync(plan.command, { stdio: 'inherit' });
   else if (plan.kind === 'copy') for (const f of plan.files) copyFileSync(f.from, f.to);
-  else if (plan.kind === 'certbot') console.log(`  Let's Encrypt selected: ensure DNS for ${plan.domain} points here and port 80 is reachable, then run the certbot profile (see DEPLOYMENT.md). Bringing the stack up first with a self-signed placeholder is fine.`);
+  else if (plan.kind === 'certbot') {
+    // nginx must have a cert to start on :443, but certbot needs nginx (webroot) to issue the real
+    // one — so bootstrap with a self-signed placeholder now; `pnpm run cert` swaps in the LE cert.
+    execSync(planCerts({ tlsMode: 'self-signed', host }).command, { stdio: 'inherit' });
+    console.log(`  Let's Encrypt selected: after this comes up, run \`pnpm run cert\` (ensure DNS for ${plan.domain} points here and port 80 is reachable).`);
+  }
 
   console.log('\nLaunching the stack…');
   const code = launchStack();
