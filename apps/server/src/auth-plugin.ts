@@ -67,6 +67,11 @@ export function registerAuth(app: FastifyInstance<any, any, any, any>, ctx: AppC
     const path = (req.raw.url ?? '').split('?')[0];
     // Only /api/* is protected. /health and the static SPA stay public.
     if (path === '/api/config') return; // public: the SPA reads OIDC settings before it has a token
+    // Webhook trigger endpoints authenticate via their per-path X-Webhook-Token secret (a
+    // constant-time compare in the route), not a Keycloak session — external callers have no
+    // bearer token. Let them through to the route's own secret check. The trailing slash keeps
+    // this scoped to the hooks subtree, so workflow management routes (/api/workflows) stay gated.
+    if (path.startsWith('/api/workflows/hooks/')) return;
     if (path !== '/api' && !path.startsWith('/api/')) return;
 
     const token = bearer(req);
