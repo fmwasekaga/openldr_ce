@@ -9,7 +9,7 @@ export { createWorkflowTriggerRunner, type WorkflowTriggerRunner } from './trigg
 export { nextCronDate } from './cron';
 export { guardedFetch, parseAllowlist, type WorkflowServices, type SqlResult, type HttpRequest, type HttpResponse, type ExportArtifactInput, type ExportArtifactResult } from './engine/services';
 export { createWorkflowDatasetStore, type WorkflowDatasetStore, type DatasetInput } from './dataset-store';
-export { sampleWorkflow } from './sample-workflow';
+export { buildDefaultWorkflows, type DefaultWorkflowInput } from './sample-workflow';
 export { HOST_NODE_DESCRIPTORS, type WorkflowNodeDescriptor } from './host-nodes';
 export { createWorkflowNodeRegistry, type WorkflowNodeRegistry, type WorkflowNodeRegistryDeps, type NodeRegistryPluginRow } from './node-registry';
 // Re-export the declaration types so web + server consume them from one place (SP-1 deliverable #5).

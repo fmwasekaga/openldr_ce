@@ -1,46 +1,167 @@
 import type { Workflow } from './types';
 
-// Example workflow showcasing the core node library — seeded so the Workflows list isn't
-// empty on a fresh install (the builder used to render this from hardcoded state before the
-// list page existed). Mirrors apps/studio/src/workflows/lib/sample-workflow.ts; the server stores
-// `definition` as opaque JSON, so the node `data` shapes (templateId/iconName/config) are
-// preserved as-is. Edges omit the web-only `type:'custom'` (the persisted schema drops it).
+// The seeded default workflows for a fresh install. Replaces the old node-showcase
+// "Sample Workflow" with a real, honest form-validated ingestion loop built entirely
+// from nodes that exist today, plus a reactive companion that demonstrates the
+// data.persisted event loop.
 //
-// Flow: Manual trigger → Set fields → HTTP request → If(premium?)
-//   ├ true  → Log → Wait → Code ─┐
-//   └ false → Loop ──────────────┴→ Merge → Filter → No-Op
-export const sampleWorkflow: Workflow = {
-  id: 'wf-sample',
-  name: 'Sample Workflow',
-  description: 'Example workflow showcasing the core node library (trigger, set, HTTP, if, log, wait, code, loop, merge, filter).',
-  enabled: true,
-  createdBy: null,
-  definition: {
-    nodes: [
-      { id: 'trigger-1', type: 'trigger', position: { x: 60, y: 260 }, data: { label: 'When clicked', triggerType: 'manual', config: {}, templateId: 'manual-trigger', iconName: 'Play' } },
-      { id: 'set-1', type: 'action', position: { x: 220, y: 260 }, data: { label: 'Set user data', action: 'set', config: { keepExisting: false, fields: [{ name: 'userId', value: '42' }, { name: 'role', value: 'admin' }, { name: 'plan', value: 'premium' }] }, templateId: 'set', iconName: 'Pencil' } },
-      { id: 'http-1', type: 'action', position: { x: 380, y: 260 }, data: { label: 'Fetch profile', action: 'http-request', config: { url: 'https://jsonplaceholder.typicode.com/users/1', method: 'GET', headers: '', body: '', responseType: 'json' }, templateId: 'http-request', iconName: 'Send' } },
-      { id: 'if-1', type: 'condition', position: { x: 540, y: 260 }, data: { label: 'Is premium?', condition: '$json.data && $json.data.id > 0', templateId: 'if', iconName: 'GitBranch' } },
-      { id: 'log-1', type: 'action', position: { x: 720, y: 140 }, data: { label: 'Log premium', action: 'log', message: 'Premium user: {{ $json.data.name }}', level: 'info', config: {}, templateId: 'log', iconName: 'Terminal' } },
-      { id: 'wait-1', type: 'action', position: { x: 880, y: 140 }, data: { label: 'Wait 1s', action: 'wait', config: { duration: 1, unit: 's' }, templateId: 'wait', iconName: 'Hourglass' } },
-      { id: 'code-1', type: 'code', position: { x: 1040, y: 140 }, data: { label: 'Build report', code: 'console.log("Building report for", $json);\nreturn { report: "done", ts: Date.now() };', language: 'javascript', templateId: 'code', iconName: 'Code' } },
-      { id: 'loop-1', type: 'loop', position: { x: 720, y: 400 }, data: { label: 'Retry 3x', iterations: 3, loopMode: 'count', templateId: 'loop', iconName: 'Repeat' } },
-      { id: 'merge-1', type: 'action', position: { x: 1220, y: 260 }, data: { label: 'Merge results', action: 'merge', config: { mode: 'append' }, templateId: 'merge', iconName: 'Combine' } },
-      { id: 'filter-1', type: 'condition', position: { x: 1400, y: 260 }, data: { label: 'Has data?', condition: '$items && $items.length > 0', templateId: 'filter', iconName: 'Filter' } },
-      { id: 'noop-1', type: 'action', position: { x: 1580, y: 260 }, data: { label: 'Done', action: 'no-op', config: {}, templateId: 'no-op', iconName: 'CircleDot' } },
-    ],
-    edges: [
-      { id: 'e1', source: 'trigger-1', target: 'set-1' },
-      { id: 'e2', source: 'set-1', target: 'http-1' },
-      { id: 'e3', source: 'http-1', target: 'if-1' },
-      { id: 'e4', source: 'if-1', sourceHandle: 'true', target: 'log-1' },
-      { id: 'e5', source: 'log-1', target: 'wait-1' },
-      { id: 'e6', source: 'wait-1', target: 'code-1' },
-      { id: 'e7', source: 'code-1', target: 'merge-1' },
-      { id: 'e8', source: 'if-1', sourceHandle: 'false', target: 'loop-1' },
-      { id: 'e9', source: 'loop-1', target: 'merge-1' },
-      { id: 'e10', source: 'merge-1', target: 'filter-1' },
-      { id: 'e11', source: 'filter-1', sourceHandle: 'true', target: 'noop-1' },
-    ],
-  },
-};
+//   Inbound  (wf-sample, DISABLED):
+//     Webhook (POST /api/workflows/hooks/lab-orders, X-Webhook-Token)
+//       → Code "Unwrap request body"  (webhook delivers {method,body,headers,query};
+//                                       Form Validate wants the answers themselves)
+//       → Form Validate (Lab order form → ServiceRequest)
+//       → Persist Store (source: webhook-lab-orders → emits data.persisted)
+//       → Log
+//
+//   Reactive (wf-sample-reactive, ENABLED):
+//     Event Trigger (data.persisted, source: webhook-lab-orders) → Log
+//
+// The inbound ships DISABLED because it exposes a live HTTP endpoint — the operator
+// opts in (enable + copy the secret). The reactive one ships ENABLED because it has no
+// external surface; enabling both is a one-click demo of the whole loop.
+//
+// This is a pure builder: the form id and webhook secret are injected by the seed
+// (packages/bootstrap/src/seed.ts) at seed time — the seeded "Lab order" form gets a
+// fresh random id, and the secret is generated per-install so no secret is committed.
+
+const WEBHOOK_PATH = 'lab-orders';
+/** Persist Store `source` and the reactive Event Trigger `source` MUST match for the loop to fire. */
+const PERSIST_SOURCE = 'webhook-lab-orders';
+
+export interface DefaultWorkflowInput {
+  /** Id of the seeded "Lab order" form the inbound loop validates against. */
+  orderFormId: string;
+  /** Per-install shared secret for the inbound webhook (sent as X-Webhook-Token). */
+  webhookSecret: string;
+}
+
+export function buildDefaultWorkflows({ orderFormId, webhookSecret }: DefaultWorkflowInput): Workflow[] {
+  const inbound: Workflow = {
+    id: 'wf-sample',
+    name: 'Ingest Lab Orders (Webhook)',
+    description:
+      'POST a lab order to /api/workflows/hooks/lab-orders with header X-Webhook-Token → validate ' +
+      'against the "Lab order" form → persist a ServiceRequest → emit data.persisted. Disabled by ' +
+      'default: enable it and copy the webhook secret to accept requests. A manual Run with no body ' +
+      'validates to zero rows (no-op).',
+    enabled: false,
+    createdBy: null,
+    definition: {
+      nodes: [
+        {
+          id: 'trigger-1',
+          type: 'webhook',
+          position: { x: 60, y: 220 },
+          data: {
+            label: 'Lab order received',
+            path: WEBHOOK_PATH,
+            method: 'POST',
+            secret: webhookSecret,
+            templateId: 'webhook-trigger',
+            iconName: 'Webhook',
+          },
+        },
+        {
+          id: 'unwrap-1',
+          type: 'code',
+          position: { x: 300, y: 220 },
+          data: {
+            label: 'Unwrap request body',
+            code: 'return $json.body ?? $json;',
+            language: 'javascript',
+            templateId: 'code',
+            iconName: 'Code',
+          },
+        },
+        {
+          id: 'form-validate-1',
+          type: 'action',
+          position: { x: 540, y: 220 },
+          data: {
+            label: 'Validate lab order',
+            action: 'form-validate',
+            config: { formId: orderFormId },
+            templateId: 'form-validate',
+            iconName: 'ClipboardCheck',
+          },
+        },
+        {
+          id: 'persist-1',
+          type: 'action',
+          position: { x: 780, y: 220 },
+          data: {
+            label: 'Persist store',
+            action: 'persist-store',
+            config: { source: PERSIST_SOURCE },
+            templateId: 'persist-store',
+            iconName: 'Database',
+          },
+        },
+        {
+          id: 'log-1',
+          type: 'action',
+          position: { x: 1020, y: 220 },
+          data: {
+            label: 'Log persisted',
+            action: 'log',
+            message: 'Persisted lab order: {{ $json }}',
+            level: 'info',
+            config: {},
+            templateId: 'log',
+            iconName: 'Terminal',
+          },
+        },
+      ],
+      edges: [
+        { id: 'e1', source: 'trigger-1', target: 'unwrap-1' },
+        { id: 'e2', source: 'unwrap-1', target: 'form-validate-1' },
+        { id: 'e3', source: 'form-validate-1', target: 'persist-1' },
+        { id: 'e4', source: 'persist-1', target: 'log-1' },
+      ],
+    },
+  };
+
+  const reactive: Workflow = {
+    id: 'wf-sample-reactive',
+    name: 'On Lab Order Persisted → Log',
+    description:
+      'Reacts to the data.persisted event emitted when a lab order is stored (source ' +
+      'webhook-lab-orders) and logs a summary. Demonstrates the event-driven half of the ' +
+      'ingestion loop — enable "Ingest Lab Orders (Webhook)" and POST an order to see it fire.',
+    enabled: true,
+    createdBy: null,
+    definition: {
+      nodes: [
+        {
+          id: 'evt-1',
+          type: 'trigger',
+          position: { x: 60, y: 220 },
+          data: {
+            label: 'On data persisted',
+            triggerType: 'event',
+            config: { event: 'data.persisted', source: PERSIST_SOURCE, resourceType: '' },
+            templateId: 'event-trigger',
+            iconName: 'Radio',
+          },
+        },
+        {
+          id: 'log-1',
+          type: 'action',
+          position: { x: 300, y: 220 },
+          data: {
+            label: 'Log reaction',
+            action: 'log',
+            message: 'Reacted to {{ $json.count }} {{ $json.resourceTypes }} from {{ $json.source }}',
+            level: 'info',
+            config: {},
+            templateId: 'log',
+            iconName: 'Terminal',
+          },
+        },
+      ],
+      edges: [{ id: 'e1', source: 'evt-1', target: 'log-1' }],
+    },
+  };
+
+  return [inbound, reactive];
+}
