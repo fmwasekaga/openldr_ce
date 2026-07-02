@@ -217,11 +217,15 @@ and replace the location block:
 ```
 with:
 ```nginx
-    location /         { proxy_pass $upstream_web$request_uri; }
-    location /studio   { proxy_pass $upstream_studio$request_uri; }
-    location /api      { proxy_pass $upstream_api$request_uri; }
-    location = /health { proxy_pass $upstream_api/health; }
-    location /auth     { proxy_pass $upstream_kc$request_uri; }
+    location /          { proxy_pass $upstream_web$request_uri; }
+    # Bare /studio (no trailing slash) must redirect to /studio/, else it proxies to the studio
+    # container whose nginx only defines `location /studio/` → 404. The exact-match wins over the
+    # prefix below for the bare case; everything under /studio/ hits the prefix and proxies through.
+    location = /studio  { return 301 /studio/; }
+    location /studio    { proxy_pass $upstream_studio$request_uri; }
+    location /api       { proxy_pass $upstream_api$request_uri; }
+    location = /health  { proxy_pass $upstream_api/health; }
+    location /auth      { proxy_pass $upstream_kc$request_uri; }
 ```
 Leave the `resolver 127.0.0.11 valid=30s ipv6=off;` line and everything else unchanged.
 
