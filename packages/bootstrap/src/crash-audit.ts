@@ -17,21 +17,34 @@ export async function drainCrashMarkersToAudit(opts: { dir: string; audit: Audit
     opts.logger.warn({ err }, 'crash-marker drain failed (continuing)');
     return 0;
   }
+  // Group by fingerprint so a restart loop of the SAME crash collapses into one row that carries
+  // an occurrence count + first/last-seen span, instead of thousands of near-identical rows.
+  const groups = new Map<string, typeof markers>();
   for (const m of markers) {
-    // The first in-flight op is the most likely culprit; attribute the row to its plugin.
-    const culprit = m.inFlight[0];
+    const key = m.fingerprint ?? `${m.kind}:${m.error}`;
+    const g = groups.get(key);
+    if (g) g.push(m); else groups.set(key, [m]);
+  }
+  for (const group of groups.values()) {
+    const sorted = [...group].sort((a, b) => a.at.localeCompare(b.at));
+    const rep = sorted[sorted.length - 1]; // most recent as representative
+    const culprit = rep.inFlight[0];
+    const isLoop = rep.kind === 'crash.loop';
     await safeRecord(opts.audit, opts.logger, {
       actorType: 'system',
       actorName: 'system',
-      action: culprit ? 'plugin.crash' : 'system.crash',
+      action: isLoop ? 'system.crash_loop' : culprit ? 'plugin.crash' : 'system.crash',
       entityType: culprit ? 'plugin' : 'system',
       entityId: culprit?.pluginId ?? 'process',
       metadata: {
-        kind: m.kind,
-        error: m.error,
-        at: m.at,
-        inFlight: m.inFlight,
-        ...(m.stack ? { stack: m.stack } : {}),
+        kind: rep.kind,
+        error: rep.error,
+        fingerprint: rep.fingerprint,
+        occurrenceCount: sorted.length,
+        firstSeen: sorted[0].at,
+        lastSeen: rep.at,
+        inFlight: rep.inFlight,
+        ...(rep.stack ? { stack: rep.stack } : {}),
       },
     });
   }
