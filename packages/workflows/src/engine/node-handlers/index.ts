@@ -102,6 +102,11 @@ const ACTION_HANDLERS: Record<string, NodeHandler> = {
 
 const TYPE_HANDLERS: Record<string, NodeHandler> = {
   trigger: triggerHandler,
+  // A webhook node is a trigger entry point: the studio builder + webhook registry model it as
+  // its own ReactFlow type ('webhook'), but at execution time it must behave exactly like a
+  // trigger — emit the seeded ctx.input (the webhook request envelope) as the run's first items.
+  // Without this the payload never enters the graph (defaultHandler would pass through []).
+  webhook: triggerHandler,
   code: codeHandler,
   'plugin-node': pluginNodeHandler,
 };
