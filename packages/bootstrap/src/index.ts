@@ -639,6 +639,7 @@ export * from './terminology-context';
 export * from './seed';
 export * from './plugin-broker';
 export * from './crash-audit';
+export * from './crash-loop';
 export * from './policy';
 export { wipeInternalDatabase, clearAuditAndRunHistory, listInternalDataTables, buildTruncateSql } from './danger';
 

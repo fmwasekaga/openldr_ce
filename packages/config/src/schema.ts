@@ -122,6 +122,15 @@ export const ConfigSchema = z
     // boot drains these into the audit trail (action plugin.crash). Created on first write.
     PLUGIN_CRASH_LOG_DIR: z.string().default('.openldr/crash'),
 
+    // Restart circuit-breaker: if >= CRASH_LOOP_THRESHOLD process crashes occur within
+    // CRASH_LOOP_WINDOW_SEC, the next boot writes one system.crash_loop marker and backs off
+    // (escalating sleep-then-exit) so the orchestrator's restart policy slows a hot loop instead
+    // of the app hot-spinning and flooding the crash log / audit trail.
+    CRASH_LOOP_THRESHOLD: z.coerce.number().int().positive().default(5),
+    CRASH_LOOP_WINDOW_SEC: z.coerce.number().int().positive().default(60),
+    CRASH_LOOP_BACKOFF_MS: z.coerce.number().int().positive().default(2_000),
+    CRASH_LOOP_BACKOFF_CAP_MS: z.coerce.number().int().positive().default(60_000),
+
     // Marketplace artifact security.
     MARKETPLACE_DEV_ALLOW_UNSIGNED: envBoolean(false),
     MARKETPLACE_REGISTRY_DIR: z.string().optional(),

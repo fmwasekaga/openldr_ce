@@ -1,5 +1,5 @@
 import { loadConfig } from '@openldr/config';
-import { createAppContext, createIngestContext, createDbContext, seedDatabase, drainCrashMarkersToAudit } from '@openldr/bootstrap';
+import { createAppContext, createIngestContext, createDbContext, seedDatabase, drainCrashMarkersToAudit, guardAgainstCrashLoop } from '@openldr/bootstrap';
 import { createLogger, makeCrashHandler } from '@openldr/core';
 import { buildApp } from './app';
 
@@ -20,6 +20,18 @@ async function main(): Promise<void> {
     dir: cfg.PLUGIN_CRASH_LOG_DIR, kind: 'unhandledRejection',
     log: (m) => logger.fatal({ marker: m }, 'unhandledRejection — wrote crash marker, exiting'),
   }));
+
+  // Restart circuit-breaker: before doing any expensive startup, bail out with a backoff if we're
+  // in a crash loop, so a repeatedly-crashing boot slows down instead of hot-spinning + flooding.
+  const tripped = await guardAgainstCrashLoop({
+    dir: cfg.PLUGIN_CRASH_LOG_DIR,
+    threshold: cfg.CRASH_LOOP_THRESHOLD,
+    windowSec: cfg.CRASH_LOOP_WINDOW_SEC,
+    backoffMs: cfg.CRASH_LOOP_BACKOFF_MS,
+    backoffCapMs: cfg.CRASH_LOOP_BACKOFF_CAP_MS,
+    log: (v) => logger.fatal(v, 'restart loop detected — backing off before exit'),
+  });
+  if (tripped) return; // guard already called process.exit; return keeps types happy under test
 
   // Self-migrate on startup when enabled (single-port prod deployment). migrateToLatest is
   // idempotent, so a fresh DB gets its schema and an already-migrated one is a no-op. Runs
