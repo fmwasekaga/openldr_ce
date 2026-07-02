@@ -22,6 +22,8 @@ export function App() {
         <Link to="/" className="text-lg font-semibold text-foreground">OpenLDR</Link>
         <nav className="flex items-center gap-4 text-sm">
           <Link to="/docs" className="text-muted-foreground hover:text-foreground">Docs</Link>
+          {/* Studio is a separate app served by the gateway under /studio/ — a full navigation, not a router Link. */}
+          <a href="/studio/" className="text-muted-foreground hover:text-foreground">Studio</a>
           <a href="https://github.com/fmwasekaga/openldr_ce" className="text-muted-foreground hover:text-foreground">GitHub</a>
         </nav>
       </header>
