@@ -276,24 +276,22 @@ export interface QueryModel { id: string; label: string; dimensions: ModelDimens
 const json = (body: unknown) => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
 export async function listModels(): Promise<QueryModel[]> {
-  const r = await authFetch('/api/dashboards/models'); if (!r.ok) throw new Error(`models failed: ${r.status}`); return r.json();
+  return authFetch('/api/dashboards/models').then((r) => okJson<QueryModel[]>(r, 'load models'));
 }
 export async function runWidgetQuery(q: WidgetQuery): Promise<ReportResult> {
-  const r = await authFetch('/api/dashboards/query', json(q));
-  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `query failed: ${r.status}`);
-  return r.json();
+  return authFetch('/api/dashboards/query', json(q)).then((r) => okJson<ReportResult>(r, 'run query'));
 }
 export async function listDashboards(): Promise<Dashboard[]> {
-  const r = await authFetch('/api/dashboards'); if (!r.ok) throw new Error(`list failed: ${r.status}`); return r.json();
+  return authFetch('/api/dashboards').then((r) => okJson<Dashboard[]>(r, 'list dashboards'));
 }
 export async function getDashboard(id: string): Promise<Dashboard> {
-  const r = await authFetch(`/api/dashboards/${id}`); if (!r.ok) throw new Error(`get failed: ${r.status}`); return r.json();
+  return authFetch(`/api/dashboards/${id}`).then((r) => okJson<Dashboard>(r, 'get dashboard'));
 }
 export async function createDashboard(d: Dashboard): Promise<Dashboard> {
-  const r = await authFetch('/api/dashboards', json(d)); if (!r.ok) throw new Error(`create failed: ${r.status}`); return r.json();
+  return authFetch('/api/dashboards', json(d)).then((r) => okJson<Dashboard>(r, 'create dashboard'));
 }
 export async function saveDashboard(d: Dashboard): Promise<Dashboard> {
-  const r = await authFetch(`/api/dashboards/${d.id}`, { ...json(d), method: 'PUT' }); if (!r.ok) throw new Error(`save failed: ${r.status}`); return r.json();
+  return authFetch(`/api/dashboards/${d.id}`, { ...json(d), method: 'PUT' }).then((r) => okJson<Dashboard>(r, 'save dashboard'));
 }
 export async function deleteDashboard(id: string): Promise<void> {
   const r = await authFetch(`/api/dashboards/${id}`, { method: 'DELETE' }); if (!r.ok) throw new Error(`delete failed: ${r.status}`);
@@ -538,18 +536,34 @@ export interface CodingSystemInput {
 }
 
 const jbody = (body: unknown, method: string) => ({ method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-async function errorDetail(res: Response): Promise<string> {
+interface ApiErrorDetail { message: string; code?: string; correlationId?: string }
+
+async function errorDetail(res: Response): Promise<ApiErrorDetail> {
   const contentType = res.headers.get('content-type') ?? '';
   if (contentType.includes('application/json')) {
-    const body = await res.json().catch(() => null) as { error?: unknown; message?: unknown } | null;
+    const body = await res.json().catch(() => null) as { error?: unknown; message?: unknown; code?: unknown; correlationId?: unknown } | null;
     const detail = body?.error ?? body?.message;
-    if (typeof detail === 'string' && detail.trim()) return detail.trim();
+    const message = typeof detail === 'string' && detail.trim() ? detail.trim() : String(res.status);
+    return {
+      message,
+      code: typeof body?.code === 'string' ? body.code : undefined,
+      correlationId: typeof body?.correlationId === 'string' ? body.correlationId : undefined,
+    };
   }
   const text = await res.text().catch(() => '');
-  return text.trim() || String(res.status);
+  return { message: text.trim() || String(res.status) };
 }
+
+/** Format a failed API call into a single user-facing string: "<what> failed: <message> · <code> · <id>". */
+export function formatApiError(what: string, detail: ApiErrorDetail): string {
+  const parts = [detail.message];
+  if (detail.code) parts.push(detail.code);
+  if (detail.correlationId) parts.push(detail.correlationId);
+  return `${what} failed: ${parts.join(' · ')}`;
+}
+
 async function okJson<T>(res: Response, what: string): Promise<T> {
-  if (!res.ok) throw new Error(`${what} failed: ${await errorDetail(res)}`);
+  if (!res.ok) throw new Error(formatApiError(what, await errorDetail(res)));
   return res.json() as Promise<T>;
 }
 const apiGet = <T>(url: string, what: string): Promise<T> => authFetch(url).then((res) => okJson<T>(res, what));
