@@ -71,6 +71,7 @@ KC_HOSTNAME=https://localhost/auth
 KEYCLOAK_ADMIN=admin
 KEYCLOAK_ADMIN_PASSWORD=$KC_PW
 SECRETS_ENCRYPTION_KEY=$SECRETS_KEY
+MIGRATE_ON_START=true
 SEED_ON_START=true
 MARKETPLACE_REGISTRY_URL=https://raw.githubusercontent.com/fmwasekaga/openldr-ce-marketplace/main
 EOF
