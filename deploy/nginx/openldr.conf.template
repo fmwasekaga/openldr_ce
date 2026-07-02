@@ -22,9 +22,10 @@ server {
     # container on redeploy (its IP changes) leaves nginx proxying a dead IP → 502 until an
     # nginx restart. A variable proxy_pass + resolver makes nginx re-resolve per request.
     resolver 127.0.0.11 valid=30s ipv6=off;
-    set $upstream_app     http://app:3000;
-    set $upstream_landing http://landing:80;
-    set $upstream_kc      http://keycloak:8080;
+    set $upstream_web    http://web:80;
+    set $upstream_studio http://studio:80;
+    set $upstream_api    http://api:3000;
+    set $upstream_kc     http://keycloak:8080;
 
     client_max_body_size 50m;            # plugin/bundle/ingest uploads
     gzip on;
@@ -43,9 +44,13 @@ server {
     proxy_set_header Connection        "upgrade";
     proxy_read_timeout 120s;
 
-    location /         { proxy_pass $upstream_landing$request_uri; }
-    location /studio   { proxy_pass $upstream_app$request_uri; }
-    location /api      { proxy_pass $upstream_app$request_uri; }
-    location = /health { proxy_pass $upstream_app/health; }
-    location /auth     { proxy_pass $upstream_kc$request_uri; }
+    location /          { proxy_pass $upstream_web$request_uri; }
+    # Bare /studio (no trailing slash) must redirect to /studio/, else it proxies to the studio
+    # container whose nginx only defines `location /studio/` → 404. The exact-match wins over the
+    # prefix below for the bare case; everything under /studio/ hits the prefix and proxies through.
+    location = /studio  { return 301 /studio/; }
+    location /studio    { proxy_pass $upstream_studio$request_uri; }
+    location /api       { proxy_pass $upstream_api$request_uri; }
+    location = /health  { proxy_pass $upstream_api/health; }
+    location /auth      { proxy_pass $upstream_kc$request_uri; }
 }
