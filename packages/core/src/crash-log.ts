@@ -74,6 +74,18 @@ export function appendCrashMarker(dir: string, marker: CrashMarker): void {
   appendFileSync(join(dir, CRASH_FILE), `${JSON.stringify(marker)}\n`, 'utf8');
 }
 
+/** Parse newline-delimited JSON crash markers; empty lines are skipped and a torn/partial line is
+ *  dropped rather than throwing (a crash mid-append can leave the last line half-written). */
+function parseCrashLog(content: string): CrashMarker[] {
+  const markers: CrashMarker[] = [];
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try { markers.push(JSON.parse(trimmed) as CrashMarker); } catch { /* skip a torn/partial line */ }
+  }
+  return markers;
+}
+
 /** Read and clear all crash markers. The log is renamed first so a marker appended during the
  *  drain isn't lost; malformed lines are skipped rather than throwing. */
 export function drainCrashMarkers(dir: string): CrashMarker[] {
@@ -88,13 +100,7 @@ export function drainCrashMarkers(dir: string): CrashMarker[] {
   let content = '';
   try { content = readFileSync(archived, 'utf8'); } catch { content = ''; }
   try { rmSync(archived, { force: true }); } catch { /* leave it; next drain ignores it */ }
-  const markers: CrashMarker[] = [];
-  for (const line of content.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    try { markers.push(JSON.parse(trimmed) as CrashMarker); } catch { /* skip a torn/partial line */ }
-  }
-  return markers;
+  return parseCrashLog(content);
 }
 
 /** Read crash markers WITHOUT clearing them (used by the boot-time crash-loop check, which must
@@ -104,13 +110,7 @@ export function readCrashMarkers(dir: string): CrashMarker[] {
   if (!existsSync(file)) return [];
   let content = '';
   try { content = readFileSync(file, 'utf8'); } catch { return []; }
-  const markers: CrashMarker[] = [];
-  for (const line of content.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    try { markers.push(JSON.parse(trimmed) as CrashMarker); } catch { /* skip torn line */ }
-  }
-  return markers;
+  return parseCrashLog(content);
 }
 
 export interface CrashLoopVerdict {
@@ -132,7 +132,7 @@ export function detectCrashLoop(
   const recent = markers
     .filter((m) => m.kind !== 'crash.loop')
     .filter((m) => { const t = Date.parse(m.at); return Number.isFinite(t) && t >= cutoff; })
-    .sort((a, b) => a.at.localeCompare(b.at));
+    .sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
   return {
     tripped: recent.length >= opts.threshold,
     count: recent.length,
@@ -141,8 +141,13 @@ export function detectCrashLoop(
 }
 
 /** Normalize a crash into a stable fingerprint so a restart loop of the SAME crash coalesces.
- *  Volatile tokens (numbers, uuids, hex, ports, paths) are stripped so incidental differences
- *  (a changing IP or pid) don't fragment the group. */
+ *  Hex tokens and uuids are stripped, then a blanket `\d+` strip removes ALL remaining digits so a
+ *  changing IP, port, or pid doesn't fragment the group. That digit strip is deliberately coarse:
+ *  it also merges genuinely-distinct error classes that differ only by a number (e.g. HTTP "404" vs
+ *  "500", or "plugin v1" vs "plugin v2" — these hash identically). This is an intentional tradeoff
+ *  favoring loop-coalescing over fine-grained distinction — over-coalescing only makes the crash-loop
+ *  breaker MORE likely to trip, which is the safe direction. (Paths are not normalized as such; any
+ *  path collapsing is only a byproduct of the digit strip.) */
 export function crashFingerprint(kind: string, message: string, stack?: string): string {
   const topFrame = (stack ?? '').split('\n').find((l) => l.trim().startsWith('at ')) ?? '';
   const normalized = `${kind}|${message}|${topFrame}`
