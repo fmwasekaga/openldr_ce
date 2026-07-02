@@ -35,7 +35,8 @@
     "mssql:accept": "tsx scripts/mssql-live-acceptance.ts",
     "make:marketplace-bundle": "tsx scripts/make-marketplace-bundle.ts",
     "marketplace:accept": "tsx scripts/marketplace-live-acceptance.ts",
-    "init": "node scripts/init.mjs"
+    "init": "node scripts/init.mjs",
+    "publish:images": "bash scripts/build-and-push.sh"
   },
   "devDependencies": {
     "@inquirer/prompts": "^8.5.2",
