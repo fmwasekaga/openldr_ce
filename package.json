@@ -33,9 +33,11 @@
     "load:measure": "node scripts/load-measure.mjs",
     "mssql:accept": "tsx scripts/mssql-live-acceptance.ts",
     "make:marketplace-bundle": "tsx scripts/make-marketplace-bundle.ts",
-    "marketplace:accept": "tsx scripts/marketplace-live-acceptance.ts"
+    "marketplace:accept": "tsx scripts/marketplace-live-acceptance.ts",
+    "init": "node scripts/init.mjs"
   },
   "devDependencies": {
+    "@inquirer/prompts": "^8.5.2",
     "@types/node": "^22.10.0",
     "dependency-cruiser": "^16.4.0",
     "esbuild": "^0.24.0",
