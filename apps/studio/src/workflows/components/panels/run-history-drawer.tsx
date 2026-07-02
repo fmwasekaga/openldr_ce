@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, CheckCircle2, XCircle, Download } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, XCircle, Download, RefreshCw } from 'lucide-react';
 import {
   fetchWorkflowRuns,
   fetchWorkflowRun,
@@ -47,6 +47,8 @@ export function RunHistoryDrawer({ open, workflowId, onClose }: Props) {
   const [runs, setRuns] = useState<WorkflowRunSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
+  // Bump to re-run the list-load effect on demand (there's no live stream for recorded runs).
+  const [reloadKey, setReloadKey] = useState(0);
 
   const [selected, setSelected] = useState<WorkflowRunSummary | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -71,7 +73,7 @@ export function RunHistoryDrawer({ open, workflowId, onClose }: Props) {
       .then((res) => { if (active) { setRuns(res); setLoading(false); } })
       .catch(() => { if (active) { setError('Failed to load run history.'); setLoading(false); } });
     return () => { active = false; };
-  }, [open, workflowId, page, pageSize]);
+  }, [open, workflowId, page, pageSize, reloadKey]);
 
   const openRun = (run: WorkflowRunSummary) => {
     setSelected(run);
@@ -83,6 +85,12 @@ export function RunHistoryDrawer({ open, workflowId, onClose }: Props) {
       .finally(() => setDetailLoading(false));
   };
 
+  // Refresh: re-fetch the open run's detail, or reload the list when showing it.
+  const refresh = () => {
+    if (selected) openRun(selected);
+    else setReloadKey((k) => k + 1);
+  };
+
   const hasNext = runs.length > pageSize;
   const pageRuns = hasNext ? runs.slice(0, pageSize) : runs;
   // Synthesize a total just large enough to keep the pager's Next button live.
@@ -91,7 +99,18 @@ export function RunHistoryDrawer({ open, workflowId, onClose }: Props) {
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <SheetContent className="flex w-[600px] flex-col gap-0 p-0">
-        <SheetHeader className="border-b border-border px-4 py-3">
+        <SheetHeader className="relative border-b border-border px-4 py-3">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={refresh}
+            disabled={loading || detailLoading}
+            title="Refresh"
+            className="absolute right-11 top-2.5 h-7 w-7 text-muted-foreground hover:text-foreground"
+          >
+            <RefreshCw className={cn('h-4 w-4', (loading || detailLoading) && 'animate-spin')} />
+          </Button>
           <SheetTitle>
             {selected ? (
               <button
