@@ -28,6 +28,13 @@ describe('error catalog', () => {
     expect(err.message).toBe('field "patientId" is required');
   });
 
+  it('appError carries cause and details through', () => {
+    const cause = new Error('io');
+    const err = appError('RP0003', { cause, details: { id: 'x' } });
+    expect(err.cause).toBe(cause);
+    expect(err.details).toEqual({ id: 'x' });
+  });
+
   it('appError throws for an unknown code (programmer error)', () => {
     expect(() => appError('ZZ9999')).toThrow(/unknown error code/i);
   });
@@ -47,5 +54,10 @@ describe('error catalog', () => {
     expect(codeForUnknown(new ZodError([]))).toBe('SY0400');
     expect(codeForUnknown(new Error('connect ECONNREFUSED 127.0.0.1:5432'))).toBe('SY0503');
     expect(codeForUnknown(new Error('boom'))).toBe('SY0500');
+  });
+
+  it('codeForUnknown does not false-positive on connect-substring words', () => {
+    expect(codeForUnknown(new Error('reconnect attempt failed'))).toBe('SY0500');
+    expect(codeForUnknown(new Error('connection refused'))).toBe('SY0503');
   });
 });

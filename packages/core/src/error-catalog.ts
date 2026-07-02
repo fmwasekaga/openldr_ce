@@ -62,7 +62,7 @@ const ENTRIES: readonly CatalogEntry[] = [
 
 /** The assembled catalog, keyed by code. */
 export const CATALOG: Readonly<Record<string, CatalogEntry>> = Object.freeze(
-  Object.fromEntries(ENTRIES.map((e) => [e.code, e])),
+  Object.fromEntries(ENTRIES.map((e) => [e.code, Object.freeze(e)])),
 );
 
 /** A coded, HTTP-mapped application error. The central server error handler stamps correlationId. */
@@ -109,6 +109,6 @@ export function codeForUnknown(err: unknown): 'SY0400' | 'SY0500' | 'SY0503' {
     return 'SY0400';
   }
   const msg = err instanceof Error ? err.message : String(err);
-  if (/ECONNREFUSED|ETIMEDOUT|ENOTFOUND|connection|connect\b/i.test(msg)) return 'SY0503';
+  if (/ECONNREFUSED|ETIMEDOUT|ENOTFOUND|\bconnect(ion)?\b/i.test(msg)) return 'SY0503';
   return 'SY0500';
 }
