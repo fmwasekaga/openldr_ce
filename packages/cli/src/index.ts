@@ -17,6 +17,7 @@ import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, run
 import { runMarketVerify, runMarketInstall, runMarketList, runMarketRollback, runMarketEnable, runMarketDisable, runMarketRemove } from './market';
 import { runArtifactKeygen, runArtifactNew, runArtifactBuild, runArtifactPack, runArtifactSign, runArtifactTest, runArtifactPublish } from './artifact';
 import { runSettingsFlagsList, runSettingsFlagsSet, runSettingsDanger } from './settings';
+import { runErrorsList } from './errors';
 
 const program = new Command();
 program.name('openldr').description('OpenLDR CE operator CLI');
@@ -48,6 +49,13 @@ program
       await ctx?.close();
     }
   });
+
+const errors = program.command('errors').description('Error-code catalog');
+errors
+  .command('list')
+  .description('List the OpenLDR CE error codes (code, http status, message)')
+  .option('--json', 'emit machine-readable JSON', false)
+  .action((opts: { json: boolean }) => { process.exitCode = runErrorsList(opts); });
 
 const fhir = program.command('fhir').description('FHIR R4 utilities');
 fhir
