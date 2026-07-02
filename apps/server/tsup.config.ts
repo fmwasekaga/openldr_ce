@@ -6,11 +6,13 @@ export default defineConfig({
   target: 'node20',
   clean: true,
   noExternal: [/^@openldr\//],
-  // Native addons reachable only transitively (via @openldr/bootstrap → ssh2 for the SFTP/FTP
-  // node; cpu-features is ssh2's optional native speedup). They aren't in this package's own
-  // dependencies, so esbuild would try to BUNDLE them and fail resolving their prebuilt `.node`
-  // binaries. Keep them external — required from node_modules at runtime (pnpm deploy ships them).
-  external: ['ssh2', 'cpu-features'],
+  // Deps that must stay external — bundling them breaks runtime file resolution:
+  //  - ssh2 / cpu-features: native `.node` addons (via @openldr/bootstrap → SFTP node).
+  //  - pdfkit: loads its standard-font `.afm` metric files from disk at runtime (via
+  //    @openldr/report-pdf); bundled, those data files don't travel and every report PDF 500s.
+  // They aren't in this package's own dependencies, so we also declare them as direct deps
+  // (package.json) → pnpm deploy installs them intact in node_modules for the runtime require.
+  external: ['ssh2', 'cpu-features', 'pdfkit'],
   // tsup defaults removeNodeProtocol:true, which strips the "node:" prefix.
   // node:sqlite (Node 22+) has no bare "sqlite" fallback, so the stripped
   // import fails at runtime. Keep "node:sqlite" intact in the bundle output.

@@ -89,6 +89,9 @@ importers:
       fastify:
         specifier: ^5.2.0
         version: 5.8.5
+      pdfkit:
+        specifier: ^0.15.0
+        version: 0.15.2
       ssh2:
         specifier: ^1.17.0
         version: 1.17.0
