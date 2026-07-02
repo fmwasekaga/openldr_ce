@@ -1,10 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
 import Fastify from 'fastify';
 import { registerReportRoutes } from './reports-routes';
+import { registerErrorHandler } from './error-handler';
 import { ReportNotFoundError } from '@openldr/bootstrap';
 
 function appWith(reporting: unknown) {
   const app = Fastify();
+  registerErrorHandler(app);
   registerReportRoutes(app, { reporting } as never);
   return app;
 }
@@ -98,6 +100,7 @@ describe('report run history routes', () => {
     } as unknown as Parameters<typeof registerReportRoutes>[1];
 
     const app = Fastify();
+    registerErrorHandler(app);
     app.addHook('onRequest', async (req) => {
       (req as { user?: unknown }).user = { id: 'u1', username: 'ada', displayName: 'Ada', roles: [], status: 'active' };
     });
@@ -163,6 +166,7 @@ describe('report schedule routes', () => {
       reportScheduler: { runNow: () => {} },
     } as unknown as Parameters<typeof registerReportRoutes>[1];
     const app = Fastify();
+    registerErrorHandler(app);
     app.addHook('onRequest', async (req) => { (req as { user?: unknown }).user = { id: 'u1', username: 'ada', displayName: 'Ada', roles, status: 'active' }; });
     registerReportRoutes(app, ctx);
     return { app, created };
@@ -216,6 +220,7 @@ describe('report schedule-run routes', () => {
       blob: { get: async () => new TextEncoder().encode('a,b\n1,2') },
     } as unknown as Parameters<typeof registerReportRoutes>[1];
     const app = Fastify();
+    registerErrorHandler(app);
     app.addHook('onRequest', async (req) => { (req as { user?: unknown }).user = { id: 'u1', username: 'ada', displayName: 'Ada', roles: ['lab_technician'], status: 'active' }; });
     registerReportRoutes(app, ctx);
     return { app };

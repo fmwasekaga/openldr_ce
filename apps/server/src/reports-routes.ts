@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z, ZodError } from 'zod';
 import { ReportNotFoundError, type AppContext } from '@openldr/bootstrap';
 import { toCsv, nextRunAt, type ScheduleFrequency } from '@openldr/reporting';
+import { appError } from '@openldr/core';
 import { requireRole } from './rbac';
 
 const runBeaconBody = z.object({
@@ -92,10 +93,7 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
       return mapError(err, reply);
     }
     const def = ctx.reporting.list().find((r) => r.id === id);
-    if (!def) {
-      reply.code(404);
-      return { error: `report not found: ${id}` };
-    }
+    if (!def) throw appError('RP0002', { message: `report not found: ${id}` });
     const user = req.user;
     await ctx.reportRuns.record({
       reportId: id,
@@ -124,7 +122,7 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
     const { id } = req.params as { id: string };
     let body: z.infer<typeof scheduleCreate>;
     try { body = scheduleCreate.parse(req.body); } catch (err) { return mapError(err, reply); }
-    if (!ctx.reporting.list().find((r) => r.id === id)) { reply.code(404); return { error: `report not found: ${id}` }; }
+    if (!ctx.reporting.list().find((r) => r.id === id)) throw appError('RP0002', { message: `report not found: ${id}` });
     const sid = randomUUID();
     const nextDueAt = nextRunAt(body.frequency as ScheduleFrequency, body.dayOfWeek ?? null, body.dayOfMonth ?? null, new Date());
     await ctx.reportSchedules.create({
@@ -142,7 +140,7 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
     let body: z.infer<typeof schedulePatch>;
     try { body = schedulePatch.parse(req.body); } catch (err) { return mapError(err, reply); }
     const existing = await ctx.reportSchedules.get(sid);
-    if (!existing) { reply.code(404); return { error: `schedule not found: ${sid}` }; }
+    if (!existing) throw appError('RP0002', { message: `schedule not found: ${sid}` });
     const timingChanged = body.frequency !== undefined || body.dayOfWeek !== undefined || body.dayOfMonth !== undefined;
     const nextDueAt = timingChanged
       ? nextRunAt((body.frequency ?? existing.frequency) as ScheduleFrequency,
@@ -196,17 +194,12 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
   });
 }
 
-function mapError(err: unknown, reply: FastifyReply): { error: string } {
-  if (err instanceof ReportNotFoundError) {
-    reply.code(404);
-    return { error: err.message };
-  }
-  if (err instanceof ZodError) {
-    reply.code(400);
-    return { error: 'invalid parameters' };
-  }
-  const msg = err instanceof Error ? err.message : String(err);
-  const isConn = /ECONNREFUSED|ETIMEDOUT|connection|connect/i.test(msg);
-  reply.code(isConn ? 503 : 500);
-  return { error: msg };
+// Reports-specific error mapping: turn the known reports failures into catalog codes and throw
+// so the central error handler renders them uniformly ({ error, code, correlationId }). Anything
+// else re-throws unchanged and is classified as a SY#### fallback by the central handler.
+function mapError(err: unknown, reply: FastifyReply): never {
+  void reply; // status now comes from the AppError via the central handler
+  if (err instanceof ReportNotFoundError) throw appError('RP0002', { message: err.message, cause: err });
+  if (err instanceof ZodError) throw appError('RP0004', { cause: err });
+  throw err;
 }
