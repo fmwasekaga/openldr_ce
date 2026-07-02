@@ -7,9 +7,8 @@ import type { Workflow } from './types';
 //
 //   Inbound  (wf-sample, DISABLED):
 //     Webhook (POST /api/workflows/hooks/lab-orders, X-Webhook-Token)
-//       → Code "Unwrap request body"  (webhook delivers {method,body,headers,query};
-//                                       Form Validate wants the answers themselves)
-//       → Form Validate (Lab order form → ServiceRequest)
+//       → Form Validate (Lab order form → ServiceRequest; sourcePath 'body' unwraps
+//                        the webhook envelope {method,body,headers,query} → answers)
 //       → Persist Store (source: webhook-lab-orders → emits data.persisted)
 //       → Log
 //
@@ -62,25 +61,13 @@ export function buildDefaultWorkflows({ orderFormId, webhookSecret }: DefaultWor
           },
         },
         {
-          id: 'unwrap-1',
-          type: 'code',
-          position: { x: 300, y: 220 },
-          data: {
-            label: 'Unwrap request body',
-            code: 'return $json.body ?? $json;',
-            language: 'javascript',
-            templateId: 'code',
-            iconName: 'Code',
-          },
-        },
-        {
           id: 'form-validate-1',
           type: 'action',
           position: { x: 540, y: 220 },
           data: {
             label: 'Validate lab order',
             action: 'form-validate',
-            config: { formId: orderFormId },
+            config: { formId: orderFormId, sourcePath: 'body' },
             templateId: 'form-validate',
             iconName: 'ClipboardCheck',
           },
@@ -113,10 +100,9 @@ export function buildDefaultWorkflows({ orderFormId, webhookSecret }: DefaultWor
         },
       ],
       edges: [
-        { id: 'e1', source: 'trigger-1', target: 'unwrap-1' },
-        { id: 'e2', source: 'unwrap-1', target: 'form-validate-1' },
-        { id: 'e3', source: 'form-validate-1', target: 'persist-1' },
-        { id: 'e4', source: 'persist-1', target: 'log-1' },
+        { id: 'e1', source: 'trigger-1', target: 'form-validate-1' },
+        { id: 'e2', source: 'form-validate-1', target: 'persist-1' },
+        { id: 'e3', source: 'persist-1', target: 'log-1' },
       ],
     },
   };

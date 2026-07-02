@@ -42,6 +42,34 @@ describe('formValidateHandler', () => {
       formValidateHandler({ id: 'fv', type: 'action', data: { action: 'form-validate', config: { formId: 'x' } } }, ctx, []),
     ).rejects.toThrow(/validateForm service not injected/);
   });
+
+  it('reads answers from config.sourcePath when set (unwraps a webhook envelope body)', async () => {
+    const validateForm = vi.fn(async ({ formId, items }: { formId: string; items: WorkflowItem[] }) => ({
+      items: [],
+      meta: { formId, validated: items.length, invalid: [] },
+    }));
+    const ctx = createContext(undefined, () => {}, [], undefined, { validateForm } as unknown as WorkflowServices);
+    await formValidateHandler(
+      { id: 'fv', type: 'action', data: { action: 'form-validate', config: { formId: 'form-1', sourcePath: 'body' } } },
+      ctx,
+      [{ json: { method: 'POST', body: { patient: 'Patient/1' }, headers: {}, query: {} } }],
+    );
+    expect(validateForm).toHaveBeenCalledWith({ formId: 'form-1', items: [{ json: { patient: 'Patient/1' } }] });
+  });
+
+  it('falls back to empty answers when the sourcePath is missing or non-object', async () => {
+    const validateForm = vi.fn(async ({ formId, items }: { formId: string; items: WorkflowItem[] }) => ({
+      items: [],
+      meta: { formId, validated: 0, invalid: [] },
+    }));
+    const ctx = createContext(undefined, () => {}, [], undefined, { validateForm } as unknown as WorkflowServices);
+    await formValidateHandler(
+      { id: 'fv', type: 'action', data: { action: 'form-validate', config: { formId: 'form-1', sourcePath: 'body' } } },
+      ctx,
+      [{ json: { method: 'POST' } }],
+    );
+    expect(validateForm).toHaveBeenCalledWith({ formId: 'form-1', items: [{ json: {} }] });
+  });
 });
 
 describe('persistStoreHandler', () => {

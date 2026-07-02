@@ -19,7 +19,7 @@ describe('buildDefaultWorkflows', () => {
 
   it('injects the form id onto the Form Validate node', () => {
     const fv = inbound.definition.nodes.find((n) => n.data.action === 'form-validate');
-    expect(fv?.data.config).toMatchObject({ formId: 'form-xyz' });
+    expect(fv?.data.config).toMatchObject({ formId: 'form-xyz', sourcePath: 'body' });
   });
 
   it('injects the secret + path + method onto the webhook node', () => {
@@ -34,11 +34,10 @@ describe('buildDefaultWorkflows', () => {
     expect(evt?.data.config).toMatchObject({ source: 'webhook-lab-orders' });
   });
 
-  it('connects the inbound chain trigger→unwrap→validate→persist→log', () => {
+  it('connects the inbound chain trigger→validate→persist→log', () => {
     const hops = inbound.definition.edges.map((e) => `${e.source}->${e.target}`);
     expect(hops).toEqual([
-      'trigger-1->unwrap-1',
-      'unwrap-1->form-validate-1',
+      'trigger-1->form-validate-1',
       'form-validate-1->persist-1',
       'persist-1->log-1',
     ]);

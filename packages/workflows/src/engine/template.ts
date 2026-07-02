@@ -24,7 +24,7 @@ const NODE_CALL_RE = /^\$node\(\s*['"]([^'"]+)['"]\s*\)(.*)$/;
  * Walk a dot-path (possibly starting with `.`) against an arbitrary JS value.
  * Returns `undefined` if any segment is missing.
  */
-function readPath(value: unknown, path: string): unknown {
+export function readPath(value: unknown, path: string): unknown {
   if (!path) return value;
   const segments = path.replace(/^\./, '').split('.').filter(Boolean);
   let current: unknown = value;
