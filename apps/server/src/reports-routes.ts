@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { z, ZodError } from 'zod';
 import { ReportNotFoundError, type AppContext } from '@openldr/bootstrap';
 import { toCsv, nextRunAt, type ScheduleFrequency } from '@openldr/reporting';
@@ -47,7 +47,7 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
       reply.header('content-type', 'text/csv').header('content-disposition', `attachment; filename="${id}.csv"`);
       return toCsv(result.columns, result.rows);
     } catch (err) {
-      return mapError(err, reply);
+      rethrowAsAppError(err);
     }
   });
 
@@ -56,7 +56,7 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
       const result = await ctx.reporting.run('amr-glass-ris', req.query as Record<string, unknown>);
       reply.header('content-type', 'text/csv').header('content-disposition', 'attachment; filename="glass-ris.csv"');
       return toCsv(result.columns, result.rows);
-    } catch (err) { return mapError(err, reply); }
+    } catch (err) { rethrowAsAppError(err); }
   });
 
   app.get('/api/reports/:id.pdf', async (req, reply) => {
@@ -65,7 +65,7 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
       const buf = await ctx.reporting.renderPdf(id, req.query);
       reply.header('content-type', 'application/pdf').header('content-disposition', `attachment; filename="${id}.pdf"`);
       return reply.send(buf);
-    } catch (err) { return mapError(err, reply); }
+    } catch (err) { rethrowAsAppError(err); }
   });
 
   app.get('/api/reports/:id/options', async (req, reply) => {
@@ -73,7 +73,7 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
     try {
       return await ctx.reporting.options(id);
     } catch (err) {
-      return mapError(err, reply);
+      rethrowAsAppError(err);
     }
   });
 
@@ -90,7 +90,7 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
     try {
       body = runBeaconBody.parse(req.body);
     } catch (err) {
-      return mapError(err, reply);
+      rethrowAsAppError(err);
     }
     const def = ctx.reporting.list().find((r) => r.id === id);
     if (!def) throw appError('RP0002', { message: `report not found: ${id}` });
@@ -121,7 +121,7 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
   app.post('/api/reports/:id/schedules', MANAGE, async (req, reply) => {
     const { id } = req.params as { id: string };
     let body: z.infer<typeof scheduleCreate>;
-    try { body = scheduleCreate.parse(req.body); } catch (err) { return mapError(err, reply); }
+    try { body = scheduleCreate.parse(req.body); } catch (err) { rethrowAsAppError(err); }
     if (!ctx.reporting.list().find((r) => r.id === id)) throw appError('RP0002', { message: `report not found: ${id}` });
     const sid = randomUUID();
     const nextDueAt = nextRunAt(body.frequency as ScheduleFrequency, body.dayOfWeek ?? null, body.dayOfMonth ?? null, new Date());
@@ -138,7 +138,7 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
   app.patch('/api/reports/schedules/:sid', MANAGE, async (req, reply) => {
     const { sid } = req.params as { sid: string };
     let body: z.infer<typeof schedulePatch>;
-    try { body = schedulePatch.parse(req.body); } catch (err) { return mapError(err, reply); }
+    try { body = schedulePatch.parse(req.body); } catch (err) { rethrowAsAppError(err); }
     const existing = await ctx.reportSchedules.get(sid);
     if (!existing) throw appError('RP0002', { message: `schedule not found: ${sid}` });
     const timingChanged = body.frequency !== undefined || body.dayOfWeek !== undefined || body.dayOfMonth !== undefined;
@@ -189,7 +189,7 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
     try {
       return await ctx.reporting.run(id, req.query);
     } catch (err) {
-      return mapError(err, reply);
+      rethrowAsAppError(err);
     }
   });
 }
@@ -197,9 +197,11 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
 // Reports-specific error mapping: turn the known reports failures into catalog codes and throw
 // so the central error handler renders them uniformly ({ error, code, correlationId }). Anything
 // else re-throws unchanged and is classified as a SY#### fallback by the central handler.
-function mapError(err: unknown, reply: FastifyReply): never {
-  void reply; // status now comes from the AppError via the central handler
+function rethrowAsAppError(err: unknown): never {
   if (err instanceof ReportNotFoundError) throw appError('RP0002', { message: err.message, cause: err });
-  if (err instanceof ZodError) throw appError('RP0004', { cause: err });
+  if (err instanceof ZodError) {
+    const fields = err.issues.map((i) => i.path.join('.') || '(root)').join(', ');
+    throw appError('RP0004', { message: `invalid report parameters: ${fields}`, details: err.flatten(), cause: err });
+  }
   throw err;
 }

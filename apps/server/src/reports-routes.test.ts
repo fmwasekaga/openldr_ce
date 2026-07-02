@@ -37,13 +37,17 @@ describe('report routes', () => {
     const app = appWith({ list: vi.fn(), run: vi.fn(async () => { throw new ReportNotFoundError('nope'); }) });
     const res = await app.inject({ method: 'GET', url: '/api/reports/nope' });
     expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe('RP0002');
   });
 
-  it('400 on invalid params (ZodError)', async () => {
+  it('400 on invalid params (ZodError) surfaces code + offending field', async () => {
     const { ZodError } = await import('zod');
-    const app = appWith({ list: vi.fn(), run: vi.fn(async () => { throw new ZodError([]); }) });
+    const issue = { code: 'custom' as const, path: ['from'], message: 'Required' };
+    const app = appWith({ list: vi.fn(), run: vi.fn(async () => { throw new ZodError([issue]); }) });
     const res = await app.inject({ method: 'GET', url: '/api/reports/amr-resistance' });
     expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('RP0004');
+    expect(res.json().error).toContain('from');
   });
 
   it('503 on connection failure', async () => {
