@@ -121,9 +121,14 @@ export function createAuth(cfg: AuthConfig, deps: AuthDeps = {}): AuthPort {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 3000);
         try {
-          const res = await fetchFn(discoveryUrl, { signal: controller.signal });
-          if (!res.ok) throw new Error(`OIDC discovery returned ${res.status}`);
-          return 'OIDC issuer reachable';
+          // Probe the SAME endpoint token validation actually depends on: when an internal
+          // (back-channel) JWKS URL is configured, the public issuer is only reachable via the
+          // gateway — NOT from inside the app container (where its host resolves to itself). Use
+          // the internal JWKS URL so the probe reflects real auth readiness over the private network.
+          const probeUrl = cfg.internalJwksUrl ?? discoveryUrl;
+          const res = await fetchFn(probeUrl, { signal: controller.signal });
+          if (!res.ok) throw new Error(`OIDC ${cfg.internalJwksUrl ? 'JWKS' : 'discovery'} returned ${res.status}`);
+          return cfg.internalJwksUrl ? 'OIDC JWKS reachable (internal)' : 'OIDC issuer reachable';
         } finally {
           clearTimeout(timer);
         }

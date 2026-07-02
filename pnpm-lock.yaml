@@ -83,9 +83,15 @@ importers:
       adm-zip:
         specifier: ^0.5.16
         version: 0.5.17
+      cpu-features:
+        specifier: ^0.0.10
+        version: 0.0.10
       fastify:
         specifier: ^5.2.0
         version: 5.8.5
+      ssh2:
+        specifier: ^1.17.0
+        version: 1.17.0
       zod:
         specifier: ^3.24.1
         version: 3.25.76
@@ -8965,8 +8971,7 @@ snapshots:
       base64-js: 1.5.1
       ieee754: 1.2.1
 
-  buildcheck@0.0.7:
-    optional: true
+  buildcheck@0.0.7: {}
 
   bundle-name@4.1.0:
     dependencies:
@@ -9139,7 +9144,6 @@ snapshots:
     dependencies:
       buildcheck: 0.0.7
       nan: 2.28.0
-    optional: true
 
   crc-32@1.2.2: {}
 
@@ -10763,8 +10767,7 @@ snapshots:
     dependencies:
       lru.min: 1.1.4
 
-  nan@2.28.0:
-    optional: true
+  nan@2.28.0: {}
 
   nanoid@3.3.12: {}
 

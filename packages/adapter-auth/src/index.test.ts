@@ -24,6 +24,17 @@ describe('createAuth', () => {
     expect(r.status).toBe('down');
     expect(r.detail).toContain('404');
   });
+
+  it('with internalJwksUrl: health probes the internal JWKS url, not the public discovery', async () => {
+    const internalJwks = 'http://keycloak:8080/auth/realms/openldr/protocol/openid-connect/certs';
+    const fetchFn = vi.fn(async () => ({ ok: true, status: 200 }) as Response);
+    const auth = createAuth({ issuerUrl: 'https://host/auth/realms/openldr', internalJwksUrl: internalJwks }, { fetchFn });
+    const r = await auth.healthCheck();
+    expect(r.status).toBe('up');
+    expect(r.detail).toContain('internal');
+    expect(fetchFn).toHaveBeenCalledWith(internalJwks, expect.anything());
+    expect(fetchFn).not.toHaveBeenCalledWith(expect.stringContaining('.well-known'), expect.anything());
+  });
 });
 
 async function localKeySet(): Promise<{ sign: (claims: Record<string, unknown>, opts?: { iss?: string; aud?: string; exp?: string; sub?: string | null }) => Promise<string>; keySet: JWTVerifyGetKey }> {

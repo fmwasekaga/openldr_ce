@@ -3,6 +3,10 @@ packages:
   - 'packages/*'
   - 'wasm/dhis2-sink/ui'
   - 'e2e'
+# Allow the pinned SheetJS `xlsx` URL tarball (packages/{workflows,bootstrap}) to resolve as a
+# sub-dependency during `pnpm deploy` (production Docker build). pnpm 10+ blocks URL-resolved
+# subdeps by default; our only exotic dep is xlsx, pinned + integrity-hashed in the lockfile.
+blockExoticSubdeps: false
 allowBuilds:
   esbuild: true
   '@extism/extism': true

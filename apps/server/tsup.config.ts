@@ -6,6 +6,11 @@ export default defineConfig({
   target: 'node20',
   clean: true,
   noExternal: [/^@openldr\//],
+  // Native addons reachable only transitively (via @openldr/bootstrap → ssh2 for the SFTP/FTP
+  // node; cpu-features is ssh2's optional native speedup). They aren't in this package's own
+  // dependencies, so esbuild would try to BUNDLE them and fail resolving their prebuilt `.node`
+  // binaries. Keep them external — required from node_modules at runtime (pnpm deploy ships them).
+  external: ['ssh2', 'cpu-features'],
   // tsup defaults removeNodeProtocol:true, which strips the "node:" prefix.
   // node:sqlite (Node 22+) has no bare "sqlite" fallback, so the stripped
   // import fails at runtime. Keep "node:sqlite" intact in the bundle output.
