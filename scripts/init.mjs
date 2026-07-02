@@ -74,9 +74,12 @@ async function main() {
   else if (plan.kind === 'copy') for (const f of plan.files) copyFileSync(f.from, f.to);
   else if (plan.kind === 'certbot') {
     // nginx must have a cert to start on :443, but certbot needs nginx (webroot) to issue the real
-    // one — so bootstrap with a self-signed placeholder now; `pnpm run cert` swaps in the LE cert.
-    execSync(planCerts({ tlsMode: 'self-signed', host }).command, { stdio: 'inherit' });
-    console.log(`  Let's Encrypt selected: after this comes up, run \`pnpm run cert\` (ensure DNS for ${plan.domain} points here and port 80 is reachable).`);
+    // one — so bootstrap with a self-signed placeholder. Only when NO cert exists yet, so re-running
+    // init never clobbers an already-issued Let's Encrypt cert. `pnpm run cert` installs the real one.
+    if (!existsSync('deploy/nginx/certs/fullchain.pem')) {
+      execSync(planCerts({ tlsMode: 'self-signed', host }).command, { stdio: 'inherit' });
+    }
+    console.log(`  Let's Encrypt selected: once up, run \`pnpm run cert\` (idempotent — it won't re-issue while a valid cert exists, so it's rate-limit safe). Ensure DNS for ${plan.domain} points here and port 80 is reachable.`);
   }
 
   console.log('\nLaunching the stack…');
