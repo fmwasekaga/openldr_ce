@@ -3,6 +3,8 @@
 #   curl -fsSL https://raw.githubusercontent.com/fmwasekaga/openldr_ce/main/install/install.sh | bash
 # Flags: --dir <path> (default ./openldr), --version <tag> (default latest),
 #        --server-name <host> (default localhost — the public hostname/domain),
+#        --letsencrypt <email> (issue a trusted Let's Encrypt cert for --server-name),
+#        --staging (use the LE staging CA — for testing, avoids rate limits),
 #        --no-start (scaffold + config only), --no-pull (skip image pull).
 set -eu
 
@@ -10,6 +12,8 @@ REPO_RAW="https://raw.githubusercontent.com/fmwasekaga/openldr_ce/main"
 DIR="./openldr"
 VERSION="latest"
 HOST="localhost"
+LE_EMAIL=""
+LE_STAGING=""
 NO_START=0
 NO_PULL=0
 
@@ -18,6 +22,8 @@ while [ $# -gt 0 ]; do
     --dir) DIR="$2"; shift 2 ;;
     --version) VERSION="$2"; shift 2 ;;
     --server-name) HOST="$2"; shift 2 ;;
+    --letsencrypt) LE_EMAIL="$2"; shift 2 ;;
+    --staging) LE_STAGING=1; shift ;;
     --no-start) NO_START=1; shift ;;
     --no-pull) NO_PULL=1; shift ;;
     *) echo "unknown flag: $1" >&2; exit 2 ;;
@@ -26,6 +32,13 @@ done
 ORIGIN="https://$HOST"
 
 err() { echo "✗ $1" >&2; exit 1; }
+
+# Let's Encrypt needs a public hostname reachable over :80 — reject localhost / bare IPs.
+if [ -n "$LE_EMAIL" ]; then
+  if [ "$HOST" = "localhost" ] || echo "$HOST" | grep -qE '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
+    err "--letsencrypt needs a public --server-name (a domain), not localhost or an IP."
+  fi
+fi
 
 # 1. Preflight
 command -v docker >/dev/null 2>&1 || err "Docker is not installed. See https://docs.docker.com/get-docker/"
@@ -39,6 +52,8 @@ fetch() { curl -fsSL "$REPO_RAW/$1" -o "$2" || err "failed to download $1"; }
 fetch "deploy/install/docker-compose.yml" "$DIR/docker-compose.yml"
 fetch "infra/keycloak/openldr-realm.json" "$DIR/config/keycloak/openldr-realm.json"
 fetch "scripts/init-target-db.sql" "$DIR/config/init-target-db.sql"
+fetch "deploy/install/renew-cert.sh" "$DIR/renew-cert.sh"
+chmod +x "$DIR/renew-cert.sh" 2>/dev/null || true
 
 # Register this deploy's origin as a valid OIDC redirect so studio login works behind the
 # gateway. The shipped realm lists localhost + dev URLs; a non-localhost host (or https://localhost)
@@ -86,6 +101,7 @@ KEYCLOAK_ADMIN_PASSWORD=$KC_PW
 SECRETS_ENCRYPTION_KEY=$SECRETS_KEY
 MIGRATE_ON_START=true
 SEED_ON_START=true
+LETSENCRYPT_EMAIL=$LE_EMAIL
 MARKETPLACE_REGISTRY_URL=https://raw.githubusercontent.com/fmwasekaga/openldr-ce-marketplace/main
 EOF
   echo "→ Wrote $DIR/.env (generated secrets)"
@@ -109,10 +125,41 @@ fi
 cd "$DIR"
 [ "$NO_PULL" -eq 1 ] || docker compose pull
 docker compose up -d
+
+# Let's Encrypt: the stack is up (nginx serving the http-01 webroot on :80). Issue a trusted cert,
+# install it where the gateway reads it, reload, and wire up auto-renewal. Non-fatal: on failure the
+# stack stays up on the self-signed cert.
+if [ -n "$LE_EMAIL" ]; then
+  echo "→ Requesting Let's Encrypt cert for $HOST ${LE_STAGING:+(staging)}..."
+  # give nginx a moment to be ready to serve the challenge
+  i=0; while [ "$i" -lt 12 ]; do curl -fsS -o /dev/null "http://localhost/.well-known/acme-challenge/" 2>/dev/null && break; i=$((i+1)); sleep 2; done
+  if docker compose --profile letsencrypt run --rm --entrypoint certbot certbot \
+       certonly --webroot -w /var/www/certbot -d "$HOST" --email "$LE_EMAIL" \
+       --agree-tos --no-eff-email --keep-until-expiring --non-interactive ${LE_STAGING:+--staging}; then
+    docker compose --profile letsencrypt run --rm --entrypoint sh certbot -c \
+      "cp /etc/letsencrypt/live/$HOST/fullchain.pem /certs-out/fullchain.pem && cp /etc/letsencrypt/live/$HOST/privkey.pem /certs-out/privkey.pem"
+    docker compose exec gateway nginx -s reload
+    echo "✓ Trusted cert installed for $ORIGIN"
+    ABS_DIR="$(pwd)"
+    if [ "$(id -u)" = "0" ]; then
+      printf '0 3,15 * * * root cd %s && sh renew-cert.sh >> /var/log/openldr-cert.log 2>&1\n' "$ABS_DIR" > /etc/cron.d/openldr-cert
+      chmod 0644 /etc/cron.d/openldr-cert
+      echo "→ Installed auto-renewal cron: /etc/cron.d/openldr-cert"
+    else
+      echo "! Not root — add this to your crontab (crontab -e) for auto-renewal:"
+      echo "  0 3,15 * * * cd $ABS_DIR && sh renew-cert.sh >> /tmp/openldr-cert.log 2>&1"
+    fi
+  else
+    echo "! Let's Encrypt issuance failed (DNS not pointing at this host yet? port 80 blocked?)."
+    echo "  The stack is UP on the self-signed cert. Once DNS/ports are ready, re-run the installer"
+    echo "  with the same --server-name $HOST --letsencrypt $LE_EMAIL to retry."
+  fi
+fi
+
 echo ""
 echo "✓ OpenLDR is starting. Open $ORIGIN"
 echo "  Keycloak admin password: $(grep '^KEYCLOAK_ADMIN_PASSWORD=' .env | cut -d= -f2)"
 echo ""
-echo "  For a public domain, install with: --server-name your.domain.com"
-echo "  For trusted TLS, drop fullchain.pem + privkey.pem into config/nginx/certs/"
-echo "  (the generated cert is self-signed) and re-run: docker compose up -d"
+echo "  Public domain + trusted TLS in one shot:"
+echo "    install.sh --server-name your.domain.com --letsencrypt you@email.com"
+echo "  (add --staging first to test without hitting Let's Encrypt rate limits)"
