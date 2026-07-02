@@ -90,7 +90,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   edges: sampleEdges,
   selectedNodeId: null,
   configNodeId: null,
-  workflowName: 'Sample Workflow',
+  workflowName: 'Untitled workflow',
   workflowId: null,
   nodeRunStatus: {},
   nodeRunError: {},
