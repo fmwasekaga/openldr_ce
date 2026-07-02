@@ -4,12 +4,18 @@ param(
   [string]$Dir = "./openldr",
   [string]$Version = "latest",
   [string]$ServerName = "localhost",
+  [string]$Letsencrypt = "",
   [switch]$NoStart,
   [switch]$NoPull
 )
 $ErrorActionPreference = "Stop"
 $RepoRaw = "https://raw.githubusercontent.com/fmwasekaga/openldr_ce/main"
 $Origin = "https://$ServerName"
+if ($Letsencrypt) {
+  Write-Host "! Let's Encrypt is only automated by the Linux installer (install.sh --letsencrypt)."
+  Write-Host "  On Windows the cert is self-signed; for public TLS run install.sh on the server, or"
+  Write-Host "  drop a real fullchain.pem + privkey.pem into $Dir/config/nginx/certs/ and restart."
+}
 
 function Die($m) { Write-Error "X $m"; exit 1 }
 
