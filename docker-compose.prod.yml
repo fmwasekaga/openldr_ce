@@ -1,13 +1,15 @@
-# Single-HTTPS-port production stack: nginx (TLS) gateway -> landing + app (studio SPA + API)
-# + Keycloak (under /auth) + backing services. Only nginx publishes host ports.
+# Single-HTTPS-port production stack: gateway (TLS) -> web (landing) + studio (SPA) + api
+# + Keycloak (under /auth) + backing services. Only gateway publishes host ports.
 # Usage:
 #   pnpm run init            # interactive: writes .env.prod + certs, brings this up
 #   # or manually:
 #   cp .env.prod.example .env.prod && edit; sh deploy/nginx/gen-selfsigned.sh localhost
 #   docker compose -f docker-compose.prod.yml up -d --build
 services:
-  app:
-    build: .
+  api:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
     env_file: .env.prod
     expose: ["3000"]
     depends_on:
@@ -16,14 +18,21 @@ services:
       keycloak: { condition: service_started }
     restart: unless-stopped
 
-  landing:
+  studio:
+    build:
+      context: .
+      dockerfile: apps/studio/Dockerfile
+    expose: ["80"]
+    restart: unless-stopped
+
+  web:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
     expose: ["80"]
     restart: unless-stopped
 
-  nginx:
+  gateway:
     image: nginx:1.27-alpine
     environment:
       SERVER_NAME: ${SERVER_NAME:-localhost}
@@ -36,7 +45,7 @@ services:
       - ./deploy/nginx/openldr.conf.template:/etc/nginx/templates/default.conf.template:ro
       - ./deploy/nginx/certs:/etc/nginx/certs:ro
       - certbot-www:/var/www/certbot
-    depends_on: ["app", "landing", "keycloak"]
+    depends_on: ["api", "studio", "web", "keycloak"]
     restart: unless-stopped
 
   # Let's Encrypt helper (profile-gated: does NOT start with `up`). Invoked ad-hoc by
