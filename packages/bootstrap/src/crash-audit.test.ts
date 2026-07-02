@@ -72,6 +72,15 @@ describe('drainCrashMarkersToAudit', () => {
     expect(recorded).toHaveLength(0);
   });
 
+  it('maps a crash.loop marker to a system.crash_loop row', async () => {
+    appendCrashMarker(dir, { at: 't', kind: 'crash.loop', error: 'restart loop', fingerprint: 'fp-loop', inFlight: [] });
+    const { store, recorded } = fakeAudit();
+    await drainCrashMarkersToAudit({ dir, audit: store, logger });
+    expect(recorded[0].action).toBe('system.crash_loop');
+    expect(recorded[0].entityType).toBe('system');
+    expect(recorded[0].entityId).toBe('process');
+  });
+
   it('coalesces identical-fingerprint markers into one row with a count', async () => {
     // three identical crashes + one distinct
     appendCrashMarker(dir, buildCrashMarker('uncaughtException', new Error('DB pool exhausted')));

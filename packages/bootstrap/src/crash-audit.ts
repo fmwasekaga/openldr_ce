@@ -21,12 +21,14 @@ export async function drainCrashMarkersToAudit(opts: { dir: string; audit: Audit
   // an occurrence count + first/last-seen span, instead of thousands of near-identical rows.
   const groups = new Map<string, typeof markers>();
   for (const m of markers) {
+    // fingerprint is always set by buildCrashMarker; the fallback only guards legacy/malformed
+    // on-disk markers parsed loosely from the crash log.
     const key = m.fingerprint ?? `${m.kind}:${m.error}`;
     const g = groups.get(key);
     if (g) g.push(m); else groups.set(key, [m]);
   }
   for (const group of groups.values()) {
-    const sorted = [...group].sort((a, b) => a.at.localeCompare(b.at));
+    const sorted = [...group].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
     const rep = sorted[sorted.length - 1]; // most recent as representative
     const culprit = rep.inFlight[0];
     const isLoop = rep.kind === 'crash.loop';
