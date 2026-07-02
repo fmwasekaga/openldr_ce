@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { AppError, CATALOG, appError, catalogFor, domainForPrefix, codeForUnknown } from './error-catalog';
+import { AppError, CATALOG, DOMAINS, appError, catalogFor, domainForPrefix, codeForUnknown } from './error-catalog';
 import { ZodError } from 'zod';
 
 describe('error catalog', () => {
@@ -12,6 +12,14 @@ describe('error catalog', () => {
       expect(CATALOG[code].httpStatus).toBeGreaterThanOrEqual(400);
     }
     expect(new Set(codes).size).toBe(codes.length);
+  });
+
+  it('every code prefix maps to a known domain', () => {
+    for (const entry of Object.values(CATALOG)) {
+      const prefix = entry.code.replace(/\d+$/, '');
+      expect(DOMAINS[prefix], `prefix ${prefix} missing from DOMAINS`).toBeDefined();
+      expect(entry.domain).toBe(DOMAINS[prefix]);
+    }
   });
 
   it('appError builds an AppError from the catalog', () => {
