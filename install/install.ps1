@@ -3,11 +3,13 @@
 param(
   [string]$Dir = "./openldr",
   [string]$Version = "latest",
+  [string]$ServerName = "localhost",
   [switch]$NoStart,
   [switch]$NoPull
 )
 $ErrorActionPreference = "Stop"
 $RepoRaw = "https://raw.githubusercontent.com/fmwasekaga/openldr_ce/main"
+$Origin = "https://$ServerName"
 
 function Die($m) { Write-Error "X $m"; exit 1 }
 
@@ -23,6 +25,17 @@ function Fetch($rel, $out) { Invoke-WebRequest -UseBasicParsing "$RepoRaw/$rel" 
 Fetch "deploy/install/docker-compose.yml" "$Dir/docker-compose.yml"
 Fetch "infra/keycloak/openldr-realm.json" "$Dir/config/keycloak/openldr-realm.json"
 Fetch "scripts/init-target-db.sql" "$Dir/config/init-target-db.sql"
+
+# Register this deploy's origin as a valid OIDC redirect so studio login works behind the gateway.
+# The shipped realm lists localhost + dev URLs; a non-localhost host (or https://localhost) must be
+# added or Keycloak rejects the /studio/auth/callback redirect. webOrigins is already "+".
+$realmPath = "$Dir/config/keycloak/openldr-realm.json"
+$realm = Get-Content $realmPath -Raw
+if ($realm -notmatch [regex]::Escape("`"$Origin/*`"")) {
+  $realm = $realm -replace '"redirectUris":\s*\[', "`"redirectUris`": [`"$Origin/*`", "
+  Set-Content -Path $realmPath -Value $realm -Encoding ascii
+  Write-Host "-> Registered $Origin/* as an OIDC redirect in the realm"
+}
 
 # 3. Secrets + cert (never overwrite an existing .env)
 # Use a cryptographic RNG (Get-Random is a clock-seeded PRNG, unfit for secrets)
@@ -43,8 +56,8 @@ if (-not (Test-Path $envPath)) {
   $secretsKey = [Convert]::ToBase64String($secretBytes)
   @"
 OPENLDR_VERSION=$Version
-SERVER_NAME=localhost
-PUBLIC_ORIGIN=https://localhost
+SERVER_NAME=$ServerName
+PUBLIC_ORIGIN=$Origin
 GATEWAY_HTTP_PORT=80
 GATEWAY_HTTPS_PORT=443
 TLS_MODE=self-signed
@@ -59,10 +72,10 @@ S3_ACCESS_KEY_ID=$s3k
 S3_SECRET_ACCESS_KEY=$s3s
 S3_BUCKET=openldr
 S3_FORCE_PATH_STYLE=true
-OIDC_ISSUER_URL=https://localhost/auth/realms/openldr
+OIDC_ISSUER_URL=$Origin/auth/realms/openldr
 OIDC_INTERNAL_JWKS_URL=http://keycloak:8080/auth/realms/openldr/protocol/openid-connect/certs
 OIDC_WEB_CLIENT_ID=openldr-web
-KC_HOSTNAME=https://localhost/auth
+KC_HOSTNAME=$Origin/auth
 KEYCLOAK_ADMIN=admin
 KEYCLOAK_ADMIN_PASSWORD=$kc
 SECRETS_ENCRYPTION_KEY=$secretsKey
@@ -82,7 +95,7 @@ if (-not (Test-Path $cert)) {
   if (Get-Command openssl -ErrorAction SilentlyContinue) {
     openssl req -x509 -newkey rsa:2048 -nodes -days 825 `
       -keyout "$Dir/config/nginx/certs/privkey.pem" -out $cert `
-      -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" 2>$null
+      -subj "/CN=$ServerName" -addext "subjectAltName=DNS:$ServerName,DNS:localhost,IP:127.0.0.1" 2>$null
     Write-Host "-> Generated self-signed cert"
   } else {
     Write-Host "! openssl not found — provide certs in $Dir/config/nginx/certs/"
@@ -103,11 +116,10 @@ try {
   if ($LASTEXITCODE -ne 0) { Die "docker compose up failed" }
 } finally { Pop-Location }
 Write-Host ""
-Write-Host "OK OpenLDR is starting. Open https://localhost"
+Write-Host "OK OpenLDR is starting. Open $Origin"
 $kcLine = (Select-String -Path $envPath -Pattern '^KEYCLOAK_ADMIN_PASSWORD=').Line
 if ($kcLine) { Write-Host "   Keycloak admin password: $($kcLine -replace '^KEYCLOAK_ADMIN_PASSWORD=','')" }
 Write-Host ""
-Write-Host "   Tip: for a non-localhost host (IP/domain) or Let's Encrypt TLS, run"
-Write-Host "   'pnpm run init' from source, or edit SERVER_NAME / PUBLIC_ORIGIN /"
-Write-Host "   OIDC_ISSUER_URL / KC_HOSTNAME / TLS_MODE in .env and re-run:"
-Write-Host "   docker compose up -d"
+Write-Host "   For a public domain, install with: -ServerName your.domain.com"
+Write-Host "   For trusted TLS, drop fullchain.pem + privkey.pem into config/nginx/certs/"
+Write-Host "   (the generated cert is self-signed) and re-run: docker compose up -d"

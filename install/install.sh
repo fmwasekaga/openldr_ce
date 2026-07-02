@@ -2,12 +2,14 @@
 # OpenLDR CE one-line installer (Linux/macOS).
 #   curl -fsSL https://raw.githubusercontent.com/fmwasekaga/openldr_ce/main/install/install.sh | bash
 # Flags: --dir <path> (default ./openldr), --version <tag> (default latest),
+#        --server-name <host> (default localhost — the public hostname/domain),
 #        --no-start (scaffold + config only), --no-pull (skip image pull).
 set -eu
 
 REPO_RAW="https://raw.githubusercontent.com/fmwasekaga/openldr_ce/main"
 DIR="./openldr"
 VERSION="latest"
+HOST="localhost"
 NO_START=0
 NO_PULL=0
 
@@ -15,11 +17,13 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --dir) DIR="$2"; shift 2 ;;
     --version) VERSION="$2"; shift 2 ;;
+    --server-name) HOST="$2"; shift 2 ;;
     --no-start) NO_START=1; shift ;;
     --no-pull) NO_PULL=1; shift ;;
     *) echo "unknown flag: $1" >&2; exit 2 ;;
   esac
 done
+ORIGIN="https://$HOST"
 
 err() { echo "✗ $1" >&2; exit 1; }
 
@@ -36,6 +40,15 @@ fetch "deploy/install/docker-compose.yml" "$DIR/docker-compose.yml"
 fetch "infra/keycloak/openldr-realm.json" "$DIR/config/keycloak/openldr-realm.json"
 fetch "scripts/init-target-db.sql" "$DIR/config/init-target-db.sql"
 
+# Register this deploy's origin as a valid OIDC redirect so studio login works behind the
+# gateway. The shipped realm lists localhost + dev URLs; a non-localhost host (or https://localhost)
+# must be added or Keycloak rejects the /studio/auth/callback redirect. webOrigins is already "+".
+REALM="$DIR/config/keycloak/openldr-realm.json"
+if ! grep -qF "\"$ORIGIN/*\"" "$REALM" 2>/dev/null; then
+  sed "s|\"redirectUris\": \[|\"redirectUris\": [\"$ORIGIN/*\", |" "$REALM" > "$REALM.tmp" && mv "$REALM.tmp" "$REALM"
+  echo "→ Registered $ORIGIN/* as an OIDC redirect in the realm"
+fi
+
 # 3. Secrets + cert (only on first run — never overwrite an existing .env)
 # Read a bounded block of /dev/urandom (not an unbounded stream) and take the
 # first 24 alnum chars with cut — cut consumes all of its input, so no early
@@ -48,8 +61,8 @@ if [ ! -f "$DIR/.env" ]; then
   ( umask 077; : > "$DIR/.env" )
   cat > "$DIR/.env" <<EOF
 OPENLDR_VERSION=$VERSION
-SERVER_NAME=localhost
-PUBLIC_ORIGIN=https://localhost
+SERVER_NAME=$HOST
+PUBLIC_ORIGIN=$ORIGIN
 GATEWAY_HTTP_PORT=80
 GATEWAY_HTTPS_PORT=443
 TLS_MODE=self-signed
@@ -64,10 +77,10 @@ S3_ACCESS_KEY_ID=$S3_KEY
 S3_SECRET_ACCESS_KEY=$S3_SECRET
 S3_BUCKET=openldr
 S3_FORCE_PATH_STYLE=true
-OIDC_ISSUER_URL=https://localhost/auth/realms/openldr
+OIDC_ISSUER_URL=$ORIGIN/auth/realms/openldr
 OIDC_INTERNAL_JWKS_URL=http://keycloak:8080/auth/realms/openldr/protocol/openid-connect/certs
 OIDC_WEB_CLIENT_ID=openldr-web
-KC_HOSTNAME=https://localhost/auth
+KC_HOSTNAME=$ORIGIN/auth
 KEYCLOAK_ADMIN=admin
 KEYCLOAK_ADMIN_PASSWORD=$KC_PW
 SECRETS_ENCRYPTION_KEY=$SECRETS_KEY
@@ -84,7 +97,7 @@ if [ ! -f "$DIR/config/nginx/certs/fullchain.pem" ]; then
   openssl req -x509 -newkey rsa:2048 -nodes -days 825 \
     -keyout "$DIR/config/nginx/certs/privkey.pem" \
     -out "$DIR/config/nginx/certs/fullchain.pem" \
-    -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" 2>/dev/null \
+    -subj "/CN=$HOST" -addext "subjectAltName=DNS:$HOST,DNS:localhost,IP:127.0.0.1" 2>/dev/null \
     && echo "→ Generated self-signed cert" || echo "! openssl not found — provide certs in $DIR/config/nginx/certs/"
 fi
 
@@ -97,10 +110,9 @@ cd "$DIR"
 [ "$NO_PULL" -eq 1 ] || docker compose pull
 docker compose up -d
 echo ""
-echo "✓ OpenLDR is starting. Open https://localhost"
+echo "✓ OpenLDR is starting. Open $ORIGIN"
 echo "  Keycloak admin password: $(grep '^KEYCLOAK_ADMIN_PASSWORD=' .env | cut -d= -f2)"
 echo ""
-echo "  Tip: for a non-localhost host (IP/domain) or Let's Encrypt TLS, run"
-echo "  'pnpm run init' from source, or edit SERVER_NAME / PUBLIC_ORIGIN /"
-echo "  OIDC_ISSUER_URL / KC_HOSTNAME / TLS_MODE in .env and re-run:"
-echo "  docker compose up -d"
+echo "  For a public domain, install with: --server-name your.domain.com"
+echo "  For trusted TLS, drop fullchain.pem + privkey.pem into config/nginx/certs/"
+echo "  (the generated cert is self-signed) and re-run: docker compose up -d"
