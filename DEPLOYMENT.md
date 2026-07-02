@@ -5,18 +5,44 @@ path-routes every request from a single origin:
 
 ```
                 :443 (TLS)                     internal docker network only
-  browser ───────────────▶  nginx  ┌── /         ──▶ landing   (apps/web static site)
-            :80 → 301 https         ├── /studio   ──▶ app       (fastify: Studio SPA)
-                                    ├── /api      ──▶ app       (fastify: REST API)
-                                    ├── /health   ──▶ app
+  browser ───────────────▶  gateway ┌── /         ──▶ web       (apps/web static site)
+            :80 → 301 https         ├── /studio   ──▶ studio    (static nginx: Studio SPA)
+                                    ├── /api      ──▶ api       (fastify: REST API)
+                                    ├── /health   ──▶ api
                                     └── /auth     ──▶ keycloak  (OIDC issuer, /auth base path)
-                                              app also talks to: postgres, minio (blob)
+                                              api also talks to: postgres, minio (blob)
 ```
 
-**Only nginx publishes host ports (80/443).** postgres, minio, keycloak, landing, and app are
-reachable only on the compose network. Auth uses a split front/back channel: the browser hits the
-public issuer `https://<host>/auth/realms/openldr`, while the app validates tokens over the internal
+**Only the gateway publishes host ports (80/443).** postgres, minio, keycloak, web, studio, and api
+are reachable only on the compose network. Auth uses a split front/back channel: the browser hits the
+public issuer `https://<host>/auth/realms/openldr`, while the api validates tokens over the internal
 JWKS URL (`http://keycloak:8080/auth/...`) so it never depends on the gateway's cert.
+
+## Images
+
+OpenLDR CE ships four independently-versioned images on Docker Hub:
+
+| Image | Contents |
+|-------|----------|
+| `fmwasekaga/openldr-api` | server/API + `/health` (no SPA) |
+| `fmwasekaga/openldr-studio` | studio SPA (static nginx, served under `/studio/`) |
+| `fmwasekaga/openldr-web` | public landing site |
+| `fmwasekaga/openldr-gateway` | nginx reverse proxy (routes `/`→web, `/studio`→studio, `/api`+`/health`→api, `/auth`→keycloak) |
+
+Postgres, MinIO, and Keycloak use their stock upstream images.
+
+### Publishing (maintainers)
+
+```bash
+docker login
+pnpm run publish:images            # fmwasekaga/*, tags :latest + :<package.json version>, amd64
+# or: ./scripts/build-and-push.sh --tag rc1 --no-push   # local build without pushing
+```
+
+### Two deploy paths
+
+- **From source (`pnpm run init`)** builds the images locally via `docker-compose.prod.yml`.
+- **One-line install** (`install/install.sh` | `.ps1`) PULLS the published images — no clone, no build.
 
 ## Prerequisites
 
@@ -79,7 +105,7 @@ pnpm run cert            # = sh deploy/letsencrypt.sh  (reads domain+email from 
 ```
 
 Bring-your-own cert instead: drop `fullchain.pem` + `privkey.pem` into `deploy/nginx/certs/` and
-`docker compose ... restart nginx`.
+`docker compose ... restart gateway`.
 
 ## Database migrations & seed
 
@@ -113,8 +139,8 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml -p openldr down  
 docker compose --env-file .env.prod -f docker-compose.prod.yml -p openldr down -v         # stop + drop data volumes
 ```
 
-nginx re-resolves backing containers at runtime (Docker DNS), so recreating `app` on redeploy does
-**not** require an nginx restart.
+The gateway re-resolves backing containers at runtime (Docker DNS), so recreating `api` or `studio`
+on redeploy does **not** require a gateway restart.
 
 ## Out of scope (here)
 
