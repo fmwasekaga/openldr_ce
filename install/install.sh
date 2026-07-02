@@ -50,6 +50,10 @@ if [ ! -f "$DIR/.env" ]; then
   cat > "$DIR/.env" <<EOF
 OPENLDR_VERSION=$VERSION
 SERVER_NAME=localhost
+PUBLIC_ORIGIN=https://localhost
+GATEWAY_HTTP_PORT=80
+GATEWAY_HTTPS_PORT=443
+TLS_MODE=self-signed
 PORT=3000
 NODE_ENV=production
 INTERNAL_DATABASE_URL=postgres://openldr:$PG_PW@postgres:5432/openldr
@@ -61,8 +65,10 @@ S3_ACCESS_KEY_ID=$S3_KEY
 S3_SECRET_ACCESS_KEY=$S3_SECRET
 S3_BUCKET=openldr
 S3_FORCE_PATH_STYLE=true
-OIDC_ISSUER_URL=http://host.docker.internal:8180/realms/openldr
+OIDC_ISSUER_URL=https://localhost/auth/realms/openldr
+OIDC_INTERNAL_JWKS_URL=http://keycloak:8080/auth/realms/openldr/protocol/openid-connect/certs
 OIDC_WEB_CLIENT_ID=openldr-web
+KC_HOSTNAME=https://localhost/auth
 KEYCLOAK_ADMIN=admin
 KEYCLOAK_ADMIN_PASSWORD=$KC_PW
 SECRETS_ENCRYPTION_KEY=$SECRETS_KEY
@@ -93,3 +99,8 @@ docker compose up -d
 echo ""
 echo "✓ OpenLDR is starting. Open https://localhost"
 echo "  Keycloak admin password: $(grep '^KEYCLOAK_ADMIN_PASSWORD=' .env | cut -d= -f2)"
+echo ""
+echo "  Tip: for a non-localhost host (IP/domain) or Let's Encrypt TLS, run"
+echo "  'pnpm run init' from source, or edit SERVER_NAME / PUBLIC_ORIGIN /"
+echo "  OIDC_ISSUER_URL / KC_HOSTNAME / TLS_MODE in .env and re-run:"
+echo "  docker compose up -d"

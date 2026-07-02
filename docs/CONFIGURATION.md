@@ -2,6 +2,33 @@
 
 Source of truth: `packages/config/src/schema.ts`.
 
+## Gateway And Public Addressing
+
+These variables control the nginx gateway's public identity and TLS behaviour. `pnpm run init`
+writes all of them into `.env.prod`; you can also set them manually.
+
+| Variable | Type | Default | Effect |
+|---|---:|---:|---|
+| `SERVER_NAME` | hostname or IP | `localhost` | nginx `server_name` and the hostname used in the TLS certificate subject. |
+| `PUBLIC_ORIGIN` | URL | `https://localhost` | The fully-qualified public origin (scheme + host + optional port). Used to construct absolute URLs in emails and OIDC redirects. |
+| `GATEWAY_HTTP_PORT` | positive integer | `80` | Host port mapped to nginx's HTTP listener (redirects to HTTPS). |
+| `GATEWAY_HTTPS_PORT` | positive integer | `443` | Host port mapped to nginx's HTTPS listener. |
+| `TLS_MODE` | `self-signed\|letsencrypt\|bring-your-own` | `self-signed` | TLS provisioning mode. `self-signed` generates a cert via `gen-selfsigned.sh`; `letsencrypt` uses Certbot (requires a public DNS record); `bring-your-own` reads pre-placed certs from `deploy/nginx/certs/`. |
+| `LETSENCRYPT_EMAIL` | email | unset | Required when `TLS_MODE=letsencrypt`. Passed to `certbot certonly` for expiry notifications. |
+
+### OIDC and Keycloak gateway vars
+
+Keycloak is proxied by nginx at `/auth`. The application accesses it two ways:
+
+- **Browser (front-channel):** via the public `OIDC_ISSUER_URL` — e.g. `https://HOST/auth/realms/openldr`. This is the issuer embedded in tokens and used for OIDC discovery.
+- **Server (back-channel JWKS):** via `OIDC_INTERNAL_JWKS_URL` — the docker-internal address, which avoids the gateway and the need to trust a self-signed cert.
+
+| Variable | Type | Default | Effect |
+|---|---:|---:|---|
+| `OIDC_ISSUER_URL` | URL | required | Public Keycloak realm issuer, e.g. `https://HOST/auth/realms/openldr`. Must match the token `iss` claim. |
+| `OIDC_INTERNAL_JWKS_URL` | URL | unset | Back-channel JWKS endpoint, e.g. `http://keycloak:8080/auth/realms/openldr/protocol/openid-connect/certs`. When set the server fetches signing keys over the docker network, bypassing the gateway TLS cert. |
+| `KC_HOSTNAME` | URL | `https://localhost/auth` | Keycloak's advertised external hostname (Keycloak v2 `hostname` setting). Must be `PUBLIC_ORIGIN + /auth`. |
+
 ## Required Core Settings
 
 | Variable | Type | Default | Effect |
