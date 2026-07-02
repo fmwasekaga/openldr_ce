@@ -1,121 +1,122 @@
 # Deploying OpenLDR CE (single HTTPS port)
 
-OpenLDR CE runs behind **one HTTPS port**: an nginx reverse proxy terminates TLS and
-proxies every request to the application container, which serves the SPA, the `/api`
-surface, and the auth callback from a single origin. Postgres, MinIO, and Keycloak run
-as backing services on the internal network.
+OpenLDR CE runs behind **one HTTPS port**. An nginx reverse proxy terminates TLS and
+path-routes every request from a single origin:
 
 ```
-            :443 (TLS)            :3000 (internal)
-  browser ───────────▶  nginx  ───────────▶  app (fastify: SPA + /api + auth)
-            :80 → 301 https                    │
-                                               ├── postgres   (internal DB)
-                                               ├── minio       (blob storage)
-                                               └── keycloak    (:8180, OIDC issuer)
+                :443 (TLS)                     internal docker network only
+  browser ───────────────▶  nginx  ┌── /         ──▶ landing   (apps/web static site)
+            :80 → 301 https         ├── /studio   ──▶ app       (fastify: Studio SPA)
+                                    ├── /api      ──▶ app       (fastify: REST API)
+                                    ├── /health   ──▶ app
+                                    └── /auth     ──▶ keycloak  (OIDC issuer, /auth base path)
+                                              app also talks to: postgres, minio (blob)
 ```
+
+**Only nginx publishes host ports (80/443).** postgres, minio, keycloak, landing, and app are
+reachable only on the compose network. Auth uses a split front/back channel: the browser hits the
+public issuer `https://<host>/auth/realms/openldr`, while the app validates tokens over the internal
+JWKS URL (`http://keycloak:8080/auth/...`) so it never depends on the gateway's cert.
 
 ## Prerequisites
 
 - Docker + Docker Compose v2.
 - A domain name (production) or `localhost` (local/demo).
+- For a public deployment: DNS A-record → this host, and ports **80 + 443** reachable.
 
-## Quick start (local, self-signed TLS)
+## Fastest path — the init wizard
+
+`pnpm run init` (needs Node + pnpm on the host) interactively configures and launches the stack:
+
+1. Address by **IP** (lists the host's addresses) or **Domain** (e.g. `openldr.online`).
+2. TLS mode: **self-signed** (lab/internal), **Let's Encrypt** (public domain), or **bring-your-own**.
+3. HTTP/HTTPS ports (defaults 80/443).
+
+It writes `.env.prod` (correct `PUBLIC_ORIGIN` / `SERVER_NAME` / OIDC + Keycloak hostnames), renders
+the Keycloak realm, generates/plans certs, brings the stack up, and polls `/health`.
+
+## Manual quick start (local, self-signed TLS)
 
 ```sh
 # 1. Self-signed cert for localhost (writes deploy/nginx/certs/{fullchain,privkey}.pem)
 sh deploy/nginx/gen-selfsigned.sh localhost
-
 # 2. Environment
-cp .env.prod.example .env.prod        # then edit secrets
-
-# 3. Build + run the stack
-docker compose -f docker-compose.prod.yml up -d --build
+cp .env.prod.example .env.prod          # then edit secrets (SECRETS_ENCRYPTION_KEY, etc.)
+# 3. Build + run
+docker compose -f docker-compose.prod.yml -p openldr up -d --build
 ```
 
-Browse **https://localhost** (accept the self-signed-certificate warning).
-
-### Windows (PowerShell)
-
-`docker compose` works the same. For the cert, either run the script from **Git Bash**
-(`sh deploy/nginx/gen-selfsigned.sh localhost`) or use this PowerShell one-liner (no local
-openssl needed — generates it inside a container):
+Browse **https://localhost** (accept the self-signed warning). On Windows, generate the cert inside a
+container if you have no local openssl:
 
 ```powershell
 docker run --rm -v "${PWD}/deploy/nginx/certs:/certs" alpine/openssl req -x509 -newkey rsa:2048 -nodes -days 825 `
   -keyout /certs/privkey.pem -out /certs/fullchain.pem -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
-Copy-Item .env.prod.example .env.prod   # then edit secrets
-docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-Smoke from PowerShell with `curl.exe` (the real curl, not the `Invoke-WebRequest` alias):
-`curl.exe -k https://localhost/health`. (The repo's `.gitattributes` keeps `*.sh` and the
-nginx template LF so they aren't CRLF-mangled on a Windows checkout.)
+## Production TLS — Let's Encrypt (effortless)
 
-## TLS in production
+DNS for your domain must point at this host and ports 80/443 must be reachable first.
 
-Replace the self-signed cert with a real one — e.g. via **Let's Encrypt / certbot**:
+```sh
+# 1. Configure for the domain (or set SERVER_NAME + LETSENCRYPT_EMAIL in .env.prod by hand)
+pnpm run init            # Domain → your.domain → TLS: Let's Encrypt → email
 
-1. Obtain a certificate for your domain (certbot, your CA, or a managed LB).
-2. Place `fullchain.pem` + `privkey.pem` in `deploy/nginx/certs/`.
-3. Set `SERVER_NAME=your.domain` in `.env.prod` (and re-run `up -d`).
+# 2. Bring the stack up (starts on the self-signed placeholder; :80 serves the ACME challenge)
+docker compose -f docker-compose.prod.yml -p openldr up -d --build
 
-Certificate renewal (certbot cron / your platform's mechanism) is the operator's
-responsibility — it is intentionally not wired into the compose file.
+# 3. Issue the real cert, install it for nginx, and reload — one command
+pnpm run cert            # = sh deploy/letsencrypt.sh  (reads domain+email from .env.prod)
+```
 
-## Database migrations
+`deploy/letsencrypt.sh` runs certbot over the webroot nginx already serves, copies the issued
+`fullchain.pem`/`privkey.pem` into `deploy/nginx/certs/`, and reloads nginx. It is **idempotent**
+(`--keep-until-expiring`) — wire it into cron for hands-off renewal:
 
-The app **self-migrates on startup** when `MIGRATE_ON_START=true` (set in `.env.prod.example`).
-Migrations are idempotent (`migrateToLatest`): a fresh Postgres gets its full schema, an
-already-migrated one is a no-op. Without this, the API returns **500s** on a schema-less DB
-(`relation "publishers" does not exist`, etc.). The flag is **off by default** so dev/test
-environments manage their own schema; the production stack turns it on.
+```cron
+# twice daily; certbot only re-issues when near expiry, nginx reloads either way
+0 3,15 * * *  cd /opt/openldr && pnpm run cert >> /var/log/openldr-cert.log 2>&1
+```
 
-Migration creates the schema but loads no data. Set **`SEED_ON_START=true`** (also in
-`.env.prod.example`) to seed idempotent sample data after migration — a sample
-organization/location/patient and the bundled sample forms — so the app comes up populated.
-This is the same work as `openldr db seed`; it dedups by name, so it's a no-op on a populated
-DB. Loading real reference terminology (LOINC/RxNorm/SNOMED) and lab data is a separate,
-heavier import — those pages render empty until then, which is expected, not an error.
+Bring-your-own cert instead: drop `fullchain.pem` + `privkey.pem` into `deploy/nginx/certs/` and
+`docker compose ... restart nginx`.
+
+## Database migrations & seed
+
+The app **self-migrates on startup** when `MIGRATE_ON_START=true` (set in `.env.prod.example`);
+migrations are idempotent. `SEED_ON_START=true` seeds idempotent sample data (org/location/patient,
+the bundled sample forms, and the default lab-order ingestion workflows) after migration. Loading
+real reference terminology (LOINC/RxNorm/SNOMED) and lab data is a separate, heavier import.
 
 ## Environment
 
-All configuration is environment-driven; see **`.env.prod.example`** for the full,
-annotated set. Required keys: `INTERNAL_DATABASE_URL`, `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`,
-`S3_SECRET_ACCESS_KEY`, `S3_BUCKET`, `OIDC_ISSUER_URL`. Service hostnames
-(`postgres` / `minio` / `keycloak`) resolve on the compose network.
-
-**Auth note (important — verified on a live run):** an HTTPS page cannot fetch the OIDC
-discovery doc from an `http://` Keycloak — the browser blocks it as **mixed content**. So
-**real single-port SSO requires Keycloak served under the same HTTPS origin** (proxy it
-behind nginx, e.g. `https://<host>/realms/…`, with Keycloak proxy/hostname config, and make
-the issuer reachable by the app container too). That integration is a follow-up beyond this
-single-port baseline.
-
-For a **local demo without real login**, set `NODE_ENV=development` and `AUTH_DEV_BYPASS=true`
-in `.env.prod` — the app loads as a dev admin, no Keycloak round-trip. (`AUTH_DEV_BYPASS` is
-deliberately **rejected when `NODE_ENV=production`**, so demo mode must use `development`.)
+All configuration is environment-driven — see **`.env.prod.example`** for the full, annotated set.
+Service hostnames (`postgres` / `minio` / `keycloak`) resolve on the compose network. For a **local
+demo without real login**, set `NODE_ENV=development` + `AUTH_DEV_BYPASS=true` in `.env.prod`
+(`AUTH_DEV_BYPASS` is rejected under `NODE_ENV=production`).
 
 ## Smoke check
 
-After `up`, once the backing services are healthy:
-
 ```sh
 curl -ik http://localhost/            # → 301 redirect to https
-curl -k  https://localhost/health     # → {"status":"up",...}
-curl -k  https://localhost/           # → SPA HTML (contains id="root")
-curl -k  https://localhost/api/config # → JSON (auth/OIDC config)
+curl -k  https://localhost/health     # → {"status":"up",...} (all checks up)
+curl -k  https://localhost/           # → landing HTML
+curl -k  https://localhost/studio/    # → Studio SPA (<title>OpenLDR</title>)
+curl -k  https://localhost/api/workflows   # → 401 without a token (auth enforced)
 ```
 
 ## Upgrade / teardown
 
 ```sh
-docker compose -f docker-compose.prod.yml up -d --build   # rebuild + restart
-docker compose -f docker-compose.prod.yml down            # stop (keeps volumes)
-docker compose -f docker-compose.prod.yml down -v         # stop + drop data volumes
+docker compose -f docker-compose.prod.yml -p openldr up -d --build   # rebuild + restart
+docker compose -f docker-compose.prod.yml -p openldr down            # stop (keeps volumes)
+docker compose -f docker-compose.prod.yml -p openldr down -v         # stop + drop data volumes
 ```
+
+nginx re-resolves backing containers at runtime (Docker DNS), so recreating `app` on redeploy does
+**not** require an nginx restart.
 
 ## Out of scope (here)
 
-Kubernetes/Helm, CI/CD, autoscaling/HA, automated certbot renewal, the optional SQL Server
-and DHIS2 services (use the dev `docker-compose.yml` profiles for those), and log/metrics
-shipping.
+Kubernetes/Helm, CI/CD, autoscaling/HA, the optional SQL Server and DHIS2 services (use the dev
+`docker-compose.yml` profiles), and log/metrics shipping.

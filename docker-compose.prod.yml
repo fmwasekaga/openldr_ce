@@ -39,13 +39,17 @@ services:
     depends_on: ["app", "landing", "keycloak"]
     restart: unless-stopped
 
+  # Let's Encrypt helper (profile-gated: does NOT start with `up`). Invoked ad-hoc by
+  # `deploy/letsencrypt.sh` (or `pnpm run cert`) to issue/renew a cert over the webroot nginx
+  # already serves on :80, copy the pems into deploy/nginx/certs (where nginx reads them), and
+  # reload nginx. `letsencrypt` volume persists the ACME account + certs across runs (renewal).
   certbot:
     image: certbot/certbot:latest
     profiles: ["letsencrypt"]
     volumes:
-      - ./deploy/nginx/certs:/etc/letsencrypt/live-out
+      - letsencrypt:/etc/letsencrypt
+      - ./deploy/nginx/certs:/certs-out
       - certbot-www:/var/www/certbot
-    entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot; sleep 12h & wait $${!}; done"
 
   postgres:
     image: postgres:16-alpine
@@ -100,3 +104,4 @@ volumes:
   pgdata:
   miniodata:
   certbot-www:
+  letsencrypt:

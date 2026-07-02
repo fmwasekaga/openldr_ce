@@ -17,6 +17,15 @@ server {
     ssl_certificate_key /etc/nginx/certs/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
 
+    # Re-resolve upstream container IPs at runtime via Docker's embedded DNS. Without this,
+    # nginx resolves `app`/`landing`/`keycloak` ONCE at startup, so recreating a backing
+    # container on redeploy (its IP changes) leaves nginx proxying a dead IP → 502 until an
+    # nginx restart. A variable proxy_pass + resolver makes nginx re-resolve per request.
+    resolver 127.0.0.11 valid=30s ipv6=off;
+    set $upstream_app     http://app:3000;
+    set $upstream_landing http://landing:80;
+    set $upstream_kc      http://keycloak:8080;
+
     client_max_body_size 50m;            # plugin/bundle/ingest uploads
     gzip on;
     gzip_types text/plain text/css application/javascript application/json image/svg+xml;
@@ -34,9 +43,9 @@ server {
     proxy_set_header Connection        "upgrade";
     proxy_read_timeout 120s;
 
-    location /        { proxy_pass http://landing:80; }
-    location /studio  { proxy_pass http://app:3000; }
-    location /api      { proxy_pass http://app:3000; }
-    location = /health { proxy_pass http://app:3000/health; }
-    location /auth     { proxy_pass http://keycloak:8080; }
+    location /         { proxy_pass $upstream_landing$request_uri; }
+    location /studio   { proxy_pass $upstream_app$request_uri; }
+    location /api      { proxy_pass $upstream_app$request_uri; }
+    location = /health { proxy_pass $upstream_app/health; }
+    location /auth     { proxy_pass $upstream_kc$request_uri; }
 }
