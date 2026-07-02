@@ -44,6 +44,27 @@ pnpm run publish:images            # fmwasekaga/*, tags :latest + :<package.json
 - **From source (`pnpm run init`)** builds the images locally via `docker-compose.prod.yml`.
 - **One-line install** (`install/install.sh` | `.ps1`) PULLS the published images — no clone, no build.
 
+### Trusted TLS (Let's Encrypt)
+
+For a public domain, issue a trusted, auto-renewing cert in the install command:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/fmwasekaga/openldr_ce/main/install/install.sh \
+  | bash -s -- --server-name your.domain.com --letsencrypt you@email.com
+```
+
+Prereqs: the domain's DNS A-record points at the host, and ports 80 + 443 are reachable. Add
+`--staging` first to test the flow without hitting Let's Encrypt's rate limits. Renewal is automatic
+via `/etc/cron.d/openldr-cert` (running `renew-cert.sh` twice daily); if the installer isn't root it
+prints the cron line to add manually. Without `--letsencrypt` the installer generates a self-signed
+cert (browser warning; not usable on a domain that already served a trusted cert with HSTS).
+
+This is the **one-line-install** path (pulls published images, no clone). For the **from-source**
+path (`pnpm run init` + `docker-compose.prod.yml`), see "Production TLS — Let's Encrypt" below —
+same idea (certbot over the http-01 webroot, cron-driven renewal), different entry point
+(`pnpm run cert` / `deploy/letsencrypt.sh` instead of `renew-cert.sh`). `install.ps1` does not
+automate Let's Encrypt on Windows; it prints a warning and falls back to self-signed.
+
 ## Prerequisites
 
 - Docker + Docker Compose v2.
