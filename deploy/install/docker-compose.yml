@@ -1,14 +1,9 @@
-# Installer-target stack: pulls the published app image and mounts only the
-# config files the installer downloads next to this file. Do not use build: here.
-#
-# NOTE: The `landing` service requires a published landing image:
-#   ghcr.io/fmwasekaga/openldr-landing:<version>
-# This image must be released alongside the main app image. Until it is
-# published, remove or comment out the `landing` service and the nginx
-# depends_on entry for it — the rest of the stack will work without a landing page.
+# Installer-target stack: pulls the published fmwasekaga/openldr-* images and
+# mounts only the config files the installer downloads next to this file.
+# Do not use build: here.
 services:
-  app:
-    image: ghcr.io/fmwasekaga/openldr:${OPENLDR_VERSION:-latest}
+  api:
+    image: fmwasekaga/openldr-api:${OPENLDR_VERSION:-latest}
     env_file: .env
     expose: ["3000"]
     depends_on:
@@ -17,22 +12,26 @@ services:
       keycloak: { condition: service_started }
     restart: unless-stopped
 
-  landing:
-    image: ghcr.io/fmwasekaga/openldr-landing:${OPENLDR_VERSION:-latest}
+  studio:
+    image: fmwasekaga/openldr-studio:${OPENLDR_VERSION:-latest}
     expose: ["80"]
     restart: unless-stopped
 
-  nginx:
-    image: nginx:1.27-alpine
+  web:
+    image: fmwasekaga/openldr-web:${OPENLDR_VERSION:-latest}
+    expose: ["80"]
+    restart: unless-stopped
+
+  gateway:
+    image: fmwasekaga/openldr-gateway:${OPENLDR_VERSION:-latest}
     environment:
       SERVER_NAME: ${SERVER_NAME:-localhost}
     ports:
       - "${GATEWAY_HTTP_PORT:-80}:80"
       - "${GATEWAY_HTTPS_PORT:-443}:443"
     volumes:
-      - ./config/nginx/openldr.conf.template:/etc/nginx/templates/default.conf.template:ro
       - ./config/nginx/certs:/etc/nginx/certs:ro
-    depends_on: ["app", "landing", "keycloak"]
+    depends_on: ["api", "studio", "web", "keycloak"]
     restart: unless-stopped
 
   postgres:

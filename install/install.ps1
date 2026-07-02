@@ -21,7 +21,6 @@ Write-Host "-> Scaffolding $Dir"
 New-Item -ItemType Directory -Force -Path "$Dir/config/nginx/certs","$Dir/config/keycloak" | Out-Null
 function Fetch($rel, $out) { Invoke-WebRequest -UseBasicParsing "$RepoRaw/$rel" -OutFile $out }
 Fetch "deploy/install/docker-compose.yml" "$Dir/docker-compose.yml"
-Fetch "deploy/nginx/openldr.conf.template" "$Dir/config/nginx/openldr.conf.template"
 Fetch "infra/keycloak/openldr-realm.json" "$Dir/config/keycloak/openldr-realm.json"
 Fetch "scripts/init-target-db.sql" "$Dir/config/init-target-db.sql"
 

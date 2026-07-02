@@ -33,7 +33,6 @@ echo "→ Scaffolding $DIR"
 mkdir -p "$DIR/config/nginx/certs" "$DIR/config/keycloak"
 fetch() { curl -fsSL "$REPO_RAW/$1" -o "$2" || err "failed to download $1"; }
 fetch "deploy/install/docker-compose.yml" "$DIR/docker-compose.yml"
-fetch "deploy/nginx/openldr.conf.template" "$DIR/config/nginx/openldr.conf.template"
 fetch "infra/keycloak/openldr-realm.json" "$DIR/config/keycloak/openldr-realm.json"
 fetch "scripts/init-target-db.sql" "$DIR/config/init-target-db.sql"
 
