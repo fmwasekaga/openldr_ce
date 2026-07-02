@@ -35,8 +35,17 @@ services:
       # matches server_name localhost and would otherwise win on :80).
       - ./deploy/nginx/openldr.conf.template:/etc/nginx/templates/default.conf.template:ro
       - ./deploy/nginx/certs:/etc/nginx/certs:ro
+      - certbot-www:/var/www/certbot
     depends_on: ["app", "landing", "keycloak"]
     restart: unless-stopped
+
+  certbot:
+    image: certbot/certbot:latest
+    profiles: ["letsencrypt"]
+    volumes:
+      - ./deploy/nginx/certs:/etc/letsencrypt/live-out
+      - certbot-www:/var/www/certbot
+    entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot; sleep 12h & wait $${!}; done"
 
   postgres:
     image: postgres:16-alpine
@@ -90,3 +99,4 @@ services:
 volumes:
   pgdata:
   miniodata:
+  certbot-www:
