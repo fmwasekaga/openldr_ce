@@ -1,8 +1,10 @@
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
+import { registerErrorHandler } from './error-handler';
 import fastifyStatic from '@fastify/static';
 import type { AppContext } from '@openldr/bootstrap';
 import { registerReportRoutes } from './reports-routes';
@@ -45,7 +47,12 @@ export function registerConfigRoute(
 }
 
 export function buildApp(ctx: AppContext) {
-  const app = Fastify({ loggerInstance: ctx.logger });
+  const app = Fastify({
+    loggerInstance: ctx.logger,
+    // Short 8-char correlation id per request; surfaces in every error body + one log line.
+    genReqId: () => randomUUID().replace(/-/g, '').slice(0, 8),
+  });
+  registerErrorHandler(app);
 
   app.get('/health', async (_req, reply) => {
     const result = await ctx.health.runAll();
