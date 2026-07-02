@@ -730,6 +730,9 @@ importers:
       vitest:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.19.21)(jsdom@25.0.1)(lightningcss@1.32.0)
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
 
   packages/dashboards:
     dependencies:

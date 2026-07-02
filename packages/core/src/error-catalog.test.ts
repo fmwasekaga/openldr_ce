@@ -1,0 +1,51 @@
+import { describe, it, expect } from 'vitest';
+import { AppError, CATALOG, appError, catalogFor, domainForPrefix, codeForUnknown } from './error-catalog';
+import { ZodError } from 'zod';
+
+describe('error catalog', () => {
+  it('every code is well-formed and unique', () => {
+    const codes = Object.keys(CATALOG);
+    expect(codes.length).toBeGreaterThan(0);
+    for (const code of codes) {
+      expect(code).toMatch(/^[A-Z]{2,4}\d{4}$/);
+      expect(CATALOG[code].code).toBe(code); // entry self-consistent
+      expect(CATALOG[code].httpStatus).toBeGreaterThanOrEqual(400);
+    }
+    expect(new Set(codes).size).toBe(codes.length);
+  });
+
+  it('appError builds an AppError from the catalog', () => {
+    const err = appError('RP0001');
+    expect(err).toBeInstanceOf(AppError);
+    expect(err.code).toBe('RP0001');
+    expect(err.httpStatus).toBe(400);
+    expect(err.message).toBe(CATALOG.RP0001.message);
+  });
+
+  it('appError message override keeps the code', () => {
+    const err = appError('FM0003', { message: 'field "patientId" is required' });
+    expect(err.code).toBe('FM0003');
+    expect(err.message).toBe('field "patientId" is required');
+  });
+
+  it('appError throws for an unknown code (programmer error)', () => {
+    expect(() => appError('ZZ9999')).toThrow(/unknown error code/i);
+  });
+
+  it('catalogFor lists a domain by prefix', () => {
+    const reports = catalogFor('RP');
+    expect(reports.every((e) => e.code.startsWith('RP'))).toBe(true);
+    expect(reports.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('domainForPrefix maps known prefixes', () => {
+    expect(domainForPrefix('RP')).toBe('reports');
+    expect(domainForPrefix('ZZ')).toBeUndefined();
+  });
+
+  it('codeForUnknown classifies raw errors to SY codes', () => {
+    expect(codeForUnknown(new ZodError([]))).toBe('SY0400');
+    expect(codeForUnknown(new Error('connect ECONNREFUSED 127.0.0.1:5432'))).toBe('SY0503');
+    expect(codeForUnknown(new Error('boom'))).toBe('SY0500');
+  });
+});
