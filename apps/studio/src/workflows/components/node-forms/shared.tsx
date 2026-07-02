@@ -59,9 +59,14 @@ function collectOptions(children: ReactNode): Opt[] {
     if (!isValidElement(child)) return;
     if (child.type === 'option') {
       const props = child.props as { value?: unknown; children?: ReactNode; disabled?: boolean };
+      // Native <select> semantics: an <option> with no `value` uses its text as the value
+      // (e.g. `<option>POST</option>` → "POST"). Without this fallback such options collapsed to
+      // "" and got filtered out as the placeholder, leaving method dropdowns (webhook/HTTP) blank.
+      // An EXPLICIT `value=""` is preserved as the placeholder, per this component's convention.
+      const label = props.children;
       out.push({
-        value: String(props.value ?? ''),
-        label: props.children,
+        value: props.value != null ? String(props.value) : (typeof label === 'string' ? label : ''),
+        label,
         disabled: props.disabled,
       });
     } else {
