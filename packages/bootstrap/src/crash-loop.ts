@@ -26,23 +26,29 @@ export async function guardAgainstCrashLoop(opts: CrashLoopGuardOpts): Promise<b
   const nowMs = opts.nowMs ?? Date.now();
   const exit = opts.exit ?? ((code: number) => process.exit(code));
   const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
-  const markers = readCrashMarkers(opts.dir);
-  const verdict = detectCrashLoop(markers, { nowMs, windowSec: opts.windowSec, threshold: opts.threshold });
-  if (!verdict.tripped) return false;
+  try {
+    const markers = readCrashMarkers(opts.dir);
+    const verdict = detectCrashLoop(markers, { nowMs, windowSec: opts.windowSec, threshold: opts.threshold });
+    if (!verdict.tripped) return false;
 
-  // Escalating backoff: base * 2^(overThreshold), capped. More crashes → longer cool-off.
-  const over = Math.max(0, verdict.count - opts.threshold);
-  const backoff = Math.min(opts.backoffMs * 2 ** over, opts.backoffCapMs);
+    // Escalating backoff: base * 2^(overThreshold), capped. More crashes → longer cool-off.
+    const over = Math.max(0, verdict.count - opts.threshold);
+    const backoff = Math.min(opts.backoffMs * 2 ** over, opts.backoffCapMs);
 
-  // Record ONE loop marker (deduped: skip if the most recent marker is already a loop marker) so
-  // the next healthy boot's drain surfaces a single system.crash_loop row rather than a pile.
-  const latest = markers[markers.length - 1] as CrashMarker | undefined;
-  if (!latest || latest.kind !== 'crash.loop') {
-    const marker = buildCrashMarker('crash.loop', new Error(`restart loop: ${verdict.count} crashes in ${opts.windowSec}s`));
-    try { appendCrashMarker(opts.dir, marker); } catch { /* best-effort */ }
+    // Record ONE loop marker (deduped: skip if the most recent marker is already a loop marker) so
+    // the next healthy boot's drain surfaces a single system.crash_loop row rather than a pile.
+    const latest = markers[markers.length - 1] as CrashMarker | undefined;
+    if (!latest || latest.kind !== 'crash.loop') {
+      try {
+        appendCrashMarker(opts.dir, buildCrashMarker('crash.loop', new Error(`restart loop: ${verdict.count} crashes in ${opts.windowSec}s`)));
+      } catch { /* best-effort durable marker */ }
+    }
+    try { opts.log?.({ count: verdict.count, firstAt: verdict.firstAt, lastAt: verdict.lastAt, backoffMs: backoff }); } catch { /* logging must not block the exit */ }
+    await sleep(backoff);
+    exit(1);
+    return true;
+  } catch {
+    // Fail open: a fault INSIDE the breaker must never itself prevent the app from starting.
+    return false;
   }
-  opts.log?.({ count: verdict.count, firstAt: verdict.firstAt, lastAt: verdict.lastAt, backoffMs: backoff });
-  await sleep(backoff);
-  exit(1);
-  return true;
 }
