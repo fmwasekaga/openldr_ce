@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { sampleForms, type FormStore } from '@openldr/forms';
-import { sampleWorkflow, type WorkflowStore } from '@openldr/workflows';
+import { buildDefaultWorkflows, type WorkflowStore } from '@openldr/workflows';
 import { seedDefaultDashboard, type DashboardStore } from '@openldr/dashboards';
 import type { ConnectorStore, TerminologyAdminStore, AppSettingStore } from '@openldr/db';
 import { BUNDLED_TERMINOLOGY, readBundledTerminology } from '@openldr/db';
@@ -84,6 +84,7 @@ export async function seedDatabase(db: DbContext, app: FormSeedTarget): Promise<
   // ignores the sample's id, so id-based dedup would re-create the samples every run.
   const existingForms = await app.forms.list();
   const existingByName = new Map(existingForms.map((f) => [f.name, f]));
+  let orderFormId: string | null = null;
   let formsSeeded = 0;
   for (const form of sampleForms) {
     const existing = existingByName.get(form.name);
@@ -113,15 +114,26 @@ export async function seedDatabase(db: DbContext, app: FormSeedTarget): Promise<
     // Publish so the forms actually drive their target pages (the Users page needs a
     // published 'users' form). Idempotent: only publish drafts, never re-snapshot.
     if (status !== 'published') await app.forms.setStatus(id, 'published');
+    if (form.name === 'Lab order') orderFormId = id;
   }
 
-  // Sample workflow — seeded once (idempotent by stable id) so the Workflows list isn't
-  // empty on a fresh install. Matched by id, not name, so a user-renamed copy is never re-created.
+  // Default workflows — the inbound lab-order ingestion loop + its reactive companion, seeded
+  // once each (idempotent by stable id) so a fresh install ships a real, runnable example. The
+  // inbound's Form Validate node is bound to the seeded "Lab order" form's actual id, and the
+  // webhook secret is generated per-install (so no secret is committed and reseeds never rotate
+  // it). Matched by id, not name, so operator-edited copies are never re-created.
   const existingWorkflows = await app.workflows.store.list();
   let workflowsSeeded = 0;
-  if (!existingWorkflows.some((w) => w.id === sampleWorkflow.id)) {
-    await app.workflows.store.create(sampleWorkflow);
-    workflowsSeeded = 1;
+  if (orderFormId) {
+    const defaults = buildDefaultWorkflows({ orderFormId, webhookSecret: randomUUID() });
+    for (const wf of defaults) {
+      if (!existingWorkflows.some((w) => w.id === wf.id)) {
+        await app.workflows.store.create(wf);
+        workflowsSeeded += 1;
+      }
+    }
+  } else {
+    console.warn('[seed] "Lab order" form not found — skipping default workflow seed');
   }
 
   // Default target-warehouse connector — a ready `type:'postgres'` host connector pointing at

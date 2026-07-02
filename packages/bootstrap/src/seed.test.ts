@@ -6,7 +6,7 @@ import type { DbContext } from './db-context';
 // In-memory fakes so we exercise the real seedDatabase logic without a database.
 function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
   const forms: { id: string; name: string; status: string }[] = [];
-  const workflows: { id: string; name: string }[] = [];
+  const workflows: { id: string; name: string; definition?: unknown }[] = [];
   const connectors: { id: string; name: string; type: string | null; config: Record<string, string> }[] = [];
   const dashboards: { id: string }[] = [];
   // Terminology stores modelled just enough to exercise real idempotency: value sets deduped by
@@ -71,8 +71,8 @@ function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
     workflows: {
       store: {
         list: async () => workflows as never,
-        create: async (w: { id: string; name: string }) => {
-          workflows.push({ id: w.id, name: w.name });
+        create: async (w: { id: string; name: string; definition?: unknown }) => {
+          workflows.push({ id: w.id, name: w.name, definition: w.definition });
           return w as never;
         },
       },
@@ -100,21 +100,32 @@ function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
 
 const fakeDb = { persist: vi.fn(async (r: { id: string }) => ({ flattened: JSON.stringify(r) })) } as unknown as DbContext;
 
-describe('seedDatabase — sample workflow', () => {
-  it('seeds the sample workflow once', async () => {
+describe('seedDatabase — default workflows', () => {
+  // The seeded sample-forms include "Lab order" at index 3 → the fake assigns it id 'form-3'.
+  const ORDER_FORM_ID = 'form-3';
+
+  it('seeds the inbound + reactive default workflows', async () => {
     const { app, workflows } = fakeApp();
     const res = await seedDatabase(fakeDb, app);
-    expect(res.workflowsSeeded).toBe(1);
-    expect(workflows.filter((w) => w.id === 'wf-sample')).toHaveLength(1);
-    expect(workflows[0].name).toBe('Sample Workflow');
+    expect(res.workflowsSeeded).toBe(2);
+    expect(workflows.map((w) => w.id).sort()).toEqual(['wf-sample', 'wf-sample-reactive']);
   });
 
-  it('is idempotent — re-running does not duplicate it', async () => {
+  it('injects the seeded "Lab order" form id into the inbound Form Validate node', async () => {
+    const { app, workflows } = fakeApp();
+    await seedDatabase(fakeDb, app);
+    const inbound = workflows.find((w) => w.id === 'wf-sample');
+    const def = inbound?.definition as { nodes: { data: { action?: string; config?: { formId?: string } } }[] };
+    const fv = def.nodes.find((n) => n.data.action === 'form-validate');
+    expect(fv?.data.config?.formId).toBe(ORDER_FORM_ID);
+  });
+
+  it('is idempotent — re-running seeds nothing new', async () => {
     const { app, workflows } = fakeApp();
     await seedDatabase(fakeDb, app);
     const res2 = await seedDatabase(fakeDb, app);
     expect(res2.workflowsSeeded).toBe(0);
-    expect(workflows.filter((w) => w.id === 'wf-sample')).toHaveLength(1);
+    expect(workflows).toHaveLength(2);
   });
 });
 
@@ -221,7 +232,7 @@ describe('seedDatabase — bundled terminology', () => {
     const res = await seedDatabase(fakeDb, app);
     // The rest of the seed still succeeds; terminology counts fall back to 0.
     expect(res.terminology).toEqual({ valueSetsImported: 0, ucumConceptsImported: 0 });
-    expect(res.workflowsSeeded).toBe(1);
+    expect(res.workflowsSeeded).toBe(2);
     expect(res.dashboardsSeeded).toBe(1);
   });
 });
