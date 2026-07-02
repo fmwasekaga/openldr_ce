@@ -35,7 +35,8 @@ export function registerErrorHandler(app: FastifyInstance<any, any, any, any>): 
   app.setErrorHandler((err: unknown, req: FastifyRequest, reply: FastifyReply) => {
     const { status, code, message } = toErrorResponse(err);
     const correlationId = String(req.id);
-    const line = { code, correlationId, err };
+    const details = err instanceof AppError ? err.details : undefined;
+    const line = { code, correlationId, ...(details !== undefined ? { details } : {}), err };
     if (status >= 500) req.log.error(line, message);
     else req.log.warn(line, message);
     void reply.code(status).send({ error: message, code, correlationId });
