@@ -66,17 +66,22 @@ reactive companion that demonstrates the `data.persisted` event loop.
 Webhook Trigger  (path: "lab-orders", method: POST, secret: <per-install randomUUID>)
    │   POST /api/workflows/hooks/lab-orders,  header X-Webhook-Token: <secret>
    ▼
-Code "Unwrap request body"   return $json.body ?? $json;
-   │
-   ▼
-Form Validate   (config.formId = seeded "Lab order" form id — injected at seed time)
-   │
+Form Validate   (config.formId = seeded "Lab order" form id — injected at seed time;
+   │             config.sourcePath = "body" — unwraps the webhook envelope
+   │             {method,body,headers,query} → the answers themselves)
    ▼
 Persist Store   (config.source = "webhook-lab-orders")   → emits data.persisted{source,batchId,…}
    │
    ▼
-Log   "Persisted lab order {{ $json.id }}"
+Log   "Persisted lab order: {{ $json }}"
 ```
+
+> **Design note (revised during review):** the unwrap was originally a Code node
+> (`return $json.body ?? $json`), but Code nodes are gated behind `WORKFLOW_CODE_ENABLED`
+> (default OFF, host-privileged), which would have made the seeded loop fail on a stock
+> install. Instead, Form Validate gained an optional `config.sourcePath` that reads answers
+> from a nested field of each item — no Code node, works on stock config, and is reusable for
+> any webhook→validate flow.
 
 **2. "On Lab Order Persisted → Log"** — id `wf-sample-reactive`, **seeded `enabled: true`**:
 

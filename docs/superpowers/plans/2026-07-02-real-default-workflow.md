@@ -589,6 +589,24 @@ Update `real-default-workflow-idea.md` (mark implemented; note the deferred mult
 
 ---
 
+## Task 5: Form Validate `sourcePath` — drop the Code unwrap (added during review)
+
+**Why:** The final holistic review found the Task-1 unwrap was a Code node, but Code nodes are
+gated behind `WORKFLOW_CODE_ENABLED` (default OFF, host-privileged), so the seeded loop would fail
+on a stock install. Fix: give Form Validate an optional `config.sourcePath` (read answers from a
+nested item field) and remove the Code node.
+
+**Files:** `packages/workflows/src/engine/template.ts` (export `readPath`),
+`.../engine/node-handlers/form-validate.ts` (apply `sourcePath` via `readPath` + an `asAnswers`
+coercion; blank = unchanged, backward-compatible), `.../engine/node-handlers/form-persist-handlers.test.ts`
+(+2 tests), `.../host-nodes.ts` (add `sourcePath` text field to the form-validate descriptor),
+`.../sample-workflow.ts` (delete the `unwrap-1` Code node; Form Validate config `{ formId,
+sourcePath: 'body' }`; edges `trigger-1→form-validate-1→persist-1→log-1`), `.../sample-workflow.test.ts`
+(assert `sourcePath`; update edge chain).
+
+**Result:** Done (commit `48cabb1e`). workflows 360/360; `pnpm typecheck --force` 30/30. The inbound
+seeded loop now runs on stock config with no Code-gate dependency. Spec + memory updated to match.
+
 ## Self-Review Notes
 
 - **Spec coverage:** two seeded workflows (Task 1 builder, Task 2 seed), unwrap node (Task 1), seed-time form-id + secret injection (Task 2), enabled asymmetry (Task 1 literals + Task 2 test), single-trigger canvas (Task 3), tests (Tasks 1-3), live verify (Task 4), deferred authz recorded in spec Non-Goals. Docs update intentionally omitted (spec Non-Goal).
