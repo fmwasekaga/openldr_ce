@@ -370,7 +370,7 @@ describe('workflow routes', () => {
       headers: { 'x-webhook-token': 's3cret' }, payload: { name: 'a' },
     });
     expect(ok.statusCode).toBe(200);
-    expect(ok.json()).toEqual({ ok: true });
+    expect(ok.json()).toEqual({ ok: true, runId: null, correlationId: null });
     expect(ctx.__extras.runAndRecordCalls.length).toBe(1);
     expect(ctx.__extras.runAndRecordCalls[0].workflowId).toBe('wf-hook');
     expect(ctx.__extras.runAndRecordCalls[0].source).toBe('webhook');
