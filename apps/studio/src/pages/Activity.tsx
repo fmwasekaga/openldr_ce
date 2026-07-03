@@ -192,6 +192,9 @@ export function Activity() {
             className="h-8 max-w-xs text-xs"
             aria-label={t('activity.searchPlaceholder')}
           />
+          <div className="flex-1" />
+          <span className="text-xs text-muted-foreground">{t('activity.newestFirst')}</span>
+          <span className="h-4 w-px bg-border" aria-hidden="true" />
           <Button
             variant="ghost"
             size="icon"
@@ -203,8 +206,6 @@ export function Activity() {
           >
             <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
           </Button>
-          <div className="flex-1" />
-          <span className="text-xs text-muted-foreground">{t('activity.newestFirst')}</span>
         </div>
 
         <div className="flex-1 overflow-auto">
