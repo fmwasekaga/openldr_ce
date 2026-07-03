@@ -46,7 +46,7 @@ export const WidgetQuerySchema = z.discriminatedUnion('mode', [
     model: z.string(),
     metric: MetricSchema,
     dimension: DimensionRefSchema.optional(),
-    breakdown: DimensionRefSchema.optional(),
+    breakdown: z.object({ key: z.string() }).optional(),
     filters: z.array(QueryFilterSchema).default([]),
     variableBindings: z.record(z.string()).optional(),
   }),

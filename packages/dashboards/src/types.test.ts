@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { WidgetConfigSchema } from './types';
+import { WidgetConfigSchema, WidgetQuerySchema } from './types';
 
 describe('WidgetConfigSchema', () => {
   it('accepts a builder widget', () => {
@@ -15,6 +15,14 @@ describe('WidgetConfigSchema', () => {
       query: { mode: 'sql', sql: 'select 1 as n' },
     });
     expect(ok.success).toBe(true);
+  });
+  it('strips grain from a builder breakdown (key-only)', () => {
+    const q = WidgetQuerySchema.parse({
+      mode: 'builder', model: 'm', metric: { key: 'count', agg: 'count' },
+      dimension: { key: 'status' }, breakdown: { key: 'ward', grain: 'month' }, filters: [],
+    });
+    expect(q).toMatchObject({ breakdown: { key: 'ward' } });
+    expect((q as { breakdown?: Record<string, unknown> }).breakdown).not.toHaveProperty('grain');
   });
   it('rejects an unknown widget type', () => {
     const bad = WidgetConfigSchema.safeParse({
