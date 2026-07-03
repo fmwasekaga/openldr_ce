@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { computeLayout, type PageSpec, type PositionedBox, type ReportTemplate } from '@openldr/report-builder/pure';
+import { computeLayout, type PageSpec, type PositionedBox, type ReportTemplate, type ReportLintIssue } from '@openldr/report-builder/pure';
 import { previewLayoutModel } from './reportBuilderModel';
 import { createDomMeasurer } from './domMeasurer';
 import { CanvasBlock } from './CanvasBlock';
@@ -15,7 +15,7 @@ function pageWH(p: PageSpec): [number, number] {
   return p.orientation === 'landscape' ? [h, w] : [w, h];
 }
 
-export function ReportCanvas({ template, selected, onSelect, data }: { template: ReportTemplate; selected: CellRef | null; onSelect: (row: number, cell: number) => void; data?: Map<string, BlockData> }): JSX.Element {
+export function ReportCanvas({ template, selected, onSelect, data, issues }: { template: ReportTemplate; selected: CellRef | null; onSelect: (row: number, cell: number) => void; data?: Map<string, BlockData>; issues?: ReportLintIssue[] }): JSX.Element {
   const measurer = useMemo(() => createDomMeasurer(), []);
   const page = template.page as PageSpec;
   const [pw, ph] = pageWH(page);
@@ -27,6 +27,11 @@ export function ReportCanvas({ template, selected, onSelect, data }: { template:
   }, [data]);
   const boxes: PositionedBox[] = useMemo(() => computeLayout(previewLayoutModel(template, tableRowCounts), measurer), [template, tableRowCounts, measurer]);
   const maxPage = boxes.reduce((m, b) => Math.max(m, b.page), 1);
+  const cellSeverity = (r: number, c: number): 'error' | 'warning' | null => {
+    const matched = (issues ?? []).filter((i) => i.rowIndex === r && i.cellIndex === c);
+    if (matched.some((i) => i.severity === 'error')) return 'error';
+    return matched.length ? 'warning' : null;
+  };
 
   return (
     <div className="flex flex-col items-center gap-3 overflow-auto p-4">
@@ -43,6 +48,9 @@ export function ReportCanvas({ template, selected, onSelect, data }: { template:
                 className={`absolute cursor-pointer overflow-hidden rounded-sm ${isSel ? 'ring-2 ring-[#378ADD]' : 'ring-1 ring-transparent hover:ring-border'}`}
                 style={{ left: b.x * scale, top: b.y * scale, width: b.w * scale, height: b.h * scale, padding: 2 }}
               >
+                {(() => { const sev = cellSeverity(b.rowIndex, b.cellIndex); return sev ? (
+                  <span data-testid={`lint-marker-${b.rowIndex}-${b.cellIndex}`} className={`pointer-events-none absolute right-1 top-1 z-10 h-2 w-2 rounded-full ${sev === 'error' ? 'bg-destructive' : 'bg-amber-500'}`} />
+                ) : null; })()}
                 <CanvasBlock block={template.rows[b.rowIndex].cells[b.cellIndex].block} data={data?.get(`${b.rowIndex}:${b.cellIndex}`)} />
               </div>
             );

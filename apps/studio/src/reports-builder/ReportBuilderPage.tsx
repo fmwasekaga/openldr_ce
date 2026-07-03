@@ -4,7 +4,7 @@ import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } f
 import { AppShell } from '@/shell/AppShell';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { createEmptyTemplate, type Block, type BlockKind, type ReportTemplate } from '@openldr/report-builder/pure';
+import { createEmptyTemplate, lintReportTemplate, type Block, type BlockKind, type ReportTemplate } from '@openldr/report-builder/pure';
 import { createReportTemplate, getReportTemplate, updateReportTemplate, deleteReportTemplate, fetchClientConfig } from '../api';
 import { useTemplateHistory } from '../forms-builder/useTemplateHistory';
 import { addRowWithBlock, moveRow, newBlock, removeCell, setColSpan, updateBlockAt } from './reportBuilderModel';
@@ -15,6 +15,7 @@ import { PreviewPdfDialog } from './PreviewPdfDialog';
 import { useBlockData } from './useBlockData';
 import { ParametersEditor } from './ParametersEditor';
 import { ParamValuesBar } from './ParamValuesBar';
+import { LintSummary } from './LintSummary';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 
 export function ReportBuilderPage(): JSX.Element {
@@ -64,6 +65,9 @@ export function ReportBuilderPage(): JSX.Element {
     [selected, template],
   );
 
+  const issues = useMemo(() => lintReportTemplate(template), [template]);
+  const hasErrors = issues.some((i) => i.severity === 'error');
+
   const save = async () => {
     try {
       const name = template.name.trim() || 'Untitled report';
@@ -84,12 +88,13 @@ export function ReportBuilderPage(): JSX.Element {
           <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2">
             <Input aria-label="Report name" placeholder="Untitled report" value={template.name} onChange={(e) => update({ ...template, name: e.target.value })} className="h-8 max-w-xs text-sm" />
             <div className="flex items-center gap-1.5">
+              <LintSummary issues={issues} onSelectBlock={(r, c) => setSelected({ row: r, cell: c })} />
               <Button size="sm" variant="ghost" onClick={() => applyHistory(history.undo())}>Undo</Button>
               <Button size="sm" variant="ghost" onClick={() => applyHistory(history.redo())}>Redo</Button>
               <Button size="sm" variant="outline" onClick={() => setParamsOpen(true)}>Parameters</Button>
               <Button size="sm" variant="outline" onClick={() => { void doPreview(); }}>Preview PDF</Button>
               <Button size="sm" onClick={() => { void save(); }}>Save</Button>
-              <Button size="sm" variant="outline" onClick={() => { void publish(); }}>Publish</Button>
+              <Button size="sm" variant="outline" disabled={hasErrors} onClick={() => { void publish(); }}>Publish</Button>
               <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setConfirmDeleteOpen(true)}>Delete</Button>
             </div>
           </div>
@@ -98,7 +103,7 @@ export function ReportBuilderPage(): JSX.Element {
           <div className="flex min-h-0 flex-1 overflow-hidden">
             <div className="w-40 shrink-0 border-r border-border overflow-y-auto"><BlockPalette onAdd={addBlock} /></div>
             <div className="min-w-0 flex-1 overflow-auto bg-muted/30" onClick={() => setSelected(null)}>
-              <ReportCanvas template={template} selected={selected} onSelect={(row, cell) => setSelected({ row, cell })} data={blockData} />
+              <ReportCanvas template={template} selected={selected} onSelect={(row, cell) => setSelected({ row, cell })} data={blockData} issues={issues} />
             </div>
             <div className="w-64 shrink-0 border-l border-border overflow-y-auto">
               {selectedBlock && selected ? (

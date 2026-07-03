@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { ReportCanvas } from './ReportCanvas';
 import { addRowWithBlock, newBlock } from './reportBuilderModel';
 import { createEmptyTemplate } from '@openldr/report-builder/pure';
+import type { ReportLintIssue } from '@openldr/report-builder/pure';
 
 function template() {
   let t = createEmptyTemplate('rt', 'R');
@@ -33,5 +34,26 @@ describe('ReportCanvas', () => {
     const data = new Map([['0:0', { loading: true } as any]]);
     render(<ReportCanvas template={t} selected={null} onSelect={() => {}} data={data} />);
     expect(screen.getByText(/loading|…/i)).toBeInTheDocument();
+  });
+});
+
+describe('ReportCanvas lint markers', () => {
+  function oneBlock() {
+    let t = createEmptyTemplate('rt', 'R');
+    t = addRowWithBlock(t, newBlock('title'));
+    return t;
+  }
+
+  it('renders an error marker on a cell with an error issue', () => {
+    const issues: ReportLintIssue[] = [{ severity: 'error', code: 'empty-query', message: 'x', rowIndex: 0, cellIndex: 0 }];
+    const { container } = render(<ReportCanvas template={oneBlock()} selected={null} onSelect={() => {}} issues={issues} />);
+    const marker = container.querySelector('[data-testid="lint-marker-0-0"]');
+    expect(marker).toBeTruthy();
+    expect(marker?.className).toContain('bg-destructive');
+  });
+
+  it('renders no marker when there are no issues for a cell', () => {
+    const { container } = render(<ReportCanvas template={oneBlock()} selected={null} onSelect={() => {}} issues={[]} />);
+    expect(container.querySelector('[data-testid="lint-marker-0-0"]')).toBeNull();
   });
 });
