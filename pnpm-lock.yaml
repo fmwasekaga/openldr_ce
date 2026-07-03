@@ -682,6 +682,9 @@ importers:
       '@openldr/plugins':
         specifier: workspace:*
         version: link:../plugins
+      '@openldr/report-builder':
+        specifier: workspace:*
+        version: link:../report-builder
       '@openldr/reporting':
         specifier: workspace:*
         version: link:../reporting
