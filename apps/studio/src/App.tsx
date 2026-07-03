@@ -5,6 +5,7 @@ import { Docs } from './pages/Docs';
 import { AppShell } from './shell/AppShell';
 import { DashboardPage } from './dashboard/DashboardPage';
 import { Audit } from './pages/Audit';
+import { Activity } from './pages/Activity';
 import { Users } from './pages/Users';
 import { SettingsShell } from '@/pages/settings/SettingsShell';
 import { General } from '@/pages/settings/General';
@@ -39,6 +40,7 @@ export function App() {
         <Route path="connectors" element={<RequireRole role="lab_admin"><Connectors /></RequireRole>} />
       </Route>
       <Route path="/audit" element={<Audit />} />
+      <Route path="/activity" element={<Activity />} />
       <Route path="/forms" element={<Forms />} />
       <Route path="/forms/new" element={<FormBuilderPage />} />
       <Route path="/forms/:id/builder" element={<FormBuilderPage />} />

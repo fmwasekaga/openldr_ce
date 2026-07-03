@@ -2,7 +2,7 @@ import { type ReactNode, useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, BookOpen, Library, FileInput, Users, ShieldCheck, Settings,
-  Workflow, ChevronLeft, ChevronRight, Sun, Moon, LogOut, type LucideIcon,
+  Workflow, Activity, ChevronLeft, ChevronRight, Sun, Moon, LogOut, type LucideIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { SUPPORTED_LANGUAGES, setLanguage } from '@/i18n/language';
@@ -26,6 +26,7 @@ const NAV: { to: string; labelKey: string; end: boolean; icon: LucideIcon; roles
   { to: '/forms', labelKey: 'nav.forms', end: false, icon: FileInput },
   { to: '/users', labelKey: 'nav.users', end: false, icon: Users },
   { to: '/audit', labelKey: 'nav.audit', end: false, icon: ShieldCheck },
+  { to: '/activity', labelKey: 'nav.activity', end: false, icon: Activity, roles: ['lab_admin', 'lab_manager', 'data_analyst', 'system_auditor'] },
   { to: '/docs', labelKey: 'nav.docs', end: false, icon: BookOpen },
 ];
 
