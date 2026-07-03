@@ -27,4 +27,11 @@ describe('ReportCanvas', () => {
     render(<ReportCanvas template={template()} selected={{ row: 1, cell: 0 }} onSelect={() => {}} />);
     expect(screen.getByTestId('canvas-cell-1-0').getAttribute('data-selected')).toBe('true');
   });
+  it('passes block data to the rendered block', () => {
+    let t = createEmptyTemplate('rt', 'R');
+    t = addRowWithBlock(t, newBlock('kpi'));
+    const data = new Map([['0:0', { loading: true } as any]]);
+    render(<ReportCanvas template={t} selected={null} onSelect={() => {}} data={data} />);
+    expect(screen.getByText(/loading|…/i)).toBeInTheDocument();
+  });
 });

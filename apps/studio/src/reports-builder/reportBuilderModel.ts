@@ -69,15 +69,15 @@ const SAMPLE_TABLE_ROWS = 4;
 
 /** Build a LayoutModel for the editing canvas: interpolate title/text with empty params and
  *  use a fixed sample row count for tables (P3a has no live data). */
-export function previewLayoutModel(t: ReportTemplate): LayoutModel {
+export function previewLayoutModel(t: ReportTemplate, tableRowCounts: Record<string, number> = {}): LayoutModel {
   const ctx = { params: {}, dataset: undefined };
-  const rows: LayoutRow[] = t.rows.map((row) => ({
+  const rows: LayoutRow[] = t.rows.map((row, r) => ({
     repeat: row.repeat,
-    cells: row.cells.map((cell) => {
+    cells: row.cells.map((cell, c) => {
       const b = cell.block;
       if (b.kind === 'title') return { kind: b.kind, colSpan: cell.colSpan, text: interpolate(b.text ?? '', ctx), style: b.style };
       if (b.kind === 'text') return { kind: b.kind, colSpan: cell.colSpan, text: interpolate(b.content ?? '', ctx), style: b.style };
-      if (b.kind === 'table') return { kind: b.kind, colSpan: cell.colSpan, rowCount: SAMPLE_TABLE_ROWS };
+      if (b.kind === 'table') return { kind: b.kind, colSpan: cell.colSpan, rowCount: tableRowCounts[`${r}:${c}`] ?? SAMPLE_TABLE_ROWS };
       return { kind: b.kind, colSpan: cell.colSpan };
     }),
   }));

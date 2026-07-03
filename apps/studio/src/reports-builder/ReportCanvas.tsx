@@ -3,6 +3,7 @@ import { computeLayout, type PageSpec, type PositionedBox, type ReportTemplate }
 import { previewLayoutModel } from './reportBuilderModel';
 import { createDomMeasurer } from './domMeasurer';
 import { CanvasBlock } from './CanvasBlock';
+import type { BlockData } from './useBlockData';
 
 export interface CellRef { row: number; cell: number }
 
@@ -14,12 +15,17 @@ function pageWH(p: PageSpec): [number, number] {
   return p.orientation === 'landscape' ? [h, w] : [w, h];
 }
 
-export function ReportCanvas({ template, selected, onSelect }: { template: ReportTemplate; selected: CellRef | null; onSelect: (row: number, cell: number) => void }): JSX.Element {
+export function ReportCanvas({ template, selected, onSelect, data }: { template: ReportTemplate; selected: CellRef | null; onSelect: (row: number, cell: number) => void; data?: Map<string, BlockData> }): JSX.Element {
   const measurer = useMemo(() => createDomMeasurer(), []);
   const page = template.page as PageSpec;
   const [pw, ph] = pageWH(page);
   const scale = CANVAS_W / pw;
-  const boxes: PositionedBox[] = useMemo(() => computeLayout(previewLayoutModel(template), measurer), [template, measurer]);
+  const tableRowCounts = useMemo(() => {
+    const m: Record<string, number> = {};
+    data?.forEach((d, k) => { if (d.result) m[k] = d.result.rows.length; });
+    return m;
+  }, [data]);
+  const boxes: PositionedBox[] = useMemo(() => computeLayout(previewLayoutModel(template, tableRowCounts), measurer), [template, tableRowCounts, measurer]);
   const maxPage = boxes.reduce((m, b) => Math.max(m, b.page), 1);
 
   return (
@@ -37,7 +43,7 @@ export function ReportCanvas({ template, selected, onSelect }: { template: Repor
                 className={`absolute cursor-pointer overflow-hidden rounded-sm ${isSel ? 'ring-2 ring-[#378ADD]' : 'ring-1 ring-transparent hover:ring-border'}`}
                 style={{ left: b.x * scale, top: b.y * scale, width: b.w * scale, height: b.h * scale, padding: 2 }}
               >
-                <CanvasBlock block={template.rows[b.rowIndex].cells[b.cellIndex].block} />
+                <CanvasBlock block={template.rows[b.rowIndex].cells[b.cellIndex].block} data={data?.get(`${b.rowIndex}:${b.cellIndex}`)} />
               </div>
             );
           })}

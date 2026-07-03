@@ -56,4 +56,11 @@ describe('reportBuilderModel', () => {
     expect(lm.rows.length).toBe(1);
     expect(lm.rows[0].cells[0].kind).toBe('title');
   });
+
+  it('previewLayoutModel uses a supplied table row count over the sample default', () => {
+    let t = createEmptyTemplate('rt', 'R');
+    t = addRowWithBlock(t, newBlock('table'));
+    const lm = previewLayoutModel(t, { '0:0': 9 });
+    expect(lm.rows[0].cells[0].rowCount).toBe(9);
+  });
 });
