@@ -31,3 +31,5 @@ export {
   type RunPersistStoreInput,
   type RunPersistStoreOutput,
 } from './engine/services';
+export * from './lifecycle';
+export { extractCorrelationId } from './correlation';
