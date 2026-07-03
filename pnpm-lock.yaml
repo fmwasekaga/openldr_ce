@@ -664,6 +664,9 @@ importers:
       '@openldr/core':
         specifier: workspace:*
         version: link:../core
+      '@openldr/dashboards':
+        specifier: workspace:*
+        version: link:../dashboards
       '@openldr/db':
         specifier: workspace:*
         version: link:../db
