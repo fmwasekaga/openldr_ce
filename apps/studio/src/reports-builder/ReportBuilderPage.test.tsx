@@ -85,4 +85,21 @@ describe('ReportBuilderPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: /^delete report$/i }));
     await waitFor(() => expect(deleteReportTemplate).toHaveBeenCalled());
   });
+  it('disables Publish when the template has a lint error', async () => {
+    const t = { id: 'rt1', name: 'R', description: '', category: 'operational', status: 'draft',
+      page: { size: 'A4', orientation: 'portrait', margins: { top: 40, right: 40, bottom: 40, left: 40 } },
+      parameters: [], rows: [{ id: 'r', cells: [{ colSpan: 12, block: { kind: 'kpi', label: '', query: { mode: 'builder', model: '', metric: { key: 'count', agg: 'count' }, filters: [] } } }] }] };
+    vi.mocked(getReportTemplate).mockResolvedValue(t as never);
+    renderId('rt1');
+    expect(await screen.findByRole('button', { name: /^publish$/i })).toBeDisabled();
+  });
+
+  it('enables Publish for a clean template', async () => {
+    const t = { id: 'rt1', name: 'R', description: '', category: 'operational', status: 'draft',
+      page: { size: 'A4', orientation: 'portrait', margins: { top: 40, right: 40, bottom: 40, left: 40 } },
+      parameters: [], rows: [{ id: 'r', cells: [{ colSpan: 12, block: { kind: 'kpi', label: '', query: { mode: 'builder', model: 'm', metric: { key: 'count', agg: 'count' }, filters: [] } } }] }] };
+    vi.mocked(getReportTemplate).mockResolvedValue(t as never);
+    renderId('rt1');
+    expect(await screen.findByRole('button', { name: /^publish$/i })).toBeEnabled();
+  });
 });
