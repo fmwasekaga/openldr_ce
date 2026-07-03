@@ -93,6 +93,10 @@ export function ReportBuilderPage(): JSX.Element {
                   colSpan={template.rows[selected.row].cells[selected.cell].colSpan}
                   onPatchBlock={(patch) => update(updateBlockAt(template, selected.row, selected.cell, patch))}
                   onSetColSpan={(n) => update(setColSpan(template, selected.row, selected.cell, n))}
+                  canMoveUp={selected.row > 0}
+                  canMoveDown={selected.row < template.rows.length - 1}
+                  onMoveUp={() => { pushUpdate(moveRow(template, selected.row, selected.row - 1)); setSelected({ row: selected.row - 1, cell: selected.cell }); }}
+                  onMoveDown={() => { pushUpdate(moveRow(template, selected.row, selected.row + 1)); setSelected({ row: selected.row + 1, cell: selected.cell }); }}
                   onDelete={() => { pushUpdate(removeCell(template, selected.row, selected.cell)); setSelected(null); }}
                 />
               ) : (
