@@ -43,4 +43,22 @@ describe('useBlockData', () => {
     await waitFor(() => expect(hook.current.get('1:0')?.result).toBeTruthy());
     expect(runWidgetQuery).toHaveBeenCalledTimes(1);
   });
+
+  it('substitutes a param value into a bound filter before querying', async () => {
+    runWidgetQuery.mockResolvedValue(result(1));
+    let t = createEmptyTemplate('rt', 'R');
+    t = addRowWithBlock(t, newBlock('kpi'));
+    t = updateBlockAt(t, 0, 0, {
+      query: {
+        mode: 'builder',
+        model: 'm',
+        metric: { key: 'count', agg: 'count' },
+        filters: [{ dimension: 'status', op: 'eq', value: '{{param.status}}' }],
+      },
+    } as any);
+    renderHook(() => useBlockData(t, { status: 'active' }));
+    await waitFor(() => expect(runWidgetQuery).toHaveBeenCalled());
+    const arg = vi.mocked(runWidgetQuery).mock.calls[0][0] as { filters: { value: unknown }[] };
+    expect(arg.filters[0].value).toBe('active');
+  });
 });
