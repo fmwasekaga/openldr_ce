@@ -1,7 +1,8 @@
 import { interpolate, type InterpolateContext } from '../helpers';
 import type { Block } from '../schema';
 import type { CellData, PositionedBox } from './layout';
-import { drawChart, type ChartData } from './charts';
+import { drawChart } from './charts';
+import { resultToChartData, chartOpts } from './chart-data';
 
 const TABLE_HEADER_H = 18;
 const TABLE_ROW_H = 16;
@@ -11,17 +12,6 @@ function fontFor(style?: { bold?: boolean; italic?: boolean }): string {
   if (style?.bold) return 'Helvetica-Bold';
   if (style?.italic) return 'Helvetica-Oblique';
   return 'Helvetica';
-}
-
-// Build ChartData from a ReportResult using the columns as label/value (label = first non-number col, value = first number col).
-function toChartData(title: string, result: CellData['result']): ChartData {
-  if (!result) return { title, categories: [], series: [] };
-  const cols = result.columns;
-  const labelKey = cols.find((c) => c.kind !== 'number')?.key ?? cols[0]?.key ?? 'label';
-  const valueKey = cols.find((c) => c.kind === 'number')?.key ?? cols[1]?.key ?? 'value';
-  const categories = result.rows.map((r) => String(r[labelKey] ?? ''));
-  const values = result.rows.map((r) => Number(r[valueKey] ?? 0));
-  return { title, categories, series: [{ name: valueKey, values }] };
 }
 
 function drawErrorPlaceholder(doc: PDFKit.PDFDocument, box: PositionedBox, msg: string): void {
@@ -72,10 +62,10 @@ export function drawBlock(
       return;
     }
     case 'kpi':
-      drawChart(doc, box, 'kpi', toChartData(block.label || '', cell?.result), {});
+      drawChart(doc, box, 'kpi', resultToChartData(cell?.result, { title: block.label || '' }), {});
       return;
     case 'chart':
-      drawChart(doc, box, block.chartType, toChartData('', cell?.result), block.visual as never);
+      drawChart(doc, box, block.chartType, resultToChartData(cell?.result, { title: '', ...chartOpts(block.query) }), block.visual as never);
       return;
     case 'table':
       drawTable(doc, box, block, cell, bodyBottom);

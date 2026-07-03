@@ -1,8 +1,8 @@
 import { linearScale, niceTicks } from './scale';
 import { layoutLegend } from './legend';
+import type { ChartData, ChartSeries } from '../chart-data';
+export type { ChartData, ChartSeries };
 
-export interface ChartSeries { name: string; values: number[] }
-export interface ChartData { title: string; categories: string[]; series: ChartSeries[] }
 export interface ChartVisual { color?: string; secondaryColor?: string; showLegend?: boolean }
 
 export type ChartKind = 'bar' | 'line' | 'pie';
