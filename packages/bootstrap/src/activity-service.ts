@@ -41,8 +41,11 @@ export function createActivityService(deps: ActivityDeps): ActivityService {
       for (const h of heads) {
         const lc = await assemble(h.correlationId);
         const last = lc?.stages[lc.stages.length - 1];
+        // Source = how the payload arrived (the `received` stage detail = webhook/ingest source),
+        // not the last stage's detail (which for a persisted payload is a resource count).
+        const received = lc?.stages.find((s) => s.stage === 'received');
         out.push({ correlationId: h.correlationId, workflowId: h.workflowId,
-          source: last?.detail ?? null, startedAt: h.latestAt,
+          source: received?.detail ?? null, startedAt: h.latestAt,
           currentStage: last?.stage ?? 'received', status: lc?.status ?? 'stuck' });
       }
       return out;

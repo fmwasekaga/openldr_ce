@@ -71,10 +71,6 @@ function StageBar({ current }: { current: string }) {
   );
 }
 
-function shortId(id: string): string {
-  return id.length > 12 ? `${id.slice(0, 8)}…${id.slice(-4)}` : id;
-}
-
 function LifecycleSheet({
   correlationId,
   lifecycle,
@@ -212,11 +208,11 @@ export function Activity() {
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
-                <TableHead className="w-56 text-xs uppercase">{t('activity.colPayload')}</TableHead>
-                <TableHead className="w-40 text-xs uppercase">{t('activity.colSource')}</TableHead>
+                <TableHead className="text-xs uppercase">{t('activity.colPayload')}</TableHead>
+                <TableHead className="w-44 text-xs uppercase">{t('activity.colSource')}</TableHead>
                 <TableHead className="w-48 text-xs uppercase">{t('activity.colStarted')}</TableHead>
                 <TableHead className="w-44 text-xs uppercase">{t('activity.colStage')}</TableHead>
-                <TableHead className="text-xs uppercase">{t('activity.colStatus')}</TableHead>
+                <TableHead className="w-28 text-xs uppercase">{t('activity.colStatus')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody className="[&_tr:last-child]:border-b">
@@ -234,7 +230,7 @@ export function Activity() {
                     onClick={() => { void openPayload(p.correlationId); }}
                     title={t('activity.openDetail')}
                   >
-                    <TableCell><span className="font-mono text-xs text-muted-foreground" title={p.correlationId}>{shortId(p.correlationId)}</span></TableCell>
+                    <TableCell><span className="font-mono text-xs text-muted-foreground" title={p.correlationId}>{p.correlationId}</span></TableCell>
                     <TableCell className="text-sm">{p.source ?? t('activity.noSource')}</TableCell>
                     <TableCell><span className="whitespace-nowrap font-mono text-xs text-muted-foreground">{formatTimestamp(p.startedAt)}</span></TableCell>
                     <TableCell>
