@@ -3,28 +3,42 @@ import { Button } from '@/components/ui/button';
 import { listModels, type QueryModel, type WidgetQuery } from '../api';
 import { BuilderForm } from '../dashboard/editor/BuilderForm';
 import { FilterListEditor, type BuilderFilter } from './FilterListEditor';
+import { SqlQueryEditor } from './SqlQueryEditor';
 import type { Block, ReportParam } from '@openldr/report-builder/pure';
 
 type BuilderQuery = Extract<WidgetQuery, { mode: 'builder' }>;
+type SqlQuery = Extract<WidgetQuery, { mode: 'sql' }>;
 const EMPTY: BuilderQuery = { mode: 'builder', model: '', metric: { key: 'count', agg: 'count' }, filters: [] };
+const EMPTY_SQL: SqlQuery = { mode: 'sql', sql: 'select 1 as value', values: {} };
 const CHART_TYPES: { v: 'bar' | 'line' | 'pie'; label: string }[] = [{ v: 'bar', label: 'Bar' }, { v: 'line', label: 'Line' }, { v: 'pie', label: 'Pie' }];
+const PARAM_TOKEN = /^\{\{\s*param\.(\w+)\s*\}\}$/;
 
-export function QueryEditor({ block, parameters, onChange }: { block: Block; parameters: ReportParam[]; onChange: (patch: Partial<Block>) => void }): JSX.Element {
+export function QueryEditor({ block, parameters, sqlEnabled = false, onChange }: { block: Block; parameters: ReportParam[]; sqlEnabled?: boolean; onChange: (patch: Partial<Block>) => void }): JSX.Element {
   const [models, setModels] = useState<QueryModel[]>([]);
+  const [sqlOpen, setSqlOpen] = useState(false);
   useEffect(() => { listModels().then(setModels).catch(() => setModels([])); }, []);
 
   const isTable = block.kind === 'table';
-  const query: BuilderQuery = isTable
-    ? (block.source === 'primary' ? EMPTY : (block.source as BuilderQuery))
-    : ((block as { query?: WidgetQuery }).query?.mode === 'builder' ? (block as { query: BuilderQuery }).query : EMPTY);
+  // The raw stored query for this block, or null (table:'primary').
+  const rawQuery: WidgetQuery | null = isTable
+    ? (block.source === 'primary' ? null : (block.source as WidgetQuery))
+    : ((block as { query?: WidgetQuery }).query ?? null);
+  const mode: 'builder' | 'sql' = rawQuery?.mode === 'sql' ? 'sql' : 'builder';
+  const builderQuery: BuilderQuery = rawQuery?.mode === 'builder' ? rawQuery : EMPTY;
+  const sqlQuery: SqlQuery = rawQuery?.mode === 'sql' ? rawQuery : EMPTY_SQL;
 
-  const setQuery = (q: BuilderQuery) => {
+  const setQuery = (q: WidgetQuery) => {
     if (block.kind === 'kpi' || block.kind === 'chart') onChange({ query: q } as Partial<Block>);
     else if (isTable) onChange({ source: q } as Partial<Block>);
   };
 
   const showBuilder = !isTable || block.source !== 'primary';
-  const dimensions = models.find((m) => m.id === query.model)?.dimensions ?? [];
+  const dimensions = models.find((m) => m.id === builderQuery.model)?.dimensions ?? [];
+  // SQL authoring for a new (non-sql) block requires the flag; an existing sql block stays viewable.
+  const sqlToggleDisabled = !sqlEnabled && mode !== 'sql';
+  const boundParams = Object.entries(sqlQuery.values ?? {})
+    .map(([v, val]) => [v, (typeof val === 'string' ? val.match(PARAM_TOKEN)?.[1] : undefined)] as const)
+    .filter(([, p]) => p);
 
   return (
     <div className="flex flex-col gap-3">
@@ -36,16 +50,45 @@ export function QueryEditor({ block, parameters, onChange }: { block: Block; par
       )}
 
       {showBuilder && (
-        models.length ? <BuilderForm models={models} value={query} onChange={setQuery} /> : <p className="text-xs text-muted-foreground">Loading data sources…</p>
+        <div className="flex gap-1 text-xs">
+          <Button type="button" size="sm" variant={mode === 'builder' ? 'default' : 'outline'} className="h-7 flex-1" onClick={() => { if (mode !== 'builder') setQuery({ ...EMPTY }); }}>Builder</Button>
+          <Button type="button" size="sm" variant={mode === 'sql' ? 'default' : 'outline'} className="h-7 flex-1" disabled={sqlToggleDisabled} onClick={() => { if (mode !== 'sql') setQuery({ ...EMPTY_SQL }); }}>SQL</Button>
+        </div>
       )}
 
-      {showBuilder && models.length > 0 && (
-        <FilterListEditor
-          filters={(query.filters ?? []) as BuilderFilter[]}
-          dimensions={dimensions}
-          parameters={parameters}
-          onChange={(f) => setQuery({ ...query, filters: f as BuilderQuery['filters'] })}
-        />
+      {showBuilder && mode === 'builder' && (
+        <>
+          {models.length ? <BuilderForm models={models} value={builderQuery} onChange={(q) => setQuery(q)} /> : <p className="text-xs text-muted-foreground">Loading data sources…</p>}
+          {models.length > 0 && (
+            <FilterListEditor
+              filters={(builderQuery.filters ?? []) as BuilderFilter[]}
+              dimensions={dimensions}
+              parameters={parameters}
+              onChange={(f) => setQuery({ ...builderQuery, filters: f as BuilderQuery['filters'] })}
+            />
+          )}
+        </>
+      )}
+
+      {showBuilder && mode === 'sql' && (
+        <div className="flex flex-col gap-2">
+          <pre className="max-h-24 overflow-auto rounded border border-border bg-muted/40 p-2 font-mono text-[11px] text-muted-foreground">{sqlQuery.sql}</pre>
+          {boundParams.length > 0 && (
+            <div className="text-[11px] text-muted-foreground">
+              {boundParams.map(([v, p]) => <div key={v}><code className="font-mono">{`{{${v}}}`}</code> → {p}</div>)}
+            </div>
+          )}
+          <Button type="button" size="sm" variant="outline" className="h-7" onClick={() => setSqlOpen(true)}>Edit SQL</Button>
+          <SqlQueryEditor
+            open={sqlOpen}
+            sql={sqlQuery.sql}
+            values={sqlQuery.values ?? {}}
+            parameters={parameters}
+            sqlEnabled={sqlEnabled}
+            onClose={() => setSqlOpen(false)}
+            onSave={(q) => setQuery(q)}
+          />
+        </div>
       )}
 
       {block.kind === 'chart' && (

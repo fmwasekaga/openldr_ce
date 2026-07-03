@@ -50,3 +50,27 @@ describe('QueryEditor filters', () => {
     );
   });
 });
+
+describe('QueryEditor SQL mode', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('disables the SQL toggle for a builder block when sqlEnabled is false', () => {
+    const block: Block = { kind: 'kpi', query: { mode: 'builder', model: 'observations', metric: { key: 'count', agg: 'count' }, filters: [] }, label: '' };
+    render(<QueryEditor block={block} parameters={[]} sqlEnabled={false} onChange={() => {}} />);
+    expect(screen.getByRole('button', { name: /^sql$/i })).toBeDisabled();
+  });
+
+  it('switches a builder block to a seeded sql query when SQL is enabled', () => {
+    const block: Block = { kind: 'kpi', query: { mode: 'builder', model: 'observations', metric: { key: 'count', agg: 'count' }, filters: [] }, label: '' };
+    const onChange = vi.fn();
+    render(<QueryEditor block={block} parameters={[]} sqlEnabled onChange={onChange} />);
+    fireEvent.click(screen.getByRole('button', { name: /^sql$/i }));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ query: { mode: 'sql', sql: 'select 1 as value', values: {} } }));
+  });
+
+  it('shows Edit SQL for an existing sql block even when sqlEnabled is false', () => {
+    const block: Block = { kind: 'kpi', query: { mode: 'sql', sql: 'select 2 as value', values: {} }, label: '' };
+    render(<QueryEditor block={block} parameters={[]} sqlEnabled={false} onChange={() => {}} />);
+    expect(screen.getByRole('button', { name: /edit sql/i })).toBeTruthy();
+  });
+});
