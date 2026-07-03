@@ -10,6 +10,8 @@ vi.mock('../api', () => ({
   deleteReportTemplate: vi.fn(),
   previewReportTemplate: vi.fn(),
   listPluginUis: vi.fn(async () => []),
+  runWidgetQuery: vi.fn().mockResolvedValue({ columns: [], rows: [], chart: {}, meta: { generatedAt: 'n', rowCount: 0 } }),
+  listModels: vi.fn().mockResolvedValue([]),
 }));
 vi.mock('../reports/PdfCanvasViewer', () => ({ PdfCanvasViewer: () => <div /> }));
 
