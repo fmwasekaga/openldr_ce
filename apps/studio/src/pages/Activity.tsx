@@ -88,7 +88,7 @@ function LifecycleSheet({
           <SheetTitle>{t('activity.detailTitle')}</SheetTitle>
           <SheetDescription className="break-all font-mono text-xs">{correlationId}</SheetDescription>
         </SheetHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+        <div className="min-h-0 flex-1 overflow-y-auto">
           {!lifecycle ? (
             <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
           ) : lifecycle.stages.length === 0 ? (
