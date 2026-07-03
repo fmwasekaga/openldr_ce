@@ -34,9 +34,12 @@ export function useBlockData(template: ReportTemplate, params: Record<string, st
 
   const timer = useRef<ReturnType<typeof setTimeout>>();
   useEffect(() => {
+    // `cancelled` lives in the effect body (not the timer callback) and is flipped by the cleanup,
+    // so a superseded in-flight query (signature changed, or unmount) can't setData after the fact
+    // and overwrite a newer result out of order.
+    let cancelled = false;
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
-      let cancelled = false;
       setData((prev) => { const next = new Map(prev); for (const w of wanted) next.set(w.key, { ...next.get(w.key), loading: true }); return next; });
       const byJson = new Map<string, { key: string; q: WidgetQuery }[]>();
       for (const w of wanted) { const a = byJson.get(w.json) ?? []; a.push({ key: w.key, q: w.q }); byJson.set(w.json, a); }
@@ -47,7 +50,7 @@ export function useBlockData(template: ReportTemplate, params: Record<string, st
       });
       setData((prev) => { const keep = new Set(wanted.map((w) => w.key)); const next = new Map<string, BlockData>(); prev.forEach((v, k) => { if (keep.has(k)) next.set(k, v); }); return next; });
     }, 250);
-    return () => { if (timer.current) clearTimeout(timer.current); };
+    return () => { cancelled = true; if (timer.current) clearTimeout(timer.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signature]);
 
