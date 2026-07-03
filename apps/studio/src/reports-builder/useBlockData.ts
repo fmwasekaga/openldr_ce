@@ -8,7 +8,13 @@ const TOKEN = /\{\{\s*param\.(\w+)\s*\}\}/g;
 function resolve(q: WidgetQuery, params: Record<string, string>): WidgetQuery {
   const clone = JSON.parse(JSON.stringify(q)) as WidgetQuery;
   const sub = (v: unknown) => (typeof v === 'string' && v.includes('{{') ? v.replace(TOKEN, (_m, k: string) => params[k] ?? '') : v);
-  if (clone.mode === 'builder') clone.filters = (clone.filters ?? []).map((f) => ({ ...f, value: sub(f.value) as never }));
+  if (clone.mode === 'builder') {
+    clone.filters = (clone.filters ?? []).map((f) => ({ ...f, value: sub(f.value) as never }));
+  } else if (clone.values) {
+    const next: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(clone.values)) next[k] = sub(v);
+    clone.values = next as never;
+  }
   return clone;
 }
 

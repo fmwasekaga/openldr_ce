@@ -5,9 +5,10 @@ import type { Block, ReportParam } from '@openldr/report-builder/pure';
 
 const WIDTHS = [3, 4, 6, 8, 12];
 
-export function BlockInspector({ block, colSpan, parameters, onPatchBlock, onSetColSpan, onMoveUp, onMoveDown, canMoveUp, canMoveDown, onDelete }: {
+export function BlockInspector({ block, colSpan, parameters, sqlEnabled, onPatchBlock, onSetColSpan, onMoveUp, onMoveDown, canMoveUp, canMoveDown, onDelete }: {
   block: Block; colSpan: number;
   parameters: ReportParam[];
+  sqlEnabled: boolean;
   onPatchBlock: (patch: Partial<Block>) => void;
   onSetColSpan: (n: number) => void;
   onMoveUp: () => void;
@@ -31,7 +32,7 @@ export function BlockInspector({ block, colSpan, parameters, onPatchBlock, onSet
         </label>
       )}
       {(block.kind === 'kpi' || block.kind === 'chart' || block.kind === 'table') && (
-        <QueryEditor block={block} parameters={parameters} onChange={onPatchBlock} />
+        <QueryEditor block={block} parameters={parameters} sqlEnabled={sqlEnabled} onChange={onPatchBlock} />
       )}
 
       <div className="flex flex-col gap-1 text-xs">Width
