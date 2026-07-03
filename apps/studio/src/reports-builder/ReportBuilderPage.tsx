@@ -13,13 +13,17 @@ import { ReportCanvas, type CellRef } from './ReportCanvas';
 import { BlockInspector } from './BlockInspector';
 import { PreviewPdfDialog } from './PreviewPdfDialog';
 import { useBlockData } from './useBlockData';
+import { ParametersEditor } from './ParametersEditor';
+import { ParamValuesBar } from './ParamValuesBar';
 
 export function ReportBuilderPage(): JSX.Element {
   const { id } = useParams();
   const navigate = useNavigate();
   const [tplId, setTplId] = useState<string | null>(id ?? null);
   const [template, setTemplate] = useState<ReportTemplate>(() => createEmptyTemplate(`rt-${Date.now()}`, ''));
-  const blockData = useBlockData(template, {});
+  const [paramValues, setParamValues] = useState<Record<string, string>>({});
+  const [paramsOpen, setParamsOpen] = useState(false);
+  const blockData = useBlockData(template, paramValues);
   const [selected, setSelected] = useState<CellRef | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [error, setError] = useState<string>();
@@ -76,6 +80,7 @@ export function ReportBuilderPage(): JSX.Element {
             <div className="flex items-center gap-1.5">
               <Button size="sm" variant="ghost" onClick={() => applyHistory(history.undo())}>Undo</Button>
               <Button size="sm" variant="ghost" onClick={() => applyHistory(history.redo())}>Redo</Button>
+              <Button size="sm" variant="outline" onClick={() => setParamsOpen(true)}>Parameters</Button>
               <Button size="sm" variant="outline" onClick={() => { void doPreview(); }}>Preview PDF</Button>
               <Button size="sm" onClick={() => { void save(); }}>Save</Button>
               <Button size="sm" variant="outline" onClick={() => { void publish(); }}>Publish</Button>
@@ -83,6 +88,7 @@ export function ReportBuilderPage(): JSX.Element {
             </div>
           </div>
           {error && <div className="border-b border-border px-4 py-2 text-xs text-destructive">{error}</div>}
+          <ParamValuesBar parameters={template.parameters} values={paramValues} onChange={setParamValues} />
           <div className="flex min-h-0 flex-1 overflow-hidden">
             <div className="w-40 shrink-0 border-r border-border overflow-y-auto"><BlockPalette onAdd={addBlock} /></div>
             <div className="min-w-0 flex-1 overflow-auto bg-muted/30" onClick={() => setSelected(null)}>
@@ -92,6 +98,7 @@ export function ReportBuilderPage(): JSX.Element {
               {selectedBlock && selected ? (
                 <BlockInspector
                   block={selectedBlock}
+                  parameters={template.parameters}
                   colSpan={template.rows[selected.row].cells[selected.cell].colSpan}
                   onPatchBlock={(patch) => update(updateBlockAt(template, selected.row, selected.cell, patch))}
                   onSetColSpan={(n) => update(setColSpan(template, selected.row, selected.cell, n))}
@@ -108,7 +115,13 @@ export function ReportBuilderPage(): JSX.Element {
           </div>
         </div>
       </DndContext>
-      {tplId && <PreviewPdfDialog open={previewOpen} reportId={tplId} params={{}} onClose={() => setPreviewOpen(false)} />}
+      {tplId && <PreviewPdfDialog open={previewOpen} reportId={tplId} params={paramValues} onClose={() => setPreviewOpen(false)} />}
+      <ParametersEditor
+        open={paramsOpen}
+        parameters={template.parameters}
+        onClose={() => setParamsOpen(false)}
+        onSave={(p) => update({ ...template, parameters: p })}
+      />
     </AppShell>
   );
 }
