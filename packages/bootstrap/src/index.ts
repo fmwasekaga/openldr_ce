@@ -303,11 +303,12 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
 
   const ingestBatches = createBatchStore(internal.db);
   const persistedEvent = async (correlationId: string) => {
-    const row = await internal.db.selectFrom('outbox_events' as never)
-      .select(['payload', 'created_at'] as never)
-      .where('batch_id' as never, '=', correlationId as never)
-      .where('type' as never, '=', 'data.persisted' as never)
-      .orderBy('created_at' as never, 'asc').executeTakeFirst() as { payload: unknown; created_at: unknown } | undefined;
+    const row = await internal.db.selectFrom('outbox_events')
+      .select(['payload', 'created_at'])
+      .where('batch_id', '=', correlationId)
+      .where('type', '=', 'data.persisted')
+      .orderBy('created_at', 'asc')
+      .executeTakeFirst();
     if (!row) return null;
     const p = (typeof row.payload === 'string' ? JSON.parse(row.payload) : row.payload) as { count?: number; resourceTypes?: string[] };
     return { at: String(row.created_at), count: p.count ?? 0, resourceTypes: p.resourceTypes ?? [] };

@@ -195,7 +195,7 @@ export function Activity() {
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <StageBar current={p.currentStage} />
-                        <span className="font-mono text-[11px] text-muted-foreground">{p.currentStage}</span>
+                        <span className="text-[11px] text-muted-foreground">{t(`activity.stage.${p.currentStage}`, p.currentStage)}</span>
                       </div>
                     </TableCell>
                     <TableCell><StatusBadge status={p.status} /></TableCell>

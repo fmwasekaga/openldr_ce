@@ -27,7 +27,7 @@ import { Activity } from './Activity';
 describe('Activity page', () => {
   it('lists recent payloads with their stage', async () => {
     render(<MemoryRouter><Activity /></MemoryRouter>);
-    await waitFor(() => expect(screen.getByText('persisted')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Persisted')).toBeInTheDocument());
   });
 
   it('opens the lifecycle detail when a row is clicked', async () => {

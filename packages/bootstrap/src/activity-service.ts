@@ -10,7 +10,7 @@ export interface ActivityDeps {
     listByCorrelation(id: string): Promise<ActivityRun[]>;
     listCorrelations(opts?: { limit?: number; offset?: number }): Promise<Array<{ correlationId: string; latestAt: string; latestStatus: string; workflowId: string }>>;
   };
-  batches: { get(batchId: string): Promise<{ received_at?: unknown; created_at?: unknown; source?: unknown; status?: unknown } | null | undefined> };
+  batches: { get(batchId: string): Promise<{ created_at?: unknown; source?: unknown; status?: unknown } | null | undefined> };
   /** Reads the data.persisted event for a batch from outbox_events (null if not yet persisted). */
   persistedEvent(correlationId: string): Promise<{ at: string; count: number; resourceTypes: string[] } | null>;
 }
@@ -29,7 +29,7 @@ export function createActivityService(deps: ActivityDeps): ActivityService {
     const persistedEvent = await deps.persistedEvent(correlationId);
     if (runs.length === 0 && !batchRow) return null;
     const ingestBatch = batchRow
-      ? { receivedAt: String(batchRow.received_at ?? batchRow.created_at ?? runs[0]?.startedAt ?? ''), source: (batchRow.source as string) ?? null, status: String(batchRow.status ?? '') }
+      ? { receivedAt: String(batchRow.created_at ?? runs[0]?.startedAt ?? ''), source: (batchRow.source as string) ?? null, status: String(batchRow.status ?? '') }
       : null;
     return buildLifecycle({ correlationId, runs: runs as LifecycleRun[], persistedEvent, ingestBatch });
   }
