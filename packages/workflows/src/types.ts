@@ -66,6 +66,7 @@ export const WorkflowRunSchema = z.object({
   finishedAt: z.string(),
   result: z.unknown(),          // the full WorkflowRunResult
   error: z.string().nullable().default(null),
+  correlationId: z.string().nullable().optional(),
 });
 export type WorkflowRun = z.infer<typeof WorkflowRunSchema>;
 
