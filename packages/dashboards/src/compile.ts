@@ -103,11 +103,11 @@ export async function runBuilderQuery(
     if (d && d.kind === 'date' && q.dimension?.grain) {
       const buckets = new Map<string, number>();
       for (const r of rows) {
-        const key = `${grainKey(r.label, q.dimension.grain)} ${String(r.series ?? '(none)')}`;
+        const key = `${grainKey(r.label, q.dimension.grain)}\0${String(r.series ?? '(none)')}`;
         buckets.set(key, (buckets.get(key) ?? 0) + Number(r.value ?? 0));
       }
       shaped = [...buckets.entries()].sort((a, b2) => (a[0] < b2[0] ? -1 : 1)).map(([key, value]) => {
-        const [label, series] = key.split(' ');
+        const [label, series] = key.split('\0');
         return { label, series, value };
       });
     } else {
