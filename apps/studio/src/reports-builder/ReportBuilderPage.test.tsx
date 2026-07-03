@@ -70,6 +70,13 @@ describe('ReportBuilderPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /preview pdf/i }));
     await waitFor(() => expect(previewReportTemplate).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ q: 'abc' })));
   });
+  it('does not refetch (clobber) after saving a new report', async () => {
+    createReportTemplate.mockResolvedValueOnce({ id: 'rt-new', name: 'Untitled report', status: 'draft', description: '', category: 'operational', page: PAGE, parameters: [], rows: [] });
+    renderNew();
+    fireEvent.click(await screen.findByRole('button', { name: /^save$/i }));
+    await waitFor(() => expect(createReportTemplate).toHaveBeenCalled());
+    expect(getReportTemplate).not.toHaveBeenCalledWith('rt-new');
+  });
   it('does not delete until the confirmation is accepted', async () => {
     getReportTemplate.mockResolvedValue({ id: 'rt1', name: 'Report', status: 'draft', description: '', category: 'operational', page: PAGE, parameters: [], rows: [] });
     renderId('rt1');

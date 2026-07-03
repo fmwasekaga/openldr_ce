@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { AppShell } from '@/shell/AppShell';
@@ -30,13 +30,14 @@ export function ReportBuilderPage(): JSX.Element {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [sqlEnabled, setSqlEnabled] = useState(false);
   const [error, setError] = useState<string>();
+  const loadedIdRef = useRef<string | null>(null);
   const history = useTemplateHistory<ReportTemplate>(() => template);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   useEffect(() => {
-    if (!id) return;
+    if (!id || loadedIdRef.current === id) return;
     let cancelled = false;
-    void getReportTemplate(id).then((t) => { if (!cancelled) { setTplId(t.id); setTemplate(t); } }).catch((e) => { if (!cancelled) setError(String(e)); });
+    void getReportTemplate(id).then((t) => { if (!cancelled) { loadedIdRef.current = t.id; setTplId(t.id); setTemplate(t); } }).catch((e) => { if (!cancelled) setError(String(e)); });
     return () => { cancelled = true; };
   }, [id]);
 
@@ -68,7 +69,7 @@ export function ReportBuilderPage(): JSX.Element {
       const name = template.name.trim() || 'Untitled report';
       const toSave = { ...template, name };
       const saved = tplId ? await updateReportTemplate(tplId, toSave) : await createReportTemplate(toSave);
-      setTemplate(saved); setTplId(saved.id);
+      setTemplate(saved); setTplId(saved.id); loadedIdRef.current = saved.id;
       if (!id) navigate(`/reports/builder/${saved.id}`, { replace: true });
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   };
