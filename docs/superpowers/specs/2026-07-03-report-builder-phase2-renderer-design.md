@@ -117,10 +117,14 @@ focused structural/snapshot tests.
     exclusion + repeat, primary-table spill. Table-driven, no PDF.
   - `runTemplate` (fake `queryFn`): dedup, primary-dataset binding, `{{param.x}}` resolution, per-block
     error isolation.
-  - Chart drawers + painter: structural assertions via `doc.bufferedPageRange()` + text extraction
-    (as `report-pdf/index.test.ts`): page count, header/footer repeat, chart title/label presence.
+  - Chart pure helpers (`scale.ts` nice-ticks, `legend.ts` item layout) and painter/chart drawers:
+    the geometry lives in pure helpers with real unit tests; the drawers themselves are asserted to
+    produce a valid PDF buffer without throwing (`%PDF-` header + non-trivial length, as
+    `report-pdf/index.test.ts` does — no PDF text-parsing dependency).
+  - Pagination/geometry correctness (page count, header/footer repeat, primary-table spill) is asserted
+    at the **pure `computeLayout`** level, where boxes carry explicit `page` numbers — not by parsing PDFs.
   - End-to-end golden: a fixture template (KPI + chart + primary table + header/footer) rendered with a
-    fake `queryFn`, asserting page count and key text.
+    fake `queryFn`, asserting it yields a valid multi-object PDF buffer without throwing.
 
 ## Scope boundaries (YAGNI for Phase 2)
 
