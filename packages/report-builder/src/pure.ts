@@ -1,4 +1,5 @@
 export * from './schema';
 export * from './helpers';
+export * from './lint';
 export * from './render/layout';
 export * from './render/chart-data';
