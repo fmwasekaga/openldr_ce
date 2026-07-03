@@ -59,4 +59,18 @@ describe('lintReportTemplate', () => {
     const rows = [kpi({ mode: 'builder', model: 'm', metric: { key: 'count', agg: 'count' }, filters: [] })] as never;
     expect(lintReportTemplate(withRows(rows))).toEqual([]);
   });
+
+  it('flags an orphaned param ref in the dataset even without a primary table', () => {
+    const dataset = { mode: 'builder', model: 'm', metric: { key: 'count', agg: 'count' }, filters: [{ dimension: 'd', op: 'eq', value: '{{param.missing}}' }] };
+    // a valid kpi block so the report isn't empty; the orphan is only in the dataset
+    const rows = [kpi({ mode: 'builder', model: 'm', metric: { key: 'count', agg: 'count' }, filters: [] })] as never;
+    expect(codes(withRows(rows, { dataset } as never))).toContain('orphaned-param-ref');
+  });
+
+  it('counts a parameter used only by the dataset as used (no unused-parameter)', () => {
+    const params = [{ id: 'site', label: 'S', type: 'text', required: false }] as never;
+    const dataset = { mode: 'builder', model: 'm', metric: { key: 'count', agg: 'count' }, filters: [{ dimension: 'd', op: 'eq', value: '{{param.site}}' }] };
+    const rows = [kpi({ mode: 'builder', model: 'm', metric: { key: 'count', agg: 'count' }, filters: [] })] as never;
+    expect(codes(withRows(rows, { parameters: params, dataset } as never))).not.toContain('unused-parameter');
+  });
 });

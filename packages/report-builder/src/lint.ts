@@ -59,7 +59,6 @@ export function lintReportTemplate(t: ReportTemplate): ReportLintIssue[] {
     const loc = { rowIndex: r, cellIndex: c };
     if (block.kind === 'table' && block.source === 'primary') {
       if (!t.dataset) issues.push({ severity: 'error', code: 'empty-query', message: 'Table uses the primary dataset but none is configured', ...loc });
-      else consumeRefs(t.dataset, loc);
       return;
     }
     const q = dataQuery(block);
@@ -78,6 +77,8 @@ export function lintReportTemplate(t: ReportTemplate): ReportLintIssue[] {
     }
     consumeRefs(q, loc);
   }));
+
+  if (t.dataset) consumeRefs(t.dataset);
 
   const seenIds = new Set<string>();
   for (const p of t.parameters) {
