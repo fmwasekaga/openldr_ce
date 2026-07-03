@@ -1,12 +1,13 @@
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { QueryEditor } from './QueryEditor';
-import type { Block } from '@openldr/report-builder/pure';
+import type { Block, ReportParam } from '@openldr/report-builder/pure';
 
 const WIDTHS = [3, 4, 6, 8, 12];
 
-export function BlockInspector({ block, colSpan, onPatchBlock, onSetColSpan, onMoveUp, onMoveDown, canMoveUp, canMoveDown, onDelete }: {
+export function BlockInspector({ block, colSpan, parameters, onPatchBlock, onSetColSpan, onMoveUp, onMoveDown, canMoveUp, canMoveDown, onDelete }: {
   block: Block; colSpan: number;
+  parameters: ReportParam[];
   onPatchBlock: (patch: Partial<Block>) => void;
   onSetColSpan: (n: number) => void;
   onMoveUp: () => void;
@@ -30,7 +31,7 @@ export function BlockInspector({ block, colSpan, onPatchBlock, onSetColSpan, onM
         </label>
       )}
       {(block.kind === 'kpi' || block.kind === 'chart' || block.kind === 'table') && (
-        <QueryEditor block={block} onChange={onPatchBlock} />
+        <QueryEditor block={block} parameters={parameters} onChange={onPatchBlock} />
       )}
 
       <div className="flex flex-col gap-1 text-xs">Width
