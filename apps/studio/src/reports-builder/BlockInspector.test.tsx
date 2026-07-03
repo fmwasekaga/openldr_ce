@@ -2,6 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { BlockInspector } from './BlockInspector';
 
+vi.mock('../api', () => ({ listModels: vi.fn().mockResolvedValue([]) }));
+
 const titleBlock = { kind: 'title', text: 'Hi', style: {} } as never;
 
 const base = {
@@ -34,9 +36,9 @@ describe('BlockInspector', () => {
     fireEvent.click(screen.getByRole('button', { name: /delete/i }));
     expect(onDelete).toHaveBeenCalled();
   });
-  it('shows a data-config note for chart blocks', () => {
-    render(<BlockInspector {...base} block={{ kind: 'chart', query: {} as never, chartType: 'bar', visual: {} } as never} colSpan={6} />);
-    expect(screen.getByText(/data.*next step/i)).toBeInTheDocument();
+  it('renders the QueryEditor for a chart block', async () => {
+    render(<BlockInspector {...base} block={{ kind: 'chart', query: { mode: 'builder', model: '', metric: { key: 'count', agg: 'count' }, filters: [] } as never, chartType: 'bar', visual: {} } as never} colSpan={6} />);
+    expect(await screen.findByRole('button', { name: /^bar$/i })).toBeInTheDocument();
   });
   it('moves the row up and down', () => {
     const onMoveUp = vi.fn();

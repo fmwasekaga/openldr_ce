@@ -12,12 +12,14 @@ import { BlockPalette } from './BlockPalette';
 import { ReportCanvas, type CellRef } from './ReportCanvas';
 import { BlockInspector } from './BlockInspector';
 import { PreviewPdfDialog } from './PreviewPdfDialog';
+import { useBlockData } from './useBlockData';
 
 export function ReportBuilderPage(): JSX.Element {
   const { id } = useParams();
   const navigate = useNavigate();
   const [tplId, setTplId] = useState<string | null>(id ?? null);
   const [template, setTemplate] = useState<ReportTemplate>(() => createEmptyTemplate(`rt-${Date.now()}`, ''));
+  const blockData = useBlockData(template, {});
   const [selected, setSelected] = useState<CellRef | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [error, setError] = useState<string>();
@@ -84,7 +86,7 @@ export function ReportBuilderPage(): JSX.Element {
           <div className="flex min-h-0 flex-1 overflow-hidden">
             <div className="w-40 shrink-0 border-r border-border overflow-y-auto"><BlockPalette onAdd={addBlock} /></div>
             <div className="min-w-0 flex-1 overflow-auto bg-muted/30" onClick={() => setSelected(null)}>
-              <ReportCanvas template={template} selected={selected} onSelect={(row, cell) => setSelected({ row, cell })} />
+              <ReportCanvas template={template} selected={selected} onSelect={(row, cell) => setSelected({ row, cell })} data={blockData} />
             </div>
             <div className="w-64 shrink-0 border-l border-border overflow-y-auto">
               {selectedBlock && selected ? (

@@ -1,5 +1,6 @@
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { QueryEditor } from './QueryEditor';
 import type { Block } from '@openldr/report-builder/pure';
 
 const WIDTHS = [3, 4, 6, 8, 12];
@@ -29,7 +30,7 @@ export function BlockInspector({ block, colSpan, onPatchBlock, onSetColSpan, onM
         </label>
       )}
       {(block.kind === 'kpi' || block.kind === 'chart' || block.kind === 'table') && (
-        <p className="rounded-md border border-dashed border-border p-2 text-xs text-muted-foreground">Configure this block's data in the next step.</p>
+        <QueryEditor block={block} onChange={onPatchBlock} />
       )}
 
       <div className="flex flex-col gap-1 text-xs">Width
