@@ -3,6 +3,8 @@ import {
   DOC_GROUPS,
   DOC_GUIDES,
   DOC_ORDER,
+  DOC_VERSIONS,
+  DEFAULT_DOC_VERSION,
   LOCALES,
   firstHeading,
   list,
@@ -20,7 +22,7 @@ describe('docs registry', () => {
     ]);
   });
 
-  it('defines exactly the thirteen approved guides in navigation order', () => {
+  it('defines exactly the fourteen approved guides in navigation order', () => {
     expect(DOC_GUIDES.map((guide) => guide.slug)).toEqual([
       'start-here',
       'dashboard',
@@ -34,6 +36,7 @@ describe('docs registry', () => {
       'settings',
       'connectors',
       'marketplace',
+      'environment',
       'advanced-docs',
     ]);
     expect(DOC_ORDER).toEqual(DOC_GUIDES.map((guide) => guide.slug));
@@ -52,9 +55,10 @@ describe('docs registry', () => {
       terminology: ['forms', 'audit'],
       users: ['audit', 'settings'],
       audit: ['users', 'workflows'],
-      settings: ['connectors', 'marketplace'],
+      settings: ['connectors', 'marketplace', 'environment'],
       connectors: ['report-pipeline', 'settings', 'workflows', 'marketplace'],
       marketplace: ['settings', 'connectors', 'forms'],
+      environment: ['settings', 'connectors'],
       'advanced-docs': ['start-here', 'settings'],
     });
   });
@@ -131,5 +135,23 @@ describe('docs registry', () => {
   it('excludes DHIS2 even while orphan markdown still exists', () => {
     expect(resolve('en', 'dhis2')).toBeNull();
     expect(list('en').some((section) => section.slug === 'dhis2')).toBe(false);
+  });
+
+  it('exposes the authored doc versions newest-first with a sane default', () => {
+    expect(DOC_VERSIONS).toContain('0.1.0');
+    // Newest-first ordering.
+    expect(DOC_VERSIONS).toEqual([...DOC_VERSIONS].sort((a, b) => (a < b ? 1 : a > b ? -1 : 0)));
+    // Default is an authored version.
+    expect(DOC_VERSIONS).toContain(DEFAULT_DOC_VERSION);
+  });
+
+  it('resolves an explicit version and falls back to the latest for an unknown one', () => {
+    const pinned = resolve('en', 'dashboard', '0.1.0');
+    const fallback = resolve('en', 'dashboard', '99.0.0');
+    expect(pinned).not.toBeNull();
+    // An unknown version falls back to the newest authored content, not null.
+    expect(fallback).not.toBeNull();
+    expect(fallback!.content).toBe(pinned!.content);
+    expect(list('en', '99.0.0').map((s) => s.slug)).toEqual(list('en', '0.1.0').map((s) => s.slug));
   });
 });

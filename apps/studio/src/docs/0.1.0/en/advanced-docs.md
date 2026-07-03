@@ -1,17 +1,19 @@
-# Advanced Docs — Coming soon
+# Deployment & developer docs
 
-The separate advanced documentation app does not exist yet. This placeholder explains what will move there when that app is created.
+This in-app manual covers tasks you perform inside the app as a signed-in user.
+Deployment, configuration, and developer topics live on the **OpenLDR website**, in its
+Docs section:
 
-Future scope:
+- **Requirements & Install** — what you need and the one-line installer (including a
+  public domain with a trusted Let's Encrypt certificate).
+- **Environment variables** — every value in the deployment's `.env`.
+- **Windows Server (WSL2)** — deploying on Windows Server via WSL2.
+- **Development** — running OpenLDR from source with hot reload.
+- **Command-line interface (CLI)** — the `openldr` operator command line (database,
+  terminology, ingest, plugins, reports, users, marketplace).
 
-- Installation and deployment.
-- Environment and infrastructure configuration.
-- CLI.
-- HTTP API.
-- Plugin and extension development.
-- Operator troubleshooting.
-
-Until then, this in-app manual stays focused on web-interface tasks that signed-in users can perform from the current app.
+You'll find all of these on the project website and in the source repository:
+<https://github.com/fmwasekaga/openldr_ce>.
 
 ## Related guides
 

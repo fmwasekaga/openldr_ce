@@ -6,12 +6,21 @@ import { AppShell } from '../shell/AppShell';
 import {
   DOC_GROUPS,
   DOC_GUIDES,
+  DOC_VERSIONS,
+  DEFAULT_DOC_VERSION,
   list,
   resolve,
   type DocAudience,
   type DocSection,
   type Locale,
 } from '../docs/registry';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { buildIndex, searchDocs } from '../docs/search';
 import { DocMarkdown } from '../docs/DocMarkdown';
 import { Lightbox, type LightboxImage } from '../docs/Lightbox';
@@ -77,9 +86,10 @@ export function Docs() {
   const [collapsed, setCollapsed] = useState(false);
   const [lightbox, setLightbox] = useState<LightboxImage | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [version, setVersion] = useState(DEFAULT_DOC_VERSION);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  const sections = useMemo(() => list(locale), [locale]);
+  const sections = useMemo(() => list(locale, version), [locale, version]);
   const index = useMemo(() => buildIndex(sections), [sections]);
   const hits = useMemo(() => searchDocs(index, query), [index, query]);
   const sectionBySlug = useMemo(
@@ -89,7 +99,7 @@ export function Docs() {
 
   const defaultSlug = sections[0]?.slug ?? 'start-here';
   const activeSlug = slug ?? defaultSlug;
-  const section = resolve(locale, activeSlug);
+  const section = resolve(locale, activeSlug, version);
   // Reset the reading pane to the top whenever the active guide changes.
   useEffect(() => {
     if (contentRef.current) contentRef.current.scrollTop = 0;
@@ -223,6 +233,22 @@ export function Docs() {
                 {exportError}
               </span>
             )}
+            <Select value={version} onValueChange={setVersion}>
+              <SelectTrigger
+                className="h-8 w-auto gap-1 px-2 text-xs"
+                aria-label="Documentation version"
+              >
+                <span className="text-muted-foreground">Version</span>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end">
+                {DOC_VERSIONS.map((docVersion) => (
+                  <SelectItem key={docVersion} value={docVersion} className="text-xs">
+                    {docVersion}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" aria-label="Download documentation">

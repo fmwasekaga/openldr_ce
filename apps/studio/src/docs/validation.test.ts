@@ -259,16 +259,15 @@ describe('authored guide structure', () => {
     expect(resolved!.content).not.toMatch(/!\[[^\]]*]\(/);
   });
 
-  it('keeps advanced docs as a coming-soon placeholder', () => {
+  it('points advanced docs to the web docs (no longer a coming-soon placeholder)', () => {
     const resolved = resolve('en', 'advanced-docs');
     expect(resolved, 'advanced-docs should resolve').not.toBeNull();
-    expect(resolved!.content).toContain('# Advanced Docs — Coming soon');
-    expect(resolved!.content).toContain('does not exist yet');
-    expect(resolved!.content).toContain('Installation and deployment');
-    expect(resolved!.content).toContain('Plugin and extension development');
+    expect(resolved!.content).toContain('# Deployment & developer docs');
+    expect(resolved!.content).toContain('OpenLDR website');
+    expect(resolved!.content).toContain('CLI');
+    expect(resolved!.content).toContain('github.com/fmwasekaga/openldr_ce');
     expect(resolved!.content).toContain('/docs/start-here');
     expect(resolved!.content).toContain('/docs/settings');
-    expect(resolved!.content).not.toMatch(/https?:\/\//);
     expect(resolved!.content).not.toMatch(/!\[[^\]]*]\(/);
   });
 });

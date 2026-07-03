@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Check, Copy } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,8 @@ const BASE = 'https://raw.githubusercontent.com/fmwasekaga/openldr_ce/main/insta
 const COMMANDS: Record<string, string> = {
   unix: `curl -fsSL ${BASE}/install.sh | bash`,
   windows: `irm ${BASE}/install.ps1 | iex`,
+  // Inside a WSL2 distro you're on Linux, so it's the same shell installer as unix.
+  wsl: `curl -fsSL ${BASE}/install.sh | bash`,
 };
 
 function CommandRow({ command }: { command: string }) {
@@ -49,9 +52,32 @@ export function InstallBlock() {
         <TabsList>
           <TabsTrigger value="unix">Linux / macOS</TabsTrigger>
           <TabsTrigger value="windows">Windows</TabsTrigger>
+          <TabsTrigger value="wsl">Windows Server (WSL2)</TabsTrigger>
         </TabsList>
-        <TabsContent value="unix"><CommandRow command={COMMANDS.unix} /></TabsContent>
-        <TabsContent value="windows"><CommandRow command={COMMANDS.windows} /></TabsContent>
+        <TabsContent value="unix">
+          <CommandRow command={COMMANDS.unix} />
+          <p className="mt-2 text-left text-sm text-muted-foreground">
+            Any Linux distribution or macOS with Docker installed.
+          </p>
+        </TabsContent>
+        <TabsContent value="windows">
+          <CommandRow command={COMMANDS.windows} />
+          <p className="mt-2 text-left text-sm text-muted-foreground">
+            Windows 10/11 with Docker Desktop — run it in PowerShell.
+          </p>
+        </TabsContent>
+        <TabsContent value="wsl">
+          <CommandRow command={COMMANDS.wsl} />
+          <p className="mt-2 text-left text-sm text-muted-foreground">
+            Windows Server can&apos;t run these Linux images natively — install Docker CE
+            inside a WSL2 Ubuntu distro and run the command above there (it&apos;s Linux).
+            New to this?{' '}
+            <Link to="/docs/windows-server" className="text-foreground underline underline-offset-4">
+              Windows Server (WSL2) setup guide
+            </Link>
+            .
+          </p>
+        </TabsContent>
       </Tabs>
     </section>
   );

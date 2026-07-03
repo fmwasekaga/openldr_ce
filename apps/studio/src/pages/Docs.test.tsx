@@ -59,6 +59,8 @@ const registry = vi.hoisted(() => {
 vi.mock('../docs/registry', () => ({
   DOC_GROUPS: registry.groups,
   DOC_GUIDES: registry.guides,
+  DOC_VERSIONS: ['0.1.0'],
+  DEFAULT_DOC_VERSION: '0.1.0',
   list: vi.fn((locale: string) =>
     registry.sections.map((section) => ({ ...section, localeUsed: locale === 'en' ? 'en' : 'en' })),
   ),

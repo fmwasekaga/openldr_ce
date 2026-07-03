@@ -1,4 +1,4 @@
-import { DOCS_VERSION } from './version';
+import { DOCS_VERSION, compareVersions } from './version';
 
 export type Locale = 'en' | 'fr' | 'pt';
 export const LOCALES: Locale[] = ['en', 'fr', 'pt'];
@@ -167,7 +167,7 @@ export const DOC_GUIDES: DocGuide[] = [
     requiredRoles: ['lab_admin'],
     estimatedMinutes: 5,
     difficulty: 'beginner',
-    relatedSlugs: ['connectors', 'marketplace'],
+    relatedSlugs: ['connectors', 'marketplace', 'environment'],
     screenshotNames: [],
     status: 'published',
   },
@@ -202,17 +202,30 @@ export const DOC_GUIDES: DocGuide[] = [
     status: 'published',
   },
   {
+    slug: 'environment',
+    title: 'Environment Variables',
+    group: 'administration',
+    summary: 'Reference for the environment variables that configure a deployment.',
+    audience: ['administrators'],
+    requiredRoles: ['lab_admin'],
+    estimatedMinutes: 8,
+    difficulty: 'advanced',
+    relatedSlugs: ['settings', 'connectors'],
+    screenshotNames: [],
+    status: 'published',
+  },
+  {
     slug: 'advanced-docs',
-    title: 'Advanced Docs — Coming soon',
+    title: 'Deployment & Developer Docs',
     group: 'more',
-    summary: 'See what is planned for future operator and developer documentation.',
+    summary: 'Find deployment, configuration, CLI, and developer docs on the OpenLDR website.',
     audience: ['all-users'],
     requiredRoles: [],
     estimatedMinutes: 3,
     difficulty: 'advanced',
     relatedSlugs: ['start-here', 'settings'],
     screenshotNames: [],
-    status: 'coming-soon',
+    status: 'published',
   },
 ];
 
@@ -238,17 +251,30 @@ export function firstHeading(md: string): string {
   return line ? line.trim().replace(/^#\s+/, '').trim() : '';
 }
 
+/** Authored doc versions, newest first (discovered from the content folders). */
+export const DOC_VERSIONS: string[] = Object.keys(BY_VERSION).sort((a, b) =>
+  compareVersions(b, a),
+);
+
+/** The version to show by default: this release if it has authored docs, else the
+ * newest authored version (so a release ahead of its docs still shows the latest). */
+export const DEFAULT_DOC_VERSION: string =
+  DOC_VERSIONS.find((version) => version === DOCS_VERSION) ?? DOC_VERSIONS[0] ?? DOCS_VERSION;
+
 function localesForVersion(version: string): Record<string, Record<string, string>> {
   if (BY_VERSION[version]) return BY_VERSION[version];
-  const versions = Object.keys(BY_VERSION).sort();
-  return BY_VERSION[versions[versions.length - 1]] ?? {};
+  return BY_VERSION[DOC_VERSIONS[0]] ?? {};
 }
 
-export function resolve(locale: Locale, slug: string): DocSection | null {
+export function resolve(
+  locale: Locale,
+  slug: string,
+  version: string = DEFAULT_DOC_VERSION,
+): DocSection | null {
   const guide = DOC_GUIDES.find((candidate) => candidate.slug === slug);
   if (!guide) return null;
 
-  const locales = localesForVersion(DOCS_VERSION);
+  const locales = localesForVersion(version);
   const localized = locales[locale]?.[slug];
   const content = localized ?? locales.en?.[slug];
   if (content == null) return null;
@@ -261,8 +287,8 @@ export function resolve(locale: Locale, slug: string): DocSection | null {
   };
 }
 
-export function list(locale: Locale): DocSection[] {
+export function list(locale: Locale, version: string = DEFAULT_DOC_VERSION): DocSection[] {
   return DOC_GUIDES
-    .map((guide) => resolve(locale, guide.slug))
+    .map((guide) => resolve(locale, guide.slug, version))
     .filter((section): section is DocSection => section !== null);
 }
