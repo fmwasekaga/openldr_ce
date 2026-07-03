@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { computeLayout, type LayoutModel, type Measurer } from './layout';
+import { computeLayout, toLayoutModel, type LayoutModel, type Measurer } from './layout';
+import { createEmptyTemplate } from '../helpers';
 
 // Deterministic fake measurer: height = number of \n-separated lines * lineHeight.
 const fakeMeasurer: Measurer = {
@@ -79,5 +80,41 @@ describe('computeLayout', () => {
     const kpis = boxes.filter((b) => b.kind === 'kpi');
     expect(kpis[0].page).toBe(1);
     expect(kpis[1].page).toBe(2);
+  });
+});
+
+describe('toLayoutModel', () => {
+  const primaryResult = { columns: [], rows: [{}, {}, {}], chart: { type: 'bar', x: 'l', y: 'v' }, meta: { generatedAt: 'n', rowCount: 3 } };
+
+  it('interpolates title text and carries style + colSpan', () => {
+    const t = createEmptyTemplate('rt', 'R');
+    t.rows = [{ id: 'r', cells: [{ colSpan: 8, block: { kind: 'title', text: 'Hi {{param.who}}', style: { fontSize: 16 } } as any }] }];
+    const lm = toLayoutModel({ template: t, params: { who: 'Ndola' }, cells: {} });
+    expect(lm.rows[0].cells[0].text).toBe('Hi Ndola');
+    expect(lm.rows[0].cells[0].style).toEqual({ fontSize: 16 });
+    expect(lm.rows[0].cells[0].colSpan).toBe(8);
+    expect(lm.page.size).toBe(t.page.size);
+  });
+
+  it('fills a primary-table rowCount from the primary dataset', () => {
+    const t = createEmptyTemplate('rt', 'R');
+    t.rows = [{ id: 'r', cells: [{ colSpan: 12, block: { kind: 'table', source: 'primary', columns: [] } as any }] }];
+    const lm = toLayoutModel({ template: t, params: {}, primary: { result: primaryResult as any }, cells: {} });
+    expect(lm.rows[0].cells[0].rowCount).toBe(3);
+  });
+
+  it('fills an inline-table rowCount from its own resolved cell', () => {
+    const t = createEmptyTemplate('rt', 'R');
+    const q = { mode: 'builder', model: 'm', metric: { key: 'count', agg: 'count' }, filters: [] };
+    t.rows = [{ id: 'r', cells: [{ colSpan: 12, block: { kind: 'table', source: q, columns: [] } as any }] }];
+    const lm = toLayoutModel({ template: t, params: {}, cells: { '0:0': { result: { ...primaryResult, rows: [{}, {}] } as any } } });
+    expect(lm.rows[0].cells[0].rowCount).toBe(2);
+  });
+
+  it('carries repeat flags through', () => {
+    const t = createEmptyTemplate('rt', 'R');
+    t.rows = [{ id: 'r', repeat: 'header', cells: [{ colSpan: 12, block: { kind: 'text', text: 'x', style: {} } as any }] }];
+    const lm = toLayoutModel({ template: t, params: {}, cells: {} });
+    expect(lm.rows[0].repeat).toBe('header');
   });
 });

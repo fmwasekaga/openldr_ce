@@ -1,5 +1,6 @@
 import type { ReportResult } from '@openldr/reporting';
 import type { Block, ReportTemplate } from '../schema';
+import { interpolate } from '../helpers';
 
 export interface CellData { result?: ReportResult; error?: string }
 
@@ -135,4 +136,27 @@ export function computeLayout(modelIn: LayoutModel, m: Measurer): PositionedBox[
     cursorY += height + ROW_GAP;
   }
   return out;
+}
+
+export function toLayoutModel(resolved: ResolvedTemplate): LayoutModel {
+  const { template, params, primary, cells } = resolved;
+  const datasetRow = primary?.result?.rows[0] as Record<string, unknown> | undefined;
+  const ctx = { params, dataset: datasetRow };
+
+  const rows: LayoutRow[] = template.rows.map((row, r) => ({
+    repeat: row.repeat,
+    cells: row.cells.map((cell, c) => {
+      const b = cell.block;
+      const lb: LayoutBlock = { kind: b.kind, colSpan: cell.colSpan };
+      if (b.kind === 'title') { lb.text = interpolate(b.text ?? '', ctx); lb.style = b.style; }
+      else if (b.kind === 'text') { lb.text = interpolate(b.content ?? '', ctx); lb.style = b.style; }
+      else if (b.kind === 'table') {
+        lb.rowCount = b.source === 'primary'
+          ? (primary?.result?.rows.length ?? 0)
+          : (cells[`${r}:${c}`]?.result?.rows.length ?? 0);
+      }
+      return lb;
+    }),
+  }));
+  return { page: template.page as PageSpec, rows };
 }
