@@ -7,6 +7,7 @@ const createReportTemplate = vi.fn().mockResolvedValue({ id: 'new-id', name: 'Un
 const getReportTemplate = vi.fn((..._a: unknown[]): Promise<unknown> => new Promise(() => {}));
 const updateReportTemplate = vi.fn().mockResolvedValue({ id: 'rt1', name: 'Report', status: 'draft', description: '', category: 'operational', page: PAGE, parameters: [], rows: [] });
 const previewReportTemplate = vi.fn().mockResolvedValue(new Blob(['%PDF'], { type: 'application/pdf' }));
+const fetchClientConfig = vi.fn().mockResolvedValue({ dashboardSqlEnabled: true, authEnforced: false, version: '', environment: '', oidc: null });
 vi.mock('../api', () => ({
   getReportTemplate: (...a: unknown[]) => getReportTemplate(...a),
   createReportTemplate: (...a: unknown[]) => createReportTemplate(...a),
@@ -16,6 +17,7 @@ vi.mock('../api', () => ({
   listPluginUis: vi.fn(async () => []),
   runWidgetQuery: vi.fn().mockResolvedValue({ columns: [], rows: [], chart: {}, meta: { generatedAt: 'n', rowCount: 0 } }),
   listModels: vi.fn().mockResolvedValue([]),
+  fetchClientConfig: (...a: unknown[]) => fetchClientConfig(...a),
 }));
 vi.mock('../reports/PdfCanvasViewer', () => ({ PdfCanvasViewer: () => <div /> }));
 
@@ -27,6 +29,7 @@ beforeEach(() => {
   getReportTemplate.mockImplementation(async () => new Promise(() => {}));
   updateReportTemplate.mockClear();
   previewReportTemplate.mockClear();
+  fetchClientConfig.mockClear();
 });
 
 function renderNew() {
@@ -53,6 +56,10 @@ describe('ReportBuilderPage', () => {
     fireEvent.click(screen.getByText('Title'));
     fireEvent.click(screen.getByRole('button', { name: /save/i }));
     await waitFor(() => expect(createReportTemplate).toHaveBeenCalled());
+  });
+  it('fetches the client config for SQL gating on mount', async () => {
+    renderNew();
+    await waitFor(() => expect(fetchClientConfig).toHaveBeenCalled());
   });
   it('routes entered parameter values into the PDF preview', async () => {
     getReportTemplate.mockResolvedValue({ id: 'rt1', name: 'Report', status: 'draft', description: '', category: 'operational', page: PAGE, parameters: [{ id: 'q', label: 'Query', type: 'text', required: false }], rows: [] });

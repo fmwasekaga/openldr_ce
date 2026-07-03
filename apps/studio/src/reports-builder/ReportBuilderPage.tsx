@@ -5,7 +5,7 @@ import { AppShell } from '@/shell/AppShell';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { createEmptyTemplate, type Block, type BlockKind, type ReportTemplate } from '@openldr/report-builder/pure';
-import { createReportTemplate, getReportTemplate, updateReportTemplate, deleteReportTemplate } from '../api';
+import { createReportTemplate, getReportTemplate, updateReportTemplate, deleteReportTemplate, fetchClientConfig } from '../api';
 import { useTemplateHistory } from '../forms-builder/useTemplateHistory';
 import { addRowWithBlock, moveRow, newBlock, removeCell, setColSpan, updateBlockAt } from './reportBuilderModel';
 import { BlockPalette } from './BlockPalette';
@@ -26,6 +26,7 @@ export function ReportBuilderPage(): JSX.Element {
   const blockData = useBlockData(template, paramValues);
   const [selected, setSelected] = useState<CellRef | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [sqlEnabled, setSqlEnabled] = useState(false);
   const [error, setError] = useState<string>();
   const history = useTemplateHistory<ReportTemplate>(() => template);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
@@ -36,6 +37,8 @@ export function ReportBuilderPage(): JSX.Element {
     void getReportTemplate(id).then((t) => { if (!cancelled) { setTplId(t.id); setTemplate(t); } }).catch((e) => { if (!cancelled) setError(String(e)); });
     return () => { cancelled = true; };
   }, [id]);
+
+  useEffect(() => { fetchClientConfig().then((c) => setSqlEnabled(c.dashboardSqlEnabled)).catch(() => {}); }, []);
 
   const update = (next: ReportTemplate) => { history.recordEdit(); setTemplate(next); };
   const pushUpdate = (next: ReportTemplate) => { history.pushHistory(); setTemplate(next); };
@@ -99,6 +102,7 @@ export function ReportBuilderPage(): JSX.Element {
                 <BlockInspector
                   block={selectedBlock}
                   parameters={template.parameters}
+                  sqlEnabled={sqlEnabled}
                   colSpan={template.rows[selected.row].cells[selected.cell].colSpan}
                   onPatchBlock={(patch) => update(updateBlockAt(template, selected.row, selected.cell, patch))}
                   onSetColSpan={(n) => update(setColSpan(template, selected.row, selected.cell, n))}

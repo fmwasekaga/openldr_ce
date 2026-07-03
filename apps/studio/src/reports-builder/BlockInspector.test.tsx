@@ -9,6 +9,7 @@ const titleBlock = { kind: 'title', text: 'Hi', style: {} } as never;
 const base = {
   colSpan: 12,
   parameters: [],
+  sqlEnabled: false,
   onPatchBlock: () => {},
   onSetColSpan: () => {},
   onMoveUp: () => {},

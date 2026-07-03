@@ -75,7 +75,7 @@ export function QueryEditor({ block, parameters, sqlEnabled = false, onChange }:
           <pre className="max-h-24 overflow-auto rounded border border-border bg-muted/40 p-2 font-mono text-[11px] text-muted-foreground">{sqlQuery.sql}</pre>
           {boundParams.length > 0 && (
             <div className="text-[11px] text-muted-foreground">
-              {boundParams.map(([v, p]) => <div key={v}><code className="font-mono">{`{{${v}}}`}</code> → {p}</div>)}
+              {boundParams.map(([v, p]) => <div key={v}><code className="font-mono">{`{{${v}}}`}</code> → {parameters.find((pp) => pp.id === p)?.label ?? p}</div>)}
             </div>
           )}
           <Button type="button" size="sm" variant="outline" className="h-7" onClick={() => setSqlOpen(true)}>Edit SQL</Button>
