@@ -21,6 +21,7 @@
     "@openldr/config": "workspace:*",
     "@openldr/core": "workspace:*",
     "@openldr/db": "workspace:*",
+    "@openldr/dashboards": "workspace:*",
     "@openldr/fhir": "workspace:*",
     "@openldr/reporting": "workspace:*",
     "@openldr/forms": "workspace:*",

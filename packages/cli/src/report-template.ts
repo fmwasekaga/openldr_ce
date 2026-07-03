@@ -1,8 +1,10 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { createAppContext } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import { ReportTemplateSchema, type ReportTemplate } from '@openldr/report-builder/pure';
-import type { ReportTemplateStore } from '@openldr/report-builder';
+import { renderReportTemplatePdf, type ReportTemplateStore } from '@openldr/report-builder';
+import type { WidgetQuery } from '@openldr/dashboards';
+import type { ReportResult } from '@openldr/reporting';
 
 type Writer = (s: string) => void;
 const stdout: Writer = (s) => process.stdout.write(s);
@@ -47,4 +49,36 @@ export async function runImport(file: string): Promise<number> {
 export async function runDelete(id: string, opts: { force: boolean }): Promise<number> {
   const ctx = await createAppContext(loadConfig());
   try { await deleteTemplate(ctx.reportTemplates, id, opts); process.stdout.write(`deleted ${id}\n`); return 0; } finally { await ctx.close(); }
+}
+
+export function parseParams(s: string | undefined): Record<string, string> {
+  if (!s) return {};
+  const out: Record<string, string> = {};
+  for (const pair of s.split(',')) {
+    const eq = pair.indexOf('=');
+    if (eq > 0) out[pair.slice(0, eq).trim()] = pair.slice(eq + 1).trim();
+  }
+  return out;
+}
+
+export async function renderTemplateToFile(
+  store: ReportTemplateStore,
+  queryFn: (q: WidgetQuery) => Promise<ReportResult>,
+  id: string,
+  params: Record<string, string>,
+  outPath: string,
+): Promise<void> {
+  const tpl = await store.get(id);
+  if (!tpl) throw new Error(`report template not found: ${id}`);
+  const pdf = await renderReportTemplatePdf(tpl, params, queryFn);
+  writeFileSync(outPath, pdf);
+}
+
+export async function runRender(id: string, opts: { params?: string; out: string }): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    await renderTemplateToFile(ctx.reportTemplates, (q) => ctx.dashboards.query(q), id, parseParams(opts.params), opts.out);
+    process.stdout.write(`rendered ${id} -> ${opts.out}\n`);
+    return 0;
+  } finally { await ctx.close(); }
 }

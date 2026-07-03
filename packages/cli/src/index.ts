@@ -6,7 +6,7 @@ import { redactError } from './redact-error';
 import { runFhirValidate, formatFhirValidate } from './fhir';
 import { runDbMigrate, runDbReset, runDbSeed } from './db';
 import { runFormsExtract, runFormsList } from './forms';
-import { runList as runReportTemplateList, runExport as runReportTemplateExport, runImport as runReportTemplateImport, runDelete as runReportTemplateDelete } from './report-template';
+import { runList as runReportTemplateList, runExport as runReportTemplateExport, runImport as runReportTemplateImport, runDelete as runReportTemplateDelete, runRender as runReportTemplateRender } from './report-template';
 import { runIngest, runPipelineStatus, runPipelineRetry, runPipelineLogs, runQueueStatus, runProvenanceAudit } from './ingest';
 import { runPluginInstall, runPluginList, runPluginTest, runPluginRun, runPluginRemove } from './plugin';
 import { runReportList, runReportRun, runReportGlassExport } from './report';
@@ -264,6 +264,12 @@ reportTemplate.command('import <file>').description('Create a report template fr
 reportTemplate.command('delete <id>').description('Delete a report template (destructive)').option('--force', 'confirm deletion', false).action(async (id: string, opts: { force: boolean }) => {
   try { process.exitCode = await runReportTemplateDelete(id, opts); } catch (err) { process.stderr.write(`report-template delete failed: ${redactError(err)}\n`); process.exitCode = 1; }
 });
+reportTemplate.command('render <id>').description('Render a report template to a PDF file')
+  .option('--params <kv>', 'comma-separated k=v parameter values')
+  .requiredOption('-o, --out <file>', 'output PDF path')
+  .action(async (id: string, opts: { params?: string; out: string }) => {
+    try { process.exitCode = await runReportTemplateRender(id, opts); } catch (err) { process.stderr.write(`report-template render failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
 
 program
   .command('ingest <file>')

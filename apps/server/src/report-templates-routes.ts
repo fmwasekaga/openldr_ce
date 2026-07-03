@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { ReportTemplateSchema } from '@openldr/report-builder/pure';
+import { renderReportTemplatePdf } from '@openldr/report-builder';
 import { recordAudit } from './audit-helper';
 import { requireRole } from './rbac';
 
@@ -15,6 +16,17 @@ export function registerReportTemplateRoutes(app: FastifyInstance<any, any, any,
     const t = await ctx.reportTemplates.get(id);
     if (!t) { reply.code(404); return { error: 'not found' }; }
     return t;
+  });
+
+  app.post('/api/report-templates/:id/preview', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const tpl = await ctx.reportTemplates.get(id);
+    if (!tpl) { reply.code(404); return { error: 'not found' }; }
+    const body = (req.body ?? {}) as { params?: Record<string, string> };
+    const pdf = await renderReportTemplatePdf(tpl, body.params ?? {}, (q) => ctx.dashboards.query(q));
+    reply.header('content-type', 'application/pdf');
+    reply.header('content-disposition', `inline; filename="${id}.pdf"`);
+    return reply.send(pdf);
   });
 
   app.post('/api/report-templates', MANAGE, async (req, reply) => {

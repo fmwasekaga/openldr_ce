@@ -74,3 +74,37 @@ describe('report-template routes', () => {
     expect((await app.inject({ method: 'GET', url: '/api/report-templates' })).json().length).toBe(0);
   });
 });
+
+describe('report-template preview', () => {
+  const tpl = {
+    id: 'rt1', name: 'R', description: '', category: 'operational', status: 'draft',
+    page: { size: 'A4', orientation: 'portrait', margins: { top: 40, right: 40, bottom: 40, left: 40 } },
+    parameters: [], rows: [{ id: 'r', cells: [{ colSpan: 12, block: { kind: 'title', text: 'Hi {{param.who}}', style: {} } }] }],
+  };
+
+  function ctxWith(tplRow: any) {
+    return {
+      reportTemplates: { get: async (id: string) => (id === tplRow?.id ? tplRow : undefined) },
+      dashboards: { query: async () => ({ columns: [], rows: [], chart: { type: 'stat', value: '0', label: 'x' }, meta: { generatedAt: 'n', rowCount: 0 } }) },
+      logger: { error() {}, warn() {}, info() {} },
+    } as any;
+  }
+
+  it('returns a PDF for a known template', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req) => { (req as any).user = { id: 'u', username: 'u', displayName: null, roles: ['lab_technician'] }; });
+    registerReportTemplateRoutes(app, ctxWith(tpl));
+    const res = await app.inject({ method: 'POST', url: '/api/report-templates/rt1/preview', payload: { params: { who: 'Ndola' } } });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('application/pdf');
+    expect(res.rawPayload.subarray(0, 5).toString()).toBe('%PDF-');
+  });
+
+  it('404s an unknown template', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req) => { (req as any).user = { id: 'u', username: 'u', displayName: null, roles: ['lab_technician'] }; });
+    registerReportTemplateRoutes(app, ctxWith(tpl));
+    const res = await app.inject({ method: 'POST', url: '/api/report-templates/nope/preview', payload: {} });
+    expect(res.statusCode).toBe(404);
+  });
+});
