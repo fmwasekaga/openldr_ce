@@ -4,7 +4,7 @@ import type { Block, ReportParam } from '@openldr/report-builder/pure';
 
 vi.mock('../api', () => ({
   listModels: vi.fn().mockResolvedValue([
-    { id: 'observations', label: 'Results', dimensions: [{ key: 'code_text', label: 'Analyte', column: 'code_text', kind: 'string' }], metrics: [{ key: 'count', label: 'Count', agg: 'count' }] },
+    { id: 'observations', label: 'Results', dimensions: [{ key: 'code_text', label: 'Analyte', column: 'code_text', kind: 'string' }, { key: 'status', label: 'Status', column: 'status', kind: 'string' }], metrics: [{ key: 'count', label: 'Count', agg: 'count' }] },
   ]),
 }));
 
@@ -72,5 +72,18 @@ describe('QueryEditor SQL mode', () => {
     const block: Block = { kind: 'kpi', query: { mode: 'sql', sql: 'select 2 as value', values: {} }, label: '' };
     render(<QueryEditor block={block} parameters={[]} sqlEnabled={false} onChange={() => {}} />);
     expect(screen.getByRole('button', { name: /edit sql/i })).toBeTruthy();
+  });
+});
+
+describe('QueryEditor breakdown', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('writes query.breakdown for a chart block when a breakdown dimension is picked', async () => {
+    const block: Block = { kind: 'chart', chartType: 'bar', visual: {}, query: { mode: 'builder', model: 'observations', metric: { key: 'count', agg: 'count' }, dimension: { key: 'status' }, filters: [] } };
+    const onChange = vi.fn();
+    render(<QueryEditor block={block} parameters={[]} onChange={onChange} />);
+    const sel = await screen.findByLabelText('Breakdown');
+    fireEvent.change(sel, { target: { value: 'code_text' } });
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ query: expect.objectContaining({ breakdown: { key: 'code_text' } }) }));
   });
 });

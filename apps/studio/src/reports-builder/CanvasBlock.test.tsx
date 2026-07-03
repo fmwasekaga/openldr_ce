@@ -21,9 +21,14 @@ describe('CanvasBlock', () => {
 
 describe('CanvasBlock live data', () => {
   const result = { columns: [{ key: 'label', label: 'L', kind: 'string' }, { key: 'value', label: 'V', kind: 'number' }], rows: [{ label: 'a', value: 1 }], chart: {}, meta: { generatedAt: 'n', rowCount: 1 } } as any;
-  it('renders a widget for a chart block with data', () => {
-    render(<CanvasBlock block={{ kind: 'chart', query: {} as never, chartType: 'bar', visual: {} } as never} data={{ result, loading: false }} />);
-    expect(screen.getByTestId('widget')).toHaveTextContent('bar-chart');
+  it('renders a chart block via ReportChart (not the generic widget)', () => {
+    const { container } = render(<CanvasBlock block={{ kind: 'chart', query: {} as never, chartType: 'bar', visual: {} } as never} data={{ result, loading: false }} />);
+    expect(screen.queryByTestId('widget')).toBeNull();
+    expect(container.querySelector('.recharts-responsive-container')).toBeInTheDocument();
+  });
+  it('renders a kpi block via the generic widget', () => {
+    render(<CanvasBlock block={{ kind: 'kpi', query: {} as never, label: 'X' } as never} data={{ result, loading: false }} />);
+    expect(screen.getByTestId('widget')).toBeInTheDocument();
   });
   it('shows a loading state', () => {
     render(<CanvasBlock block={{ kind: 'kpi', query: {} as never, label: 'X' } as never} data={{ loading: true }} />);

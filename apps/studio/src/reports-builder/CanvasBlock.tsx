@@ -1,6 +1,8 @@
 import type { Block } from '@openldr/report-builder/pure';
+import { resultToChartData, chartOpts } from '@openldr/report-builder/pure';
 import { renderWidget } from '../dashboard/widgets';
 import { blockToWidgetConfig } from './blockToWidgetConfig';
+import { ReportChart } from './ReportChart';
 import type { BlockData } from './useBlockData';
 
 export function CanvasBlock({ block, data }: { block: Block; data?: BlockData }): JSX.Element {
@@ -8,7 +10,13 @@ export function CanvasBlock({ block, data }: { block: Block; data?: BlockData })
   if (isData && data) {
     if (data.loading) return <div className="flex h-full items-center justify-center text-[10px] text-muted-foreground">Loading…</div>;
     if (data.error) return <div className="flex h-full items-center justify-center px-1 text-center text-[10px] text-destructive">{data.error}</div>;
-    if (data.result) return <div className="h-full w-full">{renderWidget(blockToWidgetConfig(block, data.result), data.result)}</div>;
+    if (data.result) {
+      if (block.kind === 'chart') {
+        const cd = resultToChartData(data.result, { title: '', ...chartOpts(block.query) });
+        return <div className="h-full w-full"><ReportChart chartType={block.chartType} data={cd} /></div>;
+      }
+      return <div className="h-full w-full">{renderWidget(blockToWidgetConfig(block, data.result), data.result)}</div>;
+    }
   }
   switch (block.kind) {
     case 'title':

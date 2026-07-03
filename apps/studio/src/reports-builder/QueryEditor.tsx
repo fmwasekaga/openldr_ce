@@ -67,6 +67,19 @@ export function QueryEditor({ block, parameters, sqlEnabled = false, onChange }:
               onChange={(f) => setQuery({ ...builderQuery, filters: f as BuilderQuery['filters'] })}
             />
           )}
+          {block.kind === 'chart' && models.length > 0 && (
+            <label className="flex flex-col gap-1 text-xs">Breakdown → series
+              <select
+                aria-label="Breakdown"
+                className="h-7 rounded border border-border bg-background text-xs"
+                value={builderQuery.breakdown?.key ?? ''}
+                onChange={(e) => setQuery({ ...builderQuery, breakdown: e.target.value ? { key: e.target.value } : undefined })}
+              >
+                <option value="">(none)</option>
+                {dimensions.filter((d) => d.key !== builderQuery.dimension?.key).map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
+              </select>
+            </label>
+          )}
         </>
       )}
 
