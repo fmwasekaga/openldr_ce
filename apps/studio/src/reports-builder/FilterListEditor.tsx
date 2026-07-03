@@ -74,6 +74,7 @@ export function FilterListEditor({ filters, dimensions, parameters, onChange }: 
                   type="button" size="sm" className="h-7 rounded-l-none px-2 text-[10px]"
                   aria-label={`filter-${i}-mode-param`}
                   variant={paramMode ? 'default' : 'outline'}
+                  disabled={parameters.length === 0}
                   onClick={() => update(i, { value: `{{param.${parameters[0]?.id ?? ''}}}` })}
                 >Param</Button>
               </div>

@@ -13,13 +13,13 @@ const PARAMS: ReportParam[] = [{ id: 'site', label: 'Site', type: 'select', requ
 
 // Stateful harness: onChange updates local state (re-rendering the component like
 // production does inside QueryEditor) AND forwards to a spy for assertions.
-function Harness({ initial, spy }: { initial: BuilderFilter[]; spy: (f: BuilderFilter[]) => void }) {
+function Harness({ initial, spy, params = PARAMS }: { initial: BuilderFilter[]; spy: (f: BuilderFilter[]) => void; params?: ReportParam[] }) {
   const [filters, setFilters] = useState<BuilderFilter[]>(initial);
   return (
     <FilterListEditor
       filters={filters}
       dimensions={DIMS}
-      parameters={PARAMS}
+      parameters={params}
       onChange={(f) => { setFilters(f); spy(f); }}
     />
   );
@@ -53,5 +53,15 @@ describe('FilterListEditor', () => {
     render(<Harness initial={[{ dimension: 'status', op: 'in', value: '' }]} spy={spy} />);
     fireEvent.change(screen.getByLabelText('filter-0-value'), { target: { value: 'a, b ,c' } });
     expect(spy).toHaveBeenLastCalledWith([{ dimension: 'status', op: 'in', value: ['a', 'b', 'c'] }]);
+  });
+
+  it('disables the Param toggle when there are no parameters', () => {
+    const spy = vi.fn();
+    render(<Harness initial={[{ dimension: 'status', op: 'eq', value: '' }]} spy={spy} params={[]} />);
+    const btn = screen.getByRole('button', { name: /filter-0-mode-param/i });
+    expect(btn).toBeDisabled();
+    fireEvent.click(btn);
+    // Disabled button must not write an invalid {{param.}} value.
+    expect(spy).not.toHaveBeenCalled();
   });
 });
