@@ -15,6 +15,7 @@ import { PreviewPdfDialog } from './PreviewPdfDialog';
 import { useBlockData } from './useBlockData';
 import { ParametersEditor } from './ParametersEditor';
 import { ParamValuesBar } from './ParamValuesBar';
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 
 export function ReportBuilderPage(): JSX.Element {
   const { id } = useParams();
@@ -23,6 +24,7 @@ export function ReportBuilderPage(): JSX.Element {
   const [template, setTemplate] = useState<ReportTemplate>(() => createEmptyTemplate(`rt-${Date.now()}`, ''));
   const [paramValues, setParamValues] = useState<Record<string, string>>({});
   const [paramsOpen, setParamsOpen] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const blockData = useBlockData(template, paramValues);
   const [selected, setSelected] = useState<CellRef | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -87,7 +89,7 @@ export function ReportBuilderPage(): JSX.Element {
               <Button size="sm" variant="outline" onClick={() => { void doPreview(); }}>Preview PDF</Button>
               <Button size="sm" onClick={() => { void save(); }}>Save</Button>
               <Button size="sm" variant="outline" onClick={() => { void publish(); }}>Publish</Button>
-              <Button size="sm" variant="ghost" className="text-destructive" onClick={() => { void handleDelete(); }}>Delete</Button>
+              <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setConfirmDeleteOpen(true)}>Delete</Button>
             </div>
           </div>
           {error && <div className="border-b border-border px-4 py-2 text-xs text-destructive">{error}</div>}
@@ -126,6 +128,18 @@ export function ReportBuilderPage(): JSX.Element {
         onClose={() => setParamsOpen(false)}
         onSave={(p) => update({ ...template, parameters: p })}
       />
+      <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this report?</AlertDialogTitle>
+            <AlertDialogDescription>This permanently deletes the report template. This cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { void handleDelete(); }}>Delete report</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppShell>
   );
 }
