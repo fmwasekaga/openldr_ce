@@ -14,6 +14,7 @@ import { Connectors } from '@/pages/settings/Connectors';
 import { Forms } from './pages/Forms';
 import { FormCapture } from './pages/FormCapture';
 import { FormBuilderPage } from './forms-builder/FormBuilderPage';
+import { ReportBuilderPage } from './reports-builder/ReportBuilderPage';
 import { Workflows } from './workflows/page';
 import { WorkflowList } from './workflows/WorkflowList';
 import { PluginContainer } from './plugins/PluginContainer';
@@ -44,6 +45,8 @@ export function App() {
       <Route path="/forms" element={<Forms />} />
       <Route path="/forms/new" element={<FormBuilderPage />} />
       <Route path="/forms/:id/builder" element={<FormBuilderPage />} />
+      <Route path="/reports/builder/new" element={<RequireRole roles={['lab_admin', 'lab_manager']}><ReportBuilderPage /></RequireRole>} />
+      <Route path="/reports/builder/:id" element={<RequireRole roles={['lab_admin', 'lab_manager']}><ReportBuilderPage /></RequireRole>} />
       <Route path="/forms/:id" element={<FormCapture />} />
       <Route path="/x/:pluginId" element={<RequireRole><PluginContainer /></RequireRole>} />
       <Route path="/docs" element={<Docs />} />
