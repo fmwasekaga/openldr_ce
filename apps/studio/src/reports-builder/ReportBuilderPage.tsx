@@ -103,7 +103,7 @@ export function ReportBuilderPage(): JSX.Element {
           <div className="flex min-h-0 flex-1 overflow-hidden">
             <div className="w-40 shrink-0 border-r border-border overflow-y-auto"><BlockPalette onAdd={addBlock} /></div>
             <div className="min-w-0 flex-1 overflow-auto bg-muted/30" onClick={() => setSelected(null)}>
-              <ReportCanvas template={template} selected={selected} onSelect={(row, cell) => setSelected({ row, cell })} data={blockData} />
+              <ReportCanvas template={template} selected={selected} onSelect={(row, cell) => setSelected({ row, cell })} data={blockData} issues={issues} />
             </div>
             <div className="w-64 shrink-0 border-l border-border overflow-y-auto">
               {selectedBlock && selected ? (
