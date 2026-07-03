@@ -14,6 +14,7 @@ export function ParamValuesBar({ parameters, values, onChange }: {
   onChange: (v: Record<string, string>) => void;
 }): JSX.Element | null {
   const [options, setOptions] = useState<Record<string, string[]>>({});
+  const [optErrors, setOptErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let alive = true;
@@ -25,8 +26,9 @@ export function ParamValuesBar({ parameters, values, onChange }: {
           const key = r.columns[0].key;
           const opts = r.rows.map((row) => String(row[key])).filter((v) => v !== 'null' && v !== '');
           setOptions((prev) => ({ ...prev, [p.id]: opts }));
+          setOptErrors((prev) => { const n = { ...prev }; delete n[p.id]; return n; });
         })
-        .catch(() => {});
+        .catch((e) => { if (alive) setOptErrors((prev) => ({ ...prev, [p.id]: e instanceof Error ? e.message : String(e) })); });
     }
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -54,13 +56,16 @@ export function ParamValuesBar({ parameters, values, onChange }: {
               className="h-8 text-xs"
             />
           ) : p.type === 'select' ? (
-            <Select value={values[p.id] ?? ALL} onValueChange={(v) => set({ [p.id]: v === ALL ? undefined : v })}>
-              <SelectTrigger aria-label={p.label} className="h-8 w-40 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>All</SelectItem>
-                {(options[p.id] ?? []).map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <div className="flex flex-col gap-0.5">
+              <Select value={values[p.id] ?? ALL} onValueChange={(v) => set({ [p.id]: v === ALL ? undefined : v })}>
+                <SelectTrigger aria-label={p.label} className="h-8 w-40 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>All</SelectItem>
+                  {(options[p.id] ?? []).map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {optErrors[p.id] && <span className="text-[10px] text-destructive">options failed</span>}
+            </div>
           ) : (
             <Input aria-label={p.label} className="h-8 w-40 text-xs" value={values[p.id] ?? ''} onChange={(e) => set({ [p.id]: e.target.value })} />
           )}

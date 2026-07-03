@@ -8,11 +8,12 @@ const getReportTemplate = vi.fn((..._a: unknown[]): Promise<unknown> => new Prom
 const updateReportTemplate = vi.fn().mockResolvedValue({ id: 'rt1', name: 'Report', status: 'draft', description: '', category: 'operational', page: PAGE, parameters: [], rows: [] });
 const previewReportTemplate = vi.fn().mockResolvedValue(new Blob(['%PDF'], { type: 'application/pdf' }));
 const fetchClientConfig = vi.fn().mockResolvedValue({ dashboardSqlEnabled: true, authEnforced: false, version: '', environment: '', oidc: null });
+const deleteReportTemplate = vi.fn().mockResolvedValue(undefined);
 vi.mock('../api', () => ({
   getReportTemplate: (...a: unknown[]) => getReportTemplate(...a),
   createReportTemplate: (...a: unknown[]) => createReportTemplate(...a),
   updateReportTemplate: (...a: unknown[]) => updateReportTemplate(...a),
-  deleteReportTemplate: vi.fn(),
+  deleteReportTemplate: (...a: unknown[]) => deleteReportTemplate(...a),
   previewReportTemplate: (...a: unknown[]) => previewReportTemplate(...a),
   listPluginUis: vi.fn(async () => []),
   runWidgetQuery: vi.fn().mockResolvedValue({ columns: [], rows: [], chart: {}, meta: { generatedAt: 'n', rowCount: 0 } }),
@@ -30,6 +31,7 @@ beforeEach(() => {
   updateReportTemplate.mockClear();
   previewReportTemplate.mockClear();
   fetchClientConfig.mockClear();
+  deleteReportTemplate.mockClear();
 });
 
 function renderNew() {
@@ -67,5 +69,20 @@ describe('ReportBuilderPage', () => {
     fireEvent.change(await screen.findByLabelText('Query'), { target: { value: 'abc' } });
     fireEvent.click(screen.getByRole('button', { name: /preview pdf/i }));
     await waitFor(() => expect(previewReportTemplate).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ q: 'abc' })));
+  });
+  it('does not refetch (clobber) after saving a new report', async () => {
+    createReportTemplate.mockResolvedValueOnce({ id: 'rt-new', name: 'Untitled report', status: 'draft', description: '', category: 'operational', page: PAGE, parameters: [], rows: [] });
+    renderNew();
+    fireEvent.click(await screen.findByRole('button', { name: /^save$/i }));
+    await waitFor(() => expect(createReportTemplate).toHaveBeenCalled());
+    expect(getReportTemplate).not.toHaveBeenCalledWith('rt-new');
+  });
+  it('does not delete until the confirmation is accepted', async () => {
+    getReportTemplate.mockResolvedValue({ id: 'rt1', name: 'Report', status: 'draft', description: '', category: 'operational', page: PAGE, parameters: [], rows: [] });
+    renderId('rt1');
+    fireEvent.click(await screen.findByRole('button', { name: /^delete$/i }));
+    expect(deleteReportTemplate).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole('button', { name: /^delete report$/i }));
+    await waitFor(() => expect(deleteReportTemplate).toHaveBeenCalled());
   });
 });

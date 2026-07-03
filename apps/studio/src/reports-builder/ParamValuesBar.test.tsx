@@ -28,4 +28,11 @@ describe('ParamValuesBar', () => {
     render(<ParamValuesBar parameters={params} values={{}} onChange={() => {}} />);
     await waitFor(() => expect(runWidgetQuery).toHaveBeenCalledWith({ mode: 'sql', sql: 'SELECT name FROM sites' }));
   });
+
+  it('surfaces an inline warning when optionsSql fails', async () => {
+    vi.mocked(runWidgetQuery).mockRejectedValue(new Error('bad sql'));
+    const params: ReportParam[] = [{ id: 'site', label: 'Site', type: 'select', required: false, optionsSql: 'SELECT x' }];
+    render(<ParamValuesBar parameters={params} values={{}} onChange={() => {}} />);
+    expect(await screen.findByText(/options failed/i)).toBeTruthy();
+  });
 });
