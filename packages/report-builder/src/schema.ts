@@ -19,6 +19,7 @@ export const ReportParamSchema = z.object({
   type: z.enum(['daterange', 'select', 'text']),
   required: z.boolean().default(false),
   optionsKey: z.string().optional(),
+  optionsSql: z.string().optional(),
 });
 
 const BlockStyleSchema = z.object({
