@@ -1,6 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { CanvasBlock } from './CanvasBlock';
+
+vi.mock('../dashboard/widgets', () => ({ renderWidget: (config: { type: string }) => <div data-testid="widget">{config.type}</div> }));
 
 describe('CanvasBlock', () => {
   it('renders title text', () => {
@@ -14,5 +16,21 @@ describe('CanvasBlock', () => {
   it('renders a table placeholder', () => {
     render(<CanvasBlock block={{ kind: 'table', source: 'primary', columns: [] } as never} />);
     expect(screen.getByText(/table/i)).toBeInTheDocument();
+  });
+});
+
+describe('CanvasBlock live data', () => {
+  const result = { columns: [{ key: 'label', label: 'L', kind: 'string' }, { key: 'value', label: 'V', kind: 'number' }], rows: [{ label: 'a', value: 1 }], chart: {}, meta: { generatedAt: 'n', rowCount: 1 } } as any;
+  it('renders a widget for a chart block with data', () => {
+    render(<CanvasBlock block={{ kind: 'chart', query: {} as never, chartType: 'bar', visual: {} } as never} data={{ result, loading: false }} />);
+    expect(screen.getByTestId('widget')).toHaveTextContent('bar-chart');
+  });
+  it('shows a loading state', () => {
+    render(<CanvasBlock block={{ kind: 'kpi', query: {} as never, label: 'X' } as never} data={{ loading: true }} />);
+    expect(screen.getByText(/loading|…/i)).toBeInTheDocument();
+  });
+  it('shows an error state', () => {
+    render(<CanvasBlock block={{ kind: 'chart', query: {} as never, chartType: 'bar', visual: {} } as never} data={{ error: 'boom', loading: false }} />);
+    expect(screen.getByText(/boom/i)).toBeInTheDocument();
   });
 });
