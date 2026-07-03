@@ -27,6 +27,9 @@ export function ParametersEditor({ open, parameters, onClose, onSave }: {
   };
   const add = () => setList([...list, { id: newId(), label: 'New Parameter', type: 'text', required: false }]);
 
+  const ids = list.map((p) => p.id.trim());
+  const invalid = ids.some((id) => id === '') || new Set(ids).size !== ids.length;
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="w-full max-w-lg max-h-[80vh] flex flex-col p-0">
@@ -80,9 +83,10 @@ export function ParametersEditor({ open, parameters, onClose, onSave }: {
         </div>
         <div className="flex items-center justify-between border-t border-border px-6 py-4">
           <Button variant="outline" size="sm" onClick={add}>Add Parameter</Button>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            {invalid && <span className="text-xs text-destructive">Parameter ids must be unique and non-empty</span>}
             <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
-            <Button size="sm" onClick={() => { onSave(list); onClose(); }}>Save Parameters</Button>
+            <Button size="sm" disabled={invalid} onClick={() => { if (!invalid) { onSave(list); onClose(); } }}>Save Parameters</Button>
           </div>
         </div>
       </DialogContent>
