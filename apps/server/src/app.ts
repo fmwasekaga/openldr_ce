@@ -19,6 +19,7 @@ import { registerMarketplaceRoutes } from './marketplace-routes';
 import { registerWorkflowRoutes } from './workflows-routes';
 import { registerConnectorsRoutes } from './connectors-routes';
 import { registerSettingsRoutes } from './settings-routes';
+import { registerActivityRoutes } from './activity-routes';
 import { registerPluginUiRoutes } from './plugin-ui-routes';
 import { createConnectorStore } from '@openldr/db';
 import { registerAuth } from './auth-plugin';
@@ -84,6 +85,7 @@ export function buildApp(ctx: AppContext) {
   registerConnectorsRoutes(app, ctx, { connectors: createConnectorStore(ctx.internalDb) });
   registerWorkflowRoutes(app, ctx, { connectors: createConnectorStore(ctx.internalDb) });
   registerSettingsRoutes(app, ctx);
+  registerActivityRoutes(app, ctx);
 
   // Serve the built SPA under /studio/* — the landing site owns /.
   // API + health routes are registered above and always win.
