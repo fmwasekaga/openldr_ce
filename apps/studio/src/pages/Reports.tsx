@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { AppShell } from '../shell/AppShell';
 import {
   fetchReports, fetchReport, fetchReportOptions, logReportRun,
@@ -9,6 +10,7 @@ import { ReportLibrary } from '../reports/ReportLibrary';
 import { ReportHistoryDrawer } from '../reports/ReportHistoryDrawer';
 import { ReportSchedulesDrawer } from '../reports/ReportSchedulesDrawer';
 import { useAuth } from '@/auth/AuthProvider';
+import { Button } from '@/components/ui/button';
 import { ReportParametersBar } from '../reports/ReportParametersBar';
 import { ReportSummaryStrip } from '../reports/ReportSummaryStrip';
 import { ReportActionsMenu } from '../reports/ReportActionsMenu';
@@ -102,17 +104,24 @@ export function Reports() {
   return (
     <AppShell title={t('nav.reports')} fullBleed>
       <div className="flex h-full min-h-0">
-        <ReportLibrary
-          reports={reports}
-          selectedId={selectedId}
-          onSelect={handleSelect}
-          pinnedIds={pinnedIds}
-          onTogglePin={handleTogglePin}
-          search={search}
-          onSearchChange={setSearch}
-          collapsed={collapsed}
-          onToggleCollapse={() => setCollapsed((c) => !c)}
-        />
+        <div className="flex min-w-0 shrink-0 flex-col">
+          {!collapsed && (
+            <div className="flex items-center justify-end border-b border-border px-2 py-2">
+              <NewReportButton />
+            </div>
+          )}
+          <ReportLibrary
+            reports={reports}
+            selectedId={selectedId}
+            onSelect={handleSelect}
+            pinnedIds={pinnedIds}
+            onTogglePin={handleTogglePin}
+            search={search}
+            onSearchChange={setSearch}
+            collapsed={collapsed}
+            onToggleCollapse={() => setCollapsed((c) => !c)}
+          />
+        </div>
 
         <div className="flex min-w-0 flex-1 flex-col">
           {!selected ? (
@@ -216,4 +225,11 @@ export function Reports() {
       )}
     </AppShell>
   );
+}
+
+export function NewReportButton(): JSX.Element | null {
+  const navigate = useNavigate();
+  const { hasRole } = useAuth();
+  if (!(hasRole('lab_admin') || hasRole('lab_manager'))) return null;
+  return <Button size="sm" onClick={() => navigate('/reports/builder/new')}>New report</Button>;
 }
