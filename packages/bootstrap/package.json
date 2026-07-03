@@ -28,6 +28,7 @@
     "@openldr/marketplace": "workspace:*",
     "@openldr/plugins": "workspace:*",
     "@openldr/ports": "workspace:*",
+    "@openldr/report-builder": "workspace:*",
     "@openldr/report-pdf": "workspace:*",
     "@openldr/reporting": "workspace:*",
     "@openldr/terminology": "workspace:*",

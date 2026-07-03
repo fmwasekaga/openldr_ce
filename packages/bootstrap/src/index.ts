@@ -14,6 +14,7 @@ import { createUserStore, type UserStore, createUserProfileStore, type UserProfi
 import { createFormStore, type FormStore } from '@openldr/forms';
 import { getReport, reportSummaries, getEventSource, eventSourceCatalog, toCsv, type ReportResult, type ReportSummary } from '@openldr/reporting';
 import { createDashboardStore, getModel, listModels, runBuilderQuery, runSqlQuery, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, seedDefaultDashboard, type DashboardStore, type WidgetQuery } from '@openldr/dashboards';
+import { createReportTemplateStore, type ReportTemplateStore } from '@openldr/report-builder';
 import {
   createWorkflowStore, type WorkflowStore,
   createWorkflowRunStore, type WorkflowRunStore,
@@ -145,6 +146,7 @@ export interface AppContext {
     };
   };
   dashboards: DashboardsApi;
+  reportTemplates: ReportTemplateStore;
   workflows: {
     store: WorkflowStore;
     runs: WorkflowRunStore;
@@ -266,6 +268,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   });
 
   const dashboardStore = createDashboardStore(internal.db);
+  const reportTemplateStore = createReportTemplateStore(internal.db);
   const runDashboardQuery = async (q: WidgetQuery): Promise<ReportResult> => {
     let data;
     if (q.mode === 'builder') {
@@ -634,6 +637,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     health,
     terminology,
     dashboards,
+    reportTemplates: reportTemplateStore,
     workflows,
     plugins,
     pluginData,

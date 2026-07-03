@@ -585,6 +585,9 @@ importers:
       '@openldr/ports':
         specifier: workspace:*
         version: link:../ports
+      '@openldr/report-builder':
+        specifier: workspace:*
+        version: link:../report-builder
       '@openldr/report-pdf':
         specifier: workspace:*
         version: link:../report-pdf
