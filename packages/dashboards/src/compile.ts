@@ -82,6 +82,10 @@ export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryMode
     const d = dim(model, q.dimension.key);
     qb = qb.select(sql.ref(d.column).as('label')).groupBy(d.column as never).orderBy(d.column as never);
   }
+  if (q.breakdown) {
+    const b = dim(model, q.breakdown.key);
+    qb = qb.select(sql.ref(b.column).as('series')).groupBy(b.column as never).orderBy(b.column as never);
+  }
   qb = applyFilters(qb, model, q.filters ?? []);
   return qb;
 }
@@ -90,8 +94,32 @@ export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryMode
 export async function runBuilderQuery(
   db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery,
 ): Promise<ReportResultData> {
-  const rows = (await compileBuilderQuery(db, model, q).execute()) as { value: number; label?: unknown }[];
+  const rows = (await compileBuilderQuery(db, model, q).execute()) as { value: number; label?: unknown; series?: unknown }[];
   const d = q.dimension ? dim(model, q.dimension.key) : undefined;
+
+  if (q.breakdown) {
+    const b = dim(model, q.breakdown.key);
+    let shaped: Record<string, unknown>[];
+    if (d && d.kind === 'date' && q.dimension?.grain) {
+      const buckets = new Map<string, number>();
+      for (const r of rows) {
+        const key = `${grainKey(r.label, q.dimension.grain)} ${String(r.series ?? '(none)')}`;
+        buckets.set(key, (buckets.get(key) ?? 0) + Number(r.value ?? 0));
+      }
+      shaped = [...buckets.entries()].sort((a, b2) => (a[0] < b2[0] ? -1 : 1)).map(([key, value]) => {
+        const [label, series] = key.split(' ');
+        return { label, series, value };
+      });
+    } else {
+      shaped = rows.map((r) => ({ label: r.label ?? '(none)', series: String(r.series ?? '(none)'), value: Number(r.value ?? 0) }));
+    }
+    const columns: ReportColumn[] = [
+      { key: 'label', label: d?.label ?? model.label, kind: d?.kind === 'date' ? 'date' : 'string' },
+      { key: 'series', label: b.label, kind: 'string' },
+      { key: 'value', label: q.metric.label ?? 'Value', kind: 'number' },
+    ];
+    return { columns, rows: shaped, chart: { type: 'bar', x: 'label', y: 'value' } };
+  }
 
   let shaped: Record<string, unknown>[];
   if (d && d.kind === 'date' && q.dimension?.grain) {
@@ -100,13 +128,12 @@ export async function runBuilderQuery(
       const key = grainKey(r.label, q.dimension.grain);
       buckets.set(key, (buckets.get(key) ?? 0) + Number(r.value ?? 0));
     }
-    shaped = [...buckets.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([label, value]) => ({ label, value }));
+    shaped = [...buckets.entries()].sort((a, b2) => (a[0] < b2[0] ? -1 : 1)).map(([label, value]) => ({ label, value }));
   } else if (d) {
     shaped = rows.map((r) => ({ label: r.label ?? '(none)', value: Number(r.value ?? 0) }));
   } else {
     shaped = [{ label: model.label, value: Number(rows[0]?.value ?? 0) }];
   }
-
   const columns: ReportColumn[] = [
     { key: 'label', label: d?.label ?? model.label, kind: d?.kind === 'date' ? 'date' : 'string' },
     { key: 'value', label: q.metric.label ?? 'Value', kind: 'number' },

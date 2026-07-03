@@ -44,4 +44,17 @@ describe('compileBuilderQuery', () => {
     }).compile();
     expect(parameters).toContain('active');
   });
+
+  it('groups by both the dimension and the breakdown', () => {
+    const model = getModel('service_requests')!;
+    const { sql } = compileBuilderQuery(db, model, {
+      mode: 'builder', model: 'service_requests',
+      metric: { key: 'count', agg: 'count' },
+      dimension: { key: 'status' }, breakdown: { key: 'code_text' }, filters: [],
+    }).compile();
+    expect(sql).toContain('"status"');
+    expect(sql).toContain('"code_text"');
+    expect((sql.match(/group by/gi) ?? []).length).toBe(1);
+    expect(sql).toContain('"series"');
+  });
 });
