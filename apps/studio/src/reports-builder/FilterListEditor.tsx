@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Trash2 } from 'lucide-react';
@@ -32,10 +31,6 @@ export function FilterListEditor({ filters, dimensions, parameters, onChange }: 
   parameters: ReportParam[];
   onChange: (f: BuilderFilter[]) => void;
 }): JSX.Element {
-  // Per-row literal/param mode override. The stored value is the source of
-  // truth, but the toggle also holds an explicit mode so switching works even
-  // before the parent feeds the updated filters back (controlled component).
-  const [paramModeOverride, setParamModeOverride] = useState<Record<number, boolean>>({});
   const update = (i: number, patch: Partial<BuilderFilter>) =>
     onChange(filters.map((f, j) => (j === i ? { ...f, ...patch } : f)));
   const add = () =>
@@ -46,7 +41,7 @@ export function FilterListEditor({ filters, dimensions, parameters, onChange }: 
     <div className="flex flex-col gap-2">
       <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Filters</div>
       {filters.map((f, i) => {
-        const paramMode = paramModeOverride[i] ?? isParamValue(f.value);
+        const paramMode = isParamValue(f.value);
         return (
           <div key={i} className="flex flex-col gap-1 rounded border border-border p-2">
             <div className="flex gap-1">
@@ -73,13 +68,13 @@ export function FilterListEditor({ filters, dimensions, parameters, onChange }: 
                   type="button" size="sm" className="h-7 rounded-r-none px-2 text-[10px]"
                   aria-label={`filter-${i}-mode-literal`}
                   variant={paramMode ? 'outline' : 'default'}
-                  onClick={() => { setParamModeOverride((m) => ({ ...m, [i]: false })); update(i, { value: '' }); }}
+                  onClick={() => update(i, { value: '' })}
                 >Value</Button>
                 <Button
                   type="button" size="sm" className="h-7 rounded-l-none px-2 text-[10px]"
                   aria-label={`filter-${i}-mode-param`}
                   variant={paramMode ? 'default' : 'outline'}
-                  onClick={() => { setParamModeOverride((m) => ({ ...m, [i]: true })); update(i, { value: `{{param.${parameters[0]?.id ?? ''}}}` }); }}
+                  onClick={() => update(i, { value: `{{param.${parameters[0]?.id ?? ''}}}` })}
                 >Param</Button>
               </div>
               {paramMode ? (
