@@ -3,7 +3,7 @@ import Fastify from 'fastify';
 import { registerReportTemplateRoutes } from './report-templates-routes';
 import './auth-plugin';
 
-function fakeCtx() {
+function fakeCtx(sqlEnabled = false) {
   const data: any[] = [];
   const auditEvents: any[] = [];
   return {
@@ -14,6 +14,7 @@ function fakeCtx() {
       update: async (id: string, d: any) => { const i = data.findIndex((x) => x.id === id); data[i] = d; return d; },
       remove: async (id: string) => { const i = data.findIndex((x) => x.id === id); if (i >= 0) data.splice(i, 1); },
     },
+    featureFlags: { get: async (_k: string) => sqlEnabled },
     audit: { record: async (e: any) => { auditEvents.push(e); return e; } },
     logger: { error() {}, warn() {}, info() {} },
     __auditEvents: auditEvents,
@@ -106,5 +107,43 @@ describe('report-template preview', () => {
     registerReportTemplateRoutes(app, ctxWith(tpl));
     const res = await app.inject({ method: 'POST', url: '/api/report-templates/nope/preview', payload: {} });
     expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('report-template raw SQL authoring gate', () => {
+  const sqlTpl = (sql: string) => ({
+    id: 'rt1', name: 'R', description: '', category: 'operational', status: 'draft',
+    page: { size: 'A4', orientation: 'portrait', margins: { top: 40, right: 40, bottom: 40, left: 40 } },
+    parameters: [], rows: [{ id: 'r', cells: [{ colSpan: 12, block: { kind: 'kpi', label: '', query: { mode: 'sql', sql, values: {} } } }] }],
+  });
+
+  it('rejects creating a report with a raw SQL block when the flag is off', async () => {
+    const app = appWith(fakeCtx(false));
+    const res = await app.inject({ method: 'POST', url: '/api/report-templates', payload: sqlTpl('select 1 as value') });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('allows creating a raw SQL block when the flag is on', async () => {
+    const app = appWith(fakeCtx(true));
+    const res = await app.inject({ method: 'POST', url: '/api/report-templates', payload: sqlTpl('select 1 as value') });
+    expect(res.statusCode).toBe(201);
+  });
+
+  it('allows a non-SQL edit to a persisted SQL block with the flag off (unchanged SQL is vetted)', async () => {
+    const ctx = fakeCtx(true);
+    const app = appWith(ctx);
+    await app.inject({ method: 'POST', url: '/api/report-templates', payload: sqlTpl('select 1 as value') });
+    ctx.featureFlags.get = async () => false;
+    const res = await app.inject({ method: 'PUT', url: '/api/report-templates/rt1', payload: { ...sqlTpl('select 1 as value'), name: 'Renamed' } });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('rejects CHANGING the SQL text of a persisted block with the flag off', async () => {
+    const ctx = fakeCtx(true);
+    const app = appWith(ctx);
+    await app.inject({ method: 'POST', url: '/api/report-templates', payload: sqlTpl('select 1 as value') });
+    ctx.featureFlags.get = async () => false;
+    const res = await app.inject({ method: 'PUT', url: '/api/report-templates/rt1', payload: sqlTpl('select 2 as value') });
+    expect(res.statusCode).toBe(400);
   });
 });
