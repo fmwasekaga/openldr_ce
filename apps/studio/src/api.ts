@@ -1257,8 +1257,8 @@ export interface LifecycleStageEntry { stage: string; status: string; at: string
 export interface Lifecycle { correlationId: string; status: string; stages: LifecycleStageEntry[]; runIds: string[] }
 export interface RecentPayload { correlationId: string; workflowId: string; source: string | null; startedAt: string; currentStage: string; status: string }
 
-export const fetchActivity = (): Promise<RecentPayload[]> =>
-  authFetch('/api/activity').then((r) => okJson<RecentPayload[]>(r, 'list activity'));
+export const fetchActivity = (limit = 200): Promise<RecentPayload[]> =>
+  authFetch(`/api/activity?limit=${limit}`).then((r) => okJson<RecentPayload[]>(r, 'list activity'));
 export const fetchLifecycle = (id: string): Promise<Lifecycle> =>
   authFetch(`/api/activity/${encodeURIComponent(id)}`).then((r) => okJson<Lifecycle>(r, 'load lifecycle'));
 

@@ -412,6 +412,9 @@ export const fr: EnShape = {
   },
   activity: {
     newestFirst: 'Charges les plus récentes en premier.',
+    searchPlaceholder: 'Rechercher des charges utiles…',
+    refresh: 'Actualiser',
+    count: '{{count}} charges utiles',
     colPayload: 'Charge',
     colSource: 'Source',
     colStarted: 'Démarré',

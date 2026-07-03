@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
-import { Copy, Filter, RotateCcw, X } from 'lucide-react';
+import { Copy, Filter, RefreshCw, RotateCcw, X } from 'lucide-react';
 import { AppShell } from '@/shell/AppShell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -343,6 +343,18 @@ export function Audit() {
             )}
             <div className="flex-1" />
             <span className="text-xs text-muted-foreground">Newest events first.</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground"
+              onClick={() => void load()}
+              disabled={loading}
+              aria-label="Refresh"
+              title="Refresh"
+            >
+              <RefreshCw className={loading ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />
+            </Button>
           </div>
           <AuditFilterChips filters={filters} onRemove={removeFilter} />
           <button type="submit" className="hidden" aria-hidden="true">Apply</button>

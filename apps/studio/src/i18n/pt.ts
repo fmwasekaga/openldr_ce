@@ -412,6 +412,9 @@ export const pt: EnShape = {
   },
   activity: {
     newestFirst: 'Cargas mais recentes primeiro.',
+    searchPlaceholder: 'Pesquisar cargas úteis…',
+    refresh: 'Atualizar',
+    count: '{{count}} cargas úteis',
     colPayload: 'Carga',
     colSource: 'Origem',
     colStarted: 'Iniciada',

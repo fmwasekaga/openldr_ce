@@ -416,6 +416,9 @@ export const en = {
   },
   activity: {
     newestFirst: 'Newest payloads first.',
+    searchPlaceholder: 'Search payloads…',
+    refresh: 'Refresh',
+    count: '{{count}} payloads',
     colPayload: 'Payload',
     colSource: 'Source',
     colStarted: 'Started',

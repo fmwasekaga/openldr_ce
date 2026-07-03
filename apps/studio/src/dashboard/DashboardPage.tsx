@@ -11,7 +11,7 @@ import {
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/cn';
-import { Plus, Pencil, Check, SlidersHorizontal, MoreHorizontal, Download, Upload } from 'lucide-react';
+import { Plus, Pencil, Check, SlidersHorizontal, MoreHorizontal, Download, Upload, RefreshCw } from 'lucide-react';
 import { listDashboards, createDashboard, saveDashboard, fetchClientConfig, type Dashboard, type DashboardFilterDef, type WidgetConfig } from '../api';
 import { useDashboardStore } from './store';
 import { DashboardGrid } from './DashboardGrid';
@@ -41,6 +41,8 @@ export function DashboardPage() {
   const [filterEditorOpen, setFilterEditorOpen] = useState(false);
   const [sqlEnabled, setSqlEnabled] = useState(false);
   const [error, setError] = useState<string>();
+  // Bumping this remounts the widget grid, which re-runs every widget's query — a refresh.
+  const [refreshKey, setRefreshKey] = useState(0);
   const saveTimer = useRef<ReturnType<typeof setTimeout>>();
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -138,6 +140,17 @@ export function DashboardPage() {
               ))}
             </SelectContent>
           </Select>
+          <div className="flex items-center gap-1">
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label="Refresh"
+            title="Refresh"
+            className="h-8 w-8 text-muted-foreground"
+            onClick={() => setRefreshKey((k) => k + 1)}
+          >
+            <RefreshCw className="h-4 w-4" />
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button size="icon" variant="ghost" aria-label="Dashboard menu" className="h-8 w-8">
@@ -191,6 +204,7 @@ export function DashboardPage() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          </div>
           <input
             ref={fileInput}
             type="file"
@@ -214,6 +228,7 @@ export function DashboardPage() {
         )}
         <div className={cn('flex-1', editing && 'dash-edit-bg')}>
           <DashboardGrid
+            key={refreshKey}
             filterValues={values}
             onEdit={(id) => {
               setEditingWidget(current.widgets.find((w) => w.id === id));

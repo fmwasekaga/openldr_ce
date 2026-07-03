@@ -1,8 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { RefreshCw } from 'lucide-react';
 import { AppShell } from '@/shell/AppShell';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { TablePagination } from '@/components/ui/table-pagination';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { cn } from '@/lib/cn';
 import { fetchActivity, fetchLifecycle, type Lifecycle, type RecentPayload } from '@/api';
@@ -84,11 +88,11 @@ function LifecycleSheet({
   return (
     <Sheet open={correlationId !== null} onOpenChange={onOpenChange}>
       <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-xl">
-        <SheetHeader className="border-b border-border px-6 py-4">
+        <SheetHeader className="border-b border-border px-4 py-3">
           <SheetTitle>{t('activity.detailTitle')}</SheetTitle>
           <SheetDescription className="break-all font-mono text-xs">{correlationId}</SheetDescription>
         </SheetHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto p-6">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
           {!lifecycle ? (
             <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
           ) : lifecycle.stages.length === 0 ? (
@@ -135,16 +139,37 @@ export function Activity() {
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [lifecycle, setLifecycle] = useState<Lifecycle | null>(null);
+  const [query, setQuery] = useState('');
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(25);
 
-  useEffect(() => {
-    let cancelled = false;
+  const load = useCallback(async () => {
     setLoading(true);
-    fetchActivity()
-      .then((rows) => { if (!cancelled) { setPayloads(rows); setError(null); } })
-      .catch((e) => { if (!cancelled) { setPayloads([]); setError(e instanceof Error ? e.message : String(e)); } })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+    setError(null);
+    try {
+      setPayloads(await fetchActivity(200));
+    } catch (e) {
+      setPayloads([]);
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
   }, []);
+  useEffect(() => { void load(); }, [load]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return payloads;
+    return payloads.filter((p) =>
+      p.correlationId.toLowerCase().includes(q) ||
+      (p.source ?? '').toLowerCase().includes(q) ||
+      p.status.toLowerCase().includes(q) ||
+      p.currentStage.toLowerCase().includes(q),
+    );
+  }, [payloads, query]);
+  // Keep the page in range as the filter narrows results.
+  useEffect(() => { setPage(0); }, [query]);
+  const pageRows = filtered.slice(page * pageSize, page * pageSize + pageSize);
 
   const openPayload = useCallback(async (correlationId: string) => {
     setSelectedId(correlationId);
@@ -159,7 +184,26 @@ export function Activity() {
   return (
     <AppShell title={t('nav.activity')} fullBleed>
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex items-center justify-between border-b border-border px-4 py-2">
+        <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t('activity.searchPlaceholder')}
+            className="h-8 max-w-xs text-xs"
+            aria-label={t('activity.searchPlaceholder')}
+          />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground"
+            onClick={() => void load()}
+            disabled={loading}
+            aria-label={t('activity.refresh')}
+            title={t('activity.refresh')}
+          >
+            <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
+          </Button>
+          <div className="flex-1" />
           <span className="text-xs text-muted-foreground">{t('activity.newestFirst')}</span>
         </div>
 
@@ -179,10 +223,10 @@ export function Activity() {
                 <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">{t('common.loading')}</TableCell></TableRow>
               ) : error ? (
                 <TableRow><TableCell colSpan={5} className="py-8 text-center text-destructive">{error}</TableCell></TableRow>
-              ) : payloads.length === 0 ? (
+              ) : filtered.length === 0 ? (
                 <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">{t('activity.empty')}</TableCell></TableRow>
               ) : (
-                payloads.map((p) => (
+                pageRows.map((p) => (
                   <TableRow
                     key={p.correlationId}
                     className="cursor-pointer transition-colors hover:bg-[rgba(70,130,180,0.08)]"
@@ -205,6 +249,15 @@ export function Activity() {
             </TableBody>
           </Table>
         </div>
+
+        <TablePagination
+          page={page}
+          pageSize={pageSize}
+          total={filtered.length}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => { setPageSize(size); setPage(0); }}
+          leftSlot={<span className="text-muted-foreground">{t('activity.count', { count: filtered.length })}</span>}
+        />
 
         <LifecycleSheet
           correlationId={selectedId}
