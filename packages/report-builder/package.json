@@ -16,9 +16,11 @@
     "@openldr/dashboards": "workspace:*",
     "@openldr/reporting": "workspace:*",
     "kysely": "^0.27.5",
+    "pdfkit": "^0.15.0",
     "zod": "3.24.0"
   },
   "devDependencies": {
+    "@types/pdfkit": "^0.13.4",
     "pg-mem": "^3.0.14",
     "typescript": "5.7.2",
     "vitest": "2.1.8"
