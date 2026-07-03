@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
-import { dangerResetDashboards, dangerFactoryReset, dangerClearAudit } from '@openldr/bootstrap';
+import { dangerResetDashboards, dangerFactoryReset, dangerClearAudit, getSyncConfig, setSyncConfig } from '@openldr/bootstrap';
+import { SYNC_CONFIG_KEY } from '@openldr/config';
 import { requireRole } from './rbac';
 import { recordAudit } from './audit-helper';
 
@@ -22,6 +23,28 @@ const defaultDeps: DangerDeps = {
 export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext, deps: DangerDeps = defaultDeps): void {
   app.get('/api/settings/flags', { preHandler: requireRole('lab_admin') }, async () => ctx.featureFlags.all());
 
+  // Lab⇄central sync config (scaffolding; the engine is not implemented yet). Non-secret,
+  // stored in app_settings. Admin-only + audited, mirrored by `openldr settings sync …`.
+  app.get('/api/settings/sync', { preHandler: requireRole('lab_admin') }, async () =>
+    getSyncConfig(ctx.appSettings),
+  );
+
+  app.put('/api/settings/sync', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const before = await getSyncConfig(ctx.appSettings);
+    let after;
+    try {
+      after = await setSyncConfig(ctx.appSettings, req.body, req.user?.id ?? null);
+    } catch (e) {
+      reply.code(400);
+      return { error: e instanceof Error ? e.message : 'invalid sync config' };
+    }
+    await recordAudit(ctx, req, {
+      action: 'settings.sync.update', entityType: 'app_setting', entityId: SYNC_CONFIG_KEY,
+      metadata: { before, after },
+    });
+    return after;
+  });
+
   app.put('/api/settings/flags/:key', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
     const { key } = req.params as { key: string };
     const { value } = req.body as { value: boolean };
@@ -33,6 +56,30 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
       metadata: { key, before, after },
     });
     reply.code(200);
+    return { key, value: after };
+  });
+
+  // Admin-tunable number settings (operational limits). Admin-only + audited, mirrored by
+  // `openldr settings numbers …`.
+  app.get('/api/settings/numbers', { preHandler: requireRole('lab_admin') }, async () =>
+    ctx.numberSettings.all(),
+  );
+
+  app.put('/api/settings/numbers/:key', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const { key } = req.params as { key: string };
+    const { value } = req.body as { value: number };
+    const before = await ctx.numberSettings.get(key).catch(() => null);
+    let after: number;
+    try {
+      after = await ctx.numberSettings.set(key, Number(value), req.user?.id ?? null);
+    } catch (e) {
+      reply.code(400);
+      return { error: e instanceof Error ? e.message : 'invalid number setting' };
+    }
+    await recordAudit(ctx, req, {
+      action: 'settings.number.update', entityType: 'app_setting', entityId: key,
+      metadata: { key, before, after },
+    });
     return { key, value: after };
   });
 

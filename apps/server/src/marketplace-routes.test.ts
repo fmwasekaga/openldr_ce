@@ -88,6 +88,7 @@ function fakeCtx(plugins: unknown, cfg: Record<string, unknown>, internalDb: unk
   return {
     cfg, plugins, internalDb, logger: { error() {}, warn() {}, info() {}, debug() {} },
     audit: { record: async (e: unknown) => { audited?.push(e); } },
+    numberSettings: { get: async () => 67_108_864, all: async () => [], set: async () => 0, invalidate: () => {} },
     marketplaceForms: marketplaceForms ?? { install: async () => ({ id: 'x', version: '1', targetFormId: 'form-1' }), detach: async () => {}, list: async () => [] },
   } as unknown as AppContext;
 }

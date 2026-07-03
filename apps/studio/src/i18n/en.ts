@@ -145,6 +145,52 @@ export const en = {
           label: 'Dashboard raw SQL',
           description: 'Allow authoring and running arbitrary read-only SQL in dashboard widgets (Postgres warehouse only). Off by default.',
         },
+        workflowListeners: {
+          label: 'Workflow listener triggers',
+          description: 'Run external listener triggers (Postgres LISTEN / IMAP email polling). Turning this off stops all listeners on the next reconcile.',
+        },
+        workflowDatasetPublish: {
+          label: 'Publish workflow datasets',
+          description: 'Publish materialized workflow datasets as real tables in the Postgres warehouse so the SQL node and dashboards can query them.',
+        },
+      },
+      numbers: {
+        title: 'Limits & tuning',
+        description: 'Operational limits, tunable at runtime without a restart. Values are clamped to safe ranges.',
+        saved: 'Saved',
+        saveFailed: 'Could not save: {{error}}',
+        dashboardSqlTimeoutMs: {
+          label: 'Dashboard SQL timeout (ms)',
+          description: 'Maximum time a dashboard raw-SQL query may run before it is cancelled.',
+        },
+        dashboardSqlRowCap: {
+          label: 'Dashboard SQL row cap',
+          description: 'Maximum number of rows a dashboard raw-SQL query may return.',
+        },
+        marketplaceMaxPayloadBytes: {
+          label: 'Marketplace max payload (bytes)',
+          description: 'Maximum size of a plugin bundle downloaded from a remote registry.',
+        },
+      },
+      sync: {
+        title: 'Lab ⇄ central sync',
+        preview: 'Preview — the sync engine is not running yet. Settings are saved so this lab is ready to configure when sync ships.',
+        saved: 'Sync settings saved',
+        saveFailed: 'Could not save: {{error}}',
+        save: 'Save',
+        enabled: {
+          label: 'Enable sync',
+          description: 'Master switch. Has no effect until the sync engine is available.',
+        },
+        mode: {
+          label: 'Direction',
+          push: 'Push to central',
+          pull: 'Pull from central',
+          bidirectional: 'Bidirectional',
+        },
+        centralUrl: { label: 'Central URL' },
+        siteId: { label: 'Site ID' },
+        intervalMinutes: { label: 'Sync interval (minutes)' },
       },
       danger: {
         title: 'Danger Zone',

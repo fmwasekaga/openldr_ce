@@ -21,6 +21,18 @@ export const FEATURE_FLAGS: readonly FeatureFlagDefinition[] = [
     descriptionKey: 'settings.general.flags.dashboardRawSql.description',
     default: false,
   },
+  {
+    id: 'workflow.listeners_enabled',
+    labelKey: 'settings.general.flags.workflowListeners.label',
+    descriptionKey: 'settings.general.flags.workflowListeners.description',
+    default: true,
+  },
+  {
+    id: 'workflow.dataset_publish_enabled',
+    labelKey: 'settings.general.flags.workflowDatasetPublish.label',
+    descriptionKey: 'settings.general.flags.workflowDatasetPublish.description',
+    default: false,
+  },
 ];
 
 export type FeatureFlagId = (typeof FEATURE_FLAGS)[number]['id'];

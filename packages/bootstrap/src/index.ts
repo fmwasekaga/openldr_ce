@@ -34,6 +34,7 @@ import { createFormArtifactInstaller, type FormArtifactInstaller } from './form-
 import { type PluginRuntime } from '@openldr/plugins';
 import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore } from '@openldr/db';
 import { createFeatureFlags, type FeatureFlags } from './feature-flags';
+import { createNumberSettings, type NumberSettings } from './number-settings';
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { policyFromConfig } from './policy';
 import { createPluginTarget } from './connector-target';
@@ -158,6 +159,7 @@ export interface AppContext {
   connectors: ConnectorStore;
   appSettings: AppSettingStore;
   featureFlags: FeatureFlags;
+  numberSettings: NumberSettings;
   cfg: Config;
   close(): Promise<void>;
 }
@@ -282,7 +284,10 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
         throw new DashboardQueryError('raw SQL widgets are disabled');
       }
       const finalSql = q.values ? applyTemplate(q.sql, resolveValues(q.values)) : q.sql;
-      data = await runSqlQuery(reportingDb, finalSql, { timeoutMs: cfg.DASHBOARD_SQL_TIMEOUT_MS, rowCap: cfg.DASHBOARD_SQL_ROW_CAP });
+      data = await runSqlQuery(reportingDb, finalSql, {
+        timeoutMs: await numberSettings.get('dashboard.sql_timeout_ms'),
+        rowCap: await numberSettings.get('dashboard.sql_row_cap'),
+      });
     }
     return { ...data, meta: { generatedAt: new Date().toISOString(), rowCount: data.rows.length } };
   };
@@ -357,6 +362,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   const connectorStore = createConnectorStore(internal.db);
   const appSettings = createAppSettingsStore(internal.db);
   const featureFlags = createFeatureFlags(appSettings);
+  const numberSettings = createNumberSettings(appSettings);
   const connectorSqlRunner = createConnectorSqlRunner({ connectors: connectorStore, secretsKey: cfg.SECRETS_ENCRYPTION_KEY });
   const connectorMongoRunner = createConnectorMongoRunner({ connectors: connectorStore, secretsKey: cfg.SECRETS_ENCRYPTION_KEY });
   const connectorRedisRunner = createConnectorRedisRunner({ connectors: connectorStore, secretsKey: cfg.SECRETS_ENCRYPTION_KEY });
@@ -374,7 +380,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     httpFetch: (req) => guardedFetch(req, cfg.WORKFLOW_HTTP_ALLOWLIST),
     materializeDataset: async (name, columns, rows, workflowId) => {
       await workflowDatasets.upsertByName({ name, columns, rows, rowCount: rows.length, workflowId });
-      if (cfg.WORKFLOW_DATASET_PUBLISH_ENABLED && cfg.TARGET_STORE_ADAPTER === 'pg') {
+      if ((await featureFlags.get('workflow.dataset_publish_enabled')) && cfg.TARGET_STORE_ADAPTER === 'pg') {
         const table = datasetTableName(name);
         const ident = sql.table(table);
         await store.transaction(async (trx) => {
@@ -448,7 +454,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     store: { list: () => workflowStore.list() },
     runAndRecord: (id, source, input, files) => workflowRunner.runAndRecord(id, source, input, files),
     logger,
-    cfg,
+    isEnabled: () => featureFlags.get('workflow.listeners_enabled'),
     drivers: {
       postgres: createPostgresListenerDriver({ connectors: connectorStore, secretsKey: cfg.SECRETS_ENCRYPTION_KEY, logger }),
       email: createEmailListenerDriver({
@@ -618,6 +624,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     connectors: connectorStore,
     appSettings,
     featureFlags,
+    numberSettings,
     cfg,
     async close() {
       await workflowListeners.stopAll();
@@ -628,6 +635,9 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
 
 export { createFeatureFlags } from './feature-flags';
 export type { FeatureFlags, ResolvedFlag } from './feature-flags';
+export { createNumberSettings } from './number-settings';
+export type { NumberSettings, ResolvedNumberSetting } from './number-settings';
+export { getSyncConfig, setSyncConfig } from './sync-settings';
 export { CE_VERSION } from './plugin-registry';
 export * from './db-context';
 export { createPluginTarget } from './connector-target';

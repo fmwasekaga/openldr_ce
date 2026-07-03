@@ -32,8 +32,10 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
   const registries = createRegistryStore(ctx.internalDb);
 
   const localRegistryRoot = ctx.cfg.MARKETPLACE_LOCAL_REGISTRY_ROOT ?? '';
-  const maxPayloadBytes = ctx.cfg.MARKETPLACE_MAX_PAYLOAD_BYTES;
-  function sourceFor(reg: RegistryRecord): RegistrySource {
+  // Read the download cap live (Settings → General "Limits & tuning") so it can be tuned
+  // without a restart.
+  async function sourceFor(reg: RegistryRecord): Promise<RegistrySource> {
+    const maxPayloadBytes = await ctx.numberSettings.get('marketplace.max_payload_bytes');
     return reg.kind === 'http'
       ? new HttpRegistrySource(reg.location, fetchImpl, undefined, maxPayloadBytes)
       : new LocalRegistrySource(reg.location, localRegistryRoot);
@@ -97,7 +99,7 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
     let firstError: string | undefined;
     for (const reg of regs) {
       try {
-        const listing = await sourceFor(reg).list();
+        const listing = await (await sourceFor(reg)).list();
         for (const l of listing) {
           bundles.push({
             ref: packRef(reg.id, l.ref), id: l.id, version: l.version, type: l.type,
@@ -128,7 +130,7 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
     const ref = safeRef(parsed.ref);
     if (!ref) { reply.code(400); return { error: 'invalid bundle ref' }; }
     try {
-      const b = await sourceFor(reg).getBundle(ref);
+      const b = await (await sourceFor(reg)).getBundle(ref);
       const v = verifyBundle(b);
       return {
         ref: packRef(reg.id, ref), id: b.manifest.id, version: b.manifest.version, type: b.manifest.type,
@@ -181,7 +183,7 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
       reply.code(400); return { error: 'acknowledgedCapabilities must be an array' };
     }
     try {
-      const b = await sourceFor(reg).getBundle(ref);
+      const b = await (await sourceFor(reg)).getBundle(ref);
       const a = actor(req);
       const acknowledgedCapabilities = (body.acknowledgedCapabilities as Capability[] | undefined) ?? b.manifest.capabilities;
       if (b.manifest.type === 'form-template') {
@@ -203,7 +205,7 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
   });
 
   app.post('/api/marketplace/refresh', { preHandler: requireRole('lab_admin') }, async () => {
-    for (const reg of await enabledRegistries()) sourceFor(reg).refresh();
+    for (const reg of await enabledRegistries()) (await sourceFor(reg)).refresh();
     return { ok: true };
   });
 

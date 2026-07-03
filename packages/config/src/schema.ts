@@ -71,10 +71,9 @@ export const ConfigSchema = z
     AUTH_DEV_USERNAME: z.string().min(1).default('dev-admin'),
     AUTH_DEV_ROLES: z.string().default('lab_admin'),
 
-    // Custom dashboards — raw-SQL widget escape hatch is now the `dashboard.raw_sql`
-    // feature flag (Settings → General), not an env var. Timeout/row-cap remain env-tunable.
-    DASHBOARD_SQL_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
-    DASHBOARD_SQL_ROW_CAP: z.coerce.number().int().positive().default(10000),
+    // Custom dashboards — raw-SQL widget escape hatch is the `dashboard.raw_sql` feature
+    // flag; its timeout/row-cap are now the `dashboard.sql_timeout_ms` / `dashboard.sql_row_cap`
+    // number settings (Settings → General "Limits & tuning"), not env vars.
 
     // Workflow Code node sandbox limits.
     // SECURITY (SEC-01): Code nodes execute user JS via Node's `vm` inside a worker_thread.
@@ -88,15 +87,14 @@ export const ConfigSchema = z
     WORKFLOW_CODE_MEMORY_MB: z.coerce.number().int().positive().default(128),
     // Comma-separated allow-list of hostnames for the workflow HTTP source node.
     WORKFLOW_HTTP_ALLOWLIST: z.string().default(''),
-    // Publish materialized workflow datasets as real `wf_ds_<name>` tables in the
-    // target store (Postgres only) so the SQL node + dashboards can query them.
-    WORKFLOW_DATASET_PUBLISH_ENABLED: envBoolean(false),
+    // (`workflow.dataset_publish_enabled` — publish materialized datasets as real target
+    // tables — is now a Settings → General feature flag, not an env var.)
     // Max byte size of a file uploaded to a workflow run (upload route + webhook body).
     WORKFLOW_FILE_MAX_BYTES: z.coerce.number().int().positive().default(52_428_800),
     // Max accumulated output items a single loop node may emit on its done handle.
     WORKFLOW_LOOP_MAX_ITEMS: z.coerce.number().int().positive().default(100_000),
-    // Master switch for external listener triggers (postgres LISTEN / IMAP poll).
-    WORKFLOW_LISTENERS_ENABLED: envBoolean(true),
+    // (`workflow.listeners_enabled` — master switch for external listener triggers
+    // (postgres LISTEN / IMAP poll) — is now a Settings → General feature flag.)
     // Master switch for the read-write-file node's host filesystem access (privilege risk → off by default).
     WORKFLOW_FILE_ACCESS_ENABLED: envBoolean(false),
     // The single sandbox root all host file operations are confined to (empty = unset).
@@ -142,9 +140,8 @@ export const ConfigSchema = z
     // INSIDE this root (path-containment), bounding arbitrary-local-path reads. Empty
     // (default) preserves current behavior — the root is the opt-in containment switch.
     MARKETPLACE_LOCAL_REGISTRY_ROOT: z.string().default(''),
-    // SEC-10: max bytes for a remote bundle wasm payload download (defense against an
-    // OOM from a malicious/compromised registry). 64 MB default.
-    MARKETPLACE_MAX_PAYLOAD_BYTES: z.coerce.number().int().positive().default(67_108_864),
+    // (`marketplace.max_payload_bytes` — max bytes for a remote bundle wasm payload download,
+    // guarding against an OOM from a malicious/compromised registry — is now a number setting.)
 
     // Secret-at-rest encryption key for dynamic Connectors (base64, decodes to 32 bytes /
     // AES-256). Optional at boot; required only when a secret-bearing connector is

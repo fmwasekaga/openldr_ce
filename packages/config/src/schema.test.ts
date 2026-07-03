@@ -17,9 +17,6 @@ describe('workflow code sandbox config', () => {
   it('defaults WORKFLOW_HTTP_ALLOWLIST to empty', () => {
     expect(ConfigSchema.parse(base).WORKFLOW_HTTP_ALLOWLIST).toBe('');
   });
-  it('defaults WORKFLOW_DATASET_PUBLISH_ENABLED to false', () => {
-    expect(ConfigSchema.parse(base).WORKFLOW_DATASET_PUBLISH_ENABLED).toBe(false);
-  });
   it('defaults WORKFLOW_LOOP_MAX_ITEMS to 100000', () => {
     expect(ConfigSchema.parse(base).WORKFLOW_LOOP_MAX_ITEMS).toBe(100000);
   });
@@ -28,15 +25,13 @@ describe('workflow code sandbox config', () => {
   });
   it('defaults listener knobs', () => {
     const c = ConfigSchema.parse(base);
-    expect(c.WORKFLOW_LISTENERS_ENABLED).toBe(true);
     expect(c.WORKFLOW_EMAIL_POLL_MIN_SECONDS).toBe(30);
     expect(c.WORKFLOW_EMAIL_MAX_PER_POLL).toBe(50);
   });
   it('coerces listener knob overrides', () => {
-    const c = ConfigSchema.parse({ ...base, WORKFLOW_EMAIL_POLL_MIN_SECONDS: '15', WORKFLOW_EMAIL_MAX_PER_POLL: '10', WORKFLOW_LISTENERS_ENABLED: 'false' });
+    const c = ConfigSchema.parse({ ...base, WORKFLOW_EMAIL_POLL_MIN_SECONDS: '15', WORKFLOW_EMAIL_MAX_PER_POLL: '10' });
     expect(c.WORKFLOW_EMAIL_POLL_MIN_SECONDS).toBe(15);
     expect(c.WORKFLOW_EMAIL_MAX_PER_POLL).toBe(10);
-    expect(c.WORKFLOW_LISTENERS_ENABLED).toBe(false);
   });
   it('defaults host file access knobs', () => {
     const c = ConfigSchema.parse(base);
@@ -47,14 +42,6 @@ describe('workflow code sandbox config', () => {
     const c = ConfigSchema.parse({ ...base, WORKFLOW_FILE_ACCESS_ENABLED: 'true', WORKFLOW_FILE_ACCESS_ROOT: '/data/wf' });
     expect(c.WORKFLOW_FILE_ACCESS_ENABLED).toBe(true);
     expect(c.WORKFLOW_FILE_ACCESS_ROOT).toBe('/data/wf');
-  });
-});
-
-describe('dashboard SQL config', () => {
-  it('defaults DASHBOARD_SQL_TIMEOUT_MS and DASHBOARD_SQL_ROW_CAP', () => {
-    const cfg = ConfigSchema.parse(base);
-    expect(cfg.DASHBOARD_SQL_TIMEOUT_MS).toBeGreaterThan(0);
-    expect(cfg.DASHBOARD_SQL_ROW_CAP).toBeGreaterThan(0);
   });
 });
 

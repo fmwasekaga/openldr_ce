@@ -34,7 +34,9 @@ export interface ListenerManagerDeps {
   store: { list(): Promise<WorkflowRow[]> };
   runAndRecord: (workflowId: string, source: 'postgres' | 'email', input: unknown, files?: Record<string, BinaryRef>) => Promise<void>;
   logger: { error(o: unknown, m?: string): void; warn(o: unknown, m?: string): void };
-  cfg: { WORKFLOW_LISTENERS_ENABLED: boolean };
+  /** Live read of the `workflow.listeners_enabled` feature flag; checked each reconcile
+   * so toggling it in Settings starts/stops listeners without a restart. */
+  isEnabled: () => Promise<boolean>;
   drivers: { postgres: ListenerDriver; email: ListenerDriver };
 }
 
@@ -72,7 +74,7 @@ export function createWorkflowListenerManager(deps: ListenerManagerDeps): Workfl
 
   return {
     async reconcile() {
-      if (!deps.cfg.WORKFLOW_LISTENERS_ENABLED) { await stopAll(); return; }
+      if (!(await deps.isEnabled())) { await stopAll(); return; }
       const specs = extractListenerSpecs(await deps.store.list());
       const desired = new Map(specs.map((s) => [keyOf(s), s]));
       for (const [key, cur] of [...active]) {

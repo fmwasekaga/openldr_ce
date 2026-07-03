@@ -149,6 +149,52 @@ export const pt: EnShape = {
           label: 'SQL bruto no painel',
           description: 'Permitir a criação e execução de SQL arbitrário de leitura apenas em widgets de painel (apenas armazém Postgres). Desativado por predefinição.',
         },
+        workflowListeners: {
+          label: 'Gatilhos de escuta de fluxo de trabalho',
+          description: 'Executar gatilhos de escuta externos (Postgres LISTEN / sondagem de e-mail IMAP). Desativar isto para todos os ouvintes na próxima reconciliação.',
+        },
+        workflowDatasetPublish: {
+          label: 'Publicar conjuntos de dados de fluxo de trabalho',
+          description: 'Publicar conjuntos de dados de fluxo de trabalho materializados como tabelas reais no armazém Postgres para que o nó SQL e os painéis os possam consultar.',
+        },
+      },
+      numbers: {
+        title: 'Limites e afinação',
+        description: 'Limites operacionais, ajustáveis em tempo de execução sem reiniciar. Os valores são limitados a intervalos seguros.',
+        saved: 'Guardado',
+        saveFailed: 'Não foi possível guardar: {{error}}',
+        dashboardSqlTimeoutMs: {
+          label: 'Tempo limite de SQL do painel (ms)',
+          description: 'Tempo máximo de execução de uma consulta SQL bruta do painel antes de ser cancelada.',
+        },
+        dashboardSqlRowCap: {
+          label: 'Limite de linhas de SQL do painel',
+          description: 'Número máximo de linhas que uma consulta SQL bruta do painel pode devolver.',
+        },
+        marketplaceMaxPayloadBytes: {
+          label: 'Carga máxima do marketplace (bytes)',
+          description: 'Tamanho máximo de um pacote de plugin transferido de um registo remoto.',
+        },
+      },
+      sync: {
+        title: 'Sincronização laboratório ⇄ central',
+        preview: 'Pré-visualização — o motor de sincronização ainda não está em execução. As definições são guardadas para que este laboratório fique pronto a configurar quando a sincronização for lançada.',
+        saved: 'Definições de sincronização guardadas',
+        saveFailed: 'Não foi possível guardar: {{error}}',
+        save: 'Guardar',
+        enabled: {
+          label: 'Ativar sincronização',
+          description: 'Interruptor principal. Sem efeito até o motor de sincronização estar disponível.',
+        },
+        mode: {
+          label: 'Direção',
+          push: 'Enviar para a central',
+          pull: 'Obter da central',
+          bidirectional: 'Bidirecional',
+        },
+        centralUrl: { label: 'URL da central' },
+        siteId: { label: 'ID do site' },
+        intervalMinutes: { label: 'Intervalo de sincronização (minutos)' },
       },
       danger: {
         title: 'Zona de perigo',

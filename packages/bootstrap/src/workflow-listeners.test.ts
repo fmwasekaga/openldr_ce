@@ -34,7 +34,7 @@ describe('listener manager sync', () => {
     store: { list: vi.fn(async () => list) },
     runAndRecord: vi.fn(async () => {}),
     logger: { error: vi.fn(), warn: vi.fn() },
-    cfg: { WORKFLOW_LISTENERS_ENABLED: true },
+    isEnabled: vi.fn(async () => true),
     drivers: { postgres: driver, email: driver },
   });
 
@@ -62,7 +62,7 @@ describe('listener manager sync', () => {
   it('master switch off → no listeners', async () => {
     const { driver, starts } = fakeDriver();
     const d = deps(driver, [wf('w1', true, [pgNode('n1')])]) as never;
-    (d as { cfg: { WORKFLOW_LISTENERS_ENABLED: boolean } }).cfg.WORKFLOW_LISTENERS_ENABLED = false;
+    (d as { isEnabled: () => Promise<boolean> }).isEnabled = vi.fn(async () => false);
     const m = createWorkflowListenerManager(d);
     await m.reconcile();
     expect(starts).toEqual([]);

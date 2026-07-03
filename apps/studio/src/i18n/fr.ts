@@ -149,6 +149,52 @@ export const fr: EnShape = {
           label: 'SQL brut pour les tableaux de bord',
           description: "Autoriser la création et l'exécution de requêtes SQL arbitraires en lecture seule dans les widgets de tableau de bord (entrepôt Postgres uniquement). Désactivé par défaut.",
         },
+        workflowListeners: {
+          label: "Déclencheurs d'écoute de workflow",
+          description: "Exécuter les déclencheurs d'écoute externes (Postgres LISTEN / interrogation e-mail IMAP). Le désactiver arrête tous les écouteurs à la prochaine réconciliation.",
+        },
+        workflowDatasetPublish: {
+          label: 'Publier les jeux de données de workflow',
+          description: "Publier les jeux de données de workflow matérialisés en tant que vraies tables dans l'entrepôt Postgres afin que le nœud SQL et les tableaux de bord puissent les interroger.",
+        },
+      },
+      numbers: {
+        title: 'Limites et réglages',
+        description: "Limites opérationnelles, réglables à chaud sans redémarrage. Les valeurs sont bornées à des plages sûres.",
+        saved: 'Enregistré',
+        saveFailed: "Impossible d'enregistrer : {{error}}",
+        dashboardSqlTimeoutMs: {
+          label: 'Délai SQL des tableaux de bord (ms)',
+          description: "Durée maximale d'exécution d'une requête SQL brute de tableau de bord avant annulation.",
+        },
+        dashboardSqlRowCap: {
+          label: 'Plafond de lignes SQL des tableaux de bord',
+          description: 'Nombre maximal de lignes qu\'une requête SQL brute de tableau de bord peut renvoyer.',
+        },
+        marketplaceMaxPayloadBytes: {
+          label: 'Charge utile maximale de la marketplace (octets)',
+          description: "Taille maximale d'un paquet de plugin téléchargé depuis un registre distant.",
+        },
+      },
+      sync: {
+        title: 'Synchronisation labo ⇄ central',
+        preview: "Aperçu — le moteur de synchronisation n'est pas encore actif. Les paramètres sont enregistrés afin que ce laboratoire soit prêt à être configuré dès que la synchronisation sera disponible.",
+        saved: 'Paramètres de synchronisation enregistrés',
+        saveFailed: "Impossible d'enregistrer : {{error}}",
+        save: 'Enregistrer',
+        enabled: {
+          label: 'Activer la synchronisation',
+          description: "Interrupteur principal. Sans effet tant que le moteur de synchronisation n'est pas disponible.",
+        },
+        mode: {
+          label: 'Sens',
+          push: 'Envoyer vers le central',
+          pull: 'Récupérer depuis le central',
+          bidirectional: 'Bidirectionnelle',
+        },
+        centralUrl: { label: 'URL du central' },
+        siteId: { label: 'Identifiant du site' },
+        intervalMinutes: { label: 'Intervalle de synchronisation (minutes)' },
       },
       danger: {
         title: 'Zone dangereuse',

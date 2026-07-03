@@ -1,5 +1,5 @@
-import { createAppContext, dangerResetDashboards, dangerFactoryReset, dangerClearAudit } from '@openldr/bootstrap';
-import { loadConfig } from '@openldr/config';
+import { createAppContext, dangerResetDashboards, dangerFactoryReset, dangerClearAudit, getSyncConfig, setSyncConfig } from '@openldr/bootstrap';
+import { loadConfig, type SyncConfig } from '@openldr/config';
 
 interface JsonOpt { json: boolean }
 
@@ -29,6 +29,88 @@ export async function runSettingsFlagsSet(key: string, value: string, opts: Json
     await ctx.featureFlags.set(key, value === 'true', 'cli');
     await ctx.audit.record({ actorType: 'system', actorName: 'cli', action: 'settings.flag.update', entityType: 'app_setting', entityId: key, metadata: { key, before, after: value === 'true' } });
     emit(opts.json, { ok: true, key, value: value === 'true' }, `set ${key} = ${value}`);
+    return 0;
+  } finally {
+    await ctx.close();
+  }
+}
+
+export async function runSettingsNumbersList(opts: JsonOpt): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const nums = await ctx.numberSettings.all();
+    emit(opts.json, nums, nums.map((n) => `${n.id} = ${n.value}  [${n.min}..${n.max}]`).join('\n') || '(none)');
+    return 0;
+  } finally {
+    await ctx.close();
+  }
+}
+
+export async function runSettingsNumbersSet(key: string, value: string, opts: JsonOpt): Promise<number> {
+  const n = Number(value);
+  if (!Number.isFinite(n)) {
+    process.stderr.write(`value must be a number (got "${value}")\n`);
+    return 1;
+  }
+  const ctx = await createAppContext(loadConfig());
+  try {
+    let after: number;
+    try {
+      after = await ctx.numberSettings.set(key, n, 'cli');
+    } catch (e) {
+      process.stderr.write(`${e instanceof Error ? e.message : String(e)}\n`);
+      return 1;
+    }
+    await ctx.audit.record({ actorType: 'system', actorName: 'cli', action: 'settings.number.update', entityType: 'app_setting', entityId: key, metadata: { key, after } });
+    emit(opts.json, { ok: true, key, value: after }, `set ${key} = ${after}`);
+    return 0;
+  } finally {
+    await ctx.close();
+  }
+}
+
+const SYNC_FIELDS = ['enabled', 'mode', 'centralUrl', 'siteId', 'intervalMinutes'] as const;
+type SyncField = (typeof SYNC_FIELDS)[number];
+
+function coerceSyncField(field: SyncField, value: string): SyncConfig[SyncField] {
+  if (field === 'enabled') return value === 'true' || value === '1';
+  if (field === 'intervalMinutes') return Number(value);
+  return value;
+}
+
+export async function runSettingsSyncShow(opts: JsonOpt): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const cfg = await getSyncConfig(ctx.appSettings);
+    emit(
+      opts.json,
+      cfg,
+      SYNC_FIELDS.map((f) => `${f} = ${String(cfg[f])}`).join('\n'),
+    );
+    return 0;
+  } finally {
+    await ctx.close();
+  }
+}
+
+export async function runSettingsSyncSet(field: string, value: string, opts: JsonOpt): Promise<number> {
+  if (!SYNC_FIELDS.includes(field as SyncField)) {
+    process.stderr.write(`unknown field "${field}" (expected: ${SYNC_FIELDS.join(' | ')})\n`);
+    return 1;
+  }
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const current = await getSyncConfig(ctx.appSettings);
+    const next = { ...current, [field]: coerceSyncField(field as SyncField, value) };
+    let saved: SyncConfig;
+    try {
+      saved = await setSyncConfig(ctx.appSettings, next, 'cli');
+    } catch (e) {
+      process.stderr.write(`invalid value: ${e instanceof Error ? e.message : String(e)}\n`);
+      return 1;
+    }
+    await ctx.audit.record({ actorType: 'system', actorName: 'cli', action: 'settings.sync.update', entityType: 'app_setting', entityId: 'sync.config', metadata: { field, before: current, after: saved } });
+    emit(opts.json, saved, `set ${field} = ${String(saved[field as SyncField])}`);
     return 0;
   } finally {
     await ctx.close();

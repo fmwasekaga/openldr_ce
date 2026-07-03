@@ -314,6 +314,37 @@ export const setFeatureFlag = (key: string, value: boolean): Promise<{ key: stri
   authFetch(`/api/settings/flags/${encodeURIComponent(key)}`, jbody({ value }, 'PUT'))
     .then((r) => okJson<{ key: string; value: boolean }>(r, 'set feature flag'));
 
+export interface NumberSetting {
+  id: string;
+  labelKey: string;
+  descriptionKey: string;
+  value: number;
+  min: number;
+  max: number;
+}
+
+export const fetchNumberSettings = (): Promise<NumberSetting[]> =>
+  authFetch('/api/settings/numbers').then((r) => okJson<NumberSetting[]>(r, 'list number settings'));
+
+export const setNumberSetting = (key: string, value: number): Promise<{ key: string; value: number }> =>
+  authFetch(`/api/settings/numbers/${encodeURIComponent(key)}`, jbody({ value }, 'PUT'))
+    .then((r) => okJson<{ key: string; value: number }>(r, 'set number setting'));
+
+export type SyncMode = 'push' | 'pull' | 'bidirectional';
+export interface SyncConfig {
+  enabled: boolean;
+  mode: SyncMode;
+  centralUrl: string;
+  siteId: string;
+  intervalMinutes: number;
+}
+
+export const fetchSyncConfig = (): Promise<SyncConfig> =>
+  authFetch('/api/settings/sync').then((r) => okJson<SyncConfig>(r, 'load sync config'));
+
+export const saveSyncConfig = (cfg: SyncConfig): Promise<SyncConfig> =>
+  authFetch('/api/settings/sync', jbody(cfg, 'PUT')).then((r) => okJson<SyncConfig>(r, 'save sync config'));
+
 export type DangerAction = 'reset-dashboards' | 'factory-reset' | 'clear-audit';
 
 export const runDangerAction = (action: DangerAction): Promise<{ ok: boolean; action: string }> =>

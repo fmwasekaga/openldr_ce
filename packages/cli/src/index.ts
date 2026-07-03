@@ -16,7 +16,7 @@ import { runTargetStoreTest } from './target-store';
 import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, runTerminologyExpand, runTerminologyTranslate, runPublisherList, runPublisherCreate, runSystemList, runSystemCreate, runTermList, runValueSetList, runOntologyBuild, runOntologyRebuild, runOntologyList, runOntologyUnlink } from './terminology';
 import { runMarketVerify, runMarketInstall, runMarketList, runMarketRollback, runMarketEnable, runMarketDisable, runMarketRemove } from './market';
 import { runArtifactKeygen, runArtifactNew, runArtifactBuild, runArtifactPack, runArtifactSign, runArtifactTest, runArtifactPublish } from './artifact';
-import { runSettingsFlagsList, runSettingsFlagsSet, runSettingsDanger } from './settings';
+import { runSettingsFlagsList, runSettingsFlagsSet, runSettingsDanger, runSettingsSyncShow, runSettingsSyncSet, runSettingsNumbersList, runSettingsNumbersSet } from './settings';
 import { runErrorsList } from './errors';
 
 const program = new Command();
@@ -126,6 +126,24 @@ flags.command('list').description('List all feature flags and their values').opt
 flags.command('set <key> <value>').description('Set a feature flag (value: true|false)').option('--json', 'emit JSON', false)
   .action(async (key: string, value: string, opts: { json: boolean }) => {
     try { process.exitCode = await runSettingsFlagsSet(key, value, opts); } catch (err) { process.stderr.write(`settings flags set failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+const numbers = settings.command('numbers').description('Operational number settings (limits & tuning)');
+numbers.command('list').description('List number settings and their values').option('--json', 'emit JSON', false)
+  .action(async (opts: { json: boolean }) => {
+    try { process.exitCode = await runSettingsNumbersList(opts); } catch (err) { process.stderr.write(`settings numbers list failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+numbers.command('set <key> <value>').description('Set a number setting (clamped into its range)').option('--json', 'emit JSON', false)
+  .action(async (key: string, value: string, opts: { json: boolean }) => {
+    try { process.exitCode = await runSettingsNumbersSet(key, value, opts); } catch (err) { process.stderr.write(`settings numbers set failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+const sync = settings.command('sync').description('Lab⇄central sync config (scaffold — engine not yet implemented)');
+sync.command('show').description('Show the current sync configuration').option('--json', 'emit JSON', false)
+  .action(async (opts: { json: boolean }) => {
+    try { process.exitCode = await runSettingsSyncShow(opts); } catch (err) { process.stderr.write(`settings sync show failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+sync.command('set <field> <value>').description('Set a sync field: enabled|mode|centralUrl|siteId|intervalMinutes').option('--json', 'emit JSON', false)
+  .action(async (field: string, value: string, opts: { json: boolean }) => {
+    try { process.exitCode = await runSettingsSyncSet(field, value, opts); } catch (err) { process.stderr.write(`settings sync set failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
 settings.command('danger <action>')
   .description('Run a danger-zone action: reset-dashboards | clear-audit | factory-reset (internal DB only)')
