@@ -412,6 +412,7 @@ function ctxWith(status: 'up' | 'down'): AppContext {
     appSettings: {} as never,
     featureFlags: { get: async () => false } as never,
     numberSettings: { get: async () => 0, all: async () => [], set: async () => 0, invalidate: () => {} } as never,
+    activity: { getLifecycle: async () => null, listRecent: async () => [] } as never,
     marketplaceForms: {} as never,
     terminology: { ops: {} as never, admin: buildFakeAdmin(), ontology: buildFakeOntology(), loaders: buildFakeLoaders() },
     dashboards: {} as never,

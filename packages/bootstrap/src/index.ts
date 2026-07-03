@@ -33,6 +33,8 @@ import { createPluginScheduleApi, createPluginScheduleRunner, type PluginSchedul
 import { createFormArtifactInstaller, type FormArtifactInstaller } from './form-artifact-install';
 import { type PluginRuntime } from '@openldr/plugins';
 import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore } from '@openldr/db';
+import { createBatchStore } from '@openldr/ingest';
+import { createActivityService, type ActivityService } from './activity-service';
 import { createFeatureFlags, type FeatureFlags } from './feature-flags';
 import { createNumberSettings, type NumberSettings } from './number-settings';
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
@@ -160,6 +162,7 @@ export interface AppContext {
   appSettings: AppSettingStore;
   featureFlags: FeatureFlags;
   numberSettings: NumberSettings;
+  activity: ActivityService;
   cfg: Config;
   close(): Promise<void>;
 }
@@ -297,6 +300,19 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   const workflowSchedules = createWorkflowScheduleStore(internal.db);
   const workflowWebhooks = createWebhookRegistry();
   const workflowDatasets = createWorkflowDatasetStore(internal.db);
+
+  const ingestBatches = createBatchStore(internal.db);
+  const persistedEvent = async (correlationId: string) => {
+    const row = await internal.db.selectFrom('outbox_events' as never)
+      .select(['payload', 'created_at'] as never)
+      .where('batch_id' as never, '=', correlationId as never)
+      .where('type' as never, '=', 'data.persisted' as never)
+      .orderBy('created_at' as never, 'asc').executeTakeFirst() as { payload: unknown; created_at: unknown } | undefined;
+    if (!row) return null;
+    const p = (typeof row.payload === 'string' ? JSON.parse(row.payload) : row.payload) as { count?: number; resourceTypes?: string[] };
+    return { at: String(row.created_at), count: p.count ?? 0, resourceTypes: p.resourceTypes ?? [] };
+  };
+  const activity = createActivityService({ runs: workflowRuns, batches: ingestBatches, persistedEvent });
 
   const health = new HealthRegistry();
   health.register({ name: 'auth', check: () => auth.healthCheck() });
@@ -625,6 +641,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     appSettings,
     featureFlags,
     numberSettings,
+    activity,
     cfg,
     async close() {
       await workflowListeners.stopAll();
@@ -637,6 +654,8 @@ export { createFeatureFlags } from './feature-flags';
 export type { FeatureFlags, ResolvedFlag } from './feature-flags';
 export { createNumberSettings } from './number-settings';
 export type { NumberSettings, ResolvedNumberSetting } from './number-settings';
+export { createActivityService } from './activity-service';
+export type { ActivityService, RecentPayload } from './activity-service';
 export { getSyncConfig, setSyncConfig } from './sync-settings';
 export { CE_VERSION } from './plugin-registry';
 export * from './db-context';
