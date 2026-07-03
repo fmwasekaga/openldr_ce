@@ -61,4 +61,20 @@ describe('useBlockData', () => {
     const arg = vi.mocked(runWidgetQuery).mock.calls[0][0] as { filters: { value: unknown }[] };
     expect(arg.filters[0].value).toBe('active');
   });
+
+  it('substitutes a param value into a sql block values before querying', async () => {
+    runWidgetQuery.mockResolvedValue(result(1));
+    const t = {
+      id: 't', name: 'T', description: '', category: 'operational', status: 'draft',
+      page: { size: 'A4', orientation: 'portrait', margins: { top: 40, right: 40, bottom: 40, left: 40 } },
+      parameters: [], rows: [{ id: 'r0', cells: [{ colSpan: 12, block: {
+        kind: 'kpi', label: '', query: { mode: 'sql', sql: 'select {{ward}}', values: { ward: '{{param.site}}' } },
+      } }] }],
+    } as unknown as import('@openldr/report-builder/pure').ReportTemplate;
+    renderHook(() => useBlockData(t, { site: 'ICU' }));
+    await waitFor(() => expect(runWidgetQuery).toHaveBeenCalled());
+    const arg = vi.mocked(runWidgetQuery).mock.calls[0][0] as { mode: string; values: Record<string, unknown> };
+    expect(arg.mode).toBe('sql');
+    expect(arg.values.ward).toBe('ICU');
+  });
 });
