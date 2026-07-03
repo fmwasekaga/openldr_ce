@@ -6,7 +6,7 @@ export interface ListenerSpec {
   triggerType: 'postgres' | 'email';
   config: Record<string, unknown>;
 }
-export type OnFire = (input: unknown, files?: Record<string, BinaryRef>) => Promise<void>;
+export type OnFire = (input: unknown, files?: Record<string, BinaryRef>) => Promise<unknown>;
 export interface ListenerHandle { stop(): Promise<void>; }
 export interface ListenerDriver { start(spec: ListenerSpec, onFire: OnFire): Promise<ListenerHandle>; }
 
@@ -32,7 +32,7 @@ export function extractListenerSpecs(rows: WorkflowRow[]): ListenerSpec[] {
 
 export interface ListenerManagerDeps {
   store: { list(): Promise<WorkflowRow[]> };
-  runAndRecord: (workflowId: string, source: 'postgres' | 'email', input: unknown, files?: Record<string, BinaryRef>) => Promise<void>;
+  runAndRecord: (workflowId: string, source: 'postgres' | 'email', input: unknown, files?: Record<string, BinaryRef>) => Promise<unknown>;
   logger: { error(o: unknown, m?: string): void; warn(o: unknown, m?: string): void };
   /** Live read of the `workflow.listeners_enabled` feature flag; checked each reconcile
    * so toggling it in Settings starts/stops listeners without a restart. */

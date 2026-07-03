@@ -10,6 +10,7 @@ import type { CodeLimits } from './engine/execution-context';
 import type { BinaryRef } from './engine/items';
 import { WorkflowDefinitionSchema, type TriggerSource, type WorkflowRun } from './types';
 import { nextCronDate } from './cron';
+import { extractCorrelationId } from './correlation';
 
 interface RunnerDeps {
   store: Pick<WorkflowStore, 'get'>;
@@ -32,16 +33,16 @@ export interface WorkflowTriggerRunner {
   reconcile(eventing: EventingPort): Promise<void>;
   setIngestWorkflowIds(ids: string[]): void;
   setEventWorkflowIds(ids: string[]): void;
-  runAndRecord(workflowId: string, source: TriggerSource, input: unknown, files?: Record<string, BinaryRef>): Promise<void>;
+  runAndRecord(workflowId: string, source: TriggerSource, input: unknown, files?: Record<string, BinaryRef>): Promise<{ runId: string; correlationId: string | null } | null>;
 }
 
 export function createWorkflowTriggerRunner(deps: RunnerDeps): WorkflowTriggerRunner {
   let ingestIds = new Set<string>();
   let eventIds = new Set<string>();
 
-  async function runAndRecord(workflowId: string, source: TriggerSource, input: unknown, files?: Record<string, BinaryRef>): Promise<void> {
+  async function runAndRecord(workflowId: string, source: TriggerSource, input: unknown, files?: Record<string, BinaryRef>): Promise<{ runId: string; correlationId: string | null } | null> {
     const wf = await deps.store.get(workflowId);
-    if (!wf || !wf.enabled) return;
+    if (!wf || !wf.enabled) return null;
     const def = WorkflowDefinitionSchema.parse(wf.definition);
     let result: Awaited<ReturnType<typeof deps.runWorkflow>>;
     let error: string | null = null;
@@ -64,6 +65,7 @@ export function createWorkflowTriggerRunner(deps: RunnerDeps): WorkflowTriggerRu
         results: [],
       };
     }
+    const correlationId = extractCorrelationId(input, result);
     const run: WorkflowRun = {
       id: randomUUID(),
       workflowId,
@@ -73,8 +75,10 @@ export function createWorkflowTriggerRunner(deps: RunnerDeps): WorkflowTriggerRu
       finishedAt: result.finishedAt,
       result,
       error,
+      correlationId,
     };
     await deps.runs.record(run);
+    return { runId: run.id, correlationId };
   }
 
   /**

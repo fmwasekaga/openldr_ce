@@ -408,11 +408,11 @@ export function registerWorkflowRoutes(
       files = { file: { objectKey, contentType: 'application/octet-stream', fileName: 'webhook', byteSize: buf.length } };
       webhookBody = undefined;
     }
-    await ctx.workflows.runner.runAndRecord(entry.workflowId, 'webhook', {
+    const outcome = await ctx.workflows.runner.runAndRecord(entry.workflowId, 'webhook', {
       method: req.method, body: webhookBody,
       headers: stripAuthHeaders(req.headers as Record<string, unknown>), query: req.query,
     }, files);
-    return { ok: true };
+    return { ok: true, runId: outcome?.runId ?? null, correlationId: outcome?.correlationId ?? null };
   });
 }
 
