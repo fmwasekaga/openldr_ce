@@ -38,6 +38,7 @@ import * as m036 from './036_dhis2_to_plugin_data';
 import * as m037 from './037_connectors_host_type';
 import * as m038 from './038_app_settings';
 import * as m039 from './039_workflow_runs_correlation';
+import * as m040 from './040_report_templates';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -79,4 +80,5 @@ export const internalMigrations: Record<string, Migration> = {
   '037_connectors_host_type': { up: m037.up, down: m037.down },
   '038_app_settings': { up: m038.up, down: m038.down },
   '039_workflow_runs_correlation': { up: m039.up, down: m039.down },
+  '040_report_templates': { up: m040.up, down: m040.down },
 };

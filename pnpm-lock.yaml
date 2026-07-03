@@ -71,6 +71,9 @@ importers:
       '@openldr/marketplace':
         specifier: workspace:*
         version: link:../../packages/marketplace
+      '@openldr/report-builder':
+        specifier: workspace:*
+        version: link:../../packages/report-builder
       '@openldr/reporting':
         specifier: workspace:*
         version: link:../../packages/reporting
@@ -585,6 +588,9 @@ importers:
       '@openldr/ports':
         specifier: workspace:*
         version: link:../ports
+      '@openldr/report-builder':
+        specifier: workspace:*
+        version: link:../report-builder
       '@openldr/report-pdf':
         specifier: workspace:*
         version: link:../report-pdf
@@ -676,6 +682,9 @@ importers:
       '@openldr/plugins':
         specifier: workspace:*
         version: link:../plugins
+      '@openldr/report-builder':
+        specifier: workspace:*
+        version: link:../report-builder
       '@openldr/reporting':
         specifier: workspace:*
         version: link:../reporting
@@ -964,6 +973,34 @@ importers:
       vitest:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.19.21)(jsdom@25.0.1)(lightningcss@1.32.0)
+
+  packages/report-builder:
+    dependencies:
+      '@openldr/dashboards':
+        specifier: workspace:*
+        version: link:../dashboards
+      '@openldr/db':
+        specifier: workspace:*
+        version: link:../db
+      '@openldr/reporting':
+        specifier: workspace:*
+        version: link:../reporting
+      kysely:
+        specifier: ^0.27.5
+        version: 0.27.6
+      zod:
+        specifier: 3.24.0
+        version: 3.24.0
+    devDependencies:
+      pg-mem:
+        specifier: ^3.0.14
+        version: 3.0.14(kysely@0.27.6)
+      typescript:
+        specifier: 5.7.2
+        version: 5.7.2
+      vitest:
+        specifier: 2.1.8
+        version: 2.1.8(@types/node@25.9.3)(jsdom@25.0.1)(lightningcss@1.32.0)
 
   packages/report-pdf:
     dependencies:
