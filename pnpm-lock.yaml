@@ -71,6 +71,9 @@ importers:
       '@openldr/marketplace':
         specifier: workspace:*
         version: link:../../packages/marketplace
+      '@openldr/report-builder':
+        specifier: workspace:*
+        version: link:../../packages/report-builder
       '@openldr/reporting':
         specifier: workspace:*
         version: link:../../packages/reporting

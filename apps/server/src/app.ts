@@ -15,6 +15,7 @@ import { registerDashboardRoutes } from './dashboards-routes';
 import { registerAuditRoutes } from './audit-routes';
 import { registerUsersRoutes } from './users-routes';
 import { registerFormsRoutes } from './forms-routes';
+import { registerReportTemplateRoutes } from './report-templates-routes';
 import { registerMarketplaceRoutes } from './marketplace-routes';
 import { registerWorkflowRoutes } from './workflows-routes';
 import { registerConnectorsRoutes } from './connectors-routes';
@@ -80,6 +81,7 @@ export function buildApp(ctx: AppContext) {
   registerAuditRoutes(app, ctx);
   registerUsersRoutes(app, ctx);
   registerFormsRoutes(app, ctx);
+  registerReportTemplateRoutes(app, ctx);
   registerMarketplaceRoutes(app, ctx);
   registerPluginUiRoutes(app, ctx);
   registerConnectorsRoutes(app, ctx, { connectors: createConnectorStore(ctx.internalDb) });
