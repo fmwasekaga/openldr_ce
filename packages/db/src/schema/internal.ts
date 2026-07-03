@@ -398,6 +398,7 @@ export interface WorkflowRunsTable {
   finished_at: Date;
   result: JSONColumnType<Record<string, unknown>>;
   error: string | null;
+  correlation_id: string | null;
 }
 
 export interface WorkflowSchedulesTable {
