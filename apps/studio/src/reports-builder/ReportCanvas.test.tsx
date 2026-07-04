@@ -13,6 +13,11 @@ function template() {
 }
 
 describe('ReportCanvas', () => {
+  it('renders an empty-state placeholder when the template has no rows', () => {
+    const t = createEmptyTemplate('rt', 'R'); // no rows
+    render(<ReportCanvas template={t} selected={null} onSelect={() => {}} />);
+    expect(screen.getByText(/drag a block from the palette/i)).toBeInTheDocument();
+  });
   it('renders a block for each cell', () => {
     render(<ReportCanvas template={template()} selected={null} onSelect={() => {}} />);
     expect(screen.getByText('Title')).toBeInTheDocument();

@@ -33,6 +33,14 @@ export function ReportCanvas({ template, selected, onSelect, data, issues }: { t
     return matched.length ? 'warning' : null;
   };
 
+  if (template.rows.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center p-8 text-center text-sm text-muted-foreground">
+        Drag a block from the palette, or click one to add it.
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center gap-3 overflow-auto p-4">
       {Array.from({ length: maxPage }, (_, i) => i + 1).map((pageNo) => (
