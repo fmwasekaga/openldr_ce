@@ -32,6 +32,24 @@ export function moveRow(t: ReportTemplate, from: number, to: number): ReportTemp
   return { ...t, rows };
 }
 
+export function duplicateRow(t: ReportTemplate, r: number): ReportTemplate {
+  if (r < 0 || r >= t.rows.length) return t;
+  const clone = { ...(JSON.parse(JSON.stringify(t.rows[r])) as ReportTemplate['rows'][number]), id: rowId() };
+  const rows = [...t.rows];
+  rows.splice(r + 1, 0, clone);
+  return { ...t, rows };
+}
+
+// Decide a row reorder from a dnd-kit cell drag (ids are `cell:${rowIndex}:${cellIndex}`).
+// Returns the reordered template, or null when the drag isn't a cross-row cell move.
+export function moveRowFromCellDrag(t: ReportTemplate, activeId: string, overId: string | null): ReportTemplate | null {
+  if (!activeId.startsWith('cell:') || !overId || !overId.startsWith('cell:')) return null;
+  const from = Number(activeId.split(':')[1]);
+  const to = Number(overId.split(':')[1]);
+  if (Number.isNaN(from) || Number.isNaN(to) || from === to) return null;
+  return moveRow(t, from, to);
+}
+
 export function setColSpan(t: ReportTemplate, r: number, c: number, colSpan: number): ReportTemplate {
   const clamped = Math.max(1, Math.min(12, Math.round(colSpan)));
   return mapCell(t, r, c, (cell) => ({ ...cell, colSpan: clamped }));
