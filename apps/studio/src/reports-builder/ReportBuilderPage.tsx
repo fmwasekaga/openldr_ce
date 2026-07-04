@@ -44,6 +44,20 @@ export function ReportBuilderPage(): JSX.Element {
 
   useEffect(() => { fetchClientConfig().then((c) => setSqlEnabled(c.dashboardSqlEnabled)).catch(() => {}); }, []);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return;
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); applyHistory(e.shiftKey ? history.redo() : history.undo()); return; }
+      if (mod && e.key.toLowerCase() === 'd' && selected) { e.preventDefault(); pushUpdate(duplicateRow(template, selected.row)); setSelected({ row: selected.row + 1, cell: selected.cell }); return; }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selected) { e.preventDefault(); pushUpdate(removeCell(template, selected.row, selected.cell)); setSelected(null); return; }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [template, selected]);
+
   const update = (next: ReportTemplate) => { history.recordEdit(); setTemplate(next); };
   const pushUpdate = (next: ReportTemplate) => { history.pushHistory(); setTemplate(next); };
 

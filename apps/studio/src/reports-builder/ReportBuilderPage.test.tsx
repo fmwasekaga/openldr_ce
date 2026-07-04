@@ -102,4 +102,19 @@ describe('ReportBuilderPage', () => {
     renderId('rt1');
     expect(await screen.findByRole('button', { name: /^publish$/i })).toBeEnabled();
   });
+
+  it('duplicates the selected block row on Ctrl+D and ignores keys while typing in an input', async () => {
+    const t = { id: 'rt1', name: 'R', description: '', category: 'operational', status: 'draft',
+      page: { size: 'A4', orientation: 'portrait', margins: { top: 40, right: 40, bottom: 40, left: 40 } },
+      parameters: [], rows: [{ id: 'r0', cells: [{ colSpan: 12, block: { kind: 'title', text: 'A', style: {} } }] }] };
+    vi.mocked(getReportTemplate).mockResolvedValue(t as never);
+    renderId('rt1');
+    fireEvent.click(await screen.findByTestId('canvas-cell-0-0')); // select the block
+    // typing guard: keydown targeted at the name input must NOT duplicate
+    fireEvent.keyDown(screen.getByLabelText(/report name/i), { key: 'd', ctrlKey: true });
+    expect(screen.queryByTestId('canvas-cell-1-0')).toBeNull();
+    // Ctrl+D on the document duplicates the row → a second cell appears
+    fireEvent.keyDown(document, { key: 'd', ctrlKey: true });
+    expect(await screen.findByTestId('canvas-cell-1-0')).toBeTruthy();
+  });
 });
