@@ -40,6 +40,10 @@ describe('ReportCanvas', () => {
     render(<ReportCanvas template={t} selected={null} onSelect={() => {}} data={data} />);
     expect(screen.getByText(/loading|…/i)).toBeInTheDocument();
   });
+  it('renders a drag handle on each cell', () => {
+    render(<ReportCanvas template={template()} selected={null} onSelect={() => {}} />);
+    expect(screen.getAllByRole('button', { name: /drag to reorder/i }).length).toBeGreaterThan(0);
+  });
 });
 
 describe('ReportCanvas lint markers', () => {
