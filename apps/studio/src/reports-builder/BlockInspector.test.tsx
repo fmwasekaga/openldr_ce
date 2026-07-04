@@ -17,6 +17,9 @@ const base = {
   canMoveUp: true,
   canMoveDown: true,
   onDelete: () => {},
+  onDuplicate: () => {},
+  repeat: undefined,
+  onSetRepeat: () => {},
 };
 
 describe('BlockInspector', () => {
@@ -55,5 +58,21 @@ describe('BlockInspector', () => {
     render(<BlockInspector {...base} block={titleBlock} canMoveUp={false} canMoveDown={false} />);
     expect(screen.getByRole('button', { name: /move row up/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /move row down/i })).toBeDisabled();
+  });
+  it('calls onDuplicate when Duplicate is clicked', () => {
+    const onDuplicate = vi.fn();
+    render(<BlockInspector {...base} block={titleBlock} onDuplicate={onDuplicate} />);
+    fireEvent.click(screen.getByRole('button', { name: /duplicate block/i }));
+    expect(onDuplicate).toHaveBeenCalled();
+  });
+
+  it('reflects and sets the row repeat mode', () => {
+    const onSetRepeat = vi.fn();
+    render(<BlockInspector {...base} block={titleBlock} repeat="header" onSetRepeat={onSetRepeat} />);
+    expect(screen.getByRole('button', { name: /^header$/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /^footer$/i }));
+    expect(onSetRepeat).toHaveBeenCalledWith('footer');
+    fireEvent.click(screen.getByRole('button', { name: /^normal$/i }));
+    expect(onSetRepeat).toHaveBeenCalledWith(undefined);
   });
 });

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { createEmptyTemplate, lintReportTemplate, type Block, type BlockKind, type ReportTemplate } from '@openldr/report-builder/pure';
 import { createReportTemplate, getReportTemplate, updateReportTemplate, deleteReportTemplate, fetchClientConfig } from '../api';
 import { useTemplateHistory } from '../forms-builder/useTemplateHistory';
-import { addRowWithBlock, moveRow, newBlock, removeCell, setColSpan, updateBlockAt } from './reportBuilderModel';
+import { addRowWithBlock, duplicateRow, moveRow, newBlock, removeCell, setColSpan, setRepeat, updateBlockAt } from './reportBuilderModel';
 import { BlockPalette } from './BlockPalette';
 import { ReportCanvas, type CellRef } from './ReportCanvas';
 import { BlockInspector } from './BlockInspector';
@@ -118,6 +118,9 @@ export function ReportBuilderPage(): JSX.Element {
                   canMoveDown={selected.row < template.rows.length - 1}
                   onMoveUp={() => { pushUpdate(moveRow(template, selected.row, selected.row - 1)); setSelected({ row: selected.row - 1, cell: selected.cell }); }}
                   onMoveDown={() => { pushUpdate(moveRow(template, selected.row, selected.row + 1)); setSelected({ row: selected.row + 1, cell: selected.cell }); }}
+                  repeat={template.rows[selected.row].repeat}
+                  onSetRepeat={(v) => pushUpdate(setRepeat(template, selected.row, v))}
+                  onDuplicate={() => { pushUpdate(duplicateRow(template, selected.row)); setSelected({ row: selected.row + 1, cell: selected.cell }); }}
                   onDelete={() => { pushUpdate(removeCell(template, selected.row, selected.cell)); setSelected(null); }}
                 />
               ) : (
