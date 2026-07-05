@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { computeLayout, type Block, type PageSpec, type PositionedBox, type ReportTemplate, type ReportLintIssue } from '@openldr/report-builder/pure';
 import { previewLayoutModel } from './reportBuilderModel';
@@ -12,6 +13,7 @@ function CanvasCell({ b, scale, isSel, sev, onSelect, block, data }: {
   b: PositionedBox; scale: number; isSel: boolean; sev: 'error' | 'warning' | null;
   onSelect: (row: number, cell: number) => void; block: Block; data?: BlockData;
 }): JSX.Element {
+  const { t } = useTranslation();
   const id = `cell:${b.rowIndex}:${b.cellIndex}`;
   const { setNodeRef: dropRef } = useDroppable({ id });
   const { attributes, listeners, setNodeRef: dragRef, isDragging } = useDraggable({ id });
@@ -29,7 +31,7 @@ function CanvasCell({ b, scale, isSel, sev, onSelect, block, data }: {
         ref={dragRef}
         {...attributes}
         {...listeners}
-        aria-label="Drag to reorder"
+        aria-label={t('reportBuilder.canvas.dragToReorder')}
         onClick={(e) => e.stopPropagation()}
         className="absolute left-1 top-1 z-10 cursor-grab rounded bg-muted/80 px-1 text-[9px] leading-none text-muted-foreground opacity-0 group-hover:opacity-100"
       >⋮⋮</button>
@@ -47,6 +49,7 @@ function pageWH(p: PageSpec): [number, number] {
 }
 
 export function ReportCanvas({ template, selected, onSelect, data, issues }: { template: ReportTemplate; selected: CellRef | null; onSelect: (row: number, cell: number) => void; data?: Map<string, BlockData>; issues?: ReportLintIssue[] }): JSX.Element {
+  const { t } = useTranslation();
   const measurer = useMemo(() => createDomMeasurer(), []);
   const page = template.page as PageSpec;
   const [pw, ph] = pageWH(page);
@@ -67,7 +70,7 @@ export function ReportCanvas({ template, selected, onSelect, data, issues }: { t
   if (template.rows.length === 0) {
     return (
       <div className="flex h-full items-center justify-center p-8 text-center text-sm text-muted-foreground">
-        Drag a block from the palette, or click one to add it.
+        {t('reportBuilder.canvas.empty')}
       </div>
     );
   }
@@ -88,7 +91,7 @@ export function ReportCanvas({ template, selected, onSelect, data, issues }: { t
               data={data?.get(`${b.rowIndex}:${b.cellIndex}`)}
             />
           ))}
-          <div className="pointer-events-none absolute bottom-1 right-2 text-[9px] text-muted-foreground">Page {pageNo} / {maxPage}</div>
+          <div className="pointer-events-none absolute bottom-1 right-2 text-[9px] text-muted-foreground">{t('reportBuilder.canvas.pageOfPages', { page: pageNo, total: maxPage })}</div>
         </div>
       ))}
     </div>

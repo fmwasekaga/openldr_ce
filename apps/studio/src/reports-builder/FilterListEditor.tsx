@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Trash2 } from 'lucide-react';
@@ -31,6 +32,7 @@ export function FilterListEditor({ filters, dimensions, parameters, onChange }: 
   parameters: ReportParam[];
   onChange: (f: BuilderFilter[]) => void;
 }): JSX.Element {
+  const { t } = useTranslation();
   const update = (i: number, patch: Partial<BuilderFilter>) =>
     onChange(filters.map((f, j) => (j === i ? { ...f, ...patch } : f)));
   const add = () =>
@@ -39,7 +41,7 @@ export function FilterListEditor({ filters, dimensions, parameters, onChange }: 
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Filters</div>
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportBuilder.filters.heading')}</div>
       {filters.map((f, i) => {
         const paramMode = isParamValue(f.value);
         return (
@@ -69,14 +71,14 @@ export function FilterListEditor({ filters, dimensions, parameters, onChange }: 
                   aria-label={`filter-${i}-mode-literal`}
                   variant={paramMode ? 'outline' : 'default'}
                   onClick={() => update(i, { value: '' })}
-                >Value</Button>
+                >{t('reportBuilder.filters.value')}</Button>
                 <Button
                   type="button" size="sm" className="h-7 rounded-l-none px-2 text-[10px]"
                   aria-label={`filter-${i}-mode-param`}
                   variant={paramMode ? 'default' : 'outline'}
                   disabled={parameters.length === 0}
                   onClick={() => update(i, { value: `{{param.${parameters[0]?.id ?? ''}}}` })}
-                >Param</Button>
+                >{t('reportBuilder.filters.param')}</Button>
               </div>
               {paramMode ? (
                 <select
@@ -85,7 +87,7 @@ export function FilterListEditor({ filters, dimensions, parameters, onChange }: 
                   value={paramId(f.value)}
                   onChange={(e) => update(i, { value: `{{param.${e.target.value}}}` })}
                 >
-                  {parameters.length === 0 && <option value="">(no parameters)</option>}
+                  {parameters.length === 0 && <option value="">{t('reportBuilder.filters.noParameters')}</option>}
                   {parameters.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
                 </select>
               ) : (
@@ -104,7 +106,7 @@ export function FilterListEditor({ filters, dimensions, parameters, onChange }: 
           </div>
         );
       })}
-      <Button type="button" size="sm" variant="outline" className="h-7" onClick={add}>Add filter</Button>
+      <Button type="button" size="sm" variant="outline" className="h-7" onClick={add}>{t('reportBuilder.filters.addFilter')}</Button>
     </div>
   );
 }

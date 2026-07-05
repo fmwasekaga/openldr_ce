@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core';
 import { AppShell } from '@/shell/AppShell';
 import { Input } from '@/components/ui/input';
@@ -19,6 +20,7 @@ import { LintSummary } from './LintSummary';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 
 export function ReportBuilderPage(): JSX.Element {
+  const { t } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
   const [tplId, setTplId] = useState<string | null>(id ?? null);
@@ -98,20 +100,20 @@ export function ReportBuilderPage(): JSX.Element {
   const doPreview = async () => { await save(); setPreviewOpen(true); };
 
   return (
-    <AppShell title="Report Builder" fullBleed>
+    <AppShell title={t('reportBuilder.header.title')} fullBleed>
       <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2">
-            <Input aria-label="Report name" placeholder="Untitled report" value={template.name} onChange={(e) => update({ ...template, name: e.target.value })} className="h-8 max-w-xs text-sm" />
+            <Input aria-label={t('reportBuilder.header.reportNameAria')} placeholder={t('reportBuilder.header.namePlaceholder')} value={template.name} onChange={(e) => update({ ...template, name: e.target.value })} className="h-8 max-w-xs text-sm" />
             <div className="flex items-center gap-1.5">
               <LintSummary issues={issues} onSelectBlock={(r, c) => setSelected({ row: r, cell: c })} />
-              <Button size="sm" variant="ghost" onClick={() => applyHistory(history.undo())}>Undo</Button>
-              <Button size="sm" variant="ghost" onClick={() => applyHistory(history.redo())}>Redo</Button>
-              <Button size="sm" variant="outline" onClick={() => setParamsOpen(true)}>Parameters</Button>
-              <Button size="sm" variant="outline" onClick={() => { void doPreview(); }}>Preview PDF</Button>
-              <Button size="sm" onClick={() => { void save(); }}>Save</Button>
-              <Button size="sm" variant="outline" disabled={hasErrors} onClick={() => { void publish(); }}>Publish</Button>
-              <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setConfirmDeleteOpen(true)}>Delete</Button>
+              <Button size="sm" variant="ghost" onClick={() => applyHistory(history.undo())}>{t('reportBuilder.header.undo')}</Button>
+              <Button size="sm" variant="ghost" onClick={() => applyHistory(history.redo())}>{t('reportBuilder.header.redo')}</Button>
+              <Button size="sm" variant="outline" onClick={() => setParamsOpen(true)}>{t('reportBuilder.header.parameters')}</Button>
+              <Button size="sm" variant="outline" onClick={() => { void doPreview(); }}>{t('reportBuilder.header.preview')}</Button>
+              <Button size="sm" onClick={() => { void save(); }}>{t('common.save')}</Button>
+              <Button size="sm" variant="outline" disabled={hasErrors} onClick={() => { void publish(); }}>{t('reportBuilder.header.publish')}</Button>
+              <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setConfirmDeleteOpen(true)}>{t('common.delete')}</Button>
             </div>
           </div>
           {error && <div className="border-b border-border px-4 py-2 text-xs text-destructive">{error}</div>}
@@ -140,14 +142,14 @@ export function ReportBuilderPage(): JSX.Element {
                   onDelete={() => { pushUpdate(removeCell(template, selected.row, selected.cell)); setSelected(null); }}
                 />
               ) : (
-                <div className="p-4 text-xs text-muted-foreground">Select a block to edit it, or drag a block from the palette.</div>
+                <div className="p-4 text-xs text-muted-foreground">{t('reportBuilder.inspector.selectHint')}</div>
               )}
             </div>
           </div>
         </div>
         <DragOverlay>
           {activeDrag && activeDrag.startsWith('cell:') ? (
-            <div className="rounded border border-border bg-background px-2 py-1 text-xs shadow">Moving row</div>
+            <div className="rounded border border-border bg-background px-2 py-1 text-xs shadow">{t('reportBuilder.header.movingRow')}</div>
           ) : null}
         </DragOverlay>
       </DndContext>
@@ -161,12 +163,12 @@ export function ReportBuilderPage(): JSX.Element {
       <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete this report?</AlertDialogTitle>
-            <AlertDialogDescription>This permanently deletes the report template. This cannot be undone.</AlertDialogDescription>
+            <AlertDialogTitle>{t('reportBuilder.header.deleteConfirmTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('reportBuilder.header.deleteConfirmBody')}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { void handleDelete(); }}>Delete report</AlertDialogAction>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { void handleDelete(); }}>{t('reportBuilder.header.deleteConfirmAction')}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

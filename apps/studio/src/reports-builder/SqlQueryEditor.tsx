@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { sql as sqlLang } from '@codemirror/lang-sql';
@@ -32,6 +33,7 @@ export function SqlQueryEditor({ open, sql, values, parameters, sqlEnabled, onCl
   onClose: () => void;
   onSave: (q: SqlQuery) => void;
 }): JSX.Element {
+  const { t } = useTranslation();
   const [sqlText, setSqlText] = useState(sql);
   const [vals, setVals] = useState<Values>(values);
   const readOnly = !sqlEnabled;
@@ -90,8 +92,8 @@ export function SqlQueryEditor({ open, sql, values, parameters, sqlEnabled, onCl
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="flex h-[70vh] w-[80vw] max-w-3xl flex-col gap-0 p-0">
         <div className="border-b border-border px-4 py-3">
-          <DialogTitle className="text-base font-semibold">SQL query</DialogTitle>
-          <DialogDescription className="sr-only">Edit the block's SQL and bind variables to report parameters</DialogDescription>
+          <DialogTitle className="text-base font-semibold">{t('reportBuilder.sql.title')}</DialogTitle>
+          <DialogDescription className="sr-only">{t('reportBuilder.sql.description')}</DialogDescription>
         </div>
         <div className="flex min-h-0 flex-1 flex-col gap-0">
           <div className="min-h-0 flex-1 overflow-hidden">
@@ -100,7 +102,7 @@ export function SqlQueryEditor({ open, sql, values, parameters, sqlEnabled, onCl
           </div>
           {vars.length > 0 && (
             <div className="max-h-40 overflow-y-auto border-t border-border p-3">
-              <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">Bind variables to parameters</div>
+              <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportBuilder.sql.bindVariables')}</div>
               <div className="flex flex-col gap-1">
                 {vars.map((v) => (
                   <div key={v} className="flex items-center gap-2 text-xs">
@@ -111,7 +113,7 @@ export function SqlQueryEditor({ open, sql, values, parameters, sqlEnabled, onCl
                       value={boundParamId(vals[v])}
                       onChange={(e) => bind(v, e.target.value)}
                     >
-                      <option value="">(unbound)</option>
+                      <option value="">{t('reportBuilder.filters.unbound')}</option>
                       {parameters.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
                     </select>
                   </div>
@@ -121,8 +123,8 @@ export function SqlQueryEditor({ open, sql, values, parameters, sqlEnabled, onCl
           )}
         </div>
         <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-3">
-          <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
-          <Button size="sm" onClick={save}>Save</Button>
+          <Button variant="outline" size="sm" onClick={onClose}>{t('common.cancel')}</Button>
+          <Button size="sm" onClick={save}>{t('common.save')}</Button>
         </div>
       </DialogContent>
     </Dialog>

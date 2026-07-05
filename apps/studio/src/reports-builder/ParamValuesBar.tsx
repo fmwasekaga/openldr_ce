@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
@@ -13,6 +14,7 @@ export function ParamValuesBar({ parameters, values, onChange }: {
   values: Record<string, string>;
   onChange: (v: Record<string, string>) => void;
 }): JSX.Element | null {
+  const { t } = useTranslation();
   const [options, setOptions] = useState<Record<string, string[]>>({});
   const [optErrors, setOptErrors] = useState<Record<string, string>>({});
 
@@ -60,11 +62,11 @@ export function ParamValuesBar({ parameters, values, onChange }: {
               <Select value={values[p.id] ?? ALL} onValueChange={(v) => set({ [p.id]: v === ALL ? undefined : v })}>
                 <SelectTrigger aria-label={p.label} className="h-8 w-40 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={ALL}>All</SelectItem>
+                  <SelectItem value={ALL}>{t('reportBuilder.paramValues.all')}</SelectItem>
                   {(options[p.id] ?? []).map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
                 </SelectContent>
               </Select>
-              {optErrors[p.id] && <span className="text-[10px] text-destructive">options failed</span>}
+              {optErrors[p.id] && <span className="text-[10px] text-destructive">{t('reportBuilder.paramValues.optionsFailed')}</span>}
             </div>
           ) : (
             <Input aria-label={p.label} className="h-8 w-40 text-xs" value={values[p.id] ?? ''} onChange={(e) => set({ [p.id]: e.target.value })} />
