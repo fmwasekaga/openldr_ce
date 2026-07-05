@@ -1,3 +1,4 @@
+import '@/i18n';
 import '@testing-library/jest-dom/vitest';
 
 // jsdom's Blob lacks .text()/.arrayBuffer(); export tests read blob contents

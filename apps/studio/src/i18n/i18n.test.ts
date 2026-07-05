@@ -13,3 +13,9 @@ describe('i18n', () => {
     expect(i18n.t('users.roleNames.custom_role', { defaultValue: 'custom_role' })).toBe('custom_role');
   });
 });
+
+describe('i18n wiring', () => {
+  it('resolves a known common key to English', () => {
+    expect(i18n.t('common.save')).toBe('Save');
+  });
+});
