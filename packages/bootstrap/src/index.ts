@@ -5,7 +5,7 @@ import { createAuth } from '@openldr/adapter-auth';
 import { createEventBus } from '@openldr/adapter-event-bus';
 import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import type { Config } from '@openldr/config';
-import { createLogger, HealthRegistry, redact, type Logger } from '@openldr/core';
+import { createLogger, HealthRegistry, redact, appError, type Logger } from '@openldr/core';
 import { createInternalDb, createFhirStore, createFlatWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema, Provenance } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
@@ -14,7 +14,8 @@ import { createUserStore, type UserStore, createUserProfileStore, type UserProfi
 import { createFormStore, type FormStore } from '@openldr/forms';
 import { getReport, reportSummaries, getEventSource, eventSourceCatalog, toCsv, type ReportResult, type ReportSummary } from '@openldr/reporting';
 import { createDashboardStore, getModel, listModels, runBuilderQuery, runSqlQuery, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, seedDefaultDashboard, type DashboardStore, type WidgetQuery } from '@openldr/dashboards';
-import { createReportTemplateStore, type ReportTemplateStore } from '@openldr/report-builder';
+import { createReportTemplateStore, renderReportTemplatePdf, type ReportTemplateStore } from '@openldr/report-builder';
+import type { ReportTemplate } from '@openldr/report-builder/pure';
 import {
   createWorkflowStore, type WorkflowStore,
   createWorkflowRunStore, type WorkflowRunStore,
@@ -77,11 +78,18 @@ export interface DashboardsApi {
 
 export interface ReportingApi {
   list(): ReportSummary[];
+  listAll(): Promise<ReportSummary[]>;
+  findSummary(id: string): Promise<ReportSummary | undefined>;
   run(id: string, rawParams: unknown): Promise<ReportResult>;
   runEventSource(id: string, window: { from: string; to: string }): Promise<{ rows: Record<string, unknown>[] }>;
   eventSources(): { id: string; name: string; columns: { key: string; label: string }[] }[];
   renderPdf(id: string, rawParams: unknown): Promise<Buffer>;
   options(id: string): Promise<Record<string, string[]>>;
+}
+
+export function isPublished(t: { status: string }): boolean { return t.status === 'published'; }
+export function templateToSummary(t: ReportTemplate): ReportSummary {
+  return { id: t.id, name: t.name, description: t.description, category: t.category, parameters: t.parameters, source: 'builder' };
 }
 
 /** Map a dataset name to a safe `wf_ds_<...>` table identifier. */
@@ -235,14 +243,29 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   };
   const reporting: ReportingApi = {
     list: () => reportSummaries(),
+    async listAll() {
+      const templates = (await reportTemplateStore.list()).filter(isPublished).map(templateToSummary);
+      return [...reportSummaries(), ...templates];
+    },
+    async findSummary(id) {
+      const cat = reportSummaries().find((s) => s.id === id);
+      if (cat) return cat;
+      const t = await reportTemplateStore.get(id);
+      return t && isPublished(t) ? templateToSummary(t) : undefined;
+    },
     eventSources: () => eventSourceCatalog().map((s) => ({ id: s.id, name: s.name, columns: s.columns })),
-    run: runReport,
+    async run(id, rawParams) {
+      if (await reportTemplateStore.get(id)) throw appError('RP0005', { message: `report is PDF-only: ${id}` });
+      return runReport(id, rawParams);
+    },
     async runEventSource(id, window) {
       const src = getEventSource(id);
       if (!src) throw new ReportNotFoundError(id);
       return src.run(reportingDb, window);
     },
     async renderPdf(id, rawParams) {
+      const t = await reportTemplateStore.get(id);
+      if (t && isPublished(t)) return renderReportTemplatePdf(t, (rawParams ?? {}) as Record<string, string>, runDashboardQuery);
       const result = await runReport(id, rawParams);
       const def = getReport(id)!;
       return renderReportPdf({
@@ -254,6 +277,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       });
     },
     async options(id) {
+      if (await reportTemplateStore.get(id)) return {};
       const def = getReport(id);
       if (!def) throw new ReportNotFoundError(id);
       return def.options ? def.options(reportingDb) : {};
