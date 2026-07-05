@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { listModels, type QueryModel, type WidgetQuery } from '../api';
 import { BuilderForm } from '../dashboard/editor/BuilderForm';
@@ -10,10 +11,11 @@ type BuilderQuery = Extract<WidgetQuery, { mode: 'builder' }>;
 type SqlQuery = Extract<WidgetQuery, { mode: 'sql' }>;
 const EMPTY: BuilderQuery = { mode: 'builder', model: '', metric: { key: 'count', agg: 'count' }, filters: [] };
 const EMPTY_SQL: SqlQuery = { mode: 'sql', sql: 'select 1 as value', values: {} };
-const CHART_TYPES: { v: 'bar' | 'line' | 'pie'; label: string }[] = [{ v: 'bar', label: 'Bar' }, { v: 'line', label: 'Line' }, { v: 'pie', label: 'Pie' }];
+const CHART_TYPES: { v: 'bar' | 'line' | 'pie'; labelKey: string }[] = [{ v: 'bar', labelKey: 'reportBuilder.query.bar' }, { v: 'line', labelKey: 'reportBuilder.query.line' }, { v: 'pie', labelKey: 'reportBuilder.query.pie' }];
 const PARAM_TOKEN = /^\{\{\s*param\.(\w+)\s*\}\}$/;
 
 export function QueryEditor({ block, parameters, sqlEnabled = false, onChange }: { block: Block; parameters: ReportParam[]; sqlEnabled?: boolean; onChange: (patch: Partial<Block>) => void }): JSX.Element {
+  const { t } = useTranslation();
   const [models, setModels] = useState<QueryModel[]>([]);
   const [sqlOpen, setSqlOpen] = useState(false);
   useEffect(() => { listModels().then(setModels).catch(() => setModels([])); }, []);
@@ -44,21 +46,21 @@ export function QueryEditor({ block, parameters, sqlEnabled = false, onChange }:
     <div className="flex flex-col gap-3">
       {isTable && (
         <div className="flex gap-1 text-xs">
-          <Button type="button" size="sm" variant={block.source === 'primary' ? 'default' : 'outline'} className="h-7 flex-1" onClick={() => onChange({ source: 'primary' } as Partial<Block>)}>Primary dataset</Button>
-          <Button type="button" size="sm" variant={block.source !== 'primary' ? 'default' : 'outline'} className="h-7 flex-1" onClick={() => onChange({ source: { ...EMPTY } } as Partial<Block>)}>Own query</Button>
+          <Button type="button" size="sm" variant={block.source === 'primary' ? 'default' : 'outline'} className="h-7 flex-1" onClick={() => onChange({ source: 'primary' } as Partial<Block>)}>{t('reportBuilder.query.primaryDataset')}</Button>
+          <Button type="button" size="sm" variant={block.source !== 'primary' ? 'default' : 'outline'} className="h-7 flex-1" onClick={() => onChange({ source: { ...EMPTY } } as Partial<Block>)}>{t('reportBuilder.query.ownQuery')}</Button>
         </div>
       )}
 
       {showBuilder && (
         <div className="flex gap-1 text-xs">
-          <Button type="button" size="sm" variant={mode === 'builder' ? 'default' : 'outline'} className="h-7 flex-1" onClick={() => { if (mode !== 'builder') setQuery({ ...EMPTY }); }}>Builder</Button>
-          <Button type="button" size="sm" variant={mode === 'sql' ? 'default' : 'outline'} className="h-7 flex-1" disabled={sqlToggleDisabled} onClick={() => { if (mode !== 'sql') setQuery({ ...EMPTY_SQL }); }}>SQL</Button>
+          <Button type="button" size="sm" variant={mode === 'builder' ? 'default' : 'outline'} className="h-7 flex-1" onClick={() => { if (mode !== 'builder') setQuery({ ...EMPTY }); }}>{t('reportBuilder.query.builder')}</Button>
+          <Button type="button" size="sm" variant={mode === 'sql' ? 'default' : 'outline'} className="h-7 flex-1" disabled={sqlToggleDisabled} onClick={() => { if (mode !== 'sql') setQuery({ ...EMPTY_SQL }); }}>{t('reportBuilder.query.sql')}</Button>
         </div>
       )}
 
       {showBuilder && mode === 'builder' && (
         <>
-          {models.length ? <BuilderForm models={models} value={builderQuery} onChange={(q) => setQuery(q)} /> : <p className="text-xs text-muted-foreground">Loading data sources…</p>}
+          {models.length ? <BuilderForm models={models} value={builderQuery} onChange={(q) => setQuery(q)} /> : <p className="text-xs text-muted-foreground">{t('reportBuilder.query.loadingSources')}</p>}
           {models.length > 0 && (
             <FilterListEditor
               filters={(builderQuery.filters ?? []) as BuilderFilter[]}
@@ -68,14 +70,14 @@ export function QueryEditor({ block, parameters, sqlEnabled = false, onChange }:
             />
           )}
           {block.kind === 'chart' && models.length > 0 && (
-            <label className="flex flex-col gap-1 text-xs">Breakdown → series
+            <label className="flex flex-col gap-1 text-xs">{t('reportBuilder.query.breakdown')}
               <select
-                aria-label="Breakdown"
+                aria-label={t('reportBuilder.query.breakdownAria')}
                 className="h-7 rounded border border-border bg-background text-xs"
                 value={builderQuery.breakdown?.key ?? ''}
                 onChange={(e) => setQuery({ ...builderQuery, breakdown: e.target.value ? { key: e.target.value } : undefined })}
               >
-                <option value="">(none)</option>
+                <option value="">{t('reportBuilder.query.none')}</option>
                 {dimensions.filter((d) => d.key !== builderQuery.dimension?.key).map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
               </select>
             </label>
@@ -91,7 +93,7 @@ export function QueryEditor({ block, parameters, sqlEnabled = false, onChange }:
               {boundParams.map(([v, p]) => <div key={v}><code className="font-mono">{`{{${v}}}`}</code> → {parameters.find((pp) => pp.id === p)?.label ?? p}</div>)}
             </div>
           )}
-          <Button type="button" size="sm" variant="outline" className="h-7" onClick={() => setSqlOpen(true)}>Edit SQL</Button>
+          <Button type="button" size="sm" variant="outline" className="h-7" onClick={() => setSqlOpen(true)}>{t('reportBuilder.query.editSql')}</Button>
           <SqlQueryEditor
             open={sqlOpen}
             sql={sqlQuery.sql}
@@ -105,10 +107,10 @@ export function QueryEditor({ block, parameters, sqlEnabled = false, onChange }:
       )}
 
       {block.kind === 'chart' && (
-        <div className="flex flex-col gap-1 text-xs">Chart type
+        <div className="flex flex-col gap-1 text-xs">{t('reportBuilder.query.chartType')}
           <div className="flex gap-1">
             {CHART_TYPES.map((c) => (
-              <Button key={c.v} type="button" size="sm" variant={block.chartType === c.v ? 'default' : 'outline'} className="h-7 flex-1" onClick={() => onChange({ chartType: c.v } as Partial<Block>)}>{c.label}</Button>
+              <Button key={c.v} type="button" size="sm" variant={block.chartType === c.v ? 'default' : 'outline'} className="h-7 flex-1" onClick={() => onChange({ chartType: c.v } as Partial<Block>)}>{t(c.labelKey)}</Button>
             ))}
           </div>
         </div>
