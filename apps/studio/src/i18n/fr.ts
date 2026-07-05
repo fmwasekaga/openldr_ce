@@ -532,6 +532,16 @@ export const fr: EnShape = {
       noParameters: '(aucun paramètre)',
       unbound: '(non lié)',
     },
+    metrics: {
+      heading: 'Mesures (colonnes du tableau)',
+      label: 'Libellé de la mesure',
+      labelPlaceholder: 'Libellé de colonne',
+      aggregate: 'Agrégat de la mesure',
+      remove: 'Supprimer la mesure',
+      column: 'Colonne de la mesure',
+      columnPlaceholder: '(colonne…)',
+      add: 'Ajouter une mesure',
+    },
     parameters: {
       title: 'Paramètres du rapport',
       variableId: 'ID de variable',

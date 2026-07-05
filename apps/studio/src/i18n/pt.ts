@@ -532,6 +532,16 @@ export const pt: EnShape = {
       noParameters: '(sem parâmetros)',
       unbound: '(não vinculado)',
     },
+    metrics: {
+      heading: 'Métricas (colunas da tabela)',
+      label: 'Rótulo da métrica',
+      labelPlaceholder: 'Rótulo da coluna',
+      aggregate: 'Agregação da métrica',
+      remove: 'Remover métrica',
+      column: 'Coluna da métrica',
+      columnPlaceholder: '(coluna…)',
+      add: 'Adicionar métrica',
+    },
     parameters: {
       title: 'Parâmetros do relatório',
       variableId: 'ID da variável',

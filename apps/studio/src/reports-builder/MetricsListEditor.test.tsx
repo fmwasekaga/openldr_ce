@@ -28,4 +28,11 @@ describe('MetricsListEditor', () => {
     fireEvent.change(screen.getByLabelText('Metric label'), { target: { value: 'Tested' } });
     expect(onChange).toHaveBeenCalledWith([expect.objectContaining({ key: 'm1', label: 'Tested' })]);
   });
+
+  it('generates a non-colliding key after a remove', () => {
+    const onChange = vi.fn();
+    render(<MetricsListEditor metrics={[{ key: 'm2', agg: 'count' }]} dimensions={dims} onChange={onChange} />);
+    fireEvent.click(screen.getByRole('button', { name: /add metric/i }));
+    expect(onChange).toHaveBeenCalledWith([{ key: 'm2', agg: 'count' }, expect.objectContaining({ key: 'm3' })]);
+  });
 });
