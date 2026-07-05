@@ -15,20 +15,21 @@ export type FilterOp = (typeof FILTER_OPS)[number];
 export type DimensionKind = 'string' | 'date' | 'number';
 export type DateGrain = 'day' | 'week' | 'month' | 'year';
 
-export const MetricSchema = z.object({
-  key: z.string(), label: z.string().optional(),
-  agg: z.enum(AGGS), column: z.string().optional(),
-});
-export type Metric = z.infer<typeof MetricSchema>;
-
-export const DimensionRefSchema = z.object({ key: z.string(), grain: z.enum(['day', 'week', 'month', 'year']).optional() });
-export type DimensionRef = z.infer<typeof DimensionRefSchema>;
-
 export const QueryFilterSchema = z.object({
   dimension: z.string(), op: z.enum(FILTER_OPS),
   value: z.union([z.string(), z.number(), z.array(z.union([z.string(), z.number()]))]).nullable(),
 });
 export type QueryFilter = z.infer<typeof QueryFilterSchema>;
+
+export const MetricSchema = z.object({
+  key: z.string(), label: z.string().optional(),
+  agg: z.enum(AGGS), column: z.string().optional(),
+  where: z.array(QueryFilterSchema).optional(), // Slice A: conditional predicate (ANDed)
+});
+export type Metric = z.infer<typeof MetricSchema>;
+
+export const DimensionRefSchema = z.object({ key: z.string(), grain: z.enum(['day', 'week', 'month', 'year']).optional() });
+export type DimensionRef = z.infer<typeof DimensionRefSchema>;
 
 export const WidgetVariableDefSchema = z.object({
   type: z.enum(['text', 'number', 'date', 'date-range']),
@@ -45,6 +46,7 @@ export const WidgetQuerySchema = z.discriminatedUnion('mode', [
     mode: z.literal('builder'),
     model: z.string(),
     metric: MetricSchema,
+    metrics: z.array(MetricSchema).optional(), // Slice A: multi-column table mode
     dimension: DimensionRefSchema.optional(),
     breakdown: z.object({ key: z.string() }).optional(),
     filters: z.array(QueryFilterSchema).default([]),

@@ -1,11 +1,13 @@
 import type { QueryModel, WidgetQuery } from '../../api';
+import { MetricConditionEditor, type MetricCondition } from './MetricConditionEditor';
 
 type BuilderQuery = Extract<WidgetQuery, { mode: 'builder' }>;
 
 export function BuilderForm({ models, value, onChange }: { models: QueryModel[]; value: BuilderQuery; onChange: (q: BuilderQuery) => void }) {
   const model = models.find((m) => m.id === value.model) ?? models[0];
-  const setModel = (id: string) => { const m = models.find((x) => x.id === id)!; onChange({ ...value, model: id, metric: m.metrics[0], dimension: undefined, filters: [] }); };
+  const setModel = (id: string) => { const m = models.find((x) => x.id === id)!; onChange({ ...value, model: id, metric: m.metrics[0], metrics: undefined, dimension: undefined, filters: [] }); };
   const setMetric = (key: string) => { const mm = model.metrics.find((x) => x.key === key)!; onChange({ ...value, metric: mm }); };
+  const setWhere = (w: MetricCondition[]) => onChange({ ...value, metric: { ...value.metric, where: w.length ? w : undefined } });
   const setDim = (key: string) => onChange({ ...value, dimension: key ? { key } : undefined });
   const dim = model?.dimensions.find((d) => d.key === value.dimension?.key);
   return (
@@ -20,6 +22,13 @@ export function BuilderForm({ models, value, onChange }: { models: QueryModel[];
           {model?.metrics.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
         </select>
       </label>
+      <div className="text-sm">Only where
+        <MetricConditionEditor
+          conditions={(value.metric.where ?? []) as MetricCondition[]}
+          dimensions={model?.dimensions ?? []}
+          onChange={setWhere}
+        />
+      </div>
       <label className="text-sm">Group by
         <select aria-label="Group by" className="mt-1 w-full rounded border border-border bg-background p-2" value={value.dimension?.key ?? ''} onChange={(e) => setDim(e.target.value)}>
           <option value="">(none)</option>

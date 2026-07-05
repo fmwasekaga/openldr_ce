@@ -536,6 +536,16 @@ export const en = {
       noParameters: '(no parameters)',
       unbound: '(unbound)',
     },
+    metrics: {
+      heading: 'Metrics (table columns)',
+      label: 'Metric label',
+      labelPlaceholder: 'Column label',
+      aggregate: 'Metric aggregate',
+      remove: 'Remove metric',
+      column: 'Metric column',
+      columnPlaceholder: '(column…)',
+      add: 'Add metric',
+    },
     parameters: {
       title: 'Report Parameters',
       variableId: 'Variable ID',

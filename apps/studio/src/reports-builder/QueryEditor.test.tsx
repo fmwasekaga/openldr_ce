@@ -87,3 +87,18 @@ describe('QueryEditor breakdown', () => {
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ query: expect.objectContaining({ breakdown: { key: 'code_text' } }) }));
   });
 });
+
+describe('QueryEditor multi-metric (Slice A)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('adds a metric to a table own-query and writes source.metrics', async () => {
+    const block: Block = { kind: 'table', columns: [], source: { mode: 'builder', model: 'observations', metric: { key: 'count', agg: 'count' }, filters: [] } } as any;
+    const onChange = vi.fn();
+    render(<QueryEditor block={block} parameters={[]} onChange={onChange} />);
+    await waitFor(() => screen.getByRole('button', { name: /add metric/i }));
+    fireEvent.click(screen.getByRole('button', { name: /add metric/i }));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+      source: expect.objectContaining({ metrics: [expect.objectContaining({ key: 'm1', agg: 'count' })] }),
+    }));
+  });
+});

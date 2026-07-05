@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { listModels, type QueryModel, type WidgetQuery } from '../api';
 import { BuilderForm } from '../dashboard/editor/BuilderForm';
 import { FilterListEditor, type BuilderFilter } from './FilterListEditor';
+import { MetricsListEditor } from './MetricsListEditor';
 import { SqlQueryEditor } from './SqlQueryEditor';
 import type { Block, ReportParam } from '@openldr/report-builder/pure';
 
@@ -61,6 +62,13 @@ export function QueryEditor({ block, parameters, sqlEnabled = false, onChange }:
       {showBuilder && mode === 'builder' && (
         <>
           {models.length ? <BuilderForm models={models} value={builderQuery} onChange={(q) => setQuery(q)} /> : <p className="text-xs text-muted-foreground">{t('reportBuilder.query.loadingSources')}</p>}
+          {block.kind === 'table' && models.length > 0 && (
+            <MetricsListEditor
+              metrics={builderQuery.metrics ?? []}
+              dimensions={dimensions}
+              onChange={(ms) => setQuery({ ...builderQuery, metrics: ms.length ? ms : undefined, metric: ms[0] ?? builderQuery.metric })}
+            />
+          )}
           {models.length > 0 && (
             <FilterListEditor
               filters={(builderQuery.filters ?? []) as BuilderFilter[]}
