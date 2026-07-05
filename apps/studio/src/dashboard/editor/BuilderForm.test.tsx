@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, fireEvent } from '@testing-library/react';
+import { render, fireEvent, screen } from '@testing-library/react';
 import { BuilderForm } from './BuilderForm';
 import type { QueryModel } from '../../api';
 
@@ -11,5 +11,16 @@ describe('BuilderForm', () => {
     const { getByLabelText } = render(<BuilderForm models={models} value={{ mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count' }, filters: [] }} onChange={onChange} />);
     fireEvent.change(getByLabelText('Group by'), { target: { value: 'status' } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ dimension: expect.objectContaining({ key: 'status' }) }));
+  });
+});
+
+describe('BuilderForm conditional metric (Slice A)', () => {
+  it('sets metric.where when a condition is added', () => {
+    const onChange = vi.fn();
+    render(<BuilderForm models={models} value={{ mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count' }, filters: [] }} onChange={onChange} />);
+    fireEvent.click(screen.getByRole('button', { name: /add condition/i }));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+      metric: expect.objectContaining({ where: [{ dimension: 'status', op: 'eq', value: '' }] }),
+    }));
   });
 });
