@@ -47,6 +47,7 @@ function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
     },
   };
   const settings = new Map<string, string>();
+  const reportTemplates: { id: string }[] = [];
   const app: FormSeedTarget = {
     appSettings: {
       get: async (key: string) => {
@@ -92,10 +93,17 @@ function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
         },
       },
     },
+    reportTemplates: {
+      get: async (id: string) => reportTemplates.find((r) => r.id === id) as never,
+      create: async (t: { id: string }) => {
+        if (!reportTemplates.some((x) => x.id === t.id)) reportTemplates.push({ id: t.id });
+        return t as never;
+      },
+    },
     terminology,
     cfg,
   };
-  return { app, workflows, connectors, dashboards, valueSets, concepts, settings };
+  return { app, workflows, connectors, dashboards, reportTemplates, valueSets, concepts, settings };
 }
 
 const fakeDb = { persist: vi.fn(async (r: { id: string }) => ({ flattened: JSON.stringify(r) })) } as unknown as DbContext;
