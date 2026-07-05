@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { WidgetConfigSchema, WidgetQuerySchema } from './types';
+import { WidgetConfigSchema, WidgetQuerySchema, MetricSchema } from './types';
 
 describe('WidgetConfigSchema', () => {
   it('accepts a builder widget', () => {
@@ -30,5 +30,37 @@ describe('WidgetConfigSchema', () => {
       query: { mode: 'builder', model: 'm', metric: { key: 'count', agg: 'count' }, filters: [] },
     });
     expect(bad.success).toBe(false);
+  });
+});
+
+describe('conditional & multi-metric schema (Slice A)', () => {
+  it('accepts a metric with a conditional where predicate', () => {
+    const m = MetricSchema.parse({
+      key: 'r', label: 'R', agg: 'count',
+      where: [{ dimension: 'interpretation_code', op: 'eq', value: 'R' }],
+    });
+    expect(m.where?.[0]).toEqual({ dimension: 'interpretation_code', op: 'eq', value: 'R' });
+  });
+
+  it('accepts a builder query carrying multiple metrics', () => {
+    const q = WidgetQuerySchema.parse({
+      mode: 'builder', model: 'observations',
+      metric: { key: 'count', agg: 'count' },
+      metrics: [
+        { key: 'tested', agg: 'count' },
+        { key: 'r', agg: 'count', where: [{ dimension: 'interpretation_code', op: 'eq', value: 'R' }] },
+      ],
+      dimension: { key: 'code_text' }, filters: [],
+    });
+    if (q.mode !== 'builder') throw new Error('expected builder');
+    expect(q.metrics?.map((m) => m.key)).toEqual(['tested', 'r']);
+  });
+
+  it('still accepts a legacy single-metric builder query with no metrics field', () => {
+    const q = WidgetQuerySchema.parse({
+      mode: 'builder', model: 'observations', metric: { key: 'count', agg: 'count' }, filters: [],
+    });
+    if (q.mode !== 'builder') throw new Error('expected builder');
+    expect(q.metrics).toBeUndefined();
   });
 });
