@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import i18n from './index';
+import { en } from './en';
 
 describe('i18n', () => {
   it('initializes with en and resolves table + users keys', () => {
@@ -17,5 +18,8 @@ describe('i18n', () => {
 describe('i18n wiring', () => {
   it('resolves a known common key to English', () => {
     expect(i18n.t('common.save')).toBe('Save');
+  });
+  it('exposes the reportBuilder namespace', () => {
+    expect((en as Record<string, unknown>).reportBuilder).toBeDefined();
   });
 });
