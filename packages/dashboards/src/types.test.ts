@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { WidgetConfigSchema, WidgetQuerySchema, MetricSchema } from './types';
+import { WidgetConfigSchema, WidgetQuerySchema, MetricSchema, DerivedRatioSchema } from './types';
 
 describe('WidgetConfigSchema', () => {
   it('accepts a builder widget', () => {
@@ -62,5 +62,25 @@ describe('conditional & multi-metric schema (Slice A)', () => {
     });
     if (q.mode !== 'builder') throw new Error('expected builder');
     expect(q.metrics).toBeUndefined();
+  });
+});
+
+describe('derived ratio metric schema (Slice B)', () => {
+  it('accepts a metric carrying a derived ratio and applies scale/decimals defaults', () => {
+    const m = MetricSchema.parse({
+      key: 'percentR', agg: 'count',
+      derived: { numerator: 'r', denominator: 'tested' },
+    });
+    expect(m.derived).toEqual({ numerator: 'r', denominator: 'tested', scale: 100, decimals: 1 });
+  });
+
+  it('parses an explicit scale/decimals', () => {
+    const d = DerivedRatioSchema.parse({ numerator: 'a', denominator: 'b', scale: 1, decimals: 2 });
+    expect(d).toEqual({ numerator: 'a', denominator: 'b', scale: 1, decimals: 2 });
+  });
+
+  it('still accepts a plain aggregate metric with no derived field', () => {
+    const m = MetricSchema.parse({ key: 'tested', agg: 'count' });
+    expect(m.derived).toBeUndefined();
   });
 });
