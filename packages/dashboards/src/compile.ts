@@ -142,12 +142,22 @@ export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryMode
   return qb;
 }
 
-/** Shape a multi-metric (wide) query into a table: label + one numeric column per metric. */
+/** Derived ratio: numerator/denominator × scale, rounded to `decimals`; div-by-zero → 0. */
+function ratio(d: NonNullable<Metric['derived']>, row: Record<string, unknown>): number {
+  const den = Number(row[d.denominator] ?? 0);
+  if (!den) return 0;
+  const v = (Number(row[d.numerator] ?? 0) / den) * d.scale;
+  const f = 10 ** d.decimals;
+  return Math.round(v * f) / f;
+}
+
+/** Shape a multi-metric (wide) query into a table: label + one column per metric (aggregate or derived). */
 async function runWideQuery(
   db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery,
 ): Promise<ReportResultData> {
   const metrics = q.metrics!;
-  const keys = metrics.map((m) => m.key);
+  const aggKeys = metrics.filter((m) => !m.derived).map((m) => m.key);
+  const derivedMetrics = metrics.filter((m) => m.derived);
   const rows = (await compileBuilderQuery(db, model, q).execute()) as Record<string, unknown>[];
   const d = q.dimension ? dim(model, q.dimension.key) : undefined;
 
@@ -156,28 +166,36 @@ async function runWideQuery(
     const buckets = new Map<string, Record<string, number>>();
     for (const r of rows) {
       const bk = grainKey(r.label, q.dimension.grain);
-      const acc = buckets.get(bk) ?? Object.fromEntries(keys.map((k) => [k, 0]));
-      for (const k of keys) acc[k] += Number(r[k] ?? 0);
+      const acc = buckets.get(bk) ?? Object.fromEntries(aggKeys.map((k) => [k, 0]));
+      for (const k of aggKeys) acc[k] += Number(r[k] ?? 0);
       buckets.set(bk, acc);
     }
     shaped = [...buckets.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([label, acc]) => ({ label, ...acc }));
   } else if (d) {
     shaped = rows.map((r) => {
       const out: Record<string, unknown> = { label: r.label ?? '(none)' };
-      for (const k of keys) out[k] = Number(r[k] ?? 0);
+      for (const k of aggKeys) out[k] = Number(r[k] ?? 0);
       return out;
     });
   } else {
     const out: Record<string, unknown> = { label: model.label };
-    for (const k of keys) out[k] = Number(rows[0]?.[k] ?? 0);
+    for (const k of aggKeys) out[k] = Number(rows[0]?.[k] ?? 0);
     shaped = [out];
+  }
+
+  // Derived (ratio) metrics: computed per output row, after aggregate values are final.
+  for (const row of shaped) {
+    for (const m of derivedMetrics) row[m.key] = ratio(m.derived!, row);
   }
 
   const columns: ReportColumn[] = [
     { key: 'label', label: d?.label ?? model.label, kind: d?.kind === 'date' ? 'date' : 'string' },
-    ...metrics.map((m) => ({ key: m.key, label: m.label ?? m.key, kind: 'number' as const })),
+    ...metrics.map((m) => ({
+      key: m.key, label: m.label ?? m.key,
+      kind: (m.derived && m.derived.scale === 100 ? 'percent' : 'number') as 'percent' | 'number',
+    })),
   ];
-  const chart: ChartHint = { type: 'bar', x: 'label', y: keys[0] ?? 'label' };
+  const chart: ChartHint = { type: 'bar', x: 'label', y: aggKeys[0] ?? 'label' };
   return { columns, rows: shaped, chart };
 }
 

@@ -105,3 +105,53 @@ describe('runBuilderQuery wide mode (Slice A)', () => {
     expect(res.rows).toContainEqual(expect.objectContaining({ label: '2024-02', total: 1, r: 1 }));
   });
 });
+
+describe('runBuilderQuery derived ratio (Slice B)', () => {
+  function memObs() {
+    const mem = newDb();
+    mem.public.none('create table observations (status text, code_text text, interpretation_code text, value_unit text, value_quantity float, effective_date_time text, subject_ref text)');
+    return mem;
+  }
+
+  it('computes %R as a derived ratio metric (completes amr-resistance)', async () => {
+    const mem = memObs();
+    mem.public.none(`insert into observations (code_text, interpretation_code) values
+      ('Ciprofloxacin','R'),('Ciprofloxacin','R'),('Ciprofloxacin','I'),('Ciprofloxacin','S'),
+      ('Gentamicin','R'),('Gentamicin','S'),('Gentamicin','S')`);
+    const db = mem.adapters.createKysely() as unknown as import('kysely').Kysely<any>;
+    const model = getModel('observations')!;
+    const res = await runBuilderQuery(db, model, {
+      mode: 'builder', model: 'observations',
+      metric: { key: 'tested', agg: 'count' },
+      metrics: [
+        { key: 'tested', label: 'Tested', agg: 'count' },
+        { key: 'r', label: 'R', agg: 'count', where: [{ dimension: 'interpretation_code', op: 'eq', value: 'R' }] },
+        { key: 'percentR', label: '%R', agg: 'count', derived: { numerator: 'r', denominator: 'tested', scale: 100, decimals: 1 } },
+      ],
+      dimension: { key: 'code_text' },
+      filters: [{ dimension: 'interpretation_code', op: 'in', value: ['R', 'I', 'S'] }],
+    });
+    expect(res.columns.map((c) => c.key)).toEqual(['label', 'tested', 'r', 'percentR']);
+    expect(res.columns.find((c) => c.key === 'percentR')?.kind).toBe('percent');
+    expect(res.rows).toContainEqual(expect.objectContaining({ label: 'Ciprofloxacin', tested: 4, r: 2, percentR: 50 }));
+    expect(res.rows).toContainEqual(expect.objectContaining({ label: 'Gentamicin', tested: 3, r: 1, percentR: 33.3 }));
+  });
+
+  it('returns 0 for a derived ratio when the denominator is 0', async () => {
+    const mem = memObs();
+    mem.public.none(`insert into observations (interpretation_code) values ('S'),('S')`);
+    const db = mem.adapters.createKysely() as unknown as import('kysely').Kysely<any>;
+    const model = getModel('observations')!;
+    const res = await runBuilderQuery(db, model, {
+      mode: 'builder', model: 'observations',
+      metric: { key: 'r', agg: 'count' },
+      metrics: [
+        { key: 'r', agg: 'count', where: [{ dimension: 'interpretation_code', op: 'eq', value: 'R' }] },
+        { key: 'i', agg: 'count', where: [{ dimension: 'interpretation_code', op: 'eq', value: 'I' }] },
+        { key: 'ratio', agg: 'count', derived: { numerator: 'r', denominator: 'i', scale: 100, decimals: 1 } },
+      ],
+      filters: [],
+    });
+    expect(res.rows[0]).toEqual(expect.objectContaining({ r: 0, i: 0, ratio: 0 }));
+  });
+});
