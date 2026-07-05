@@ -4,6 +4,7 @@ import { Search, Star, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { ReportSummary, ReportCategory } from '../api';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/cn';
 
@@ -68,6 +69,11 @@ export function ReportLibrary({
         </TooltipTrigger>
         <TooltipContent side="right">{r.name}</TooltipContent>
       </Tooltip>
+      {r.source === 'builder' && (
+        <Badge variant="outline" className="shrink-0 px-1 py-0 text-[9px] font-medium uppercase tracking-wide">
+          {t('reports.custom')}
+        </Badge>
+      )}
       <button
         type="button"
         aria-label={`pin-${r.id}`}

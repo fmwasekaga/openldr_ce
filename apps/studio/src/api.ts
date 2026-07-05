@@ -43,6 +43,8 @@ export interface ReportSummary {
   category: ReportCategory;
   parameters: ReportParamMeta[];
   summaryMetrics?: ReportMetricMeta[];
+  /** 'catalog' = built-in report; 'builder' = published Report Builder template (PDF-only). Absent ⇒ catalog. */
+  source?: 'catalog' | 'builder';
 }
 export interface ChartHint {
   type: 'bar' | 'line' | 'pie' | 'stat';
