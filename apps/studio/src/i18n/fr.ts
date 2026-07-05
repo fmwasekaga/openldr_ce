@@ -362,6 +362,7 @@ export const fr: EnShape = {
   reports: {
     searchPlaceholder: 'Rechercher des rapports…',
     pinned: 'Épinglés',
+    custom: 'Personnalisé',
     selectReport: 'Sélectionnez un rapport dans la bibliothèque.',
     runReport: 'Exécutez le rapport pour voir les résultats.',
     running: 'Exécution…',

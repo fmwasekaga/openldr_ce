@@ -16,6 +16,9 @@ describe('catalog', () => {
   it('reportSummaries returns id+name+description', () => {
     expect(reportSummaries()[0]).toHaveProperty('description');
   });
+  it('marks catalog reports with source "catalog"', () => {
+    expect(reportSummaries().every((s) => s.source === 'catalog')).toBe(true);
+  });
 });
 
 describe('report catalog metadata', () => {

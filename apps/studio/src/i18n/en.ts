@@ -358,6 +358,7 @@ export const en = {
   reports: {
     searchPlaceholder: 'Search reports…',
     pinned: 'Pinned',
+    custom: 'Custom',
     selectReport: 'Select a report from the library.',
     runReport: 'Run the report to see results.',
     running: 'Running…',

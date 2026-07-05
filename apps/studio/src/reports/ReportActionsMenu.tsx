@@ -9,10 +9,17 @@ interface Props {
   onOpenHistory?: () => void;
   onOpenSchedules?: () => void;
   canManageSchedules?: boolean;
+  /**
+   * Custom (builder) templates are PDF-only: any CSV/XLSX export affordance in this menu
+   * is hidden. History + PDF/Schedule actions remain. (No tabular export items exist here
+   * today — the tabular exports live in the Spreadsheet tab, which the orchestrator does not
+   * render for custom reports — so this currently gates nothing but keeps the contract explicit.)
+   */
+  pdfOnly?: boolean;
 }
 
 /** SP-3b: Run History (SP-2) and Schedules (manager-only) are live. */
-export function ReportActionsMenu({ onOpenHistory, onOpenSchedules, canManageSchedules }: Props) {
+export function ReportActionsMenu({ onOpenHistory, onOpenSchedules, canManageSchedules, pdfOnly: _pdfOnly }: Props) {
   const { t } = useTranslation();
   return (
     <DropdownMenu>

@@ -37,7 +37,7 @@ const schedulePatch = z.object({
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
-  app.get('/api/reports', async () => ctx.reporting.list());
+  app.get('/api/reports', async () => ctx.reporting.listAll());
 
   // Register the .csv route BEFORE the bare :id route so it is matched first.
   app.get('/api/reports/:id.csv', async (req, reply) => {
@@ -92,7 +92,7 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
     } catch (err) {
       rethrowAsAppError(err);
     }
-    const def = ctx.reporting.list().find((r) => r.id === id);
+    const def = await ctx.reporting.findSummary(id);
     if (!def) throw appError('RP0002', { message: `report not found: ${id}` });
     const user = req.user;
     await ctx.reportRuns.record({
@@ -122,7 +122,7 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
     const { id } = req.params as { id: string };
     let body: z.infer<typeof scheduleCreate>;
     try { body = scheduleCreate.parse(req.body); } catch (err) { rethrowAsAppError(err); }
-    if (!ctx.reporting.list().find((r) => r.id === id)) throw appError('RP0002', { message: `report not found: ${id}` });
+    if (!(await ctx.reporting.findSummary(id))) throw appError('RP0002', { message: `report not found: ${id}` });
     const sid = randomUUID();
     const nextDueAt = nextRunAt(body.frequency as ScheduleFrequency, body.dayOfWeek ?? null, body.dayOfMonth ?? null, new Date());
     await ctx.reportSchedules.create({
