@@ -151,3 +151,47 @@ describe('wide-mode compile (Slice A)', () => {
     })).toThrow(/duplicate metric key/i);
   });
 });
+
+describe('derived metrics compile (Slice B)', () => {
+  it('does not emit a SQL column for a derived metric', () => {
+    const model = getModel('observations')!;
+    const { sql } = compileBuilderQuery(db, model, {
+      mode: 'builder', model: 'observations',
+      metric: { key: 'tested', agg: 'count' },
+      metrics: [
+        { key: 'tested', agg: 'count' },
+        { key: 'pct', agg: 'count', derived: { numerator: 'tested', denominator: 'tested', scale: 100, decimals: 1 } },
+      ],
+      dimension: { key: 'code_text' }, filters: [],
+    }).compile();
+    expect(sql).toContain('as "tested"');
+    expect(sql).not.toContain('as "pct"');
+  });
+
+  it('throws when a derived metric references an unknown metric', () => {
+    const model = getModel('observations')!;
+    expect(() => compileBuilderQuery(db, model, {
+      mode: 'builder', model: 'observations',
+      metric: { key: 'tested', agg: 'count' },
+      metrics: [
+        { key: 'tested', agg: 'count' },
+        { key: 'pct', agg: 'count', derived: { numerator: 'nope', denominator: 'tested', scale: 100, decimals: 1 } },
+      ],
+      filters: [],
+    })).toThrow(/references unknown metric/i);
+  });
+
+  it('throws when a derived metric references another derived metric', () => {
+    const model = getModel('observations')!;
+    expect(() => compileBuilderQuery(db, model, {
+      mode: 'builder', model: 'observations',
+      metric: { key: 'tested', agg: 'count' },
+      metrics: [
+        { key: 'tested', agg: 'count' },
+        { key: 'a', agg: 'count', derived: { numerator: 'tested', denominator: 'tested', scale: 100, decimals: 1 } },
+        { key: 'b', agg: 'count', derived: { numerator: 'a', denominator: 'tested', scale: 100, decimals: 1 } },
+      ],
+      filters: [],
+    })).toThrow(/references unknown metric/i);
+  });
+});

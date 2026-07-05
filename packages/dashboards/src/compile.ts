@@ -114,10 +114,17 @@ export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryMode
   let qb = db.selectFrom(model.table) as unknown as AnyQB;
   if (wide) {
     if (q.breakdown) throw new Error('multi-metric (wide) queries cannot use a breakdown');
+    const aggKeys = new Set(q.metrics!.filter((m) => !m.derived).map((m) => m.key));
     const seen = new Set<string>();
     for (const m of q.metrics!) {
       if (seen.has(m.key)) throw new Error(`duplicate metric key: ${m.key}`);
       seen.add(m.key);
+      if (m.derived) {
+        for (const ref of [m.derived.numerator, m.derived.denominator]) {
+          if (!aggKeys.has(ref)) throw new Error(`derived metric ${m.key} references unknown metric: ${ref}`);
+        }
+        continue; // derived metrics are computed post-aggregation, not selected in SQL
+      }
       qb = qb.select(metricExpr(model, m).as(m.key));
     }
   } else {
