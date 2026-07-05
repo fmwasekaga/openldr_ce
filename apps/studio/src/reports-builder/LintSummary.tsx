@@ -1,7 +1,9 @@
+import { useTranslation } from 'react-i18next';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import type { ReportLintIssue } from '@openldr/report-builder/pure';
 
 export function LintSummary({ issues, onSelectBlock }: { issues: ReportLintIssue[]; onSelectBlock?: (row: number, cell: number) => void }): JSX.Element | null {
+  const { t } = useTranslation();
   if (issues.length === 0) return null;
   const errors = issues.filter((i) => i.severity === 'error').length;
   const warnings = issues.length - errors;
@@ -9,8 +11,8 @@ export function LintSummary({ issues, onSelectBlock }: { issues: ReportLintIssue
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button type="button" aria-label="Lint issues" className={`rounded-md border px-2 py-1 text-xs ${tone}`}>
-          {errors} errors, {warnings} warnings
+        <button type="button" aria-label={t('reportBuilder.lint.ariaLabel')} className={`rounded-md border px-2 py-1 text-xs ${tone}`}>
+          {t('reportBuilder.lint.summary', { errors, warnings })}
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-0 text-xs">
