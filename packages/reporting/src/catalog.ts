@@ -26,5 +26,6 @@ export function reportSummaries(): ReportSummary[] {
     category: r.category,
     parameters: r.parameters,
     summaryMetrics: r.summaryMetrics,
+    source: 'catalog',
   }));
 }
