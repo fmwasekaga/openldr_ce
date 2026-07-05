@@ -5,7 +5,7 @@ import type { Block, ReportParam } from '@openldr/report-builder/pure';
 
 const WIDTHS = [3, 4, 6, 8, 12];
 
-export function BlockInspector({ block, colSpan, parameters, sqlEnabled, onPatchBlock, onSetColSpan, onMoveUp, onMoveDown, canMoveUp, canMoveDown, onDelete }: {
+export function BlockInspector({ block, colSpan, parameters, sqlEnabled, onPatchBlock, onSetColSpan, onMoveUp, onMoveDown, canMoveUp, canMoveDown, onDelete, onDuplicate, repeat, onSetRepeat }: {
   block: Block; colSpan: number;
   parameters: ReportParam[];
   sqlEnabled: boolean;
@@ -16,6 +16,9 @@ export function BlockInspector({ block, colSpan, parameters, sqlEnabled, onPatch
   canMoveUp: boolean;
   canMoveDown: boolean;
   onDelete: () => void;
+  onDuplicate: () => void;
+  repeat: 'header' | 'footer' | undefined;
+  onSetRepeat: (v: 'header' | 'footer' | undefined) => void;
 }): JSX.Element {
   return (
     <div className="flex flex-col gap-4 p-3 text-sm">
@@ -50,7 +53,18 @@ export function BlockInspector({ block, colSpan, parameters, sqlEnabled, onPatch
         </div>
       </div>
 
-      <Button type="button" variant="ghost" className="justify-start text-destructive hover:text-destructive" onClick={onDelete}>Delete block</Button>
+      <div className="flex flex-col gap-1 text-xs">Row repeat
+        <div className="flex gap-1">
+          {([['Normal', undefined], ['Header', 'header'], ['Footer', 'footer']] as const).map(([label, val]) => (
+            <Button key={label} type="button" size="sm" variant={repeat === val ? 'default' : 'outline'} className="h-7 flex-1" onClick={() => onSetRepeat(val)}>{label}</Button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <Button type="button" variant="outline" size="sm" className="justify-start" onClick={onDuplicate}>Duplicate block</Button>
+        <Button type="button" variant="ghost" className="justify-start text-destructive hover:text-destructive" onClick={onDelete}>Delete block</Button>
+      </div>
     </div>
   );
 }

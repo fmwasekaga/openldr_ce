@@ -1,13 +1,13 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core';
 import { AppShell } from '@/shell/AppShell';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { createEmptyTemplate, lintReportTemplate, type Block, type BlockKind, type ReportTemplate } from '@openldr/report-builder/pure';
 import { createReportTemplate, getReportTemplate, updateReportTemplate, deleteReportTemplate, fetchClientConfig } from '../api';
 import { useTemplateHistory } from '../forms-builder/useTemplateHistory';
-import { addRowWithBlock, moveRow, newBlock, removeCell, setColSpan, updateBlockAt } from './reportBuilderModel';
+import { addRowWithBlock, duplicateRow, moveRow, moveRowFromCellDrag, newBlock, removeCell, setColSpan, setRepeat, updateBlockAt } from './reportBuilderModel';
 import { BlockPalette } from './BlockPalette';
 import { ReportCanvas, type CellRef } from './ReportCanvas';
 import { BlockInspector } from './BlockInspector';
@@ -28,6 +28,7 @@ export function ReportBuilderPage(): JSX.Element {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const blockData = useBlockData(template, paramValues);
   const [selected, setSelected] = useState<CellRef | null>(null);
+  const [activeDrag, setActiveDrag] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [sqlEnabled, setSqlEnabled] = useState(false);
   const [error, setError] = useState<string>();
@@ -44,20 +45,35 @@ export function ReportBuilderPage(): JSX.Element {
 
   useEffect(() => { fetchClientConfig().then((c) => setSqlEnabled(c.dashboardSqlEnabled)).catch(() => {}); }, []);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return;
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); applyHistory(e.shiftKey ? history.redo() : history.undo()); return; }
+      if (mod && e.key.toLowerCase() === 'd' && selected) { e.preventDefault(); pushUpdate(duplicateRow(template, selected.row)); setSelected({ row: selected.row + 1, cell: selected.cell }); return; }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selected) { e.preventDefault(); pushUpdate(removeCell(template, selected.row, selected.cell)); setSelected(null); return; }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [template, selected]);
+
   const update = (next: ReportTemplate) => { history.recordEdit(); setTemplate(next); };
   const pushUpdate = (next: ReportTemplate) => { history.pushHistory(); setTemplate(next); };
 
   const addBlock = (kind: BlockKind) => { pushUpdate(addRowWithBlock(template, newBlock(kind))); };
   const applyHistory = (next: ReportTemplate | null) => { if (next) setTemplate(next); };
 
+  const onDragStart = (e: DragStartEvent) => setActiveDrag(String(e.active.id));
+
   const onDragEnd = (e: DragEndEvent) => {
+    setActiveDrag(null);
     const active = String(e.active.id);
     const over = e.over ? String(e.over.id) : null;
     if (active.startsWith('palette:')) { addBlock(active.slice('palette:'.length) as BlockKind); return; }
-    if (active.startsWith('row:') && over?.startsWith('row:')) {
-      const from = Number(active.slice(4)); const to = Number(over.slice(4));
-      if (from !== to) pushUpdate(moveRow(template, from, to));
-    }
+    const reordered = moveRowFromCellDrag(template, active, over);
+    if (reordered) pushUpdate(reordered);
   };
 
   const selectedBlock: Block | null = useMemo(
@@ -83,7 +99,7 @@ export function ReportBuilderPage(): JSX.Element {
 
   return (
     <AppShell title="Report Builder" fullBleed>
-      <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+      <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2">
             <Input aria-label="Report name" placeholder="Untitled report" value={template.name} onChange={(e) => update({ ...template, name: e.target.value })} className="h-8 max-w-xs text-sm" />
@@ -118,6 +134,9 @@ export function ReportBuilderPage(): JSX.Element {
                   canMoveDown={selected.row < template.rows.length - 1}
                   onMoveUp={() => { pushUpdate(moveRow(template, selected.row, selected.row - 1)); setSelected({ row: selected.row - 1, cell: selected.cell }); }}
                   onMoveDown={() => { pushUpdate(moveRow(template, selected.row, selected.row + 1)); setSelected({ row: selected.row + 1, cell: selected.cell }); }}
+                  repeat={template.rows[selected.row].repeat}
+                  onSetRepeat={(v) => pushUpdate(setRepeat(template, selected.row, v))}
+                  onDuplicate={() => { pushUpdate(duplicateRow(template, selected.row)); setSelected({ row: selected.row + 1, cell: selected.cell }); }}
                   onDelete={() => { pushUpdate(removeCell(template, selected.row, selected.cell)); setSelected(null); }}
                 />
               ) : (
@@ -126,6 +145,11 @@ export function ReportBuilderPage(): JSX.Element {
             </div>
           </div>
         </div>
+        <DragOverlay>
+          {activeDrag && activeDrag.startsWith('cell:') ? (
+            <div className="rounded border border-border bg-background px-2 py-1 text-xs shadow">Moving row</div>
+          ) : null}
+        </DragOverlay>
       </DndContext>
       {tplId && <PreviewPdfDialog open={previewOpen} reportId={tplId} params={paramValues} onClose={() => setPreviewOpen(false)} />}
       <ParametersEditor
