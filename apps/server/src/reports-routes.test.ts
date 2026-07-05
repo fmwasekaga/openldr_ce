@@ -11,6 +11,13 @@ function appWith(reporting: unknown) {
   return app;
 }
 
+function appWithCtx(ctx: unknown) {
+  const app = Fastify();
+  registerErrorHandler(app);
+  registerReportRoutes(app, ctx as never);
+  return app;
+}
+
 const okResult = {
   columns: [{ key: 'antibiotic', label: 'Antibiotic', kind: 'string' }, { key: 'percentR', label: '%R', kind: 'percent' }],
   rows: [{ antibiotic: 'AMP', percentR: 72 }],
@@ -20,10 +27,31 @@ const okResult = {
 
 describe('report routes', () => {
   it('GET /api/reports lists', async () => {
-    const app = appWith({ list: () => [{ id: 'amr-resistance', name: 'AMR', description: 'd' }], run: vi.fn() });
+    const app = appWith({ list: () => [{ id: 'amr-resistance', name: 'AMR', description: 'd' }], listAll: async () => [{ id: 'amr-resistance', name: 'AMR', description: 'd' }], run: vi.fn() });
     const res = await app.inject({ method: 'GET', url: '/api/reports' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toHaveLength(1);
+  });
+
+  it('GET /api/reports lists via listAll (includes custom templates)', async () => {
+    const app = appWithCtx({ reporting: { listAll: async () => [
+      { id: 'amr', name: 'AMR', description: 'd', source: 'catalog' },
+      { id: 'rt-1', name: 'Custom', description: 'c', source: 'builder' },
+    ] } });
+    const res = await app.inject({ method: 'GET', url: '/api/reports' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().map((r: { id: string }) => r.id)).toContain('rt-1');
+  });
+
+  it('records a run beacon for a template id (existence via findSummary)', async () => {
+    const record = vi.fn(async () => {});
+    const app = appWithCtx({
+      reporting: { findSummary: async (id: string) => (id === 'rt-1' ? { id: 'rt-1', name: 'Custom', source: 'builder' } : undefined) },
+      reportRuns: { record },
+    });
+    const res = await app.inject({ method: 'POST', url: '/api/reports/rt-1/runs', payload: { format: 'pdf' } });
+    expect(res.statusCode).toBe(201);
+    expect(record).toHaveBeenCalled();
   });
 
   it('GET /api/reports/:id returns result', async () => {
@@ -93,6 +121,7 @@ describe('report run history routes', () => {
     const ctx = {
       reporting: {
         list: () => [{ id: 'amr-resistance', name: 'AMR Resistance Rate', description: '', category: 'amr', parameters: [] }],
+        findSummary: async (id: string) => (id === 'amr-resistance' ? { id: 'amr-resistance', name: 'AMR Resistance Rate', description: '', source: 'catalog' } : undefined),
         run: async () => ({ columns: [], rows: [], chart: { type: 'stat', value: '0', label: 'x' }, meta: { generatedAt: '', rowCount: 0 } }),
         renderPdf: async () => Buffer.from(''),
         options: async () => ({}),
@@ -159,7 +188,10 @@ describe('report schedule routes', () => {
   function appWithSchedules(roles = ['lab_manager']) {
     const created: any[] = [];
     const ctx = {
-      reporting: { list: () => [{ id: 'amr-resistance', name: 'AMR Resistance Rate', description: '', category: 'amr', parameters: [] }] },
+      reporting: {
+        list: () => [{ id: 'amr-resistance', name: 'AMR Resistance Rate', description: '', category: 'amr', parameters: [] }],
+        findSummary: async (id: string) => (id === 'amr-resistance' ? { id: 'amr-resistance', name: 'AMR Resistance Rate', description: '', source: 'catalog' } : undefined),
+      },
       eventing: { publish: async () => {} },
       reportSchedules: {
         create: async (s: any) => { created.push(s); },
