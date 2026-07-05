@@ -5,7 +5,7 @@ type BuilderQuery = Extract<WidgetQuery, { mode: 'builder' }>;
 
 export function BuilderForm({ models, value, onChange }: { models: QueryModel[]; value: BuilderQuery; onChange: (q: BuilderQuery) => void }) {
   const model = models.find((m) => m.id === value.model) ?? models[0];
-  const setModel = (id: string) => { const m = models.find((x) => x.id === id)!; onChange({ ...value, model: id, metric: m.metrics[0], dimension: undefined, filters: [] }); };
+  const setModel = (id: string) => { const m = models.find((x) => x.id === id)!; onChange({ ...value, model: id, metric: m.metrics[0], metrics: undefined, dimension: undefined, filters: [] }); };
   const setMetric = (key: string) => { const mm = model.metrics.find((x) => x.key === key)!; onChange({ ...value, metric: mm }); };
   const setWhere = (w: MetricCondition[]) => onChange({ ...value, metric: { ...value.metric, where: w.length ? w : undefined } });
   const setDim = (key: string) => onChange({ ...value, dimension: key ? { key } : undefined });
