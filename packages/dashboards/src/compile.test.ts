@@ -113,3 +113,41 @@ describe('conditional metrics (Slice A)', () => {
     expect(s([{ dimension: 'effective_date_time', op: 'between', value: ['2024-01-01', '2024-12-31'] }])).toContain('>=');
   });
 });
+
+describe('wide-mode compile (Slice A)', () => {
+  it('selects one aliased column per metric, grouped by the dimension', () => {
+    const model = getModel('observations')!;
+    const { sql } = compileBuilderQuery(db, model, {
+      mode: 'builder', model: 'observations',
+      metric: { key: 'tested', agg: 'count' },
+      metrics: [
+        { key: 'tested', agg: 'count' },
+        { key: 'r', agg: 'count', where: [{ dimension: 'interpretation_code', op: 'eq', value: 'R' }] },
+      ],
+      dimension: { key: 'code_text' }, filters: [],
+    }).compile();
+    expect(sql).toContain('as "tested"');
+    expect(sql).toContain('as "r"');
+    expect(sql).toContain('group by');
+  });
+
+  it('rejects wide mode combined with a breakdown', () => {
+    const model = getModel('observations')!;
+    expect(() => compileBuilderQuery(db, model, {
+      mode: 'builder', model: 'observations',
+      metric: { key: 'count', agg: 'count' },
+      metrics: [{ key: 'a', agg: 'count' }],
+      dimension: { key: 'code_text' }, breakdown: { key: 'status' }, filters: [],
+    })).toThrow(/breakdown/i);
+  });
+
+  it('rejects duplicate metric keys', () => {
+    const model = getModel('observations')!;
+    expect(() => compileBuilderQuery(db, model, {
+      mode: 'builder', model: 'observations',
+      metric: { key: 'a', agg: 'count' },
+      metrics: [{ key: 'a', agg: 'count' }, { key: 'a', agg: 'count' }],
+      filters: [],
+    })).toThrow(/duplicate metric key/i);
+  });
+});

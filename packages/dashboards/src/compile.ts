@@ -110,14 +110,24 @@ function applyFilters(qb: AnyQB, model: QueryModel, filters: QueryFilter[]): Any
 
 /** Build the Kysely query (no grain bucketing — date grain is applied in JS after fetch). */
 export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery): AnyQB {
-  const expr = metricExpr(model, q.metric); // validates + builds
+  const wide = !!(q.metrics && q.metrics.length > 0);
   let qb = db.selectFrom(model.table) as unknown as AnyQB;
-  qb = qb.select(expr.as('value'));
+  if (wide) {
+    if (q.breakdown) throw new Error('multi-metric (wide) queries cannot use a breakdown');
+    const seen = new Set<string>();
+    for (const m of q.metrics!) {
+      if (seen.has(m.key)) throw new Error(`duplicate metric key: ${m.key}`);
+      seen.add(m.key);
+      qb = qb.select(metricExpr(model, m).as(m.key));
+    }
+  } else {
+    qb = qb.select(metricExpr(model, q.metric).as('value'));
+  }
   if (q.dimension) {
     const d = dim(model, q.dimension.key);
     qb = qb.select(sql.ref(d.column).as('label')).groupBy(d.column as never).orderBy(d.column as never);
   }
-  if (q.breakdown) {
+  if (!wide && q.breakdown) {
     const b = dim(model, q.breakdown.key);
     qb = qb.select(sql.ref(b.column).as('series')).groupBy(b.column as never).orderBy(b.column as never);
   }
