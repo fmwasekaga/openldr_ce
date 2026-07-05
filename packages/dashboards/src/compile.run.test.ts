@@ -34,3 +34,74 @@ describe('runBuilderQuery breakdown', () => {
     expect(res.rows.map((r) => r.label).sort()).toEqual(['2024-01', '2024-02']);
   });
 });
+
+describe('runBuilderQuery wide mode (Slice A)', () => {
+  function memObs() {
+    const mem = newDb();
+    mem.public.none('create table observations (status text, code_text text, interpretation_code text, value_unit text, value_quantity float, effective_date_time text, subject_ref text)');
+    return mem;
+  }
+
+  it('reproduces the amr-resistance R/I/S/tested pivot as columns', async () => {
+    const mem = memObs();
+    // Cipro: 2R 1I 1S ; Genta: 1R 0I 2S
+    mem.public.none(`insert into observations (code_text, interpretation_code) values
+      ('Ciprofloxacin','R'),('Ciprofloxacin','R'),('Ciprofloxacin','I'),('Ciprofloxacin','S'),
+      ('Gentamicin','R'),('Gentamicin','S'),('Gentamicin','S')`);
+    const db = mem.adapters.createKysely() as unknown as import('kysely').Kysely<any>;
+    const model = getModel('observations')!;
+    const res = await runBuilderQuery(db, model, {
+      mode: 'builder', model: 'observations',
+      metric: { key: 'tested', agg: 'count' },
+      metrics: [
+        { key: 'tested', label: 'Tested', agg: 'count' },
+        { key: 'r', label: 'R', agg: 'count', where: [{ dimension: 'interpretation_code', op: 'eq', value: 'R' }] },
+        { key: 'i', label: 'I', agg: 'count', where: [{ dimension: 'interpretation_code', op: 'eq', value: 'I' }] },
+        { key: 's', label: 'S', agg: 'count', where: [{ dimension: 'interpretation_code', op: 'eq', value: 'S' }] },
+      ],
+      dimension: { key: 'code_text' },
+      filters: [{ dimension: 'interpretation_code', op: 'in', value: ['R', 'I', 'S'] }],
+    });
+    expect(res.columns.map((c) => c.key)).toEqual(['label', 'tested', 'r', 'i', 's']);
+    expect(res.rows).toContainEqual(expect.objectContaining({ label: 'Ciprofloxacin', tested: 4, r: 2, i: 1, s: 1 }));
+    expect(res.rows).toContainEqual(expect.objectContaining({ label: 'Gentamicin', tested: 3, r: 1, i: 0, s: 2 }));
+  });
+
+  it('returns a single summary row with each metric when there is no dimension', async () => {
+    const mem = memObs();
+    mem.public.none(`insert into observations (interpretation_code) values ('R'),('R'),('S')`);
+    const db = mem.adapters.createKysely() as unknown as import('kysely').Kysely<any>;
+    const model = getModel('observations')!;
+    const res = await runBuilderQuery(db, model, {
+      mode: 'builder', model: 'observations',
+      metric: { key: 'tested', agg: 'count' },
+      metrics: [
+        { key: 'tested', agg: 'count' },
+        { key: 'r', agg: 'count', where: [{ dimension: 'interpretation_code', op: 'eq', value: 'R' }] },
+      ],
+      filters: [],
+    });
+    expect(res.rows.length).toBe(1);
+    expect(res.rows[0]).toEqual(expect.objectContaining({ tested: 3, r: 2 }));
+  });
+
+  it('sums each metric column per grain bucket for a date dimension', async () => {
+    const mem = memObs();
+    mem.public.none(`insert into observations (effective_date_time, interpretation_code) values
+      ('2024-01-05','R'),('2024-01-20','S'),('2024-02-03','R')`);
+    const db = mem.adapters.createKysely() as unknown as import('kysely').Kysely<any>;
+    const model = getModel('observations')!;
+    const res = await runBuilderQuery(db, model, {
+      mode: 'builder', model: 'observations',
+      metric: { key: 'total', agg: 'count' },
+      metrics: [
+        { key: 'total', agg: 'count' },
+        { key: 'r', agg: 'count', where: [{ dimension: 'interpretation_code', op: 'eq', value: 'R' }] },
+      ],
+      dimension: { key: 'effective_date_time', grain: 'month' }, filters: [],
+    });
+    expect(res.rows.map((r) => r.label).sort()).toEqual(['2024-01', '2024-02']);
+    expect(res.rows).toContainEqual(expect.objectContaining({ label: '2024-01', total: 2, r: 1 }));
+    expect(res.rows).toContainEqual(expect.objectContaining({ label: '2024-02', total: 1, r: 1 }));
+  });
+});

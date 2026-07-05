@@ -135,10 +135,50 @@ export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryMode
   return qb;
 }
 
+/** Shape a multi-metric (wide) query into a table: label + one numeric column per metric. */
+async function runWideQuery(
+  db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery,
+): Promise<ReportResultData> {
+  const metrics = q.metrics!;
+  const keys = metrics.map((m) => m.key);
+  const rows = (await compileBuilderQuery(db, model, q).execute()) as Record<string, unknown>[];
+  const d = q.dimension ? dim(model, q.dimension.key) : undefined;
+
+  let shaped: Record<string, unknown>[];
+  if (d && d.kind === 'date' && q.dimension?.grain) {
+    const buckets = new Map<string, Record<string, number>>();
+    for (const r of rows) {
+      const bk = grainKey(r.label, q.dimension.grain);
+      const acc = buckets.get(bk) ?? Object.fromEntries(keys.map((k) => [k, 0]));
+      for (const k of keys) acc[k] += Number(r[k] ?? 0);
+      buckets.set(bk, acc);
+    }
+    shaped = [...buckets.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([label, acc]) => ({ label, ...acc }));
+  } else if (d) {
+    shaped = rows.map((r) => {
+      const out: Record<string, unknown> = { label: r.label ?? '(none)' };
+      for (const k of keys) out[k] = Number(r[k] ?? 0);
+      return out;
+    });
+  } else {
+    const out: Record<string, unknown> = { label: model.label };
+    for (const k of keys) out[k] = Number(rows[0]?.[k] ?? 0);
+    shaped = [out];
+  }
+
+  const columns: ReportColumn[] = [
+    { key: 'label', label: d?.label ?? model.label, kind: d?.kind === 'date' ? 'date' : 'string' },
+    ...metrics.map((m) => ({ key: m.key, label: m.label ?? m.key, kind: 'number' as const })),
+  ];
+  const chart: ChartHint = { type: 'bar', x: 'label', y: keys[0] ?? 'label' };
+  return { columns, rows: shaped, chart };
+}
+
 /** Execute and shape into ReportResultData, applying date-grain bucketing in JS. */
 export async function runBuilderQuery(
   db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery,
 ): Promise<ReportResultData> {
+  if (q.metrics && q.metrics.length > 0) return runWideQuery(db, model, q);
   const rows = (await compileBuilderQuery(db, model, q).execute()) as { value: number; label?: unknown; series?: unknown }[];
   const d = q.dimension ? dim(model, q.dimension.key) : undefined;
 
