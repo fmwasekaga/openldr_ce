@@ -541,6 +541,11 @@ export const pt: EnShape = {
       column: 'Coluna da métrica',
       columnPlaceholder: '(coluna…)',
       add: 'Adicionar métrica',
+      typeColumn: 'Coluna',
+      typeRatio: 'Rácio',
+      numerator: 'Numerador',
+      denominator: 'Denominador',
+      decimals: 'Casas decimais',
     },
     parameters: {
       title: 'Parâmetros do relatório',
