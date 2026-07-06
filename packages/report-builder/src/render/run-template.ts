@@ -14,12 +14,20 @@ function subst(value: unknown, params: Record<string, string>): unknown {
   });
 }
 
+function isBlankValue(v: unknown): boolean {
+  if (v === null || v === undefined || v === '') return true;
+  if (Array.isArray(v)) return v.length === 0 || v.every((x) => x === null || x === undefined || x === '');
+  return false;
+}
+
 /** Return a deep copy of `q` with any `{{param.<id>}}` tokens in builder filter values or
  *  sql `values` replaced by the supplied param values. Pure — does not mutate `q`. */
 export function resolveQueryParams(q: WidgetQuery, params: Record<string, string>): WidgetQuery {
   const clone = JSON.parse(JSON.stringify(q)) as WidgetQuery;
   if (clone.mode === 'builder') {
-    clone.filters = (clone.filters ?? []).map((f) => ({ ...f, value: subst(f.value, params) as never }));
+    clone.filters = (clone.filters ?? [])
+      .map((f) => ({ ...f, value: subst(f.value, params) as never }))
+      .filter((f) => !isBlankValue(f.value));
   } else {
     if (clone.values) {
       const next: Record<string, unknown> = {};
