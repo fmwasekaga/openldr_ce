@@ -485,6 +485,8 @@ export const en = {
     },
     palette: {
       heading: 'Blocks',
+      collapse: 'Collapse palette',
+      expand: 'Expand palette',
       kind: {
         title: 'Title',
         text: 'Text',

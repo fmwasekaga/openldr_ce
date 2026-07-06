@@ -481,6 +481,8 @@ export const pt: EnShape = {
     },
     palette: {
       heading: 'Blocos',
+      collapse: 'Recolher paleta',
+      expand: 'Expandir paleta',
       kind: {
         title: 'Título',
         text: 'Texto',

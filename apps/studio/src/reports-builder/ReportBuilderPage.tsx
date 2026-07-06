@@ -10,6 +10,7 @@ import { createReportTemplate, getReportTemplate, updateReportTemplate, deleteRe
 import { useTemplateHistory } from '../forms-builder/useTemplateHistory';
 import { addRowWithBlock, duplicateRow, moveRow, moveRowFromCellDrag, newBlock, removeCell, setColSpan, setRepeat, updateBlockAt } from './reportBuilderModel';
 import { BlockPalette } from './BlockPalette';
+import { usePersistedToggle } from './usePersistedToggle';
 import { ReportCanvas, type CellRef } from './ReportCanvas';
 import { BlockInspector } from './BlockInspector';
 import { PreviewPdfDialog } from './PreviewPdfDialog';
@@ -37,6 +38,7 @@ export function ReportBuilderPage(): JSX.Element {
   const loadedIdRef = useRef<string | null>(null);
   const history = useTemplateHistory<ReportTemplate>(() => template);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const [paletteCollapsed, togglePalette] = usePersistedToggle('openldr-rb-palette-collapsed');
 
   useEffect(() => {
     if (!id || loadedIdRef.current === id) return;
@@ -119,7 +121,7 @@ export function ReportBuilderPage(): JSX.Element {
           {error && <div className="border-b border-border px-4 py-2 text-xs text-destructive">{error}</div>}
           <ParamValuesBar parameters={template.parameters} values={paramValues} onChange={setParamValues} />
           <div className="flex min-h-0 flex-1 overflow-hidden">
-            <div className="w-40 shrink-0 border-r border-border overflow-y-auto"><BlockPalette onAdd={addBlock} /></div>
+            <div className={`${paletteCollapsed ? 'w-12' : 'w-40'} shrink-0 border-r border-border overflow-y-auto`}><BlockPalette collapsed={paletteCollapsed} onToggle={togglePalette} onAdd={addBlock} /></div>
             <div className="min-w-0 flex-1 overflow-auto bg-muted/30" onClick={() => setSelected(null)}>
               <ReportCanvas template={template} selected={selected} onSelect={(row, cell) => setSelected({ row, cell })} data={blockData} issues={issues} />
             </div>
