@@ -545,6 +545,9 @@ export const en = {
       none: '(none)',
       editSql: 'Edit SQL',
       loadingSources: 'Loading data sources…',
+      simple: 'Simple',
+      advanced: 'Advanced (AND/OR)',
+      revertBlocked: "Advanced logic can't be shown as a simple list",
     },
     filters: {
       heading: 'Filters',
@@ -553,6 +556,13 @@ export const en = {
       addFilter: 'Add filter',
       noParameters: '(no parameters)',
       unbound: '(unbound)',
+    },
+    tree: {
+      and: 'AND',
+      or: 'OR',
+      addRule: 'Add rule',
+      addGroup: 'Add group',
+      removeGroup: 'Remove group',
     },
     metrics: {
       heading: 'Metrics (table columns)',

@@ -6,6 +6,8 @@ import { BuilderForm } from '../dashboard/editor/BuilderForm';
 import { FilterListEditor, type BuilderFilter } from './FilterListEditor';
 import { MetricsListEditor } from './MetricsListEditor';
 import { SqlQueryEditor } from './SqlQueryEditor';
+import { QueryGroupEditor } from './QueryGroupEditor';
+import { seedTreeFromFilters, isFlatRepresentable, flattenToFilters, newGroup } from './queryTreeModel';
 import type { Block, ReportParam } from '@openldr/report-builder/pure';
 
 type BuilderQuery = Extract<WidgetQuery, { mode: 'builder' }>;
@@ -45,6 +47,9 @@ export function QueryEditor({ block, parameters, sqlEnabled = false, onChange }:
 
   const showBuilder = !isTable || block.source !== 'primary';
   const dimensions = models.find((m) => m.id === builderQuery.model)?.dimensions ?? [];
+  const filterTree = builderQuery.filterTree;
+  const advanced = !!filterTree;
+  const canRevertToSimple = !advanced || (filterTree ? isFlatRepresentable(filterTree) : true);
   // SQL authoring for a new (non-sql) block requires the flag; an existing sql block stays viewable.
   const sqlToggleDisabled = !sqlEnabled && mode !== 'sql';
   const boundParams = Object.entries(sqlQuery.values ?? {})
@@ -78,12 +83,39 @@ export function QueryEditor({ block, parameters, sqlEnabled = false, onChange }:
             />
           )}
           {models.length > 0 && (
-            <FilterListEditor
-              filters={(builderQuery.filters ?? []) as BuilderFilter[]}
-              dimensions={dimensions}
-              parameters={parameters}
-              onChange={(f) => setQuery({ ...builderQuery, filters: f as BuilderQuery['filters'] })}
-            />
+            <>
+              <div className="flex gap-1 text-xs">
+                <Button
+                  type="button" size="sm" variant={!advanced ? 'default' : 'outline'} className="h-7 flex-1"
+                  disabled={advanced && !canRevertToSimple}
+                  title={advanced && !canRevertToSimple ? t('reportBuilder.query.revertBlocked') : undefined}
+                  onClick={() => { if (advanced && filterTree && canRevertToSimple) setQuery({ ...builderQuery, filters: flattenToFilters(filterTree), filterTree: undefined }); }}
+                >
+                  {t('reportBuilder.query.simple')}
+                </Button>
+                <Button
+                  type="button" size="sm" variant={advanced ? 'default' : 'outline'} className="h-7 flex-1"
+                  onClick={() => { if (!advanced) setQuery({ ...builderQuery, filterTree: seedTreeFromFilters(builderQuery.filters ?? []), filters: [] }); }}
+                >
+                  {t('reportBuilder.query.advanced')}
+                </Button>
+              </div>
+              {advanced ? (
+                <QueryGroupEditor
+                  group={filterTree ?? newGroup()}
+                  dimensions={dimensions}
+                  parameters={parameters}
+                  onChange={(g) => setQuery({ ...builderQuery, filterTree: g })}
+                />
+              ) : (
+                <FilterListEditor
+                  filters={(builderQuery.filters ?? []) as BuilderFilter[]}
+                  dimensions={dimensions}
+                  parameters={parameters}
+                  onChange={(f) => setQuery({ ...builderQuery, filters: f as BuilderQuery['filters'] })}
+                />
+              )}
+            </>
           )}
           {block.kind === 'chart' && models.length > 0 && (
             <label className="flex flex-col gap-1 text-xs">{t('reportBuilder.query.breakdown')}

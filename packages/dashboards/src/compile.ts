@@ -1,7 +1,7 @@
-import { type Kysely, sql, type SelectQueryBuilder } from 'kysely';
+import { type Kysely, sql, expressionBuilder, type SelectQueryBuilder } from 'kysely';
 import type { ExternalSchema } from '@openldr/db';
 import type { QueryModel, ModelDimension } from './models/registry';
-import type { WidgetQuery, Metric, QueryFilter, DateGrain } from './types';
+import type { WidgetQuery, Metric, QueryFilter, DateGrain, ConditionNode, ConditionRule } from './types';
 import type { ReportResultData, ReportColumn, ChartHint } from '@openldr/reporting';
 
 type BuilderQuery = Extract<WidgetQuery, { mode: 'builder' }>;
@@ -108,6 +108,32 @@ function applyFilters(qb: AnyQB, model: QueryModel, filters: QueryFilter[]): Any
   return q;
 }
 
+// Compile one rule to a Kysely expression, mirroring applyFilters' operator logic.
+function compileRule(eb: any, model: QueryModel, rule: ConditionRule): any {
+  const ref = dim(model, rule.dimension).column as never;
+  const v = rule.value;
+  switch (rule.op) {
+    case 'in': return eb(ref, 'in', (Array.isArray(v) ? v : [v]) as never);
+    case 'contains': return eb(ref, 'like', likePattern(v) as never);
+    case 'gte': return eb(ref, '>=', v as never);
+    case 'lte': return eb(ref, '<=', v as never);
+    case 'between':
+      return Array.isArray(v) && v.length === 2
+        ? eb.and([eb(ref, '>=', v[0] as never), eb(ref, '<=', v[1] as never)])
+        : null;
+    case 'eq':
+    default: return eb(ref, '=', v as never);
+  }
+}
+
+// Compile a node; returns null for an empty group (no rule descendants) so callers can skip it.
+function compileNode(eb: any, model: QueryModel, node: ConditionNode): any {
+  if (node.kind === 'rule') return node.value === null ? null : compileRule(eb, model, node);
+  const parts = node.children.map((c) => compileNode(eb, model, c)).filter((p: any) => p != null);
+  if (parts.length === 0) return null;
+  return node.combinator === 'or' ? eb.or(parts) : eb.and(parts);
+}
+
 /** Build the Kysely query (no grain bucketing — date grain is applied in JS after fetch). */
 export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery): AnyQB {
   const wide = !!(q.metrics && q.metrics.length > 0);
@@ -138,7 +164,14 @@ export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryMode
     const b = dim(model, q.breakdown.key);
     qb = qb.select(sql.ref(b.column).as('series')).groupBy(b.column as never).orderBy(b.column as never);
   }
-  qb = applyFilters(qb, model, q.filters ?? []);
+  if (q.filterTree) {
+    // Compile the tree once; apply only if it yields a predicate (an all-null/empty tree adds none).
+    const eb = expressionBuilder(qb as never) as never;
+    const expr = compileNode(eb, model, q.filterTree);
+    if (expr) qb = qb.where(expr as never) as AnyQB;
+  } else {
+    qb = applyFilters(qb, model, q.filters ?? []);
+  }
   return qb;
 }
 

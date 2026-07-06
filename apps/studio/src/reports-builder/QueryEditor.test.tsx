@@ -102,3 +102,25 @@ describe('QueryEditor multi-metric (Slice A)', () => {
     }));
   });
 });
+
+describe('QueryEditor Simple/Advanced toggle (Task 8)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('switching to Advanced seeds a filterTree from existing flat filters', async () => {
+    const onChange = vi.fn();
+    const block = {
+      kind: 'chart', chartType: 'bar', visual: {},
+      query: { mode: 'builder', model: 'observations', metric: { key: 'count', agg: 'count' }, filters: [{ dimension: 'code_text', op: 'eq', value: 'X' }] },
+    } as any;
+    render(<QueryEditor block={block} parameters={[]} onChange={onChange} />);
+    fireEvent.click(await screen.findByRole('button', { name: /advanced/i }));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+      query: expect.objectContaining({
+        filterTree: expect.objectContaining({
+          combinator: 'and',
+          children: [expect.objectContaining({ kind: 'rule', dimension: 'code_text' })],
+        }),
+      }),
+    }));
+  });
+});

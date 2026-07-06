@@ -33,4 +33,14 @@ describe('BuilderForm conditional metric (Slice A)', () => {
     fireEvent.change(screen.getByLabelText('Source'), { target: { value: 'observations' } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ model: 'observations', metrics: undefined }));
   });
+
+  it('clears the stale filterTree (and flat filters) when the source model changes', () => {
+    const onChange = vi.fn();
+    render(<BuilderForm models={models} value={{
+      mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count' }, filters: [],
+      filterTree: { kind: 'group', combinator: 'and', children: [{ kind: 'rule', dimension: 'status', op: 'eq', value: 'x' }] },
+    }} onChange={onChange} />);
+    fireEvent.change(screen.getByLabelText('Source'), { target: { value: 'observations' } });
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ model: 'observations', filterTree: undefined, filters: [] }));
+  });
 });

@@ -195,3 +195,54 @@ describe('derived metrics compile (Slice B)', () => {
     })).toThrow(/references unknown metric/i);
   });
 });
+
+describe('compileBuilderQuery filterTree (nested AND/OR)', () => {
+  const model = getModel('service_requests')!; // adjust to the file's existing model-fetch helper
+
+  it('compiles a nested AND/OR tree into and/or SQL', () => {
+    const q = {
+      mode: 'builder' as const, model: 'service_requests',
+      metric: { key: 'count', agg: 'count' as const }, filters: [],
+      filterTree: { kind: 'group', combinator: 'and', children: [
+        { kind: 'rule', dimension: 'status', op: 'eq', value: 'completed' },
+        { kind: 'group', combinator: 'or', children: [
+          { kind: 'rule', dimension: 'code_text', op: 'eq', value: 'Blood culture' },
+          { kind: 'rule', dimension: 'code_text', op: 'eq', value: 'Urine culture' },
+        ] },
+      ] },
+    };
+    const { sql } = compileBuilderQuery(db, model, q as any).compile();
+    expect(sql).toMatch(/where/i);
+    expect(sql).toMatch(/\bor\b/i);   // the OR subgroup
+    expect(sql).toMatch(/\band\b/i);  // the AND root
+  });
+
+  it('ignores flat filters when a filterTree is present (precedence)', () => {
+    const q = {
+      mode: 'builder' as const, model: 'service_requests',
+      metric: { key: 'count', agg: 'count' as const },
+      filters: [{ dimension: 'priority', op: 'eq', value: 'urgent' }],
+      filterTree: { kind: 'group', combinator: 'and', children: [ { kind: 'rule', dimension: 'status', op: 'eq', value: 'completed' } ] },
+    };
+    const { sql } = compileBuilderQuery(db, model, q as any).compile();
+    expect(sql).not.toMatch(/priority/i); // flat filter superseded
+  });
+
+  it('emits SQL identical to today when no filterTree (backward-compat)', () => {
+    const q = { mode: 'builder' as const, model: 'service_requests', metric: { key: 'count', agg: 'count' as const }, filters: [{ dimension: 'status', op: 'eq', value: 'completed' }] };
+    const { sql } = compileBuilderQuery(db, model, q as any).compile();
+    expect(sql).toMatch(/where/i);
+    expect(sql).toMatch(/status/i);
+    expect(sql).not.toMatch(/\bor\b/i);
+  });
+
+  it('adds no predicate (and does not throw) when every rule compiles away', () => {
+    const q = {
+      mode: 'builder' as const, model: 'service_requests',
+      metric: { key: 'count', agg: 'count' as const }, filters: [],
+      filterTree: { kind: 'group', combinator: 'and', children: [ { kind: 'rule', dimension: 'status', op: 'eq', value: null } ] },
+    };
+    const { sql } = compileBuilderQuery(db, model, q as any).compile();
+    expect(sql).not.toMatch(/where/i); // null-valued rule → no where clause, no crash
+  });
+});

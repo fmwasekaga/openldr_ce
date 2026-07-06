@@ -21,6 +21,21 @@ export const QueryFilterSchema = z.object({
 });
 export type QueryFilter = z.infer<typeof QueryFilterSchema>;
 
+// A single condition — reuses the flat filter shape (dimension/op/value) plus a discriminant.
+export const ConditionRuleSchema = QueryFilterSchema.extend({ kind: z.literal('rule') });
+export type ConditionRule = z.infer<typeof ConditionRuleSchema>;
+
+// A recursive AND/OR group of rules and nested groups. Zod needs z.lazy + an explicit type.
+export type ConditionNode = ConditionRule | ConditionGroup;
+export interface ConditionGroup { kind: 'group'; combinator: 'and' | 'or'; children: ConditionNode[] }
+export const ConditionGroupSchema: z.ZodType<ConditionGroup> = z.lazy(() =>
+  z.object({
+    kind: z.literal('group'),
+    combinator: z.enum(['and', 'or']),
+    children: z.array(z.union([ConditionRuleSchema, ConditionGroupSchema])),
+  }),
+);
+
 export const DerivedRatioSchema = z.object({
   numerator: z.string(),            // key of another (aggregate) metric in the same query
   denominator: z.string(),          // key of another (aggregate) metric
@@ -59,6 +74,7 @@ export const WidgetQuerySchema = z.discriminatedUnion('mode', [
     dimension: DimensionRefSchema.optional(),
     breakdown: z.object({ key: z.string() }).optional(),
     filters: z.array(QueryFilterSchema).default([]),
+    filterTree: ConditionGroupSchema.optional(), // recursive AND/OR tree; supersedes `filters` when present
     variableBindings: z.record(z.string()).optional(),
   }),
   z.object({

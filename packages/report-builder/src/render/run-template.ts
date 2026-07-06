@@ -20,6 +20,17 @@ function isBlankValue(v: unknown): boolean {
   return false;
 }
 
+// Substitute params in rule values and drop blank rules / emptied groups. Returns null if the
+// node resolves to nothing (a blank rule, or a group with no surviving children).
+function resolveNode(node: any, params: Record<string, string>): any {
+  if (node.kind === 'rule') {
+    const value = subst(node.value, params);
+    return isBlankValue(value) ? null : { ...node, value };
+  }
+  const children = node.children.map((c: any) => resolveNode(c, params)).filter((c: any) => c != null);
+  return children.length ? { ...node, children } : null;
+}
+
 /** Return a deep copy of `q` with any `{{param.<id>}}` tokens in builder filter values or
  *  sql `values` replaced by the supplied param values. Pure — does not mutate `q`. */
 export function resolveQueryParams(q: WidgetQuery, params: Record<string, string>): WidgetQuery {
@@ -28,6 +39,10 @@ export function resolveQueryParams(q: WidgetQuery, params: Record<string, string
     clone.filters = (clone.filters ?? [])
       .map((f) => ({ ...f, value: subst(f.value, params) as never }))
       .filter((f) => !isBlankValue(f.value));
+    if ((clone as any).filterTree) {
+      const resolved = resolveNode((clone as any).filterTree, params);
+      if (resolved) (clone as any).filterTree = resolved; else delete (clone as any).filterTree;
+    }
   } else {
     if (clone.values) {
       const next: Record<string, unknown> = {};

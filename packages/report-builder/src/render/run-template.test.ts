@@ -69,6 +69,32 @@ describe('resolveQueryParams blank-filter drop (Slice G)', () => {
   });
 });
 
+describe('resolveQueryParams filterTree', () => {
+  const base = { mode: 'builder' as const, model: 'observations', metric: { key: 'count', agg: 'count' as const }, filters: [] };
+
+  it('substitutes a bound param inside a rule', () => {
+    const q = { ...base, filterTree: { kind: 'group', combinator: 'and', children: [ { kind: 'rule', dimension: 'effective_date_time', op: 'gte', value: '{{param.from}}' } ] } };
+    const r = resolveQueryParams(q as any, { from: '2026-01-01' }) as any;
+    expect(r.filterTree.children[0].value).toBe('2026-01-01');
+  });
+
+  it('drops a rule whose param resolves blank, then prunes the emptied group', () => {
+    const q = { ...base, filterTree: { kind: 'group', combinator: 'and', children: [
+      { kind: 'rule', dimension: 'code_text', op: 'eq', value: 'Blood culture' },
+      { kind: 'group', combinator: 'or', children: [ { kind: 'rule', dimension: 'effective_date_time', op: 'gte', value: '{{param.from}}' } ] },
+    ] } };
+    const r = resolveQueryParams(q as any, {}) as any; // from is unset
+    expect(r.filterTree.children).toHaveLength(1);              // the empty OR subgroup pruned
+    expect(r.filterTree.children[0].kind).toBe('rule');
+  });
+
+  it('deletes filterTree entirely when the whole tree prunes to empty', () => {
+    const q = { ...base, filterTree: { kind: 'group', combinator: 'and', children: [ { kind: 'rule', dimension: 'effective_date_time', op: 'lte', value: '{{param.to}}' } ] } };
+    const r = resolveQueryParams(q as any, {}) as any;
+    expect(r.filterTree).toBeUndefined();
+  });
+});
+
 describe('runTemplate', () => {
   it('resolves the primary dataset and each data block, keyed by row:cell', async () => {
     const t = createEmptyTemplate('rt', 'R');

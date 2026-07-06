@@ -538,6 +538,9 @@ export const fr: EnShape = {
       none: '(aucun)',
       editSql: 'Modifier le SQL',
       loadingSources: 'Chargement des sources de données…',
+      simple: 'Simple',
+      advanced: 'Avancé (ET/OU)',
+      revertBlocked: 'La logique avancée ne peut pas être affichée en liste simple',
     },
     filters: {
       heading: 'Filtres',
@@ -546,6 +549,13 @@ export const fr: EnShape = {
       addFilter: 'Ajouter un filtre',
       noParameters: '(aucun paramètre)',
       unbound: '(non lié)',
+    },
+    tree: {
+      and: 'ET',
+      or: 'OU',
+      addRule: 'Ajouter une règle',
+      addGroup: 'Ajouter un groupe',
+      removeGroup: 'Supprimer le groupe',
     },
     metrics: {
       heading: 'Mesures (colonnes du tableau)',
