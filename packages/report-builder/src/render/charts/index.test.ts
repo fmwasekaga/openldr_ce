@@ -17,7 +17,7 @@ const box = { x: 40, y: 40, w: 400, h: 200 };
 const data: ChartData = { title: 'Resistance', categories: ['E. coli', 'K. pneu'], series: [{ name: '%R', values: [41, 52] }] };
 
 describe('drawChart', () => {
-  for (const kind of ['bar', 'line', 'pie', 'kpi'] as const) {
+  for (const kind of ['bar', 'line', 'pie', 'kpi', 'area', 'donut', 'row', 'scatter'] as const) {
     it(`draws a ${kind} chart without throwing and emits a valid PDF`, async () => {
       const buf = await render((doc) => drawChart(doc, box, kind, data, {}));
       expect(buf.subarray(0, 5).toString()).toBe('%PDF-');
@@ -29,4 +29,13 @@ describe('drawChart', () => {
     const buf = await render((doc) => drawChart(doc, box, 'bar', { title: 'Empty', categories: [], series: [] }, {}));
     expect(buf.subarray(0, 5).toString()).toBe('%PDF-');
   });
+
+  const multi: ChartData = { title: 'Multi', categories: ['A', 'B', 'C'], series: [{ name: 'R', values: [1, 2, 3] }, { name: 'S', values: [3, 2, 1] }] };
+  for (const kind of ['area', 'row', 'scatter', 'donut'] as const) {
+    it(`draws a multi-series ${kind} chart without throwing`, async () => {
+      const buf = await render((doc) => drawChart(doc, box, kind, multi, {}));
+      expect(buf.subarray(0, 5).toString()).toBe('%PDF-');
+      expect(buf.length).toBeGreaterThan(500);
+    });
+  }
 });

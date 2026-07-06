@@ -33,7 +33,7 @@ export const BlockSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('title'), text: z.string().default(''), style: BlockStyleSchema }),
   z.object({ kind: z.literal('text'), content: z.string().default(''), style: BlockStyleSchema }),
   z.object({ kind: z.literal('kpi'), query: WidgetQuerySchema, label: z.string().default(''), format: z.string().optional() }),
-  z.object({ kind: z.literal('chart'), query: WidgetQuerySchema, chartType: z.enum(['bar', 'line', 'pie']), visual: z.record(z.unknown()).default({}) }),
+  z.object({ kind: z.literal('chart'), query: WidgetQuerySchema, chartType: z.enum(['bar', 'line', 'pie', 'area', 'donut', 'row', 'scatter']), visual: z.record(z.unknown()).default({}) }),
   z.object({
     kind: z.literal('table'),
     source: z.union([z.literal('primary'), WidgetQuerySchema]),

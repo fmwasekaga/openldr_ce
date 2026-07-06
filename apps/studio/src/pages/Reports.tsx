@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import { AppShell } from '../shell/AppShell';
 import {
   fetchReports, fetchReport, fetchReportOptions, logReportRun,
@@ -20,6 +19,7 @@ import { computeSummaryMetrics } from '../reports/lib/report-summary';
 import {
   loadPinned, savePinned, togglePinned, loadLastParams, saveLastParams,
 } from '../reports/lib/report-preferences';
+import { StarterGalleryDialog } from '@/reports-builder/StarterGalleryDialog';
 
 type Tab = 'document' | 'spreadsheet';
 
@@ -256,8 +256,13 @@ export function Reports() {
 }
 
 export function NewReportButton(): JSX.Element | null {
-  const navigate = useNavigate();
   const { hasRole } = useAuth();
+  const [galleryOpen, setGalleryOpen] = useState(false);
   if (!(hasRole('lab_admin') || hasRole('lab_manager'))) return null;
-  return <Button size="sm" onClick={() => navigate('/reports/builder/new')}>New report</Button>;
+  return (
+    <>
+      <Button size="sm" onClick={() => setGalleryOpen(true)}>New report</Button>
+      <StarterGalleryDialog open={galleryOpen} onOpenChange={setGalleryOpen} />
+    </>
+  );
 }

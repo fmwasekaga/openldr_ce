@@ -1,11 +1,11 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core';
 import { AppShell } from '@/shell/AppShell';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { createEmptyTemplate, lintReportTemplate, type Block, type BlockKind, type PageSpec, type ReportTemplate } from '@openldr/report-builder/pure';
+import { createEmptyTemplate, getStarterTemplate, lintReportTemplate, type Block, type BlockKind, type PageSpec, type ReportTemplate, type StarterId } from '@openldr/report-builder/pure';
 import { createReportTemplate, getReportTemplate, updateReportTemplate, deleteReportTemplate, fetchClientConfig } from '../api';
 import { useTemplateHistory } from '../forms-builder/useTemplateHistory';
 import { addRowWithBlock, duplicateRow, moveRow, moveRowFromCellDrag, newBlock, removeCell, setColSpan, setRepeat, updateBlockAt } from './reportBuilderModel';
@@ -26,8 +26,20 @@ export function ReportBuilderPage(): JSX.Element {
   const { t } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [tplId, setTplId] = useState<string | null>(id ?? null);
-  const [template, setTemplate] = useState<ReportTemplate>(() => createEmptyTemplate(`rt-${Date.now()}`, ''));
+  const [template, setTemplate] = useState<ReportTemplate>(() => {
+    const starter = searchParams.get('starter');
+    const fresh = `rt-${Date.now()}`;
+    if (starter && starter !== 'blank') {
+      try {
+        return { ...getStarterTemplate(starter as StarterId), id: fresh, status: 'draft' as const };
+      } catch {
+        return createEmptyTemplate(fresh, ''); // unknown starter → blank
+      }
+    }
+    return createEmptyTemplate(fresh, '');
+  });
   const [paramValues, setParamValues] = useState<Record<string, string>>({});
   const [paramsOpen, setParamsOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
