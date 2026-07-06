@@ -56,4 +56,11 @@ describe('formatCell (Slice G)', () => {
     expect(formatCell(4, 'number')).toBe('4');
     expect(formatCell(null)).toBe('');
   });
+  it('honors the configured decimals', () => {
+    expect(formatCell(33.33, 'percent', 2)).toBe('33.33%');
+    expect(formatCell(50, 'percent', 0)).toBe('50%');
+  });
+  it('defaults to 1 decimal when none is given', () => {
+    expect(formatCell(50, 'percent')).toBe('50.0%');
+  });
 });

@@ -154,4 +154,23 @@ describe('runBuilderQuery derived ratio (Slice B)', () => {
     });
     expect(res.rows[0]).toEqual(expect.objectContaining({ r: 0, i: 0, ratio: 0 }));
   });
+
+  it('carries the derived metric decimals onto its result column', async () => {
+    const mem = memObs();
+    mem.public.none(`insert into observations (interpretation_code) values ('R'),('R'),('S')`);
+    const db = mem.adapters.createKysely() as unknown as import('kysely').Kysely<any>;
+    const model = getModel('observations')!;
+    const res = await runBuilderQuery(db, model, {
+      mode: 'builder', model: 'observations',
+      metric: { key: 'tested', agg: 'count' },
+      metrics: [
+        { key: 'tested', agg: 'count' },
+        { key: 'r', agg: 'count', where: [{ dimension: 'interpretation_code', op: 'eq', value: 'R' }] },
+        { key: 'pct', agg: 'count', derived: { numerator: 'r', denominator: 'tested', scale: 100, decimals: 2 } },
+      ],
+      filters: [],
+    });
+    expect(res.columns.find((c) => c.key === 'pct')?.decimals).toBe(2);
+    expect(res.columns.find((c) => c.key === 'tested')?.decimals).toBeUndefined();
+  });
 });

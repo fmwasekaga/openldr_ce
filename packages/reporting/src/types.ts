@@ -33,6 +33,7 @@ export interface ReportColumn {
   key: string;
   label: string;
   kind: 'string' | 'number' | 'percent' | 'date';
+  decimals?: number;
 }
 
 export interface ReportResultData {

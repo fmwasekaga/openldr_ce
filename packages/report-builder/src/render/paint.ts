@@ -20,19 +20,20 @@ function drawErrorPlaceholder(doc: PDFKit.PDFDocument, box: PositionedBox, msg: 
   doc.fillColor('#000');
 }
 
-export function formatCell(value: unknown, kind?: string): string {
+export function formatCell(value: unknown, kind?: string, decimals = 1): string {
   if (kind === 'percent') {
+    if (value === '' || value === null || value === undefined) return '';
     const n = Number(value);
-    return Number.isFinite(n) && value !== '' && value !== null && value !== undefined ? `${n.toFixed(1)}%` : '';
+    return Number.isFinite(n) ? `${n.toFixed(decimals)}%` : '';
   }
   return String(value ?? '');
 }
 
 function drawTable(doc: PDFKit.PDFDocument, box: PositionedBox, block: Extract<Block, { kind: 'table' }>, cell: CellData | undefined, bodyBottom: number): void {
   const result = cell?.result;
-  const columns: { key: string; label: string; kind?: string }[] = block.columns.length
+  const columns: { key: string; label: string; kind?: string; decimals?: number }[] = block.columns.length
     ? block.columns
-    : (result?.columns.map((c) => ({ key: c.key, label: c.label, kind: c.kind })) ?? []);
+    : (result?.columns.map((c) => ({ key: c.key, label: c.label, kind: c.kind, decimals: c.decimals })) ?? []);
   const rows = result?.rows ?? [];
   const colW = box.w / Math.max(1, columns.length);
   let y = box.y;
@@ -47,7 +48,7 @@ function drawTable(doc: PDFKit.PDFDocument, box: PositionedBox, block: Extract<B
   rows.forEach((row, idx) => {
     if (y + TABLE_ROW_H > bodyBottom) { doc.addPage(); y = doc.page.margins.top; header(); doc.font('Helvetica').fontSize(8).fillColor('#000'); }
     if (idx % 2 === 1) { doc.rect(box.x, y, box.w, TABLE_ROW_H).fillColor('#f5f5f5').fill().fillColor('#000'); }
-    columns.forEach((c, i) => doc.text(formatCell(row[c.key], c.kind), box.x + i * colW + 2, y + 4, { width: colW - 4, ellipsis: true }));
+    columns.forEach((c, i) => doc.text(formatCell(row[c.key], c.kind, c.decimals), box.x + i * colW + 2, y + 4, { width: colW - 4, ellipsis: true }));
     y += TABLE_ROW_H;
   });
   if (rows.length === 0) doc.fillColor('#888').text('(no rows)', box.x + 2, y + 4).fillColor('#000');
