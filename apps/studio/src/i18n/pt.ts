@@ -547,6 +547,13 @@ export const pt: EnShape = {
       noParameters: '(sem parâmetros)',
       unbound: '(não vinculado)',
     },
+    tree: {
+      and: 'E',
+      or: 'OU',
+      addRule: 'Adicionar regra',
+      addGroup: 'Adicionar grupo',
+      removeGroup: 'Remover grupo',
+    },
     metrics: {
       heading: 'Métricas (colunas da tabela)',
       label: 'Rótulo da métrica',

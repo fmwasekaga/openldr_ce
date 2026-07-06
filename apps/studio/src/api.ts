@@ -256,11 +256,15 @@ export interface WidgetVariableDef {
   defaultRange?: { from: string; to: string } | null;
 }
 
+export interface ConditionRule { kind: 'rule'; dimension: string; op: string; value: unknown }
+export interface ConditionGroup { kind: 'group'; combinator: 'and' | 'or'; children: (ConditionRule | ConditionGroup)[] }
+
 export type WidgetQuery =
   | { mode: 'builder'; model: string;
       metric: { key: string; label?: string; agg: string; column?: string; where?: { dimension: string; op: string; value: unknown }[]; derived?: { numerator: string; denominator: string; scale?: number; decimals?: number } };
       metrics?: { key: string; label?: string; agg: string; column?: string; where?: { dimension: string; op: string; value: unknown }[]; derived?: { numerator: string; denominator: string; scale?: number; decimals?: number } }[];
       dimension?: { key: string; grain?: string }; breakdown?: { key: string }; filters: { dimension: string; op: string; value: unknown }[];
+      filterTree?: ConditionGroup;
       variableBindings?: Record<string, string> }
   | { mode: 'sql'; sql: string; variableBindings?: Record<string, string>; variables?: Record<string, WidgetVariableDef>;
       values?: Record<string, string | number | null | { from: string; to: string }> };

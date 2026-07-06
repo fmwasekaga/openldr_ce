@@ -554,6 +554,13 @@ export const en = {
       noParameters: '(no parameters)',
       unbound: '(unbound)',
     },
+    tree: {
+      and: 'AND',
+      or: 'OR',
+      addRule: 'Add rule',
+      addGroup: 'Add group',
+      removeGroup: 'Remove group',
+    },
     metrics: {
       heading: 'Metrics (table columns)',
       label: 'Metric label',
