@@ -541,6 +541,11 @@ export const fr: EnShape = {
       column: 'Colonne de la mesure',
       columnPlaceholder: '(colonne…)',
       add: 'Ajouter une mesure',
+      typeColumn: 'Colonne',
+      typeRatio: 'Ratio',
+      numerator: 'Numérateur',
+      denominator: 'Dénominateur',
+      decimals: 'Décimales',
     },
     parameters: {
       title: 'Paramètres du rapport',

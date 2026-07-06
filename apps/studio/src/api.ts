@@ -258,8 +258,8 @@ export interface WidgetVariableDef {
 
 export type WidgetQuery =
   | { mode: 'builder'; model: string;
-      metric: { key: string; label?: string; agg: string; column?: string; where?: { dimension: string; op: string; value: unknown }[] };
-      metrics?: { key: string; label?: string; agg: string; column?: string; where?: { dimension: string; op: string; value: unknown }[] }[];
+      metric: { key: string; label?: string; agg: string; column?: string; where?: { dimension: string; op: string; value: unknown }[]; derived?: { numerator: string; denominator: string; scale?: number; decimals?: number } };
+      metrics?: { key: string; label?: string; agg: string; column?: string; where?: { dimension: string; op: string; value: unknown }[]; derived?: { numerator: string; denominator: string; scale?: number; decimals?: number } }[];
       dimension?: { key: string; grain?: string }; breakdown?: { key: string }; filters: { dimension: string; op: string; value: unknown }[];
       variableBindings?: Record<string, string> }
   | { mode: 'sql'; sql: string; variableBindings?: Record<string, string>; variables?: Record<string, WidgetVariableDef>;

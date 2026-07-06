@@ -545,6 +545,11 @@ export const en = {
       column: 'Metric column',
       columnPlaceholder: '(column…)',
       add: 'Add metric',
+      typeColumn: 'Column',
+      typeRatio: 'Ratio',
+      numerator: 'Numerator',
+      denominator: 'Denominator',
+      decimals: 'Decimals',
     },
     parameters: {
       title: 'Report Parameters',

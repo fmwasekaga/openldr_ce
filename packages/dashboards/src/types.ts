@@ -21,10 +21,19 @@ export const QueryFilterSchema = z.object({
 });
 export type QueryFilter = z.infer<typeof QueryFilterSchema>;
 
+export const DerivedRatioSchema = z.object({
+  numerator: z.string(),            // key of another (aggregate) metric in the same query
+  denominator: z.string(),          // key of another (aggregate) metric
+  scale: z.number().default(100),   // ×100 → percent
+  decimals: z.number().default(1),  // round to N decimals
+});
+export type DerivedRatio = z.infer<typeof DerivedRatioSchema>;
+
 export const MetricSchema = z.object({
   key: z.string(), label: z.string().optional(),
   agg: z.enum(AGGS), column: z.string().optional(),
   where: z.array(QueryFilterSchema).optional(), // Slice A: conditional predicate (ANDed)
+  derived: DerivedRatioSchema.optional(),       // Slice B: computed post-aggregation, not selected in SQL
 });
 export type Metric = z.infer<typeof MetricSchema>;
 

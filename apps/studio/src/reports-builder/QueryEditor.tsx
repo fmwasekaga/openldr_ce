@@ -66,7 +66,7 @@ export function QueryEditor({ block, parameters, sqlEnabled = false, onChange }:
             <MetricsListEditor
               metrics={builderQuery.metrics ?? []}
               dimensions={dimensions}
-              onChange={(ms) => setQuery({ ...builderQuery, metrics: ms.length ? ms : undefined, metric: ms[0] ?? builderQuery.metric })}
+              onChange={(ms) => setQuery({ ...builderQuery, metrics: ms.length ? ms : undefined, metric: ms.find((m) => !m.derived) ?? builderQuery.metric })}
             />
           )}
           {models.length > 0 && (

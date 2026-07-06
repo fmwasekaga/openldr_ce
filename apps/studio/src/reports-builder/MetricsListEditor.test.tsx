@@ -36,3 +36,43 @@ describe('MetricsListEditor', () => {
     expect(onChange).toHaveBeenCalledWith([{ key: 'm2', agg: 'count' }, expect.objectContaining({ key: 'm3' })]);
   });
 });
+
+describe('MetricsListEditor ratio metrics (Slice B)', () => {
+  it('toggles a metric to a ratio with default numerator/denominator/decimals', () => {
+    const onChange = vi.fn();
+    render(<MetricsListEditor metrics={[{ key: 'tested', label: 'Tested', agg: 'count' }, { key: 'r', label: 'R', agg: 'count' }]} dimensions={dims} onChange={onChange} />);
+    const ratioButtons = screen.getAllByRole('button', { name: /^ratio$/i });
+    fireEvent.click(ratioButtons[1]);
+    expect(onChange).toHaveBeenCalledWith([
+      { key: 'tested', label: 'Tested', agg: 'count' },
+      expect.objectContaining({ key: 'r', derived: { numerator: 'tested', denominator: 'tested', scale: 100, decimals: 1 } }),
+    ]);
+  });
+
+  it('edits the ratio numerator from the other aggregate metrics', () => {
+    const onChange = vi.fn();
+    render(<MetricsListEditor metrics={[
+      { key: 'tested', label: 'Tested', agg: 'count' },
+      { key: 'r', label: 'R', agg: 'count' },
+      { key: 'pct', label: '%R', agg: 'count', derived: { numerator: 'tested', denominator: 'tested', scale: 100, decimals: 1 } },
+    ]} dimensions={dims} onChange={onChange} />);
+    fireEvent.change(screen.getByLabelText(/numerator/i), { target: { value: 'r' } });
+    expect(onChange).toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({ key: 'pct', derived: expect.objectContaining({ numerator: 'r' }) }),
+    ]));
+  });
+
+  it('toggling back to Column clears derived', () => {
+    const onChange = vi.fn();
+    render(<MetricsListEditor metrics={[
+      { key: 'tested', agg: 'count' },
+      { key: 'pct', agg: 'count', derived: { numerator: 'tested', denominator: 'tested', scale: 100, decimals: 1 } },
+    ]} dimensions={dims} onChange={onChange} />);
+    const colButtons = screen.getAllByRole('button', { name: /^column$/i });
+    fireEvent.click(colButtons[1]);
+    expect(onChange).toHaveBeenCalledWith([
+      { key: 'tested', agg: 'count' },
+      expect.objectContaining({ key: 'pct', derived: undefined }),
+    ]);
+  });
+});
