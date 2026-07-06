@@ -74,3 +74,26 @@ describe('lintReportTemplate', () => {
     expect(codes(withRows(rows, { parameters: params, dataset } as never))).not.toContain('unused-parameter');
   });
 });
+
+describe('lintReportTemplate daterange params (Slice G follow-up)', () => {
+  const tableWithDateFilters = (params: ReportTemplate['parameters']) => withRows(
+    [{ id: 'r', cells: [{ colSpan: 12, block: { kind: 'table', columns: [], source: {
+      mode: 'builder', model: 'observations', metric: { key: 'tested', agg: 'count' },
+      filters: [
+        { dimension: 'effective_date_time', op: 'gte', value: '{{param.from}}' },
+        { dimension: 'effective_date_time', op: 'lte', value: '{{param.to}}' },
+      ],
+    } } }] }] as never,
+    { parameters: params },
+  );
+
+  it('accepts {{param.from}}/{{param.to}} when a daterange param is defined (no orphan errors, no unused warning)', () => {
+    const cs = codes(tableWithDateFilters([{ id: 'dateRange', label: 'Date range', type: 'daterange', required: false }] as never));
+    expect(cs).not.toContain('orphaned-param-ref');
+    expect(cs).not.toContain('unused-parameter');
+  });
+
+  it('still flags {{param.from}} as orphaned when no daterange param is defined', () => {
+    expect(codes(tableWithDateFilters([] as never))).toContain('orphaned-param-ref');
+  });
+});

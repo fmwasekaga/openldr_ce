@@ -22,6 +22,16 @@
   --border: #e4e4e7; --border-2: #d4d4d8; --rule: #e4e4e7;
   --text: #18181b; --text-muted: #71717a; --table-head: #f4f4f5;
 }
+/* The report-builder canvas "page" is always a printed white sheet. Pin the light-theme base
+   variables locally so title/text blocks, data-widget tables, muted placeholders, and the page
+   number render dark-on-white regardless of the app theme (mirrors the always-light PDF). */
+.report-page-surface {
+  --bg: #ffffff; --sidebar: #fafafa; --card: #ffffff;
+  --border: #e4e4e7; --border-2: #d4d4d8; --rule: #e4e4e7;
+  --text: #18181b; --text-muted: #71717a; --table-head: #f4f4f5;
+  color-scheme: light;
+  color: var(--text);
+}
 * { box-sizing: border-box; }
 /* Base element typography lives in @layer base so Tailwind utilities (e.g. text-inherit,
    text-foreground) and scoped .doc-content rules can override it — otherwise these
