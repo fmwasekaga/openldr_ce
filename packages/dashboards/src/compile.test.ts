@@ -296,3 +296,25 @@ describe('collectUsedJoins', () => {
     expect(collectUsedJoins(model, { ...base, dimension: { key: 'code_text' } } as any)).toEqual([]);
   });
 });
+
+describe('compileBuilderQuery cross-model join (facility)', () => {
+  const model = getModel('observations')!;
+  const base = { mode: 'builder' as const, model: 'observations', metric: { key: 'count', agg: 'count' as const } };
+  it('adds a LEFT JOIN with a replace() ON + qualified group-by when grouping by a joined dimension', () => {
+    const { sql } = compileBuilderQuery(db, model, { ...base, dimension: { key: 'facility' }, filters: [] } as any).compile();
+    expect(sql).toMatch(/left join "patients" as "jp"/i);
+    expect(sql).toMatch(/replace\("observations"\."subject_ref"/i);
+    expect(sql).toMatch(/group by "jp"\."managing_organization"/i);
+  });
+  it('adds the join when facility is only a filter, and qualifies the base group-by', () => {
+    const { sql } = compileBuilderQuery(db, model, { ...base, dimension: { key: 'code_text' }, filters: [{ dimension: 'facility', op: 'eq', value: 'Org/1' }] } as any).compile();
+    expect(sql).toMatch(/left join "patients" as "jp"/i);
+    expect(sql).toMatch(/group by "observations"\."code_text"/i);
+  });
+  it('a join-free query emits byte-identical unqualified SQL (backward-compat)', () => {
+    const { sql } = compileBuilderQuery(db, model, { ...base, dimension: { key: 'code_text' }, filters: [] } as any).compile();
+    expect(sql).not.toMatch(/left join/i);
+    expect(sql).toMatch(/group by "code_text"/i);
+    expect(sql).not.toMatch(/"observations"\."code_text"/i);
+  });
+});
