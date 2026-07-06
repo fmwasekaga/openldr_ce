@@ -616,6 +616,18 @@ export const en = {
       description: 'Report PDF preview',
       rendering: 'Rendering…',
     },
+    gallery: {
+      title: 'Start a new report',
+      subtitle: 'Pick a starter, then customize it.',
+      category: { general: 'General', amr: 'AMR', operational: 'Operational', quality: 'Quality' },
+      starters: {
+        blank: { name: 'Blank report', description: 'Start from an empty canvas.' },
+        'amr-resistance': { name: 'AMR Resistance', description: 'Resistant/Intermediate/Susceptible counts and %R by antibiotic.' },
+        'test-volume': { name: 'Test Volume', description: 'Monthly order volume, KPIs, and orders by test.' },
+        'patient-demographics': { name: 'Patient Demographics', description: 'Patient counts by gender.' },
+        'specimen-results': { name: 'Specimen & Results', description: 'Specimen types and results by analyte.' },
+      },
+    },
   },
 } as const;
 

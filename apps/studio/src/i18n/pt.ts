@@ -609,5 +609,17 @@ export const pt: EnShape = {
       description: 'Pré-visualização do PDF do relatório',
       rendering: 'A renderizar…',
     },
+    gallery: {
+      title: 'Iniciar um novo relatório',
+      subtitle: 'Escolha um modelo inicial e personalize-o.',
+      category: { general: 'Geral', amr: 'RAM', operational: 'Operacional', quality: 'Qualidade' },
+      starters: {
+        blank: { name: 'Relatório em branco', description: 'Começar de uma tela vazia.' },
+        'amr-resistance': { name: 'Resistência RAM', description: 'Contagens R/I/S e %R por antibiótico.' },
+        'test-volume': { name: 'Volume de exames', description: 'Volume mensal de pedidos, KPIs e pedidos por exame.' },
+        'patient-demographics': { name: 'Demografia de pacientes', description: 'Contagem de pacientes por sexo.' },
+        'specimen-results': { name: 'Amostras e resultados', description: 'Tipos de amostra e resultados por analito.' },
+      },
+    },
   },
 };

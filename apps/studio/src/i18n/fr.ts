@@ -609,5 +609,17 @@ export const fr: EnShape = {
       description: 'Aperçu PDF du rapport',
       rendering: 'Rendu en cours…',
     },
+    gallery: {
+      title: 'Créer un nouveau rapport',
+      subtitle: 'Choisissez un modèle, puis personnalisez-le.',
+      category: { general: 'Général', amr: 'RAM', operational: 'Opérationnel', quality: 'Qualité' },
+      starters: {
+        blank: { name: 'Rapport vierge', description: 'Partir d’une page vierge.' },
+        'amr-resistance': { name: 'Résistance RAM', description: 'Décomptes R/I/S et %R par antibiotique.' },
+        'test-volume': { name: 'Volume d’analyses', description: 'Volume mensuel de commandes, indicateurs et commandes par test.' },
+        'patient-demographics': { name: 'Démographie des patients', description: 'Nombre de patients par sexe.' },
+        'specimen-results': { name: 'Échantillons et résultats', description: 'Types d’échantillons et résultats par analyte.' },
+      },
+    },
   },
 } as const;
