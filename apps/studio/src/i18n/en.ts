@@ -498,6 +498,16 @@ export const en = {
         pageBreak: 'Page break',
       },
     },
+    settings: {
+      heading: 'Report settings',
+      pageSize: 'Page size',
+      orientation: 'Orientation',
+      portrait: 'Portrait',
+      landscape: 'Landscape',
+      margins: 'Margins',
+      top: 'Top', right: 'Right', bottom: 'Bottom', left: 'Left',
+      parameters: 'Parameters',
+    },
     inspector: {
       blockSuffix: 'block',
       width: 'Width',

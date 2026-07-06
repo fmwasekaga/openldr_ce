@@ -494,6 +494,13 @@ export const pt: EnShape = {
         pageBreak: 'Quebra de página',
       },
     },
+    settings: {
+      heading: 'Definições do relatório',
+      pageSize: 'Tamanho da página', orientation: 'Orientação',
+      portrait: 'Retrato', landscape: 'Paisagem',
+      margins: 'Margens', top: 'Superior', right: 'Direita', bottom: 'Inferior', left: 'Esquerda',
+      parameters: 'Parâmetros',
+    },
     inspector: {
       blockSuffix: 'bloco',
       width: 'Largura',

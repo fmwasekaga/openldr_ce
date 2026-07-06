@@ -5,7 +5,7 @@ import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, type Dra
 import { AppShell } from '@/shell/AppShell';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { createEmptyTemplate, lintReportTemplate, type Block, type BlockKind, type ReportTemplate } from '@openldr/report-builder/pure';
+import { createEmptyTemplate, lintReportTemplate, type Block, type BlockKind, type PageSpec, type ReportTemplate } from '@openldr/report-builder/pure';
 import { createReportTemplate, getReportTemplate, updateReportTemplate, deleteReportTemplate, fetchClientConfig } from '../api';
 import { useTemplateHistory } from '../forms-builder/useTemplateHistory';
 import { addRowWithBlock, duplicateRow, moveRow, moveRowFromCellDrag, newBlock, removeCell, setColSpan, setRepeat, updateBlockAt } from './reportBuilderModel';
@@ -13,6 +13,7 @@ import { BlockPalette } from './BlockPalette';
 import { usePersistedToggle } from './usePersistedToggle';
 import { ReportCanvas, type CellRef } from './ReportCanvas';
 import { BlockInspector } from './BlockInspector';
+import { ReportSettings } from './ReportSettings';
 import { PreviewPdfDialog } from './PreviewPdfDialog';
 import { useBlockData } from './useBlockData';
 import { ParametersEditor } from './ParametersEditor';
@@ -144,7 +145,7 @@ export function ReportBuilderPage(): JSX.Element {
                   onDelete={() => { pushUpdate(removeCell(template, selected.row, selected.cell)); setSelected(null); }}
                 />
               ) : (
-                <div className="p-4 text-xs text-muted-foreground">{t('reportBuilder.inspector.selectHint')}</div>
+                <ReportSettings page={template.page as PageSpec} onPatch={(page) => update({ ...template, page })} onOpenParams={() => setParamsOpen(true)} />
               )}
             </div>
           </div>
