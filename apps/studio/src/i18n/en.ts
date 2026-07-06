@@ -485,6 +485,8 @@ export const en = {
     },
     palette: {
       heading: 'Blocks',
+      collapse: 'Collapse palette',
+      expand: 'Expand palette',
       kind: {
         title: 'Title',
         text: 'Text',
@@ -495,6 +497,16 @@ export const en = {
         divider: 'Divider',
         pageBreak: 'Page break',
       },
+    },
+    settings: {
+      heading: 'Report settings',
+      pageSize: 'Page size',
+      orientation: 'Orientation',
+      portrait: 'Portrait',
+      landscape: 'Landscape',
+      margins: 'Margins',
+      top: 'Top', right: 'Right', bottom: 'Bottom', left: 'Left',
+      parameters: 'Parameters',
     },
     inspector: {
       blockSuffix: 'block',
@@ -512,6 +524,8 @@ export const en = {
       deleteBlock: 'Delete block',
       selectHint: 'Select a block to edit it, or drag a block from the palette.',
       text: 'Text',
+      collapse: 'Collapse panel',
+      expand: 'Expand panel',
     },
     query: {
       builder: 'Builder',

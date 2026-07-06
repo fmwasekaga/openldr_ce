@@ -481,6 +481,8 @@ export const fr: EnShape = {
     },
     palette: {
       heading: 'Blocs',
+      collapse: 'Réduire la palette',
+      expand: 'Développer la palette',
       kind: {
         title: 'Titre',
         text: 'Texte',
@@ -491,6 +493,13 @@ export const fr: EnShape = {
         divider: 'Séparateur',
         pageBreak: 'Saut de page',
       },
+    },
+    settings: {
+      heading: 'Paramètres du rapport',
+      pageSize: 'Taille de page', orientation: 'Orientation',
+      portrait: 'Portrait', landscape: 'Paysage',
+      margins: 'Marges', top: 'Haut', right: 'Droite', bottom: 'Bas', left: 'Gauche',
+      parameters: 'Paramètres',
     },
     inspector: {
       blockSuffix: 'bloc',
@@ -508,6 +517,8 @@ export const fr: EnShape = {
       deleteBlock: 'Supprimer le bloc',
       selectHint: 'Sélectionnez un bloc pour le modifier, ou faites glisser un bloc depuis la palette.',
       text: 'Texte',
+      collapse: 'Réduire le panneau',
+      expand: 'Développer le panneau',
     },
     query: {
       builder: 'Générateur',

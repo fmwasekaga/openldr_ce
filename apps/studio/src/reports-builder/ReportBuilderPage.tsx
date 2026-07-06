@@ -5,13 +5,16 @@ import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, type Dra
 import { AppShell } from '@/shell/AppShell';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { createEmptyTemplate, lintReportTemplate, type Block, type BlockKind, type ReportTemplate } from '@openldr/report-builder/pure';
+import { createEmptyTemplate, lintReportTemplate, type Block, type BlockKind, type PageSpec, type ReportTemplate } from '@openldr/report-builder/pure';
 import { createReportTemplate, getReportTemplate, updateReportTemplate, deleteReportTemplate, fetchClientConfig } from '../api';
 import { useTemplateHistory } from '../forms-builder/useTemplateHistory';
 import { addRowWithBlock, duplicateRow, moveRow, moveRowFromCellDrag, newBlock, removeCell, setColSpan, setRepeat, updateBlockAt } from './reportBuilderModel';
 import { BlockPalette } from './BlockPalette';
+import { usePersistedToggle } from './usePersistedToggle';
+import { InspectorPane } from './InspectorPane';
 import { ReportCanvas, type CellRef } from './ReportCanvas';
 import { BlockInspector } from './BlockInspector';
+import { ReportSettings } from './ReportSettings';
 import { PreviewPdfDialog } from './PreviewPdfDialog';
 import { useBlockData } from './useBlockData';
 import { ParametersEditor } from './ParametersEditor';
@@ -37,6 +40,8 @@ export function ReportBuilderPage(): JSX.Element {
   const loadedIdRef = useRef<string | null>(null);
   const history = useTemplateHistory<ReportTemplate>(() => template);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const [paletteCollapsed, togglePalette] = usePersistedToggle('openldr-rb-palette-collapsed');
+  const [inspectorCollapsed, toggleInspector, setInspectorCollapsed] = usePersistedToggle('openldr-rb-inspector-collapsed');
 
   useEffect(() => {
     if (!id || loadedIdRef.current === id) return;
@@ -46,6 +51,9 @@ export function ReportBuilderPage(): JSX.Element {
   }, [id]);
 
   useEffect(() => { fetchClientConfig().then((c) => setSqlEnabled(c.dashboardSqlEnabled)).catch(() => {}); }, []);
+
+  // Selecting a block auto-expands the (possibly collapsed) inspector so it can be edited.
+  useEffect(() => { if (selected) setInspectorCollapsed(false); }, [selected]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -119,11 +127,11 @@ export function ReportBuilderPage(): JSX.Element {
           {error && <div className="border-b border-border px-4 py-2 text-xs text-destructive">{error}</div>}
           <ParamValuesBar parameters={template.parameters} values={paramValues} onChange={setParamValues} />
           <div className="flex min-h-0 flex-1 overflow-hidden">
-            <div className="w-40 shrink-0 border-r border-border overflow-y-auto"><BlockPalette onAdd={addBlock} /></div>
+            <div className={`${paletteCollapsed ? 'w-12' : 'w-40'} shrink-0 border-r border-border overflow-y-auto`}><BlockPalette collapsed={paletteCollapsed} onToggle={togglePalette} onAdd={addBlock} /></div>
             <div className="min-w-0 flex-1 overflow-auto bg-muted/30" onClick={() => setSelected(null)}>
               <ReportCanvas template={template} selected={selected} onSelect={(row, cell) => setSelected({ row, cell })} data={blockData} issues={issues} />
             </div>
-            <div className="w-64 shrink-0 border-l border-border overflow-y-auto">
+            <InspectorPane collapsed={inspectorCollapsed} onToggle={toggleInspector}>
               {selectedBlock && selected ? (
                 <BlockInspector
                   block={selectedBlock}
@@ -142,9 +150,9 @@ export function ReportBuilderPage(): JSX.Element {
                   onDelete={() => { pushUpdate(removeCell(template, selected.row, selected.cell)); setSelected(null); }}
                 />
               ) : (
-                <div className="p-4 text-xs text-muted-foreground">{t('reportBuilder.inspector.selectHint')}</div>
+                <ReportSettings page={template.page as PageSpec} onPatch={(page) => update({ ...template, page })} onOpenParams={() => setParamsOpen(true)} />
               )}
-            </div>
+            </InspectorPane>
           </div>
         </div>
         <DragOverlay>
