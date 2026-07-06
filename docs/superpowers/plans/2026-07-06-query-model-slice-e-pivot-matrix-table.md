@@ -63,7 +63,7 @@ describe('resultToMatrix', () => {
 
 describe('pivotTableResult', () => {
   it('pivots when the source has a breakdown', () => {
-    expect(pivotTableResult(breakdownQuery, longResult).columns.map((c) => c.key)).toEqual(['label', 'R', 'S']);
+    expect(pivotTableResult(breakdownQuery, longResult)!.columns.map((c) => c.key)).toEqual(['label', 'R', 'S']); // ! — pivotTableResult returns PivotResult | undefined
   });
   it('returns the raw result for a non-breakdown / primary / undefined source', () => {
     expect(pivotTableResult({ mode: 'builder', model: 'x', metric: { key: 'count', agg: 'count' }, filters: [] }, longResult)).toBe(longResult);
