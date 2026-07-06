@@ -12,7 +12,15 @@ type BuilderQuery = Extract<WidgetQuery, { mode: 'builder' }>;
 type SqlQuery = Extract<WidgetQuery, { mode: 'sql' }>;
 const EMPTY: BuilderQuery = { mode: 'builder', model: '', metric: { key: 'count', agg: 'count' }, filters: [] };
 const EMPTY_SQL: SqlQuery = { mode: 'sql', sql: 'select 1 as value', values: {} };
-const CHART_TYPES: { v: 'bar' | 'line' | 'pie'; labelKey: string }[] = [{ v: 'bar', labelKey: 'reportBuilder.query.bar' }, { v: 'line', labelKey: 'reportBuilder.query.line' }, { v: 'pie', labelKey: 'reportBuilder.query.pie' }];
+const CHART_TYPES: { v: 'bar' | 'line' | 'pie' | 'area' | 'donut' | 'row' | 'scatter'; labelKey: string }[] = [
+  { v: 'bar', labelKey: 'reportBuilder.query.bar' },
+  { v: 'line', labelKey: 'reportBuilder.query.line' },
+  { v: 'area', labelKey: 'reportBuilder.query.area' },
+  { v: 'pie', labelKey: 'reportBuilder.query.pie' },
+  { v: 'donut', labelKey: 'reportBuilder.query.donut' },
+  { v: 'row', labelKey: 'reportBuilder.query.row' },
+  { v: 'scatter', labelKey: 'reportBuilder.query.scatter' },
+];
 const PARAM_TOKEN = /^\{\{\s*param\.(\w+)\s*\}\}$/;
 
 export function QueryEditor({ block, parameters, sqlEnabled = false, onChange }: { block: Block; parameters: ReportParam[]; sqlEnabled?: boolean; onChange: (patch: Partial<Block>) => void }): JSX.Element {
