@@ -121,3 +121,24 @@ describe('lint filterTree param refs', () => {
     expect(issues.some((i) => i.code === 'unused-parameter' && i.paramId === 'site')).toBe(false);
   });
 });
+
+describe('lint dimension.reference param refs', () => {
+  function tpl(reference: string, params: { id: string; label: string; type: 'text' }[] = []) {
+    return {
+      id: 't', name: 'T', description: '', category: 'quality' as const, status: 'draft' as const,
+      page: { size: 'A4', orientation: 'portrait', margins: { top: 40, right: 40, bottom: 40, left: 40 } },
+      parameters: params,
+      rows: [{ id: 'r1', cells: [{ colSpan: 12, block: { kind: 'chart' as const, chartType: 'pie' as const, visual: {},
+        query: { mode: 'builder' as const, model: 'patients', metric: { key: 'count', agg: 'count' as const }, filters: [], dimension: { key: 'age_band', reference } } } }] }],
+    } as unknown as ReportTemplate;
+  }
+  it('counts a param used when bound only in dimension.reference (no unused warning)', () => {
+    const issues = lintReportTemplate(tpl('{{param.asOf}}', [{ id: 'asOf', label: 'As of', type: 'text' }]));
+    expect(issues.some((i) => i.code === 'unused-parameter' && i.paramId === 'asOf')).toBe(false);
+    expect(issues.some((i) => i.code === 'orphaned-param-ref')).toBe(false);
+  });
+  it('flags an orphaned reference-bound param', () => {
+    const issues = lintReportTemplate(tpl('{{param.ghost}}'));
+    expect(issues.some((i) => i.code === 'orphaned-param-ref')).toBe(true);
+  });
+});

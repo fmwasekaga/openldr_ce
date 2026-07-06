@@ -41,6 +41,7 @@ function paramRefs(q: WidgetQuery): string[] {
     };
     walk((q as any).filterTree);
   }
+  if (q.mode === 'builder' && q.dimension?.reference) scan(q.dimension.reference);
   return ids;
 }
 
