@@ -7,7 +7,7 @@ import { FilterListEditor, type BuilderFilter } from './FilterListEditor';
 import { MetricsListEditor } from './MetricsListEditor';
 import { SqlQueryEditor } from './SqlQueryEditor';
 import { QueryGroupEditor } from './QueryGroupEditor';
-import { seedTreeFromFilters, isFlatRepresentable, flattenToFilters, newGroup, type ConditionGroup } from './queryTreeModel';
+import { seedTreeFromFilters, isFlatRepresentable, flattenToFilters, newGroup } from './queryTreeModel';
 import type { Block, ReportParam } from '@openldr/report-builder/pure';
 
 type BuilderQuery = Extract<WidgetQuery, { mode: 'builder' }>;
@@ -47,7 +47,7 @@ export function QueryEditor({ block, parameters, sqlEnabled = false, onChange }:
 
   const showBuilder = !isTable || block.source !== 'primary';
   const dimensions = models.find((m) => m.id === builderQuery.model)?.dimensions ?? [];
-  const filterTree = (builderQuery as { filterTree?: ConditionGroup }).filterTree;
+  const filterTree = builderQuery.filterTree;
   const advanced = !!filterTree;
   const canRevertToSimple = !advanced || (filterTree ? isFlatRepresentable(filterTree) : true);
   // SQL authoring for a new (non-sql) block requires the flag; an existing sql block stays viewable.
