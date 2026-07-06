@@ -235,4 +235,14 @@ describe('compileBuilderQuery filterTree (nested AND/OR)', () => {
     expect(sql).toMatch(/status/i);
     expect(sql).not.toMatch(/\bor\b/i);
   });
+
+  it('adds no predicate (and does not throw) when every rule compiles away', () => {
+    const q = {
+      mode: 'builder' as const, model: 'service_requests',
+      metric: { key: 'count', agg: 'count' as const }, filters: [],
+      filterTree: { kind: 'group', combinator: 'and', children: [ { kind: 'rule', dimension: 'status', op: 'eq', value: null } ] },
+    };
+    const { sql } = compileBuilderQuery(db, model, q as any).compile();
+    expect(sql).not.toMatch(/where/i); // null-valued rule → no where clause, no crash
+  });
 });

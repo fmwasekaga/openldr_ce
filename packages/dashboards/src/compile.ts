@@ -1,4 +1,4 @@
-import { type Kysely, sql, type SelectQueryBuilder } from 'kysely';
+import { type Kysely, sql, expressionBuilder, type SelectQueryBuilder } from 'kysely';
 import type { ExternalSchema } from '@openldr/db';
 import type { QueryModel, ModelDimension } from './models/registry';
 import type { WidgetQuery, Metric, QueryFilter, DateGrain, ConditionNode, ConditionRule } from './types';
@@ -108,11 +108,6 @@ function applyFilters(qb: AnyQB, model: QueryModel, filters: QueryFilter[]): Any
   return q;
 }
 
-// True iff the tree contains at least one rule (so it produces a predicate).
-function treeHasRules(node: ConditionNode): boolean {
-  return node.kind === 'rule' ? true : node.children.some(treeHasRules);
-}
-
 // Compile one rule to a Kysely expression, mirroring applyFilters' operator logic.
 function compileRule(eb: any, model: QueryModel, rule: ConditionRule): any {
   const ref = dim(model, rule.dimension).column as never;
@@ -170,8 +165,10 @@ export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryMode
     qb = qb.select(sql.ref(b.column).as('series')).groupBy(b.column as never).orderBy(b.column as never);
   }
   if (q.filterTree) {
-    // filterTree supersedes flat filters. An empty tree (no rules) adds no predicate.
-    if (treeHasRules(q.filterTree)) qb = qb.where((eb: any) => compileNode(eb, model, q.filterTree!)) as AnyQB;
+    // Compile the tree once; apply only if it yields a predicate (an all-null/empty tree adds none).
+    const eb = expressionBuilder(qb as never) as never;
+    const expr = compileNode(eb, model, q.filterTree);
+    if (expr) qb = qb.where(expr as never) as AnyQB;
   } else {
     qb = applyFilters(qb, model, q.filters ?? []);
   }
