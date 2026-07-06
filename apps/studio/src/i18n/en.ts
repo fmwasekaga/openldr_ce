@@ -545,6 +545,9 @@ export const en = {
       none: '(none)',
       editSql: 'Edit SQL',
       loadingSources: 'Loading data sources…',
+      simple: 'Simple',
+      advanced: 'Advanced (AND/OR)',
+      revertBlocked: "Advanced logic can't be shown as a simple list",
     },
     filters: {
       heading: 'Filters',

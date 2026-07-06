@@ -538,6 +538,9 @@ export const pt: EnShape = {
       none: '(nenhum)',
       editSql: 'Editar SQL',
       loadingSources: 'A carregar fontes de dados…',
+      simple: 'Simples',
+      advanced: 'Avançado (E/OU)',
+      revertBlocked: 'A lógica avançada não pode ser exibida como lista simples',
     },
     filters: {
       heading: 'Filtros',
