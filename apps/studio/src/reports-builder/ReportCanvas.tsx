@@ -78,7 +78,7 @@ export function ReportCanvas({ template, selected, onSelect, data, issues }: { t
   return (
     <div className="flex flex-col items-center gap-3 overflow-auto p-4">
       {Array.from({ length: maxPage }, (_, i) => i + 1).map((pageNo) => (
-        <div key={pageNo} className="relative bg-white shadow-sm ring-1 ring-border" style={{ width: CANVAS_W, height: ph * scale }}>
+        <div key={pageNo} className="report-page-surface relative bg-white shadow-sm ring-1 ring-border" style={{ width: CANVAS_W, height: ph * scale }}>
           {boxes.filter((b) => b.page === pageNo).map((b) => (
             <CanvasCell
               key={`${b.rowIndex}-${b.cellIndex}`}

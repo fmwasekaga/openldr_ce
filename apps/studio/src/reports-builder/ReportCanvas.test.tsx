@@ -44,6 +44,11 @@ describe('ReportCanvas', () => {
     render(<ReportCanvas template={template()} selected={null} onSelect={() => {}} />);
     expect(screen.getAllByRole('button', { name: /drag to reorder/i }).length).toBeGreaterThan(0);
   });
+
+  it('renders the report page as a light-theme surface (readable text in dark mode)', () => {
+    const { container } = render(<ReportCanvas template={template()} selected={null} onSelect={() => {}} />);
+    expect(container.querySelector('.report-page-surface')).not.toBeNull();
+  });
 });
 
 describe('ReportCanvas lint markers', () => {
