@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { WidgetConfigSchema, WidgetQuerySchema, MetricSchema, DerivedRatioSchema } from './types';
+import { WidgetConfigSchema, WidgetQuerySchema, MetricSchema, DerivedRatioSchema, ConditionGroupSchema } from './types';
 
 describe('WidgetConfigSchema', () => {
   it('accepts a builder widget', () => {
@@ -82,5 +82,38 @@ describe('derived ratio metric schema (Slice B)', () => {
   it('still accepts a plain aggregate metric with no derived field', () => {
     const m = MetricSchema.parse({ key: 'tested', agg: 'count' });
     expect(m.derived).toBeUndefined();
+  });
+});
+
+describe('ConditionGroup (nested filter tree)', () => {
+  const tree = {
+    kind: 'group', combinator: 'and',
+    children: [
+      { kind: 'rule', dimension: 'status', op: 'eq', value: 'completed' },
+      { kind: 'group', combinator: 'or', children: [
+        { kind: 'rule', dimension: 'code_text', op: 'eq', value: 'Blood culture' },
+        { kind: 'rule', dimension: 'code_text', op: 'eq', value: 'Urine culture' },
+      ] },
+    ],
+  };
+
+  it('parses an arbitrarily nested AND/OR tree', () => {
+    const parsed = ConditionGroupSchema.parse(tree);
+    expect(parsed.combinator).toBe('and');
+    expect(parsed.children).toHaveLength(2);
+  });
+
+  it('accepts a builder query carrying a filterTree', () => {
+    const q = WidgetQuerySchema.parse({ mode: 'builder', model: 'observations', metric: { key: 'count', agg: 'count' }, filters: [], filterTree: tree });
+    expect(q).toMatchObject({ mode: 'builder', filterTree: { combinator: 'and' } });
+  });
+
+  it('a builder query with no filterTree still parses (backward-compat)', () => {
+    const q = WidgetQuerySchema.parse({ mode: 'builder', model: 'observations', metric: { key: 'count', agg: 'count' }, filters: [] });
+    expect(q).not.toHaveProperty('filterTree');
+  });
+
+  it('rejects an unknown combinator', () => {
+    expect(() => ConditionGroupSchema.parse({ kind: 'group', combinator: 'nand', children: [] })).toThrow();
   });
 });
