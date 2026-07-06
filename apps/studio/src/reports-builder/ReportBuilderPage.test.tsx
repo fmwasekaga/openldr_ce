@@ -118,3 +118,26 @@ describe('ReportBuilderPage', () => {
     expect(await screen.findByTestId('canvas-cell-1-0')).toBeTruthy();
   });
 });
+
+function renderWithStarter(starter: string) {
+  return render(
+    <MemoryRouter initialEntries={[`/reports/builder/new?starter=${starter}`]}>
+      <Routes>
+        <Route path="/reports/builder/new" element={<ReportBuilderPage />} />
+        <Route path="/reports/builder/:id" element={<ReportBuilderPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
+describe('ReportBuilderPage starter preload', () => {
+  it('preloads the Test Volume starter content when ?starter=test-volume', () => {
+    renderWithStarter('test-volume');
+    expect(screen.getByLabelText(/report name/i)).toHaveValue('Test Volume');
+  });
+
+  it('falls back to a blank draft for an unknown starter', () => {
+    renderWithStarter('does-not-exist');
+    expect(screen.getByLabelText(/report name/i)).toHaveValue('');
+  });
+});
