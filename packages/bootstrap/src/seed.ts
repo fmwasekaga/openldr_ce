@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { sampleForms, type FormStore } from '@openldr/forms';
 import { buildDefaultWorkflows, type WorkflowStore } from '@openldr/workflows';
 import { seedDefaultDashboard, type DashboardStore } from '@openldr/dashboards';
-import { seedSampleReportTemplate, seedAmrResistanceTemplate, seedPatientDemographicsTemplate, seedAmrFacilitySummaryTemplate, type ReportTemplateStore } from '@openldr/report-builder';
+import { seedSampleReportTemplate, seedAmrResistanceTemplate, seedPatientDemographicsTemplate, seedAmrFacilitySummaryTemplate, seedAnalyteInterpretationTemplate, type ReportTemplateStore } from '@openldr/report-builder';
 import type { ConnectorStore, TerminologyAdminStore, AppSettingStore } from '@openldr/db';
 import { BUNDLED_TERMINOLOGY, readBundledTerminology } from '@openldr/db';
 import { FEATURE_FLAGS } from '@openldr/config';
@@ -165,6 +165,7 @@ export async function seedDatabase(db: DbContext, app: FormSeedTarget): Promise<
     reportTemplatesSeeded += await seedAmrResistanceTemplate(app.reportTemplates);
     reportTemplatesSeeded += await seedPatientDemographicsTemplate(app.reportTemplates);
     reportTemplatesSeeded += await seedAmrFacilitySummaryTemplate(app.reportTemplates);
+    reportTemplatesSeeded += await seedAnalyteInterpretationTemplate(app.reportTemplates);
   } catch (e) {
     console.warn('[seed] report template seed skipped:', e instanceof Error ? e.message : String(e));
   }
