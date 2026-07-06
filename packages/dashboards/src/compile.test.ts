@@ -266,3 +266,18 @@ describe('compileBuilderQuery age_band computed dimension', () => {
     expect(sql).toMatch(/order by "gender"/i);
   });
 });
+
+describe('compileBuilderQuery age_band as breakdown', () => {
+  const model = getModel('patients')!;
+  it('emits a CASE bucket for a computed breakdown dimension (series)', () => {
+    const { sql } = compileBuilderQuery(db, model, { mode: 'builder', model: 'patients', metric: { key: 'count', agg: 'count' }, breakdown: { key: 'age_band' }, filters: [] } as any).compile();
+    expect(sql).toMatch(/case when/i);      // series is a CASE, not raw birth_date
+    expect(sql).not.toMatch(/group by "birth_date"/i); // not grouped by the raw column
+    expect(sql).not.toMatch(/"birth_date" as "series"/i); // series is not the raw column
+  });
+  it('a plain breakdown dimension emits raw column (byte-identical)', () => {
+    const { sql } = compileBuilderQuery(db, model, { mode: 'builder', model: 'patients', metric: { key: 'count', agg: 'count' }, breakdown: { key: 'gender' }, filters: [] } as any).compile();
+    expect(sql).toMatch(/group by "gender"/i);
+    expect(sql).not.toMatch(/case when/i);
+  });
+});

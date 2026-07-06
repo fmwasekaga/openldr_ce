@@ -187,7 +187,12 @@ export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryMode
   }
   if (!wide && q.breakdown) {
     const b = dim(model, q.breakdown.key);
-    qb = qb.select(sql.ref(b.column).as('series')).groupBy(b.column as never).orderBy(b.column as never);
+    if (b.compute) {
+      const { label, rank } = ageBandExprs(b, undefined); // breakdown has no reference → current date
+      qb = qb.select(label.as('series') as never).groupBy(label as never).groupBy(rank as never).orderBy(rank as never);
+    } else {
+      qb = qb.select(sql.ref(b.column).as('series')).groupBy(b.column as never).orderBy(b.column as never);
+    }
   }
   if (q.filterTree) {
     // Compile the tree once; apply only if it yields a predicate (an all-null/empty tree adds none).
