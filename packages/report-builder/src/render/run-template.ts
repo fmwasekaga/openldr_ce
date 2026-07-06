@@ -43,6 +43,9 @@ export function resolveQueryParams(q: WidgetQuery, params: Record<string, string
       const resolved = resolveNode((clone as any).filterTree, params);
       if (resolved) (clone as any).filterTree = resolved; else delete (clone as any).filterTree;
     }
+    if (clone.dimension?.reference) {
+      clone.dimension = { ...clone.dimension, reference: subst(clone.dimension.reference, params) as string };
+    }
   } else {
     if (clone.values) {
       const next: Record<string, unknown> = {};

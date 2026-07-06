@@ -246,3 +246,38 @@ describe('compileBuilderQuery filterTree (nested AND/OR)', () => {
     expect(sql).not.toMatch(/where/i); // null-valued rule → no where clause, no crash
   });
 });
+
+describe('compileBuilderQuery age_band computed dimension', () => {
+  const model = getModel('patients')!;
+  it('emits a CASE bucket with group by + order by for age_band', () => {
+    const { sql } = compileBuilderQuery(db, model, { mode: 'builder', model: 'patients', metric: { key: 'count', agg: 'count' }, dimension: { key: 'age_band', reference: '2026-01-01' }, filters: [] } as any).compile();
+    expect(sql).toMatch(/case when/i);
+    expect(sql).toMatch(/group by/i);
+    expect(sql).toMatch(/order by/i);
+    // GROUP BY must contain BOTH the label + rank CASE expressions so ORDER BY rank is a grouped
+    // expression on strict engines (pg/mssql). Old single-groupBy code has only 2 CASEs total → fails.
+    expect(sql).toMatch(/group by case when [\s\S]* end, case when [\s\S]* end/i);
+    expect((sql.match(/case when/gi) ?? []).length).toBeGreaterThanOrEqual(3);
+  });
+  it('a plain-column dimension emits byte-identical SQL (compute absent)', () => {
+    const { sql } = compileBuilderQuery(db, model, { mode: 'builder', model: 'patients', metric: { key: 'count', agg: 'count' }, dimension: { key: 'gender' }, filters: [] } as any).compile();
+    expect(sql).not.toMatch(/case when/i);
+    expect(sql).toMatch(/group by "gender"/i);
+    expect(sql).toMatch(/order by "gender"/i);
+  });
+});
+
+describe('compileBuilderQuery age_band as breakdown', () => {
+  const model = getModel('patients')!;
+  it('emits a CASE bucket for a computed breakdown dimension (series)', () => {
+    const { sql } = compileBuilderQuery(db, model, { mode: 'builder', model: 'patients', metric: { key: 'count', agg: 'count' }, breakdown: { key: 'age_band' }, filters: [] } as any).compile();
+    expect(sql).toMatch(/case when/i);      // series is a CASE, not raw birth_date
+    expect(sql).not.toMatch(/group by "birth_date"/i); // not grouped by the raw column
+    expect(sql).not.toMatch(/"birth_date" as "series"/i); // series is not the raw column
+  });
+  it('a plain breakdown dimension emits raw column (byte-identical)', () => {
+    const { sql } = compileBuilderQuery(db, model, { mode: 'builder', model: 'patients', metric: { key: 'count', agg: 'count' }, breakdown: { key: 'gender' }, filters: [] } as any).compile();
+    expect(sql).toMatch(/group by "gender"/i);
+    expect(sql).not.toMatch(/case when/i);
+  });
+});

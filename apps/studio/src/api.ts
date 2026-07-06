@@ -263,7 +263,7 @@ export type WidgetQuery =
   | { mode: 'builder'; model: string;
       metric: { key: string; label?: string; agg: string; column?: string; where?: { dimension: string; op: string; value: unknown }[]; derived?: { numerator: string; denominator: string; scale?: number; decimals?: number } };
       metrics?: { key: string; label?: string; agg: string; column?: string; where?: { dimension: string; op: string; value: unknown }[]; derived?: { numerator: string; denominator: string; scale?: number; decimals?: number } }[];
-      dimension?: { key: string; grain?: string }; breakdown?: { key: string }; filters: { dimension: string; op: string; value: unknown }[];
+      dimension?: { key: string; grain?: string; reference?: string }; breakdown?: { key: string }; filters: { dimension: string; op: string; value: unknown }[];
       filterTree?: ConditionGroup;
       variableBindings?: Record<string, string> }
   | { mode: 'sql'; sql: string; variableBindings?: Record<string, string>; variables?: Record<string, WidgetVariableDef>;
@@ -278,7 +278,7 @@ export interface Dashboard {
   id: string; ownerId: string | null; name: string; layout: LayoutItem[]; widgets: WidgetConfig[];
   filters: DashboardFilterDef[]; refreshIntervalSec: number; isDefault: boolean; createdAt?: string; updatedAt?: string;
 }
-export interface ModelDimension { key: string; label: string; column: string; kind: 'string' | 'date' | 'number'; dateGrain?: string[] }
+export interface ModelDimension { key: string; label: string; column: string; kind: 'string' | 'date' | 'number'; dateGrain?: string[]; compute?: { kind: 'age-band'; bands: { maxAge: number; label: string }[]; openEndedLabel: string; unknownLabel: string } }
 export interface ModelMetric { key: string; label: string; agg: string; column?: string }
 export interface QueryModel { id: string; label: string; dimensions: ModelDimension[]; metrics: ModelMetric[] }
 

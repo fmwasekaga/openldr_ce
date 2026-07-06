@@ -1,7 +1,13 @@
 import type { ExternalSchema } from '@openldr/db';
 import type { Agg, DateGrain, DimensionKind } from '../types';
 
-export interface ModelDimension { key: string; label: string; column: string; kind: DimensionKind; dateGrain?: DateGrain[] }
+export interface AgeBandCompute {
+  kind: 'age-band';
+  bands: { maxAge: number; label: string }[]; // closed upper bounds, e.g. { maxAge: 4, label: '0-4' }
+  openEndedLabel: string;                      // older than the last band, e.g. '50+'
+  unknownLabel: string;                        // null / future birth_date, e.g. 'unknown'
+}
+export interface ModelDimension { key: string; label: string; column: string; kind: DimensionKind; dateGrain?: DateGrain[]; compute?: AgeBandCompute }
 export interface ModelMetric { key: string; label: string; agg: Agg; column?: string }
 export interface QueryModel { id: string; label: string; table: keyof ExternalSchema; dimensions: ModelDimension[]; metrics: ModelMetric[] }
 
@@ -55,6 +61,10 @@ export const MODELS: QueryModel[] = [
     dimensions: [
       { key: 'gender', label: 'Gender', column: 'gender', kind: 'string' },
       { key: 'managing_organization', label: 'Facility', column: 'managing_organization', kind: 'string' },
+      { key: 'age_band', label: 'Age band', column: 'birth_date', kind: 'string',
+        compute: { kind: 'age-band',
+          bands: [{ maxAge: 4, label: '0-4' }, { maxAge: 14, label: '5-14' }, { maxAge: 24, label: '15-24' }, { maxAge: 49, label: '25-49' }],
+          openEndedLabel: '50+', unknownLabel: 'unknown' } },
     ],
     metrics: [COUNT],
   },

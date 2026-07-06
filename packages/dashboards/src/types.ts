@@ -52,7 +52,7 @@ export const MetricSchema = z.object({
 });
 export type Metric = z.infer<typeof MetricSchema>;
 
-export const DimensionRefSchema = z.object({ key: z.string(), grain: z.enum(['day', 'week', 'month', 'year']).optional() });
+export const DimensionRefSchema = z.object({ key: z.string(), grain: z.enum(['day', 'week', 'month', 'year']).optional(), reference: z.string().optional() });
 export type DimensionRef = z.infer<typeof DimensionRefSchema>;
 
 export const WidgetVariableDefSchema = z.object({

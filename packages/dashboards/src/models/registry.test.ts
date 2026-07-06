@@ -23,3 +23,14 @@ describe('model registry', () => {
     }
   });
 });
+
+describe('patients age_band computed dimension', () => {
+  it('exposes an age_band dimension with an age-band compute config', () => {
+    const m = getModel('patients')!;
+    const d = m.dimensions.find((x) => x.key === 'age_band');
+    expect(d).toBeDefined();
+    expect(d!.column).toBe('birth_date');
+    expect(d!.compute).toMatchObject({ kind: 'age-band', openEndedLabel: '50+', unknownLabel: 'unknown' });
+    expect(d!.compute!.bands.map((b) => b.label)).toEqual(['0-4', '5-14', '15-24', '25-49']);
+  });
+});

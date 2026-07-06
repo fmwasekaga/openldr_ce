@@ -3,6 +3,7 @@ import type { ExternalSchema } from '@openldr/db';
 import type { QueryModel, ModelDimension } from './models/registry';
 import type { WidgetQuery, Metric, QueryFilter, DateGrain, ConditionNode, ConditionRule } from './types';
 import type { ReportResultData, ReportColumn, ChartHint } from '@openldr/reporting';
+import { ageBandArms } from './age-band';
 
 type BuilderQuery = Extract<WidgetQuery, { mode: 'builder' }>;
 type AnyQB = SelectQueryBuilder<ExternalSchema, keyof ExternalSchema, unknown>;
@@ -134,6 +135,23 @@ function compileNode(eb: any, model: QueryModel, node: ConditionNode): any {
   return node.combinator === 'or' ? eb.or(parts) : eb.and(parts);
 }
 
+// Build label + rank CASE expressions for a computed age-band dimension, thresholds bound (not inlined).
+function ageBandExprs(d: ModelDimension, reference?: string) {
+  const parsed = reference ? new Date(reference) : new Date();
+  const ref = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  const a = ageBandArms(d.compute!, ref);
+  const col = sql.ref(d.column);
+  let label = sql`case when ${col} is null then ${a.unknownLabel} when ${col} > ${a.refYMD} then ${a.unknownLabel}`;
+  let rank = sql`case when ${col} is null then ${a.unknownRank} when ${col} > ${a.refYMD} then ${a.unknownRank}`;
+  for (const arm of a.arms) {
+    label = sql`${label} when ${col} > ${arm.thresholdYMD} then ${arm.label}`;
+    rank = sql`${rank} when ${col} > ${arm.thresholdYMD} then ${arm.rank}`;
+  }
+  label = sql`${label} else ${a.openEndedLabel} end`;
+  rank = sql`${rank} else ${a.openEndedRank} end`;
+  return { label, rank };
+}
+
 /** Build the Kysely query (no grain bucketing — date grain is applied in JS after fetch). */
 export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery): AnyQB {
   const wide = !!(q.metrics && q.metrics.length > 0);
@@ -158,11 +176,23 @@ export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryMode
   }
   if (q.dimension) {
     const d = dim(model, q.dimension.key);
-    qb = qb.select(sql.ref(d.column).as('label')).groupBy(d.column as never).orderBy(d.column as never);
+    if (d.compute) {
+      const { label, rank } = ageBandExprs(d, q.dimension.reference);
+      // GROUP BY both label + rank so ORDER BY rank is a grouped expression on strict engines
+      // (Postgres/MSSQL reject ORDER BY an ungrouped expression). rank is 1:1 with label → same groups.
+      qb = qb.select(label.as('label') as never).groupBy(label as never).groupBy(rank as never).orderBy(rank as never);
+    } else {
+      qb = qb.select(sql.ref(d.column).as('label')).groupBy(d.column as never).orderBy(d.column as never);
+    }
   }
   if (!wide && q.breakdown) {
     const b = dim(model, q.breakdown.key);
-    qb = qb.select(sql.ref(b.column).as('series')).groupBy(b.column as never).orderBy(b.column as never);
+    if (b.compute) {
+      const { label, rank } = ageBandExprs(b, undefined); // breakdown has no reference → current date
+      qb = qb.select(label.as('series') as never).groupBy(label as never).groupBy(rank as never).orderBy(rank as never);
+    } else {
+      qb = qb.select(sql.ref(b.column).as('series')).groupBy(b.column as never).orderBy(b.column as never);
+    }
   }
   if (q.filterTree) {
     // Compile the tree once; apply only if it yields a predicate (an all-null/empty tree adds none).

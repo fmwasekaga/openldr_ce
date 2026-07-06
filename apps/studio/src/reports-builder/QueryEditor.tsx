@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { listModels, type QueryModel, type WidgetQuery } from '../api';
 import { BuilderForm } from '../dashboard/editor/BuilderForm';
 import { FilterListEditor, type BuilderFilter } from './FilterListEditor';
@@ -130,6 +131,18 @@ export function QueryEditor({ block, parameters, sqlEnabled = false, onChange }:
               </select>
             </label>
           )}
+          {(() => {
+            const selDim = dimensions.find((d) => d.key === builderQuery.dimension?.key);
+            if (!selDim?.compute) return null;
+            return (
+              <label className="flex flex-col gap-1 text-xs">{t('reportBuilder.query.referenceDate')}
+                <Input aria-label={t('reportBuilder.query.referenceDateAria')} className="h-7 text-xs"
+                  value={builderQuery.dimension?.reference ?? ''}
+                  placeholder={t('reportBuilder.query.referenceDatePlaceholder')}
+                  onChange={(e) => setQuery({ ...builderQuery, dimension: { ...(builderQuery.dimension ?? { key: selDim.key }), reference: e.target.value || undefined } })} />
+              </label>
+            );
+          })()}
         </>
       )}
 
