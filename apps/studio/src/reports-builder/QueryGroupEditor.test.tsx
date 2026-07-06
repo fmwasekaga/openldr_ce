@@ -35,4 +35,15 @@ describe('QueryGroupEditor', () => {
     expect(screen.getAllByRole('button', { name: /^and$/i }).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByRole('button', { name: /^or$/i }).length).toBeGreaterThanOrEqual(1);
   });
+
+  it('gives rules in different sibling groups distinct aria-labels (no collision)', () => {
+    const tree = { kind: 'group', combinator: 'and', children: [
+      { kind: 'group', combinator: 'or', children: [{ kind: 'rule', dimension: 'status', op: 'eq', value: '' }] },
+      { kind: 'group', combinator: 'or', children: [{ kind: 'rule', dimension: 'status', op: 'eq', value: '' }] },
+    ] } as ConditionGroup;
+    const { container } = render(<QueryGroupEditor group={tree} dimensions={dims} parameters={[]} onChange={() => {}} />);
+    const labels = Array.from(container.querySelectorAll('[aria-label]')).map((el) => el.getAttribute('aria-label')).filter((l) => l && /dimension$/.test(l));
+    expect(new Set(labels).size).toBe(labels.length); // all rule-dimension labels unique
+    expect(labels.length).toBe(2);
+  });
 });

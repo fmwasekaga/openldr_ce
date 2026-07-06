@@ -30,9 +30,9 @@ function RuleRow({ rule, dimensions, parameters, onChange, onRemove, idPrefix }:
   );
 }
 
-export function QueryGroupEditor({ group, dimensions, parameters, onChange, onRemove, depth = 0 }: {
+export function QueryGroupEditor({ group, dimensions, parameters, onChange, onRemove, depth = 0, idPrefix = 'g' }: {
   group: ConditionGroup; dimensions: ModelDimension[]; parameters: ReportParam[];
-  onChange: (g: ConditionGroup) => void; onRemove?: () => void; depth?: number;
+  onChange: (g: ConditionGroup) => void; onRemove?: () => void; depth?: number; idPrefix?: string;
 }): JSX.Element {
   const { t } = useTranslation();
   const setChild = (i: number, child: ConditionNode) => onChange({ ...group, children: group.children.map((c, j) => (j === i ? child : c)) });
@@ -51,8 +51,8 @@ export function QueryGroupEditor({ group, dimensions, parameters, onChange, onRe
         {onRemove && <Button type="button" size="icon" variant="ghost" className="h-7 w-7 text-destructive" aria-label={t('reportBuilder.tree.removeGroup')} onClick={onRemove}><Trash2 className="h-4 w-4" /></Button>}
       </div>
       {group.children.map((child, i) => child.kind === 'rule'
-        ? <RuleRow key={i} rule={child} dimensions={dimensions} parameters={parameters} onChange={(r) => setChild(i, r)} onRemove={() => removeChild(i)} idPrefix={`g${depth}-r${i}`} />
-        : <QueryGroupEditor key={i} group={child} dimensions={dimensions} parameters={parameters} onChange={(g) => setChild(i, g)} onRemove={() => removeChild(i)} depth={depth + 1} />)}
+        ? <RuleRow key={i} rule={child} dimensions={dimensions} parameters={parameters} onChange={(r) => setChild(i, r)} onRemove={() => removeChild(i)} idPrefix={`${idPrefix}-${i}`} />
+        : <QueryGroupEditor key={i} group={child} dimensions={dimensions} parameters={parameters} onChange={(g) => setChild(i, g)} onRemove={() => removeChild(i)} depth={depth + 1} idPrefix={`${idPrefix}-${i}`} />)}
       <div className="flex gap-1">
         <Button type="button" size="sm" variant="outline" className="h-7" onClick={() => onChange({ ...group, children: [...group.children, newRule(dimensions)] })}>{t('reportBuilder.tree.addRule')}</Button>
         <Button type="button" size="sm" variant="outline" className="h-7" onClick={() => onChange({ ...group, children: [...group.children, newGroup()] })}>{t('reportBuilder.tree.addGroup')}</Button>
