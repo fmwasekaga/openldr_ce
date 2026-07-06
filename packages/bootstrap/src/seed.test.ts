@@ -249,8 +249,8 @@ describe('seedDatabase — report templates', () => {
   it('seeds both report templates on a fresh install, idempotent on reseed', async () => {
     const { app, reportTemplates } = fakeApp();
     const first = await seedDatabase(fakeDb, app);
-    expect(first.reportTemplatesSeeded).toBe(2);
-    expect(reportTemplates.map((r) => r.id).sort()).toEqual(['rt-amr-resistance', 'rt-sample-amr']);
+    expect(first.reportTemplatesSeeded).toBe(3);
+    expect(reportTemplates.map((r) => r.id).sort()).toEqual(['rt-amr-resistance', 'rt-patient-demographics', 'rt-sample-amr']);
     const second = await seedDatabase(fakeDb, app);
     expect(second.reportTemplatesSeeded).toBe(0);
   });
