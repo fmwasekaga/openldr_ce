@@ -185,11 +185,6 @@ Expected: FAIL — `filterTree` is ignored (no OR in the SQL).
 In `packages/dashboards/src/compile.ts`, add above `compileBuilderQuery` (after `applyFilters`, ~line 109). Type `eb`/return loosely (`any`) to match the file's `AnyQB`/`as never` convention:
 
 ```ts
-// True iff the tree contains at least one rule (so it produces a predicate).
-function treeHasRules(node: ConditionNode): boolean {
-  return node.kind === 'rule' ? true : node.children.some(treeHasRules);
-}
-
 // Compile one rule to a Kysely expression, mirroring applyFilters' operator logic.
 function compileRule(eb: any, model: QueryModel, rule: ConditionRule): any {
   const ref = dim(model, rule.dimension).column as never;
@@ -229,14 +224,21 @@ to:
 
 ```ts
   if (q.filterTree) {
-    // filterTree supersedes flat filters. An empty tree (no rules) adds no predicate.
-    if (treeHasRules(q.filterTree)) qb = qb.where((eb: any) => compileNode(eb, model, q.filterTree!)) as AnyQB;
+    // filterTree supersedes flat filters. Compile once with a standalone expression builder;
+    // apply only if it yields a predicate (an all-null/empty tree compiles to null → no where).
+    const eb = expressionBuilder(qb as never) as never;
+    const expr = compileNode(eb, model, q.filterTree);
+    if (expr) qb = qb.where(expr as never) as AnyQB;
   } else {
     qb = applyFilters(qb, model, q.filters ?? []);
   }
 ```
 
-(`treeHasRules` guarantees ≥1 rule, so `compileNode` returns non-null here.) `BuilderQuery` is the compiler's input type — since `filterTree` is now on `WidgetQuerySchema`'s builder variant, `q.filterTree` is typed; no cast needed beyond the existing `as never`/`AnyQB` idioms.
+Add `expressionBuilder` to the existing `'kysely'` named import. Compiling once and
+checking the result for null (rather than a separate `treeHasRules` pre-check)
+avoids a bug: a tree of only null-valued/malformed rules is structurally non-empty
+but compiles to `null`, and `qb.where((eb) => null)` throws in Kysely. `BuilderQuery`
+is the compiler input; `q.filterTree` is typed via the schema.
 
 - [ ] **Step 4: Run test to verify it passes**
 
