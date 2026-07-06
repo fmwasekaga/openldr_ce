@@ -3,6 +3,7 @@ import type { Block } from '../schema';
 import type { CellData, PositionedBox } from './layout';
 import { drawChart } from './charts';
 import { resultToChartData, chartOpts } from './chart-data';
+import { matrixOpts, resultToMatrix } from './matrix-data';
 
 const TABLE_HEADER_H = 18;
 const TABLE_ROW_H = 16;
@@ -29,12 +30,20 @@ export function formatCell(value: unknown, kind?: string, decimals = 1): string 
   return String(value ?? '');
 }
 
-function drawTable(doc: PDFKit.PDFDocument, box: PositionedBox, block: Extract<Block, { kind: 'table' }>, cell: CellData | undefined, bodyBottom: number): void {
-  const result = cell?.result;
-  const columns: { key: string; label: string; kind?: string; decimals?: number }[] = block.columns.length
+// Effective columns + rows for a table block: pivots a breakdown source into a matrix; else uses
+// block.columns (if set) or the raw result columns. Exported for unit testing.
+export function tableColumns(block: Extract<Block, { kind: 'table' }>, result: { columns: { key: string; label: string; kind?: string; decimals?: number }[]; rows: Record<string, unknown>[] } | undefined):
+  { columns: { key: string; label: string; kind?: string; decimals?: number }[]; rows: Record<string, unknown>[] } {
+  const mo = block.source !== 'primary' ? matrixOpts(block.source) : null;
+  const eff = mo && result ? resultToMatrix(result, mo) : result;
+  const columns = (!mo && block.columns.length)
     ? block.columns
-    : (result?.columns.map((c) => ({ key: c.key, label: c.label, kind: c.kind, decimals: c.decimals })) ?? []);
-  const rows = result?.rows ?? [];
+    : (eff?.columns.map((c) => ({ key: c.key, label: c.label ?? c.key, kind: c.kind, decimals: (c as { decimals?: number }).decimals })) ?? []);
+  return { columns, rows: eff?.rows ?? [] };
+}
+
+function drawTable(doc: PDFKit.PDFDocument, box: PositionedBox, block: Extract<Block, { kind: 'table' }>, cell: CellData | undefined, bodyBottom: number): void {
+  const { columns, rows } = tableColumns(block, cell?.result as never);
   const colW = box.w / Math.max(1, columns.length);
   let y = box.y;
   const header = () => {

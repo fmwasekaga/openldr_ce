@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import PDFDocument from 'pdfkit';
-import { drawBlock, formatCell } from './paint';
+import { drawBlock, formatCell, tableColumns } from './paint';
 import type { PositionedBox, CellData } from './layout';
 
 // pdfkit emits chunks asynchronously — resolve on 'end'.
@@ -62,5 +62,20 @@ describe('formatCell (Slice G)', () => {
   });
   it('defaults to 1 decimal when none is given', () => {
     expect(formatCell(50, 'percent')).toBe('50.0%');
+  });
+});
+
+describe('tableColumns (Slice E)', () => {
+  it('tableColumns pivots a breakdown table source into dynamic columns', () => {
+    const block = { kind: 'table', columns: [], source: { mode: 'builder', model: 'observations', metric: { key: 'count', agg: 'count' }, dimension: { key: 'code_text' }, breakdown: { key: 'interpretation_code' }, filters: [] } };
+    const result = { columns: [{ key: 'label', label: 'Analyte', kind: 'string' }, { key: 'series', kind: 'string' }, { key: 'value', kind: 'number' }], rows: [ { label: 'Amp', series: 'R', value: 5 }, { label: 'Amp', series: 'S', value: 3 } ] };
+    const { columns, rows } = tableColumns(block as any, result as any);
+    expect(columns.map((c) => c.key)).toEqual(['label', 'R', 'S']);
+    expect(rows).toEqual([{ label: 'Amp', R: 5, S: 3 }]);
+  });
+  it('tableColumns uses block.columns for a non-pivot table when set', () => {
+    const block = { kind: 'table', columns: [{ key: 'a', label: 'A' }], source: { mode: 'builder', model: 'x', metric: { key: 'count', agg: 'count' }, filters: [] } };
+    const result = { columns: [{ key: 'a', label: 'A', kind: 'string' }], rows: [{ a: 'x' }] };
+    expect(tableColumns(block as any, result as any).columns).toEqual([{ key: 'a', label: 'A' }]);
   });
 });
