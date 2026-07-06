@@ -246,3 +246,19 @@ describe('compileBuilderQuery filterTree (nested AND/OR)', () => {
     expect(sql).not.toMatch(/where/i); // null-valued rule → no where clause, no crash
   });
 });
+
+describe('compileBuilderQuery age_band computed dimension', () => {
+  const model = getModel('patients')!;
+  it('emits a CASE bucket with group by + order by for age_band', () => {
+    const { sql } = compileBuilderQuery(db, model, { mode: 'builder', model: 'patients', metric: { key: 'count', agg: 'count' }, dimension: { key: 'age_band', reference: '2026-01-01' }, filters: [] } as any).compile();
+    expect(sql).toMatch(/case when/i);
+    expect(sql).toMatch(/group by/i);
+    expect(sql).toMatch(/order by/i);
+  });
+  it('a plain-column dimension emits byte-identical SQL (compute absent)', () => {
+    const { sql } = compileBuilderQuery(db, model, { mode: 'builder', model: 'patients', metric: { key: 'count', agg: 'count' }, dimension: { key: 'gender' }, filters: [] } as any).compile();
+    expect(sql).not.toMatch(/case when/i);
+    expect(sql).toMatch(/group by "gender"/i);
+    expect(sql).toMatch(/order by "gender"/i);
+  });
+});
