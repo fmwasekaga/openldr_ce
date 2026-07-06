@@ -118,7 +118,7 @@ export function QueryEditor({ block, parameters, sqlEnabled = false, onChange }:
               )}
             </>
           )}
-          {block.kind === 'chart' && models.length > 0 && (
+          {(block.kind === 'chart' || block.kind === 'table') && models.length > 0 && (
             <label className="flex flex-col gap-1 text-xs">{t('reportBuilder.query.breakdown')}
               <select
                 aria-label={t('reportBuilder.query.breakdownAria')}

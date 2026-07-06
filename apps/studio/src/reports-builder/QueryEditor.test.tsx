@@ -89,6 +89,20 @@ describe('QueryEditor breakdown', () => {
   });
 });
 
+describe('QueryEditor breakdown — table (Slice E pivot/matrix)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('shows the breakdown dropdown for a table block and writes source.breakdown', async () => {
+    const block: Block = { kind: 'table', columns: [], source: { mode: 'builder', model: 'observations', metric: { key: 'count', agg: 'count' }, dimension: { key: 'code_text' }, filters: [] } } as never;
+    const onChange = vi.fn();
+    render(<QueryEditor block={block} parameters={[]} onChange={onChange} />);
+    const sel = await screen.findByLabelText('Breakdown');
+    expect(sel).toBeInTheDocument();
+    fireEvent.change(sel, { target: { value: 'status' } });
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ source: expect.objectContaining({ breakdown: { key: 'status' } }) }));
+  });
+});
+
 describe('QueryEditor multi-metric (Slice A)', () => {
   beforeEach(() => vi.clearAllMocks());
 
