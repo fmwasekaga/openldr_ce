@@ -193,6 +193,7 @@ async function runWideQuery(
     ...metrics.map((m) => ({
       key: m.key, label: m.label ?? m.key,
       kind: (m.derived && m.derived.scale === 100 ? 'percent' : 'number') as 'percent' | 'number',
+      ...(m.derived ? { decimals: m.derived.decimals } : {}),
     })),
   ];
   const chart: ChartHint = { type: 'bar', x: 'label', y: aggKeys[0] ?? 'label' };

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { sampleForms, type FormStore } from '@openldr/forms';
 import { buildDefaultWorkflows, type WorkflowStore } from '@openldr/workflows';
 import { seedDefaultDashboard, type DashboardStore } from '@openldr/dashboards';
-import { seedSampleReportTemplate, type ReportTemplateStore } from '@openldr/report-builder';
+import { seedSampleReportTemplate, seedAmrResistanceTemplate, type ReportTemplateStore } from '@openldr/report-builder';
 import type { ConnectorStore, TerminologyAdminStore, AppSettingStore } from '@openldr/db';
 import { BUNDLED_TERMINOLOGY, readBundledTerminology } from '@openldr/db';
 import { FEATURE_FLAGS } from '@openldr/config';
@@ -155,14 +155,16 @@ export async function seedDatabase(db: DbContext, app: FormSeedTarget): Promise<
     console.warn('[seed] sample dashboard seed skipped:', e instanceof Error ? e.message : String(e));
   }
 
-  // Sample report template — a published "AMR Surveillance Summary" so a fresh install has a
-  // report to open in the builder (and, being published, one that also appears in the Reports
-  // library). Idempotent (skips when present) and best-effort (never aborts the rest of the seed).
+  // Report templates — a published "AMR Surveillance Summary" sample plus the editable
+  // amr-resistance code report, so a fresh install has real templates to open in the builder
+  // (and, being published, ones that also appear in the Reports library). Idempotent (each
+  // skips when present) and best-effort (never aborts the rest of the seed).
   let reportTemplatesSeeded = 0;
   try {
     reportTemplatesSeeded = await seedSampleReportTemplate(app.reportTemplates);
+    reportTemplatesSeeded += await seedAmrResistanceTemplate(app.reportTemplates);
   } catch (e) {
-    console.warn('[seed] sample report template seed skipped:', e instanceof Error ? e.message : String(e));
+    console.warn('[seed] report template seed skipped:', e instanceof Error ? e.message : String(e));
   }
 
   // Bundled license-safe terminology (FHIR R4 base catalog + full UCUM) — imported once on a

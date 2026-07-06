@@ -24,11 +24,11 @@ describe('resolveQueryParams', () => {
     expect(out.filters[0].value).toBe('x-Z-y');
   });
 
-  it('leaves unknown tokens as empty string', () => {
+  it('drops a filter whose unknown token resolves to an empty string (Slice G)', () => {
     const q = { mode: 'builder', model: 'm', metric: { key: 'count', agg: 'count' },
       filters: [{ dimension: 'd', op: 'eq', value: '{{param.missing}}' }] } as any;
     const out = resolveQueryParams(q, {}) as any;
-    expect(out.filters[0].value).toBe('');
+    expect(out.filters).toEqual([]);
   });
 
   it('substitutes into sql-mode values', () => {
@@ -41,6 +41,31 @@ describe('resolveQueryParams', () => {
   it('passes a query with no tokens through unchanged (structurally)', () => {
     const q = { mode: 'builder', model: 'm', metric: { key: 'count', agg: 'count' }, filters: [] } as any;
     expect(resolveQueryParams(q, { a: 'b' })).toEqual(q);
+  });
+});
+
+describe('resolveQueryParams blank-filter drop (Slice G)', () => {
+  const base = {
+    mode: 'builder' as const, model: 'observations',
+    metric: { key: 'tested', agg: 'count' as const },
+    filters: [
+      { dimension: 'interpretation_code', op: 'in', value: ['R', 'I', 'S'] },
+      { dimension: 'effective_date_time', op: 'gte', value: '{{param.from}}' },
+      { dimension: 'effective_date_time', op: 'lte', value: '{{param.to}}' },
+    ],
+  };
+
+  it('drops date filters when the range is unset (keeps the literal filter)', () => {
+    const out = resolveQueryParams(base as never, {});
+    if (out.mode !== 'builder') throw new Error('expected builder');
+    expect(out.filters).toEqual([{ dimension: 'interpretation_code', op: 'in', value: ['R', 'I', 'S'] }]);
+  });
+
+  it('keeps date filters with substituted values when the range is set', () => {
+    const out = resolveQueryParams(base as never, { from: '2024-01-01', to: '2024-12-31' });
+    if (out.mode !== 'builder') throw new Error('expected builder');
+    expect(out.filters).toContainEqual({ dimension: 'effective_date_time', op: 'gte', value: '2024-01-01' });
+    expect(out.filters).toContainEqual({ dimension: 'effective_date_time', op: 'lte', value: '2024-12-31' });
   });
 });
 
