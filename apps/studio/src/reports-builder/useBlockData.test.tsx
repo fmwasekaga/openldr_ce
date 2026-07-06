@@ -77,4 +77,21 @@ describe('useBlockData', () => {
     expect(arg.mode).toBe('sql');
     expect(arg.values.ward).toBe('ICU');
   });
+
+  it('drops a filter bound to an unset param (blank-drop via resolveQueryParams)', async () => {
+    runWidgetQuery.mockResolvedValue(result(0));
+    let t = createEmptyTemplate('rt', 'R');
+    t = addRowWithBlock(t, newBlock('chart'));
+    t = updateBlockAt(t, 0, 0, { query: {
+      mode: 'builder', model: 'observations', metric: { key: 'count', agg: 'count' },
+      filters: [
+        { dimension: 'status', op: 'eq', value: 'final' },
+        { dimension: 'effective_date_time', op: 'gte', value: '{{param.from}}' },
+      ],
+    } } as any);
+    renderHook(() => useBlockData(t, {})); // empty params → {{param.from}} → '' → dropped
+    await waitFor(() => expect(runWidgetQuery).toHaveBeenCalled());
+    const sent = runWidgetQuery.mock.calls[0][0];
+    expect(sent.filters).toEqual([{ dimension: 'status', op: 'eq', value: 'final' }]);
+  });
 });
