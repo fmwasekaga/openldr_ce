@@ -5,7 +5,7 @@ export type { ChartData, ChartSeries };
 
 export interface ChartVisual { color?: string; secondaryColor?: string; showLegend?: boolean }
 
-export type ChartKind = 'bar' | 'line' | 'pie';
+export type ChartKind = 'bar' | 'line' | 'pie' | 'area' | 'donut' | 'row' | 'scatter';
 const PALETTE = ['#378ADD', '#1D9E75', '#D85A30', '#7F77DD', '#EF9F27', '#D4537E'];
 const AXIS = '#999';
 const GRID = '#e5e5e5';
