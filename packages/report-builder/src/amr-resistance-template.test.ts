@@ -5,6 +5,7 @@ import { ReportTemplateSchema } from './schema';
 import type { ReportTemplateStore } from './store';
 import { buildAmrResistanceTemplate, seedAmrResistanceTemplate, AMR_RESISTANCE_TEMPLATE_ID } from './amr-resistance-template';
 import { resolveQueryParams } from './render/run-template';
+import { lintReportTemplate } from './lint';
 
 function tableSource() {
   const t = buildAmrResistanceTemplate();
@@ -25,6 +26,22 @@ describe('buildAmrResistanceTemplate', () => {
     const src = tableSource() as { metrics: { key: string; derived?: unknown }[] };
     expect(src.metrics.map((m) => m.key)).toEqual(['tested', 'r', 'i', 's', 'percentR']);
     expect(src.metrics.find((m) => m.key === 'percentR')?.derived).toEqual({ numerator: 'r', denominator: 'tested', scale: 100, decimals: 1 });
+  });
+
+  it('includes a facility select param and a facility filter (Slice D)', () => {
+    const t = buildAmrResistanceTemplate();
+    const facilityParam = t.parameters.find((p) => p.id === 'facility');
+    expect(facilityParam).toMatchObject({ id: 'facility', type: 'select' });
+    expect(facilityParam?.optionsSql).toMatch(/managing_organization/i);
+    const table = t.rows.flatMap((r) => r.cells).find((c) => c.block.kind === 'table')!;
+    const src = (table.block as { source: any }).source;
+    expect(src.filters).toEqual(expect.arrayContaining([{ dimension: 'facility', op: 'eq', value: '{{param.facility}}' }]));
+  });
+
+  it('stays lint-clean with the facility param (bound in a filter → counted used)', () => {
+    const issues = lintReportTemplate(buildAmrResistanceTemplate());
+    expect(issues.filter((i) => i.severity === 'error')).toHaveLength(0);
+    expect(issues.filter((i) => i.severity === 'warning')).toHaveLength(0);
   });
 });
 
