@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import type { Block } from '@openldr/report-builder/pure';
-import { resultToChartData, chartOpts } from '@openldr/report-builder/pure';
+import { resultToChartData, chartOpts, pivotTableResult } from '@openldr/report-builder/pure';
 import { renderWidget } from '../dashboard/widgets';
 import { blockToWidgetConfig } from './blockToWidgetConfig';
 import { ReportChart } from './ReportChart';
@@ -17,7 +17,10 @@ export function CanvasBlock({ block, data }: { block: Block; data?: BlockData })
         const cd = resultToChartData(data.result, { title: '', ...chartOpts(block.query) });
         return <div className="h-full w-full"><ReportChart chartType={block.chartType} data={cd} /></div>;
       }
-      return <div className="h-full w-full">{renderWidget(blockToWidgetConfig(block, data.result), data.result)}</div>;
+      // pivotTableResult's return type is the minimal {columns,rows} shape; a pivoted table result
+      // still carries the same chart/meta as the source ReportResult (unused by the table widget).
+      const tableResult = block.kind === 'table' ? ((pivotTableResult(block.source, data.result) ?? data.result) as typeof data.result) : data.result;
+      return <div className="h-full w-full">{renderWidget(blockToWidgetConfig(block, tableResult), tableResult)}</div>;
     }
   }
   switch (block.kind) {
