@@ -524,6 +524,8 @@ export const en = {
       deleteBlock: 'Delete block',
       selectHint: 'Select a block to edit it, or drag a block from the palette.',
       text: 'Text',
+      collapse: 'Collapse panel',
+      expand: 'Expand panel',
     },
     query: {
       builder: 'Builder',

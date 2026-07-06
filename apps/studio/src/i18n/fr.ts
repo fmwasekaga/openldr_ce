@@ -517,6 +517,8 @@ export const fr: EnShape = {
       deleteBlock: 'Supprimer le bloc',
       selectHint: 'Sélectionnez un bloc pour le modifier, ou faites glisser un bloc depuis la palette.',
       text: 'Texte',
+      collapse: 'Réduire le panneau',
+      expand: 'Développer le panneau',
     },
     query: {
       builder: 'Générateur',

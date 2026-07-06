@@ -517,6 +517,8 @@ export const pt: EnShape = {
       deleteBlock: 'Eliminar bloco',
       selectHint: 'Selecione um bloco para o editar, ou arraste um bloco da paleta.',
       text: 'Texto',
+      collapse: 'Recolher painel',
+      expand: 'Expandir painel',
     },
     query: {
       builder: 'Construtor',
