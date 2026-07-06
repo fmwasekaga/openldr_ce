@@ -42,11 +42,17 @@ export function lintReportTemplate(t: ReportTemplate): ReportLintIssue[] {
   const definedSet = new Set(t.parameters.map((p) => p.id));
   const usedParamIds = new Set<string>();
 
+  // A `daterange` param populates fixed `from`/`to` value keys at runtime (ParamValuesBar),
+  // so filters bind {{param.from}}/{{param.to}} rather than {{param.<id>}}.
+  const dateRangeParamIds = t.parameters.filter((p) => p.type === 'daterange').map((p) => p.id);
+  const providedKeys = new Set<string>(dateRangeParamIds.length ? ['from', 'to'] : []);
+
   if (t.name.trim() === '') issues.push({ severity: 'error', code: 'empty-name', message: 'Report has no name' });
 
   let dataBlocks = 0;
   const consumeRefs = (q: WidgetQuery, loc?: { rowIndex: number; cellIndex: number }) => {
     for (const id of paramRefs(q)) {
+      if (providedKeys.has(id)) { for (const dp of dateRangeParamIds) usedParamIds.add(dp); continue; }
       usedParamIds.add(id);
       if (!definedSet.has(id)) issues.push({ severity: 'error', code: 'orphaned-param-ref', message: `References parameter "${id}" which is not defined`, ...loc });
     }
