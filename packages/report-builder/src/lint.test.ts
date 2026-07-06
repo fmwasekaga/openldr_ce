@@ -97,3 +97,27 @@ describe('lintReportTemplate daterange params (Slice G follow-up)', () => {
     expect(codes(tableWithDateFilters([] as never))).toContain('orphaned-param-ref');
   });
 });
+
+describe('lint filterTree param refs', () => {
+  function tplWithTreeRule(paramToken: string, params: { id: string; label: string; type: 'text' | 'daterange' }[] = []) {
+    return {
+      id: 't', name: 'T', description: '', category: 'operational' as const, status: 'draft' as const,
+      page: { size: 'A4', orientation: 'portrait', margins: { top: 40, right: 40, bottom: 40, left: 40 } },
+      parameters: params,
+      rows: [{ id: 'r1', cells: [{ colSpan: 12, block: { kind: 'chart' as const, chartType: 'bar' as const, visual: {},
+        query: { mode: 'builder' as const, model: 'observations', metric: { key: 'count', agg: 'count' as const }, filters: [],
+          filterTree: { kind: 'group', combinator: 'and', children: [ { kind: 'rule', dimension: 'code_text', op: 'eq', value: paramToken } ] } } } }] }],
+    } as unknown as ReportTemplate;
+  }
+
+  it('flags an orphaned param referenced only inside a filterTree rule', () => {
+    const issues = lintReportTemplate(tplWithTreeRule('{{param.ghost}}'));
+    expect(issues.some((i) => i.code === 'orphaned-param-ref')).toBe(true);
+  });
+
+  it('counts a defined param used when bound inside a filterTree rule (no unused warning)', () => {
+    const issues = lintReportTemplate(tplWithTreeRule('{{param.site}}', [{ id: 'site', label: 'Site', type: 'text' }]));
+    expect(issues.some((i) => i.code === 'orphaned-param-ref')).toBe(false);
+    expect(issues.some((i) => i.code === 'unused-parameter' && i.paramId === 'site')).toBe(false);
+  });
+});

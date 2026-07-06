@@ -34,6 +34,13 @@ function paramRefs(q: WidgetQuery): string[] {
   };
   if (q.mode === 'builder') for (const f of q.filters ?? []) scan(f.value);
   else if (q.values) for (const v of Object.values(q.values)) scan(v);
+  if (q.mode === 'builder' && (q as { filterTree?: unknown }).filterTree) {
+    const walk = (node: any) => {
+      if (node.kind === 'rule') scan(node.value);
+      else for (const c of node.children) walk(c);
+    };
+    walk((q as any).filterTree);
+  }
   return ids;
 }
 
