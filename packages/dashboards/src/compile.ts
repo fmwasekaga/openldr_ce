@@ -1,6 +1,6 @@
 import { type Kysely, sql, expressionBuilder, type SelectQueryBuilder } from 'kysely';
 import type { ExternalSchema } from '@openldr/db';
-import type { QueryModel, ModelDimension } from './models/registry';
+import type { QueryModel, ModelDimension, ModelJoin } from './models/registry';
 import type { WidgetQuery, Metric, QueryFilter, DateGrain, ConditionNode, ConditionRule } from './types';
 import type { ReportResultData, ReportColumn, ChartHint } from '@openldr/reporting';
 import { ageBandArms } from './age-band';
@@ -150,6 +150,23 @@ function ageBandExprs(d: ModelDimension, reference?: string) {
   label = sql`${label} else ${a.openEndedLabel} end`;
   rank = sql`${rank} else ${a.openEndedRank} end`;
   return { label, rank };
+}
+
+// Distinct joins referenced by any dimension the query uses (dimension/breakdown/filters/filterTree/metric-where).
+export function collectUsedJoins(model: QueryModel, q: BuilderQuery): ModelJoin[] {
+  const aliases = new Set<string>();
+  const add = (dimKey?: string) => { if (!dimKey) return; const d = model.dimensions.find((x) => x.key === dimKey); if (d?.join) aliases.add(d.join); };
+  add(q.dimension?.key);
+  add(q.breakdown?.key);
+  for (const f of q.filters ?? []) add(f.dimension);
+  const walk = (node?: ConditionNode) => { if (!node) return; if (node.kind === 'rule') add(node.dimension); else node.children.forEach(walk); };
+  walk(q.filterTree);
+  for (const m of [q.metric, ...(q.metrics ?? [])]) for (const w of m.where ?? []) add(w.dimension);
+  return [...aliases].map((a) => {
+    const j = (model.joins ?? []).find((x) => x.alias === a);
+    if (!j) throw new Error(`unknown join alias: ${a}`);
+    return j;
+  });
 }
 
 /** Build the Kysely query (no grain bucketing — date grain is applied in JS after fetch). */

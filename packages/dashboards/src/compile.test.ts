@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Kysely, SqliteDialect } from 'kysely';
-import { compileBuilderQuery } from './compile';
+import { compileBuilderQuery, collectUsedJoins } from './compile';
 import { getModel } from './models/registry';
 
 // A dummy Kysely instance just for .compile() — no real DB.
@@ -279,5 +279,20 @@ describe('compileBuilderQuery age_band as breakdown', () => {
     const { sql } = compileBuilderQuery(db, model, { mode: 'builder', model: 'patients', metric: { key: 'count', agg: 'count' }, breakdown: { key: 'gender' }, filters: [] } as any).compile();
     expect(sql).toMatch(/group by "gender"/i);
     expect(sql).not.toMatch(/case when/i);
+  });
+});
+
+describe('collectUsedJoins', () => {
+  const model = getModel('observations')!;
+  const base = { mode: 'builder' as const, model: 'observations', metric: { key: 'count', agg: 'count' as const }, filters: [] };
+  it('collects the join for a facility dimension / breakdown / filter / filterTree / metric-where', () => {
+    expect(collectUsedJoins(model, { ...base, dimension: { key: 'facility' } } as any).map((j) => j.alias)).toEqual(['jp']);
+    expect(collectUsedJoins(model, { ...base, breakdown: { key: 'facility' } } as any).map((j) => j.alias)).toEqual(['jp']);
+    expect(collectUsedJoins(model, { ...base, filters: [{ dimension: 'facility', op: 'eq', value: 'x' }] } as any).map((j) => j.alias)).toEqual(['jp']);
+    expect(collectUsedJoins(model, { ...base, filterTree: { kind: 'group', combinator: 'and', children: [{ kind: 'rule', dimension: 'facility', op: 'eq', value: 'x' }] } } as any).map((j) => j.alias)).toEqual(['jp']);
+    expect(collectUsedJoins(model, { ...base, metrics: [{ key: 'r', agg: 'count', where: [{ dimension: 'facility', op: 'eq', value: 'R' }] }] } as any).map((j) => j.alias)).toEqual(['jp']);
+  });
+  it('collects nothing when only base dimensions are used', () => {
+    expect(collectUsedJoins(model, { ...base, dimension: { key: 'code_text' } } as any)).toEqual([]);
   });
 });
