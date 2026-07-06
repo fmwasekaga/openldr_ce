@@ -254,6 +254,10 @@ describe('compileBuilderQuery age_band computed dimension', () => {
     expect(sql).toMatch(/case when/i);
     expect(sql).toMatch(/group by/i);
     expect(sql).toMatch(/order by/i);
+    // GROUP BY must contain BOTH the label + rank CASE expressions so ORDER BY rank is a grouped
+    // expression on strict engines (pg/mssql). Old single-groupBy code has only 2 CASEs total → fails.
+    expect(sql).toMatch(/group by case when [\s\S]* end, case when [\s\S]* end/i);
+    expect((sql.match(/case when/gi) ?? []).length).toBeGreaterThanOrEqual(3);
   });
   it('a plain-column dimension emits byte-identical SQL (compute absent)', () => {
     const { sql } = compileBuilderQuery(db, model, { mode: 'builder', model: 'patients', metric: { key: 'count', agg: 'count' }, dimension: { key: 'gender' }, filters: [] } as any).compile();

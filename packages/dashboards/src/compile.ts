@@ -178,7 +178,9 @@ export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryMode
     const d = dim(model, q.dimension.key);
     if (d.compute) {
       const { label, rank } = ageBandExprs(d, q.dimension.reference);
-      qb = qb.select(label.as('label') as never).groupBy(label as never).orderBy(rank as never);
+      // GROUP BY both label + rank so ORDER BY rank is a grouped expression on strict engines
+      // (Postgres/MSSQL reject ORDER BY an ungrouped expression). rank is 1:1 with label → same groups.
+      qb = qb.select(label.as('label') as never).groupBy(label as never).groupBy(rank as never).orderBy(rank as never);
     } else {
       qb = qb.select(sql.ref(d.column).as('label')).groupBy(d.column as never).orderBy(d.column as never);
     }
