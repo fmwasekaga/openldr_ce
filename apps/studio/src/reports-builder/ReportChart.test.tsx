@@ -36,4 +36,24 @@ describe('ReportChart', () => {
     const { container } = render(<div style={{ width: 300, height: 200 }}><ReportChart chartType="bar" data={one} /></div>);
     expect(container.querySelectorAll('.recharts-bar').length).toBe(1);
   });
+
+  it('renders an area layer per series', () => {
+    const { container } = render(<div style={{ width: 300, height: 200 }}><ReportChart chartType="area" data={two} /></div>);
+    expect(container.querySelectorAll('.recharts-area').length).toBe(2);
+  });
+
+  it('renders a donut (pie sectors) for one series', () => {
+    const { container } = render(<div style={{ width: 300, height: 200 }}><ReportChart chartType="donut" data={one} /></div>);
+    expect(container.querySelector('.recharts-pie')).toBeInTheDocument();
+  });
+
+  it('renders horizontal bars (row) — one bar layer per series', () => {
+    const { container } = render(<div style={{ width: 300, height: 200 }}><ReportChart chartType="row" data={two} /></div>);
+    expect(container.querySelectorAll('.recharts-bar').length).toBe(2);
+  });
+
+  it('renders scatter points per series', () => {
+    const { container } = render(<div style={{ width: 300, height: 200 }}><ReportChart chartType="scatter" data={two} /></div>);
+    expect(container.querySelectorAll('.recharts-scatter').length).toBe(2);
+  });
 });
