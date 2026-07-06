@@ -117,3 +117,14 @@ describe('ConditionGroup (nested filter tree)', () => {
     expect(() => ConditionGroupSchema.parse({ kind: 'group', combinator: 'nand', children: [] })).toThrow();
   });
 });
+
+describe('DimensionRef.reference', () => {
+  it('accepts an optional reference on the query dimension', () => {
+    const q = WidgetQuerySchema.parse({ mode: 'builder', model: 'patients', metric: { key: 'count', agg: 'count' }, filters: [], dimension: { key: 'age_band', reference: '{{param.asOf}}' } });
+    expect(q).toMatchObject({ mode: 'builder', dimension: { key: 'age_band', reference: '{{param.asOf}}' } });
+  });
+  it('a dimension without reference still parses', () => {
+    const q = WidgetQuerySchema.parse({ mode: 'builder', model: 'patients', metric: { key: 'count', agg: 'count' }, filters: [], dimension: { key: 'gender' } });
+    expect((q as { dimension?: { reference?: string } }).dimension).not.toHaveProperty('reference');
+  });
+});
