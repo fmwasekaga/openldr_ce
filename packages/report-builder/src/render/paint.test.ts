@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import PDFDocument from 'pdfkit';
-import { drawBlock } from './paint';
+import { drawBlock, formatCell } from './paint';
 import type { PositionedBox, CellData } from './layout';
 
 // pdfkit emits chunks asynchronously — resolve on 'end'.
@@ -38,5 +38,22 @@ describe('drawBlock', () => {
       drawBlock(doc, box('spacer'), { kind: 'spacer', height: 10 } as any, undefined, { params: {}, dataset: undefined }, 800);
     });
     expect(buf.subarray(0, 5).toString()).toBe('%PDF-');
+  });
+});
+
+describe('formatCell (Slice G)', () => {
+  it('formats a percent column value as N.N%', () => {
+    expect(formatCell(50, 'percent')).toBe('50.0%');
+    expect(formatCell(33.3, 'percent')).toBe('33.3%');
+  });
+  it('renders a blank/non-numeric percent as empty', () => {
+    expect(formatCell(null, 'percent')).toBe('');
+    expect(formatCell(undefined, 'percent')).toBe('');
+    expect(formatCell('x', 'percent')).toBe('');
+  });
+  it('renders non-percent columns as string (unchanged)', () => {
+    expect(formatCell('Ciprofloxacin')).toBe('Ciprofloxacin');
+    expect(formatCell(4, 'number')).toBe('4');
+    expect(formatCell(null)).toBe('');
   });
 });
