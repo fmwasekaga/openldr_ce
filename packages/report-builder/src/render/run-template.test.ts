@@ -135,3 +135,16 @@ describe('runTemplate', () => {
     expect(resolved.cells['0:0'].result).toBeUndefined();
   });
 });
+
+describe('resolveQueryParams dimension.reference', () => {
+  it('substitutes a param token in the dimension reference', () => {
+    const q = { mode: 'builder' as const, model: 'patients', metric: { key: 'count', agg: 'count' as const }, filters: [], dimension: { key: 'age_band', reference: '{{param.asOf}}' } };
+    const r = resolveQueryParams(q as any, { asOf: '2026-01-01' }) as any;
+    expect(r.dimension.reference).toBe('2026-01-01');
+  });
+  it('leaves a plain dimension untouched', () => {
+    const q = { mode: 'builder' as const, model: 'patients', metric: { key: 'count', agg: 'count' as const }, filters: [], dimension: { key: 'gender' } };
+    const r = resolveQueryParams(q as any, {}) as any;
+    expect(r.dimension).toEqual({ key: 'gender' });
+  });
+});
