@@ -245,6 +245,17 @@ describe('seedDatabase — bundled terminology', () => {
   });
 });
 
+describe('seedDatabase — report templates', () => {
+  it('seeds both report templates on a fresh install, idempotent on reseed', async () => {
+    const { app, reportTemplates } = fakeApp();
+    const first = await seedDatabase(fakeDb, app);
+    expect(first.reportTemplatesSeeded).toBe(2);
+    expect(reportTemplates.map((r) => r.id).sort()).toEqual(['rt-amr-resistance', 'rt-sample-amr']);
+    const second = await seedDatabase(fakeDb, app);
+    expect(second.reportTemplatesSeeded).toBe(0);
+  });
+});
+
 describe('fhirValueSetCatalogToInputs — bundled R4 fixture parses', () => {
   it('parses the bundled R4 catalog into value sets', async () => {
     const { BUNDLED_TERMINOLOGY, readBundledTerminology, fhirValueSetCatalogToInputs } = await import('@openldr/db');
