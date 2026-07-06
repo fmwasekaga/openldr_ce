@@ -7,8 +7,9 @@ export const AMR_RESISTANCE_TEMPLATE_ID = 'rt-amr-resistance';
  * The built-in amr-resistance code report reproduced as an editable, published Report Builder
  * template using the conditional (Slice A) + derived-ratio (Slice B) query model: per antibiotic,
  * R/I/S/tested counts + %R over the `observations` model. An optional date-range parameter binds to
- * the effective-date filters (dropped when unset). Facility filter deferred to the cross-model-join
- * slice. Coexists with the code report.
+ * the effective-date filters (dropped when unset), and an optional facility select parameter binds to
+ * a facility filter (Slice D cross-model join; dropped when unset, so all-facilities behavior is
+ * unchanged). Coexists with the code report.
  */
 export function buildAmrResistanceTemplate(): ReportTemplate {
   return ReportTemplateSchema.parse({
@@ -18,7 +19,10 @@ export function buildAmrResistanceTemplate(): ReportTemplate {
     category: 'amr',
     status: 'published',
     page: { size: 'A4', orientation: 'portrait', margins: { top: 40, right: 40, bottom: 40, left: 40 } },
-    parameters: [{ id: 'dateRange', label: 'Date range', type: 'daterange', required: false }],
+    parameters: [
+      { id: 'dateRange', label: 'Date range', type: 'daterange', required: false },
+      { id: 'facility', label: 'Facility', type: 'select', required: false, optionsSql: "select distinct managing_organization from patients where managing_organization is not null order by 1" },
+    ],
     rows: [
       { id: 'r1', cells: [{ colSpan: 12, block: { kind: 'title', text: 'AMR Resistance Rate', style: { bold: true, fontSize: 20 } } }] },
       { id: 'r2', cells: [{ colSpan: 12, block: { kind: 'text', content: 'Resistant/Intermediate/Susceptible counts and %R by antibiotic.', style: { italic: true } } }] },
@@ -45,6 +49,7 @@ export function buildAmrResistanceTemplate(): ReportTemplate {
                 { dimension: 'interpretation_code', op: 'in', value: ['R', 'I', 'S'] },
                 { dimension: 'effective_date_time', op: 'gte', value: '{{param.from}}' },
                 { dimension: 'effective_date_time', op: 'lte', value: '{{param.to}}' },
+                { dimension: 'facility', op: 'eq', value: '{{param.facility}}' },
               ],
             },
           },

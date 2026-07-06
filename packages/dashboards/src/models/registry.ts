@@ -7,9 +7,16 @@ export interface AgeBandCompute {
   openEndedLabel: string;                      // older than the last band, e.g. '50+'
   unknownLabel: string;                        // null / future birth_date, e.g. 'unknown'
 }
-export interface ModelDimension { key: string; label: string; column: string; kind: DimensionKind; dateGrain?: DateGrain[]; compute?: AgeBandCompute }
+export interface ModelJoin {
+  table: keyof ExternalSchema;    // 'patients'
+  alias: string;                  // 'jp'
+  left: string;                   // base column: 'subject_ref'
+  leftReplace?: [string, string]; // ['Patient/',''] → replace(base.left, 'Patient/', '')
+  right: string;                  // joined column: 'id'
+}
+export interface ModelDimension { key: string; label: string; column: string; kind: DimensionKind; dateGrain?: DateGrain[]; compute?: AgeBandCompute; join?: string }
 export interface ModelMetric { key: string; label: string; agg: Agg; column?: string }
-export interface QueryModel { id: string; label: string; table: keyof ExternalSchema; dimensions: ModelDimension[]; metrics: ModelMetric[] }
+export interface QueryModel { id: string; label: string; table: keyof ExternalSchema; dimensions: ModelDimension[]; metrics: ModelMetric[]; joins?: ModelJoin[] }
 
 const DATE_GRAINS: DateGrain[] = ['day', 'week', 'month', 'year'];
 const COUNT: ModelMetric = { key: 'count', label: 'Count', agg: 'count' };
@@ -28,12 +35,14 @@ export const MODELS: QueryModel[] = [
   },
   {
     id: 'observations', label: 'Results', table: 'observations',
+    joins: [{ table: 'patients', alias: 'jp', left: 'subject_ref', leftReplace: ['Patient/', ''], right: 'id' }],
     dimensions: [
       { key: 'status', label: 'Status', column: 'status', kind: 'string' },
       { key: 'code_text', label: 'Analyte', column: 'code_text', kind: 'string' },
       { key: 'interpretation_code', label: 'Interpretation', column: 'interpretation_code', kind: 'string' },
       { key: 'value_unit', label: 'Unit', column: 'value_unit', kind: 'string' },
       { key: 'effective_date_time', label: 'Effective', column: 'effective_date_time', kind: 'date', dateGrain: DATE_GRAINS },
+      { key: 'facility', label: 'Facility', column: 'managing_organization', kind: 'string', join: 'jp' },
     ],
     metrics: [COUNT, { key: 'avg_value', label: 'Avg Value', agg: 'avg', column: 'value_quantity' }],
   },

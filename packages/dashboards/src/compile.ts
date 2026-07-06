@@ -1,6 +1,6 @@
 import { type Kysely, sql, expressionBuilder, type SelectQueryBuilder } from 'kysely';
 import type { ExternalSchema } from '@openldr/db';
-import type { QueryModel, ModelDimension } from './models/registry';
+import type { QueryModel, ModelDimension, ModelJoin } from './models/registry';
 import type { WidgetQuery, Metric, QueryFilter, DateGrain, ConditionNode, ConditionRule } from './types';
 import type { ReportResultData, ReportColumn, ChartHint } from '@openldr/reporting';
 import { ageBandArms } from './age-band';
@@ -19,13 +19,23 @@ function likePattern(value: unknown): string {
   return `%${String(value).replace(/[%_\\]/g, '\\$&')}%`;
 }
 
+// A dimension's column ref string: joined dims → "alias"."col"; base dims → qualified only when a join is active.
+function colName(model: QueryModel, dimKey: string, qualify: boolean): string {
+  const d = dim(model, dimKey);
+  if (d.join) return `${d.join}.${d.column}`;
+  return qualify ? `${model.table}.${d.column}` : d.column;
+}
+// A raw base-table column (metric columns): qualified only when a join is active.
+function baseCol(model: QueryModel, col: string, qualify: boolean): string {
+  return qualify ? `${model.table}.${col}` : col;
+}
+
 /** A portable boolean SQL fragment for a metric's conditional predicate (ANDed). */
-function condExpr(model: QueryModel, where: QueryFilter[]) {
+function condExpr(model: QueryModel, where: QueryFilter[], qualify: boolean) {
   const frags: ReturnType<typeof sql> [] = [];
   for (const f of where) {
     if (f.value === null) continue;
-    const d = dim(model, f.dimension); // throws on unknown dimension
-    const ref = sql.ref(d.column);
+    const ref = sql.ref(colName(model, f.dimension, qualify)); // throws on unknown dimension (via dim in colName)
     switch (f.op) {
       case 'eq': frags.push(sql`${ref} = ${f.value}`); break;
       case 'in': {
@@ -47,8 +57,8 @@ function condExpr(model: QueryModel, where: QueryFilter[]) {
   return sql<boolean>`(${sql.join(frags, sql` and `)})`;
 }
 
-function metricExpr(model: QueryModel, m: Metric) {
-  const cond = m.where && m.where.length ? condExpr(model, m.where) : null;
+function metricExpr(model: QueryModel, m: Metric, qualify: boolean) {
+  const cond = m.where && m.where.length ? condExpr(model, m.where, qualify) : null;
   if (m.agg === 'count') {
     return cond ? sql<number>`sum(case when ${cond} then 1 else 0 end)` : sql<number>`count(*)`;
   }
@@ -56,7 +66,7 @@ function metricExpr(model: QueryModel, m: Metric) {
   const knownAsDimension = model.dimensions.some((d) => d.column === m.column);
   const knownAsMetric = model.metrics.some((x) => x.column === m.column);
   if (!knownAsDimension && !knownAsMetric) throw new Error(`unknown metric column: ${m.column}`);
-  const col = sql.ref(m.column);
+  const col = sql.ref(baseCol(model, m.column, qualify));
   switch (m.agg) {
     case 'count_distinct': return cond ? sql<number>`count(distinct case when ${cond} then ${col} else null end)` : sql<number>`count(distinct ${col})`;
     case 'sum': return cond ? sql<number>`sum(case when ${cond} then ${col} else 0 end)` : sql<number>`sum(${col})`;
@@ -84,12 +94,11 @@ function grainKey(value: unknown, grain: DateGrain): string {
   return d;
 }
 
-function applyFilters(qb: AnyQB, model: QueryModel, filters: QueryFilter[]): AnyQB {
+function applyFilters(qb: AnyQB, model: QueryModel, filters: QueryFilter[], qualify: boolean): AnyQB {
   let q = qb;
   for (const f of filters) {
     if (f.value === null) continue;
-    const d = dim(model, f.dimension);
-    const ref = d.column as never;
+    const ref = colName(model, f.dimension, qualify) as never;
     switch (f.op) {
       case 'eq': q = q.where(ref, '=', f.value as never); break;
       case 'in': q = q.where(ref, 'in', (Array.isArray(f.value) ? f.value : [f.value]) as never); break;
@@ -110,8 +119,8 @@ function applyFilters(qb: AnyQB, model: QueryModel, filters: QueryFilter[]): Any
 }
 
 // Compile one rule to a Kysely expression, mirroring applyFilters' operator logic.
-function compileRule(eb: any, model: QueryModel, rule: ConditionRule): any {
-  const ref = dim(model, rule.dimension).column as never;
+function compileRule(eb: any, model: QueryModel, rule: ConditionRule, qualify: boolean): any {
+  const ref = colName(model, rule.dimension, qualify) as never;
   const v = rule.value;
   switch (rule.op) {
     case 'in': return eb(ref, 'in', (Array.isArray(v) ? v : [v]) as never);
@@ -128,9 +137,9 @@ function compileRule(eb: any, model: QueryModel, rule: ConditionRule): any {
 }
 
 // Compile a node; returns null for an empty group (no rule descendants) so callers can skip it.
-function compileNode(eb: any, model: QueryModel, node: ConditionNode): any {
-  if (node.kind === 'rule') return node.value === null ? null : compileRule(eb, model, node);
-  const parts = node.children.map((c) => compileNode(eb, model, c)).filter((p: any) => p != null);
+function compileNode(eb: any, model: QueryModel, node: ConditionNode, qualify: boolean): any {
+  if (node.kind === 'rule') return node.value === null ? null : compileRule(eb, model, node, qualify);
+  const parts = node.children.map((c) => compileNode(eb, model, c, qualify)).filter((p: any) => p != null);
   if (parts.length === 0) return null;
   return node.combinator === 'or' ? eb.or(parts) : eb.and(parts);
 }
@@ -152,10 +161,35 @@ function ageBandExprs(d: ModelDimension, reference?: string) {
   return { label, rank };
 }
 
+// Distinct joins referenced by any dimension the query uses (dimension/breakdown/filters/filterTree/metric-where).
+export function collectUsedJoins(model: QueryModel, q: BuilderQuery): ModelJoin[] {
+  const aliases = new Set<string>();
+  const add = (dimKey?: string) => { if (!dimKey) return; const d = model.dimensions.find((x) => x.key === dimKey); if (d?.join) aliases.add(d.join); };
+  add(q.dimension?.key);
+  add(q.breakdown?.key);
+  for (const f of q.filters ?? []) add(f.dimension);
+  const walk = (node?: ConditionNode) => { if (!node) return; if (node.kind === 'rule') add(node.dimension); else node.children.forEach(walk); };
+  walk(q.filterTree);
+  for (const m of [q.metric, ...(q.metrics ?? [])]) for (const w of m.where ?? []) add(w.dimension);
+  return [...aliases].map((a) => {
+    const j = (model.joins ?? []).find((x) => x.alias === a);
+    if (!j) throw new Error(`unknown join alias: ${a}`);
+    return j;
+  });
+}
+
 /** Build the Kysely query (no grain bucketing — date grain is applied in JS after fetch). */
 export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery): AnyQB {
   const wide = !!(q.metrics && q.metrics.length > 0);
   let qb = db.selectFrom(model.table) as unknown as AnyQB;
+  const usedJoins = collectUsedJoins(model, q);
+  const qualify = usedJoins.length > 0;
+  for (const j of usedJoins) {
+    const left = j.leftReplace
+      ? sql`replace(${sql.ref(`${model.table}.${j.left}`)}, ${j.leftReplace[0]}, ${j.leftReplace[1]})`
+      : sql.ref(`${model.table}.${j.left}`);
+    qb = qb.leftJoin(`${j.table} as ${j.alias}` as never, (jb: any) => jb.on(sql`${left} = ${sql.ref(`${j.alias}.${j.right}`)}` as never)) as AnyQB;
+  }
   if (wide) {
     if (q.breakdown) throw new Error('multi-metric (wide) queries cannot use a breakdown');
     const aggKeys = new Set(q.metrics!.filter((m) => !m.derived).map((m) => m.key));
@@ -169,10 +203,10 @@ export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryMode
         }
         continue; // derived metrics are computed post-aggregation, not selected in SQL
       }
-      qb = qb.select(metricExpr(model, m).as(m.key));
+      qb = qb.select(metricExpr(model, m, qualify).as(m.key));
     }
   } else {
-    qb = qb.select(metricExpr(model, q.metric).as('value'));
+    qb = qb.select(metricExpr(model, q.metric, qualify).as('value'));
   }
   if (q.dimension) {
     const d = dim(model, q.dimension.key);
@@ -182,7 +216,8 @@ export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryMode
       // (Postgres/MSSQL reject ORDER BY an ungrouped expression). rank is 1:1 with label → same groups.
       qb = qb.select(label.as('label') as never).groupBy(label as never).groupBy(rank as never).orderBy(rank as never);
     } else {
-      qb = qb.select(sql.ref(d.column).as('label')).groupBy(d.column as never).orderBy(d.column as never);
+      const ref = colName(model, q.dimension.key, qualify);
+      qb = qb.select(sql.ref(ref).as('label')).groupBy(ref as never).orderBy(ref as never);
     }
   }
   if (!wide && q.breakdown) {
@@ -191,16 +226,17 @@ export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryMode
       const { label, rank } = ageBandExprs(b, undefined); // breakdown has no reference → current date
       qb = qb.select(label.as('series') as never).groupBy(label as never).groupBy(rank as never).orderBy(rank as never);
     } else {
-      qb = qb.select(sql.ref(b.column).as('series')).groupBy(b.column as never).orderBy(b.column as never);
+      const ref = colName(model, q.breakdown.key, qualify);
+      qb = qb.select(sql.ref(ref).as('series')).groupBy(ref as never).orderBy(ref as never);
     }
   }
   if (q.filterTree) {
     // Compile the tree once; apply only if it yields a predicate (an all-null/empty tree adds none).
     const eb = expressionBuilder(qb as never) as never;
-    const expr = compileNode(eb, model, q.filterTree);
+    const expr = compileNode(eb, model, q.filterTree, qualify);
     if (expr) qb = qb.where(expr as never) as AnyQB;
   } else {
-    qb = applyFilters(qb, model, q.filters ?? []);
+    qb = applyFilters(qb, model, q.filters ?? [], qualify);
   }
   return qb;
 }

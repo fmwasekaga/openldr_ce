@@ -34,3 +34,13 @@ describe('patients age_band computed dimension', () => {
     expect(d!.compute!.bands.map((b) => b.label)).toEqual(['0-4', '5-14', '15-24', '25-49']);
   });
 });
+
+describe('observations facility join', () => {
+  it('declares a patients join and a facility dimension sourced from it', () => {
+    const m = getModel('observations')!;
+    const join = (m.joins ?? []).find((j) => j.alias === 'jp');
+    expect(join).toMatchObject({ table: 'patients', alias: 'jp', left: 'subject_ref', leftReplace: ['Patient/', ''], right: 'id' });
+    const facility = m.dimensions.find((d) => d.key === 'facility');
+    expect(facility).toMatchObject({ key: 'facility', column: 'managing_organization', join: 'jp' });
+  });
+});
