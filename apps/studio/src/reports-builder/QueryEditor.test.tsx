@@ -5,6 +5,7 @@ import type { Block, ReportParam } from '@openldr/report-builder/pure';
 vi.mock('../api', () => ({
   listModels: vi.fn().mockResolvedValue([
     { id: 'observations', label: 'Results', dimensions: [{ key: 'code_text', label: 'Analyte', column: 'code_text', kind: 'string' }, { key: 'status', label: 'Status', column: 'status', kind: 'string' }], metrics: [{ key: 'count', label: 'Count', agg: 'count' }] },
+    { id: 'patients', label: 'Patients', dimensions: [{ key: 'gender', label: 'Gender', column: 'gender', kind: 'string' }, { key: 'age_band', label: 'Age band', column: 'birth_date', kind: 'string', compute: { kind: 'age-band', bands: [{ maxAge: 4, label: '0-4' }], openEndedLabel: '50+', unknownLabel: 'unknown' } }], metrics: [{ key: 'count', label: 'Count', agg: 'count' }] },
   ]),
 }));
 
@@ -100,6 +101,23 @@ describe('QueryEditor multi-metric (Slice A)', () => {
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
       source: expect.objectContaining({ metrics: [expect.objectContaining({ key: 'm1', agg: 'count' })] }),
     }));
+  });
+});
+
+describe('QueryEditor reference date (Slice C)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('shows a Reference date input only when the selected dimension is computed', async () => {
+    const block = { kind: 'chart', chartType: 'pie', visual: {}, query: { mode: 'builder', model: 'patients', metric: { key: 'count', agg: 'count' }, filters: [], dimension: { key: 'age_band' } } } as any;
+    render(<QueryEditor block={block} parameters={[]} onChange={vi.fn()} />);
+    expect(await screen.findByLabelText('Reference date')).toBeInTheDocument();
+  });
+
+  it('hides the Reference date input for a plain dimension', async () => {
+    const block = { kind: 'chart', chartType: 'pie', visual: {}, query: { mode: 'builder', model: 'patients', metric: { key: 'count', agg: 'count' }, filters: [], dimension: { key: 'gender' } } } as any;
+    render(<QueryEditor block={block} parameters={[]} onChange={vi.fn()} />);
+    await screen.findByText(/chart type/i);
+    expect(screen.queryByLabelText('Reference date')).not.toBeInTheDocument();
   });
 });
 
