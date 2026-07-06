@@ -118,7 +118,7 @@ Expected: FAIL — `drawChart` typed to `ChartKind | 'kpi'` doesn't accept the n
 
 In `packages/report-builder/src/render/charts/index.ts`:
 
-(a) Widen the type at line 8:
+(a) Widen the type at line 8 (NOTE: Task 1 already applied this one-line widening to keep the package green between tasks — verify it reads as below; if so this sub-step is a no-op):
 
 ```ts
 export type ChartKind = 'bar' | 'line' | 'pie' | 'area' | 'donut' | 'row' | 'scatter';
@@ -518,7 +518,8 @@ describe('starter registry', () => {
       expect(t.status).toBe('draft');
       const issues = lintReportTemplate(t);
       const errors = issues.filter((i) => i.severity === 'error');
-      const warnings = issues.filter((i) => i.severity === 'warning');
+      // `blank` is intentionally empty, so the `empty-report` warning is expected & correct for it.
+      const warnings = issues.filter((i) => i.severity === 'warning' && !(id === 'blank' && i.code === 'empty-report'));
       expect(errors, `${id} errors: ${JSON.stringify(errors)}`).toHaveLength(0);
       expect(warnings, `${id} warnings: ${JSON.stringify(warnings)}`).toHaveLength(0);
     }
@@ -636,7 +637,7 @@ function specimenResults(): ReportTemplate {
 
 export function getStarterTemplate(id: StarterId): ReportTemplate {
   switch (id) {
-    case 'blank': return createEmptyTemplate('rt-starter-blank', '');
+    case 'blank': return createEmptyTemplate('rt-starter-blank', 'Untitled report'); // name is z.string().min(1) — cannot be ''
     case 'amr-resistance': return { ...buildAmrResistanceTemplate(), status: 'draft' };
     case 'test-volume': return testVolume();
     case 'patient-demographics': return patientDemographics();
