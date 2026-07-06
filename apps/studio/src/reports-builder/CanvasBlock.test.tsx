@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { CanvasBlock } from './CanvasBlock';
 
-vi.mock('../dashboard/widgets', () => ({ renderWidget: (config: { type: string }) => <div data-testid="widget">{config.type}</div> }));
+vi.mock('../dashboard/widgets', () => ({ renderWidget: (config: { type: string }, result?: { columns?: { key: string }[] }) => <div data-testid="widget" data-cols={result?.columns?.map((c) => c.key).join(',') ?? ''}>{config.type}</div> }));
 
 describe('CanvasBlock', () => {
   it('renders title text', () => {
@@ -37,5 +37,13 @@ describe('CanvasBlock live data', () => {
   it('shows an error state', () => {
     render(<CanvasBlock block={{ kind: 'chart', query: {} as never, chartType: 'bar', visual: {} } as never} data={{ error: 'boom', loading: false }} />);
     expect(screen.getByText(/boom/i)).toBeInTheDocument();
+  });
+  it('renders a table with a breakdown source as a pivoted matrix', () => {
+    const block = { kind: 'table', columns: [], source: { mode: 'builder', model: 'observations', metric: { key: 'count', agg: 'count' }, dimension: { key: 'code_text' }, breakdown: { key: 'interpretation_code' }, filters: [] } };
+    const breakdownResult = { columns: [{ key: 'label', label: 'Analyte', kind: 'string' }, { key: 'series', kind: 'string' }, { key: 'value', kind: 'number' }], rows: [ { label: 'Amp', series: 'R', value: 5 }, { label: 'Amp', series: 'S', value: 3 } ] };
+    render(<CanvasBlock block={block as never} data={{ result: breakdownResult as never, loading: false }} />);
+    const cols = screen.getByTestId('widget').getAttribute('data-cols');
+    expect(cols).toBe('label,R,S');       // pivoted breakdown columns
+    expect(cols).not.toContain('series'); // NOT the raw long-result column
   });
 });
