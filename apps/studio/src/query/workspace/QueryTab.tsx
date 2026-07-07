@@ -5,14 +5,17 @@ import { queryApi, type ConnectorRef, type RunResult } from '../api';
 import { useQueryStore, type QueryTab as QueryTabModel } from '../store';
 import { SqlEditor } from './SqlEditor';
 import { ResultsGrid } from './ResultsGrid';
+import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 import { RunParamsSheet } from '../params/RunParamsSheet';
-import { ParametersEditor } from '../../reports-builder/ParametersEditor';
+import { ParametersEditor } from '../params/ParametersEditor';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { StatusIcon, IconButton, Sep, type RunStatus } from './toolbar-bits';
 
 export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
+  const { t } = useTranslation();
   const patchQuery = useQueryStore((s) => s.patchQuery);
   const [connectors, setConnectors] = useState<ConnectorRef[]>([]);
   const [result, setResult] = useState<RunResult | null>(null);
@@ -45,7 +48,8 @@ export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
       if (tab.customQueryId) await queryApi.update(tab.customQueryId, input);
       else { const { id } = await queryApi.create(input); patchQuery(tab.id, { customQueryId: id }); }
       patchQuery(tab.id, { dirty: false });
-    } catch (e) { setStatus('error'); setError((e as Error).message); }
+      toast.success(t('query.savedToast', { name: tab.title }));
+    } catch (e) { setStatus('error'); setError((e as Error).message); toast.error((e as Error).message); }
   };
 
   const statusMessage = status === 'ok'
@@ -99,8 +103,8 @@ export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
       </div>
       <RunParamsSheet open={sheetOpen} onClose={() => setSheetOpen(false)} params={tab.params}
         connectorId={tab.connectorId ?? ''} onRun={(values) => { setSheetOpen(false); void execute(values, 0); }} />
-      <ParametersEditor open={paramsOpen} parameters={tab.params as never} onClose={() => setParamsOpen(false)}
-        onSave={(p) => { patchQuery(tab.id, { params: p as never, dirty: true }); setParamsOpen(false); }} />
+      <ParametersEditor open={paramsOpen} parameters={tab.params} onClose={() => setParamsOpen(false)}
+        onSave={(p) => { patchQuery(tab.id, { params: p, dirty: true }); setParamsOpen(false); }} />
     </div>
   );
 }
