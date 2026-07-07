@@ -5,4 +5,5 @@ export * from './sql-runner';
 export * from './store';
 export * from './seed';
 export * from './template';
+export * from './custom-query';
 export { SAMPLE_DASHBOARD } from './samples';
