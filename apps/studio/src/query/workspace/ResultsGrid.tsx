@@ -1,7 +1,7 @@
 // apps/studio/src/query/workspace/ResultsGrid.tsx
 import type { RunResult } from '../api';
 
-export function ResultsGrid({ result }: { result: RunResult | null }): JSX.Element {
+export function ResultsGrid({ result }: { result: Omit<RunResult, 'ms'> | null }): JSX.Element {
   if (!result) return <div className="grid h-full place-items-center text-sm text-muted-foreground">No results</div>;
   return (
     <div className="h-full overflow-auto">

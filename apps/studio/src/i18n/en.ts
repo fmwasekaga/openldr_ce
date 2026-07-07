@@ -461,6 +461,8 @@ export const en = {
     newQuery: 'New query', run: 'Run', save: 'Save', parameters: 'Parameters',
     filterTables: 'Filter…', noConnectors: 'No database connectors', rows: 'rows',
     runParameters: 'Run parameters', runWithValues: 'Run with these values',
+    deleteQuery: 'Delete query', confirmDeleteQuery: 'Delete this custom query?',
+    collapseExplorer: 'Collapse explorer', expandExplorer: 'Expand explorer',
   },
   a11y: {
     expandSidebar: 'Expand sidebar',

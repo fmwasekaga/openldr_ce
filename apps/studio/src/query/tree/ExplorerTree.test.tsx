@@ -10,6 +10,7 @@ vi.mock('../api', () => ({ queryApi: {
   tables: vi.fn(async () => ['products']),
   datasets: vi.fn(async () => [{ id: 'd1', name: 'AMR', rowCount: 2 }]),
   list: vi.fn(async () => [{ id: 'cq1', name: 'Q1', connectorId: 'c1', sql: '', params: [] }]),
+  remove: vi.fn(async () => ({ ok: true })),
 } }));
 
 describe('ExplorerTree', () => {
@@ -25,5 +26,15 @@ describe('ExplorerTree', () => {
     await screen.findByText('PG');
     fireEvent.click(screen.getByText('PG'));
     await waitFor(() => expect(queryApi.schemas).toHaveBeenCalledWith('c1'));
+  });
+
+  it('deletes a custom query via the trash affordance', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<ExplorerTree />);
+    fireEvent.click(await screen.findByText('Custom Queries'));
+    await screen.findByText('Q1');
+    fireEvent.click(screen.getByLabelText('Delete query'));
+    await waitFor(() => expect(queryApi.remove).toHaveBeenCalledWith('cq1'));
+    confirmSpy.mockRestore();
   });
 });

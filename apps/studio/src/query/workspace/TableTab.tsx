@@ -10,7 +10,8 @@ const PAGE = 50;
 export function TableTab({ tab }: { tab: TableTabModel | DatasetTab }): JSX.Element {
   const openQueryTab = useQueryStore((s) => s.openQueryTab);
   const [page, setPage] = useState(0);
-  const [result, setResult] = useState<RunResult | null>(null);
+  // Dataset rows omit `ms`; table runs include it — the common shape (without `ms`) is what the grid needs.
+  const [result, setResult] = useState<Omit<RunResult, 'ms'> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {

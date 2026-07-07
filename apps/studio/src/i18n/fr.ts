@@ -457,6 +457,8 @@ export const fr: EnShape = {
     newQuery: 'Nouvelle requête', run: 'Exécuter', save: 'Enregistrer', parameters: 'Paramètres',
     filterTables: 'Filtrer…', noConnectors: 'Aucun connecteur de base de données', rows: 'lignes',
     runParameters: 'Paramètres d’exécution', runWithValues: 'Exécuter avec ces valeurs',
+    deleteQuery: 'Supprimer la requête', confirmDeleteQuery: 'Supprimer cette requête personnalisée ?',
+    collapseExplorer: 'Réduire l’explorateur', expandExplorer: 'Développer l’explorateur',
   },
   a11y: {
     expandSidebar: 'Développer la barre latérale',

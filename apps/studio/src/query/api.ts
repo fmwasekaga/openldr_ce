@@ -15,7 +15,8 @@ export const queryApi = {
   schemas: (id: string) => fetch(`/api/query/connectors/${id}/schemas`).then(j<string[]>),
   tables: (id: string, schema: string) => fetch(`/api/query/connectors/${id}/schemas/${schema}/tables`).then(j<string[]>),
   datasets: () => fetch('/api/query/datasets').then(j<DatasetRef[]>),
-  datasetRows: (name: string) => fetch(`/api/query/datasets/${encodeURIComponent(name)}`).then(j<RunResult>),
+  // The datasets/:name route returns { columns, rows, rowCount } with no `ms`, so omit it from the type.
+  datasetRows: (name: string) => fetch(`/api/query/datasets/${encodeURIComponent(name)}`).then(j<Omit<RunResult, 'ms'>>),
   run: (body: { connectorId: string; sql: string; params?: CustomQueryParam[]; values?: Record<string, unknown>; limit?: number; offset?: number }) =>
     fetch('/api/query/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(j<RunResult>),
   paramOptions: (connectorId: string, optionsSql: string) =>

@@ -1,7 +1,7 @@
 // apps/studio/src/query/tree/ExplorerTree.tsx
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronRight, ChevronDown, Plug, Package, Zap, Table2 } from 'lucide-react';
+import { ChevronRight, ChevronDown, Plug, Package, Zap, Table2, Trash2 } from 'lucide-react';
 import { queryApi, type ConnectorRef, type DatasetRef } from '../api';
 import { useQueryStore } from '../store';
 import type { CustomQuery } from '../custom-query-types';
@@ -23,6 +23,8 @@ export function ExplorerTree(): JSX.Element {
   const openTableTab = useQueryStore((s) => s.openTableTab);
   const openDatasetTab = useQueryStore((s) => s.openDatasetTab);
   const openQueryTab = useQueryStore((s) => s.openQueryTab);
+  const tabs = useQueryStore((s) => s.tabs);
+  const closeTab = useQueryStore((s) => s.closeTab);
 
   const [openBranch, setOpenBranch] = useState<Record<string, boolean>>({});
   const [connectors, setConnectors] = useState<ConnectorRef[]>([]);
@@ -45,6 +47,17 @@ export function ExplorerTree(): JSX.Element {
   const loadTables = (id: string, schema: string) => {
     const key = `${id}/${schema}`; toggle(`s:${key}`);
     if (!tables[key]) queryApi.tables(id, schema).then((tb) => setTables((m) => ({ ...m, [key]: tb }))).catch(onErr('tables'));
+  };
+
+  // Delete a custom query (Rename/Duplicate deferred — a full context menu is out of scope for v1).
+  const removeQuery = async (id: string): Promise<void> => {
+    if (!window.confirm(t('query.confirmDeleteQuery'))) return;
+    try {
+      await queryApi.remove(id);
+      const open = tabs.find((tb) => tb.kind === 'query' && tb.customQueryId === id);
+      if (open) closeTab(open.id);
+      setQueries(await queryApi.list());
+    } catch (e) { onErr('delete query')(e); }
   };
 
   return (
@@ -73,7 +86,14 @@ export function ExplorerTree(): JSX.Element {
 
       <Row depth={0} open={!!openBranch.queries} onClick={() => toggle('queries')} icon={<Zap className="h-3.5 w-3.5" />} label={t('query.customQueries')} />
       {openBranch.queries && queries.map((q) => (
-        <Row key={q.id} depth={1} onClick={() => openQueryTab({ customQueryId: q.id, title: q.name, connectorId: q.connectorId, sql: q.sql, params: q.params })} icon={<Zap className="h-3.5 w-3.5" />} label={q.name} />
+        <div key={q.id} className="group relative">
+          <Row depth={1} onClick={() => openQueryTab({ customQueryId: q.id, title: q.name, connectorId: q.connectorId, sql: q.sql, params: q.params })} icon={<Zap className="h-3.5 w-3.5" />} label={q.name} />
+          <button onClick={(e) => { e.stopPropagation(); void removeQuery(q.id); }}
+            className="absolute right-2 top-1/2 hidden -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-destructive group-hover:block"
+            aria-label={t('query.deleteQuery')} title={t('query.deleteQuery')}>
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
       ))}
     </div>
   );

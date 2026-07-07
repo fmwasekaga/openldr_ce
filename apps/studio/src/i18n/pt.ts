@@ -457,6 +457,8 @@ export const pt: EnShape = {
     newQuery: 'Nova consulta', run: 'Executar', save: 'Guardar', parameters: 'Parâmetros',
     filterTables: 'Filtrar…', noConnectors: 'Nenhum conector de base de dados', rows: 'linhas',
     runParameters: 'Parâmetros de execução', runWithValues: 'Executar com estes valores',
+    deleteQuery: 'Eliminar consulta', confirmDeleteQuery: 'Eliminar esta consulta personalizada?',
+    collapseExplorer: 'Recolher explorador', expandExplorer: 'Expandir explorador',
   },
   a11y: {
     expandSidebar: 'Expandir barra lateral',
