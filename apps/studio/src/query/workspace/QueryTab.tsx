@@ -1,6 +1,6 @@
 // apps/studio/src/query/workspace/QueryTab.tsx
-import { useEffect, useState, type ReactNode } from 'react';
-import { Play, Save, SlidersHorizontal, Info, CheckCircle2, AlertCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Play, Save, SlidersHorizontal } from 'lucide-react';
 import { queryApi, type ConnectorRef, type RunResult } from '../api';
 import { useQueryStore, type QueryTab as QueryTabModel } from '../store';
 import { SqlEditor } from './SqlEditor';
@@ -9,44 +9,8 @@ import { RunParamsSheet } from '../params/RunParamsSheet';
 import { ParametersEditor } from '../../reports-builder/ParametersEditor';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-
-type RunStatus = 'idle' | 'ok' | 'error';
-
-function StatusIcon({ status, message }: { status: RunStatus; message: string }): JSX.Element {
-  const icon = status === 'ok'
-    ? <CheckCircle2 className="h-4 w-4 text-green-500" />
-    : status === 'error'
-      ? <AlertCircle className="h-4 w-4 text-destructive" />
-      : <Info className="h-4 w-4 text-muted-foreground" />;
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="flex items-center" aria-label="run status" role="status">{icon}</span>
-      </TooltipTrigger>
-      <TooltipContent side="bottom" className="max-w-sm break-words">{message}</TooltipContent>
-    </Tooltip>
-  );
-}
-
-/** Ghost icon-only button with a tooltip label. */
-function IconButton({ icon, label, onClick }: { icon: ReactNode; label: string; onClick(): void }): JSX.Element {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button aria-label={label} onClick={onClick}
-          className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground">
-          {icon}
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side="bottom">{label}</TooltipContent>
-    </Tooltip>
-  );
-}
-
-function Sep(): JSX.Element {
-  return <div className="mx-1 h-5 w-px shrink-0 bg-border" />;
-}
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { StatusIcon, IconButton, Sep, type RunStatus } from './toolbar-bits';
 
 export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
   const patchQuery = useQueryStore((s) => s.patchQuery);

@@ -1,5 +1,5 @@
 // apps/studio/src/query/workspace/TabBar.tsx
-import { X, Plus, Table2, Zap, Package, Code2 } from 'lucide-react';
+import { X, Plus, Table2, Zap, Package } from 'lucide-react';
 import { useQueryStore, type Tab } from '../store';
 
 function tabIcon(t: Tab) {
@@ -9,8 +9,7 @@ function tabIcon(t: Tab) {
 }
 
 export function TabBar(): JSX.Element {
-  const { tabs, activeId, setActive, closeTab, openQueryTab, patchTable } = useQueryStore();
-  const active = tabs.find((t) => t.id === activeId);
+  const { tabs, activeId, setActive, closeTab, openQueryTab } = useQueryStore();
   return (
     <div className="flex h-10 items-stretch border-b border-border bg-muted/40">
       {tabs.map((t) => {
@@ -31,15 +30,6 @@ export function TabBar(): JSX.Element {
       <button aria-label="new query" className="flex items-center border-r border-border px-3 text-muted-foreground hover:bg-background/30 hover:text-foreground" onClick={() => openQueryTab({})}>
         <Plus className="h-4 w-4" />
       </button>
-      {active?.kind === 'table' && (
-        <button aria-label="toggle SQL editor"
-          className={`ml-auto mr-2 flex items-center gap-1 self-center rounded px-2 py-1 text-xs ${active.showSql
-            ? 'bg-primary text-primary-foreground'
-            : 'border border-border text-muted-foreground hover:text-foreground'}`}
-          onClick={() => patchTable(active.id, { showSql: !active.showSql })}>
-          <Code2 className="h-3.5 w-3.5" /> SQL
-        </button>
-      )}
     </div>
   );
 }
