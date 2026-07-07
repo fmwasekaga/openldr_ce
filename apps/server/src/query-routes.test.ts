@@ -1,6 +1,12 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { registerQueryRoutes, type QueryRouteDeps } from './query-routes';
+
+// recordAudit reads ctx.audit.record (and ctx.logger.error on failure) — provide a vi.fn() stub.
+const auditRecord = vi.fn(async () => {});
+function fakeCtx(): any {
+  return { logger: console, audit: { record: auditRecord } };
+}
 
 // Minimal in-memory fakes.
 function makeDeps(): QueryRouteDeps {
@@ -27,14 +33,14 @@ async function build(deps = makeDeps()): Promise<FastifyInstance> {
   const app = Fastify();
   // Inject an authenticated actor with the analyst role.
   app.addHook('preHandler', async (req) => { (req as any).user = { sub: 'u1', roles: ['data_analyst'] }; });
-  registerQueryRoutes(app, { logger: console } as any, deps);
+  registerQueryRoutes(app, fakeCtx(), deps);
   await app.ready();
   return app;
 }
 
 describe('custom-queries CRUD', () => {
   let app: FastifyInstance;
-  beforeEach(async () => { app = await build(); });
+  beforeEach(async () => { auditRecord.mockClear(); app = await build(); });
 
   it('creates and lists a custom query', async () => {
     const create = await app.inject({ method: 'POST', url: '/api/custom-queries',
@@ -43,6 +49,8 @@ describe('custom-queries CRUD', () => {
     const id = create.json().id;
     const list = await app.inject({ method: 'GET', url: '/api/custom-queries' });
     expect(list.json().map((q: any) => q.id)).toContain(id);
+    // The create is audited.
+    expect(auditRecord).toHaveBeenCalledWith(expect.objectContaining({ action: 'customQuery.create', entityId: id }));
   });
 
   it('rejects a create with a duplicate name', async () => {
@@ -134,7 +142,9 @@ describe('introspection', () => {
     expect(res.json()).toEqual([{ id: 'c1', name: 'PG', type: 'postgres' }]);
   });
 
-  it('includes an enabled microsoft-sql (SQL Server) connector', async () => {
+  it('lists only postgres connectors (v1)', async () => {
+    // v1 is Postgres-only: microsoft-sql/mysql introspection is portable but the run path is not,
+    // so a SQL Server connector must NOT be advertised; a non-SQL dhis2 connector is excluded too.
     const deps = makeDeps();
     deps.connectors.list = async () => [
       { id: 'c1', name: 'PG', type: 'postgres', enabled: true } as any,
@@ -143,10 +153,7 @@ describe('introspection', () => {
     ];
     const app = await build(deps);
     const res = await app.inject({ method: 'GET', url: '/api/query/connectors' });
-    expect(res.json()).toEqual([
-      { id: 'c1', name: 'PG', type: 'postgres' },
-      { id: 'c2', name: 'SQLSvr', type: 'microsoft-sql' },
-    ]);
+    expect(res.json()).toEqual([{ id: 'c1', name: 'PG', type: 'postgres' }]);
   });
 
   it('rejects a schema name that is not a bare identifier', async () => {

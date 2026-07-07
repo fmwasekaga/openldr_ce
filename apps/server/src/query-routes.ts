@@ -5,6 +5,7 @@ import type { AppContext } from '@openldr/bootstrap';
 import { CustomQueryInputSchema, validateSelectSql } from '@openldr/dashboards';
 import type { CustomQueryStore } from '@openldr/db';
 import { requireRole } from './rbac';
+import { recordAudit } from './audit-helper';
 import { substituteParams } from './query-sql';
 
 const AUTHOR_ROLES = ['lab_admin', 'lab_manager', 'data_analyst'];
@@ -24,7 +25,7 @@ export interface QueryRouteDeps {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, _ctx: AppContext, deps: QueryRouteDeps): void {
+export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext, deps: QueryRouteDeps): void {
   const GUARD = { preHandler: requireRole(...AUTHOR_ROLES) };
 
   // ---- Custom Query CRUD ----
@@ -44,7 +45,11 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, _c
     // friendly error (TOCTOU: a concurrent create could still win the race).
     if (await deps.customQueries.getByName(parsed.data.name)) { reply.code(409); return { error: 'name already exists' }; }
     const id = `cq_${randomUUID().slice(0, 8)}`;
-    await deps.customQueries.create({ id, ...parsed.data });
+    const created = { id, ...parsed.data };
+    await deps.customQueries.create(created);
+    await recordAudit(ctx, req, {
+      action: 'customQuery.create', entityType: 'customQuery', entityId: id, before: null, after: created,
+    });
     return { id };
   });
 
@@ -59,12 +64,20 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, _c
       if (clash && clash.id !== id) { reply.code(409); return { error: 'name already exists' }; }
     }
     await deps.customQueries.update(id, parsed.data);
+    const after = (await deps.customQueries.get(id)) ?? { ...existing, ...parsed.data };
+    await recordAudit(ctx, req, {
+      action: 'customQuery.update', entityType: 'customQuery', entityId: id, before: existing, after,
+    });
     return { ok: true };
   });
 
   app.delete('/api/custom-queries/:id', GUARD, async (req) => {
     const { id } = req.params as { id: string };
+    const before = await deps.customQueries.get(id);
     await deps.customQueries.remove(id);
+    await recordAudit(ctx, req, {
+      action: 'customQuery.delete', entityType: 'customQuery', entityId: id, before, after: null,
+    });
     return { ok: true };
   });
 
@@ -101,9 +114,11 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, _c
   });
 
   // ---- Connector introspection ----
-  // information_schema.schemata/.tables exist in Postgres, MySQL and SQL Server — portable across v1 SQL types.
-  // NB: the connector type string for SQL Server is 'microsoft-sql' (see connector-db.ts), not 'mssql'.
-  const SQL_TYPES = new Set(['postgres', 'microsoft-sql', 'mysql']);
+  // v1 supports Postgres only. information_schema introspection is portable across Postgres/MySQL/SQL Server,
+  // but the EXECUTION path is Postgres-specific: the run wrapper (`select * from (…) limit N offset M`) is
+  // invalid T-SQL and the TableTab identifier quoting (`"schema"."table"`) breaks on MySQL. Other dialects
+  // are deferred until the run pagination wrapper + identifier quoting are made dialect-aware.
+  const SQL_TYPES = new Set(['postgres']);
 
   app.get('/api/query/connectors', GUARD, async () => {
     const all = await deps.connectors.list();
