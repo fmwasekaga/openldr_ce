@@ -449,7 +449,14 @@ export const fr: EnShape = {
     users: 'Utilisateurs',
     audit: 'Audit',
     activity: 'Activité',
+    query: 'Requête',
     docs: 'Documentation',
+  },
+  query: {
+    explorer: 'Explorateur', connectors: 'Connecteurs', datasets: 'Jeux de données', customQueries: 'Requêtes personnalisées',
+    newQuery: 'Nouvelle requête', run: 'Exécuter', save: 'Enregistrer', parameters: 'Paramètres',
+    filterTables: 'Filtrer…', noConnectors: 'Aucun connecteur de base de données', rows: 'lignes',
+    runParameters: 'Paramètres d’exécution', runWithValues: 'Exécuter avec ces valeurs',
   },
   a11y: {
     expandSidebar: 'Développer la barre latérale',

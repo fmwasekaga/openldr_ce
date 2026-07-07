@@ -2,7 +2,7 @@ import { type ReactNode, useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, BookOpen, Library, FileInput, Users, ShieldCheck, Settings,
-  Workflow, Activity, ChevronLeft, ChevronRight, Sun, Moon, LogOut, type LucideIcon,
+  Workflow, Activity, Database, ChevronLeft, ChevronRight, Sun, Moon, LogOut, type LucideIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { SUPPORTED_LANGUAGES, setLanguage } from '@/i18n/language';
@@ -21,6 +21,7 @@ import { pluginIcon } from '@/plugins/icons';
 const NAV: { to: string; labelKey: string; end: boolean; icon: LucideIcon; roles?: string[] }[] = [
   { to: '/', labelKey: 'nav.dashboard', end: true, icon: LayoutDashboard },
   { to: '/reports', labelKey: 'nav.reports', end: false, icon: FileText },
+  { to: '/query', labelKey: 'nav.query', end: false, icon: Database, roles: ['lab_admin', 'lab_manager', 'data_analyst'] },
   { to: '/workflows', labelKey: 'nav.workflows', end: false, icon: Workflow, roles: ['lab_admin', 'lab_manager'] },
   { to: '/terminology', labelKey: 'nav.terminology', end: false, icon: Library },
   { to: '/forms', labelKey: 'nav.forms', end: false, icon: FileInput },

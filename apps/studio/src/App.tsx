@@ -16,6 +16,7 @@ import { FormCapture } from './pages/FormCapture';
 import { FormBuilderPage } from './forms-builder/FormBuilderPage';
 import { ReportBuilderPage } from './reports-builder/ReportBuilderPage';
 import { Workflows } from './workflows/page';
+import { QueryPage } from './query/QueryPage';
 import { WorkflowList } from './workflows/WorkflowList';
 import { PluginContainer } from './plugins/PluginContainer';
 import { RequireRole } from './auth/RequireRole';
@@ -32,6 +33,7 @@ export function App() {
       <Route path="/workflows" element={<RequireRole roles={['lab_admin', 'lab_manager']}><WorkflowList /></RequireRole>} />
       <Route path="/workflows/new" element={<RequireRole roles={['lab_admin', 'lab_manager']}><Workflows /></RequireRole>} />
       <Route path="/workflows/:id" element={<RequireRole roles={['lab_admin', 'lab_manager']}><Workflows /></RequireRole>} />
+      <Route path="/query" element={<RequireRole roles={['lab_admin', 'lab_manager', 'data_analyst']}><QueryPage /></RequireRole>} />
       <Route path="/terminology" element={<Terminology />} />
       <Route path="/users" element={<RequireRole role="lab_admin"><Users /></RequireRole>} />
       <Route path="/settings" element={<RequireRole><SettingsShell /></RequireRole>}>

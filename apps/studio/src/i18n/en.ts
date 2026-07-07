@@ -453,7 +453,14 @@ export const en = {
     users: 'Users',
     audit: 'Audit',
     activity: 'Activity',
+    query: 'Query',
     docs: 'Docs',
+  },
+  query: {
+    explorer: 'Explorer', connectors: 'Connectors', datasets: 'Datasets', customQueries: 'Custom Queries',
+    newQuery: 'New query', run: 'Run', save: 'Save', parameters: 'Parameters',
+    filterTables: 'Filter…', noConnectors: 'No database connectors', rows: 'rows',
+    runParameters: 'Run parameters', runWithValues: 'Run with these values',
   },
   a11y: {
     expandSidebar: 'Expand sidebar',
