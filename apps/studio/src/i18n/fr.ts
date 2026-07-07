@@ -5,6 +5,7 @@ export const fr: EnShape = {
     delete: 'Supprimer',
     save: 'Enregistrer',
     cancel: 'Annuler',
+    add: 'Ajouter',
     create: 'Créer',
     loading: 'Chargement…',
     actions: 'Actions',

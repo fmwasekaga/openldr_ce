@@ -92,11 +92,11 @@ export function ParametersEditor({ open, parameters, onClose, onSave }: {
           ))}
         </div>
         <div className="flex items-center justify-between border-t border-border px-6 py-4">
-          <Button variant="outline" size="sm" onClick={add}>{t('reportBuilder.parameters.addParameter')}</Button>
+          <Button variant="outline" size="sm" onClick={add}>{t('common.add')}</Button>
           <div className="flex items-center gap-2">
             {invalid && <span className="text-xs text-destructive">{t('reportBuilder.parameters.invalid')}</span>}
             <Button variant="outline" size="sm" onClick={onClose}>{t('common.cancel')}</Button>
-            <Button size="sm" disabled={invalid} onClick={() => { if (!invalid) { onSave(list); onClose(); } }}>{t('reportBuilder.parameters.saveParameters')}</Button>
+            <Button size="sm" disabled={invalid} onClick={() => { if (!invalid) { onSave(list); onClose(); } }}>{t('common.save')}</Button>
           </div>
         </div>
       </DialogContent>

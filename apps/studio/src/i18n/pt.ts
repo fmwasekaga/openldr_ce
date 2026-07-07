@@ -5,6 +5,7 @@ export const pt: EnShape = {
     delete: 'Eliminar',
     save: 'Guardar',
     cancel: 'Cancelar',
+    add: 'Adicionar',
     create: 'Criar',
     loading: 'A carregar…',
     actions: 'Ações',

@@ -3,6 +3,7 @@ export const en = {
     delete: 'Delete',
     save: 'Save',
     cancel: 'Cancel',
+    add: 'Add',
     create: 'Create',
     loading: 'Loading…',
     actions: 'Actions',
