@@ -135,4 +135,22 @@ export function registerQueryRoutes(app: FastifyInstance, _ctx: AppContext, deps
     const { rows } = await deps.runConnectorSql({ connectorId: body.data.connectorId, sql: body.data.optionsSql });
     return rows.slice(0, ROW_CAP).map((r) => Object.values(r)[0]);
   });
+
+  // ---- Datasets ----
+  app.get('/api/query/datasets', GUARD, async () => {
+    const all = await deps.datasets.list();
+    return all.map((d) => ({ id: d.id, name: d.name, rowCount: d.rowCount }));
+  });
+
+  app.get('/api/query/datasets/:name', GUARD, async (req, reply) => {
+    const { name } = req.params as { name: string };
+    const d = await deps.datasets.getByName(decodeURIComponent(name));
+    if (!d) { reply.code(404); return { error: 'dataset not found' }; }
+    // Stored-rows is the v1 default path (fully covered). A *published* dataset is materialized to an
+    // internal DB table (`d.publishedTable`), but `runConnectorSql` targets external connectors only —
+    // there is no clean/correct internal-DB SQL path via the services wired here, so we do NOT attempt an
+    // unsafe internal query. We fall back to the dataset's stored snapshot columns/rows. A live read of the
+    // published table is deferred until a dedicated internal-SQL runner is available (see report note).
+    return { columns: d.columns, rows: d.rows, rowCount: (d.rows as unknown[]).length };
+  });
 }

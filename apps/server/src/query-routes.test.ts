@@ -144,3 +144,22 @@ describe('introspection', () => {
     expect(res.json()).toEqual(['A', 'B']);
   });
 });
+
+describe('datasets', () => {
+  it('lists datasets', async () => {
+    const deps = makeDeps();
+    deps.datasets.list = async () => [{ id: 'd1', name: 'AMR Ndola', rowCount: 2, publishedTable: null }];
+    const app = await build(deps);
+    const res = await app.inject({ method: 'GET', url: '/api/query/datasets' });
+    expect(res.json()).toEqual([{ id: 'd1', name: 'AMR Ndola', rowCount: 2 }]);
+  });
+
+  it('returns stored rows for an unpublished dataset', async () => {
+    const deps = makeDeps();
+    deps.datasets.getByName = async () => ({ name: 'AMR Ndola',
+      columns: [{ key: 'org', label: 'org' }], rows: [{ org: 'E. coli' }], publishedTable: null });
+    const app = await build(deps);
+    const res = await app.inject({ method: 'GET', url: '/api/query/datasets/AMR%20Ndola' });
+    expect(res.json().rows).toEqual([{ org: 'E. coli' }]);
+  });
+});
