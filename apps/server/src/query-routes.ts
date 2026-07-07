@@ -1,11 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import type { AppContext } from '@openldr/bootstrap';
-import { CustomQueryInputSchema } from '@openldr/dashboards';
+import { CustomQueryInputSchema, validateSelectSql } from '@openldr/dashboards';
 import type { CustomQueryStore } from '@openldr/db';
 import { requireRole } from './rbac';
+import { substituteParams } from './query-sql';
 
 const AUTHOR_ROLES = ['lab_admin', 'lab_manager', 'data_analyst'];
+const ROW_CAP = 1000;
 
 export interface QueryRouteDeps {
   customQueries: CustomQueryStore;
@@ -62,5 +65,36 @@ export function registerQueryRoutes(app: FastifyInstance, _ctx: AppContext, deps
     const { id } = req.params as { id: string };
     await deps.customQueries.remove(id);
     return { ok: true };
+  });
+
+  // ---- Read-only execution ----
+  const RunBody = z.object({
+    connectorId: z.string().min(1),
+    sql: z.string().min(1),
+    params: z.array(z.any()).optional(),
+    values: z.record(z.any()).optional(),
+    limit: z.number().int().positive().max(ROW_CAP).optional(),
+    offset: z.number().int().min(0).optional(),
+  });
+
+  app.post('/api/query/run', GUARD, async (req, reply) => {
+    const parsed = RunBody.safeParse(req.body);
+    if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
+    const c = await deps.connectors.get(parsed.data.connectorId);
+    if (!c || !c.enabled) { reply.code(404); return { error: 'connector not found or disabled' }; }
+    let sql = parsed.data.sql;
+    try {
+      if (parsed.data.params?.length) sql = substituteParams(sql, parsed.data.params as never, parsed.data.values ?? {});
+      validateSelectSql(sql);
+    } catch (e) { reply.code(400); return { error: (e as Error).message }; }
+    if (typeof parsed.data.limit === 'number') {
+      sql = `select * from (${sql.replace(/;\s*$/, '')}) as _q limit ${parsed.data.limit} offset ${parsed.data.offset ?? 0}`;
+    }
+    try {
+      const started = Date.now();
+      const { columns, rows } = await deps.runConnectorSql({ connectorId: parsed.data.connectorId, sql });
+      const capped = rows.slice(0, ROW_CAP);
+      return { columns, rows: capped, rowCount: capped.length, ms: Date.now() - started };
+    } catch (e) { reply.code(400); return { error: (e as Error).message }; }
   });
 }

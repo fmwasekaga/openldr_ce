@@ -76,3 +76,43 @@ describe('custom-queries CRUD', () => {
     expect(res.statusCode).toBe(400);
   });
 });
+
+describe('POST /api/query/run', () => {
+  it('runs a read-only select and returns columns/rows/rowCount/ms', async () => {
+    const app = await build();
+    const res = await app.inject({ method: 'POST', url: '/api/query/run',
+      payload: { connectorId: 'c1', sql: 'select 1 as n' } });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.columns).toEqual([{ key: 'n', label: 'n' }]);
+    expect(body.rowCount).toBe(1);
+    expect(typeof body.ms).toBe('number');
+  });
+
+  it('rejects a non-select statement', async () => {
+    const app = await build();
+    const res = await app.inject({ method: 'POST', url: '/api/query/run',
+      payload: { connectorId: 'c1', sql: 'delete from t' } });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('substitutes declared params before running', async () => {
+    const deps = makeDeps();
+    let seen = '';
+    deps.runConnectorSql = async ({ sql }) => { seen = sql; return { columns: [], rows: [] }; };
+    const app = await build(deps);
+    await app.inject({ method: 'POST', url: '/api/query/run', payload: {
+      connectorId: 'c1', sql: 'select * from t where f = {{param.facility}}',
+      params: [{ id: 'facility', label: 'Facility', type: 'select', required: false }],
+      values: { facility: 'Ndola' },
+    } });
+    expect(seen).toContain("f = 'Ndola'");
+  });
+
+  it('rejects a connector that is missing or disabled', async () => {
+    const app = await build();
+    const res = await app.inject({ method: 'POST', url: '/api/query/run',
+      payload: { connectorId: 'nope', sql: 'select 1' } });
+    expect(res.statusCode).toBe(404);
+  });
+});
