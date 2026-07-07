@@ -10,7 +10,7 @@ vi.mock('../api', () => ({ queryApi: {
   datasetRows: vi.fn(),
 } }));
 
-const tab: TableTabModel = { id: 't1', kind: 'table', connectorId: 'c1', schema: 'public', table: 'products', title: 'products' };
+const tab: TableTabModel = { id: 't1', kind: 'table', connectorId: 'c1', schema: 'public', table: 'products', title: 'products', sql: 'select * from "public"."products"', showSql: false };
 
 describe('TableTab', () => {
   beforeEach(() => vi.clearAllMocks());

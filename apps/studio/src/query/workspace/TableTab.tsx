@@ -1,21 +1,30 @@
 // apps/studio/src/query/workspace/TableTab.tsx
-import { useEffect, useState } from 'react';
-import { Code2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Play } from 'lucide-react';
 import { queryApi, type RunResult } from '../api';
 import { useQueryStore, type TableTab as TableTabModel, type DatasetTab } from '../store';
 import { ResultsGrid } from './ResultsGrid';
+import { SqlEditor } from './SqlEditor';
 import { TablePagination } from '@/components/ui/table-pagination';
 
 export function TableTab({ tab }: { tab: TableTabModel | DatasetTab }): JSX.Element {
-  const openQueryTab = useQueryStore((s) => s.openQueryTab);
+  const patchTable = useQueryStore((s) => s.patchTable);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(50);
   // Dataset rows omit `ms`; table runs include it — the common shape (without `ms`) is what the grid needs.
   const [result, setResult] = useState<Omit<RunResult, 'ms'> | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [runToken, setRunToken] = useState(0);
+  const [editorFrac, setEditorFrac] = useState(0.4);
 
-  // Reset to the first page whenever the active table/dataset changes.
-  useEffect(() => { setPage(0); }, [tab]);
+  const isTable = tab.kind === 'table';
+  // Hold the current SQL in a ref so typing in the editor doesn't re-fetch on every keystroke;
+  // the grid re-runs only on Run (runToken), page or page-size change.
+  const sqlRef = useRef('');
+  if (isTable) sqlRef.current = tab.sql;
+
+  // Reset to the first page when switching to a different table/dataset.
+  useEffect(() => { setPage(0); }, [tab.id]);
 
   useEffect(() => {
     let alive = true;
@@ -24,29 +33,40 @@ export function TableTab({ tab }: { tab: TableTabModel | DatasetTab }): JSX.Elem
     if (tab.kind === 'dataset') {
       queryApi.datasetRows(tab.name).then((r) => { if (alive) setResult(r); }).catch(onErr);
     } else {
-      const sql = `select * from "${tab.schema}"."${tab.table}"`;
-      queryApi.run({ connectorId: tab.connectorId, sql, limit: pageSize, offset: page * pageSize })
+      queryApi.run({ connectorId: tab.connectorId, sql: sqlRef.current, limit: pageSize, offset: page * pageSize })
         .then((r) => { if (alive) setResult(r); }).catch(onErr);
     }
     return () => { alive = false; };
-  }, [tab, page, pageSize]);
+  }, [tab.id, tab.kind, page, pageSize, runToken]);
+
+  const run = () => { setPage(0); setRunToken((x) => x + 1); };
 
   return (
     <div className="flex h-full min-w-0 flex-col">
-      {/* Slim toolbar only for tables (the tab bar already names the table); datasets get an
-          edge-to-edge grid with no header band. */}
-      {tab.kind === 'table' && (
-        <div className="flex items-center border-b border-border px-2 py-1">
-          <button className="ml-auto flex items-center gap-1 rounded bg-primary px-2 py-0.5 text-xs text-primary-foreground"
-            onClick={() => openQueryTab({ connectorId: tab.connectorId, sql: `select * from "${tab.schema}"."${tab.table}"` })}>
-            <Code2 className="h-3.5 w-3.5" /> SQL
-          </button>
-        </div>
+      {isTable && tab.showSql && (
+        <>
+          <div className="flex min-w-0 flex-col" style={{ height: `${editorFrac * 100}%` }}>
+            <div className="flex items-center gap-2 px-3 py-2">
+              <button className="flex items-center gap-1 rounded bg-primary px-2.5 py-1 text-xs text-primary-foreground" onClick={run}>
+                <Play className="h-3.5 w-3.5" /> Run
+              </button>
+            </div>
+            <div className="min-h-0 min-w-0 flex-1 border-y border-border">
+              <SqlEditor value={tab.sql} onChange={(v) => patchTable(tab.id, { sql: v })} onRun={run} />
+            </div>
+          </div>
+          <div className="h-1 cursor-row-resize bg-border" onMouseDown={(e) => {
+            const box = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
+            const move = (ev: MouseEvent) => setEditorFrac(Math.max(0.2, Math.min(0.8, (ev.clientY - box.top) / box.height)));
+            const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+            window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
+          }} />
+        </>
       )}
       <div className="min-h-0 min-w-0 flex-1">
         {error ? <div className="p-3 text-xs text-destructive">{error}</div> : <ResultsGrid result={result} />}
       </div>
-      {tab.kind === 'table' && !error && (
+      {isTable && !error && (
         <TablePagination
           page={page}
           pageSize={pageSize}

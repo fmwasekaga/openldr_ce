@@ -5,7 +5,12 @@ import type { CustomQueryParam } from './custom-query-types';
 let seq = 0;
 const nextId = () => `t${++seq}`;
 
-export interface TableTab { id: string; kind: 'table'; connectorId: string; schema: string; table: string; title: string }
+export interface TableTab {
+  id: string; kind: 'table'; connectorId: string; schema: string; table: string; title: string;
+  // Inline ad-hoc SQL for this table view: `sql` is the query the grid runs (defaults to a plain
+  // browse SELECT); `showSql` toggles the inline editor's visibility.
+  sql: string; showSql: boolean;
+}
 export interface DatasetTab { id: string; kind: 'dataset'; name: string; title: string }
 export interface QueryTab {
   id: string; kind: 'query'; title: string;
@@ -22,6 +27,7 @@ interface State {
   setActive(id: string): void;
   closeTab(id: string): void;
   patchQuery(id: string, patch: Partial<QueryTab>): void;
+  patchTable(id: string, patch: Partial<TableTab>): void;
 }
 
 export const useQueryStore = create<State>((set, get) => ({
@@ -29,7 +35,8 @@ export const useQueryStore = create<State>((set, get) => ({
   openTableTab({ connectorId, schema, table }) {
     const existing = get().tabs.find((t) => t.kind === 'table' && t.connectorId === connectorId && t.schema === schema && t.table === table);
     if (existing) { set({ activeId: existing.id }); return; }
-    const tab: TableTab = { id: nextId(), kind: 'table', connectorId, schema, table, title: table };
+    const tab: TableTab = { id: nextId(), kind: 'table', connectorId, schema, table, title: table,
+      sql: `select * from "${schema}"."${table}"`, showSql: false };
     set((s) => ({ tabs: [...s.tabs, tab], activeId: tab.id }));
   },
   openDatasetTab({ name }) {
@@ -59,5 +66,8 @@ export const useQueryStore = create<State>((set, get) => ({
   },
   patchQuery(id, patch) {
     set((s) => ({ tabs: s.tabs.map((t) => (t.id === id && t.kind === 'query' ? { ...t, ...patch } : t)) }));
+  },
+  patchTable(id, patch) {
+    set((s) => ({ tabs: s.tabs.map((t) => (t.id === id && t.kind === 'table' ? { ...t, ...patch } : t)) }));
   },
 }));

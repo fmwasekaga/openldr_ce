@@ -41,8 +41,9 @@ export function QueryPage(): JSX.Element {
           </div>
         ) : (
           <div className="flex w-60 shrink-0 flex-col border-r border-border" data-testid="query-explorer">
-            <div className="flex items-center justify-between px-2 py-1.5">
-              <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('query.explorer')}</span>
+            {/* Match the tab-bar height + separator so the explorer header sits flush with the tabs. */}
+            <div className="flex h-10 shrink-0 items-center justify-between border-b border-border bg-muted/40 px-3">
+              <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t('query.explorer')}</span>
               <button onClick={() => setCollapsed(true)}
                 className="rounded p-1 text-muted-foreground hover:bg-accent"
                 aria-label={t('query.collapseExplorer')} title={t('query.collapseExplorer')}>
