@@ -29,8 +29,8 @@ export function QueryPage(): JSX.Element {
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(false);
   return (
-    <AppShell title={t('nav.query')}>
-      <div className="flex h-full">
+    <AppShell title={t('nav.query')} fullBleed>
+      <div className="flex h-full min-h-0">
         {collapsed ? (
           <div className="flex w-8 shrink-0 flex-col items-center border-r border-border py-2">
             <button onClick={() => setCollapsed(false)}

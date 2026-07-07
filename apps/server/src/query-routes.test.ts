@@ -104,6 +104,16 @@ describe('POST /api/query/run', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it('returns a total (count) only when a limit is supplied', async () => {
+    const app = await build();
+    const paged = await app.inject({ method: 'POST', url: '/api/query/run',
+      payload: { connectorId: 'c1', sql: 'select 1 as n', limit: 50, offset: 0 } });
+    expect(paged.json().total).toBe(1);
+    const unpaged = await app.inject({ method: 'POST', url: '/api/query/run',
+      payload: { connectorId: 'c1', sql: 'select 1 as n' } });
+    expect(unpaged.json().total).toBeUndefined();
+  });
+
   it('substitutes declared params before running', async () => {
     const deps = makeDeps();
     let seen = '';

@@ -4,15 +4,18 @@ import { Code2 } from 'lucide-react';
 import { queryApi, type RunResult } from '../api';
 import { useQueryStore, type TableTab as TableTabModel, type DatasetTab } from '../store';
 import { ResultsGrid } from './ResultsGrid';
-
-const PAGE = 50;
+import { TablePagination } from '@/components/ui/table-pagination';
 
 export function TableTab({ tab }: { tab: TableTabModel | DatasetTab }): JSX.Element {
   const openQueryTab = useQueryStore((s) => s.openQueryTab);
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
   // Dataset rows omit `ms`; table runs include it — the common shape (without `ms`) is what the grid needs.
   const [result, setResult] = useState<Omit<RunResult, 'ms'> | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Reset to the first page whenever the active table/dataset changes.
+  useEffect(() => { setPage(0); }, [tab]);
 
   useEffect(() => {
     let alive = true;
@@ -22,10 +25,11 @@ export function TableTab({ tab }: { tab: TableTabModel | DatasetTab }): JSX.Elem
       queryApi.datasetRows(tab.name).then((r) => { if (alive) setResult(r); }).catch(onErr);
     } else {
       const sql = `select * from "${tab.schema}"."${tab.table}"`;
-      queryApi.run({ connectorId: tab.connectorId, sql, limit: PAGE, offset: page * PAGE }).then((r) => { if (alive) setResult(r); }).catch(onErr);
+      queryApi.run({ connectorId: tab.connectorId, sql, limit: pageSize, offset: page * pageSize })
+        .then((r) => { if (alive) setResult(r); }).catch(onErr);
     }
     return () => { alive = false; };
-  }, [tab, page]);
+  }, [tab, page, pageSize]);
 
   return (
     <div className="flex h-full min-w-0 flex-col">
@@ -42,12 +46,14 @@ export function TableTab({ tab }: { tab: TableTabModel | DatasetTab }): JSX.Elem
       <div className="min-h-0 min-w-0 flex-1">
         {error ? <div className="p-3 text-xs text-destructive">{error}</div> : <ResultsGrid result={result} />}
       </div>
-      {tab.kind === 'table' && (
-        <div className="flex items-center gap-3 border-t border-border px-3 py-1 text-xs text-muted-foreground">
-          <span>page {page + 1}</span>
-          <button className="ml-auto disabled:opacity-40" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>‹ Prev</button>
-          <button disabled={(result?.rowCount ?? 0) < PAGE} onClick={() => setPage((p) => p + 1)}>Next ›</button>
-        </div>
+      {tab.kind === 'table' && !error && (
+        <TablePagination
+          page={page}
+          pageSize={pageSize}
+          total={result?.total ?? result?.rowCount ?? 0}
+          onPageChange={setPage}
+          onPageSizeChange={(n) => { setPageSize(n); setPage(0); }}
+        />
       )}
     </div>
   );

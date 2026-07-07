@@ -96,20 +96,28 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
     const c = await deps.connectors.get(parsed.data.connectorId);
     if (!c || !c.enabled) { reply.code(404); return { error: 'connector not found or disabled' }; }
-    let sql = parsed.data.sql;
+    let inner = parsed.data.sql;
     try {
-      if (parsed.data.params?.length) sql = substituteParams(sql, parsed.data.params as never, parsed.data.values ?? {});
-      validateSelectSql(sql);
+      if (parsed.data.params?.length) inner = substituteParams(inner, parsed.data.params as never, parsed.data.values ?? {});
+      validateSelectSql(inner);
     } catch (e) { reply.code(400); return { error: (e as Error).message }; }
     // Always wrap with a LIMIT so an unbounded `select * from big_table` never streams every row
     // into memory; the requested limit is clamped to ROW_CAP.
+    inner = inner.replace(/;\s*$/, '');
     const cap = Math.min(parsed.data.limit ?? ROW_CAP, ROW_CAP);
-    sql = `select * from (${sql.replace(/;\s*$/, '')}) as _q limit ${cap} offset ${parsed.data.offset ?? 0}`;
+    const pageSql = `select * from (${inner}) as _q limit ${cap} offset ${parsed.data.offset ?? 0}`;
     try {
       const started = Date.now();
-      const { columns, rows } = await deps.runConnectorSql({ connectorId: parsed.data.connectorId, sql });
+      const { columns, rows } = await deps.runConnectorSql({ connectorId: parsed.data.connectorId, sql: pageSql });
       const capped = rows.slice(0, ROW_CAP);
-      return { columns, rows: capped, rowCount: capped.length, ms: Date.now() - started };
+      // Total row count for the pagination control — only when the caller paginates (passes a
+      // limit), since it costs a second aggregate query over the same statement.
+      let total: number | undefined;
+      if (parsed.data.limit !== undefined) {
+        const cnt = await deps.runConnectorSql({ connectorId: parsed.data.connectorId, sql: `select count(*) as _n from (${inner}) as _q` });
+        total = Number(Object.values(cnt.rows[0] ?? {})[0] ?? capped.length);
+      }
+      return { columns, rows: capped, rowCount: capped.length, ms: Date.now() - started, ...(total !== undefined ? { total } : {}) };
     } catch (e) { reply.code(400); return { error: (e as Error).message }; }
   });
 

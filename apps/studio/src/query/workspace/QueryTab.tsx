@@ -7,6 +7,7 @@ import { SqlEditor } from './SqlEditor';
 import { ResultsGrid } from './ResultsGrid';
 import { RunParamsSheet } from '../params/RunParamsSheet';
 import { ParametersEditor } from '../../reports-builder/ParametersEditor';
+import { TablePagination } from '@/components/ui/table-pagination';
 
 export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
   const patchQuery = useQueryStore((s) => s.patchQuery);
@@ -16,18 +17,23 @@ export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [paramsOpen, setParamsOpen] = useState(false);
   const [editorFrac, setEditorFrac] = useState(0.5);
+  // Paging over the (potentially large) result set. Remember the last-used param values so page
+  // changes re-run the same query for the next slice.
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
+  const [lastValues, setLastValues] = useState<Record<string, unknown>>({});
 
   useEffect(() => { queryApi.connectors().then(setConnectors); }, []);
 
-  const execute = async (values: Record<string, unknown>) => {
-    setError(null);
+  const execute = async (values: Record<string, unknown>, p = 0, size = pageSize) => {
+    setError(null); setLastValues(values); setPage(p);
     try {
-      const r = await queryApi.run({ connectorId: tab.connectorId ?? '', sql: tab.sql, params: tab.params, values });
+      const r = await queryApi.run({ connectorId: tab.connectorId ?? '', sql: tab.sql, params: tab.params, values, limit: size, offset: p * size });
       setResult(r);
     } catch (e) { setError((e as Error).message); }
   };
 
-  const onRun = () => { if (tab.params.length > 0) setSheetOpen(true); else void execute({}); };
+  const onRun = () => { if (tab.params.length > 0) setSheetOpen(true); else void execute({}, 0); };
 
   const save = async () => {
     setError(null);
@@ -58,7 +64,7 @@ export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
             {connectors.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
-        <div className="min-h-0 flex-1 border-y border-border">
+        <div className="min-h-0 min-w-0 flex-1 border-y border-border">
           <SqlEditor value={tab.sql} onChange={(v) => patchQuery(tab.id, { sql: v, dirty: true })} onRun={onRun} />
         </div>
       </div>
@@ -71,12 +77,21 @@ export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {error ? <div className="p-3 text-xs text-destructive">{error}</div>
           : <>
-              {result && <div className="shrink-0 border-b border-border px-3 py-1 text-xs text-muted-foreground">{result.rowCount} rows · {result.ms}ms</div>}
               <div className="min-h-0 min-w-0 flex-1"><ResultsGrid result={result} /></div>
+              {result && (
+                <TablePagination
+                  page={page}
+                  pageSize={pageSize}
+                  total={result.total ?? result.rowCount}
+                  onPageChange={(p) => void execute(lastValues, p)}
+                  onPageSizeChange={(n) => { setPageSize(n); void execute(lastValues, 0, n); }}
+                  leftSlot={<span className="text-muted-foreground">{result.rowCount} rows · {result.ms}ms</span>}
+                />
+              )}
             </>}
       </div>
       <RunParamsSheet open={sheetOpen} onClose={() => setSheetOpen(false)} params={tab.params}
-        connectorId={tab.connectorId ?? ''} onRun={(values) => { setSheetOpen(false); void execute(values); }} />
+        connectorId={tab.connectorId ?? ''} onRun={(values) => { setSheetOpen(false); void execute(values, 0); }} />
       <ParametersEditor open={paramsOpen} parameters={tab.params as never} onClose={() => setParamsOpen(false)}
         onSave={(p) => { patchQuery(tab.id, { params: p as never, dirty: true }); setParamsOpen(false); }} />
     </div>
