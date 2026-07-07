@@ -1,6 +1,25 @@
 import { type Kysely, sql } from 'kysely';
 import type { InternalSchema } from './schema/internal';
-import type { CustomQuery, CustomQueryParam } from '@openldr/dashboards';
+
+// NOTE: These structurally mirror `CustomQueryParam`/`CustomQuery` from `@openldr/dashboards`
+// (the shared Zod-derived source of truth). They are re-declared locally because `@openldr/db`
+// must not depend on `@openldr/dashboards` (dashboards already depends on db — importing upward
+// would introduce a package cycle). db stores define their own record types by convention
+// (see report-schedule-store).
+export interface CustomQueryParam {
+  id: string;
+  label: string;
+  type: 'text' | 'select' | 'daterange';
+  required: boolean;
+  optionsSql?: string;
+}
+export interface CustomQuery {
+  id: string;
+  name: string;
+  connectorId: string;
+  sql: string;
+  params: CustomQueryParam[];
+}
 
 export interface NewCustomQuery {
   id: string; name: string; connectorId: string; sql: string; params: CustomQueryParam[];
