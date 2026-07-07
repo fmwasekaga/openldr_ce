@@ -6,7 +6,7 @@
 // size — which also makes it a no-op under jsdom (getBoundingClientRect is 0 there), keeping
 // unit tests on the surrounding DOM (pagination/status/error), not canvas cells.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DataEditor, GridCellKind, GridColumnIcon } from '@glideapps/glide-data-grid';
+import { DataEditor, GridCellKind } from '@glideapps/glide-data-grid';
 import type { GridCell, GridColumn, GridSelection, Item, Theme } from '@glideapps/glide-data-grid';
 import type { RunResult } from '../api';
 
@@ -21,15 +21,6 @@ function inferType(key: string, rows: Record<string, unknown>[]): ColType {
     return 'text';
   }
   return key === 'id' ? 'pk' : 'text';
-}
-
-function headerIcon(t: ColType): GridColumnIcon {
-  switch (t) {
-    case 'pk': return GridColumnIcon.HeaderRowID;
-    case 'num': return GridColumnIcon.HeaderNumber;
-    case 'bool': return GridColumnIcon.HeaderBoolean;
-    default: return GridColumnIcon.HeaderString;
-  }
 }
 
 function readVar(cs: CSSStyleDeclaration, name: string, fallback: string): string {
@@ -110,8 +101,8 @@ export function ResultsGrid({ result }: { result: Omit<RunResult, 'ms'> | null }
   const rows = result?.rows ?? [];
   const colTypes = useMemo(() => columns.map((c) => inferType(c.key, rows)), [columns, rows]);
   const gridColumns = useMemo<GridColumn[]>(
-    () => columns.map((c, i) => ({ title: c.label, id: c.key, width: 160, icon: headerIcon(colTypes[i]) })),
-    [columns, colTypes],
+    () => columns.map((c) => ({ title: c.label, id: c.key, width: 160 })),
+    [columns],
   );
 
   const getCellContent = useCallback((cell: Item): GridCell => {
@@ -155,7 +146,7 @@ export function ResultsGrid({ result }: { result: Omit<RunResult, 'ms'> | null }
             theme={theme}
             gridSelection={selection}
             onGridSelectionChange={setSelection}
-            rowMarkers="checkbox"
+            rowMarkers="checkbox-visible"
             rangeSelect="multi-rect"
             columnSelect="multi"
             rowSelect="multi"
