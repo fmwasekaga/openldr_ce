@@ -172,15 +172,13 @@ export function ResultsGrid({ result }: { result: Omit<RunResult, 'ms'> | null }
         )}
       </div>
       <div className="flex h-6 shrink-0 items-center gap-2 border-t border-border px-3 text-[11px] text-muted-foreground">
-        {stats ? (
+        {stats && (
           <>
             <span>{stats.rows}R &times; {stats.cols}C</span>
             <span className="opacity-50">&middot;</span>
             <span>{stats.cells} cells</span>
             <span className="ml-1 opacity-60">&#8984;C to copy</span>
           </>
-        ) : (
-          <span className="opacity-60">Click a cell, drag or shift-click to select a range</span>
         )}
       </div>
     </div>
