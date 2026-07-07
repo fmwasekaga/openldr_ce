@@ -8,6 +8,11 @@ function tabIcon(t: Tab) {
   return <Zap className="h-4 w-4 shrink-0" />;
 }
 
+/** A table tab is "dirty" when its inline SQL diverges from the default browse query. */
+function isDirty(t: Tab): boolean {
+  return t.kind === 'table' && t.sql !== `select * from "${t.schema}"."${t.table}"`;
+}
+
 export function TabBar(): JSX.Element {
   const { tabs, activeId, setActive, closeTab, openQueryTab } = useQueryStore();
   return (
@@ -22,7 +27,7 @@ export function TabBar(): JSX.Element {
             className={`relative flex items-center gap-2 border-r border-border px-4 text-[13px] ${isActive
               ? 'bg-card text-foreground'
               : 'text-muted-foreground hover:bg-background/30'}`}>
-            <button className="flex items-center gap-2" onClick={() => setActive(t.id)}>{tabIcon(t)}{t.title}</button>
+            <button className="flex items-center gap-2" onClick={() => setActive(t.id)}>{tabIcon(t)}{t.title}{isDirty(t) && <span className="text-primary" aria-hidden>*</span>}</button>
             <button aria-label={`close ${t.title}`} onClick={() => closeTab(t.id)}><X className="h-3.5 w-3.5 opacity-60 hover:opacity-100" /></button>
           </div>
         );
