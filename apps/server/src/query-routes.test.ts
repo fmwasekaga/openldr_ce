@@ -116,3 +116,31 @@ describe('POST /api/query/run', () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe('introspection', () => {
+  it('lists sql-typed connectors', async () => {
+    const app = await build();
+    const res = await app.inject({ method: 'GET', url: '/api/query/connectors' });
+    expect(res.json()).toEqual([{ id: 'c1', name: 'PG', type: 'postgres' }]);
+  });
+
+  it('lists tables for a connector schema via information_schema', async () => {
+    const deps = makeDeps();
+    deps.runConnectorSql = async ({ sql }) => {
+      expect(sql.toLowerCase()).toContain('information_schema.tables');
+      return { columns: [], rows: [{ table_name: 'products' }, { table_name: 'orders' }] };
+    };
+    const app = await build(deps);
+    const res = await app.inject({ method: 'GET', url: '/api/query/connectors/c1/schemas/public/tables' });
+    expect(res.json()).toEqual(['products', 'orders']);
+  });
+
+  it('returns distinct options for a select param', async () => {
+    const deps = makeDeps();
+    deps.runConnectorSql = async () => ({ columns: [], rows: [{ v: 'A' }, { v: 'B' }] });
+    const app = await build(deps);
+    const res = await app.inject({ method: 'POST', url: '/api/query/param-options',
+      payload: { connectorId: 'c1', optionsSql: 'select distinct v from t' } });
+    expect(res.json()).toEqual(['A', 'B']);
+  });
+});

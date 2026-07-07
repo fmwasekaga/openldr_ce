@@ -97,4 +97,42 @@ export function registerQueryRoutes(app: FastifyInstance, _ctx: AppContext, deps
       return { columns, rows: capped, rowCount: capped.length, ms: Date.now() - started };
     } catch (e) { reply.code(400); return { error: (e as Error).message }; }
   });
+
+  // ---- Connector introspection ----
+  // information_schema.schemata/.tables exist in Postgres, MySQL and MSSQL — portable across v1 SQL types.
+  const SQL_TYPES = new Set(['postgres', 'mssql', 'mysql']);
+
+  app.get('/api/query/connectors', GUARD, async () => {
+    const all = await deps.connectors.list();
+    return all.filter((c) => c.enabled && c.type && SQL_TYPES.has(c.type)).map((c) => ({ id: c.id, name: c.name, type: c.type }));
+  });
+
+  app.get('/api/query/connectors/:id/schemas', GUARD, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const c = await deps.connectors.get(id);
+    if (!c || !c.enabled) { reply.code(404); return { error: 'connector not found' }; }
+    const { rows } = await deps.runConnectorSql({ connectorId: id,
+      sql: "select schema_name from information_schema.schemata where schema_name not in ('pg_catalog','information_schema') order by 1" });
+    return rows.map((r) => String(r.schema_name));
+  });
+
+  app.get('/api/query/connectors/:id/schemas/:schema/tables', GUARD, async (req, reply) => {
+    const { id, schema } = req.params as { id: string; schema: string };
+    const c = await deps.connectors.get(id);
+    if (!c || !c.enabled) { reply.code(404); return { error: 'connector not found' }; }
+    const safeSchema = schema.replace(/'/g, "''");
+    const { rows } = await deps.runConnectorSql({ connectorId: id,
+      sql: `select table_name from information_schema.tables where table_schema = '${safeSchema}' order by 1` });
+    return rows.map((r) => String(r.table_name));
+  });
+
+  app.post('/api/query/param-options', GUARD, async (req, reply) => {
+    const body = z.object({ connectorId: z.string().min(1), optionsSql: z.string().min(1) }).safeParse(req.body);
+    if (!body.success) { reply.code(400); return { error: body.error.message }; }
+    try { validateSelectSql(body.data.optionsSql); } catch (e) { reply.code(400); return { error: (e as Error).message }; }
+    const c = await deps.connectors.get(body.data.connectorId);
+    if (!c || !c.enabled) { reply.code(404); return { error: 'connector not found' }; }
+    const { rows } = await deps.runConnectorSql({ connectorId: body.data.connectorId, sql: body.data.optionsSql });
+    return rows.slice(0, ROW_CAP).map((r) => Object.values(r)[0]);
+  });
 }
