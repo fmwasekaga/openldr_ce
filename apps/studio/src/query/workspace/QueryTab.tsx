@@ -6,6 +6,7 @@ import { useQueryStore, type QueryTab as QueryTabModel } from '../store';
 import { SqlEditor } from './SqlEditor';
 import { ResultsGrid } from './ResultsGrid';
 import { RunParamsSheet } from '../params/RunParamsSheet';
+import { ParametersEditor } from '../../reports-builder/ParametersEditor';
 
 export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
   const patchQuery = useQueryStore((s) => s.patchQuery);
@@ -13,6 +14,7 @@ export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
   const [result, setResult] = useState<RunResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [paramsOpen, setParamsOpen] = useState(false);
   const [editorFrac, setEditorFrac] = useState(0.5);
 
   useEffect(() => { queryApi.connectors().then(setConnectors); }, []);
@@ -44,7 +46,7 @@ export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
           <button className="flex items-center gap-1 rounded border border-border px-2.5 py-1 text-xs" onClick={save}>
             <Save className="h-3.5 w-3.5" /> Save
           </button>
-          <button className="flex items-center gap-1 rounded border border-border px-2.5 py-1 text-xs" onClick={() => setSheetOpen(true)}>
+          <button className="flex items-center gap-1 rounded border border-border px-2.5 py-1 text-xs" onClick={() => setParamsOpen(true)}>
             <SlidersHorizontal className="h-3.5 w-3.5" /> Parameters
           </button>
           <select className="ml-auto rounded border border-border bg-background px-2 py-1 text-xs" value={tab.connectorId ?? ''}
@@ -72,6 +74,8 @@ export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
       </div>
       <RunParamsSheet open={sheetOpen} onClose={() => setSheetOpen(false)} params={tab.params}
         connectorId={tab.connectorId ?? ''} onRun={(values) => { setSheetOpen(false); void execute(values); }} />
+      <ParametersEditor open={paramsOpen} parameters={tab.params as never} onClose={() => setParamsOpen(false)}
+        onSave={(p) => { patchQuery(tab.id, { params: p as never, dirty: true }); setParamsOpen(false); }} />
     </div>
   );
 }
