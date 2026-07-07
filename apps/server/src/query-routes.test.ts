@@ -50,4 +50,29 @@ describe('custom-queries CRUD', () => {
     const dup = await app.inject({ method: 'POST', url: '/api/custom-queries', payload: { name: 'Dup', connectorId: 'c1', sql: 'select 1', params: [] } });
     expect(dup.statusCode).toBe(409);
   });
+
+  it('rejects a create with an invalid body', async () => {
+    const res = await app.inject({ method: 'POST', url: '/api/custom-queries', payload: { connectorId: 'c1', sql: 'select 1' } });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('rejects a PUT rename onto another query\'s name with 409', async () => {
+    await app.inject({ method: 'POST', url: '/api/custom-queries', payload: { name: 'A', connectorId: 'c1', sql: 'select 1', params: [] } });
+    const created = await app.inject({ method: 'POST', url: '/api/custom-queries', payload: { name: 'B', connectorId: 'c1', sql: 'select 1', params: [] } });
+    const bId = created.json().id;
+    const res = await app.inject({ method: 'PUT', url: `/api/custom-queries/${bId}`, payload: { name: 'A' } });
+    expect(res.statusCode).toBe(409);
+  });
+
+  it('returns 404 on a PUT to a missing id', async () => {
+    const res = await app.inject({ method: 'PUT', url: '/api/custom-queries/nope', payload: { name: 'X' } });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('rejects a PUT with an invalid body', async () => {
+    const created = await app.inject({ method: 'POST', url: '/api/custom-queries', payload: { name: 'C', connectorId: 'c1', sql: 'select 1', params: [] } });
+    const id = created.json().id;
+    const res = await app.inject({ method: 'PUT', url: `/api/custom-queries/${id}`, payload: { name: 123 } });
+    expect(res.statusCode).toBe(400);
+  });
 });

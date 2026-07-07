@@ -1,10 +1,12 @@
 import type { CustomQueryParam } from '@openldr/dashboards';
 
+// Shape check for injection-safety only (YYYY-MM-DD); the DB enforces calendar validity.
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 function sqlString(v: string): string {
   return `'${v.replace(/'/g, "''")}'`;
 }
+// Shape check for injection-safety only; the DB enforces calendar validity.
 function assertDate(v: unknown): string {
   if (typeof v !== 'string' || !ISO_DATE.test(v)) throw new Error(`invalid date: ${String(v)}`);
   return v;

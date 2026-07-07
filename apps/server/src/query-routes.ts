@@ -36,6 +36,8 @@ export function registerQueryRoutes(app: FastifyInstance, _ctx: AppContext, deps
   app.post('/api/custom-queries', GUARD, async (req, reply) => {
     const parsed = CustomQueryInputSchema.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
+    // The DB unique(name) constraint is the real guard; this pre-check is a best-effort
+    // friendly error (TOCTOU: a concurrent create could still win the race).
     if (await deps.customQueries.getByName(parsed.data.name)) { reply.code(409); return { error: 'name already exists' }; }
     const id = `cq_${randomUUID().slice(0, 8)}`;
     await deps.customQueries.create({ id, ...parsed.data });
