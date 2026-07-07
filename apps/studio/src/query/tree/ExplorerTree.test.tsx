@@ -1,6 +1,6 @@
 // apps/studio/src/query/tree/ExplorerTree.test.tsx
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { ExplorerTree } from './ExplorerTree';
 import { queryApi } from '../api';
 
@@ -28,13 +28,15 @@ describe('ExplorerTree', () => {
     await waitFor(() => expect(queryApi.schemas).toHaveBeenCalledWith('c1'));
   });
 
-  it('deletes a custom query via the trash affordance', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+  it('deletes a custom query after confirming in the dialog', async () => {
     render(<ExplorerTree />);
     fireEvent.click(await screen.findByText('Custom Queries'));
     await screen.findByText('Q1');
     fireEvent.click(screen.getByLabelText('Delete query'));
+    // A confirm dialog opens; the query is only removed once confirmed.
+    const dialog = await screen.findByRole('alertdialog');
+    expect(queryApi.remove).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete query' }));
     await waitFor(() => expect(queryApi.remove).toHaveBeenCalledWith('cq1'));
-    confirmSpy.mockRestore();
   });
 });

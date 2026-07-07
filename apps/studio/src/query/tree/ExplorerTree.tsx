@@ -5,6 +5,7 @@ import { ChevronRight, ChevronDown, Plug, Package, Zap, Table2, Trash2 } from 'l
 import { queryApi, type ConnectorRef, type DatasetRef } from '../api';
 import { useQueryStore } from '../store';
 import type { CustomQuery } from '../custom-query-types';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 function Row({ depth, open, onClick, icon, label, active }:
   { depth: number; open?: boolean; onClick(): void; icon: React.ReactNode; label: string; active?: boolean }) {
@@ -50,8 +51,9 @@ export function ExplorerTree(): JSX.Element {
   };
 
   // Delete a custom query (Rename/Duplicate deferred — a full context menu is out of scope for v1).
-  const removeQuery = async (id: string): Promise<void> => {
-    if (!window.confirm(t('query.confirmDeleteQuery'))) return;
+  // Confirmed via the shared shadcn ConfirmDialog rather than window.confirm.
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const doDelete = async (id: string): Promise<void> => {
     try {
       await queryApi.remove(id);
       const open = tabs.find((tb) => tb.kind === 'query' && tb.customQueryId === id);
@@ -86,13 +88,23 @@ export function ExplorerTree(): JSX.Element {
       {openBranch.queries && queries.map((q) => (
         <div key={q.id} className="group relative">
           <Row depth={1} onClick={() => openQueryTab({ customQueryId: q.id, title: q.name, connectorId: q.connectorId, sql: q.sql, params: q.params })} icon={<Zap className="h-3.5 w-3.5" />} label={q.name} />
-          <button onClick={(e) => { e.stopPropagation(); void removeQuery(q.id); }}
+          <button onClick={(e) => { e.stopPropagation(); setDeleteId(q.id); }}
             className="absolute right-2 top-1/2 hidden -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-destructive group-hover:block"
             aria-label={t('query.deleteQuery')} title={t('query.deleteQuery')}>
             <Trash2 className="h-3.5 w-3.5" />
           </button>
         </div>
       ))}
+
+      <ConfirmDialog
+        open={deleteId !== null}
+        onOpenChange={(o) => { if (!o) setDeleteId(null); }}
+        title={t('query.confirmDeleteQuery')}
+        confirmLabel={t('query.deleteQuery')}
+        cancelLabel={t('common.cancel')}
+        destructive
+        onConfirm={() => { const id = deleteId; setDeleteId(null); if (id) void doDelete(id); }}
+      />
     </div>
   );
 }
