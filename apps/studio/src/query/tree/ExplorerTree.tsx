@@ -62,8 +62,6 @@ export function ExplorerTree(): JSX.Element {
 
   return (
     <div className="flex h-full flex-col overflow-auto py-2 text-sm">
-      <div className="px-3 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">System</div>
-
       <Row depth={0} open={!!openBranch.connectors} onClick={() => toggle('connectors')} icon={<Plug className="h-3.5 w-3.5" />} label={t('query.connectors')} />
       {openBranch.connectors && connectors.map((c) => (
         <div key={c.id}>
