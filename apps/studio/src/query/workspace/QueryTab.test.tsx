@@ -19,8 +19,8 @@ describe('QueryTab', () => {
     render(<QueryTab tab={tab} />);
     fireEvent.click(screen.getByRole('button', { name: /run/i }));
     await waitFor(() => expect(queryApi.run).toHaveBeenCalled());
-    // Assert the value shows in the results grid specifically (a <td> has role "cell");
-    // scoping avoids matching the CodeMirror gutter/line-number "1" that jsdom also renders.
-    expect(await screen.findByRole('cell', { name: '1' })).toBeInTheDocument();
+    // The results grid is a canvas (glide-data-grid) that no-ops under jsdom, so assert on the
+    // pagination summary the run produced (rowCount/ms) rather than a DOM cell.
+    expect(await screen.findByText('1 rows · 3ms')).toBeInTheDocument();
   });
 });
