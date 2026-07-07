@@ -1,5 +1,5 @@
 // apps/studio/src/query/workspace/QueryTab.tsx
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Play, Save, SlidersHorizontal, Info, CheckCircle2, AlertCircle } from 'lucide-react';
 import { queryApi, type ConnectorRef, type RunResult } from '../api';
 import { useQueryStore, type QueryTab as QueryTabModel } from '../store';
@@ -20,15 +20,32 @@ function StatusIcon({ status, message }: { status: RunStatus; message: string })
       ? <AlertCircle className="h-4 w-4 text-destructive" />
       : <Info className="h-4 w-4 text-muted-foreground" />;
   return (
-    <TooltipProvider delayDuration={150}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="flex items-center" aria-label="run status" role="status">{icon}</span>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" className="max-w-sm break-words">{message}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="flex items-center" aria-label="run status" role="status">{icon}</span>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" className="max-w-sm break-words">{message}</TooltipContent>
+    </Tooltip>
   );
+}
+
+/** Ghost icon-only button with a tooltip label. */
+function IconButton({ icon, label, onClick }: { icon: ReactNode; label: string; onClick(): void }): JSX.Element {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button aria-label={label} onClick={onClick}
+          className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground">
+          {icon}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function Sep(): JSX.Element {
+  return <div className="mx-1 h-5 w-px shrink-0 bg-border" />;
 }
 
 export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
@@ -76,26 +93,23 @@ export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
   return (
     <div className="flex h-full min-w-0 flex-col">
       <div className="flex min-w-0 flex-col" style={{ height: `${editorFrac * 100}%` }}>
-        <div className="flex items-center gap-2 px-3 py-2">
-          <StatusIcon status={status} message={statusMessage} />
-          <button className="flex items-center gap-1 rounded bg-primary px-2.5 py-1 text-xs text-primary-foreground" onClick={onRun}>
-            <Play className="h-3.5 w-3.5" /> Run
-          </button>
-          <button className="flex items-center gap-1 rounded border border-border px-2.5 py-1 text-xs" onClick={save}>
-            <Save className="h-3.5 w-3.5" /> Save
-          </button>
-          <button className="flex items-center gap-1 rounded border border-border px-2.5 py-1 text-xs" onClick={() => setParamsOpen(true)}>
-            <SlidersHorizontal className="h-3.5 w-3.5" /> Parameters
-          </button>
-          <div className="ml-auto">
+        <TooltipProvider delayDuration={150}>
+          <div className="flex items-center gap-2 px-3 py-2">
+            <StatusIcon status={status} message={statusMessage} />
             <Select value={tab.connectorId ?? ''} onValueChange={(v) => patchQuery(tab.id, { connectorId: v, dirty: true })}>
               <SelectTrigger className="h-8 w-56 text-xs"><SelectValue placeholder="Select a connector…" /></SelectTrigger>
               <SelectContent>
                 {connectors.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
+            <div className="flex-1" />
+            <IconButton icon={<SlidersHorizontal className="h-4 w-4" />} label="Parameters" onClick={() => setParamsOpen(true)} />
+            <Sep />
+            <IconButton icon={<Save className="h-4 w-4" />} label="Save" onClick={save} />
+            <Sep />
+            <IconButton icon={<Play className="h-4 w-4" />} label="Run" onClick={onRun} />
           </div>
-        </div>
+        </TooltipProvider>
         <div className="min-h-0 min-w-0 flex-1 border-y border-border">
           <SqlEditor value={tab.sql} onChange={(v) => { patchQuery(tab.id, { sql: v, dirty: true }); setStatus('idle'); }} onRun={onRun} />
         </div>
