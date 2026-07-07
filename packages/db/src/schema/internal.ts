@@ -422,6 +422,16 @@ export interface WorkflowDatasetsTable {
   updated_at: Generated<Date>;
 }
 
+export interface CustomQueriesTable {
+  id: string;
+  name: string;
+  connector_id: string;
+  sql: string;
+  params: unknown; // JSON: CustomQueryParam[]
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface ConnectorsTable {
   id: string;
   name: string;
@@ -512,6 +522,7 @@ export interface InternalSchema {
   workflow_runs: WorkflowRunsTable;
   workflow_schedules: WorkflowSchedulesTable;
   workflow_datasets: WorkflowDatasetsTable;
+  custom_queries: CustomQueriesTable;
   connectors: ConnectorsTable;
   registries: RegistriesTable;
   plugin_data: PluginDataTable;

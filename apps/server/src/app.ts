@@ -22,7 +22,8 @@ import { registerConnectorsRoutes } from './connectors-routes';
 import { registerSettingsRoutes } from './settings-routes';
 import { registerActivityRoutes } from './activity-routes';
 import { registerPluginUiRoutes } from './plugin-ui-routes';
-import { createConnectorStore } from '@openldr/db';
+import { registerQueryRoutes } from './query-routes';
+import { createConnectorStore, createCustomQueryStore } from '@openldr/db';
 import { registerAuth } from './auth-plugin';
 import { readAppVersion } from './version';
 
@@ -86,6 +87,27 @@ export function buildApp(ctx: AppContext) {
   registerPluginUiRoutes(app, ctx);
   registerConnectorsRoutes(app, ctx, { connectors: createConnectorStore(ctx.internalDb) });
   registerWorkflowRoutes(app, ctx, { connectors: createConnectorStore(ctx.internalDb) });
+  registerQueryRoutes(app, ctx, {
+    customQueries: createCustomQueryStore(ctx.internalDb),
+    connectors: {
+      list: () => ctx.connectors.list(),
+      get: (id) => ctx.connectors.get(id),
+    },
+    datasets: {
+      // WorkflowDatasetStore keys datasets by name and does not expose a separate id; use name as id.
+      list: async () => (await ctx.workflows.datasets.list()).map((d) => ({
+        id: d.name, name: d.name, rowCount: d.rowCount, publishedTable: d.publishedTable,
+      })),
+      // getByName returns WorkflowDataset | undefined; map absent → null for the route contract.
+      getByName: async (name) => (await ctx.workflows.datasets.getByName(name)) ?? null,
+    },
+    runConnectorSql: (input) => {
+      // Optional on WorkflowServices, but always wired in bootstrap for the server context.
+      const run = ctx.workflows.services.runConnectorSql;
+      if (!run) throw new Error('connector SQL runner unavailable');
+      return run(input);
+    },
+  });
   registerSettingsRoutes(app, ctx);
   registerActivityRoutes(app, ctx);
 
