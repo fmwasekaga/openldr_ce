@@ -131,7 +131,7 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
     if (!c || !c.enabled) { reply.code(404); return { error: 'connector not found' }; }
     try {
       const { rows } = await deps.runConnectorSql({ connectorId: id,
-        sql: "select schema_name from information_schema.schemata where schema_name not in ('pg_catalog','information_schema') order by 1" });
+        sql: "select schema_name from information_schema.schemata where schema_name not in ('pg_catalog','information_schema') and schema_name not like 'pg\\_%' order by 1" });
       return rows.map((r) => String(r.schema_name));
     } catch (e) { reply.code(400); return { error: (e as Error).message }; }
   });
