@@ -33,14 +33,18 @@ export function ExplorerTree(): JSX.Element {
 
   const toggle = (k: string) => setOpenBranch((o) => ({ ...o, [k]: !o[k] }));
 
-  useEffect(() => { if (openBranch.connectors && connectors.length === 0) queryApi.connectors().then(setConnectors); }, [openBranch.connectors]);
-  useEffect(() => { if (openBranch.datasets && datasets.length === 0) queryApi.datasets().then(setDatasets); }, [openBranch.datasets]);
-  useEffect(() => { if (openBranch.queries && queries.length === 0) queryApi.list().then(setQueries); }, [openBranch.queries]);
+  // Explorer loads are best-effort; surface a failed fetch to the console rather than
+  // leaving it as a silent unhandled rejection (the branch simply stays empty).
+  const onErr = (what: string) => (e: unknown) => console.error(`[query-explorer] failed to load ${what}`, e);
 
-  const loadSchemas = (id: string) => { toggle(`c:${id}`); if (!schemas[id]) queryApi.schemas(id).then((s) => setSchemas((m) => ({ ...m, [id]: s }))); };
+  useEffect(() => { if (openBranch.connectors && connectors.length === 0) queryApi.connectors().then(setConnectors).catch(onErr('connectors')); }, [openBranch.connectors]);
+  useEffect(() => { if (openBranch.datasets && datasets.length === 0) queryApi.datasets().then(setDatasets).catch(onErr('datasets')); }, [openBranch.datasets]);
+  useEffect(() => { if (openBranch.queries && queries.length === 0) queryApi.list().then(setQueries).catch(onErr('custom queries')); }, [openBranch.queries]);
+
+  const loadSchemas = (id: string) => { toggle(`c:${id}`); if (!schemas[id]) queryApi.schemas(id).then((s) => setSchemas((m) => ({ ...m, [id]: s }))).catch(onErr('schemas')); };
   const loadTables = (id: string, schema: string) => {
     const key = `${id}/${schema}`; toggle(`s:${key}`);
-    if (!tables[key]) queryApi.tables(id, schema).then((tb) => setTables((m) => ({ ...m, [key]: tb })));
+    if (!tables[key]) queryApi.tables(id, schema).then((tb) => setTables((m) => ({ ...m, [key]: tb }))).catch(onErr('tables'));
   };
 
   return (

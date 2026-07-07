@@ -11,14 +11,17 @@ export function TableTab({ tab }: { tab: TableTabModel | DatasetTab }): JSX.Elem
   const openQueryTab = useQueryStore((s) => s.openQueryTab);
   const [page, setPage] = useState(0);
   const [result, setResult] = useState<RunResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
+    setError(null);
+    const onErr = (e: unknown) => { if (alive) setError((e as Error).message); };
     if (tab.kind === 'dataset') {
-      queryApi.datasetRows(tab.name).then((r) => { if (alive) setResult(r); });
+      queryApi.datasetRows(tab.name).then((r) => { if (alive) setResult(r); }).catch(onErr);
     } else {
       const sql = `select * from "${tab.schema}"."${tab.table}"`;
-      queryApi.run({ connectorId: tab.connectorId, sql, limit: PAGE, offset: page * PAGE }).then((r) => { if (alive) setResult(r); });
+      queryApi.run({ connectorId: tab.connectorId, sql, limit: PAGE, offset: page * PAGE }).then((r) => { if (alive) setResult(r); }).catch(onErr);
     }
     return () => { alive = false; };
   }, [tab, page]);
@@ -34,7 +37,9 @@ export function TableTab({ tab }: { tab: TableTabModel | DatasetTab }): JSX.Elem
           </button>
         )}
       </div>
-      <div className="min-h-0 flex-1"><ResultsGrid result={result} /></div>
+      <div className="min-h-0 flex-1">
+        {error ? <div className="p-3 text-xs text-destructive">{error}</div> : <ResultsGrid result={result} />}
+      </div>
       {tab.kind === 'table' && (
         <div className="flex items-center gap-3 border-t border-border px-3 py-1.5 text-xs text-muted-foreground">
           <span>page {page + 1}</span>

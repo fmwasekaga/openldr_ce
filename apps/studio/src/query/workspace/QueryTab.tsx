@@ -30,10 +30,13 @@ export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
   const onRun = () => { if (tab.params.length > 0) setSheetOpen(true); else void execute({}); };
 
   const save = async () => {
+    setError(null);
     const input = { name: tab.title, connectorId: tab.connectorId ?? '', sql: tab.sql, params: tab.params };
-    if (tab.customQueryId) await queryApi.update(tab.customQueryId, input);
-    else { const { id } = await queryApi.create(input); patchQuery(tab.id, { customQueryId: id }); }
-    patchQuery(tab.id, { dirty: false });
+    try {
+      if (tab.customQueryId) await queryApi.update(tab.customQueryId, input);
+      else { const { id } = await queryApi.create(input); patchQuery(tab.id, { customQueryId: id }); }
+      patchQuery(tab.id, { dirty: false });
+    } catch (e) { setError((e as Error).message); }
   };
 
   return (
