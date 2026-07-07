@@ -15,7 +15,19 @@ export function SqlEditor({ value, onChange, onRun }: { value: string; onChange(
         parent: host.current, doc: value,
         extensions: [
           basicSetup, sqlLang(),
-          EditorView.theme({ '&': { height: '100%', fontSize: '13px' }, '.cm-content': { fontFamily: 'var(--mono)' } }),
+          // Theme the editor with the app's CSS token vars so it tracks light/dark. Without
+          // gutter/background rules CodeMirror's default light chrome shows a white line-number
+          // gutter in dark mode.
+          EditorView.theme({
+            '&': { height: '100%', fontSize: '13px', backgroundColor: 'var(--bg)', color: 'var(--text)' },
+            '&.cm-focused': { outline: 'none' },
+            '.cm-content': { fontFamily: 'var(--mono)', caretColor: 'var(--text)' },
+            '.cm-gutters': { backgroundColor: 'var(--bg)', color: 'var(--text-muted)', border: 'none' },
+            '.cm-activeLine': { backgroundColor: 'rgba(128,128,128,0.08)' },
+            '.cm-activeLineGutter': { backgroundColor: 'rgba(128,128,128,0.08)' },
+            '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--text)' },
+            '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': { backgroundColor: 'var(--brand-wash)' },
+          }),
           EditorView.updateListener.of((u) => { if (u.docChanged) onChange(u.state.doc.toString()); }),
           EditorView.domEventHandlers({ keydown: (e) => {
             if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); onRunRef.current(); return true; }

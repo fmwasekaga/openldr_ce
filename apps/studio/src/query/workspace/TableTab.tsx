@@ -28,21 +28,22 @@ export function TableTab({ tab }: { tab: TableTabModel | DatasetTab }): JSX.Elem
   }, [tab, page]);
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-        <span className="text-sm text-muted-foreground">{tab.title}</span>
-        {tab.kind === 'table' && (
-          <button className="ml-auto flex items-center gap-1 rounded bg-primary px-2.5 py-1 text-xs text-primary-foreground"
+    <div className="flex h-full min-w-0 flex-col">
+      {/* Slim toolbar only for tables (the tab bar already names the table); datasets get an
+          edge-to-edge grid with no header band. */}
+      {tab.kind === 'table' && (
+        <div className="flex items-center border-b border-border px-2 py-1">
+          <button className="ml-auto flex items-center gap-1 rounded bg-primary px-2 py-0.5 text-xs text-primary-foreground"
             onClick={() => openQueryTab({ connectorId: tab.connectorId, sql: `select * from "${tab.schema}"."${tab.table}"` })}>
             <Code2 className="h-3.5 w-3.5" /> SQL
           </button>
-        )}
-      </div>
-      <div className="min-h-0 flex-1">
+        </div>
+      )}
+      <div className="min-h-0 min-w-0 flex-1">
         {error ? <div className="p-3 text-xs text-destructive">{error}</div> : <ResultsGrid result={result} />}
       </div>
       {tab.kind === 'table' && (
-        <div className="flex items-center gap-3 border-t border-border px-3 py-1.5 text-xs text-muted-foreground">
+        <div className="flex items-center gap-3 border-t border-border px-3 py-1 text-xs text-muted-foreground">
           <span>page {page + 1}</span>
           <button className="ml-auto disabled:opacity-40" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>‹ Prev</button>
           <button disabled={(result?.rowCount ?? 0) < PAGE} onClick={() => setPage((p) => p + 1)}>Next ›</button>

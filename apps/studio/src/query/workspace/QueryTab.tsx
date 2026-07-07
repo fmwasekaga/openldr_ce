@@ -40,8 +40,8 @@ export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
   };
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex flex-col" style={{ height: `${editorFrac * 100}%` }}>
+    <div className="flex h-full min-w-0 flex-col">
+      <div className="flex min-w-0 flex-col" style={{ height: `${editorFrac * 100}%` }}>
         <div className="flex items-center gap-2 px-3 py-2">
           <button className="flex items-center gap-1 rounded bg-primary px-2.5 py-1 text-xs text-primary-foreground" onClick={onRun}>
             <Play className="h-3.5 w-3.5" /> Run
@@ -68,11 +68,11 @@ export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
         const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
         window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
       }} />
-      <div className="min-h-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {error ? <div className="p-3 text-xs text-destructive">{error}</div>
           : <>
-              {result && <div className="px-3 py-1 text-xs text-muted-foreground">{result.rowCount} rows · {result.ms}ms</div>}
-              <ResultsGrid result={result} />
+              {result && <div className="shrink-0 border-b border-border px-3 py-1 text-xs text-muted-foreground">{result.rowCount} rows · {result.ms}ms</div>}
+              <div className="min-h-0 min-w-0 flex-1"><ResultsGrid result={result} /></div>
             </>}
       </div>
       <RunParamsSheet open={sheetOpen} onClose={() => setSheetOpen(false)} params={tab.params}

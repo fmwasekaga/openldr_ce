@@ -13,9 +13,9 @@ function Workspace(): JSX.Element {
   const { tabs, activeId } = useQueryStore();
   const active = tabs.find((t) => t.id === activeId);
   return (
-    <div className="flex h-full flex-1 flex-col">
+    <div className="flex h-full min-w-0 flex-1 flex-col">
       <TabBar />
-      <div className="min-h-0 flex-1">
+      <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
         {!active && <div className="grid h-full place-items-center text-sm text-muted-foreground">Select a table or open a query</div>}
         {active?.kind === 'table' && <TableTab tab={active} />}
         {active?.kind === 'dataset' && <TableTab tab={active} />}
@@ -54,7 +54,7 @@ export function QueryPage(): JSX.Element {
             </div>
           </div>
         )}
-        <div className="flex flex-1" data-testid="query-workspace">
+        <div className="flex min-w-0 flex-1" data-testid="query-workspace">
           <Workspace />
         </div>
       </div>
