@@ -8,9 +8,8 @@ const nextId = () => `t${++seq}`;
 export interface TableTab {
   id: string; kind: 'table'; connectorId: string; schema: string; table: string; title: string;
   // Inline ad-hoc SQL for this table view: `sql` is the query the grid runs (defaults to a plain
-  // browse SELECT); `showSql` toggles the inline editor's visibility; `params` are declared params
-  // for the ad-hoc SQL (usually empty for a plain browse).
-  sql: string; showSql: boolean; params: CustomQueryParam[];
+  // browse SELECT); `showSql` toggles the inline editor's visibility.
+  sql: string; showSql: boolean;
 }
 export interface DatasetTab { id: string; kind: 'dataset'; name: string; title: string }
 export interface QueryTab {
@@ -37,7 +36,7 @@ export const useQueryStore = create<State>((set, get) => ({
     const existing = get().tabs.find((t) => t.kind === 'table' && t.connectorId === connectorId && t.schema === schema && t.table === table);
     if (existing) { set({ activeId: existing.id }); return; }
     const tab: TableTab = { id: nextId(), kind: 'table', connectorId, schema, table, title: table,
-      sql: `select * from "${schema}"."${table}"`, showSql: false, params: [] };
+      sql: `select * from "${schema}"."${table}"`, showSql: false };
     set((s) => ({ tabs: [...s.tabs, tab], activeId: tab.id }));
   },
   openDatasetTab({ name }) {

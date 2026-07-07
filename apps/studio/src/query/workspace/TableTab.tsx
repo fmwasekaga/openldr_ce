@@ -1,12 +1,10 @@
 // apps/studio/src/query/workspace/TableTab.tsx
 import { useEffect, useRef, useState } from 'react';
-import { Play, SlidersHorizontal, Code2 } from 'lucide-react';
+import { Play, Code2 } from 'lucide-react';
 import { queryApi, type ConnectorRef, type RunResult } from '../api';
 import { useQueryStore, type TableTab as TableTabModel, type DatasetTab } from '../store';
 import { ResultsGrid } from './ResultsGrid';
 import { SqlEditor } from './SqlEditor';
-import { RunParamsSheet } from '../params/RunParamsSheet';
-import { ParametersEditor } from '../../reports-builder/ParametersEditor';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -23,15 +21,13 @@ export function TableTab({ tab }: { tab: TableTabModel | DatasetTab }): JSX.Elem
   const [error, setError] = useState<string | null>(null);
   const [runToken, setRunToken] = useState(0);
   const [editorFrac, setEditorFrac] = useState(0.4);
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [paramsOpen, setParamsOpen] = useState(false);
 
   const isTable = tab.kind === 'table';
-  // Hold the current SQL + param values in refs so typing doesn't re-fetch on every keystroke;
-  // the grid re-runs only on Run (runToken), page, or page-size change.
+  // Hold the current SQL in a ref so typing doesn't re-fetch on every keystroke; the grid re-runs
+  // only on Run (runToken), page, or page-size change.
   const sqlRef = useRef('');
-  const valuesRef = useRef<Record<string, unknown>>({});
   if (isTable) sqlRef.current = tab.sql;
+  const connectorName = isTable ? (connectors.find((c) => c.id === tab.connectorId)?.name ?? tab.connectorId) : '';
 
   useEffect(() => { if (isTable) queryApi.connectors().then(setConnectors); }, [isTable]);
   useEffect(() => { setPage(0); }, [tab.id]);
@@ -43,20 +39,13 @@ export function TableTab({ tab }: { tab: TableTabModel | DatasetTab }): JSX.Elem
     if (tab.kind === 'dataset') {
       queryApi.datasetRows(tab.name).then((r) => { if (alive) { setResult(r); setStatus('ok'); } }).catch(onErr);
     } else {
-      queryApi.run({ connectorId: tab.connectorId, sql: sqlRef.current, params: tab.params, values: valuesRef.current, limit: pageSize, offset: page * pageSize })
+      queryApi.run({ connectorId: tab.connectorId, sql: sqlRef.current, limit: pageSize, offset: page * pageSize })
         .then((r) => { if (alive) { setResult(r); setStatus('ok'); } }).catch(onErr);
     }
     return () => { alive = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab.id, tab.kind, page, pageSize, runToken]);
 
-  const rerun = () => { setPage(0); setRunToken((x) => x + 1); };
-  const run = () => {
-    if (!isTable) return;
-    if (tab.params.length > 0) { setSheetOpen(true); return; }
-    valuesRef.current = {};
-    rerun();
-  };
+  const run = () => { setPage(0); setRunToken((x) => x + 1); };
 
   const statusMessage = status === 'ok'
     ? `Ran successfully — ${result?.rowCount ?? 0} rows.`
@@ -70,15 +59,14 @@ export function TableTab({ tab }: { tab: TableTabModel | DatasetTab }): JSX.Elem
         <TooltipProvider delayDuration={150}>
           <div className="flex items-center gap-2 border-b border-border px-3 py-2">
             <StatusIcon status={status} message={statusMessage} />
-            <Select value={tab.connectorId} onValueChange={(v) => { patchTable(tab.id, { connectorId: v }); rerun(); }}>
-              <SelectTrigger className="h-8 w-56 text-xs"><SelectValue placeholder="Select a connector…" /></SelectTrigger>
+            {/* Read-only: the connector is fixed to the table this tab was opened from. */}
+            <Select value={tab.connectorId} disabled>
+              <SelectTrigger className="h-8 w-56 text-xs"><SelectValue>{connectorName}</SelectValue></SelectTrigger>
               <SelectContent>
                 {connectors.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
             <div className="flex-1" />
-            <IconButton icon={<SlidersHorizontal className="h-4 w-4" />} label="Parameters" onClick={() => setParamsOpen(true)} />
-            <Sep />
             <IconButton icon={<Code2 className="h-4 w-4" />} label="SQL" active={tab.showSql} onClick={() => patchTable(tab.id, { showSql: !tab.showSql })} />
             <Sep />
             <IconButton icon={<Play className="h-4 w-4" />} label="Run" onClick={run} />
@@ -110,15 +98,6 @@ export function TableTab({ tab }: { tab: TableTabModel | DatasetTab }): JSX.Elem
           onPageChange={setPage}
           onPageSizeChange={(n) => { setPageSize(n); setPage(0); }}
         />
-      )}
-
-      {isTable && (
-        <>
-          <RunParamsSheet open={sheetOpen} onClose={() => setSheetOpen(false)} params={tab.params}
-            connectorId={tab.connectorId} onRun={(values) => { setSheetOpen(false); valuesRef.current = values; rerun(); }} />
-          <ParametersEditor open={paramsOpen} parameters={tab.params as never} onClose={() => setParamsOpen(false)}
-            onSave={(p) => { patchTable(tab.id, { params: p as never }); setParamsOpen(false); }} />
-        </>
       )}
     </div>
   );
