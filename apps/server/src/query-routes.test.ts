@@ -115,6 +115,16 @@ describe('POST /api/query/run', () => {
       payload: { connectorId: 'nope', sql: 'select 1' } });
     expect(res.statusCode).toBe(404);
   });
+
+  it('caps returned rows at ROW_CAP even when no limit is supplied', async () => {
+    const deps = makeDeps();
+    deps.runConnectorSql = async () => ({ columns: [{ key: 'n', label: 'n' }], rows: Array.from({ length: 1500 }, (_, i) => ({ n: i })) });
+    const app = await build(deps);
+    const res = await app.inject({ method: 'POST', url: '/api/query/run',
+      payload: { connectorId: 'c1', sql: 'select n from big_table' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().rowCount).toBe(1000);
+  });
 });
 
 describe('introspection', () => {
@@ -122,6 +132,41 @@ describe('introspection', () => {
     const app = await build();
     const res = await app.inject({ method: 'GET', url: '/api/query/connectors' });
     expect(res.json()).toEqual([{ id: 'c1', name: 'PG', type: 'postgres' }]);
+  });
+
+  it('includes an enabled microsoft-sql (SQL Server) connector', async () => {
+    const deps = makeDeps();
+    deps.connectors.list = async () => [
+      { id: 'c1', name: 'PG', type: 'postgres', enabled: true } as any,
+      { id: 'c2', name: 'SQLSvr', type: 'microsoft-sql', enabled: true } as any,
+      { id: 'c3', name: 'DHIS2', type: 'dhis2', enabled: true } as any,
+    ];
+    const app = await build(deps);
+    const res = await app.inject({ method: 'GET', url: '/api/query/connectors' });
+    expect(res.json()).toEqual([
+      { id: 'c1', name: 'PG', type: 'postgres' },
+      { id: 'c2', name: 'SQLSvr', type: 'microsoft-sql' },
+    ]);
+  });
+
+  it('rejects a schema name that is not a bare identifier', async () => {
+    const deps = makeDeps();
+    let ran = false;
+    deps.runConnectorSql = async () => { ran = true; return { columns: [], rows: [] }; };
+    const app = await build(deps);
+    const res = await app.inject({ method: 'GET',
+      url: `/api/query/connectors/c1/schemas/${encodeURIComponent("public'; drop")}/tables` });
+    expect(res.statusCode).toBe(400);
+    expect(ran).toBe(false);
+  });
+
+  it('maps a runConnectorSql failure in introspection to a 400', async () => {
+    const deps = makeDeps();
+    deps.runConnectorSql = async () => { throw new Error('connection refused'); };
+    const app = await build(deps);
+    const res = await app.inject({ method: 'GET', url: '/api/query/connectors/c1/schemas/public/tables' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain('connection refused');
   });
 
   it('lists tables for a connector schema via information_schema', async () => {

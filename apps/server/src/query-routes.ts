@@ -88,9 +88,10 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, _c
       if (parsed.data.params?.length) sql = substituteParams(sql, parsed.data.params as never, parsed.data.values ?? {});
       validateSelectSql(sql);
     } catch (e) { reply.code(400); return { error: (e as Error).message }; }
-    if (typeof parsed.data.limit === 'number') {
-      sql = `select * from (${sql.replace(/;\s*$/, '')}) as _q limit ${parsed.data.limit} offset ${parsed.data.offset ?? 0}`;
-    }
+    // Always wrap with a LIMIT so an unbounded `select * from big_table` never streams every row
+    // into memory; the requested limit is clamped to ROW_CAP.
+    const cap = Math.min(parsed.data.limit ?? ROW_CAP, ROW_CAP);
+    sql = `select * from (${sql.replace(/;\s*$/, '')}) as _q limit ${cap} offset ${parsed.data.offset ?? 0}`;
     try {
       const started = Date.now();
       const { columns, rows } = await deps.runConnectorSql({ connectorId: parsed.data.connectorId, sql });
@@ -100,8 +101,9 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, _c
   });
 
   // ---- Connector introspection ----
-  // information_schema.schemata/.tables exist in Postgres, MySQL and MSSQL — portable across v1 SQL types.
-  const SQL_TYPES = new Set(['postgres', 'mssql', 'mysql']);
+  // information_schema.schemata/.tables exist in Postgres, MySQL and SQL Server — portable across v1 SQL types.
+  // NB: the connector type string for SQL Server is 'microsoft-sql' (see connector-db.ts), not 'mssql'.
+  const SQL_TYPES = new Set(['postgres', 'microsoft-sql', 'mysql']);
 
   app.get('/api/query/connectors', GUARD, async () => {
     const all = await deps.connectors.list();
@@ -112,19 +114,26 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, _c
     const { id } = req.params as { id: string };
     const c = await deps.connectors.get(id);
     if (!c || !c.enabled) { reply.code(404); return { error: 'connector not found' }; }
-    const { rows } = await deps.runConnectorSql({ connectorId: id,
-      sql: "select schema_name from information_schema.schemata where schema_name not in ('pg_catalog','information_schema') order by 1" });
-    return rows.map((r) => String(r.schema_name));
+    try {
+      const { rows } = await deps.runConnectorSql({ connectorId: id,
+        sql: "select schema_name from information_schema.schemata where schema_name not in ('pg_catalog','information_schema') order by 1" });
+      return rows.map((r) => String(r.schema_name));
+    } catch (e) { reply.code(400); return { error: (e as Error).message }; }
   });
 
   app.get('/api/query/connectors/:id/schemas/:schema/tables', GUARD, async (req, reply) => {
     const { id, schema } = req.params as { id: string; schema: string };
     const c = await deps.connectors.get(id);
     if (!c || !c.enabled) { reply.code(404); return { error: 'connector not found' }; }
+    // Validate the schema as a bare identifier before interpolating: quote-doubling alone is
+    // defeatable under MySQL backslash-escaping. Keep the quote-double as defense-in-depth.
+    if (!/^[A-Za-z0-9_]+$/.test(schema)) { reply.code(400); return { error: 'invalid schema name' }; }
     const safeSchema = schema.replace(/'/g, "''");
-    const { rows } = await deps.runConnectorSql({ connectorId: id,
-      sql: `select table_name from information_schema.tables where table_schema = '${safeSchema}' order by 1` });
-    return rows.map((r) => String(r.table_name));
+    try {
+      const { rows } = await deps.runConnectorSql({ connectorId: id,
+        sql: `select table_name from information_schema.tables where table_schema = '${safeSchema}' order by 1` });
+      return rows.map((r) => String(r.table_name));
+    } catch (e) { reply.code(400); return { error: (e as Error).message }; }
   });
 
   app.post('/api/query/param-options', GUARD, async (req, reply) => {
@@ -133,8 +142,10 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, _c
     try { validateSelectSql(body.data.optionsSql); } catch (e) { reply.code(400); return { error: (e as Error).message }; }
     const c = await deps.connectors.get(body.data.connectorId);
     if (!c || !c.enabled) { reply.code(404); return { error: 'connector not found' }; }
-    const { rows } = await deps.runConnectorSql({ connectorId: body.data.connectorId, sql: body.data.optionsSql });
-    return rows.slice(0, ROW_CAP).map((r) => Object.values(r)[0]);
+    try {
+      const { rows } = await deps.runConnectorSql({ connectorId: body.data.connectorId, sql: body.data.optionsSql });
+      return rows.slice(0, ROW_CAP).map((r) => Object.values(r)[0]);
+    } catch (e) { reply.code(400); return { error: (e as Error).message }; }
   });
 
   // ---- Datasets ----
