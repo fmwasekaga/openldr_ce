@@ -23,7 +23,8 @@ export interface QueryRouteDeps {
   runConnectorSql(input: { connectorId: string; sql: string }): Promise<{ columns: { key: string; label: string }[]; rows: Record<string, unknown>[] }>;
 }
 
-export function registerQueryRoutes(app: FastifyInstance, _ctx: AppContext, deps: QueryRouteDeps): void {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, _ctx: AppContext, deps: QueryRouteDeps): void {
   const GUARD = { preHandler: requireRole(...AUTHOR_ROLES) };
 
   // ---- Custom Query CRUD ----
