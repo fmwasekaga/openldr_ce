@@ -15,12 +15,13 @@ export function TabBar(): JSX.Element {
     <div className="flex h-10 items-stretch border-b border-border bg-muted/40">
       {tabs.map((t) => {
         const isActive = t.id === activeId;
-        // Flush, full-height rectangular tabs with vertical dividers (DB-tool style). The active
-        // tab uses the panel bg + a -mb-px overlap so its bottom merges with the content below.
+        // Flush, full-height rectangular tabs with vertical dividers (DB-tool style). Every tab
+        // keeps the shared bottom separator (the bar's border-b); the active tab is distinguished
+        // only by a slightly lighter background.
         return (
           <div key={t.id}
             className={`relative flex items-center gap-2 border-r border-border px-4 text-[13px] ${isActive
-              ? '-mb-px bg-background text-foreground'
+              ? 'bg-card text-foreground'
               : 'text-muted-foreground hover:bg-background/30'}`}>
             <button className="flex items-center gap-2" onClick={() => setActive(t.id)}>{tabIcon(t)}{t.title}</button>
             <button aria-label={`close ${t.title}`} onClick={() => closeTab(t.id)}><X className="h-3.5 w-3.5 opacity-60 hover:opacity-100" /></button>
