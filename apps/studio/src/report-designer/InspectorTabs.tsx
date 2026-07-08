@@ -1,0 +1,47 @@
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { cn } from '@/lib/cn';
+import type { DesignElement, ReportTemplate } from './types';
+import { findElement } from './model';
+import { PropertiesTab } from './PropertiesTab';
+import { LayersTab } from './LayersTab';
+import { DataTab } from './DataTab';
+
+type TabKey = 'properties' | 'layers' | 'data';
+
+interface Props {
+  template: ReportTemplate;
+  selectedElementId: string | null;
+  onSelectElement(id: string | null): void;
+}
+
+export function InspectorTabs({ template, selectedElementId, onSelectElement }: Props): JSX.Element {
+  const { t } = useTranslation();
+  const [tab, setTab] = useState<TabKey>('properties');
+  const selected: DesignElement | null = findElement(template, selectedElementId);
+
+  const tabs: { key: TabKey; label: string }[] = [
+    { key: 'properties', label: t('reportDesigner.properties') },
+    { key: 'layers', label: t('reportDesigner.layers') },
+    { key: 'data', label: t('reportDesigner.data') },
+  ];
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="flex h-10 shrink-0 border-b border-border bg-muted/40">
+        {tabs.map((tb) => (
+          <button key={tb.key} onClick={() => setTab(tb.key)}
+            className={cn('flex flex-1 items-center justify-center text-[11px] font-medium uppercase tracking-wide',
+              tab === tb.key ? 'border-b-2 border-foreground text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            {tb.label}
+          </button>
+        ))}
+      </div>
+      <div className="min-h-0 flex-1 overflow-auto">
+        {tab === 'properties' && <PropertiesTab template={template} selected={selected} />}
+        {tab === 'layers' && <LayersTab template={template} selectedElementId={selectedElementId} onSelectElement={onSelectElement} />}
+        {tab === 'data' && <DataTab template={template} />}
+      </div>
+    </div>
+  );
+}
