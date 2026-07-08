@@ -38,4 +38,10 @@ describe('TemplatesExplorer', () => {
     fireEvent.click(screen.getByRole('button', { name: /collapse explorer/i }));
     expect(props.onCollapse).toHaveBeenCalled();
   });
+
+  it('shows the empty-state message when the search matches nothing', () => {
+    setup();
+    fireEvent.change(screen.getByLabelText('Search'), { target: { value: 'zzz-no-match' } });
+    expect(screen.getByText('No templates match your search.')).toBeInTheDocument();
+  });
 });

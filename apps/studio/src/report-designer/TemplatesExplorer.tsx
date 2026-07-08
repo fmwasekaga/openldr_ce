@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Search, Plus, PanelLeftClose } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/cn';
 import type { ReportTemplate } from './types';
 
 interface Props {
@@ -46,8 +47,10 @@ export function TemplatesExplorer({ templates, selectedId, onSelect, onNew, onCo
             const active = tpl.id === selectedId;
             return (
               <button key={tpl.id} onClick={() => onSelect(tpl.id)}
-                className={'rounded-md border px-3 py-2 text-left text-sm transition-colors ' +
-                  (active ? 'border-primary/40 bg-accent text-accent-foreground' : 'hover:bg-muted')}>
+                className={cn(
+                  'rounded-md border px-3 py-2 text-left text-sm transition-colors',
+                  active ? 'border-primary/40 bg-accent text-accent-foreground' : 'hover:bg-muted',
+                )}>
                 <div className="font-medium">{tpl.name}</div>
                 <div className="mt-0.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
                   {tpl.paper} · {tpl.orientation} · {tpl.pages.length}
