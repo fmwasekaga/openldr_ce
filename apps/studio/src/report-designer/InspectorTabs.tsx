@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/cn';
-import type { ReportTemplate } from './types';
+import type { ReportTemplate, TemplateParam } from './types';
+import { findElement } from './model';
 import { PropertiesTab } from './PropertiesTab';
 import { LayersTab } from './LayersTab';
 import { DataTab } from './DataTab';
@@ -15,11 +16,14 @@ interface Props {
   onPatchElement(id: string, patch: Partial<import('./types').DesignElement>, opts?: { discrete?: boolean }): void;
   onPatchPage(patch: Partial<ReportTemplate>, opts?: { discrete?: boolean }): void;
   onPatchElements(ids: string[], patch: Partial<import('./types').DesignElement>, opts?: { discrete?: boolean }): void;
+  onPatchParameters(next: TemplateParam[]): void;
 }
 
-export function InspectorTabs({ template, selectedIds, onSelect, onPatchElement, onPatchPage, onPatchElements }: Props): JSX.Element {
+export function InspectorTabs({ template, selectedIds, onSelect, onPatchElement, onPatchPage, onPatchElements, onPatchParameters }: Props): JSX.Element {
   const { t } = useTranslation();
   const [tab, setTab] = useState<TabKey>('properties');
+  // Binding is a single-selection action; for 0/multi selection pass undefined so the tab shows its hint.
+  const selectedElement = (selectedIds.length === 1 ? findElement(template, selectedIds[0]) : undefined) ?? undefined;
 
   const tabs: { key: TabKey; label: string }[] = [
     { key: 'properties', label: t('reportDesigner.properties') },
@@ -46,7 +50,7 @@ export function InspectorTabs({ template, selectedIds, onSelect, onPatchElement,
       <div className="min-h-0 flex-1 overflow-auto">
         {tab === 'properties' && <PropertiesTab template={template} selectedIds={selectedIds} onPatchElement={onPatchElement} onPatchPage={onPatchPage} onPatchElements={onPatchElements} />}
         {tab === 'layers' && <LayersTab template={template} selectedIds={selectedIds} onSelect={onSelect} />}
-        {tab === 'data' && <DataTab template={template} />}
+        {tab === 'data' && <DataTab element={selectedElement} parameters={template.parameters} onPatchElement={onPatchElement} onPatchParameters={onPatchParameters} />}
       </div>
     </div>
   );

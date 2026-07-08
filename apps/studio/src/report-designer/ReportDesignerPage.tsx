@@ -114,6 +114,10 @@ export function ReportDesignerPage(): JSX.Element {
     const next = updateElements(template, ids, patch);
     if (opts?.discrete) pushTemplate(next); else updateTemplate(next);
   };
+  const patchParameters = (parameters: import('./types').TemplateParam[]) => {
+    if (!template) return;
+    pushTemplate({ ...template, parameters }); // discrete step — param edits are deliberate
+  };
 
   const startEdit = (id: string) => { setSelectedIds([id]); setEditingId(id); };
   const editChange = (id: string, text: string) => { if (template) updateTemplate(updateElement(template, id, { text })); };
@@ -266,7 +270,7 @@ export function ReportDesignerPage(): JSX.Element {
             </div>
             <div className="flex w-64 shrink-0 flex-col border-l border-border" data-testid="inspector">
               <InspectorTabs template={template} selectedIds={selectedIds} onSelect={setSelectedIds}
-                onPatchElement={patchElement} onPatchPage={patchPage} onPatchElements={patchElements} />
+                onPatchElement={patchElement} onPatchPage={patchPage} onPatchElements={patchElements} onPatchParameters={patchParameters} />
             </div>
           </>
         ) : (
