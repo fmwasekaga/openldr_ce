@@ -7,6 +7,8 @@ import { paperSize } from './model';
 import { HANDLES, type Handle } from './geometry';
 import { useCanvasInteraction } from './useCanvasInteraction';
 
+const GUIDE_COLOR = '#e0369a'; // distinct alignment-guide color, drawn over the white page
+
 interface Props {
   template: ReportTemplate;
   zoom: number;
@@ -54,12 +56,12 @@ function PageSurface({ page, zoom, pageSize, selectedIds, onSelect, onCommitRect
         );
       })}
       {ix.guides.map((g, idx) => (
-        <span key={idx} aria-hidden style={g.axis === 'x'
-          ? { position: 'absolute', left: g.pos * zoom, top: g.from * zoom, height: (g.to - g.from) * zoom, width: 1, background: '#e0369a' }
-          : { position: 'absolute', top: g.pos * zoom, left: g.from * zoom, width: (g.to - g.from) * zoom, height: 1, background: '#e0369a' }} />
+        <span key={idx} aria-hidden data-testid="guide" style={g.axis === 'x'
+          ? { position: 'absolute', left: g.pos * zoom, top: g.from * zoom, height: (g.to - g.from) * zoom, width: 1, background: GUIDE_COLOR, pointerEvents: 'none' }
+          : { position: 'absolute', top: g.pos * zoom, left: g.from * zoom, width: (g.to - g.from) * zoom, height: 1, background: GUIDE_COLOR, pointerEvents: 'none' }} />
       ))}
       {ix.marquee && (
-        <span aria-hidden className="absolute border border-dashed border-primary bg-primary/10"
+        <span aria-hidden data-testid="marquee" className="absolute border border-dashed border-primary bg-primary/10 pointer-events-none"
           style={{ left: ix.marquee.x * zoom, top: ix.marquee.y * zoom, width: ix.marquee.w * zoom, height: ix.marquee.h * zoom }} />
       )}
     </div>

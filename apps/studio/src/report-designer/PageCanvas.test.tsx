@@ -84,4 +84,37 @@ describe('PageCanvas interaction', () => {
     fireEvent.pointerUp(window, { clientX: 30, clientY: 30 });
     expect(onCommit).toHaveBeenCalledTimes(1);
   });
+
+  it('marquee-drag selects the intersecting elements', () => {
+    const onSelect = vi.fn();
+    render(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={1} selectedIds={[]} onSelect={onSelect} onCommitRects={vi.fn()} />);
+    const surface = screen.getByTestId('page-surface-rt-amr-summary-p1');
+    fireEvent.pointerDown(surface, { clientX: 0, clientY: 0, button: 0 });
+    fireEvent.pointerMove(window, { clientX: 700, clientY: 700 });
+    fireEvent.pointerUp(window, { clientX: 700, clientY: 700 });
+    const ids = onSelect.mock.calls.at(-1)![0];
+    expect(ids).toEqual(expect.arrayContaining(['amr-title', 'amr-table']));
+  });
+
+  it('drags a multi-selection and commits all their rects', () => {
+    const onCommit = vi.fn();
+    render(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={1} selectedIds={['amr-title', 'amr-subtitle']} onSelect={vi.fn()} onCommitRects={onCommit} />);
+    fireEvent.pointerDown(screen.getByTestId('el-amr-title'), { clientX: 50, clientY: 45, button: 0 });
+    fireEvent.pointerMove(window, { clientX: 90, clientY: 75 });
+    fireEvent.pointerUp(window, { clientX: 90, clientY: 75 });
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    const rects = onCommit.mock.calls[0][0];
+    expect(rects.has('amr-title')).toBe(true);
+    expect(rects.has('amr-subtitle')).toBe(true);
+  });
+
+  it('renders an alignment guide when a drag snaps into alignment', () => {
+    render(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={1} selectedIds={['amr-footer']} onSelect={vi.fn()} onCommitRects={vi.fn()} />);
+    // amr-footer starts at x=48 (aligned with title/subtitle/table left edges). Nudge +3 so its
+    // left edge (51) is within the 6px snap threshold of x=48 → an x-guide should render.
+    fireEvent.pointerDown(screen.getByTestId('el-amr-footer'), { clientX: 60, clientY: 1065, button: 0 });
+    fireEvent.pointerMove(window, { clientX: 63, clientY: 1065 });
+    expect(screen.getByTestId('guide')).toBeInTheDocument();
+    fireEvent.pointerUp(window, { clientX: 63, clientY: 1065 });
+  });
 });
