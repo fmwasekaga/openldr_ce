@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import {
-  Plus, Minus, Eye, MoreHorizontal,
+  Plus, Minus, Eye, MoreHorizontal, Undo2, Redo2,
   FilePlus, Save, Download, FileText, FileSpreadsheet, ShieldCheck, Copy, Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,10 @@ interface Props {
   onNameChange(name: string): void;
   onNewTemplate(): void;
   onInsert(kind: ElementKind): void;
+  onUndo(): void;
+  onRedo(): void;
+  canUndo: boolean;
+  canRedo: boolean;
   onZoomIn(): void;
   onZoomOut(): void;
   onPreview(): void;
@@ -38,6 +42,17 @@ export function CanvasHeader(props: Props): JSX.Element {
         aria-label={t('reportDesigner.reportName')} className="h-8 max-w-xs text-sm font-medium" />
 
       <div className="flex items-center gap-1.5">
+        <div className="flex items-center rounded-md border border-border">
+          <button onClick={props.onUndo} disabled={!props.canUndo} aria-label={t('reportDesigner.undo')}
+            className="rounded-l-md p-1 text-muted-foreground hover:bg-accent disabled:opacity-40 disabled:hover:bg-transparent">
+            <Undo2 className="h-3.5 w-3.5" />
+          </button>
+          <button onClick={props.onRedo} disabled={!props.canRedo} aria-label={t('reportDesigner.redo')}
+            className="rounded-r-md p-1 text-muted-foreground hover:bg-accent disabled:opacity-40 disabled:hover:bg-transparent">
+            <Redo2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
         <div className="flex items-center rounded-md border border-border">
           <button onClick={props.onZoomOut} aria-label={t('reportDesigner.zoomOut')}
             className="rounded-l-md p-1 text-muted-foreground hover:bg-accent">

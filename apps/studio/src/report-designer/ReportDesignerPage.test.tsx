@@ -42,4 +42,21 @@ describe('ReportDesignerPage', () => {
     // mock AMR page 1 already has a "Title" text element; inserting adds another "Text" layer
     expect(within(screen.getByTestId('inspector')).getByRole('button', { name: /^Text$/ })).toBeInTheDocument();
   });
+
+  it('undoes an inserted element', async () => {
+    renderPage();
+    const kebab = screen.getByRole('button', { name: /more actions/i });
+    fireEvent.pointerDown(kebab, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menuitem', { name: 'Insert' })) fireEvent.keyDown(kebab, { key: 'Enter' });
+    const insertSub = await screen.findByRole('menuitem', { name: 'Insert' });
+    insertSub.focus();
+    fireEvent.keyDown(insertSub, { key: 'ArrowRight' });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Text' }));
+    // the inserted generic "Text" layer exists...
+    fireEvent.click(within(screen.getByTestId('inspector')).getByRole('button', { name: 'Layers' }));
+    expect(within(screen.getByTestId('inspector')).getByRole('button', { name: /^Text$/ })).toBeInTheDocument();
+    // ...and undo removes it (the seeded Title/Subtitle/Notes text layers remain, none named exactly "Text")
+    fireEvent.click(screen.getByRole('button', { name: /undo/i }));
+    expect(within(screen.getByTestId('inspector')).queryByRole('button', { name: /^Text$/ })).not.toBeInTheDocument();
+  });
 });

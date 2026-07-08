@@ -481,6 +481,8 @@ export const en = {
     zoomOut: 'Zoom out',
     preview: 'Preview',
     moreActions: 'More actions',
+    undo: 'Undo',
+    redo: 'Redo',
     save: 'Save',
     export: 'Export',
     exportPdf: 'Export PDF',

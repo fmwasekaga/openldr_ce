@@ -477,6 +477,8 @@ export const fr: EnShape = {
     zoomOut: 'Zoom arrière',
     preview: 'Aperçu',
     moreActions: 'Plus d’actions',
+    undo: 'Annuler',
+    redo: 'Rétablir',
     save: 'Enregistrer',
     export: 'Exporter',
     exportPdf: 'Exporter en PDF',

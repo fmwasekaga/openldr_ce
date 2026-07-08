@@ -6,6 +6,7 @@ function setup(overrides = {}) {
   const props = {
     name: 'AMR summary', zoom: 0.75,
     onNameChange: vi.fn(), onNewTemplate: vi.fn(), onInsert: vi.fn(), onZoomIn: vi.fn(), onZoomOut: vi.fn(),
+    onUndo: vi.fn(), onRedo: vi.fn(), canUndo: false, canRedo: false,
     onPreview: vi.fn(), onSave: vi.fn(), onExportPdf: vi.fn(), onExportExcel: vi.fn(),
     onCheck: vi.fn(), onDuplicate: vi.fn(), onDelete: vi.fn(), ...overrides,
   };
@@ -42,6 +43,20 @@ describe('CanvasHeader', () => {
     expect(props.onZoomIn).toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: /zoom out/i }));
     expect(props.onZoomOut).toHaveBeenCalled();
+  });
+
+  it('disables undo/redo when there is no history', () => {
+    setup();
+    expect(screen.getByRole('button', { name: /undo/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /redo/i })).toBeDisabled();
+  });
+
+  it('fires undo and redo when enabled', () => {
+    const props = setup({ canUndo: true, canRedo: true });
+    fireEvent.click(screen.getByRole('button', { name: /undo/i }));
+    expect(props.onUndo).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /redo/i }));
+    expect(props.onRedo).toHaveBeenCalled();
   });
 
   it('lists the actions in the kebab menu', async () => {

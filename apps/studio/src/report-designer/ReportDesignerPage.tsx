@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Frame, PanelLeftOpen } from 'lucide-react';
 import { AppShell } from '@/shell/AppShell';
+import { useTemplateHistory } from '../forms-builder/useTemplateHistory';
 import { TemplatesExplorer } from './TemplatesExplorer';
 import { CanvasHeader } from './CanvasHeader';
 import { PageCanvas } from './PageCanvas';
@@ -23,8 +24,19 @@ export function ReportDesignerPage(): JSX.Element {
   const [collapsed, setCollapsed] = useState(false);
 
   const template = templates.find((tpl) => tpl.id === selectedId) ?? null;
+
+  // Undo/redo history, scoped to the open template (reset whenever the selection changes).
+  const history = useTemplateHistory<ReportTemplate>(() => template ?? templates[0]);
+  useEffect(() => { if (template) history.reset(template); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [selectedId]);
+
   const patchTemplate = (next: ReportTemplate) =>
     setTemplates((ts) => ts.map((tpl) => (tpl.id === next.id ? next : tpl)));
+  // `updateTemplate` coalesces bursty edits (e.g. typing a name); `pushTemplate` records a discrete step.
+  const updateTemplate = (next: ReportTemplate) => { history.recordEdit(); patchTemplate(next); };
+  const pushTemplate = (next: ReportTemplate) => { history.pushHistory(); patchTemplate(next); };
+  const applyHistory = (next: ReportTemplate | null) => { if (next) patchTemplate(next); };
+  const undo = () => applyHistory(history.undo());
+  const redo = () => applyHistory(history.redo());
 
   const zoomStep = (dir: 1 | -1) => {
     const idx = ZOOMS.indexOf(zoom);
@@ -35,7 +47,7 @@ export function ReportDesignerPage(): JSX.Element {
   const insert = (kind: ElementKind) => {
     if (!template) return;
     const el = newElement(kind);
-    patchTemplate(addElement(template, 0, el));
+    pushTemplate(addElement(template, 0, el));
     setSelectedElementId(el.id);
   };
 
@@ -49,6 +61,21 @@ export function ReportDesignerPage(): JSX.Element {
     setSelectedId(id);
     setSelectedElementId(null);
   };
+
+  // Keyboard: Ctrl/Cmd+Z = undo, Ctrl/Cmd+Shift+Z (or Ctrl+Y) = redo. Ignore while typing in a field.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return;
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const key = e.key.toLowerCase();
+      if (key === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
+      else if (key === 'y') { e.preventDefault(); redo(); }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [template]);
 
   return (
     <AppShell title={t('reportDesigner.title')} fullBleed>
@@ -72,9 +99,11 @@ export function ReportDesignerPage(): JSX.Element {
           <>
             <div className="flex min-w-0 flex-1 flex-col">
               <CanvasHeader name={template.name} zoom={zoom}
-                onNameChange={(name) => patchTemplate({ ...template, name })}
+                onNameChange={(name) => updateTemplate({ ...template, name })}
                 onNewTemplate={newTemplate}
-                onInsert={insert} onZoomIn={() => zoomStep(1)} onZoomOut={() => zoomStep(-1)}
+                onInsert={insert}
+                onUndo={undo} onRedo={redo} canUndo={history.canUndo} canRedo={history.canRedo}
+                onZoomIn={() => zoomStep(1)} onZoomOut={() => zoomStep(-1)}
                 onPreview={noop} onSave={noop} onExportPdf={noop} onExportExcel={noop}
                 onCheck={noop} onDuplicate={noop} onDelete={noop} />
               <PageCanvas template={template} zoom={zoom}
