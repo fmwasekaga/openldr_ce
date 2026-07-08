@@ -11,7 +11,7 @@ import { CanvasHeader } from './CanvasHeader';
 import { PageCanvas } from './PageCanvas';
 import { InspectorTabs } from './InspectorTabs';
 import { PreviewReportDesignDialog } from './PreviewReportDesignDialog';
-import { createReportDesign, deleteReportDesign, getReportDesign, listReportDesigns, updateReportDesign } from '../api';
+import { createReportDesign, deleteReportDesign, downloadReportDesignPdf, getReportDesign, listReportDesigns, updateReportDesign } from '../api';
 import { addElement, allElements, newElement, paperSize, removeElements, updateElement, updateElementRects, updateElements } from './model';
 import { clampRectToPage } from './geometry';
 import type { ElementKind, Rect, ReportDesign, ReportTemplate } from './types';
@@ -185,6 +185,15 @@ export function ReportDesignerPage(): JSX.Element {
     } catch (e) { fail(e); }
   };
 
+  const onExportPdf = async () => {
+    if (!template) return;
+    setError(undefined);
+    try {
+      await downloadReportDesignPdf(template);
+      toast.success(t('reportDesigner.exportedToast', { name: template.name }));
+    } catch (e) { fail(e); }
+  };
+
   const onDelete = async () => {
     if (!template) return;
     setError(undefined);
@@ -265,7 +274,7 @@ export function ReportDesignerPage(): JSX.Element {
                 onInsert={insert}
                 onUndo={undo} onRedo={redo} canUndo={history.canUndo} canRedo={history.canRedo}
                 onZoomIn={() => zoomStep(1)} onZoomOut={() => zoomStep(-1)}
-                onPreview={() => setPreviewOpen(true)} onSave={() => { void onSave(); }} onExportPdf={noop} onExportExcel={noop}
+                onPreview={() => setPreviewOpen(true)} onSave={() => { void onSave(); }} onExportPdf={() => { void onExportPdf(); }} onExportExcel={noop}
                 onCheck={noop} onDuplicate={noop} onDelete={() => setConfirmDeleteOpen(true)} />
               <PageCanvas template={template} zoom={zoom} selectedIds={selectedIds} onSelect={setSelectedIds} onCommitRects={commitRects}
                 editingId={editingId} onEditStart={startEdit} onEditChange={editChange} onEditEnd={endEdit} />

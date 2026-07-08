@@ -543,6 +543,7 @@ export const en = {
     emptyTitle: 'Select or create a template',
     emptyBody: 'A template arranges text, images, and report tables on printable pages — then exports to PDF or Excel.',
     savedToast: 'Saved “{{name}}”',
+    exportedToast: 'Exported “{{name}}.pdf”',
     deletedToast: 'Report design deleted',
     deleteConfirmTitle: 'Delete this report design?',
     deleteConfirmBody: 'This permanently deletes the report design. This cannot be undone.',

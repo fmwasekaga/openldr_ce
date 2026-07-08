@@ -596,6 +596,20 @@ export const previewReportDesign = (design: ReportDesign): Promise<Blob> =>
     return r.blob();
   });
 
+/** Render the (working) design via the preview endpoint and download it as a PDF file. */
+export async function downloadReportDesignPdf(design: ReportDesign): Promise<void> {
+  const blob = await previewReportDesign(design);
+  const safeName = (design.name || 'report-design').replace(/[^\w.-]+/g, '_');
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${safeName}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 // ── Terminology admin types & client ─────────────────────────────────────────
 export type PublisherRole = 'local' | 'standard' | 'external';
 export interface Publisher { id: string; name: string; role: PublisherRole; icon: string | null; seeded: boolean; sortOrder: number }
