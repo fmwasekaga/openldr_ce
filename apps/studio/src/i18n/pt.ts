@@ -494,7 +494,6 @@ export const pt: EnShape = {
     pageSettings: 'Configurações da página',
     paper: 'Papel',
     orientation: 'Orientação',
-    boundReport: 'Relatório associado',
     columns: 'Colunas',
     content: 'Conteúdo',
     fontSize: 'Tamanho',

@@ -10,7 +10,6 @@ import type { Margins, Orientation, Paper, Rect, ReportTemplate, TextAlign } fro
 import { findElement, paperSize } from './model';
 import { clampRectToPage } from './geometry';
 import { ColorField } from './ColorField';
-import { MOCK_REPORTS } from './mockTemplates';
 
 export interface PatchOpts { discrete?: boolean }
 
@@ -114,17 +113,12 @@ function KindControls({ el, onPatch }: {
   }
 
   if (el.kind === 'table') {
+    // Bound tables get their columns from the Data tab's boundColumns — no PropertiesTab columns editor.
+    if (el.dataSource) return null;
     const cols = el.columns ?? [];
     const setCols = (next: string[], discrete?: boolean) => onPatch({ columns: next }, discrete ? { discrete: true } : undefined);
     return (
       <div className="flex flex-col gap-3">
-        <div>
-          <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.boundReport')}</div>
-          <Select value={el.boundReport || ''} onValueChange={(v) => onPatch({ boundReport: v }, { discrete: true })}>
-            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="—" /></SelectTrigger>
-            <SelectContent>{MOCK_REPORTS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
-          </Select>
-        </div>
         <div>
           <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.columns')}</div>
           <div className="flex flex-col gap-1">

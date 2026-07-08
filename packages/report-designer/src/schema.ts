@@ -39,9 +39,7 @@ export const DesignElementSchema = z.object({
   columns: z.array(z.string()).optional(),
   /** table sample rows (looks-only) */
   rows: z.array(z.array(z.string())).optional(),
-  /** table binding label, e.g. "AMR resistance" */
-  boundReport: z.string().optional(),
-  /** real table binding (supersedes boundReport) */
+  /** real table binding (configured in the Data tab) */
   dataSource: DataSourceSchema.optional(),
   /** picked/reordered/relabeled projection of the query's result columns */
   boundColumns: z.array(BoundColumnSchema).optional(),

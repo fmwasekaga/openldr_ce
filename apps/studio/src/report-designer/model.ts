@@ -1,4 +1,4 @@
-import type { DesignElement, DesignPage, ElementKind, Orientation, Paper, Rect, ReportTemplate } from './types';
+import type { DesignElement, ElementKind, Orientation, Paper, Rect, ReportTemplate } from './types';
 
 /** Paper sizes in CSS px at 96dpi, portrait. */
 export const PAPER_PX: Record<Paper, { w: number; h: number }> = {
@@ -29,7 +29,7 @@ export function newElement(kind: ElementKind): DesignElement {
   if (kind === 'line') return { id, kind, name, rect: { x: 48, y: 48, w: 200, h: 2 } };
   if (kind === 'table') return {
     id, kind, name, rect: { x: 48, y: 48, w: 480, h: 160 },
-    boundReport: '', columns: ['Column A', 'Column B'], rows: [['—', '—'], ['—', '—']],
+    columns: ['Column A', 'Column B'], rows: [['—', '—'], ['—', '—']],
   };
   return { id, kind, name, rect: { x: 48, y: 48, w: 200, h: 80 } };
 }
@@ -37,12 +37,6 @@ export function newElement(kind: ElementKind): DesignElement {
 export function addElement(tpl: ReportTemplate, pageIndex: number, el: DesignElement): ReportTemplate {
   const pages = tpl.pages.map((p, i) => (i === pageIndex ? { ...p, elements: [...p.elements, el] } : p));
   return { ...tpl, pages };
-}
-
-export function reportsOnPage(page: DesignPage): string[] {
-  const set = new Set<string>();
-  for (const el of page.elements) if (el.kind === 'table' && el.boundReport) set.add(el.boundReport);
-  return [...set];
 }
 
 export function findElement(tpl: ReportTemplate, id: string | null): DesignElement | null {

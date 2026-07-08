@@ -498,7 +498,6 @@ export const en = {
     pageSettings: 'Page settings',
     paper: 'Paper',
     orientation: 'Orientation',
-    boundReport: 'Bound report',
     columns: 'Columns',
     content: 'Content',
     fontSize: 'Size',

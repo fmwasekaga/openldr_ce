@@ -56,6 +56,18 @@ describe('PropertiesTab editing', () => {
     expect(props.onPatchElement).toHaveBeenCalledWith('amr-table', expect.objectContaining({ columns: expect.any(Array) }), { discrete: true });
   });
 
+  it('shows the columns editor for an unbound table', () => {
+    render(<PropertiesTab template={tplWithEl({ id: 'tb', kind: 'table', name: 'Table', rect: { x: 0, y: 0, w: 200, h: 100 }, columns: ['A', 'B'] })}
+      selectedIds={['tb']} onPatchElement={vi.fn()} onPatchPage={vi.fn()} onPatchElements={vi.fn()} />);
+    expect(screen.getByRole('button', { name: /add column/i })).toBeInTheDocument();
+  });
+
+  it('hides the columns editor for a bound table (Data tab owns its columns)', () => {
+    render(<PropertiesTab template={tplWithEl({ id: 'tb', kind: 'table', name: 'Table', rect: { x: 0, y: 0, w: 200, h: 100 }, columns: ['A', 'B'], dataSource: { kind: 'custom-query', queryId: 'cq_1' } })}
+      selectedIds={['tb']} onPatchElement={vi.fn()} onPatchPage={vi.fn()} onPatchElements={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: /add column/i })).toBeNull();
+  });
+
   it('edits line stroke width (coalesced)', () => {
     const onPatchElement = vi.fn();
     render(<PropertiesTab template={tplWithEl({ id: 'ln', kind: 'line', name: 'Line', rect: { x: 0, y: 0, w: 100, h: 2 } })}
