@@ -19,4 +19,9 @@ describe('ColorField', () => {
     fireEvent.click(screen.getByRole('button', { name: '#ef4444' }));
     expect(onChange).toHaveBeenCalledWith('#ef4444', { discrete: true });
   });
+
+  it('shows a Mixed placeholder when mixed', () => {
+    render(<ColorField value="#000000" mixed onChange={vi.fn()} aria-label="Text color" />);
+    expect(screen.getByLabelText('Text color hex')).toHaveAttribute('placeholder', 'Mixed');
+  });
 });

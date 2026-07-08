@@ -19,19 +19,22 @@ interface Props {
   selectedIds: string[];
   onPatchElement(id: string, patch: Partial<import('./types').DesignElement>, opts?: PatchOpts): void;
   onPatchPage(patch: Partial<ReportTemplate>, opts?: PatchOpts): void;
+  onPatchElements(ids: string[], patch: Partial<import('./types').DesignElement>, opts?: PatchOpts): void;
 }
 
-function NumberField({ label, value, onChange, min }: { label: string; value: number; onChange(n: number): void; min?: number }): JSX.Element {
-  const [text, setText] = useState(String(value));
-  useEffect(() => { setText(String(value)); }, [value]);
+function common<T>(vals: T[]): T | undefined { return vals.length > 0 && vals.every((v) => v === vals[0]) ? vals[0] : undefined; }
+
+function NumberField({ label, value, onChange, min, placeholder }: { label: string; value: number | undefined; onChange(n: number): void; min?: number; placeholder?: string }): JSX.Element {
+  const [text, setText] = useState(value == null ? '' : String(value));
+  useEffect(() => { setText(value == null ? '' : String(value)); }, [value]);
   return (
     <div className="flex-1">
       <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
-      <Input type="number" aria-label={label} value={text} min={min}
+      <Input type="number" aria-label={label} value={text} min={min} placeholder={placeholder}
         onChange={(e) => { setText(e.target.value); const n = Number(e.target.value); if (e.target.value !== '' && !Number.isNaN(n)) onChange(n); }}
         onBlur={() => {
           const n = Number(text);
-          if (text === '' || Number.isNaN(n)) { setText(String(value)); return; }
+          if (text === '' || Number.isNaN(n)) { setText(value == null ? '' : String(value)); return; }
           const clamped = min != null ? Math.max(min, n) : n;
           setText(String(clamped));
           if (clamped !== n) onChange(clamped);
@@ -145,13 +148,85 @@ function KindControls({ el, onPatch }: {
   return null;
 }
 
-export function PropertiesTab({ template, selectedIds, onPatchElement, onPatchPage }: Props): JSX.Element {
+function BulkControls({ ids, els, onPatchElements }: {
+  ids: string[]; els: import('./types').DesignElement[];
+  onPatchElements(ids: string[], patch: Partial<import('./types').DesignElement>, opts?: PatchOpts): void;
+}): JSX.Element | null {
+  const { t } = useTranslation();
+  const style = (patch: Partial<import('./types').ElementStyle>, discrete?: boolean) => onPatchElements(ids, { style: patch }, discrete ? { discrete: true } : undefined);
+  const styles = els.map((e) => e.style ?? {});
+  const allText = els.every((e) => e.kind === 'text' || e.kind === 'datetime');
+  const allShape = els.every((e) => e.kind === 'line' || e.kind === 'rect');
+  const allRect = els.every((e) => e.kind === 'rect');
+  if (!allText && !allShape) return null;
+
+  if (allText) {
+    const align = common(styles.map((s) => s.align ?? 'left'));
+    const bold = common(styles.map((s) => !!s.bold));
+    const size = common(styles.map((s) => s.fontSize ?? 11));
+    const color = common(styles.map((s) => s.color ?? '#000000'));
+    const aligns: { v: TextAlign; icon: typeof AlignLeft; label: string }[] = [
+      { v: 'left', icon: AlignLeft, label: t('reportDesigner.alignLeft') },
+      { v: 'center', icon: AlignCenter, label: t('reportDesigner.alignCenter') },
+      { v: 'right', icon: AlignRight, label: t('reportDesigner.alignRight') },
+    ];
+    return (
+      <div className="flex flex-col gap-3">
+        <div className="flex items-end gap-2">
+          <NumberField label={t('reportDesigner.fontSize')} value={size} onChange={(n) => style({ fontSize: n })} min={4} placeholder={t('reportDesigner.mixed')} />
+          <Button type="button" variant={bold ? 'default' : 'outline'} size="icon" className="h-8 w-8 font-bold"
+            aria-label={t('reportDesigner.bold')} aria-pressed={!!bold} onClick={() => style({ bold: !bold }, true)}>B</Button>
+          <div className="flex h-8 rounded-md border border-border">
+            {aligns.map(({ v, icon: Icon, label }) => (
+              <button key={v} type="button" aria-label={label} aria-pressed={align === v} onClick={() => style({ align: v }, true)}
+                className={cn('flex w-8 items-center justify-center first:rounded-l-md last:rounded-r-md',
+                  align === v ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground')}>
+                <Icon className="h-4 w-4" />
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.color')}</div>
+          <ColorField value={color ?? '#000000'} mixed={color === undefined} onChange={(c, opts) => style({ color: c }, !!opts?.discrete)} aria-label={t('reportDesigner.color')} />
+        </div>
+      </div>
+    );
+  }
+  // allShape
+  const strokeColor = common(styles.map((s) => s.strokeColor ?? '#9ca3af'));
+  const strokeWidth = common(styles.map((s) => s.strokeWidth ?? 1));
+  const fill = common(styles.map((s) => s.fill ?? 'none'));
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.strokeColor')}</div>
+        <ColorField value={strokeColor ?? '#9ca3af'} mixed={strokeColor === undefined} onChange={(c, opts) => style({ strokeColor: c }, !!opts?.discrete)} aria-label={t('reportDesigner.strokeColor')} />
+      </div>
+      <NumberField label={t('reportDesigner.strokeWidth')} value={strokeWidth} onChange={(n) => style({ strokeWidth: n })} min={1} placeholder={t('reportDesigner.mixed')} />
+      {allRect && (
+        <div>
+          <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.fill')}</div>
+          <ColorField value={fill ?? 'none'} mixed={fill === undefined} onChange={(c, opts) => style({ fill: c }, !!opts?.discrete)} allowNone aria-label={t('reportDesigner.fill')} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function PropertiesTab({ template, selectedIds, onPatchElement, onPatchPage, onPatchElements }: Props): JSX.Element {
   const { t } = useTranslation();
   const selected = selectedIds.length === 1 ? findElement(template, selectedIds[0]) : null;
   const size = paperSize(template.paper, template.orientation);
 
   if (selectedIds.length > 1) {
-    return <div className="p-3 text-xs text-muted-foreground">{t('reportDesigner.selectedCount', { count: selectedIds.length })}</div>;
+    const els = selectedIds.map((id) => findElement(template, id)).filter((e): e is import('./types').DesignElement => !!e);
+    return (
+      <div className="flex flex-col gap-3 p-3">
+        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.selectedCount', { count: selectedIds.length })}</div>
+        <BulkControls ids={selectedIds} els={els} onPatchElements={onPatchElements} />
+      </div>
+    );
   }
 
   if (!selected) {

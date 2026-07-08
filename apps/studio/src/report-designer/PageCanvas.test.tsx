@@ -125,6 +125,79 @@ function tplWith(el: Partial<import('./types').DesignElement> & { id: string; ki
     pages: [{ id: 'p1', elements: [{ name: el.id, rect: { x: 10, y: 10, w: 100, h: 40 }, ...el }] }] };
 }
 
+describe('PageCanvas group resize', () => {
+  it('renders group handles for a 2+ selection, scales live, and commits scaled rects', () => {
+    const onCommit = vi.fn();
+    render(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={1} selectedIds={['amr-title', 'amr-subtitle']} onSelect={vi.fn()} onCommitRects={onCommit} />);
+    fireEvent.pointerDown(screen.getByTestId('group-handle-se'), { clientX: 0, clientY: 0, button: 0 });
+    fireEvent.pointerMove(window, { clientX: 40, clientY: 40 });
+    // both members are x:48,w:500 → group bbox x:48,w:500; se drag +40 → sx=1.08, anchored left:
+    // the group box scales live to width 540 at left 48
+    expect(screen.getByTestId('group-box')).toHaveStyle({ left: '48px', width: '540px' });
+    fireEvent.pointerUp(window, { clientX: 40, clientY: 40 });
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    const rects = onCommit.mock.calls[0][0] as Map<string, { x: number; w: number }>;
+    expect(rects.get('amr-title')!.w).toBeCloseTo(540, 3);
+    expect(rects.get('amr-subtitle')!.w).toBeCloseTo(540, 3);
+    expect(rects.get('amr-title')!.x).toBeCloseTo(48, 3); // scaled about the left anchor
+  });
+
+  it('does not render group handles for a single selection', () => {
+    render(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={1} selectedIds={['amr-title']} onSelect={vi.fn()} onCommitRects={vi.fn()} />);
+    expect(screen.queryByTestId('group-handle-se')).toBeNull();
+    expect(screen.getByTestId('handle-se')).toBeInTheDocument(); // element handles still show
+  });
+});
+
+describe('PageCanvas inline text editing', () => {
+  it('double-click a text element shows a textarea bound to its text; typing patches it; Escape exits', () => {
+    const onPatchElement = vi.fn();
+    const onEditEnd = vi.fn();
+    const { rerender } = render(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={1} selectedIds={['amr-title']}
+      onSelect={vi.fn()} onCommitRects={vi.fn()} editingId={null} onEditStart={vi.fn()} onEditChange={onPatchElement} onEditEnd={onEditEnd} />);
+    rerender(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={1} selectedIds={['amr-title']}
+      onSelect={vi.fn()} onCommitRects={vi.fn()} editingId="amr-title" onEditStart={vi.fn()} onEditChange={onPatchElement} onEditEnd={onEditEnd} />);
+    const ta = screen.getByTestId('edit-amr-title');
+    fireEvent.change(ta, { target: { value: 'New' } });
+    expect(onPatchElement).toHaveBeenCalledWith('amr-title', 'New');
+    fireEvent.keyDown(ta, { key: 'Escape' });
+    expect(onEditEnd).toHaveBeenCalled();
+  });
+
+  it('does not start a drag when pointer-down lands on the edit textarea', () => {
+    const onCommit = vi.fn();
+    render(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={1} selectedIds={['amr-title']}
+      onSelect={vi.fn()} onCommitRects={onCommit} editingId="amr-title" onEditStart={vi.fn()} onEditChange={vi.fn()} onEditEnd={vi.fn()} />);
+    const ta = screen.getByTestId('edit-amr-title');
+    fireEvent.pointerDown(ta, { clientX: 20, clientY: 20, button: 0 });
+    fireEvent.pointerMove(window, { clientX: 80, clientY: 80 });
+    fireEvent.pointerUp(window, { clientX: 80, clientY: 80 });
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it('exits inline edit on blur', () => {
+    const onEditEnd = vi.fn();
+    render(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={1} selectedIds={['amr-title']} editingId="amr-title"
+      onSelect={vi.fn()} onCommitRects={vi.fn()} onEditStart={vi.fn()} onEditChange={vi.fn()} onEditEnd={onEditEnd} />);
+    fireEvent.blur(screen.getByTestId('edit-amr-title'));
+    expect(onEditEnd).toHaveBeenCalled();
+  });
+
+  it('scales the edit textarea font size by zoom', () => {
+    render(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={2} selectedIds={['amr-title']} editingId="amr-title"
+      onSelect={vi.fn()} onCommitRects={vi.fn()} onEditStart={vi.fn()} onEditChange={vi.fn()} onEditEnd={vi.fn()} />);
+    expect(screen.getByTestId('edit-amr-title')).toHaveStyle({ fontSize: '22px' }); // 11 * 2
+  });
+
+  it('does not enter edit mode on double-click of a non-text element', () => {
+    const onEditStart = vi.fn();
+    render(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={1} selectedIds={['amr-table']} editingId={null}
+      onSelect={vi.fn()} onCommitRects={vi.fn()} onEditStart={onEditStart} onEditChange={vi.fn()} onEditEnd={vi.fn()} />);
+    fireEvent.doubleClick(screen.getByTestId('el-amr-table'));
+    expect(onEditStart).not.toHaveBeenCalled();
+  });
+});
+
 describe('PageCanvas style rendering', () => {
   it('renders a bold, colored, sized text element', () => {
     render(<PageCanvas template={tplWith({ id: 'tx', kind: 'text', text: 'Hi', style: { bold: true, fontSize: 20, color: '#ff0000', align: 'center' } })}

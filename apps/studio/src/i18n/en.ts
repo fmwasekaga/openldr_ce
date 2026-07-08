@@ -515,6 +515,7 @@ export const en = {
     addColumn: 'Add column',
     removeColumn: 'Remove column',
     none: 'None',
+    mixed: 'Mixed',
     noElements: 'No elements yet.',
     selectedCount: '{{count}} elements selected',
     reportsInTemplate: 'Reports in this template',

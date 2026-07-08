@@ -511,6 +511,7 @@ export const pt: EnShape = {
     addColumn: 'Adicionar coluna',
     removeColumn: 'Remover coluna',
     none: 'Nenhum',
+    mixed: 'Misto',
     noElements: 'Ainda não há elementos.',
     selectedCount: '{{count}} elementos selecionados',
     reportsInTemplate: 'Relatórios deste modelo',

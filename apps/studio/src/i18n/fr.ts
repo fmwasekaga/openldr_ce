@@ -511,6 +511,7 @@ export const fr: EnShape = {
     addColumn: 'Ajouter une colonne',
     removeColumn: 'Supprimer la colonne',
     none: 'Aucun',
+    mixed: 'Mixte',
     noElements: 'Aucun élément pour l’instant.',
     selectedCount: '{{count}} éléments sélectionnés',
     reportsInTemplate: 'Rapports de ce modèle',

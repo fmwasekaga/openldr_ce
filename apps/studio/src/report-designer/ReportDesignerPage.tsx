@@ -8,7 +8,7 @@ import { CanvasHeader } from './CanvasHeader';
 import { PageCanvas } from './PageCanvas';
 import { InspectorTabs } from './InspectorTabs';
 import { MOCK_TEMPLATES } from './mockTemplates';
-import { addElement, allElements, newElement, paperSize, removeElements, updateElement, updateElementRects } from './model';
+import { addElement, allElements, newElement, paperSize, removeElements, updateElement, updateElementRects, updateElements } from './model';
 import { clampRectToPage } from './geometry';
 import type { ElementKind, Rect, ReportTemplate } from './types';
 
@@ -21,6 +21,7 @@ export function ReportDesignerPage(): JSX.Element {
   const [templates, setTemplates] = useState<ReportTemplate[]>(MOCK_TEMPLATES);
   const [selectedId, setSelectedId] = useState<string | null>(MOCK_TEMPLATES[0]?.id ?? null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(0.75);
   const [collapsed, setCollapsed] = useState(false);
 
@@ -63,6 +64,15 @@ export function ReportDesignerPage(): JSX.Element {
     const next = { ...template, ...patch };
     if (opts?.discrete) pushTemplate(next); else updateTemplate(next);
   };
+  const patchElements = (ids: string[], patch: Partial<import('./types').DesignElement>, opts?: { discrete?: boolean }) => {
+    if (!template) return;
+    const next = updateElements(template, ids, patch);
+    if (opts?.discrete) pushTemplate(next); else updateTemplate(next);
+  };
+
+  const startEdit = (id: string) => { setSelectedIds([id]); setEditingId(id); };
+  const editChange = (id: string, text: string) => { if (template) updateTemplate(updateElement(template, id, { text })); };
+  const endEdit = () => setEditingId(null);
 
   const zoomStep = (dir: 1 | -1) => {
     const idx = ZOOMS.indexOf(zoom);
@@ -86,6 +96,7 @@ export function ReportDesignerPage(): JSX.Element {
     setTemplates((ts) => [tpl, ...ts]);
     setSelectedId(id);
     setSelectedIds([]);
+    setEditingId(null);
   };
 
   // Keyboard: undo/redo, select-all, Esc clear, Delete/Backspace remove, arrows nudge (Shift = 10px).
@@ -118,6 +129,7 @@ export function ReportDesignerPage(): JSX.Element {
     if (!template) return;
     const present = new Set(allElements(template).map((e) => e.id));
     setSelectedIds((ids) => { const kept = ids.filter((id) => present.has(id)); return kept.length === ids.length ? ids : kept; });
+    setEditingId((id) => (id && !present.has(id) ? null : id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [template]);
 
@@ -134,7 +146,7 @@ export function ReportDesignerPage(): JSX.Element {
         ) : (
           <div className="flex w-60 shrink-0 flex-col border-r border-border" data-testid="templates-explorer">
             <TemplatesExplorer templates={templates} selectedId={selectedId}
-              onSelect={(id) => { setSelectedId(id); setSelectedIds([]); }}
+              onSelect={(id) => { setSelectedId(id); setSelectedIds([]); setEditingId(null); }}
               onCollapse={() => setCollapsed(true)} />
           </div>
         )}
@@ -150,11 +162,12 @@ export function ReportDesignerPage(): JSX.Element {
                 onZoomIn={() => zoomStep(1)} onZoomOut={() => zoomStep(-1)}
                 onPreview={noop} onSave={noop} onExportPdf={noop} onExportExcel={noop}
                 onCheck={noop} onDuplicate={noop} onDelete={noop} />
-              <PageCanvas template={template} zoom={zoom} selectedIds={selectedIds} onSelect={setSelectedIds} onCommitRects={commitRects} />
+              <PageCanvas template={template} zoom={zoom} selectedIds={selectedIds} onSelect={setSelectedIds} onCommitRects={commitRects}
+                editingId={editingId} onEditStart={startEdit} onEditChange={editChange} onEditEnd={endEdit} />
             </div>
             <div className="flex w-64 shrink-0 flex-col border-l border-border" data-testid="inspector">
               <InspectorTabs template={template} selectedIds={selectedIds} onSelect={setSelectedIds}
-                onPatchElement={patchElement} onPatchPage={patchPage} />
+                onPatchElement={patchElement} onPatchPage={patchPage} onPatchElements={patchElements} />
             </div>
           </>
         ) : (

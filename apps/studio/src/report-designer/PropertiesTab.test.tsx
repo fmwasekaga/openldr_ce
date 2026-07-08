@@ -6,7 +6,7 @@ import type { DesignElement, ReportTemplate } from './types';
 
 const tpl = MOCK_TEMPLATES[0];
 function setup(overrides = {}) {
-  const props = { template: tpl, selectedIds: [] as string[], onPatchElement: vi.fn(), onPatchPage: vi.fn(), ...overrides };
+  const props = { template: tpl, selectedIds: [] as string[], onPatchElement: vi.fn(), onPatchPage: vi.fn(), onPatchElements: vi.fn(), ...overrides };
   render(<PropertiesTab {...props} />);
   return props;
 }
@@ -59,7 +59,7 @@ describe('PropertiesTab editing', () => {
   it('edits line stroke width (coalesced)', () => {
     const onPatchElement = vi.fn();
     render(<PropertiesTab template={tplWithEl({ id: 'ln', kind: 'line', name: 'Line', rect: { x: 0, y: 0, w: 100, h: 2 } })}
-      selectedIds={['ln']} onPatchElement={onPatchElement} onPatchPage={vi.fn()} />);
+      selectedIds={['ln']} onPatchElement={onPatchElement} onPatchPage={vi.fn()} onPatchElements={vi.fn()} />);
     fireEvent.change(screen.getByLabelText('Stroke width'), { target: { value: '3' } });
     expect(onPatchElement).toHaveBeenCalledWith('ln', { style: { strokeWidth: 3 } }, undefined);
   });
@@ -67,7 +67,7 @@ describe('PropertiesTab editing', () => {
   it('edits rect fill color (coalesced hex)', () => {
     const onPatchElement = vi.fn();
     render(<PropertiesTab template={tplWithEl({ id: 'rc', kind: 'rect', name: 'Rect', rect: { x: 0, y: 0, w: 100, h: 100 } })}
-      selectedIds={['rc']} onPatchElement={onPatchElement} onPatchPage={vi.fn()} />);
+      selectedIds={['rc']} onPatchElement={onPatchElement} onPatchPage={vi.fn()} onPatchElements={vi.fn()} />);
     fireEvent.change(screen.getByLabelText('Fill hex'), { target: { value: '#123456' } });
     expect(onPatchElement).toHaveBeenCalledWith('rc', { style: { fill: '#123456' } }, undefined);
   });
@@ -75,8 +75,48 @@ describe('PropertiesTab editing', () => {
   it('edits image source (coalesced)', () => {
     const onPatchElement = vi.fn();
     render(<PropertiesTab template={tplWithEl({ id: 'im', kind: 'image', name: 'Image', rect: { x: 0, y: 0, w: 100, h: 100 } })}
-      selectedIds={['im']} onPatchElement={onPatchElement} onPatchPage={vi.fn()} />);
+      selectedIds={['im']} onPatchElement={onPatchElement} onPatchPage={vi.fn()} onPatchElements={vi.fn()} />);
     fireEvent.change(screen.getByLabelText('Source'), { target: { value: 'http://x/y.png' } });
     expect(onPatchElement).toHaveBeenCalledWith('im', { src: 'http://x/y.png' }, undefined);
+  });
+
+  it('shows bulk text controls for an all-text multi-selection and applies bold to all', () => {
+    const props = setup({ selectedIds: ['amr-title', 'amr-subtitle'] });
+    fireEvent.click(screen.getByRole('button', { name: 'Bold' }));
+    expect(props.onPatchElements).toHaveBeenCalledWith(['amr-title', 'amr-subtitle'], { style: { bold: true } }, { discrete: true });
+  });
+
+  it('shows only the count for a mixed-kind multi-selection', () => {
+    setup({ selectedIds: ['amr-title', 'amr-table'] });
+    expect(screen.getByText('2 elements selected')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Bold' })).toBeNull();
+  });
+
+  it('applies a bulk stroke width to an all-rect multi-selection', () => {
+    const onPatchElements = vi.fn();
+    const template: ReportTemplate = {
+      id: 't', name: 't', paper: 'A4', orientation: 'portrait', parameters: [],
+      pages: [{ id: 'p1', elements: [
+        { id: 'r1', kind: 'rect', name: 'Rect 1', rect: { x: 0, y: 0, w: 100, h: 100 } },
+        { id: 'r2', kind: 'rect', name: 'Rect 2', rect: { x: 0, y: 0, w: 100, h: 100 } },
+      ] }],
+    };
+    render(<PropertiesTab template={template} selectedIds={['r1', 'r2']} onPatchElement={vi.fn()} onPatchPage={vi.fn()} onPatchElements={onPatchElements} />);
+    fireEvent.change(screen.getByLabelText('Stroke width'), { target: { value: '3' } });
+    expect(onPatchElements).toHaveBeenCalledWith(['r1', 'r2'], { style: { strokeWidth: 3 } }, undefined);
+  });
+
+  it('shows a Mixed placeholder for a size that differs across the text selection', () => {
+    const template: ReportTemplate = {
+      id: 't', name: 't', paper: 'A4', orientation: 'portrait', parameters: [],
+      pages: [{ id: 'p1', elements: [
+        { id: 'x1', kind: 'text', name: 'Text 1', rect: { x: 0, y: 0, w: 100, h: 20 }, text: 'a', style: { fontSize: 12 } },
+        { id: 'x2', kind: 'text', name: 'Text 2', rect: { x: 0, y: 0, w: 100, h: 20 }, text: 'b', style: { fontSize: 18 } },
+      ] }],
+    };
+    render(<PropertiesTab template={template} selectedIds={['x1', 'x2']} onPatchElement={vi.fn()} onPatchPage={vi.fn()} onPatchElements={vi.fn()} />);
+    const size = screen.getByLabelText('Size');
+    expect(size).toHaveValue(null);
+    expect(size).toHaveAttribute('placeholder', 'Mixed');
   });
 });

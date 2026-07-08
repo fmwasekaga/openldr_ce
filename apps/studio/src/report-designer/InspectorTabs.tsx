@@ -14,9 +14,10 @@ interface Props {
   onSelect(ids: string[]): void;
   onPatchElement(id: string, patch: Partial<import('./types').DesignElement>, opts?: { discrete?: boolean }): void;
   onPatchPage(patch: Partial<ReportTemplate>, opts?: { discrete?: boolean }): void;
+  onPatchElements(ids: string[], patch: Partial<import('./types').DesignElement>, opts?: { discrete?: boolean }): void;
 }
 
-export function InspectorTabs({ template, selectedIds, onSelect, onPatchElement, onPatchPage }: Props): JSX.Element {
+export function InspectorTabs({ template, selectedIds, onSelect, onPatchElement, onPatchPage, onPatchElements }: Props): JSX.Element {
   const { t } = useTranslation();
   const [tab, setTab] = useState<TabKey>('properties');
 
@@ -43,7 +44,7 @@ export function InspectorTabs({ template, selectedIds, onSelect, onPatchElement,
         })}
       </div>
       <div className="min-h-0 flex-1 overflow-auto">
-        {tab === 'properties' && <PropertiesTab template={template} selectedIds={selectedIds} onPatchElement={onPatchElement} onPatchPage={onPatchPage} />}
+        {tab === 'properties' && <PropertiesTab template={template} selectedIds={selectedIds} onPatchElement={onPatchElement} onPatchPage={onPatchPage} onPatchElements={onPatchElements} />}
         {tab === 'layers' && <LayersTab template={template} selectedIds={selectedIds} onSelect={onSelect} />}
         {tab === 'data' && <DataTab template={template} />}
       </div>

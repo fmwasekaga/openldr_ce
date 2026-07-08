@@ -151,4 +151,43 @@ describe('ReportDesignerPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /undo/i }));
     expect(content()).toHaveValue('Antimicrobial resistance summary');
   });
+
+  it('bulk-bolds a multi-text selection as one undo step', () => {
+    renderPage();
+    const inspector = () => screen.getByTestId('inspector');
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Layers' }));
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Title' }));
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Subtitle' }), { shiftKey: true });
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Properties' }));
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Bold' }));
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Layers' }));
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Title' })); // single-select Title
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Properties' }));
+    // its per-element Bold now reflects active (both were bolded)
+    expect(within(inspector()).getByRole('button', { name: 'Bold' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: /undo/i }));
+    expect(within(inspector()).getByRole('button', { name: 'Bold' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('double-click a text element on the canvas edits it inline and syncs the model', () => {
+    renderPage();
+    fireEvent.doubleClick(screen.getByTestId('el-amr-title'));
+    const ta = screen.getByTestId('edit-amr-title');
+    fireEvent.change(ta, { target: { value: 'Inline edit' } });
+    fireEvent.keyDown(ta, { key: 'Escape' });
+    // Properties Content field reflects the inline edit (element stays selected)
+    fireEvent.click(within(screen.getByTestId('inspector')).getByRole('button', { name: 'Properties' }));
+    expect(within(screen.getByTestId('inspector')).getByLabelText('Content')).toHaveValue('Inline edit');
+  });
+
+  it('double-clicking a text element in a multi-selection collapses to editing just it', () => {
+    renderPage();
+    const inspector = () => screen.getByTestId('inspector');
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Layers' }));
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Title' }));
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Subtitle' }), { shiftKey: true });
+    fireEvent.doubleClick(screen.getByTestId('el-amr-title'));
+    expect(screen.getByTestId('edit-amr-title')).toBeInTheDocument();
+    expect(screen.queryByTestId('edit-amr-subtitle')).toBeNull();
+  });
 });
