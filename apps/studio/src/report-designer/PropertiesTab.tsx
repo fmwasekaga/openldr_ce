@@ -24,17 +24,17 @@ interface Props {
 
 function common<T>(vals: T[]): T | undefined { return vals.length > 0 && vals.every((v) => v === vals[0]) ? vals[0] : undefined; }
 
-function NumberField({ label, value, onChange, min }: { label: string; value: number; onChange(n: number): void; min?: number }): JSX.Element {
-  const [text, setText] = useState(String(value));
-  useEffect(() => { setText(String(value)); }, [value]);
+function NumberField({ label, value, onChange, min, placeholder }: { label: string; value: number | undefined; onChange(n: number): void; min?: number; placeholder?: string }): JSX.Element {
+  const [text, setText] = useState(value == null ? '' : String(value));
+  useEffect(() => { setText(value == null ? '' : String(value)); }, [value]);
   return (
     <div className="flex-1">
       <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
-      <Input type="number" aria-label={label} value={text} min={min}
+      <Input type="number" aria-label={label} value={text} min={min} placeholder={placeholder}
         onChange={(e) => { setText(e.target.value); const n = Number(e.target.value); if (e.target.value !== '' && !Number.isNaN(n)) onChange(n); }}
         onBlur={() => {
           const n = Number(text);
-          if (text === '' || Number.isNaN(n)) { setText(String(value)); return; }
+          if (text === '' || Number.isNaN(n)) { setText(value == null ? '' : String(value)); return; }
           const clamped = min != null ? Math.max(min, n) : n;
           setText(String(clamped));
           if (clamped !== n) onChange(clamped);
@@ -173,12 +173,7 @@ function BulkControls({ ids, els, onPatchElements }: {
     return (
       <div className="flex flex-col gap-3">
         <div className="flex items-end gap-2">
-          <div className="flex-1">
-            <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.fontSize')}</div>
-            <Input type="number" aria-label={t('reportDesigner.fontSize')} min={4} value={size ?? ''} placeholder={t('reportDesigner.mixed')}
-              onChange={(e) => { const n = Number(e.target.value); if (e.target.value !== '' && !Number.isNaN(n)) style({ fontSize: Math.max(4, n) }); }}
-              className="h-8 text-xs" />
-          </div>
+          <NumberField label={t('reportDesigner.fontSize')} value={size} onChange={(n) => style({ fontSize: n })} min={4} placeholder={t('reportDesigner.mixed')} />
           <Button type="button" variant={bold ? 'default' : 'outline'} size="icon" className="h-8 w-8 font-bold"
             aria-label={t('reportDesigner.bold')} aria-pressed={!!bold} onClick={() => style({ bold: !bold }, true)}>B</Button>
           <div className="flex h-8 rounded-md border border-border">
@@ -193,7 +188,7 @@ function BulkControls({ ids, els, onPatchElements }: {
         </div>
         <div>
           <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.color')}</div>
-          <ColorField value={color ?? 'none'} onChange={(c, opts) => style({ color: c }, !!opts?.discrete)} aria-label={t('reportDesigner.color')} />
+          <ColorField value={color ?? '#000000'} mixed={color === undefined} onChange={(c, opts) => style({ color: c }, !!opts?.discrete)} aria-label={t('reportDesigner.color')} />
         </div>
       </div>
     );
@@ -206,18 +201,13 @@ function BulkControls({ ids, els, onPatchElements }: {
     <div className="flex flex-col gap-3">
       <div>
         <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.strokeColor')}</div>
-        <ColorField value={strokeColor ?? 'none'} onChange={(c, opts) => style({ strokeColor: c }, !!opts?.discrete)} aria-label={t('reportDesigner.strokeColor')} />
+        <ColorField value={strokeColor ?? '#9ca3af'} mixed={strokeColor === undefined} onChange={(c, opts) => style({ strokeColor: c }, !!opts?.discrete)} aria-label={t('reportDesigner.strokeColor')} />
       </div>
-      <div>
-        <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.strokeWidth')}</div>
-        <Input type="number" aria-label={t('reportDesigner.strokeWidth')} min={1} value={strokeWidth ?? ''} placeholder={t('reportDesigner.mixed')}
-          onChange={(e) => { const n = Number(e.target.value); if (e.target.value !== '' && !Number.isNaN(n)) style({ strokeWidth: Math.max(1, n) }); }}
-          className="h-8 text-xs" />
-      </div>
+      <NumberField label={t('reportDesigner.strokeWidth')} value={strokeWidth} onChange={(n) => style({ strokeWidth: n })} min={1} placeholder={t('reportDesigner.mixed')} />
       {allRect && (
         <div>
           <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.fill')}</div>
-          <ColorField value={fill ?? 'none'} onChange={(c, opts) => style({ fill: c }, !!opts?.discrete)} allowNone aria-label={t('reportDesigner.fill')} />
+          <ColorField value={fill ?? 'none'} mixed={fill === undefined} onChange={(c, opts) => style({ fill: c }, !!opts?.discrete)} allowNone aria-label={t('reportDesigner.fill')} />
         </div>
       )}
     </div>

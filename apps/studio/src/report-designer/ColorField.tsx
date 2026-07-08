@@ -9,10 +9,11 @@ interface Props {
   value: string;
   onChange(v: string, opts?: { discrete?: boolean }): void;
   allowNone?: boolean;
+  mixed?: boolean;
   'aria-label'?: string;
 }
 
-export function ColorField({ value, onChange, allowNone, 'aria-label': ariaLabel }: Props): JSX.Element {
+export function ColorField({ value, onChange, allowNone, mixed, 'aria-label': ariaLabel }: Props): JSX.Element {
   const { t } = useTranslation();
   const label = ariaLabel ?? t('reportDesigner.color');
   const isNone = !value || value === 'none';
@@ -21,8 +22,8 @@ export function ColorField({ value, onChange, allowNone, 'aria-label': ariaLabel
       <Popover>
         <PopoverTrigger asChild>
           <button type="button" aria-label={label}
-            className={cn('h-7 w-7 shrink-0 rounded-md border border-border', isNone && 'bg-muted')}
-            style={isNone ? undefined : { background: value }} />
+            className={cn('h-7 w-7 shrink-0 rounded-md border border-border', !mixed && isNone && 'bg-muted')}
+            style={mixed ? { background: 'linear-gradient(135deg,#ef4444 0 33%,#10b981 33% 66%,#3b82f6 66%)' } : (isNone ? undefined : { background: value })} />
         </PopoverTrigger>
         <PopoverContent align="start" className="w-40 p-2">
           <div className="grid grid-cols-6 gap-1">
@@ -39,9 +40,9 @@ export function ColorField({ value, onChange, allowNone, 'aria-label': ariaLabel
           )}
         </PopoverContent>
       </Popover>
-      <Input aria-label={`${label} hex`} value={isNone ? '' : value}
+      <Input aria-label={`${label} hex`} value={mixed ? '' : (isNone ? '' : value)}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={allowNone ? t('reportDesigner.none') : '#000000'}
+        placeholder={mixed ? t('reportDesigner.mixed') : (allowNone ? t('reportDesigner.none') : '#000000')}
         className="h-7 font-mono text-xs" />
     </div>
   );

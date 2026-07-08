@@ -91,4 +91,32 @@ describe('PropertiesTab editing', () => {
     expect(screen.getByText('2 elements selected')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Bold' })).toBeNull();
   });
+
+  it('applies a bulk stroke width to an all-rect multi-selection', () => {
+    const onPatchElements = vi.fn();
+    const template: ReportTemplate = {
+      id: 't', name: 't', paper: 'A4', orientation: 'portrait', parameters: [],
+      pages: [{ id: 'p1', elements: [
+        { id: 'r1', kind: 'rect', name: 'Rect 1', rect: { x: 0, y: 0, w: 100, h: 100 } },
+        { id: 'r2', kind: 'rect', name: 'Rect 2', rect: { x: 0, y: 0, w: 100, h: 100 } },
+      ] }],
+    };
+    render(<PropertiesTab template={template} selectedIds={['r1', 'r2']} onPatchElement={vi.fn()} onPatchPage={vi.fn()} onPatchElements={onPatchElements} />);
+    fireEvent.change(screen.getByLabelText('Stroke width'), { target: { value: '3' } });
+    expect(onPatchElements).toHaveBeenCalledWith(['r1', 'r2'], { style: { strokeWidth: 3 } }, undefined);
+  });
+
+  it('shows a Mixed placeholder for a size that differs across the text selection', () => {
+    const template: ReportTemplate = {
+      id: 't', name: 't', paper: 'A4', orientation: 'portrait', parameters: [],
+      pages: [{ id: 'p1', elements: [
+        { id: 'x1', kind: 'text', name: 'Text 1', rect: { x: 0, y: 0, w: 100, h: 20 }, text: 'a', style: { fontSize: 12 } },
+        { id: 'x2', kind: 'text', name: 'Text 2', rect: { x: 0, y: 0, w: 100, h: 20 }, text: 'b', style: { fontSize: 18 } },
+      ] }],
+    };
+    render(<PropertiesTab template={template} selectedIds={['x1', 'x2']} onPatchElement={vi.fn()} onPatchPage={vi.fn()} onPatchElements={vi.fn()} />);
+    const size = screen.getByLabelText('Size');
+    expect(size).toHaveValue(null);
+    expect(size).toHaveAttribute('placeholder', 'Mixed');
+  });
 });
