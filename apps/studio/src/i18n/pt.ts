@@ -539,6 +539,7 @@ export const pt: EnShape = {
     emptyTitle: 'Selecione ou crie um modelo',
     emptyBody: 'Um modelo organiza texto, imagens e tabelas de relatório em páginas imprimíveis — e depois exporta para PDF ou Excel.',
     savedToast: '“{{name}}” salvo',
+    exportedToast: '“{{name}}.pdf” exportado',
     deletedToast: 'Design de relatório excluído',
     deleteConfirmTitle: 'Excluir este design de relatório?',
     deleteConfirmBody: 'Isto exclui permanentemente o design de relatório. Esta ação não pode ser desfeita.',

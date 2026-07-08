@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { listReportDesigns, getReportDesign, createReportDesign, updateReportDesign, deleteReportDesign, previewReportDesign } from './api';
+import { listReportDesigns, getReportDesign, createReportDesign, updateReportDesign, deleteReportDesign, previewReportDesign, downloadReportDesignPdf } from './api';
 
 describe('report-design api client', () => {
   beforeEach(() => {
@@ -27,5 +27,27 @@ describe('report-design api client', () => {
     const out = await previewReportDesign(design);
     expect(fetch).toHaveBeenCalledWith('/api/report-designs/preview', expect.objectContaining({ method: 'POST' }));
     expect(out).toBe(blob);
+  });
+
+  it('downloadReportDesignPdf renders via the preview endpoint and downloads a sanitized .pdf', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, blob: async () => new Blob(['%PDF'], { type: 'application/pdf' }) } as never);
+    // jsdom lacks these blob-URL helpers — stub them for the test, then remove.
+    const g = URL as unknown as Record<string, unknown>;
+    g.createObjectURL = vi.fn(() => 'blob:x');
+    g.revokeObjectURL = vi.fn();
+    const clicked: string[] = [];
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(function (this: HTMLAnchorElement) { clicked.push(this.download); });
+
+    await downloadReportDesignPdf({ id: 'd', name: 'AMR / summary' } as never);
+
+    expect(fetch).toHaveBeenCalledWith('/api/report-designs/preview', expect.objectContaining({ method: 'POST' }));
+    expect(clicked).toEqual(['AMR_summary.pdf']); // reuses the preview endpoint + sanitizes the filename
+    expect(g.createObjectURL).toHaveBeenCalledTimes(1);
+    expect(g.revokeObjectURL).toHaveBeenCalledTimes(1);
+
+    clickSpy.mockRestore();
+    delete g.createObjectURL;
+    delete g.revokeObjectURL;
   });
 });
