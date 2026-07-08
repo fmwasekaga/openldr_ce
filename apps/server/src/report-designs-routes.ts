@@ -58,21 +58,21 @@ export function registerReportDesignRoutes(
     if (!p.success) { reply.code(400); return { error: p.error.message }; }
     const design = p.data;
 
+    // Binding contract: design.param.key === query.param.id (substituteParams keys by id),
+    // so build values once from the design's own params — extra unmapped values are harmless.
+    const values: Record<string, unknown> = {};
+    for (const dp of design.parameters) if (dp.value != null) values[dp.key] = dp.value;
+
     const resolved = new Map<string, ResolvedTable>();
     for (const page of design.pages) {
       for (const el of page.elements) {
         if (el.kind !== 'table' || !el.dataSource) continue;
-        const rec = await deps.customQueries.get(el.dataSource.queryId);
-        const values: Record<string, unknown> = {};
-        if (rec) for (const qp of rec.params) {
-          const dp = design.parameters.find((x) => x.key === qp.id);
-          if (dp?.value != null) values[qp.id] = dp.value;
-        }
         try {
           const { columns, rows } = await runStoredQuery(deps, el.dataSource.queryId, values);
           resolved.set(el.id, { columns, rows });
         } catch (e) {
-          // Per-table failures become an in-PDF placeholder, never a 500.
+          // Per-table failures become an in-PDF placeholder, never a 500
+          // (all store access lives inside runStoredQuery, inside this catch).
           resolved.set(el.id, { error: (e as Error).message });
         }
       }

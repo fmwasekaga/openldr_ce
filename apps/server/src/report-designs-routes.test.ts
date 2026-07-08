@@ -128,5 +128,41 @@ describe('report-design routes', () => {
     const design = { id: 'd', name: 'N', pages: [{ id: 'p', elements: [{ id: 't', kind: 'table', name: 'T', rect: { x: 0, y: 0, w: 200, h: 80 }, dataSource: { kind: 'custom-query', queryId: 'cq_1' } }] }] };
     const res = await app.inject({ method: 'POST', url: '/api/report-designs/preview', payload: design });
     expect(res.statusCode).toBe(200);
+    // A valid PDF is still produced (the error becomes an in-PDF placeholder).
+    expect(res.rawPayload.subarray(0, 4).toString()).toBe('%PDF');
+  });
+
+  it('substitutes a design param into the query SQL that reaches the connector', async () => {
+    const cqWithParam = {
+      get: async (id: string) => id === 'cq_1'
+        ? { id: 'cq_1', name: 'Q', connectorId: 'c1', sql: 'select * from t where f = {{param.facility}}', params: [{ id: 'facility', label: 'F', type: 'text', required: true }] }
+        : undefined,
+    };
+    const calls: { connectorId: string; sql: string }[] = [];
+    const spyRun = async (input: { connectorId: string; sql: string }) => {
+      calls.push(input);
+      return { columns: [{ key: 'f', label: 'f' }], rows: [{ f: 'HQ' }] };
+    };
+    const app = appWith(fakeCtx(), ['lab_admin'], { customQueries: cqWithParam, runConnectorSql: spyRun });
+    const design = { id: 'd', name: 'N', paper: 'A4', orientation: 'portrait',
+      parameters: [{ key: 'facility', label: 'F', type: 'text', value: 'HQ' }],
+      pages: [{ id: 'p', elements: [{ id: 't', kind: 'table', name: 'T', rect: { x: 0, y: 0, w: 200, h: 80 }, dataSource: { kind: 'custom-query', queryId: 'cq_1' } }] }] };
+    const res = await app.inject({ method: 'POST', url: '/api/report-designs/preview', payload: design });
+    expect(res.statusCode).toBe(200);
+    expect(res.rawPayload.subarray(0, 4).toString()).toBe('%PDF');
+    expect(calls.length).toBe(1);
+    expect(calls[0].sql).toContain("'HQ'");
+  });
+
+  it('renders a design with no bound tables (static elements) to a PDF', async () => {
+    const app = appWith(fakeCtx());
+    const design = { id: 'd', name: 'N', paper: 'A4', orientation: 'portrait',
+      pages: [{ id: 'p', elements: [
+        { id: 'txt', kind: 'text', name: 'T', rect: { x: 0, y: 0, w: 200, h: 40 }, text: 'Hello' },
+        { id: 'tbl', kind: 'table', name: 'U', rect: { x: 0, y: 50, w: 200, h: 80 } },
+      ] }] };
+    const res = await app.inject({ method: 'POST', url: '/api/report-designs/preview', payload: design });
+    expect(res.statusCode).toBe(200);
+    expect(res.rawPayload.subarray(0, 4).toString()).toBe('%PDF');
   });
 });
