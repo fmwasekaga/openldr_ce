@@ -543,6 +543,9 @@ export const fr: EnShape = {
     deleteConfirmTitle: 'Supprimer cette conception de rapport ?',
     deleteConfirmBody: 'Cela supprime définitivement la conception de rapport. Cette action est irréversible.',
     deleteConfirmAction: 'Supprimer la conception',
+    previewTitle: 'Aperçu',
+    rendering: 'Rendu en cours…',
+    previewError: 'Impossible de générer l’aperçu',
     element: {
       text: 'Texte', table: 'Tableau', image: 'Image', line: 'Ligne', rect: 'Rectangle', datetime: 'Date/heure',
     },

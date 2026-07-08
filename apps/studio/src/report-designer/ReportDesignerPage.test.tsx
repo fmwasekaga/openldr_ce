@@ -23,6 +23,10 @@ vi.mock('../api', async (importOriginal) => {
   };
 });
 
+// The Preview dialog pulls in PdfCanvasViewer → pdfjs, which needs DOM APIs jsdom lacks
+// (DOMMatrix). Stub it — this suite exercises the page/editor, not PDF rendering.
+vi.mock('../reports/PdfCanvasViewer', () => ({ PdfCanvasViewer: () => <div data-testid="pdf-viewer" /> }));
+
 // Render at the AMR design route so a design is loaded into the editor, mirroring the live
 // `/report-designer/:id` entry point. Awaits the async load before returning.
 async function renderPage(id = 'rt-amr-summary') {

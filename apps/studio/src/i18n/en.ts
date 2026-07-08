@@ -547,6 +547,9 @@ export const en = {
     deleteConfirmTitle: 'Delete this report design?',
     deleteConfirmBody: 'This permanently deletes the report design. This cannot be undone.',
     deleteConfirmAction: 'Delete design',
+    previewTitle: 'Preview',
+    rendering: 'Rendering…',
+    previewError: 'Could not render the preview',
     element: {
       text: 'Text', table: 'Table', image: 'Image', line: 'Line', rect: 'Rectangle', datetime: 'Date/time',
     },

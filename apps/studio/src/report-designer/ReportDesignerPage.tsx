@@ -10,6 +10,7 @@ import { TemplatesExplorer } from './TemplatesExplorer';
 import { CanvasHeader } from './CanvasHeader';
 import { PageCanvas } from './PageCanvas';
 import { InspectorTabs } from './InspectorTabs';
+import { PreviewReportDesignDialog } from './PreviewReportDesignDialog';
 import { createReportDesign, deleteReportDesign, getReportDesign, listReportDesigns, updateReportDesign } from '../api';
 import { addElement, allElements, newElement, paperSize, removeElements, updateElement, updateElementRects, updateElements } from './model';
 import { clampRectToPage } from './geometry';
@@ -36,6 +37,7 @@ export function ReportDesignerPage(): JSX.Element {
   const [collapsed, setCollapsed] = useState(false);
   const [error, setError] = useState<string>();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   // Ids of unsaved (transient) designs created via "New template" — Save creates them server-side.
   const [transientIds, setTransientIds] = useState<Set<string>>(() => new Set());
   // The last id loaded from / persisted to the API — guards the :id effect from re-loading over local edits.
@@ -263,7 +265,7 @@ export function ReportDesignerPage(): JSX.Element {
                 onInsert={insert}
                 onUndo={undo} onRedo={redo} canUndo={history.canUndo} canRedo={history.canRedo}
                 onZoomIn={() => zoomStep(1)} onZoomOut={() => zoomStep(-1)}
-                onPreview={noop} onSave={() => { void onSave(); }} onExportPdf={noop} onExportExcel={noop}
+                onPreview={() => setPreviewOpen(true)} onSave={() => { void onSave(); }} onExportPdf={noop} onExportExcel={noop}
                 onCheck={noop} onDuplicate={noop} onDelete={() => setConfirmDeleteOpen(true)} />
               <PageCanvas template={template} zoom={zoom} selectedIds={selectedIds} onSelect={setSelectedIds} onCommitRects={commitRects}
                 editingId={editingId} onEditStart={startEdit} onEditChange={editChange} onEditEnd={endEdit} />
@@ -293,6 +295,7 @@ export function ReportDesignerPage(): JSX.Element {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {template && <PreviewReportDesignDialog open={previewOpen} design={template} onOpenChange={setPreviewOpen} />}
     </AppShell>
   );
 }

@@ -543,6 +543,9 @@ export const pt: EnShape = {
     deleteConfirmTitle: 'Excluir este design de relatório?',
     deleteConfirmBody: 'Isto exclui permanentemente o design de relatório. Esta ação não pode ser desfeita.',
     deleteConfirmAction: 'Excluir design',
+    previewTitle: 'Pré-visualização',
+    rendering: 'Renderizando…',
+    previewError: 'Não foi possível renderizar a pré-visualização',
     element: {
       text: 'Texto', table: 'Tabela', image: 'Imagem', line: 'Linha', rect: 'Retângulo', datetime: 'Data/hora',
     },
