@@ -10,6 +10,7 @@ import { TemplatesExplorer } from './TemplatesExplorer';
 import { CanvasHeader } from './CanvasHeader';
 import { PageCanvas } from './PageCanvas';
 import { InspectorTabs } from './InspectorTabs';
+import { PreviewReportDesignDialog } from './PreviewReportDesignDialog';
 import { createReportDesign, deleteReportDesign, getReportDesign, listReportDesigns, updateReportDesign } from '../api';
 import { addElement, allElements, newElement, paperSize, removeElements, updateElement, updateElementRects, updateElements } from './model';
 import { clampRectToPage } from './geometry';
@@ -36,6 +37,7 @@ export function ReportDesignerPage(): JSX.Element {
   const [collapsed, setCollapsed] = useState(false);
   const [error, setError] = useState<string>();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   // Ids of unsaved (transient) designs created via "New template" — Save creates them server-side.
   const [transientIds, setTransientIds] = useState<Set<string>>(() => new Set());
   // The last id loaded from / persisted to the API — guards the :id effect from re-loading over local edits.
@@ -113,6 +115,10 @@ export function ReportDesignerPage(): JSX.Element {
     if (!template) return;
     const next = updateElements(template, ids, patch);
     if (opts?.discrete) pushTemplate(next); else updateTemplate(next);
+  };
+  const patchParameters = (parameters: import('./types').TemplateParam[]) => {
+    if (!template) return;
+    pushTemplate({ ...template, parameters }); // discrete step — param edits are deliberate
   };
 
   const startEdit = (id: string) => { setSelectedIds([id]); setEditingId(id); };
@@ -259,14 +265,14 @@ export function ReportDesignerPage(): JSX.Element {
                 onInsert={insert}
                 onUndo={undo} onRedo={redo} canUndo={history.canUndo} canRedo={history.canRedo}
                 onZoomIn={() => zoomStep(1)} onZoomOut={() => zoomStep(-1)}
-                onPreview={noop} onSave={() => { void onSave(); }} onExportPdf={noop} onExportExcel={noop}
+                onPreview={() => setPreviewOpen(true)} onSave={() => { void onSave(); }} onExportPdf={noop} onExportExcel={noop}
                 onCheck={noop} onDuplicate={noop} onDelete={() => setConfirmDeleteOpen(true)} />
               <PageCanvas template={template} zoom={zoom} selectedIds={selectedIds} onSelect={setSelectedIds} onCommitRects={commitRects}
                 editingId={editingId} onEditStart={startEdit} onEditChange={editChange} onEditEnd={endEdit} />
             </div>
             <div className="flex w-64 shrink-0 flex-col border-l border-border" data-testid="inspector">
               <InspectorTabs template={template} selectedIds={selectedIds} onSelect={setSelectedIds}
-                onPatchElement={patchElement} onPatchPage={patchPage} onPatchElements={patchElements} />
+                onPatchElement={patchElement} onPatchPage={patchPage} onPatchElements={patchElements} onPatchParameters={patchParameters} />
             </div>
           </>
         ) : (
@@ -289,6 +295,7 @@ export function ReportDesignerPage(): JSX.Element {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {template && previewOpen && <PreviewReportDesignDialog open={previewOpen} design={template} onOpenChange={setPreviewOpen} />}
     </AppShell>
   );
 }

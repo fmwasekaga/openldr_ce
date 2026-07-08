@@ -22,6 +22,12 @@ export type ElementStyle = z.infer<typeof ElementStyleSchema>;
 export const MarginsSchema = z.object({ top: z.number(), right: z.number(), bottom: z.number(), left: z.number() });
 export type Margins = z.infer<typeof MarginsSchema>;
 
+export const DataSourceSchema = z.object({ kind: z.literal('custom-query'), queryId: z.string() });
+export type DataSource = z.infer<typeof DataSourceSchema>;
+
+export const BoundColumnSchema = z.object({ key: z.string(), label: z.string() });
+export type BoundColumn = z.infer<typeof BoundColumnSchema>;
+
 export const DesignElementSchema = z.object({
   id: z.string(),
   kind: z.enum(['text', 'table', 'image', 'line', 'rect', 'datetime']),
@@ -35,6 +41,10 @@ export const DesignElementSchema = z.object({
   rows: z.array(z.array(z.string())).optional(),
   /** table binding label, e.g. "AMR resistance" */
   boundReport: z.string().optional(),
+  /** real table binding (supersedes boundReport) */
+  dataSource: DataSourceSchema.optional(),
+  /** picked/reordered/relabeled projection of the query's result columns */
+  boundColumns: z.array(BoundColumnSchema).optional(),
   /** presentational style (text/line/rect) */
   style: ElementStyleSchema.optional(),
   /** image source (URL or data: URI) */
@@ -45,7 +55,15 @@ export type DesignElement = z.infer<typeof DesignElementSchema>;
 export const DesignPageSchema = z.object({ id: z.string(), elements: z.array(DesignElementSchema).default([]) });
 export type DesignPage = z.infer<typeof DesignPageSchema>;
 
-export const TemplateParamSchema = z.object({ key: z.string(), label: z.string(), value: z.string() });
+export const DateRangeValueSchema = z.object({ from: z.string(), to: z.string() });
+export type DateRangeValue = z.infer<typeof DateRangeValueSchema>;
+
+export const TemplateParamSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  type: z.enum(['text', 'select', 'daterange']).optional(),
+  value: z.union([z.string(), DateRangeValueSchema]).optional(),
+});
 export type TemplateParam = z.infer<typeof TemplateParamSchema>;
 
 export const ReportDesignSchema = z.object({

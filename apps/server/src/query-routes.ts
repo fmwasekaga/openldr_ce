@@ -6,7 +6,7 @@ import { CustomQueryInputSchema, validateSelectSql } from '@openldr/dashboards';
 import type { CustomQueryStore } from '@openldr/db';
 import { requireRole } from './rbac';
 import { recordAudit } from './audit-helper';
-import { substituteParams } from './query-sql';
+import { prepareSelect } from './run-stored-query';
 
 const AUTHOR_ROLES = ['lab_admin', 'lab_manager', 'data_analyst'];
 const ROW_CAP = 1000;
@@ -96,10 +96,9 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
     const c = await deps.connectors.get(parsed.data.connectorId);
     if (!c || !c.enabled) { reply.code(404); return { error: 'connector not found or disabled' }; }
-    let inner = parsed.data.sql;
+    let inner: string;
     try {
-      if (parsed.data.params?.length) inner = substituteParams(inner, parsed.data.params as never, parsed.data.values ?? {});
-      validateSelectSql(inner);
+      inner = prepareSelect(parsed.data.sql, (parsed.data.params ?? []) as never, parsed.data.values ?? {});
     } catch (e) { reply.code(400); return { error: (e as Error).message }; }
     // Always wrap with a LIMIT so an unbounded `select * from big_table` never streams every row
     // into memory; the requested limit is clamped to ROW_CAP.

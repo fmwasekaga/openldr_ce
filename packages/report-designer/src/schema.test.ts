@@ -26,3 +26,36 @@ describe('ReportDesignSchema', () => {
     expect(ReportDesignSchema.safeParse({ id: 'd', name: '' }).success).toBe(false);
   });
 });
+
+describe('ReportDesignSchema — data binding', () => {
+  it('accepts a table dataSource + boundColumns', () => {
+    const out = ReportDesignSchema.parse({
+      id: 'd', name: 'N',
+      pages: [{ id: 'p', elements: [{
+        id: 'e', kind: 'table', name: 'T', rect: { x: 0, y: 0, w: 100, h: 50 },
+        dataSource: { kind: 'custom-query', queryId: 'cq_1' },
+        boundColumns: [{ key: 'organism', label: 'Organism' }, { key: 'pct_r', label: '%R' }],
+      }] }],
+    });
+    const el = out.pages[0].elements[0];
+    expect(el.dataSource).toEqual({ kind: 'custom-query', queryId: 'cq_1' });
+    expect(el.boundColumns).toEqual([{ key: 'organism', label: 'Organism' }, { key: 'pct_r', label: '%R' }]);
+  });
+
+  it('accepts a string param and a daterange param', () => {
+    const out = ReportDesignSchema.parse({
+      id: 'd', name: 'N',
+      parameters: [
+        { key: 'facility', label: 'Facility', type: 'text', value: 'HQ' },
+        { key: 'range', label: 'Range', type: 'daterange', value: { from: '2026-01-01', to: '2026-06-30' } },
+      ],
+    });
+    expect(out.parameters[0].value).toBe('HQ');
+    expect(out.parameters[1].value).toEqual({ from: '2026-01-01', to: '2026-06-30' });
+  });
+
+  it('still accepts a bare {key,label,value} param (back-compat)', () => {
+    const out = ReportDesignSchema.parse({ id: 'd', name: 'N', parameters: [{ key: 'k', label: 'L', value: 'v' }] });
+    expect(out.parameters[0]).toMatchObject({ key: 'k', label: 'L', value: 'v' });
+  });
+});

@@ -84,7 +84,14 @@ export function buildApp(ctx: AppContext) {
   registerUsersRoutes(app, ctx);
   registerFormsRoutes(app, ctx);
   registerReportTemplateRoutes(app, ctx);
-  registerReportDesignRoutes(app, ctx);
+  registerReportDesignRoutes(app, ctx, {
+    customQueries: createCustomQueryStore(ctx.internalDb),
+    runConnectorSql: (input) => {
+      const run = ctx.workflows.services.runConnectorSql;
+      if (!run) throw new Error('connector SQL runner unavailable');
+      return run(input);
+    },
+  });
   registerMarketplaceRoutes(app, ctx);
   registerPluginUiRoutes(app, ctx);
   registerConnectorsRoutes(app, ctx, { connectors: createConnectorStore(ctx.internalDb) });
