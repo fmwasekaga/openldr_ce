@@ -30,9 +30,13 @@ describe('ReportDesignerPage', () => {
 
   it('inserts a Text element which then appears in the Layers list', async () => {
     renderPage();
-    const trigger = screen.getByRole('button', { name: /insert/i });
-    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
-    if (!screen.queryByRole('menuitem', { name: 'Text' })) fireEvent.keyDown(trigger, { key: 'Enter' });
+    // Insert now lives inside the kebab (More actions) as a submenu.
+    const kebab = screen.getByRole('button', { name: /more actions/i });
+    fireEvent.pointerDown(kebab, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menuitem', { name: 'Insert' })) fireEvent.keyDown(kebab, { key: 'Enter' });
+    const insertSub = await screen.findByRole('menuitem', { name: 'Insert' });
+    insertSub.focus();
+    fireEvent.keyDown(insertSub, { key: 'ArrowRight' });
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Text' }));
     fireEvent.click(within(screen.getByTestId('inspector')).getByRole('button', { name: 'Layers' }));
     // mock AMR page 1 already has a "Title" text element; inserting adds another "Text" layer

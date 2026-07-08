@@ -5,12 +5,28 @@ import { CanvasHeader } from './CanvasHeader';
 function setup(overrides = {}) {
   const props = {
     name: 'AMR summary', zoom: 0.75,
-    onNameChange: vi.fn(), onInsert: vi.fn(), onZoomIn: vi.fn(), onZoomOut: vi.fn(),
+    onNameChange: vi.fn(), onNewTemplate: vi.fn(), onInsert: vi.fn(), onZoomIn: vi.fn(), onZoomOut: vi.fn(),
     onPreview: vi.fn(), onSave: vi.fn(), onExportPdf: vi.fn(), onExportExcel: vi.fn(),
     onCheck: vi.fn(), onDuplicate: vi.fn(), onDelete: vi.fn(), ...overrides,
   };
   render(<CanvasHeader {...props} />);
   return props;
+}
+
+async function openKebab() {
+  const trigger = screen.getByRole('button', { name: /more actions/i });
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+  if (!screen.queryByRole('menuitem', { name: 'Save' })) fireEvent.keyDown(trigger, { key: 'Enter' });
+  return screen.findByRole('menuitem', { name: 'Save' });
+}
+
+// Radix submenus open reliably in jsdom via the keyboard ArrowRight interaction
+// on the focused sub-trigger.
+async function openSub(name: string) {
+  const sub = await screen.findByRole('menuitem', { name });
+  sub.focus();
+  fireEvent.keyDown(sub, { key: 'ArrowRight' });
+  return sub;
 }
 
 describe('CanvasHeader', () => {
@@ -20,29 +36,56 @@ describe('CanvasHeader', () => {
     expect(screen.getByText('75%')).toBeInTheDocument();
   });
 
-  it('inserts a Text element from the Insert menu', async () => {
+  it('steps zoom from the header controls', () => {
     const props = setup();
-    const trigger = screen.getByRole('button', { name: /insert/i });
-    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
-    if (!screen.queryByRole('menuitem', { name: 'Text' })) fireEvent.keyDown(trigger, { key: 'Enter' });
+    fireEvent.click(screen.getByRole('button', { name: /zoom in/i }));
+    expect(props.onZoomIn).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /zoom out/i }));
+    expect(props.onZoomOut).toHaveBeenCalled();
+  });
+
+  it('lists the actions in the kebab menu', async () => {
+    setup();
+    await openKebab();
+    for (const name of ['New template', 'Insert', 'Preview', 'Save', 'Export', 'Check', 'Duplicate', 'Delete']) {
+      expect(screen.getByRole('menuitem', { name })).toBeInTheDocument();
+    }
+  });
+
+  it('creates a new template from the kebab', async () => {
+    const props = setup();
+    await openKebab();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New template' }));
+    expect(props.onNewTemplate).toHaveBeenCalled();
+  });
+
+  it('fires Preview from the kebab', async () => {
+    const props = setup();
+    await openKebab();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Preview' }));
+    expect(props.onPreview).toHaveBeenCalled();
+  });
+
+  it('fires Save from the kebab', async () => {
+    const props = setup();
+    await openKebab();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Save' }));
+    expect(props.onSave).toHaveBeenCalled();
+  });
+
+  it('inserts a Text element via the Insert submenu', async () => {
+    const props = setup();
+    await openKebab();
+    await openSub('Insert');
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Text' }));
     expect(props.onInsert).toHaveBeenCalledWith('text');
   });
 
-  it('fires Save from the kebab menu', async () => {
+  it('exports PDF via the Export submenu', async () => {
     const props = setup();
-    const trigger = screen.getByRole('button', { name: /more actions/i });
-    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
-    if (!screen.queryByRole('menuitem', { name: 'Save' })) fireEvent.keyDown(trigger, { key: 'Enter' });
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Save' }));
-    expect(props.onSave).toHaveBeenCalled();
-  });
-
-  it('steps zoom and previews', () => {
-    const props = setup();
-    fireEvent.click(screen.getByRole('button', { name: /zoom in/i }));
-    expect(props.onZoomIn).toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: /preview/i }));
-    expect(props.onPreview).toHaveBeenCalled();
+    await openKebab();
+    await openSub('Export');
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'PDF' }));
+    expect(props.onExportPdf).toHaveBeenCalled();
   });
 });

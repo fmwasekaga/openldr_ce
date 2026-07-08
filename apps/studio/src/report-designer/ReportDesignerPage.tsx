@@ -64,25 +64,26 @@ export function ReportDesignerPage(): JSX.Element {
           <div className="flex w-60 shrink-0 flex-col border-r border-border" data-testid="templates-explorer">
             <TemplatesExplorer templates={templates} selectedId={selectedId}
               onSelect={(id) => { setSelectedId(id); setSelectedElementId(null); }}
-              onNew={newTemplate} onCollapse={() => setCollapsed(true)} />
+              onCollapse={() => setCollapsed(true)} />
           </div>
         )}
 
         {template ? (
-          <div className="flex min-w-0 flex-1 flex-col">
-            <CanvasHeader name={template.name} zoom={zoom}
-              onNameChange={(name) => patchTemplate({ ...template, name })}
-              onInsert={insert} onZoomIn={() => zoomStep(1)} onZoomOut={() => zoomStep(-1)}
-              onPreview={noop} onSave={noop} onExportPdf={noop} onExportExcel={noop}
-              onCheck={noop} onDuplicate={noop} onDelete={noop} />
-            <div className="flex min-h-0 flex-1">
+          <>
+            <div className="flex min-w-0 flex-1 flex-col">
+              <CanvasHeader name={template.name} zoom={zoom}
+                onNameChange={(name) => patchTemplate({ ...template, name })}
+                onNewTemplate={newTemplate}
+                onInsert={insert} onZoomIn={() => zoomStep(1)} onZoomOut={() => zoomStep(-1)}
+                onPreview={noop} onSave={noop} onExportPdf={noop} onExportExcel={noop}
+                onCheck={noop} onDuplicate={noop} onDelete={noop} />
               <PageCanvas template={template} zoom={zoom}
                 selectedElementId={selectedElementId} onSelectElement={setSelectedElementId} />
-              <div className="w-64 shrink-0 border-l border-border" data-testid="inspector">
-                <InspectorTabs template={template} selectedElementId={selectedElementId} onSelectElement={setSelectedElementId} />
-              </div>
             </div>
-          </div>
+            <div className="flex w-64 shrink-0 flex-col border-l border-border" data-testid="inspector">
+              <InspectorTabs template={template} selectedElementId={selectedElementId} onSelectElement={setSelectedElementId} />
+            </div>
+          </>
         ) : (
           <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-2 bg-muted/30 text-center">
             <Frame className="h-6 w-6 text-muted-foreground" />

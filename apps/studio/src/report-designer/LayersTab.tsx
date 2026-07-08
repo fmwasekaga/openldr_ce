@@ -14,16 +14,16 @@ export function LayersTab({ template, selectedElementId, onSelectElement }: Prop
   // topmost (last-painted) element first
   const elements = template.pages.flatMap((p) => p.elements).slice().reverse();
   return (
-    <div className="flex flex-col gap-1 p-2">
-      {elements.length === 0 && <p className="px-1 py-3 text-xs text-muted-foreground">{t('reportDesigner.noElements')}</p>}
+    <div>
+      {elements.length === 0 && <p className="px-3 py-3 text-xs text-muted-foreground">{t('reportDesigner.noElements')}</p>}
       {elements.map((el) => {
         const Icon = KIND_ICON[el.kind];
         const active = el.id === selectedElementId;
         return (
           <button key={el.id} onClick={() => onSelectElement(el.id)}
-            className={cn('flex items-center gap-2 rounded px-2 py-1.5 text-left text-xs',
-              active ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-muted')}>
-            <Icon className="h-3.5 w-3.5" /> <span className="truncate">{el.name}</span>
+            className={cn('flex w-full items-center gap-2 border-b border-border px-3 py-2.5 text-left text-sm transition-colors',
+              active ? 'bg-accent text-accent-foreground' : 'hover:bg-muted')}>
+            <Icon className="h-4 w-4 shrink-0" /> <span className="truncate">{el.name}</span>
           </button>
         );
       })}

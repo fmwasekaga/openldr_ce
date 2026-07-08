@@ -17,7 +17,7 @@ export function PageCanvas({ template, zoom, selectedElementId, onSelectElement 
   const size = paperSize(template.paper, template.orientation);
   return (
     <div data-testid="page-canvas" onClick={() => onSelectElement(null)}
-      className="flex min-h-0 flex-1 flex-col items-center gap-6 overflow-auto bg-muted/30 p-6">
+      className="flex min-h-0 flex-1 flex-col items-center gap-6 overflow-auto bg-neutral-200 p-6 dark:bg-neutral-800">
       {template.pages.map((page, i) => (
         <div key={page.id} className="flex flex-col items-center gap-1.5">
           <div className="relative bg-white shadow-md ring-1 ring-border"
@@ -27,7 +27,7 @@ export function PageCanvas({ template, zoom, selectedElementId, onSelectElement 
                 onSelect={(e) => { e.stopPropagation(); onSelectElement(el.id); }} />
             ))}
           </div>
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-[11px] text-neutral-600 dark:text-neutral-300">
             {t('reportDesigner.pageOf', { n: i + 1, total: template.pages.length })}
           </span>
         </div>

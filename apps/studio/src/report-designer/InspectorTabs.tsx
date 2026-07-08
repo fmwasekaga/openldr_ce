@@ -28,14 +28,19 @@ export function InspectorTabs({ template, selectedElementId, onSelectElement }: 
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-10 shrink-0 border-b border-border bg-muted/40">
-        {tabs.map((tb) => (
-          <button key={tb.key} onClick={() => setTab(tb.key)}
-            className={cn('flex flex-1 items-center justify-center text-[11px] font-medium uppercase tracking-wide',
-              tab === tb.key ? 'border-b-2 border-foreground text-foreground' : 'text-muted-foreground hover:text-foreground')}>
-            {tb.label}
-          </button>
-        ))}
+      {/* Flush rectangular tabs with vertical dividers, matching the query workspace tab bar:
+          active = primary top-accent line + content-surface background. */}
+      <div className="flex h-10 shrink-0 items-stretch divide-x divide-border border-b border-border bg-muted/40">
+        {tabs.map((tb) => {
+          const active = tab === tb.key;
+          return (
+            <button key={tb.key} onClick={() => setTab(tb.key)}
+              className={cn('flex flex-1 items-center justify-center border-t-2 text-[11px] font-medium uppercase tracking-wide',
+                active ? 'border-t-primary bg-background text-foreground' : 'border-t-transparent text-muted-foreground hover:bg-background/40')}>
+              {tb.label}
+            </button>
+          );
+        })}
       </div>
       <div className="min-h-0 flex-1 overflow-auto">
         {tab === 'properties' && <PropertiesTab template={template} selected={selected} />}

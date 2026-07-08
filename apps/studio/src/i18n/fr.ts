@@ -478,6 +478,7 @@ export const fr: EnShape = {
     preview: 'Aperçu',
     moreActions: 'Plus d’actions',
     save: 'Enregistrer',
+    export: 'Exporter',
     exportPdf: 'Exporter en PDF',
     exportExcel: 'Exporter en Excel',
     check: 'Vérifier',

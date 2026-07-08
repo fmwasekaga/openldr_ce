@@ -1,12 +1,13 @@
 import { useTranslation } from 'react-i18next';
 import {
-  Plus, ChevronDown, Minus, Eye, MoreHorizontal,
-  Save, FileText, FileSpreadsheet, ShieldCheck, Copy, Trash2,
+  Plus, Minus, Eye, MoreHorizontal,
+  FilePlus, Save, Download, FileText, FileSpreadsheet, ShieldCheck, Copy, Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
+  DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
 import type { ElementKind } from './types';
 import { ELEMENT_KINDS } from './model';
@@ -16,6 +17,7 @@ interface Props {
   name: string;
   zoom: number;
   onNameChange(name: string): void;
+  onNewTemplate(): void;
   onInsert(kind: ElementKind): void;
   onZoomIn(): void;
   onZoomOut(): void;
@@ -31,29 +33,11 @@ interface Props {
 export function CanvasHeader(props: Props): JSX.Element {
   const { t } = useTranslation();
   return (
-    <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-border px-3">
+    <div className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-border px-3">
       <Input value={props.name} onChange={(e) => props.onNameChange(e.target.value)}
         aria-label={t('reportDesigner.reportName')} className="h-8 max-w-xs text-sm font-medium" />
 
       <div className="flex items-center gap-1.5">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button size="sm" variant="outline" className="gap-1">
-              <Plus className="h-4 w-4" /> {t('reportDesigner.insert')} <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            {ELEMENT_KINDS.map((kind) => {
-              const Icon = KIND_ICON[kind];
-              return (
-                <DropdownMenuItem key={kind} onSelect={() => props.onInsert(kind)}>
-                  <Icon className="mr-2 h-4 w-4" /> {t(`reportDesigner.element.${kind}`)}
-                </DropdownMenuItem>
-              );
-            })}
-          </DropdownMenuContent>
-        </DropdownMenu>
-
         <div className="flex items-center rounded-md border border-border">
           <button onClick={props.onZoomOut} aria-label={t('reportDesigner.zoomOut')}
             className="rounded-l-md p-1 text-muted-foreground hover:bg-accent">
@@ -66,10 +50,6 @@ export function CanvasHeader(props: Props): JSX.Element {
           </button>
         </div>
 
-        <Button size="sm" variant="outline" className="gap-1" onClick={props.onPreview}>
-          <Eye className="h-4 w-4" /> {t('reportDesigner.preview')}
-        </Button>
-
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button size="icon" variant="outline" aria-label={t('reportDesigner.moreActions')}>
@@ -77,9 +57,31 @@ export function CanvasHeader(props: Props): JSX.Element {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={props.onNewTemplate}><FilePlus className="mr-2 h-4 w-4" /> {t('reportDesigner.newTemplate')}</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger><span className="flex items-center"><Plus className="mr-2 h-4 w-4" /> {t('reportDesigner.insert')}</span></DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                {ELEMENT_KINDS.map((kind) => {
+                  const Icon = KIND_ICON[kind];
+                  return (
+                    <DropdownMenuItem key={kind} onSelect={() => props.onInsert(kind)}>
+                      <Icon className="mr-2 h-4 w-4" /> {t(`reportDesigner.element.${kind}`)}
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={props.onPreview}><Eye className="mr-2 h-4 w-4" /> {t('reportDesigner.preview')}</DropdownMenuItem>
             <DropdownMenuItem onSelect={props.onSave}><Save className="mr-2 h-4 w-4" /> {t('reportDesigner.save')}</DropdownMenuItem>
-            <DropdownMenuItem onSelect={props.onExportPdf}><FileText className="mr-2 h-4 w-4" /> {t('reportDesigner.exportPdf')}</DropdownMenuItem>
-            <DropdownMenuItem onSelect={props.onExportExcel}><FileSpreadsheet className="mr-2 h-4 w-4" /> {t('reportDesigner.exportExcel')}</DropdownMenuItem>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger><span className="flex items-center"><Download className="mr-2 h-4 w-4" /> {t('reportDesigner.export')}</span></DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                <DropdownMenuItem onSelect={props.onExportPdf}><FileText className="mr-2 h-4 w-4" /> PDF</DropdownMenuItem>
+                <DropdownMenuItem onSelect={props.onExportExcel}><FileSpreadsheet className="mr-2 h-4 w-4" /> Excel</DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
             <DropdownMenuItem onSelect={props.onCheck}><ShieldCheck className="mr-2 h-4 w-4" /> {t('reportDesigner.check')}</DropdownMenuItem>
             <DropdownMenuItem onSelect={props.onDuplicate}><Copy className="mr-2 h-4 w-4" /> {t('reportDesigner.duplicate')}</DropdownMenuItem>
             <DropdownMenuSeparator />

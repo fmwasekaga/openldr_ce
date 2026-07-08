@@ -482,6 +482,7 @@ export const en = {
     preview: 'Preview',
     moreActions: 'More actions',
     save: 'Save',
+    export: 'Export',
     exportPdf: 'Export PDF',
     exportExcel: 'Export Excel',
     check: 'Check',
