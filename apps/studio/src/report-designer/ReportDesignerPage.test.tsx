@@ -96,4 +96,34 @@ describe('ReportDesignerPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /undo/i }));
     expect(within(inspector()).queryByText('2 elements selected')).not.toBeInTheDocument();
   });
+
+  it('undo reverses a committed drag', () => {
+    renderPage();
+    const inspector = () => screen.getByTestId('inspector');
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Layers' }));
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Title' }));
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Properties' }));
+    expect(within(inspector()).getByText('48')).toBeInTheDocument();
+    // drag Title to the right on the canvas → x changes
+    fireEvent.pointerDown(screen.getByTestId('el-amr-title'), { clientX: 100, clientY: 100, button: 0 });
+    fireEvent.pointerMove(window, { clientX: 190, clientY: 100 });
+    fireEvent.pointerUp(window, { clientX: 190, clientY: 100 });
+    expect(within(inspector()).queryByText('48')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /undo/i }));
+    expect(within(inspector()).getByText('48')).toBeInTheDocument();
+  });
+
+  it('arrow keys nudge the selection and coalesce into one undo step', () => {
+    renderPage();
+    const inspector = () => screen.getByTestId('inspector');
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Layers' }));
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Title' }));
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Properties' }));
+    expect(within(inspector()).getByText('48')).toBeInTheDocument();
+    fireEvent.keyDown(document.body, { key: 'ArrowRight' });
+    fireEvent.keyDown(document.body, { key: 'ArrowRight' });
+    expect(within(inspector()).getByText('50')).toBeInTheDocument(); // 48 → 50
+    fireEvent.click(screen.getByRole('button', { name: /undo/i }));
+    expect(within(inspector()).getByText('48')).toBeInTheDocument(); // single undo restores both nudges
+  });
 });
