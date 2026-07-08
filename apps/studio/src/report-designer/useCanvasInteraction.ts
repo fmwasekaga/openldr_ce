@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent, RefObject } from 'react';
-import type { DesignElement, DesignPage, Rect } from './types';
+import type { DesignPage, Rect } from './types';
 import { type Handle, type Box, clampRectToPage, clampGroupDelta, resizeRect, boundingBox, boxFromPoints, marqueeHits } from './geometry';
 import { type GuideLine, computeMoveGuides, computeResizeGuides, applyResizeSnap } from './alignmentGuides';
 
@@ -37,11 +37,14 @@ export function useCanvasInteraction(args: Args): CanvasInteraction {
 
   const dragRef = useRef<Drag | null>(null);
   const movedRef = useRef(false);
+  const detachRef = useRef<() => void>(() => {});
   const [preview, setPreview] = useState<Map<string, Rect> | null>(null);
   const previewRef = useRef<Map<string, Rect> | null>(null);
   const setPreviewBoth = (m: Map<string, Rect> | null) => { previewRef.current = m; setPreview(m); };
   const [guides, setGuides] = useState<GuideLine[]>([]);
   const [marquee, setMarquee] = useState<Box | null>(null);
+
+  useEffect(() => () => { detachRef.current(); }, []);
 
   const toModel = (clientX: number, clientY: number, zoom: number) => {
     const r = latest.current.originRef.current?.getBoundingClientRect();
@@ -49,15 +52,14 @@ export function useCanvasInteraction(args: Args): CanvasInteraction {
   };
 
   const end = () => {
-    window.removeEventListener('pointermove', onMove);
-    window.removeEventListener('pointerup', onUp);
+    detachRef.current(); detachRef.current = () => {};
     dragRef.current = null;
     setPreviewBoth(null); setGuides([]); setMarquee(null);
   };
 
   function onMove(e: PointerEvent) {
     const d = dragRef.current; if (!d) return;
-    const { page, zoom, pageSize, selectedIds } = latest.current;
+    const { page, zoom, pageSize } = latest.current;
     const dx = (e.clientX - d.sx) / zoom, dy = (e.clientY - d.sy) / zoom;
     if (Math.abs(e.clientX - d.sx) > DRAG_THRESHOLD || Math.abs(e.clientY - d.sy) > DRAG_THRESHOLD) movedRef.current = true;
     const thr = SNAP_SCREEN / zoom;
@@ -83,7 +85,6 @@ export function useCanvasInteraction(args: Args): CanvasInteraction {
       const a = toModel(d.sx, d.sy, zoom), b = toModel(e.clientX, e.clientY, zoom);
       setMarquee(boxFromPoints(a.x, a.y, b.x, b.y));
     }
-    void selectedIds;
   }
 
   function onUp(e: PointerEvent) {
@@ -107,9 +108,11 @@ export function useCanvasInteraction(args: Args): CanvasInteraction {
     dragRef.current = drag; movedRef.current = false;
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
+    detachRef.current = () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); };
   };
 
   const onElementPointerDown = (e: ReactPointerEvent, id: string) => {
+    if (e.button !== 0) return;
     e.stopPropagation();
     const { selectedIds, page, onSelect } = latest.current;
     if (e.shiftKey) {
@@ -124,6 +127,7 @@ export function useCanvasInteraction(args: Args): CanvasInteraction {
   };
 
   const onHandlePointerDown = (e: ReactPointerEvent, id: string, handle: Handle) => {
+    if (e.button !== 0) return;
     e.stopPropagation();
     const el = latest.current.page.elements.find((x) => x.id === id);
     if (!el) return;
@@ -131,6 +135,7 @@ export function useCanvasInteraction(args: Args): CanvasInteraction {
   };
 
   const onSurfacePointerDown = (e: ReactPointerEvent) => {
+    if (e.button !== 0) return;
     begin({ mode: 'marquee', sx: e.clientX, sy: e.clientY, additive: e.shiftKey });
   };
 
