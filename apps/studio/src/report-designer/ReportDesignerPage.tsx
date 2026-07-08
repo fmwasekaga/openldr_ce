@@ -106,7 +106,8 @@ export function ReportDesignerPage(): JSX.Element {
                 onZoomIn={() => zoomStep(1)} onZoomOut={() => zoomStep(-1)}
                 onPreview={noop} onSave={noop} onExportPdf={noop} onExportExcel={noop}
                 onCheck={noop} onDuplicate={noop} onDelete={noop} />
-              <PageCanvas template={template} zoom={zoom} selectedIds={selectedIds} onSelect={setSelectedIds} />
+              {/* onCommitRects is wired to real undo-tracked history in Task 7; no-op here for now. */}
+              <PageCanvas template={template} zoom={zoom} selectedIds={selectedIds} onSelect={setSelectedIds} onCommitRects={() => {}} />
             </div>
             <div className="flex w-64 shrink-0 flex-col border-l border-border" data-testid="inspector">
               <InspectorTabs template={template} selectedIds={selectedIds} onSelect={setSelectedIds} />

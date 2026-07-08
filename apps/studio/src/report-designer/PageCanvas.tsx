@@ -1,36 +1,30 @@
-import type { MouseEvent, CSSProperties } from 'react';
+import { useRef, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Image as ImageIcon } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import type { DesignElement, ReportTemplate } from './types';
+import type { DesignElement, DesignPage, Rect, ReportTemplate } from './types';
 import { paperSize } from './model';
 import { HANDLES, type Handle } from './geometry';
+import { useCanvasInteraction } from './useCanvasInteraction';
 
 interface Props {
   template: ReportTemplate;
   zoom: number;
   selectedIds: string[];
   onSelect(ids: string[]): void;
+  onCommitRects(rects: Map<string, Rect>): void;
 }
 
-export function PageCanvas({ template, zoom, selectedIds, onSelect }: Props): JSX.Element {
+export function PageCanvas({ template, zoom, selectedIds, onSelect, onCommitRects }: Props): JSX.Element {
   const { t } = useTranslation();
   const size = paperSize(template.paper, template.orientation);
-  const toggle = (id: string, additive: boolean) =>
-    onSelect(additive ? (selectedIds.includes(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id]) : [id]);
   return (
-    <div data-testid="page-canvas" onClick={() => onSelect([])}
+    <div data-testid="page-canvas"
       className="flex min-h-0 flex-1 flex-col items-center gap-6 overflow-auto bg-neutral-200 p-6 dark:bg-neutral-800">
       {template.pages.map((page, i) => (
         <div key={page.id} className="flex flex-col items-center gap-1.5">
-          <div className="relative bg-white shadow-md ring-1 ring-border" style={{ width: size.w * zoom, height: size.h * zoom }}>
-            {page.elements.map((el) => (
-              <ElementBox key={el.id} el={el} zoom={zoom}
-                selected={selectedIds.includes(el.id)}
-                showHandles={selectedIds.length === 1 && selectedIds[0] === el.id}
-                onSelect={(e) => { e.stopPropagation(); toggle(el.id, e.shiftKey); }} />
-            ))}
-          </div>
+          <PageSurface page={page} zoom={zoom} pageSize={size}
+            selectedIds={selectedIds} onSelect={onSelect} onCommitRects={onCommitRects} />
           <span className="text-[11px] text-neutral-600 dark:text-neutral-300">
             {t('reportDesigner.pageOf', { n: i + 1, total: template.pages.length })}
           </span>
@@ -40,23 +34,58 @@ export function PageCanvas({ template, zoom, selectedIds, onSelect }: Props): JS
   );
 }
 
+function PageSurface({ page, zoom, pageSize, selectedIds, onSelect, onCommitRects }: {
+  page: DesignPage; zoom: number; pageSize: { w: number; h: number };
+  selectedIds: string[]; onSelect(ids: string[]): void; onCommitRects(rects: Map<string, Rect>): void;
+}): JSX.Element {
+  const ref = useRef<HTMLDivElement>(null);
+  const ix = useCanvasInteraction({ page, zoom, pageSize, selectedIds, originRef: ref, onSelect, onCommitRects });
+  return (
+    <div ref={ref} data-testid={`page-surface-${page.id}`} onPointerDown={ix.onSurfacePointerDown}
+      className="relative bg-white shadow-md ring-1 ring-border" style={{ width: pageSize.w * zoom, height: pageSize.h * zoom }}>
+      {page.elements.map((el) => {
+        const rect = ix.preview?.get(el.id) ?? el.rect;
+        return (
+          <ElementBox key={el.id} el={el} rect={rect} zoom={zoom}
+            selected={selectedIds.includes(el.id)}
+            showHandles={selectedIds.length === 1 && selectedIds[0] === el.id}
+            onPointerDown={(e) => ix.onElementPointerDown(e, el.id)}
+            onHandlePointerDown={(e, h) => ix.onHandlePointerDown(e, el.id, h)} />
+        );
+      })}
+      {ix.guides.map((g, idx) => (
+        <span key={idx} aria-hidden style={g.axis === 'x'
+          ? { position: 'absolute', left: g.pos * zoom, top: g.from * zoom, height: (g.to - g.from) * zoom, width: 1, background: '#e0369a' }
+          : { position: 'absolute', top: g.pos * zoom, left: g.from * zoom, width: (g.to - g.from) * zoom, height: 1, background: '#e0369a' }} />
+      ))}
+      {ix.marquee && (
+        <span aria-hidden className="absolute border border-dashed border-primary bg-primary/10"
+          style={{ left: ix.marquee.x * zoom, top: ix.marquee.y * zoom, width: ix.marquee.w * zoom, height: ix.marquee.h * zoom }} />
+      )}
+    </div>
+  );
+}
+
 const HANDLE_CLASS: Record<Handle, string> = {
-  nw: '-left-1 -top-1', n: 'left-1/2 -top-1 -translate-x-1/2', ne: '-right-1 -top-1',
-  e: '-right-1 top-1/2 -translate-y-1/2', se: '-right-1 -bottom-1', s: 'left-1/2 -bottom-1 -translate-x-1/2',
-  sw: '-left-1 -bottom-1', w: '-left-1 top-1/2 -translate-y-1/2',
+  nw: '-left-1 -top-1 cursor-nwse-resize', n: 'left-1/2 -top-1 -translate-x-1/2 cursor-ns-resize',
+  ne: '-right-1 -top-1 cursor-nesw-resize', e: '-right-1 top-1/2 -translate-y-1/2 cursor-ew-resize',
+  se: '-right-1 -bottom-1 cursor-nwse-resize', s: 'left-1/2 -bottom-1 -translate-x-1/2 cursor-ns-resize',
+  sw: '-left-1 -bottom-1 cursor-nesw-resize', w: '-left-1 top-1/2 -translate-y-1/2 cursor-ew-resize',
 };
 
-function ElementBox({ el, zoom, selected, showHandles, onSelect }: {
-  el: DesignElement; zoom: number; selected: boolean; showHandles: boolean; onSelect(e: MouseEvent): void;
+function ElementBox({ el, rect, zoom, selected, showHandles, onPointerDown, onHandlePointerDown }: {
+  el: DesignElement; rect: Rect; zoom: number; selected: boolean; showHandles: boolean;
+  onPointerDown(e: ReactPointerEvent): void; onHandlePointerDown(e: ReactPointerEvent, h: Handle): void;
 }): JSX.Element {
-  const style: CSSProperties = { left: el.rect.x * zoom, top: el.rect.y * zoom, width: el.rect.w * zoom, height: el.rect.h * zoom };
+  const style: CSSProperties = { left: rect.x * zoom, top: rect.y * zoom, width: rect.w * zoom, height: rect.h * zoom };
   return (
-    <div role="button" tabIndex={0} aria-label={el.name} onClick={onSelect} data-testid={`el-${el.id}`}
-      className={cn('absolute cursor-pointer', selected && 'outline outline-2 outline-offset-2 outline-primary')}
+    <div role="button" tabIndex={0} aria-label={el.name} data-testid={`el-${el.id}`} onPointerDown={onPointerDown}
+      className={cn('absolute cursor-move touch-none', selected && 'outline outline-2 outline-offset-2 outline-primary')}
       style={style}>
       <ElementContent el={el} />
       {showHandles && HANDLES.map((h) => (
-        <span key={h} data-testid={`handle-${h}`} className={cn('absolute h-2 w-2 border border-primary bg-white', HANDLE_CLASS[h])} />
+        <span key={h} data-testid={`handle-${h}`} onPointerDown={(e) => onHandlePointerDown(e, h)}
+          className={cn('absolute h-2 w-2 border border-primary bg-white touch-none', HANDLE_CLASS[h])} />
       ))}
     </div>
   );
