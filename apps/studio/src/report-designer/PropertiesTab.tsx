@@ -57,10 +57,10 @@ function KindControls({ el, onPatch }: {
         <div className="flex items-end gap-2">
           <NumberField label={t('reportDesigner.fontSize')} value={s.fontSize ?? 11} onChange={(n) => style({ fontSize: n })} min={4} />
           <Button type="button" variant={s.bold ? 'default' : 'outline'} size="icon" className="h-8 w-8 font-bold"
-            aria-label={t('reportDesigner.bold')} onClick={() => style({ bold: !s.bold }, true)}>B</Button>
+            aria-label={t('reportDesigner.bold')} aria-pressed={!!s.bold} onClick={() => style({ bold: !s.bold }, true)}>B</Button>
           <div className="flex h-8 rounded-md border border-border">
             {aligns.map(({ v, icon: Icon, label }) => (
-              <button key={v} type="button" aria-label={label} onClick={() => style({ align: v }, true)}
+              <button key={v} type="button" aria-label={label} aria-pressed={(s.align ?? 'left') === v} onClick={() => style({ align: v }, true)}
                 className={cn('flex w-8 items-center justify-center', (s.align ?? 'left') === v ? 'text-foreground' : 'text-muted-foreground')}>
                 <Icon className="h-4 w-4" />
               </button>
@@ -121,7 +121,7 @@ function KindControls({ el, onPatch }: {
               <div key={i} className="flex items-center gap-1">
                 <Input aria-label={`Column ${i + 1}`} value={c} onChange={(e) => setCols(cols.map((x, j) => (j === i ? e.target.value : x)))} className="h-7 text-xs" />
                 <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0"
-                  aria-label={t('reportDesigner.removeColumn')} onClick={() => setCols(cols.filter((_, j) => j !== i), true)}>
+                  aria-label={`${t('reportDesigner.removeColumn')} ${i + 1}`} onClick={() => setCols(cols.filter((_, j) => j !== i), true)}>
                   <X className="h-3.5 w-3.5" />
                 </Button>
               </div>

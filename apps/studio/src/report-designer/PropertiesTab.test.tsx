@@ -2,12 +2,17 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { PropertiesTab } from './PropertiesTab';
 import { MOCK_TEMPLATES } from './mockTemplates';
+import type { DesignElement, ReportTemplate } from './types';
 
 const tpl = MOCK_TEMPLATES[0];
 function setup(overrides = {}) {
   const props = { template: tpl, selectedIds: [] as string[], onPatchElement: vi.fn(), onPatchPage: vi.fn(), ...overrides };
   render(<PropertiesTab {...props} />);
   return props;
+}
+
+function tplWithEl(el: DesignElement): ReportTemplate {
+  return { id: 't', name: 't', paper: 'A4', orientation: 'portrait', parameters: [], pages: [{ id: 'p1', elements: [el] }] };
 }
 
 describe('PropertiesTab editing', () => {
@@ -48,5 +53,29 @@ describe('PropertiesTab editing', () => {
     const props = setup({ selectedIds: ['amr-table'] });
     fireEvent.click(screen.getByRole('button', { name: /add column/i }));
     expect(props.onPatchElement).toHaveBeenCalledWith('amr-table', expect.objectContaining({ columns: expect.any(Array) }), { discrete: true });
+  });
+
+  it('edits line stroke width (coalesced)', () => {
+    const onPatchElement = vi.fn();
+    render(<PropertiesTab template={tplWithEl({ id: 'ln', kind: 'line', name: 'Line', rect: { x: 0, y: 0, w: 100, h: 2 } })}
+      selectedIds={['ln']} onPatchElement={onPatchElement} onPatchPage={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('Stroke width'), { target: { value: '3' } });
+    expect(onPatchElement).toHaveBeenCalledWith('ln', { style: { strokeWidth: 3 } }, undefined);
+  });
+
+  it('edits rect fill color (discrete)', () => {
+    const onPatchElement = vi.fn();
+    render(<PropertiesTab template={tplWithEl({ id: 'rc', kind: 'rect', name: 'Rect', rect: { x: 0, y: 0, w: 100, h: 100 } })}
+      selectedIds={['rc']} onPatchElement={onPatchElement} onPatchPage={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('Fill hex'), { target: { value: '#123456' } });
+    expect(onPatchElement).toHaveBeenCalledWith('rc', { style: { fill: '#123456' } }, { discrete: true });
+  });
+
+  it('edits image source (coalesced)', () => {
+    const onPatchElement = vi.fn();
+    render(<PropertiesTab template={tplWithEl({ id: 'im', kind: 'image', name: 'Image', rect: { x: 0, y: 0, w: 100, h: 100 } })}
+      selectedIds={['im']} onPatchElement={onPatchElement} onPatchPage={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('Source'), { target: { value: 'http://x/y.png' } });
+    expect(onPatchElement).toHaveBeenCalledWith('im', { src: 'http://x/y.png' }, undefined);
   });
 });
