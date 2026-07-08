@@ -117,3 +117,36 @@ describe('DataTab table binding', () => {
     expect(screen.getByText(/no columns loaded/i)).toBeInTheDocument();
   });
 });
+
+describe('DataTab design parameters', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('adds and edits a design parameter (text + daterange)', () => {
+    const onPatchParameters = vi.fn();
+    render(<DataTab element={undefined} parameters={[]} onPatchElement={vi.fn()} onPatchParameters={onPatchParameters} />);
+    fireEvent.click(screen.getByText(/add parameter/i));
+    expect(onPatchParameters).toHaveBeenCalledWith([expect.objectContaining({ key: expect.any(String), type: 'text' })]);
+  });
+
+  it('renders from/to inputs for a daterange param and patches its value', () => {
+    const onPatchParameters = vi.fn();
+    const params = [{ key: 'range', label: 'Range', type: 'daterange' as const, value: { from: '', to: '' } }];
+    render(<DataTab element={undefined} parameters={params} onPatchElement={vi.fn()} onPatchParameters={onPatchParameters} />);
+    const from = screen.getByLabelText(/from/i);
+    fireEvent.change(from, { target: { value: '2026-01-01' } });
+    fireEvent.blur(from);
+    expect(onPatchParameters).toHaveBeenCalledWith([expect.objectContaining({ value: { from: '2026-01-01', to: '' } })]);
+  });
+
+  it('commits a text param value on blur and removes a param', () => {
+    const onPatchParameters = vi.fn();
+    const params = [{ key: 'facility', label: 'Facility', type: 'text' as const, value: '' }];
+    render(<DataTab element={undefined} parameters={params} onPatchElement={vi.fn()} onPatchParameters={onPatchParameters} />);
+    const val = screen.getByLabelText('Value for facility');
+    fireEvent.change(val, { target: { value: 'Ndola' } });
+    fireEvent.blur(val);
+    expect(onPatchParameters).toHaveBeenCalledWith([expect.objectContaining({ value: 'Ndola' })]);
+    fireEvent.click(screen.getByLabelText('Remove parameter facility'));
+    expect(onPatchParameters).toHaveBeenLastCalledWith([]);
+  });
+});
