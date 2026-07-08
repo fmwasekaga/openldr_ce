@@ -1,4 +1,4 @@
-import type { DesignElement, ReportDesign } from '../schema';
+import type { DesignElement, DesignPage, ReportDesign } from '../schema';
 import { toPt, PX_TO_PT } from './units';
 import type { ResolvedTable } from './index';
 
@@ -8,6 +8,9 @@ type Box = { x: number; y: number; w: number; h: number };
 const TEXT_COLOR = '#262626';
 const LINE_COLOR = '#a3a3a3';
 const RECT_BORDER = '#d4d4d4';
+export const ROW_H = 16; // pt
+/** Body rows that fit in a box of height `hPt` (pt), reserving one row for the header. */
+const maxRowsFor = (hPt: number): number => Math.floor((hPt - ROW_H) / ROW_H);
 
 export function paramMap(design: ReportDesign, now: Date): Map<string, string> {
   const m = new Map<string, string>();
@@ -25,8 +28,33 @@ export function interpolate(input: string, tokens: Map<string, string>): string 
     .replace(/\{\{\s*date\s*\}\}/g, tokens.get('date') ?? '');
 }
 
+/** The projected body rows for a table element (bound → project columns from resolved.rows; static → el.rows; error/unresolved → []). */
+export function rowsFor(el: DesignElement, resolved: ResolvedTable | undefined): string[][] {
+  if (el.kind !== 'table') return [];
+  if (el.dataSource) {
+    if (!resolved || 'error' in resolved) return [];
+    const cols = el.boundColumns && el.boundColumns.length ? el.boundColumns : resolved.columns;
+    return resolved.rows.map((row) => cols.map((c) => String(row[c.key] ?? '')));
+  }
+  return el.rows ?? [];
+}
+
+/** How many physical pages this one table needs (repeat-page model). 1 for non-tables/errors/degenerate boxes. */
+export function tableChunkCount(el: DesignElement, resolved: ResolvedTable | undefined): number {
+  if (el.kind !== 'table') return 1;
+  const maxRows = maxRowsFor(toPt(el.rect).h);
+  if (maxRows < 1) return 1;
+  const rowCount = rowsFor(el, resolved).length;
+  return Math.max(1, Math.ceil(rowCount / maxRows));
+}
+
+/** Physical pages needed for a design page = the largest table's chunk count (min 1). */
+export function pageChunkCount(page: DesignPage, resolved: Map<string, ResolvedTable>): number {
+  return Math.max(1, ...page.elements.map((el) => tableChunkCount(el, resolved.get(el.id))));
+}
+
 export function drawElement(
-  doc: Doc, el: DesignElement, tokens: Map<string, string>, resolved: ResolvedTable | undefined,
+  doc: Doc, el: DesignElement, tokens: Map<string, string>, resolved: ResolvedTable | undefined, chunk = 0,
 ): void {
   const r = toPt(el.rect);
   const s = el.style ?? {};
@@ -59,7 +87,7 @@ export function drawElement(
       return;
     }
     case 'table': {
-      drawTable(doc, el, r, resolved);
+      drawTable(doc, el, r, resolved, chunk);
       return;
     }
   }
@@ -75,32 +103,34 @@ function drawText(doc: Doc, str: string, r: Box, s: DesignElement['style']): voi
   doc.restore();
 }
 
-function drawTable(doc: Doc, el: DesignElement, r: Box, resolved: ResolvedTable | undefined): void {
-  if (!el.dataSource || !resolved) { drawStaticTable(doc, el, r); return; }
-  if ('error' in resolved) { drawErrorPlaceholder(doc, r, resolved.error); return; }
-  const cols = (el.boundColumns && el.boundColumns.length ? el.boundColumns : resolved.columns);
-  const headers = cols.map((c) => c.label);
-  const body = resolved.rows.map((row) => cols.map((c) => String(row[c.key] ?? '')));
-  drawGrid(doc, r, headers, body);
+function drawTable(doc: Doc, el: DesignElement, r: Box, resolved: ResolvedTable | undefined, chunk: number): void {
+  if (el.dataSource && resolved && 'error' in resolved) { drawErrorPlaceholder(doc, r, resolved.error); return; }
+  const headers = tableHeaders(el, resolved);
+  const allRows = rowsFor(el, resolved);
+  drawGrid(doc, r, headers, allRows, chunk);
 }
 
-function drawStaticTable(doc: Doc, el: DesignElement, r: Box): void {
-  drawGrid(doc, r, el.columns ?? [], el.rows ?? []);
+function tableHeaders(el: DesignElement, resolved: ResolvedTable | undefined): string[] {
+  if (!el.dataSource) return el.columns ?? [];
+  const cols = el.boundColumns && el.boundColumns.length
+    ? el.boundColumns
+    : (resolved && !('error' in resolved) ? resolved.columns : []);
+  return cols.map((c) => c.label);
 }
 
-function drawGrid(doc: Doc, r: Box, headers: string[], rows: string[][]): void {
+function drawGrid(doc: Doc, r: Box, headers: string[], allRows: string[][], chunk: number): void {
   const n = Math.max(headers.length, 1);
   const colW = r.w / n;
-  const rowH = 16; // pt
+  const maxRows = maxRowsFor(r.h);
+  const rows = maxRows >= 1 ? allRows.slice(chunk * maxRows, chunk * maxRows + maxRows) : [];
   doc.save().rect(r.x, r.y, r.w, r.h).clip();
-  doc.rect(r.x, r.y, r.w, rowH).fill('#f5f5f5');
+  doc.rect(r.x, r.y, r.w, ROW_H).fill('#f5f5f5');
   doc.font('Helvetica-Bold').fontSize(8).fillColor('#262626');
   headers.forEach((h, i) => doc.text(h, r.x + i * colW + 3, r.y + 4, { width: colW - 6, ellipsis: true }));
   doc.font('Helvetica').fontSize(8).fillColor('#404040');
-  const maxRows = Math.max(0, Math.floor((r.h - rowH) / rowH));
-  rows.slice(0, maxRows).forEach((row, ri) => {
-    const y = r.y + rowH + ri * rowH;
-    if (ri % 2 === 1) doc.rect(r.x, y, r.w, rowH).fill('#fafafa').fillColor('#404040');
+  rows.forEach((row, ri) => {
+    const y = r.y + ROW_H + ri * ROW_H;
+    if (ri % 2 === 1) doc.rect(r.x, y, r.w, ROW_H).fill('#fafafa').fillColor('#404040');
     row.forEach((cell, ci) => doc.text(cell, r.x + ci * colW + 3, y + 4, { width: colW - 6, ellipsis: true }));
   });
   doc.restore();
