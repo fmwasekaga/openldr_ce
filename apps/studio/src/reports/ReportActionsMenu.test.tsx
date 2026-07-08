@@ -6,7 +6,7 @@ import { ReportActionsMenu } from './ReportActionsMenu';
 function openMenu() {
   const trigger = screen.getByRole('button', { name: /actions|more/i });
   fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
-  fireEvent.keyDown(trigger, { key: 'Enter' });
+  if (!document.querySelector('[role="menu"]')) fireEvent.keyDown(trigger, { key: 'Enter' });
 }
 
 describe('ReportActionsMenu', () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { newElement, addElement, reportsOnPage, paperSize, findElement } from './model';
+import { newElement, addElement, reportsOnPage, paperSize, findElement, allElements, updateElementRects, removeElements } from './model';
 import { MOCK_TEMPLATES } from './mockTemplates';
 import type { ReportTemplate } from './types';
 
@@ -49,5 +49,26 @@ describe('report-designer model', () => {
   it('MOCK_TEMPLATES seeds at least three templates', () => {
     expect(MOCK_TEMPLATES.length).toBeGreaterThanOrEqual(3);
     expect(MOCK_TEMPLATES[0].pages.length).toBeGreaterThan(0);
+  });
+
+  it('allElements flattens across pages', () => {
+    expect(allElements(MOCK_TEMPLATES[0]).length).toBe(
+      MOCK_TEMPLATES[0].pages.reduce((n, p) => n + p.elements.length, 0),
+    );
+  });
+
+  it('updateElementRects replaces only the given rects, immutably', () => {
+    const tpl = MOCK_TEMPLATES[0];
+    const id = tpl.pages[0].elements[0].id;
+    const next = updateElementRects(tpl, new Map([[id, { x: 1, y: 2, w: 3, h: 4 }]]));
+    expect(next.pages[0].elements[0].rect).toEqual({ x: 1, y: 2, w: 3, h: 4 });
+    expect(tpl.pages[0].elements[0].rect).not.toEqual({ x: 1, y: 2, w: 3, h: 4 });
+  });
+
+  it('removeElements drops the given ids', () => {
+    const tpl = MOCK_TEMPLATES[0];
+    const id = tpl.pages[0].elements[0].id;
+    const next = removeElements(tpl, new Set([id]));
+    expect(allElements(next).some((e) => e.id === id)).toBe(false);
   });
 });

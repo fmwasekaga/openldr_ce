@@ -496,6 +496,7 @@ export const pt: EnShape = {
     boundReport: 'Relatório associado',
     columns: 'Colunas',
     noElements: 'Ainda não há elementos.',
+    selectedCount: '{{count}} elementos selecionados',
     reportsInTemplate: 'Relatórios deste modelo',
     noReports: 'Nenhum relatório associado neste modelo.',
     parameters: 'Parâmetros',

@@ -58,7 +58,7 @@ describe('Reports page', () => {
     fireEvent.click(await screen.findByText('AMR Resistance Rate'));
     const trigger = screen.getByRole('button', { name: /actions|more/i });
     fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
-    fireEvent.keyDown(trigger, { key: 'Enter' });
+    if (!document.querySelector('[role="menu"]')) fireEvent.keyDown(trigger, { key: 'Enter' });
     fireEvent.click(await screen.findByText(/schedules|planifications|agendamentos/i));
     expect(await screen.findByText('schedules-drawer')).toBeInTheDocument();
   });

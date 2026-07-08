@@ -500,6 +500,7 @@ export const en = {
     boundReport: 'Bound report',
     columns: 'Columns',
     noElements: 'No elements yet.',
+    selectedCount: '{{count}} elements selected',
     reportsInTemplate: 'Reports in this template',
     noReports: 'No reports bound in this template.',
     parameters: 'Parameters',

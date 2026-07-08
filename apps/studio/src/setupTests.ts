@@ -40,3 +40,22 @@ if (typeof Element !== 'undefined') {
   if (!Element.prototype.releasePointerCapture) Element.prototype.releasePointerCapture = () => {};
   if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {};
 }
+
+// jsdom has no PointerEvent constructor; @testing-library/dom's fireEvent.pointer*
+// falls back to a bare Event (dropping clientX/clientY/button) without this, which
+// silently breaks the report-designer canvas's pointer-based interaction tests.
+if (typeof globalThis.PointerEvent === 'undefined') {
+  class PointerEventPolyfill extends MouseEvent {
+    public pointerId: number;
+    public pointerType: string;
+    public isPrimary: boolean;
+    constructor(type: string, params: PointerEventInit = {}) {
+      super(type, params);
+      this.pointerId = params.pointerId ?? 0;
+      this.pointerType = params.pointerType ?? 'mouse';
+      this.isPrimary = params.isPrimary ?? true;
+    }
+  }
+  // @ts-expect-error -- test-only polyfill; jsdom lacks a native PointerEvent
+  globalThis.PointerEvent = PointerEventPolyfill;
+}

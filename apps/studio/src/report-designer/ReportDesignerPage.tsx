@@ -8,8 +8,9 @@ import { CanvasHeader } from './CanvasHeader';
 import { PageCanvas } from './PageCanvas';
 import { InspectorTabs } from './InspectorTabs';
 import { MOCK_TEMPLATES } from './mockTemplates';
-import { addElement, newElement } from './model';
-import type { ElementKind, ReportTemplate } from './types';
+import { addElement, allElements, newElement, paperSize, removeElements, updateElementRects } from './model';
+import { clampRectToPage } from './geometry';
+import type { ElementKind, Rect, ReportTemplate } from './types';
 
 const ZOOMS = [0.5, 0.75, 1, 1.25];
 
@@ -19,7 +20,7 @@ export function ReportDesignerPage(): JSX.Element {
   const { t } = useTranslation();
   const [templates, setTemplates] = useState<ReportTemplate[]>(MOCK_TEMPLATES);
   const [selectedId, setSelectedId] = useState<string | null>(MOCK_TEMPLATES[0]?.id ?? null);
-  const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [zoom, setZoom] = useState(0.75);
   const [collapsed, setCollapsed] = useState(false);
 
@@ -38,6 +39,20 @@ export function ReportDesignerPage(): JSX.Element {
   const undo = () => applyHistory(history.undo());
   const redo = () => applyHistory(history.redo());
 
+  const commitRects = (rects: Map<string, Rect>) => { if (template) pushTemplate(updateElementRects(template, rects)); };
+  const deleteSelected = () => {
+    if (!template || selectedIds.length === 0) return;
+    pushTemplate(removeElements(template, new Set(selectedIds)));
+    setSelectedIds([]);
+  };
+  const nudge = (dx: number, dy: number) => {
+    if (!template || selectedIds.length === 0) return;
+    const size = paperSize(template.paper, template.orientation);
+    const rects = new Map<string, Rect>();
+    for (const el of allElements(template)) if (selectedIds.includes(el.id)) rects.set(el.id, clampRectToPage({ ...el.rect, x: el.rect.x + dx, y: el.rect.y + dy }, size));
+    updateTemplate(updateElementRects(template, rects)); // coalesced
+  };
+
   const zoomStep = (dir: 1 | -1) => {
     const idx = ZOOMS.indexOf(zoom);
     const base = idx < 0 ? 1 : idx;
@@ -48,7 +63,7 @@ export function ReportDesignerPage(): JSX.Element {
     if (!template) return;
     const el = newElement(kind);
     pushTemplate(addElement(template, 0, el));
-    setSelectedElementId(el.id);
+    setSelectedIds([el.id]);
   };
 
   const newTemplate = () => {
@@ -59,21 +74,39 @@ export function ReportDesignerPage(): JSX.Element {
     };
     setTemplates((ts) => [tpl, ...ts]);
     setSelectedId(id);
-    setSelectedElementId(null);
+    setSelectedIds([]);
   };
 
-  // Keyboard: Ctrl/Cmd+Z = undo, Ctrl/Cmd+Shift+Z (or Ctrl+Y) = redo. Ignore while typing in a field.
+  // Keyboard: undo/redo, select-all, Esc clear, Delete/Backspace remove, arrows nudge (Shift = 10px).
+  // Ignore while typing in a field.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return;
-      if (!(e.metaKey || e.ctrlKey)) return;
-      const key = e.key.toLowerCase();
-      if (key === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
-      else if (key === 'y') { e.preventDefault(); redo(); }
+      // Bail while a Radix menu handles keys itself (arrow-navigation/Esc) or lives in a [role="menu"].
+      if (e.defaultPrevented || (el && el.closest('[role="menu"]'))) return;
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
+      if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
+      if (mod && e.key.toLowerCase() === 'a') { e.preventDefault(); if (template) setSelectedIds(allElements(template).map((x) => x.id)); return; }
+      if (e.key === 'Escape') { setSelectedIds([]); return; }
+      if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelected(); return; }
+      const step = e.shiftKey ? 10 : 1;
+      if (e.key === 'ArrowLeft') { e.preventDefault(); nudge(-step, 0); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); nudge(step, 0); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); nudge(0, -step); }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); nudge(0, step); }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [template, selectedIds]);
+
+  // Reconcile selection after undo/redo/delete: drop ids that no longer exist in the template.
+  useEffect(() => {
+    if (!template) return;
+    const present = new Set(allElements(template).map((e) => e.id));
+    setSelectedIds((ids) => { const kept = ids.filter((id) => present.has(id)); return kept.length === ids.length ? ids : kept; });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [template]);
 
@@ -90,7 +123,7 @@ export function ReportDesignerPage(): JSX.Element {
         ) : (
           <div className="flex w-60 shrink-0 flex-col border-r border-border" data-testid="templates-explorer">
             <TemplatesExplorer templates={templates} selectedId={selectedId}
-              onSelect={(id) => { setSelectedId(id); setSelectedElementId(null); }}
+              onSelect={(id) => { setSelectedId(id); setSelectedIds([]); }}
               onCollapse={() => setCollapsed(true)} />
           </div>
         )}
@@ -106,11 +139,10 @@ export function ReportDesignerPage(): JSX.Element {
                 onZoomIn={() => zoomStep(1)} onZoomOut={() => zoomStep(-1)}
                 onPreview={noop} onSave={noop} onExportPdf={noop} onExportExcel={noop}
                 onCheck={noop} onDuplicate={noop} onDelete={noop} />
-              <PageCanvas template={template} zoom={zoom}
-                selectedElementId={selectedElementId} onSelectElement={setSelectedElementId} />
+              <PageCanvas template={template} zoom={zoom} selectedIds={selectedIds} onSelect={setSelectedIds} onCommitRects={commitRects} />
             </div>
             <div className="flex w-64 shrink-0 flex-col border-l border-border" data-testid="inspector">
-              <InspectorTabs template={template} selectedElementId={selectedElementId} onSelectElement={setSelectedElementId} />
+              <InspectorTabs template={template} selectedIds={selectedIds} onSelect={setSelectedIds} />
             </div>
           </>
         ) : (

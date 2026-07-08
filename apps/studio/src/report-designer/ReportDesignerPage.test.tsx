@@ -59,4 +59,71 @@ describe('ReportDesignerPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /undo/i }));
     expect(within(screen.getByTestId('inspector')).queryByRole('button', { name: /^Text$/ })).not.toBeInTheDocument();
   });
+
+  it('deletes the selected element with the Delete key', async () => {
+    renderPage();
+    // insert a Text element (kebab → Insert → Text), which becomes selected
+    const kebab = screen.getByRole('button', { name: /more actions/i });
+    fireEvent.pointerDown(kebab, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menuitem', { name: 'Insert' })) fireEvent.keyDown(kebab, { key: 'Enter' });
+    const insertSub = await screen.findByRole('menuitem', { name: 'Insert' });
+    insertSub.focus();
+    fireEvent.keyDown(insertSub, { key: 'ArrowRight' });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Text' }));
+    fireEvent.click(within(screen.getByTestId('inspector')).getByRole('button', { name: 'Layers' }));
+    expect(within(screen.getByTestId('inspector')).getByRole('button', { name: /^Text$/ })).toBeInTheDocument();
+    fireEvent.keyDown(document.body, { key: 'Delete' });
+    expect(within(screen.getByTestId('inspector')).queryByRole('button', { name: /^Text$/ })).not.toBeInTheDocument();
+  });
+
+  it('reconciles the selection after undo removes a selected element', async () => {
+    renderPage();
+    const inspector = () => screen.getByTestId('inspector');
+    // insert a Text element (auto-selected)
+    const kebab = screen.getByRole('button', { name: /more actions/i });
+    fireEvent.pointerDown(kebab, { button: 0, pointerType: 'mouse' });
+    if (!screen.queryByRole('menuitem', { name: 'Insert' })) fireEvent.keyDown(kebab, { key: 'Enter' });
+    const insertSub = await screen.findByRole('menuitem', { name: 'Insert' });
+    insertSub.focus();
+    fireEvent.keyDown(insertSub, { key: 'ArrowRight' });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Text' }));
+    // extend the selection to also include the seeded 'Title' element (now 2 selected)
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Layers' }));
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Title' }), { shiftKey: true });
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Properties' }));
+    expect(within(inspector()).getByText('2 elements selected')).toBeInTheDocument();
+    // undo the insert → the Text element is gone; reconcile must drop its stale id (→ 1 left)
+    fireEvent.click(screen.getByRole('button', { name: /undo/i }));
+    expect(within(inspector()).queryByText('2 elements selected')).not.toBeInTheDocument();
+  });
+
+  it('undo reverses a committed drag', () => {
+    renderPage();
+    const inspector = () => screen.getByTestId('inspector');
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Layers' }));
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Title' }));
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Properties' }));
+    expect(within(inspector()).getByText('48')).toBeInTheDocument();
+    // drag Title to the right on the canvas → x changes
+    fireEvent.pointerDown(screen.getByTestId('el-amr-title'), { clientX: 100, clientY: 100, button: 0 });
+    fireEvent.pointerMove(window, { clientX: 190, clientY: 100 });
+    fireEvent.pointerUp(window, { clientX: 190, clientY: 100 });
+    expect(within(inspector()).queryByText('48')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /undo/i }));
+    expect(within(inspector()).getByText('48')).toBeInTheDocument();
+  });
+
+  it('arrow keys nudge the selection and coalesce into one undo step', () => {
+    renderPage();
+    const inspector = () => screen.getByTestId('inspector');
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Layers' }));
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Title' }));
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Properties' }));
+    expect(within(inspector()).getByText('48')).toBeInTheDocument();
+    fireEvent.keyDown(document.body, { key: 'ArrowRight' });
+    fireEvent.keyDown(document.body, { key: 'ArrowRight' });
+    expect(within(inspector()).getByText('50')).toBeInTheDocument(); // 48 → 50
+    fireEvent.click(screen.getByRole('button', { name: /undo/i }));
+    expect(within(inspector()).getByText('48')).toBeInTheDocument(); // single undo restores both nudges
+  });
 });
