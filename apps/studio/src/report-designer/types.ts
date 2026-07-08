@@ -1,0 +1,33 @@
+export type ElementKind = 'text' | 'table' | 'image' | 'line' | 'rect' | 'datetime';
+export type Paper = 'A4' | 'Letter';
+export type Orientation = 'portrait' | 'landscape';
+
+export interface Rect { x: number; y: number; w: number; h: number; }
+
+export interface DesignElement {
+  id: string;
+  kind: ElementKind;
+  name: string;
+  rect: Rect;
+  /** text/datetime content */
+  text?: string;
+  /** table column headers */
+  columns?: string[];
+  /** table sample rows (looks-only) */
+  rows?: string[][];
+  /** table binding label, e.g. "AMR resistance" */
+  boundReport?: string;
+}
+
+export interface DesignPage { id: string; elements: DesignElement[]; }
+
+export interface TemplateParam { key: string; label: string; value: string; }
+
+export interface ReportTemplate {
+  id: string;
+  name: string;
+  paper: Paper;
+  orientation: Orientation;
+  pages: DesignPage[];
+  parameters: TemplateParam[];
+}
