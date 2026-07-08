@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { newElement, addElement, reportsOnPage, paperSize, findElement, allElements, updateElementRects, removeElements, updateElement } from './model';
+import { newElement, addElement, reportsOnPage, paperSize, findElement, allElements, updateElementRects, removeElements, updateElement, updateElements } from './model';
 import { MOCK_TEMPLATES } from './mockTemplates';
 import type { ReportTemplate } from './types';
 
@@ -87,5 +87,14 @@ describe('report-designer model', () => {
     const b = updateElement(a, id, { style: { fontSize: 18 } });
     const el = b.pages[0].elements.find((e) => e.id === id)!;
     expect(el.style).toEqual({ bold: true, fontSize: 18 });
+  });
+
+  it('updateElements fans a patch across ids, shallow-merging style', () => {
+    const tpl = MOCK_TEMPLATES[0];
+    const ids = [tpl.pages[0].elements[0].id, tpl.pages[0].elements[1].id];
+    const next = updateElements(tpl, ids, { style: { bold: true } });
+    expect(next.pages[0].elements[0].style).toEqual({ bold: true });
+    expect(next.pages[0].elements[1].style).toEqual({ bold: true });
+    expect(tpl.pages[0].elements[0].style).toBeUndefined();
   });
 });

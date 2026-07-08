@@ -88,3 +88,20 @@ export function updateElement(tpl: ReportTemplate, id: string, patch: Partial<De
     })),
   };
 }
+
+export function updateElements(tpl: ReportTemplate, ids: string[], patch: Partial<DesignElement>): ReportTemplate {
+  if (ids.length === 0) return tpl;
+  const set = new Set(ids);
+  return {
+    ...tpl,
+    pages: tpl.pages.map((p) => ({
+      ...p,
+      elements: p.elements.map((e) => {
+        if (!set.has(e.id)) return e;
+        const merged: DesignElement = { ...e, ...patch };
+        if (patch.style) merged.style = { ...e.style, ...patch.style };
+        return merged;
+      }),
+    })),
+  };
+}

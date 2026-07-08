@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { clampRectToPage, clampGroupDelta, boundingBox, rectsIntersect, marqueeHits, resizeRect, boxFromPoints } from './geometry';
+import { clampRectToPage, clampGroupDelta, boundingBox, rectsIntersect, marqueeHits, resizeRect, boxFromPoints, scaleGroup } from './geometry';
 import type { DesignElement } from './types';
 
 const PAGE = { w: 800, h: 1000 };
@@ -43,5 +43,31 @@ describe('geometry', () => {
 
   it('boxFromPoints normalizes to a positive box', () => {
     expect(boxFromPoints(30, 40, 10, 10)).toEqual({ x: 10, y: 10, w: 20, h: 30 });
+  });
+});
+
+describe('scaleGroup', () => {
+  const PAGE2 = { w: 800, h: 1000 };
+  const base = () => new Map([
+    ['a', { x: 100, y: 100, w: 100, h: 100 }],
+    ['b', { x: 300, y: 100, w: 100, h: 100 }],
+  ]);
+  const bbox = { x: 100, y: 100, w: 300, h: 100 };
+
+  it('scales the group proportionally from the opposite anchor (se, +300 width)', () => {
+    const out = scaleGroup(base(), bbox, 'se', 300, 0, PAGE2);
+    expect(out.get('a')).toEqual({ x: 100, y: 100, w: 200, h: 100 });
+    expect(out.get('b')).toEqual({ x: 500, y: 100, w: 200, h: 100 });
+  });
+
+  it('floors the scale so the smallest member stays >= min (w handle shrink)', () => {
+    const out = scaleGroup(base(), bbox, 'w', 290, 0, PAGE2, 8);
+    expect(out.get('a')!.w).toBeCloseTo(8, 5); // 100 * (8/100)
+  });
+
+  it('clamps the scale so the group stays on the page (e handle, huge drag)', () => {
+    const out = scaleGroup(base(), bbox, 'e', 10000, 0, PAGE2);
+    const right = out.get('b')!.x + out.get('b')!.w;
+    expect(right).toBeCloseTo(800, 5); // scaled bbox right edge pinned to page width
   });
 });

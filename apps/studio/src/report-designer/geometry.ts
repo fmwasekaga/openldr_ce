@@ -52,3 +52,31 @@ export function resizeRect(rect: Rect, handle: Handle, dx: number, dy: number, m
 export function boxFromPoints(ax: number, ay: number, bx: number, by: number): Box {
   return { x: Math.min(ax, bx), y: Math.min(ay, by), w: Math.abs(bx - ax), h: Math.abs(by - ay) };
 }
+
+/** Scale a group of rects proportionally about the anchor opposite `handle`; min-size floor + page-bound scale clamp. */
+export function scaleGroup(base: Map<string, Rect>, bbox: Box, handle: Handle, dx: number, dy: number, page: { w: number; h: number }, min = 8): Map<string, Rect> {
+  const rects = [...base.values()];
+  let sx = 1, anchorX = bbox.x;
+  if (handle.includes('e')) { anchorX = bbox.x; sx = (bbox.w + dx) / bbox.w; }
+  else if (handle.includes('w')) { anchorX = bbox.x + bbox.w; sx = (bbox.w - dx) / bbox.w; }
+  let sy = 1, anchorY = bbox.y;
+  if (handle.includes('s')) { anchorY = bbox.y; sy = (bbox.h + dy) / bbox.h; }
+  else if (handle.includes('n')) { anchorY = bbox.y + bbox.h; sy = (bbox.h - dy) / bbox.h; }
+
+  if (handle.includes('e') || handle.includes('w')) {
+    const minW = Math.min(...rects.map((r) => r.w));
+    sx = Math.max(sx, min / minW);
+    sx = Math.min(sx, handle.includes('e') ? (page.w - anchorX) / bbox.w : anchorX / bbox.w);
+  }
+  if (handle.includes('s') || handle.includes('n')) {
+    const minH = Math.min(...rects.map((r) => r.h));
+    sy = Math.max(sy, min / minH);
+    sy = Math.min(sy, handle.includes('s') ? (page.h - anchorY) / bbox.h : anchorY / bbox.h);
+  }
+
+  const out = new Map<string, Rect>();
+  for (const [id, r] of base) {
+    out.set(id, { x: anchorX + (r.x - anchorX) * sx, y: anchorY + (r.y - anchorY) * sy, w: r.w * sx, h: r.h * sy });
+  }
+  return out;
+}
