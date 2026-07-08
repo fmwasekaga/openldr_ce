@@ -43,6 +43,23 @@ export function sheetName(raw: string, used: Set<string>): string {
   return name;
 }
 
+// /api/query/run hard-caps each call at 1000 rows, so page through with offset to export every row
+// (an export is a deliverable — unlike the interactive preview grid, silent truncation would lose data).
+const PAGE = 1000;
+async function runAllRows(
+  run: ExcelExportDeps['run'], body: { connectorId: string; sql: string; params: CustomQuery['params']; values: Record<string, unknown> },
+): Promise<{ columns: { key: string; label: string }[]; rows: Record<string, unknown>[] }> {
+  const rows: Record<string, unknown>[] = [];
+  let columns: { key: string; label: string }[] = [];
+  for (let offset = 0; ; offset += PAGE) {
+    const res = await run({ ...body, limit: PAGE, offset });
+    columns = res.columns;
+    rows.push(...res.rows);
+    if (res.rows.length < PAGE) break;
+  }
+  return { columns, rows };
+}
+
 /** Resolve one table element to sheet data: run its bound query, or use its static columns/rows. */
 async function resolveTable(
   el: DesignElement, queries: CustomQuery[], values: Record<string, unknown>, run: ExcelExportDeps['run'],
@@ -50,7 +67,7 @@ async function resolveTable(
   if (el.dataSource) {
     const cq = queries.find((q) => q.id === el.dataSource!.queryId);
     if (!cq) throw new Error(`custom query not found: ${el.dataSource.queryId}`);
-    const res = await run({ connectorId: cq.connectorId, sql: cq.sql, params: cq.params, values });
+    const res = await runAllRows(run, { connectorId: cq.connectorId, sql: cq.sql, params: cq.params, values });
     const columns = el.boundColumns && el.boundColumns.length ? el.boundColumns : res.columns;
     return { name: el.name, columns, rows: res.rows };
   }
@@ -58,6 +75,11 @@ async function resolveTable(
   const columns = (el.columns ?? []).map((label, i) => ({ key: String(i), label }));
   const rows = (el.rows ?? []).map((r) => Object.fromEntries(r.map((cell, i) => [String(i), cell])));
   return { name: el.name, columns, rows };
+}
+
+/** A one-cell sheet reporting a table's query failure — mirrors the PDF renderer's per-table error placeholder. */
+function errorSheet(name: string, message: string): SheetData {
+  return { name, columns: [{ key: 'error', label: 'Error' }], rows: [{ error: `Query error: ${message}` }] };
 }
 
 /** Build a workbook with one sheet per table — a header row of column labels, then the projected rows. */
@@ -85,7 +107,14 @@ export async function exportDesignToExcel(design: ReportDesign, deps: ExcelExpor
   const queries = tables.some((t) => t.dataSource) ? await deps.list() : [];
   const values = paramValues(design);
   const sheets: SheetData[] = [];
-  for (const el of tables) sheets.push(await resolveTable(el, queries, values, deps.run));
+  for (const el of tables) {
+    // Degrade per-table (like the PDF renderer): one broken query becomes an error sheet, the rest still export.
+    try {
+      sheets.push(await resolveTable(el, queries, values, deps.run));
+    } catch (e) {
+      sheets.push(errorSheet(el.name, e instanceof Error ? e.message : String(e)));
+    }
+  }
   const safeName = (design.name || 'report-design').replace(/[^\w.-]+/g, '_');
   deps.write(buildWorkbook(sheets), `${safeName}.xlsx`);
   return tables.length;

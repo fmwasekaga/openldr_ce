@@ -62,7 +62,7 @@ describe('exportDesignToExcel', () => {
     });
     const n = await exportDesignToExcel(d, { list, run, write });
     expect(n).toBe(1);
-    expect(run).toHaveBeenCalledWith({ connectorId: 'c1', sql: 'select 1', params: [], values: { facility: 'HQ' } });
+    expect(run).toHaveBeenCalledWith({ connectorId: 'c1', sql: 'select 1', params: [], values: { facility: 'HQ' }, limit: 1000, offset: 0 });
     expect(write).toHaveBeenCalledTimes(1);
     const [wb, filename] = write.mock.calls[0] as [XLSX.WorkBook, string];
     expect(filename).toBe('My_Report.xlsx');
@@ -83,6 +83,44 @@ describe('exportDesignToExcel', () => {
     const [wb] = write.mock.calls[0] as [XLSX.WorkBook];
     expect(wb.Sheets.Static.A1.v).toBe('A');
     expect(wb.Sheets.Static.A2.v).toBe('1');
+  });
+
+  it('pages through a bound query beyond the 1000-row cap', async () => {
+    const page1 = Array.from({ length: 1000 }, (_, i) => ({ org: `o${i}` }));
+    const run = vi.fn()
+      .mockResolvedValueOnce({ columns: [{ key: 'org', label: 'Organism' }], rows: page1, rowCount: 1000, ms: 1 })
+      .mockResolvedValueOnce({ columns: [{ key: 'org', label: 'Organism' }], rows: [{ org: 'last' }], rowCount: 1, ms: 1 });
+    const list = vi.fn(async () => [{ id: 'cq_1', name: 'Q', connectorId: 'c1', sql: 's', params: [] }]);
+    const write = vi.fn();
+    const d = design({ pages: [{ id: 'p', elements: [tableEl({ dataSource: { kind: 'custom-query', queryId: 'cq_1' } })] as never }] });
+    await exportDesignToExcel(d, { list, run, write });
+    expect(run).toHaveBeenNthCalledWith(1, expect.objectContaining({ limit: 1000, offset: 0 }));
+    expect(run).toHaveBeenNthCalledWith(2, expect.objectContaining({ limit: 1000, offset: 1000 }));
+    const [wb] = write.mock.calls[0] as [XLSX.WorkBook];
+    expect(wb.Sheets.AMR.A1.v).toBe('Organism'); // header + 1001 data rows
+    expect(wb.Sheets.AMR.A1002.v).toBe('last');
+  });
+
+  it('degrades a failed bound table to an error sheet and still exports the others', async () => {
+    const run = vi.fn()
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValueOnce({ columns: [{ key: 'org', label: 'Organism' }], rows: [{ org: 'ok' }], rowCount: 1, ms: 1 });
+    const list = vi.fn(async () => [
+      { id: 'cq_1', name: 'Q', connectorId: 'c1', sql: 's', params: [] },
+      { id: 'cq_2', name: 'Q2', connectorId: 'c1', sql: 's2', params: [] },
+    ]);
+    const write = vi.fn();
+    const d = design({ pages: [{ id: 'p', elements: [
+      { id: 't1', kind: 'table', name: 'Bad', rect, dataSource: { kind: 'custom-query', queryId: 'cq_1' } },
+      { id: 't2', kind: 'table', name: 'Good', rect, dataSource: { kind: 'custom-query', queryId: 'cq_2' } },
+    ] as never }] });
+    const n = await exportDesignToExcel(d, { list, run, write });
+    expect(n).toBe(2);
+    const [wb] = write.mock.calls[0] as [XLSX.WorkBook];
+    expect(wb.SheetNames).toEqual(['Bad', 'Good']);
+    expect(wb.Sheets.Bad.A1.v).toBe('Error');
+    expect(String(wb.Sheets.Bad.A2.v)).toContain('boom');
+    expect(wb.Sheets.Good.A2.v).toBe('ok');
   });
 
   it('returns 0 and writes nothing for a design with no table elements', async () => {
