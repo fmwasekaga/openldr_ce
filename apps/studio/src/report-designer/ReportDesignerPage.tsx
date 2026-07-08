@@ -295,7 +295,7 @@ export function ReportDesignerPage(): JSX.Element {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      {template && <PreviewReportDesignDialog open={previewOpen} design={template} onOpenChange={setPreviewOpen} />}
+      {template && previewOpen && <PreviewReportDesignDialog open={previewOpen} design={template} onOpenChange={setPreviewOpen} />}
     </AppShell>
   );
 }
