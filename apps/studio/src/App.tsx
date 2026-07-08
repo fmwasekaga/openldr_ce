@@ -51,6 +51,7 @@ export function App() {
       <Route path="/reports/builder/new" element={<RequireRole roles={['lab_admin', 'lab_manager']}><ReportBuilderPage /></RequireRole>} />
       <Route path="/reports/builder/:id" element={<RequireRole roles={['lab_admin', 'lab_manager']}><ReportBuilderPage /></RequireRole>} />
       <Route path="/report-designer" element={<RequireRole roles={['lab_admin', 'lab_manager']}><ReportDesignerPage /></RequireRole>} />
+      <Route path="/report-designer/:id" element={<RequireRole roles={['lab_admin', 'lab_manager']}><ReportDesignerPage /></RequireRole>} />
       <Route path="/forms/:id" element={<FormCapture />} />
       <Route path="/x/:pluginId" element={<RequireRole><PluginContainer /></RequireRole>} />
       <Route path="/docs" element={<Docs />} />

@@ -526,6 +526,11 @@ export const en = {
     pageOf: 'Page {{n}} of {{total}}',
     emptyTitle: 'Select or create a template',
     emptyBody: 'A template arranges text, images, and report tables on printable pages — then exports to PDF or Excel.',
+    savedToast: 'Saved “{{name}}”',
+    deletedToast: 'Report design deleted',
+    deleteConfirmTitle: 'Delete this report design?',
+    deleteConfirmBody: 'This permanently deletes the report design. This cannot be undone.',
+    deleteConfirmAction: 'Delete design',
     element: {
       text: 'Text', table: 'Table', image: 'Image', line: 'Line', rect: 'Rectangle', datetime: 'Date/time',
     },

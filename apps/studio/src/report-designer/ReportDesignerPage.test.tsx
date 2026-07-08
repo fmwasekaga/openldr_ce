@@ -1,35 +1,82 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { ReportDesignerPage } from './ReportDesignerPage';
+import { createReportDesign, updateReportDesign, deleteReportDesign } from '../api';
 
-function renderPage() {
-  return render(<MemoryRouter><ReportDesignerPage /></MemoryRouter>);
+// Mock the API layer: the list + single-design loads resolve from the mock seed data (which the
+// existing editor tests depend on), and the mutating calls resolve so we can assert they fire.
+vi.mock('../api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../api')>();
+  const { MOCK_TEMPLATES } = await import('./mockTemplates');
+  return {
+    ...actual,
+    listReportDesigns: vi.fn(async () => MOCK_TEMPLATES),
+    getReportDesign: vi.fn(async (id: string) => {
+      const d = MOCK_TEMPLATES.find((t) => t.id === id);
+      if (!d) throw new Error(`not found: ${id}`);
+      return d;
+    }),
+    createReportDesign: vi.fn(async (d: unknown) => d),
+    updateReportDesign: vi.fn(async (_id: string, d: unknown) => d),
+    deleteReportDesign: vi.fn(async () => {}),
+  };
+});
+
+// Render at the AMR design route so a design is loaded into the editor, mirroring the live
+// `/report-designer/:id` entry point. Awaits the async load before returning.
+async function renderPage(id = 'rt-amr-summary') {
+  const utils = render(
+    <MemoryRouter initialEntries={[`/report-designer/${id}`]}>
+      <Routes>
+        <Route path="/report-designer" element={<ReportDesignerPage />} />
+        <Route path="/report-designer/:id" element={<ReportDesignerPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  await screen.findByLabelText('Report name');
+  return utils;
+}
+
+// Open the canvas "More actions" kebab menu (mirrors the pointer/keyboard dance the insert tests use).
+async function openKebab(): Promise<void> {
+  const kebab = screen.getByRole('button', { name: /more actions/i });
+  fireEvent.pointerDown(kebab, { button: 0, pointerType: 'mouse' });
+  if (!screen.queryByRole('menuitem', { name: /new template/i })) fireEvent.keyDown(kebab, { key: 'Enter' });
+  await screen.findByRole('menuitem', { name: /new template/i });
 }
 
 describe('ReportDesignerPage', () => {
-  it('renders explorer, canvas header for the first template, and inspector', () => {
-    renderPage();
+  it('loads the design list into the explorer', async () => {
+    await renderPage();
+    const explorer = screen.getByTestId('templates-explorer');
+    expect(within(explorer).getByText('AMR summary')).toBeInTheDocument();
+    expect(within(explorer).getByText('Monthly caseload')).toBeInTheDocument();
+    expect(within(explorer).getByText('Lab TAT')).toBeInTheDocument();
+  });
+
+  it('renders explorer, canvas header for the first template, and inspector', async () => {
+    await renderPage();
     expect(screen.getByTestId('templates-explorer')).toBeInTheDocument();
     expect(screen.getByLabelText('Report name')).toHaveValue('AMR summary');
     expect(screen.getByTestId('inspector')).toBeInTheDocument();
   });
 
-  it('collapses the explorer to a rail', () => {
-    renderPage();
+  it('collapses the explorer to a rail', async () => {
+    await renderPage();
     fireEvent.click(screen.getByRole('button', { name: /collapse explorer/i }));
     expect(screen.queryByTestId('templates-explorer')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /expand explorer/i })).toBeInTheDocument();
   });
 
-  it('switches the open template when another card is selected', () => {
-    renderPage();
-    fireEvent.click(screen.getByText('Lab TAT'));
-    expect(screen.getByLabelText('Report name')).toHaveValue('Lab TAT');
+  it('switches the open template when another card is selected', async () => {
+    await renderPage();
+    fireEvent.click(await screen.findByText('Lab TAT'));
+    expect(await screen.findByDisplayValue('Lab TAT')).toBeInTheDocument();
   });
 
   it('inserts a Text element which then appears in the Layers list', async () => {
-    renderPage();
+    await renderPage();
     // Insert now lives inside the kebab (More actions) as a submenu.
     const kebab = screen.getByRole('button', { name: /more actions/i });
     fireEvent.pointerDown(kebab, { button: 0, ctrlKey: false, pointerType: 'mouse' });
@@ -44,7 +91,7 @@ describe('ReportDesignerPage', () => {
   });
 
   it('undoes an inserted element', async () => {
-    renderPage();
+    await renderPage();
     const kebab = screen.getByRole('button', { name: /more actions/i });
     fireEvent.pointerDown(kebab, { button: 0, ctrlKey: false, pointerType: 'mouse' });
     if (!screen.queryByRole('menuitem', { name: 'Insert' })) fireEvent.keyDown(kebab, { key: 'Enter' });
@@ -61,7 +108,7 @@ describe('ReportDesignerPage', () => {
   });
 
   it('deletes the selected element with the Delete key', async () => {
-    renderPage();
+    await renderPage();
     // insert a Text element (kebab → Insert → Text), which becomes selected
     const kebab = screen.getByRole('button', { name: /more actions/i });
     fireEvent.pointerDown(kebab, { button: 0, ctrlKey: false, pointerType: 'mouse' });
@@ -77,7 +124,7 @@ describe('ReportDesignerPage', () => {
   });
 
   it('reconciles the selection after undo removes a selected element', async () => {
-    renderPage();
+    await renderPage();
     const inspector = () => screen.getByTestId('inspector');
     // insert a Text element (auto-selected)
     const kebab = screen.getByRole('button', { name: /more actions/i });
@@ -97,8 +144,8 @@ describe('ReportDesignerPage', () => {
     expect(within(inspector()).queryByText('2 elements selected')).not.toBeInTheDocument();
   });
 
-  it('undo reverses a committed drag', () => {
-    renderPage();
+  it('undo reverses a committed drag', async () => {
+    await renderPage();
     const inspector = () => screen.getByTestId('inspector');
     fireEvent.click(within(inspector()).getByRole('button', { name: 'Layers' }));
     fireEvent.click(within(inspector()).getByRole('button', { name: 'Title' }));
@@ -113,8 +160,8 @@ describe('ReportDesignerPage', () => {
     expect(within(inspector()).getByLabelText('X')).toHaveValue(48);
   });
 
-  it('arrow keys nudge the selection and coalesce into one undo step', () => {
-    renderPage();
+  it('arrow keys nudge the selection and coalesce into one undo step', async () => {
+    await renderPage();
     const inspector = () => screen.getByTestId('inspector');
     fireEvent.click(within(inspector()).getByRole('button', { name: 'Layers' }));
     fireEvent.click(within(inspector()).getByRole('button', { name: 'Title' }));
@@ -127,8 +174,8 @@ describe('ReportDesignerPage', () => {
     expect(within(inspector()).getByLabelText('X')).toHaveValue(48); // single undo restores both nudges
   });
 
-  it('edits a selected element geometry and undo restores it', () => {
-    renderPage();
+  it('edits a selected element geometry and undo restores it', async () => {
+    await renderPage();
     const inspector = () => screen.getByTestId('inspector');
     fireEvent.click(within(inspector()).getByRole('button', { name: 'Layers' }));
     fireEvent.click(within(inspector()).getByRole('button', { name: 'Title' }));
@@ -139,8 +186,8 @@ describe('ReportDesignerPage', () => {
     expect(within(inspector()).getByLabelText('X')).toHaveValue(48);
   });
 
-  it('edits text content and undo restores it', () => {
-    renderPage();
+  it('edits text content and undo restores it', async () => {
+    await renderPage();
     const inspector = () => screen.getByTestId('inspector');
     fireEvent.click(within(inspector()).getByRole('button', { name: 'Layers' }));
     fireEvent.click(within(inspector()).getByRole('button', { name: 'Title' }));
@@ -152,8 +199,8 @@ describe('ReportDesignerPage', () => {
     expect(content()).toHaveValue('Antimicrobial resistance summary');
   });
 
-  it('bulk-bolds a multi-text selection as one undo step', () => {
-    renderPage();
+  it('bulk-bolds a multi-text selection as one undo step', async () => {
+    await renderPage();
     const inspector = () => screen.getByTestId('inspector');
     fireEvent.click(within(inspector()).getByRole('button', { name: 'Layers' }));
     fireEvent.click(within(inspector()).getByRole('button', { name: 'Title' }));
@@ -169,8 +216,8 @@ describe('ReportDesignerPage', () => {
     expect(within(inspector()).getByRole('button', { name: 'Bold' })).toHaveAttribute('aria-pressed', 'false');
   });
 
-  it('double-click a text element on the canvas edits it inline and syncs the model', () => {
-    renderPage();
+  it('double-click a text element on the canvas edits it inline and syncs the model', async () => {
+    await renderPage();
     fireEvent.doubleClick(screen.getByTestId('el-amr-title'));
     const ta = screen.getByTestId('edit-amr-title');
     fireEvent.change(ta, { target: { value: 'Inline edit' } });
@@ -180,8 +227,8 @@ describe('ReportDesignerPage', () => {
     expect(within(screen.getByTestId('inspector')).getByLabelText('Content')).toHaveValue('Inline edit');
   });
 
-  it('double-clicking a text element in a multi-selection collapses to editing just it', () => {
-    renderPage();
+  it('double-clicking a text element in a multi-selection collapses to editing just it', async () => {
+    await renderPage();
     const inspector = () => screen.getByTestId('inspector');
     fireEvent.click(within(inspector()).getByRole('button', { name: 'Layers' }));
     fireEvent.click(within(inspector()).getByRole('button', { name: 'Title' }));
@@ -189,5 +236,30 @@ describe('ReportDesignerPage', () => {
     fireEvent.doubleClick(screen.getByTestId('el-amr-title'));
     expect(screen.getByTestId('edit-amr-title')).toBeInTheDocument();
     expect(screen.queryByTestId('edit-amr-subtitle')).toBeNull();
+  });
+
+  it('saves an existing design via updateReportDesign', async () => {
+    await renderPage();
+    await openKebab();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Save' }));
+    await waitFor(() => expect(updateReportDesign).toHaveBeenCalledWith('rt-amr-summary', expect.objectContaining({ id: 'rt-amr-summary' })));
+  });
+
+  it('creates a new (transient) design via createReportDesign on Save', async () => {
+    await renderPage();
+    await openKebab();
+    fireEvent.click(await screen.findByRole('menuitem', { name: /new template/i }));
+    expect(screen.getByLabelText('Report name')).toHaveValue('Untitled template');
+    await openKebab();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Save' }));
+    await waitFor(() => expect(createReportDesign).toHaveBeenCalled());
+  });
+
+  it('deletes the open design after confirmation via deleteReportDesign', async () => {
+    await renderPage();
+    await openKebab();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete design' }));
+    await waitFor(() => expect(deleteReportDesign).toHaveBeenCalledWith('rt-amr-summary'));
   });
 });
