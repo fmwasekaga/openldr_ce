@@ -165,6 +165,9 @@ importers:
       '@openldr/report-builder':
         specifier: workspace:*
         version: link:../../packages/report-builder
+      '@openldr/report-designer':
+        specifier: workspace:*
+        version: link:../../packages/report-designer
       '@radix-ui/react-alert-dialog':
         specifier: ^1.1.16
         version: 1.1.16(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -1013,6 +1016,28 @@ importers:
       '@types/pdfkit':
         specifier: ^0.13.4
         version: 0.13.9
+      pg-mem:
+        specifier: ^3.0.14
+        version: 3.0.14(kysely@0.27.6)
+      typescript:
+        specifier: 5.7.2
+        version: 5.7.2
+      vitest:
+        specifier: 2.1.8
+        version: 2.1.8(@types/node@25.9.3)(jsdom@25.0.1)(lightningcss@1.32.0)
+
+  packages/report-designer:
+    dependencies:
+      '@openldr/db':
+        specifier: workspace:*
+        version: link:../db
+      kysely:
+        specifier: ^0.27.5
+        version: 0.27.6
+      zod:
+        specifier: 3.24.0
+        version: 3.24.0
+    devDependencies:
       pg-mem:
         specifier: ^3.0.14
         version: 3.0.14(kysely@0.27.6)
