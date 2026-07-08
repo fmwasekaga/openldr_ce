@@ -31,4 +31,18 @@ describe('PageCanvas', () => {
     const el = screen.getByTestId('el-amr-table');
     ['nw','n','ne','e','se','s','sw','w'].forEach((h) => expect(el.querySelector(`[data-testid="handle-${h}"]`)).toBeTruthy());
   });
+
+  it('shows no handles and outlines every element when multiple are selected', () => {
+    render(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={0.75} selectedIds={['amr-title', 'amr-table']} onSelect={vi.fn()} />);
+    expect(screen.getByTestId('el-amr-title').className).toContain('outline');
+    expect(screen.getByTestId('el-amr-table').className).toContain('outline');
+    expect(screen.queryByTestId('handle-nw')).toBeNull();
+  });
+
+  it('shift-click removes an already-selected element', () => {
+    const onSelect = vi.fn();
+    render(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={0.75} selectedIds={['amr-title', 'amr-table']} onSelect={onSelect} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Resistance table' }), { shiftKey: true });
+    expect(onSelect).toHaveBeenCalledWith(['amr-title']);
+  });
 });

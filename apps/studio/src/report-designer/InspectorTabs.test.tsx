@@ -33,4 +33,17 @@ describe('InspectorTabs', () => {
     expect(screen.getByText('Facility')).toBeInTheDocument();
     expect(screen.getByText('Ndola')).toBeInTheDocument();
   });
+
+  it('shift-click in Layers toggles an element into the selection', () => {
+    const onSelect = vi.fn();
+    render(<InspectorTabs template={tpl} selectedIds={['amr-title']} onSelect={onSelect} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Layers' }));
+    fireEvent.click(screen.getByRole('button', { name: /Resistance table/ }), { shiftKey: true });
+    expect(onSelect).toHaveBeenCalledWith(['amr-title', 'amr-table']);
+  });
+
+  it('Properties shows a count when multiple elements are selected', () => {
+    render(<InspectorTabs template={tpl} selectedIds={['amr-title', 'amr-table']} onSelect={vi.fn()} />);
+    expect(screen.getByText('2 elements selected')).toBeInTheDocument();
+  });
 });
