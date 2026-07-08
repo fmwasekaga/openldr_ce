@@ -544,6 +544,8 @@ export const en = {
     emptyBody: 'A template arranges text, images, and report tables on printable pages — then exports to PDF or Excel.',
     savedToast: 'Saved “{{name}}”',
     exportedToast: 'Exported “{{name}}.pdf”',
+    exportedExcelToast: 'Exported “{{name}}.xlsx”',
+    nothingToExport: 'This design has no tables to export.',
     deletedToast: 'Report design deleted',
     deleteConfirmTitle: 'Delete this report design?',
     deleteConfirmBody: 'This permanently deletes the report design. This cannot be undone.',
