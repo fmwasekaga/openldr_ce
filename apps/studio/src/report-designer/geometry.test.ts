@@ -16,6 +16,9 @@ describe('geometry', () => {
     const rects = [{ x: 10, y: 10, w: 20, h: 20 }, { x: 700, y: 10, w: 20, h: 20 }];
     expect(clampGroupDelta(rects, -50, 0, PAGE)).toEqual({ dx: -10, dy: 0 }); // left member hits 0
     expect(clampGroupDelta(rects, 200, 0, PAGE)).toEqual({ dx: 80, dy: 0 });  // right member hits 800
+    const vrects = [{ x: 10, y: 10, w: 20, h: 20 }, { x: 10, y: 900, w: 20, h: 20 }];
+    expect(clampGroupDelta(vrects, 0, -50, PAGE)).toEqual({ dx: 0, dy: -10 }); // top member hits 0
+    expect(clampGroupDelta(vrects, 0, 200, PAGE)).toEqual({ dx: 0, dy: 80 });  // bottom member hits 1000
   });
 
   it('boundingBox spans all rects', () => {
@@ -35,6 +38,7 @@ describe('geometry', () => {
     expect(resizeRect({ x: 100, y: 100, w: 100, h: 100 }, 'nw', 20, 20)).toEqual({ x: 120, y: 120, w: 80, h: 80 });
     expect(resizeRect({ x: 100, y: 100, w: 100, h: 100 }, 'e', -200, 0)).toEqual({ x: 100, y: 100, w: 8, h: 100 });
     expect(resizeRect({ x: 100, y: 100, w: 100, h: 100 }, 'n', 0, 200)).toEqual({ x: 100, y: 192, w: 100, h: 8 });
+    expect(resizeRect({ x: 100, y: 100, w: 100, h: 100 }, 'w', 200, 0)).toEqual({ x: 192, y: 100, w: 8, h: 100 });
   });
 
   it('boxFromPoints normalizes to a positive box', () => {
