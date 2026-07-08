@@ -1,5 +1,5 @@
 // apps/studio/src/query/QueryPage.tsx
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { AppShell } from '../shell/AppShell';
 import { useTranslation } from 'react-i18next';
@@ -28,6 +28,10 @@ function Workspace(): JSX.Element {
 export function QueryPage(): JSX.Element {
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(false);
+  // The query store is module-level (survives route changes); clear open tabs when leaving so
+  // re-entering the page starts from a blank workspace rather than restoring the old session.
+  const reset = useQueryStore((s) => s.reset);
+  useEffect(() => () => reset(), [reset]);
   return (
     <AppShell title={t('nav.query')} fullBleed>
       <div className="flex h-full min-h-0">

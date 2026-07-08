@@ -19,14 +19,14 @@ export function TabBar(): JSX.Element {
     <div className="flex h-10 items-stretch border-b border-border bg-muted/40">
       {tabs.map((t) => {
         const isActive = t.id === activeId;
-        // Flush, full-height rectangular tabs with vertical dividers (DB-tool style). Every tab
-        // keeps the shared bottom separator (the bar's border-b); the active tab is distinguished
-        // only by a slightly lighter background.
+        // Flush, full-height rectangular tabs with vertical dividers (DB-tool style). The active tab
+        // is marked by a primary top-accent line plus the content-surface background, so it reads
+        // clearly in both light and dark mode (a bare background shift alone was invisible in light).
         return (
           <div key={t.id}
-            className={`relative flex items-center gap-2 border-r border-border px-4 text-[13px] ${isActive
-              ? 'bg-card text-foreground'
-              : 'text-muted-foreground hover:bg-background/30'}`}>
+            className={`relative flex items-center gap-2 border-r border-border border-t-2 px-4 text-[13px] ${isActive
+              ? 'border-t-primary bg-background text-foreground'
+              : 'border-t-transparent text-muted-foreground hover:bg-background/40'}`}>
             <button className="flex items-center gap-2" onClick={() => setActive(t.id)}>{tabIcon(t)}{t.title}{isDirty(t) && <span className="text-primary" aria-hidden>*</span>}</button>
             <button aria-label={`close ${t.title}`} onClick={() => closeTab(t.id)}><X className="h-3.5 w-3.5 opacity-60 hover:opacity-100" /></button>
           </div>

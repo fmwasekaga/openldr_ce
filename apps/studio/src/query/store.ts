@@ -28,6 +28,8 @@ interface State {
   closeTab(id: string): void;
   patchQuery(id: string, patch: Partial<QueryTab>): void;
   patchTable(id: string, patch: Partial<TableTab>): void;
+  /** Clear all open tabs — used to reset the workspace to a blank state when leaving the page. */
+  reset(): void;
 }
 
 export const useQueryStore = create<State>((set, get) => ({
@@ -70,4 +72,5 @@ export const useQueryStore = create<State>((set, get) => ({
   patchTable(id, patch) {
     set((s) => ({ tabs: s.tabs.map((t) => (t.id === id && t.kind === 'table' ? { ...t, ...patch } : t)) }));
   },
+  reset() { set({ tabs: [], activeId: null }); },
 }));
