@@ -50,12 +50,13 @@ export function computeResizeGuides(rect: Rect, handle: Handle, others: DesignEl
   return { dx: sx?.delta ?? 0, dy: sy?.delta ?? 0, lines };
 }
 
-/** Apply a resize snap delta to the moving edge(s) of `rect`. */
-export function applyResizeSnap(rect: Rect, handle: Handle, snap: Snap): Rect {
+/** Apply a resize snap delta to the moving edge(s) of `rect`, floored to a min size. */
+export function applyResizeSnap(rect: Rect, handle: Handle, snap: Snap, min = 8): Rect {
   let { x, y, w, h } = rect;
-  if (handle.includes('w')) { x += snap.dx; w -= snap.dx; }
-  else if (handle.includes('e')) { w += snap.dx; }
-  if (handle.includes('n')) { y += snap.dy; h -= snap.dy; }
-  else if (handle.includes('s')) { h += snap.dy; }
+  const right = x + w, bottom = y + h;
+  if (handle.includes('w')) { x = Math.min(x + snap.dx, right - min); w = right - x; }
+  if (handle.includes('e')) { w = Math.max(min, w + snap.dx); }
+  if (handle.includes('n')) { y = Math.min(y + snap.dy, bottom - min); h = bottom - y; }
+  if (handle.includes('s')) { h = Math.max(min, h + snap.dy); }
   return { x, y, w, h };
 }

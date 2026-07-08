@@ -35,4 +35,26 @@ describe('alignmentGuides', () => {
     const out = applyResizeSnap(rect, 'e', snap);
     expect(out).toEqual({ x: 100, y: 100, w: 200, h: 100 });
   });
+
+  it('resize snap floors the moving edge so it cannot invert', () => {
+    expect(applyResizeSnap({ x: 100, y: 100, w: 50, h: 40 }, 'e', { dx: -100, dy: 0, lines: [] })).toEqual({ x: 100, y: 100, w: 8, h: 40 });
+    expect(applyResizeSnap({ x: 100, y: 100, w: 50, h: 40 }, 'w', { dx: 100, dy: 0, lines: [] })).toEqual({ x: 142, y: 100, w: 8, h: 40 });
+  });
+
+  it('snaps a corner (se) resize on both axes', () => {
+    const others = [el('a', 300, 500, 40, 40)];
+    const rect = { x: 100, y: 100, w: 197, h: 397 };
+    const snap = computeResizeGuides(rect, 'se', others, PAGE, 6);
+    expect(snap.dx).toBe(3);
+    expect(snap.dy).toBe(3);
+    expect(applyResizeSnap(rect, 'se', snap)).toEqual({ x: 100, y: 100, w: 200, h: 400 });
+  });
+
+  it('snaps a top-edge (n) resize on the y-axis', () => {
+    const others = [el('a', 500, 200, 40, 40)];
+    const rect = { x: 100, y: 203, w: 50, h: 100 };
+    const snap = computeResizeGuides(rect, 'n', others, PAGE, 6);
+    expect(snap.dy).toBe(-3);
+    expect(applyResizeSnap(rect, 'n', snap)).toEqual({ x: 100, y: 200, w: 50, h: 103 });
+  });
 });
