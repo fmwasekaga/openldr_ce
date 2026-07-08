@@ -519,6 +519,7 @@ export const pt: EnShape = {
     selectTableToBind: 'Selecione um elemento de tabela para vinculá-lo a uma consulta.',
     noColumnsLoaded: 'Nenhuma coluna carregada. Escolha uma consulta e selecione Carregar colunas.',
     loadColumnsError: 'Não foi possível carregar as colunas. Verifique a consulta e os seus parâmetros.',
+    columnLabel: 'Rótulo da coluna',
     moveUp: 'Mover para cima',
     moveDown: 'Mover para baixo',
     parameters: 'Parâmetros',

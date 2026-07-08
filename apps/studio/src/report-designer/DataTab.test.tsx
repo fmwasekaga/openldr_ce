@@ -18,8 +18,17 @@ const tableEl = (over: Partial<DesignElement> = {}): DesignElement => ({
 function setup(over: Partial<DesignElement> = {}) {
   const onPatchElement = vi.fn();
   const onPatchParameters = vi.fn();
-  render(<DataTab element={tableEl(over)} parameters={[]} onPatchElement={onPatchElement} onPatchParameters={onPatchParameters} />);
-  return { onPatchElement, onPatchParameters };
+  const utils = render(<DataTab element={tableEl(over)} parameters={[]} onPatchElement={onPatchElement} onPatchParameters={onPatchParameters} />);
+  return { onPatchElement, onPatchParameters, ...utils };
+}
+
+// The query list resolves asynchronously; retry the Load-columns click until run() fires.
+async function loadColumns() {
+  const loadBtn = screen.getByRole('button', { name: /load columns/i });
+  await waitFor(() => {
+    fireEvent.click(loadBtn);
+    expect(queryApi.run).toHaveBeenCalled();
+  });
 }
 
 describe('DataTab table binding', () => {
@@ -40,14 +49,50 @@ describe('DataTab table binding', () => {
 
   it('loads result columns and includes one into boundColumns (discrete)', async () => {
     const { onPatchElement } = setup({ dataSource: { kind: 'custom-query', queryId: 'cq_1' } });
-    const loadBtn = screen.getByRole('button', { name: /load columns/i });
-    // The query list resolves asynchronously; retry the click until run() fires.
-    await waitFor(() => {
-      fireEvent.click(loadBtn);
-      expect(queryApi.run).toHaveBeenCalled();
-    });
-    const check = await screen.findByLabelText('Organism');
-    fireEvent.click(check);
+    await loadColumns();
+    fireEvent.click(await screen.findByLabelText('org'));
     expect(onPatchElement).toHaveBeenCalledWith('t', { boundColumns: [{ key: 'org', label: 'Organism' }] }, { discrete: true });
+  });
+
+  it('relabelling an included column is coalesced (no discrete opt)', async () => {
+    const { onPatchElement } = setup({
+      dataSource: { kind: 'custom-query', queryId: 'cq_1' },
+      boundColumns: [{ key: 'org', label: 'Organism' }],
+    });
+    // The label Input for the included column carries the translated aria-label suffixed with the key.
+    fireEvent.change(screen.getByLabelText('Label for column org'), { target: { value: 'Bug' } });
+    expect(onPatchElement).toHaveBeenLastCalledWith('t', { boundColumns: [{ key: 'org', label: 'Bug' }] }, undefined);
+  });
+
+  it('reorders included columns via move-down (discrete)', async () => {
+    const { onPatchElement } = setup({
+      dataSource: { kind: 'custom-query', queryId: 'cq_1' },
+      boundColumns: [{ key: 'org', label: 'Organism' }, { key: 'pct', label: '%R' }],
+    });
+    await loadColumns();
+    fireEvent.click(screen.getByLabelText('Move down Organism'));
+    expect(onPatchElement).toHaveBeenLastCalledWith(
+      't',
+      { boundColumns: [{ key: 'pct', label: '%R' }, { key: 'org', label: 'Organism' }] },
+      { discrete: true },
+    );
+  });
+
+  it('renders the error line when the query run rejects', async () => {
+    (queryApi.run as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('boom'));
+    setup({ dataSource: { kind: 'custom-query', queryId: 'cq_1' } });
+    await loadColumns();
+    expect(await screen.findByText('Could not load columns. Check the query and its parameters.')).toBeInTheDocument();
+  });
+
+  it('clears loaded columns when a different element is selected', async () => {
+    const onPatchElement = vi.fn();
+    const props = { parameters: [], onPatchElement, onPatchParameters: vi.fn() };
+    const { rerender } = render(<DataTab element={tableEl({ id: 't', dataSource: { kind: 'custom-query', queryId: 'cq_1' } })} {...props} />);
+    await loadColumns();
+    expect(await screen.findByLabelText('org')).toBeInTheDocument();
+    rerender(<DataTab element={tableEl({ id: 't2', dataSource: { kind: 'custom-query', queryId: 'cq_1' } })} {...props} />);
+    expect(screen.queryByLabelText('org')).toBeNull();
+    expect(screen.getByText(/no columns loaded/i)).toBeInTheDocument();
   });
 });

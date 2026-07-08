@@ -519,6 +519,7 @@ export const fr: EnShape = {
     selectTableToBind: 'Sélectionnez un tableau pour le lier à une requête.',
     noColumnsLoaded: 'Aucune colonne chargée. Choisissez une requête puis « Charger les colonnes ».',
     loadColumnsError: 'Impossible de charger les colonnes. Vérifiez la requête et ses paramètres.',
+    columnLabel: 'Libellé de la colonne',
     moveUp: 'Monter',
     moveDown: 'Descendre',
     parameters: 'Paramètres',

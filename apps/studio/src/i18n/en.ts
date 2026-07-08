@@ -523,6 +523,7 @@ export const en = {
     selectTableToBind: 'Select a table element to bind it to a query.',
     noColumnsLoaded: 'No columns loaded. Pick a query and choose Load columns.',
     loadColumnsError: 'Could not load columns. Check the query and its parameters.',
+    columnLabel: 'Label for column',
     moveUp: 'Move up',
     moveDown: 'Move down',
     parameters: 'Parameters',
