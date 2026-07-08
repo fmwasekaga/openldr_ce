@@ -590,6 +590,11 @@ export const updateReportDesign = (id: string, d: ReportDesign): Promise<ReportD
   authFetch(`/api/report-designs/${encodeURIComponent(id)}`, jbody(d, 'PUT')).then((r) => okJson<ReportDesign>(r, 'save report design'));
 export const deleteReportDesign = (id: string): Promise<void> =>
   apiDelete(`/api/report-designs/${encodeURIComponent(id)}`, 'delete report design');
+export const previewReportDesign = (design: ReportDesign): Promise<Blob> =>
+  authFetch('/api/report-designs/preview', jbody(design, 'POST')).then((r) => {
+    if (!r.ok) throw new Error(`preview failed: ${r.status}`);
+    return r.blob();
+  });
 
 // ── Terminology admin types & client ─────────────────────────────────────────
 export type PublisherRole = 'local' | 'standard' | 'external';
