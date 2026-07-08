@@ -24,6 +24,7 @@
     "@openldr/terminology": "workspace:*",
     "@openldr/dashboards": "workspace:*",
     "@openldr/report-builder": "workspace:*",
+    "@openldr/report-designer": "workspace:*",
     "@openldr/workflows": "workspace:*",
     "@openldr/marketplace": "workspace:*",
     "@fastify/static": "^9.1.3",
