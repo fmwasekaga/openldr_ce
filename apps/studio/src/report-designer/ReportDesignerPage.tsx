@@ -14,6 +14,7 @@ import { PreviewReportDesignDialog } from './PreviewReportDesignDialog';
 import { createReportDesign, deleteReportDesign, downloadReportDesignPdf, getReportDesign, listReportDesigns, updateReportDesign } from '../api';
 import { addElement, allElements, newElement, paperSize, removeElements, updateElement, updateElementRects, updateElements } from './model';
 import { clampRectToPage } from './geometry';
+import { exportDesignToExcel } from './exportExcel';
 import type { ElementKind, Rect, ReportDesign, ReportTemplate } from './types';
 
 const ZOOMS = [0.5, 0.75, 1, 1.25];
@@ -194,6 +195,16 @@ export function ReportDesignerPage(): JSX.Element {
     } catch (e) { fail(e); }
   };
 
+  const onExportExcel = async () => {
+    if (!template) return;
+    setError(undefined);
+    try {
+      const n = await exportDesignToExcel(template);
+      if (n === 0) { toast.info(t('reportDesigner.nothingToExport')); return; }
+      toast.success(t('reportDesigner.exportedExcelToast', { name: template.name }));
+    } catch (e) { fail(e); }
+  };
+
   const onDelete = async () => {
     if (!template) return;
     setError(undefined);
@@ -274,7 +285,7 @@ export function ReportDesignerPage(): JSX.Element {
                 onInsert={insert}
                 onUndo={undo} onRedo={redo} canUndo={history.canUndo} canRedo={history.canRedo}
                 onZoomIn={() => zoomStep(1)} onZoomOut={() => zoomStep(-1)}
-                onPreview={() => setPreviewOpen(true)} onSave={() => { void onSave(); }} onExportPdf={() => { void onExportPdf(); }} onExportExcel={noop}
+                onPreview={() => setPreviewOpen(true)} onSave={() => { void onSave(); }} onExportPdf={() => { void onExportPdf(); }} onExportExcel={() => { void onExportExcel(); }}
                 onCheck={noop} onDuplicate={noop} onDelete={() => setConfirmDeleteOpen(true)} />
               <PageCanvas template={template} zoom={zoom} selectedIds={selectedIds} onSelect={setSelectedIds} onCommitRects={commitRects}
                 editingId={editingId} onEditStart={startEdit} onEditChange={editChange} onEditEnd={endEdit} />
