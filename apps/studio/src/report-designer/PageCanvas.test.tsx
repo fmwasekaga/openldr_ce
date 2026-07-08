@@ -149,6 +149,33 @@ describe('PageCanvas group resize', () => {
   });
 });
 
+describe('PageCanvas inline text editing', () => {
+  it('double-click a text element shows a textarea bound to its text; typing patches it; Escape exits', () => {
+    const onPatchElement = vi.fn();
+    const onEditEnd = vi.fn();
+    const { rerender } = render(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={1} selectedIds={['amr-title']}
+      onSelect={vi.fn()} onCommitRects={vi.fn()} editingId={null} onEditStart={vi.fn()} onEditChange={onPatchElement} onEditEnd={onEditEnd} />);
+    rerender(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={1} selectedIds={['amr-title']}
+      onSelect={vi.fn()} onCommitRects={vi.fn()} editingId="amr-title" onEditStart={vi.fn()} onEditChange={onPatchElement} onEditEnd={onEditEnd} />);
+    const ta = screen.getByTestId('edit-amr-title');
+    fireEvent.change(ta, { target: { value: 'New' } });
+    expect(onPatchElement).toHaveBeenCalledWith('amr-title', 'New');
+    fireEvent.keyDown(ta, { key: 'Escape' });
+    expect(onEditEnd).toHaveBeenCalled();
+  });
+
+  it('does not start a drag when pointer-down lands on the edit textarea', () => {
+    const onCommit = vi.fn();
+    render(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={1} selectedIds={['amr-title']}
+      onSelect={vi.fn()} onCommitRects={onCommit} editingId="amr-title" onEditStart={vi.fn()} onEditChange={vi.fn()} onEditEnd={vi.fn()} />);
+    const ta = screen.getByTestId('edit-amr-title');
+    fireEvent.pointerDown(ta, { clientX: 20, clientY: 20, button: 0 });
+    fireEvent.pointerMove(window, { clientX: 80, clientY: 80 });
+    fireEvent.pointerUp(window, { clientX: 80, clientY: 80 });
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+});
+
 describe('PageCanvas style rendering', () => {
   it('renders a bold, colored, sized text element', () => {
     render(<PageCanvas template={tplWith({ id: 'tx', kind: 'text', text: 'Hi', style: { bold: true, fontSize: 20, color: '#ff0000', align: 'center' } })}

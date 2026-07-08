@@ -1,4 +1,4 @@
-import { useRef, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useRef, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Image as ImageIcon } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -15,9 +15,14 @@ interface Props {
   selectedIds: string[];
   onSelect(ids: string[]): void;
   onCommitRects(rects: Map<string, Rect>): void;
+  editingId?: string | null;
+  onEditStart?(id: string): void;
+  onEditChange?(id: string, text: string): void;
+  onEditEnd?(): void;
 }
 
-export function PageCanvas({ template, zoom, selectedIds, onSelect, onCommitRects }: Props): JSX.Element {
+export function PageCanvas({ template, zoom, selectedIds, onSelect, onCommitRects,
+  editingId = null, onEditStart, onEditChange, onEditEnd }: Props): JSX.Element {
   const { t } = useTranslation();
   const size = paperSize(template.paper, template.orientation);
   return (
@@ -26,7 +31,8 @@ export function PageCanvas({ template, zoom, selectedIds, onSelect, onCommitRect
       {template.pages.map((page, i) => (
         <div key={page.id} className="flex flex-col items-center gap-1.5">
           <PageSurface page={page} zoom={zoom} pageSize={size} margins={template.margins}
-            selectedIds={selectedIds} onSelect={onSelect} onCommitRects={onCommitRects} />
+            selectedIds={selectedIds} onSelect={onSelect} onCommitRects={onCommitRects}
+            editingId={editingId} onEditStart={onEditStart} onEditChange={onEditChange} onEditEnd={onEditEnd} />
           <span className="text-[11px] text-neutral-600 dark:text-neutral-300">
             {t('reportDesigner.pageOf', { n: i + 1, total: template.pages.length })}
           </span>
@@ -36,9 +42,14 @@ export function PageCanvas({ template, zoom, selectedIds, onSelect, onCommitRect
   );
 }
 
-function PageSurface({ page, zoom, pageSize, margins, selectedIds, onSelect, onCommitRects }: {
+function PageSurface({ page, zoom, pageSize, margins, selectedIds, onSelect, onCommitRects,
+  editingId = null, onEditStart, onEditChange, onEditEnd }: {
   page: DesignPage; zoom: number; pageSize: { w: number; h: number }; margins?: Margins;
   selectedIds: string[]; onSelect(ids: string[]): void; onCommitRects(rects: Map<string, Rect>): void;
+  editingId?: string | null;
+  onEditStart?(id: string): void;
+  onEditChange?(id: string, text: string): void;
+  onEditEnd?(): void;
 }): JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
   const ix = useCanvasInteraction({ page, zoom, pageSize, selectedIds, originRef: ref, onSelect, onCommitRects });
@@ -55,8 +66,12 @@ function PageSurface({ page, zoom, pageSize, margins, selectedIds, onSelect, onC
           <ElementBox key={el.id} el={el} rect={rect} zoom={zoom}
             selected={selectedIds.includes(el.id)}
             showHandles={selectedIds.length === 1 && selectedIds[0] === el.id}
+            editing={editingId === el.id}
             onPointerDown={(e) => ix.onElementPointerDown(e, el.id)}
-            onHandlePointerDown={(e, h) => ix.onHandlePointerDown(e, el.id, h)} />
+            onHandlePointerDown={(e, h) => ix.onHandlePointerDown(e, el.id, h)}
+            onDoubleClick={() => onEditStart?.(el.id)}
+            onEditChange={(text) => onEditChange?.(el.id, text)}
+            onEditEnd={() => onEditEnd?.()} />
         );
       })}
       {groupBox && (
@@ -92,17 +107,34 @@ const HANDLE_CLASS: Record<Handle, string> = {
   sw: '-left-1 -bottom-1 cursor-nesw-resize', w: '-left-1 top-1/2 -translate-y-1/2 cursor-ew-resize',
 };
 
-function ElementBox({ el, rect, zoom, selected, showHandles, onPointerDown, onHandlePointerDown }: {
-  el: DesignElement; rect: Rect; zoom: number; selected: boolean; showHandles: boolean;
+function ElementBox({ el, rect, zoom, selected, showHandles, editing, onPointerDown, onHandlePointerDown, onDoubleClick, onEditChange, onEditEnd }: {
+  el: DesignElement; rect: Rect; zoom: number; selected: boolean; showHandles: boolean; editing: boolean;
   onPointerDown(e: ReactPointerEvent): void; onHandlePointerDown(e: ReactPointerEvent, h: Handle): void;
+  onDoubleClick(): void; onEditChange(text: string): void; onEditEnd(): void;
 }): JSX.Element {
+  const editRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => { if (editing) { editRef.current?.focus(); editRef.current?.select(); } }, [editing]);
   const style: CSSProperties = { left: rect.x * zoom, top: rect.y * zoom, width: rect.w * zoom, height: rect.h * zoom };
+  const isText = el.kind === 'text' || el.kind === 'datetime';
+  const s = el.style ?? {};
   return (
-    <div role="button" tabIndex={0} aria-label={el.name} data-testid={`el-${el.id}`} onPointerDown={onPointerDown}
-      className={cn('absolute cursor-move touch-none', selected && 'outline outline-2 outline-offset-2 outline-primary')}
+    <div role="button" tabIndex={0} aria-label={el.name} data-testid={`el-${el.id}`}
+      onPointerDown={editing ? undefined : onPointerDown}
+      onDoubleClick={isText ? onDoubleClick : undefined}
+      className={cn('absolute touch-none', editing ? 'cursor-text' : 'cursor-move', selected && 'outline outline-2 outline-offset-2 outline-primary')}
       style={style}>
-      <ElementContent el={el} zoom={zoom} />
-      {showHandles && HANDLES.map((h) => (
+      {editing && isText ? (
+        <textarea ref={editRef} data-testid={`edit-${el.id}`} value={el.text ?? ''}
+          onPointerDown={(e) => e.stopPropagation()}
+          onChange={(e) => onEditChange(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); onEditEnd(); } }}
+          onBlur={onEditEnd}
+          className="absolute inset-0 resize-none overflow-hidden border-0 bg-transparent p-0 leading-tight outline-none"
+          style={{ fontSize: (s.fontSize ?? 11) * zoom, fontWeight: s.bold ? 600 : 400, textAlign: s.align ?? 'left', color: s.color ?? '#262626' }} />
+      ) : (
+        <ElementContent el={el} zoom={zoom} />
+      )}
+      {showHandles && !editing && HANDLES.map((h) => (
         <span key={h} data-testid={`handle-${h}`} onPointerDown={(e) => onHandlePointerDown(e, h)}
           className={cn('absolute h-2 w-2 border border-primary bg-white touch-none', HANDLE_CLASS[h])} />
       ))}

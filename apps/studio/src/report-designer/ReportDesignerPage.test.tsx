@@ -168,4 +168,15 @@ describe('ReportDesignerPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /undo/i }));
     expect(within(inspector()).getByRole('button', { name: 'Bold' })).toHaveAttribute('aria-pressed', 'false');
   });
+
+  it('double-click a text element on the canvas edits it inline and syncs the model', () => {
+    renderPage();
+    fireEvent.doubleClick(screen.getByTestId('el-amr-title'));
+    const ta = screen.getByTestId('edit-amr-title');
+    fireEvent.change(ta, { target: { value: 'Inline edit' } });
+    fireEvent.keyDown(ta, { key: 'Escape' });
+    // Properties Content field reflects the inline edit (element stays selected)
+    fireEvent.click(within(screen.getByTestId('inspector')).getByRole('button', { name: 'Properties' }));
+    expect(within(screen.getByTestId('inspector')).getByLabelText('Content')).toHaveValue('Inline edit');
+  });
 });
