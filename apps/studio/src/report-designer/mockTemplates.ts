@@ -1,5 +1,7 @@
 import type { ReportTemplate } from './types';
 
+export const MOCK_REPORTS = ['AMR resistance', 'Caseload by test', 'TAT by analyte'];
+
 export const MOCK_TEMPLATES: ReportTemplate[] = [
   {
     id: 'rt-amr-summary',

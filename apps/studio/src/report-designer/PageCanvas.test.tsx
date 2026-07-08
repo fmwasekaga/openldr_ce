@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { PageCanvas } from './PageCanvas';
 import { MOCK_TEMPLATES } from './mockTemplates';
+import type { ReportTemplate } from './types';
 
 function pd(el: Element, x: number, y: number, extra: object = {}) {
   fireEvent.pointerDown(el, { clientX: x, clientY: y, button: 0, ...extra });
@@ -116,5 +117,37 @@ describe('PageCanvas interaction', () => {
     fireEvent.pointerMove(window, { clientX: 63, clientY: 1065 });
     expect(screen.getByTestId('guide')).toBeInTheDocument();
     fireEvent.pointerUp(window, { clientX: 63, clientY: 1065 });
+  });
+});
+
+function tplWith(el: Partial<import('./types').DesignElement> & { id: string; kind: import('./types').ElementKind }, margins?: import('./types').Margins): ReportTemplate {
+  return { id: 't', name: 't', paper: 'A4', orientation: 'portrait', parameters: [], margins,
+    pages: [{ id: 'p1', elements: [{ name: el.id, rect: { x: 10, y: 10, w: 100, h: 40 }, ...el }] }] };
+}
+
+describe('PageCanvas style rendering', () => {
+  it('renders a bold, colored, sized text element', () => {
+    render(<PageCanvas template={tplWith({ id: 'tx', kind: 'text', text: 'Hi', style: { bold: true, fontSize: 20, color: '#ff0000', align: 'center' } })}
+      zoom={1} selectedIds={[]} onSelect={vi.fn()} onCommitRects={vi.fn()} />);
+    const box = screen.getByText('Hi');
+    expect(box).toHaveStyle({ fontWeight: '600', textAlign: 'center', fontSize: '20px', color: 'rgb(255, 0, 0)' });
+  });
+
+  it('renders an image element with a src', () => {
+    render(<PageCanvas template={tplWith({ id: 'im', kind: 'image', src: 'http://x/y.png' })}
+      zoom={1} selectedIds={[]} onSelect={vi.fn()} onCommitRects={vi.fn()} />);
+    expect(screen.getByRole('img')).toHaveAttribute('src', 'http://x/y.png');
+  });
+
+  it('renders a page margin guide when margins are set', () => {
+    render(<PageCanvas template={tplWith({ id: 'tx', kind: 'text', text: 'Hi' }, { top: 20, right: 20, bottom: 20, left: 20 })}
+      zoom={1} selectedIds={[]} onSelect={vi.fn()} onCommitRects={vi.fn()} />);
+    expect(screen.getByTestId('margin-guide')).toHaveStyle({ left: '20px', top: '20px', right: '20px', bottom: '20px' });
+  });
+
+  it('renders no margin guide when margins are unset', () => {
+    render(<PageCanvas template={tplWith({ id: 'tx', kind: 'text', text: 'Hi' })}
+      zoom={1} selectedIds={[]} onSelect={vi.fn()} onCommitRects={vi.fn()} />);
+    expect(screen.queryByTestId('margin-guide')).toBeNull();
   });
 });

@@ -103,14 +103,14 @@ describe('ReportDesignerPage', () => {
     fireEvent.click(within(inspector()).getByRole('button', { name: 'Layers' }));
     fireEvent.click(within(inspector()).getByRole('button', { name: 'Title' }));
     fireEvent.click(within(inspector()).getByRole('button', { name: 'Properties' }));
-    expect(within(inspector()).getByText('48')).toBeInTheDocument();
+    expect(within(inspector()).getByLabelText('X')).toHaveValue(48);
     // drag Title to the right on the canvas → x changes
     fireEvent.pointerDown(screen.getByTestId('el-amr-title'), { clientX: 100, clientY: 100, button: 0 });
     fireEvent.pointerMove(window, { clientX: 190, clientY: 100 });
     fireEvent.pointerUp(window, { clientX: 190, clientY: 100 });
-    expect(within(inspector()).queryByText('48')).not.toBeInTheDocument();
+    expect(within(inspector()).getByLabelText('X')).not.toHaveValue(48);
     fireEvent.click(screen.getByRole('button', { name: /undo/i }));
-    expect(within(inspector()).getByText('48')).toBeInTheDocument();
+    expect(within(inspector()).getByLabelText('X')).toHaveValue(48);
   });
 
   it('arrow keys nudge the selection and coalesce into one undo step', () => {
@@ -119,11 +119,36 @@ describe('ReportDesignerPage', () => {
     fireEvent.click(within(inspector()).getByRole('button', { name: 'Layers' }));
     fireEvent.click(within(inspector()).getByRole('button', { name: 'Title' }));
     fireEvent.click(within(inspector()).getByRole('button', { name: 'Properties' }));
-    expect(within(inspector()).getByText('48')).toBeInTheDocument();
+    expect(within(inspector()).getByLabelText('X')).toHaveValue(48);
     fireEvent.keyDown(document.body, { key: 'ArrowRight' });
     fireEvent.keyDown(document.body, { key: 'ArrowRight' });
-    expect(within(inspector()).getByText('50')).toBeInTheDocument(); // 48 → 50
+    expect(within(inspector()).getByLabelText('X')).toHaveValue(50); // 48 → 50
     fireEvent.click(screen.getByRole('button', { name: /undo/i }));
-    expect(within(inspector()).getByText('48')).toBeInTheDocument(); // single undo restores both nudges
+    expect(within(inspector()).getByLabelText('X')).toHaveValue(48); // single undo restores both nudges
+  });
+
+  it('edits a selected element geometry and undo restores it', () => {
+    renderPage();
+    const inspector = () => screen.getByTestId('inspector');
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Layers' }));
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Title' }));
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Properties' }));
+    fireEvent.change(within(inspector()).getByLabelText('X'), { target: { value: '200' } });
+    expect(within(inspector()).getByLabelText('X')).toHaveValue(200);
+    fireEvent.click(screen.getByRole('button', { name: /undo/i }));
+    expect(within(inspector()).getByLabelText('X')).toHaveValue(48);
+  });
+
+  it('edits text content and undo restores it', () => {
+    renderPage();
+    const inspector = () => screen.getByTestId('inspector');
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Layers' }));
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Title' }));
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Properties' }));
+    const content = () => within(inspector()).getByLabelText('Content');
+    fireEvent.change(content(), { target: { value: 'Changed' } });
+    expect(content()).toHaveValue('Changed');
+    fireEvent.click(screen.getByRole('button', { name: /undo/i }));
+    expect(content()).toHaveValue('Antimicrobial resistance summary');
   });
 });

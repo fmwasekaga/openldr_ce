@@ -4,6 +4,20 @@ export type Orientation = 'portrait' | 'landscape';
 
 export interface Rect { x: number; y: number; w: number; h: number; }
 
+export type TextAlign = 'left' | 'center' | 'right';
+
+export interface ElementStyle {
+  fontSize?: number;
+  bold?: boolean;
+  align?: TextAlign;
+  color?: string;
+  strokeColor?: string;
+  strokeWidth?: number;
+  fill?: string;
+}
+
+export interface Margins { top: number; right: number; bottom: number; left: number; }
+
 export interface DesignElement {
   id: string;
   kind: ElementKind;
@@ -17,6 +31,10 @@ export interface DesignElement {
   rows?: string[][];
   /** table binding label, e.g. "AMR resistance" */
   boundReport?: string;
+  /** presentational style (text/line/rect) */
+  style?: ElementStyle;
+  /** image source (URL or data: URI) */
+  src?: string;
 }
 
 export interface DesignPage { id: string; elements: DesignElement[]; }
@@ -30,4 +48,5 @@ export interface ReportTemplate {
   orientation: Orientation;
   pages: DesignPage[];
   parameters: TemplateParam[];
+  margins?: Margins;
 }

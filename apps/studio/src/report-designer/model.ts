@@ -73,3 +73,18 @@ export function removeElements(tpl: ReportTemplate, ids: Set<string>): ReportTem
   if (ids.size === 0) return tpl;
   return { ...tpl, pages: tpl.pages.map((p) => ({ ...p, elements: p.elements.filter((e) => !ids.has(e.id)) })) };
 }
+
+export function updateElement(tpl: ReportTemplate, id: string, patch: Partial<DesignElement>): ReportTemplate {
+  return {
+    ...tpl,
+    pages: tpl.pages.map((p) => ({
+      ...p,
+      elements: p.elements.map((e) => {
+        if (e.id !== id) return e;
+        const merged: DesignElement = { ...e, ...patch };
+        if (patch.style) merged.style = { ...e.style, ...patch.style };
+        return merged;
+      }),
+    })),
+  };
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { newElement, addElement, reportsOnPage, paperSize, findElement, allElements, updateElementRects, removeElements } from './model';
+import { newElement, addElement, reportsOnPage, paperSize, findElement, allElements, updateElementRects, removeElements, updateElement } from './model';
 import { MOCK_TEMPLATES } from './mockTemplates';
 import type { ReportTemplate } from './types';
 
@@ -70,5 +70,22 @@ describe('report-designer model', () => {
     const id = tpl.pages[0].elements[0].id;
     const next = removeElements(tpl, new Set([id]));
     expect(allElements(next).some((e) => e.id === id)).toBe(false);
+  });
+
+  it('updateElement merges a shallow patch immutably', () => {
+    const tpl = MOCK_TEMPLATES[0];
+    const id = tpl.pages[0].elements[0].id;
+    const next = updateElement(tpl, id, { text: 'Hi' });
+    expect(next.pages[0].elements[0].text).toBe('Hi');
+    expect(tpl.pages[0].elements[0].text).not.toBe('Hi');
+  });
+
+  it('updateElement shallow-merges the style object', () => {
+    const tpl = MOCK_TEMPLATES[0];
+    const id = tpl.pages[0].elements[0].id;
+    const a = updateElement(tpl, id, { style: { bold: true } });
+    const b = updateElement(a, id, { style: { fontSize: 18 } });
+    const el = b.pages[0].elements.find((e) => e.id === id)!;
+    expect(el.style).toEqual({ bold: true, fontSize: 18 });
   });
 });
