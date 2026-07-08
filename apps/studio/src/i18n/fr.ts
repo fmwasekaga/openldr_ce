@@ -494,7 +494,6 @@ export const fr: EnShape = {
     pageSettings: 'Paramètres de page',
     paper: 'Papier',
     orientation: 'Orientation',
-    boundReport: 'Rapport lié',
     columns: 'Colonnes',
     content: 'Contenu',
     fontSize: 'Taille',

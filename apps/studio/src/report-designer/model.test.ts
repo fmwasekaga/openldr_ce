@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { newElement, addElement, reportsOnPage, paperSize, findElement, allElements, updateElementRects, removeElements, updateElement, updateElements } from './model';
+import { newElement, addElement, paperSize, findElement, allElements, updateElementRects, removeElements, updateElement, updateElements } from './model';
 import { MOCK_TEMPLATES } from './mockTemplates';
 import type { ReportTemplate } from './types';
 
@@ -23,13 +23,6 @@ describe('report-designer model', () => {
     const next = addElement(tpl, 0, newElement('text'));
     expect(next.pages[0].elements).toHaveLength(1);
     expect(tpl.pages[0].elements).toHaveLength(0);
-  });
-
-  it('reportsOnPage returns distinct bound reports from table elements', () => {
-    const tpl = MOCK_TEMPLATES[0];
-    const reports = reportsOnPage(tpl.pages[0]);
-    expect(reports).toContain('AMR resistance');
-    expect(new Set(reports).size).toBe(reports.length);
   });
 
   it('paperSize swaps width/height for landscape', () => {
