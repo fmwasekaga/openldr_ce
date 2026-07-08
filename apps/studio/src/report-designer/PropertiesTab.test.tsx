@@ -35,4 +35,18 @@ describe('PropertiesTab editing', () => {
     const call = props.onPatchElement.mock.calls.at(-1)!;
     expect(call[1].rect.w).toBe(8);
   });
+
+  it('edits text content (coalesced) and toggles bold (discrete)', () => {
+    const props = setup({ selectedIds: ['amr-title'] });
+    fireEvent.change(screen.getByLabelText('Content'), { target: { value: 'New title' } });
+    expect(props.onPatchElement).toHaveBeenCalledWith('amr-title', { text: 'New title' }, undefined);
+    fireEvent.click(screen.getByRole('button', { name: 'Bold' }));
+    expect(props.onPatchElement).toHaveBeenCalledWith('amr-title', { style: { bold: true } }, { discrete: true });
+  });
+
+  it('adds a table column (discrete)', () => {
+    const props = setup({ selectedIds: ['amr-table'] });
+    fireEvent.click(screen.getByRole('button', { name: /add column/i }));
+    expect(props.onPatchElement).toHaveBeenCalledWith('amr-table', expect.objectContaining({ columns: expect.any(Array) }), { discrete: true });
+  });
 });
