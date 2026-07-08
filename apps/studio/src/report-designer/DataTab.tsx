@@ -42,6 +42,7 @@ export function DataTab({ element, parameters, onPatchElement }: Props): JSX.Ele
     loadSeq.current += 1;
     setResultColumns([]);
     setLoadError(null);
+    setLoading(false); // a new element always starts idle, even if the old one had a run in flight
   }, [element?.id]);
 
   if (!element || element.kind !== 'table') {
@@ -85,7 +86,10 @@ export function DataTab({ element, parameters, onPatchElement }: Props): JSX.Ele
       if (reqId !== loadSeq.current) return;
       setLoadError(t('reportDesigner.loadColumnsError'));
     } finally {
-      if (reqId === loadSeq.current) setLoading(false);
+      // Always clear loading when a request settles. The reqId guard above already prevents stale
+      // RESULTS from applying; loading must reset unconditionally or a superseded run leaves the
+      // button stuck-disabled on the new element. Concurrent loads can't happen (button disabled while loading).
+      setLoading(false);
     }
   };
 

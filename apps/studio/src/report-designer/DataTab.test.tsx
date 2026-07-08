@@ -85,6 +85,27 @@ describe('DataTab table binding', () => {
     expect(await screen.findByText('Could not load columns. Check the query and its parameters.')).toBeInTheDocument();
   });
 
+  it('recovers the Load button when the element is switched mid-flight', async () => {
+    // A deferred run() that stays pending until we resolve it, simulating an in-flight load.
+    let resolveRun: (v: { columns: { key: string; label: string }[]; rows: unknown[] }) => void = () => {};
+    (queryApi.run as ReturnType<typeof vi.fn>).mockReturnValueOnce(new Promise((r) => { resolveRun = r; }));
+
+    const props = { parameters: [], onPatchElement: vi.fn(), onPatchParameters: vi.fn() };
+    const { rerender } = render(<DataTab element={tableEl({ id: 't', dataSource: { kind: 'custom-query', queryId: 'cq_1' } })} {...props} />);
+
+    const loadBtn = () => screen.getByRole('button', { name: /load columns/i });
+    // Fire the load; wait until run() is actually dispatched (queries must be loaded first).
+    await waitFor(() => { fireEvent.click(loadBtn()); expect(queryApi.run).toHaveBeenCalled(); });
+    expect(loadBtn()).toBeDisabled(); // loading === true while the deferred is pending
+
+    // Switch to a different element while the first run is still pending.
+    rerender(<DataTab element={tableEl({ id: 't2', dataSource: { kind: 'custom-query', queryId: 'cq_1' } })} {...props} />);
+    // Resolve the stale run late — its result must be ignored, and loading must not stay stuck.
+    resolveRun({ columns: [{ key: 'org', label: 'Organism' }], rows: [] });
+
+    await waitFor(() => expect(loadBtn()).not.toBeDisabled());
+  });
+
   it('clears loaded columns when a different element is selected', async () => {
     const onPatchElement = vi.fn();
     const props = { parameters: [], onPatchElement, onPatchParameters: vi.fn() };
