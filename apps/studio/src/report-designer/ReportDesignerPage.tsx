@@ -83,6 +83,8 @@ export function ReportDesignerPage(): JSX.Element {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return;
+      // Bail while a Radix menu handles keys itself (arrow-navigation/Esc) or lives in a [role="menu"].
+      if (e.defaultPrevented || (el && el.closest('[role="menu"]'))) return;
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
       if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
