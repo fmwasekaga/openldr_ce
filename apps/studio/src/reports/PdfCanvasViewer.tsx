@@ -170,7 +170,10 @@ export function PdfCanvasViewer({ blob, fileName, onDownload }: Props) {
             {t('common.loading')}
           </div>
         ) : (
-          <div className="flex justify-center">
+          <div className="mx-auto w-fit">
+            {/* w-fit + mx-auto centers the page when it fits, but collapses to left-aligned + fully
+                scrollable when the page is wider than the viewport. A `flex justify-center` wrapper
+                would push the left overflow off-screen and out of scroll reach. */}
             <canvas ref={canvasRef} className="shadow-lg" />
           </div>
         )}
