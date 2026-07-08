@@ -138,4 +138,17 @@ describe('ReportDesignerPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /undo/i }));
     expect(within(inspector()).getByLabelText('X')).toHaveValue(48);
   });
+
+  it('edits text content and undo restores it', () => {
+    renderPage();
+    const inspector = () => screen.getByTestId('inspector');
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Layers' }));
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Title' }));
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Properties' }));
+    const content = () => within(inspector()).getByLabelText('Content');
+    fireEvent.change(content(), { target: { value: 'Changed' } });
+    expect(content()).toHaveValue('Changed');
+    fireEvent.click(screen.getByRole('button', { name: /undo/i }));
+    expect(content()).toHaveValue('Antimicrobial resistance summary');
+  });
 });

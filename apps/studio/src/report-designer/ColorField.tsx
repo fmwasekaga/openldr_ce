@@ -7,7 +7,7 @@ const PRESETS = ['#000000', '#374151', '#6b7280', '#9ca3af', '#d1d5db', '#ffffff
 
 interface Props {
   value: string;
-  onChange(v: string): void;
+  onChange(v: string, opts?: { discrete?: boolean }): void;
   allowNone?: boolean;
   'aria-label'?: string;
 }
@@ -27,12 +27,12 @@ export function ColorField({ value, onChange, allowNone, 'aria-label': ariaLabel
         <PopoverContent align="start" className="w-40 p-2">
           <div className="grid grid-cols-6 gap-1">
             {PRESETS.map((c) => (
-              <button key={c} type="button" aria-label={c} onClick={() => onChange(c)}
+              <button key={c} type="button" aria-label={c} onClick={() => onChange(c, { discrete: true })}
                 className="h-5 w-5 rounded border border-border" style={{ background: c }} />
             ))}
           </div>
           {allowNone && (
-            <button type="button" onClick={() => onChange('none')}
+            <button type="button" onClick={() => onChange('none', { discrete: true })}
               className="mt-2 w-full rounded border border-border py-1 text-xs text-muted-foreground hover:bg-muted">
               {t('reportDesigner.none')}
             </button>

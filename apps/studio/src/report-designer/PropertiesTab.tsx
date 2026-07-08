@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Input } from '@/components/ui/input';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
@@ -21,13 +22,19 @@ interface Props {
 }
 
 function NumberField({ label, value, onChange, min }: { label: string; value: number; onChange(n: number): void; min?: number }): JSX.Element {
+  const [text, setText] = useState(String(value));
+  useEffect(() => { setText(String(value)); }, [value]);
   return (
     <div className="flex-1">
       <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
-      <Input type="number" aria-label={label} value={value} min={min}
-        onChange={(e) => {
-          const n = Number(e.target.value);
-          if (e.target.value !== '' && !Number.isNaN(n)) onChange(min != null ? Math.max(min, n) : n);
+      <Input type="number" aria-label={label} value={text} min={min}
+        onChange={(e) => { setText(e.target.value); const n = Number(e.target.value); if (e.target.value !== '' && !Number.isNaN(n)) onChange(n); }}
+        onBlur={() => {
+          const n = Number(text);
+          if (text === '' || Number.isNaN(n)) { setText(String(value)); return; }
+          const clamped = min != null ? Math.max(min, n) : n;
+          setText(String(clamped));
+          if (clamped !== n) onChange(clamped);
         }}
         className="h-8 text-xs" />
     </div>
@@ -69,7 +76,7 @@ function KindControls({ el, onPatch }: {
         </div>
         <div>
           <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.color')}</div>
-          <ColorField value={s.color ?? '#000000'} onChange={(c) => style({ color: c }, true)} aria-label={t('reportDesigner.color')} />
+          <ColorField value={s.color ?? '#000000'} onChange={(c, opts) => style({ color: c }, !!opts?.discrete)} aria-label={t('reportDesigner.color')} />
         </div>
       </div>
     );
@@ -80,13 +87,13 @@ function KindControls({ el, onPatch }: {
       <div className="flex flex-col gap-3">
         <div>
           <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.strokeColor')}</div>
-          <ColorField value={s.strokeColor ?? '#9ca3af'} onChange={(c) => style({ strokeColor: c }, true)} aria-label={t('reportDesigner.strokeColor')} />
+          <ColorField value={s.strokeColor ?? '#9ca3af'} onChange={(c, opts) => style({ strokeColor: c }, !!opts?.discrete)} aria-label={t('reportDesigner.strokeColor')} />
         </div>
         <NumberField label={t('reportDesigner.strokeWidth')} value={s.strokeWidth ?? 1} onChange={(n) => style({ strokeWidth: n })} min={1} />
         {el.kind === 'rect' && (
           <div>
             <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.fill')}</div>
-            <ColorField value={s.fill ?? 'none'} onChange={(c) => style({ fill: c }, true)} allowNone aria-label={t('reportDesigner.fill')} />
+            <ColorField value={s.fill ?? 'none'} onChange={(c, opts) => style({ fill: c }, !!opts?.discrete)} allowNone aria-label={t('reportDesigner.fill')} />
           </div>
         )}
       </div>

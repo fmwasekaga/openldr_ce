@@ -17,6 +17,6 @@ describe('ColorField', () => {
     fireEvent.pointerDown(trigger, { button: 0, pointerType: 'mouse' });
     if (!screen.queryByRole('button', { name: '#ef4444' })) fireEvent.click(trigger);
     fireEvent.click(screen.getByRole('button', { name: '#ef4444' }));
-    expect(onChange).toHaveBeenCalledWith('#ef4444');
+    expect(onChange).toHaveBeenCalledWith('#ef4444', { discrete: true });
   });
 });

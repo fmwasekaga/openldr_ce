@@ -34,11 +34,12 @@ describe('PropertiesTab editing', () => {
     expect(screen.getByText('2 elements selected')).toBeInTheDocument();
   });
 
-  it('clamps W to the minimum when a too-small value is typed', () => {
+  it('clamps W to the minimum on blur', () => {
     const props = setup({ selectedIds: ['amr-title'] });
-    fireEvent.change(screen.getByLabelText('W'), { target: { value: '0' } });
-    const call = props.onPatchElement.mock.calls.at(-1)!;
-    expect(call[1].rect.w).toBe(8);
+    const w = screen.getByLabelText('W');
+    fireEvent.change(w, { target: { value: '0' } });
+    fireEvent.blur(w);
+    expect(props.onPatchElement.mock.calls.at(-1)![1].rect.w).toBe(8);
   });
 
   it('edits text content (coalesced) and toggles bold (discrete)', () => {
@@ -63,12 +64,12 @@ describe('PropertiesTab editing', () => {
     expect(onPatchElement).toHaveBeenCalledWith('ln', { style: { strokeWidth: 3 } }, undefined);
   });
 
-  it('edits rect fill color (discrete)', () => {
+  it('edits rect fill color (coalesced hex)', () => {
     const onPatchElement = vi.fn();
     render(<PropertiesTab template={tplWithEl({ id: 'rc', kind: 'rect', name: 'Rect', rect: { x: 0, y: 0, w: 100, h: 100 } })}
       selectedIds={['rc']} onPatchElement={onPatchElement} onPatchPage={vi.fn()} />);
     fireEvent.change(screen.getByLabelText('Fill hex'), { target: { value: '#123456' } });
-    expect(onPatchElement).toHaveBeenCalledWith('rc', { style: { fill: '#123456' } }, { discrete: true });
+    expect(onPatchElement).toHaveBeenCalledWith('rc', { style: { fill: '#123456' } }, undefined);
   });
 
   it('edits image source (coalesced)', () => {
