@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { X } from 'lucide-react';
+import { Dialog, DialogContent, DialogClose, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { previewReportDesign } from '../api';
 import { PdfCanvasViewer } from '../reports/PdfCanvasViewer';
 import type { ReportDesign } from './types';
@@ -28,6 +29,12 @@ export function PreviewReportDesignDialog({ open, design, onOpenChange }: {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl">
+        <DialogClose
+          aria-label={t('common.close')}
+          className="absolute right-4 top-4 z-10 rounded p-1 text-muted-foreground hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <X className="h-4 w-4" />
+        </DialogClose>
         <DialogTitle className="text-base font-semibold">{t('reportDesigner.previewTitle')}</DialogTitle>
         <DialogDescription className="sr-only">{t('reportDesigner.previewTitle')}</DialogDescription>
         <div className="h-[70vh]">

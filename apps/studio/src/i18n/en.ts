@@ -15,6 +15,7 @@ export const en = {
     configUnreachable: 'Cannot reach the server. Please reload.',
     previous: 'Previous',
     next: 'Next',
+    close: 'Close',
   },
   table: {
     filter: 'Filter',
