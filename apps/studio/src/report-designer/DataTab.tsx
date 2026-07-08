@@ -25,10 +25,12 @@ type ParamType = NonNullable<TemplateParam['type']>;
 const emptyValue = (type: ParamType): TemplateParam['value'] => (type === 'daterange' ? { from: '', to: '' } : '');
 
 /** One editable design-parameter row. Text inputs commit on blur (local state while typing). */
-function ParamRow({ param, onChange, onRemove }: {
+function ParamRow({ param, onChange, onRemove, isKeyTaken }: {
   param: TemplateParam;
   onChange: (patch: Partial<TemplateParam>) => void;
   onRemove: () => void;
+  /** True if `k` is already used by ANOTHER row — a rename to it must be rejected. */
+  isKeyTaken: (k: string) => boolean;
 }): JSX.Element {
   const { t } = useTranslation();
   const type: ParamType = param.type ?? 'text';
@@ -50,7 +52,14 @@ function ParamRow({ param, onChange, onRemove }: {
     setFrom(r.from); setTo(r.to);
   }, [param.value]);
 
-  const commitKey = () => { const k = key.trim(); if (k && k !== param.key) onChange({ key: k }); else setKey(param.key); };
+  // Commit a rename only if non-empty, changed, AND not already used by a sibling row; otherwise
+  // snap the local text back to the current key (duplicate keys would collide in the loadColumns /
+  // server-preview `values[param.key]` map and dup React keys in the list — last-wins silently).
+  const commitKey = () => {
+    const k = key.trim();
+    if (k && k !== param.key && !isKeyTaken(k)) onChange({ key: k });
+    else setKey(param.key);
+  };
 
   return (
     <div className="flex flex-col gap-1.5 py-2">
@@ -98,7 +107,8 @@ function ParamEditor({ parameters, onPatchParameters }: {
     const keys = new Set(parameters.map((p) => p.key));
     let n = 1;
     while (keys.has(`param${n}`)) n += 1; // smallest free paramN, so keys stay unique
-    onPatchParameters([...parameters, { key: `param${n}`, label: `Param ${parameters.length + 1}`, type: 'text', value: '' }]);
+    // Derive the default label from the same n so key and label don't diverge after a middle remove.
+    onPatchParameters([...parameters, { key: `param${n}`, label: `Param ${n}`, type: 'text', value: '' }]);
   };
   const update = (i: number, patch: Partial<TemplateParam>) =>
     onPatchParameters(parameters.map((p, j) => (j === i ? { ...p, ...patch } : p)));
@@ -117,7 +127,8 @@ function ParamEditor({ parameters, onPatchParameters }: {
       ) : (
         <div className="flex flex-col divide-y divide-border">
           {parameters.map((p, i) => (
-            <ParamRow key={p.key} param={p} onChange={(patch) => update(i, patch)} onRemove={() => remove(i)} />
+            <ParamRow key={p.key} param={p} onChange={(patch) => update(i, patch)} onRemove={() => remove(i)}
+              isKeyTaken={(k) => parameters.some((o, j) => j !== i && o.key === k)} />
           ))}
         </div>
       )}

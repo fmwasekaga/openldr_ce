@@ -149,4 +149,32 @@ describe('DataTab design parameters', () => {
     fireEvent.click(screen.getByLabelText('Remove parameter facility'));
     expect(onPatchParameters).toHaveBeenLastCalledWith([]);
   });
+
+  it('resets value to a text default when the type changes away from daterange', async () => {
+    const onPatchParameters = vi.fn();
+    const params = [{ key: 'p', label: 'P', type: 'daterange' as const, value: { from: '2026-01-01', to: '2026-06-30' } }];
+    render(<DataTab element={undefined} parameters={params} onPatchElement={vi.fn()} onPatchParameters={onPatchParameters} />);
+    fireEvent.click(screen.getByLabelText('Type p')); // open the type Select (jsdom pointerDown-driven)
+    fireEvent.click(await screen.findByText('Text'));
+    expect(onPatchParameters).toHaveBeenCalledWith([expect.objectContaining({ type: 'text', value: '' })]);
+    // The stale daterange object is gone — never committed with both a text type and a {from,to} value.
+    expect(onPatchParameters).not.toHaveBeenCalledWith([expect.objectContaining({ type: 'text', value: { from: '2026-01-01', to: '2026-06-30' } })]);
+  });
+
+  it('rejects a key rename that collides with a sibling param', () => {
+    const onPatchParameters = vi.fn();
+    const params = [
+      { key: 'param1', label: 'Param 1', type: 'text' as const, value: '' },
+      { key: 'param2', label: 'Param 2', type: 'text' as const, value: '' },
+    ];
+    render(<DataTab element={undefined} parameters={params} onPatchElement={vi.fn()} onPatchParameters={onPatchParameters} />);
+    const keyInput = screen.getByLabelText('Key param2');
+    fireEvent.change(keyInput, { target: { value: 'param1' } });
+    fireEvent.blur(keyInput);
+    // The duplicate rename must be rejected: no patch that would produce two 'param1' keys.
+    for (const call of onPatchParameters.mock.calls) {
+      const next = call[0] as Array<{ key: string }>;
+      expect(next.filter((p) => p.key === 'param1').length).toBeLessThan(2);
+    }
+  });
 });
