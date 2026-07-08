@@ -114,7 +114,7 @@ function ElementContent({ el, zoom }: { el: DesignElement; zoom: number }): JSX.
       return <div className="h-full w-full" style={{ border: `${(s.strokeWidth ?? 1) * zoom}px solid ${s.strokeColor ?? '#d4d4d4'}`, background: s.fill && s.fill !== 'none' ? s.fill : 'transparent' }} />;
     case 'image':
       return el.src
-        ? <img src={el.src} alt={el.name} className="h-full w-full object-contain" />
+        ? <img src={el.src} alt={el.name} draggable={false} className="h-full w-full object-contain" />
         : (
           <div className="flex h-full w-full items-center justify-center border border-dashed border-neutral-300 text-neutral-400">
             <ImageIcon className="h-4 w-4" />

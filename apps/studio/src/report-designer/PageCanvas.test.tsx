@@ -130,7 +130,7 @@ describe('PageCanvas style rendering', () => {
     render(<PageCanvas template={tplWith({ id: 'tx', kind: 'text', text: 'Hi', style: { bold: true, fontSize: 20, color: '#ff0000', align: 'center' } })}
       zoom={1} selectedIds={[]} onSelect={vi.fn()} onCommitRects={vi.fn()} />);
     const box = screen.getByText('Hi');
-    expect(box).toHaveStyle({ fontWeight: '600', textAlign: 'center' });
+    expect(box).toHaveStyle({ fontWeight: '600', textAlign: 'center', fontSize: '20px', color: 'rgb(255, 0, 0)' });
   });
 
   it('renders an image element with a src', () => {
@@ -142,6 +142,12 @@ describe('PageCanvas style rendering', () => {
   it('renders a page margin guide when margins are set', () => {
     render(<PageCanvas template={tplWith({ id: 'tx', kind: 'text', text: 'Hi' }, { top: 20, right: 20, bottom: 20, left: 20 })}
       zoom={1} selectedIds={[]} onSelect={vi.fn()} onCommitRects={vi.fn()} />);
-    expect(screen.getByTestId('margin-guide')).toBeInTheDocument();
+    expect(screen.getByTestId('margin-guide')).toHaveStyle({ left: '20px', top: '20px', right: '20px', bottom: '20px' });
+  });
+
+  it('renders no margin guide when margins are unset', () => {
+    render(<PageCanvas template={tplWith({ id: 'tx', kind: 'text', text: 'Hi' })}
+      zoom={1} selectedIds={[]} onSelect={vi.fn()} onCommitRects={vi.fn()} />);
+    expect(screen.queryByTestId('margin-guide')).toBeNull();
   });
 });
