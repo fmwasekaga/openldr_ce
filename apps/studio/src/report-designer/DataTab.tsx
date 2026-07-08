@@ -24,7 +24,7 @@ export function DataTab({ template }: Props): JSX.Element {
       {template.parameters.map((pm) => (
         <div key={pm.key}>
           <div className="mb-1 text-[10px] text-muted-foreground">{pm.label}</div>
-          <div className="flex h-8 items-center rounded-md border border-border bg-muted/30 px-2 text-xs">{pm.value}</div>
+          <div className="flex h-8 items-center rounded-md border border-border bg-muted/30 px-2 text-xs">{typeof pm.value === 'string' ? pm.value : ''}</div>
         </div>
       ))}
     </div>
