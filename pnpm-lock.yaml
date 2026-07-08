@@ -709,6 +709,9 @@ importers:
       '@openldr/report-builder':
         specifier: workspace:*
         version: link:../report-builder
+      '@openldr/report-designer':
+        specifier: workspace:*
+        version: link:../report-designer
       '@openldr/reporting':
         specifier: workspace:*
         version: link:../reporting
