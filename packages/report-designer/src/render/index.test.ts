@@ -66,6 +66,15 @@ describe('renderReportDesignPdf', () => {
     expect(buf.toString('latin1')).toMatch(/\/Count 1/);
   });
 
+  it('paginates an overflowing static (unbound) table through the render path', async () => {
+    const design = baseDesign({ pages: [{ id: 'p1', elements: [
+      { id: 't1', kind: 'table', name: 'T', rect: { x: 10, y: 10, w: 300, h: 100 }, columns: ['A'], rows: Array.from({ length: 7 }, (_, i) => [`r${i}`]) },
+    ] }] });
+    const buf = await renderReportDesignPdf(design, new Map(), { now: NOW });
+    expect(buf.subarray(0, 4).toString()).toBe('%PDF');
+    expect(buf.toString('latin1')).toMatch(/\/Count 3/);
+  });
+
   it('an error table does not paginate (1 page) and does not throw', async () => {
     const design = baseDesign({ pages: [{ id: 'p1', elements: [
       { id: 't1', kind: 'table', name: 'T', rect: { x: 10, y: 10, w: 300, h: 100 }, dataSource: { kind: 'custom-query', queryId: 'q' } },

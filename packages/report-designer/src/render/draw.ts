@@ -9,6 +9,8 @@ const TEXT_COLOR = '#262626';
 const LINE_COLOR = '#a3a3a3';
 const RECT_BORDER = '#d4d4d4';
 export const ROW_H = 16; // pt
+/** Body rows that fit in a box of height `hPt` (pt), reserving one row for the header. */
+const maxRowsFor = (hPt: number): number => Math.floor((hPt - ROW_H) / ROW_H);
 
 export function paramMap(design: ReportDesign, now: Date): Map<string, string> {
   const m = new Map<string, string>();
@@ -40,7 +42,7 @@ export function rowsFor(el: DesignElement, resolved: ResolvedTable | undefined):
 /** How many physical pages this one table needs (repeat-page model). 1 for non-tables/errors/degenerate boxes. */
 export function tableChunkCount(el: DesignElement, resolved: ResolvedTable | undefined): number {
   if (el.kind !== 'table') return 1;
-  const maxRows = Math.floor((toPt(el.rect).h - ROW_H) / ROW_H);
+  const maxRows = maxRowsFor(toPt(el.rect).h);
   if (maxRows < 1) return 1;
   const rowCount = rowsFor(el, resolved).length;
   return Math.max(1, Math.ceil(rowCount / maxRows));
@@ -119,7 +121,7 @@ function tableHeaders(el: DesignElement, resolved: ResolvedTable | undefined): s
 function drawGrid(doc: Doc, r: Box, headers: string[], allRows: string[][], chunk: number): void {
   const n = Math.max(headers.length, 1);
   const colW = r.w / n;
-  const maxRows = Math.floor((r.h - ROW_H) / ROW_H);
+  const maxRows = maxRowsFor(r.h);
   const rows = maxRows >= 1 ? allRows.slice(chunk * maxRows, chunk * maxRows + maxRows) : [];
   doc.save().rect(r.x, r.y, r.w, r.h).clip();
   doc.rect(r.x, r.y, r.w, ROW_H).fill('#f5f5f5');

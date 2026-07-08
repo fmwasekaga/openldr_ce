@@ -28,8 +28,8 @@ export function renderReportDesignPdf(
   });
 
   for (const page of pages) {
-    const chunks = pageChunkCount(page, resolved);
-    for (let c = 0; c < chunks; c += 1) {
+    const pageCount = pageChunkCount(page, resolved);
+    for (let c = 0; c < pageCount; c += 1) {
       doc.addPage({ size: [w, h], margin: 0 });
       for (const el of page.elements) drawElement(doc, el, tokens, resolved.get(el.id), c);
     }

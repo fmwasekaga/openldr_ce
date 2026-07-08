@@ -55,6 +55,17 @@ describe('interpolate', () => {
 const tbl = (over: Partial<DesignElement>): DesignElement =>
   ({ id: 't', kind: 'table', name: 'T', rect: { x: 0, y: 0, w: 300, h: 100 }, ...over } as DesignElement);
 
+describe('rowsFor', () => {
+  it('projects boundColumns from resolved rows for a bound table', () => {
+    const el = tbl({ dataSource: { kind: 'custom-query', queryId: 'q' }, boundColumns: [{ key: 'a', label: 'A' }] });
+    expect(rowsFor(el, { columns: [{ key: 'a', label: 'A' }, { key: 'b', label: 'B' }], rows: [{ a: 1, b: 2 }] })).toEqual([['1']]); // only boundColumn 'a', stringified
+  });
+  it('returns [] for an error-resolved bound table and the element static rows for an unbound table', () => {
+    expect(rowsFor(tbl({ dataSource: { kind: 'custom-query', queryId: 'q' } }), { error: 'x' })).toEqual([]);
+    expect(rowsFor(tbl({ columns: ['A'], rows: [['1'], ['2']] }), undefined)).toEqual([['1'], ['2']]);
+  });
+});
+
 describe('tableChunkCount', () => {
   // box h=100px → 75pt; maxRows = floor((75-16)/16) = 3
   it('splits a bound table into ceil(rows/maxRows) chunks', () => {
