@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent, RefObject } from 'react';
 import type { DesignPage, Rect } from './types';
-import { type Handle, type Box, clampRectToPage, clampGroupDelta, resizeRect, boundingBox, boxFromPoints, marqueeHits } from './geometry';
+import { type Handle, type Box, clampRectToPage, clampGroupDelta, resizeRect, boundingBox, boxFromPoints, marqueeHits, scaleGroup } from './geometry';
 import { type GuideLine, computeMoveGuides, computeResizeGuides, applyResizeSnap } from './alignmentGuides';
 
 const DRAG_THRESHOLD = 4;   // px before a press becomes a drag
@@ -20,7 +20,8 @@ interface Args {
 type Drag =
   | { mode: 'move'; sx: number; sy: number; base: Map<string, Rect> }
   | { mode: 'resize'; sx: number; sy: number; id: string; handle: Handle; base: Rect }
-  | { mode: 'marquee'; sx: number; sy: number; additive: boolean };
+  | { mode: 'marquee'; sx: number; sy: number; additive: boolean }
+  | { mode: 'group-resize'; sx: number; sy: number; handle: Handle; base: Map<string, Rect>; bbox: Box };
 
 export interface CanvasInteraction {
   preview: Map<string, Rect> | null;
@@ -29,6 +30,7 @@ export interface CanvasInteraction {
   onElementPointerDown(e: ReactPointerEvent, id: string): void;
   onHandlePointerDown(e: ReactPointerEvent, id: string, handle: Handle): void;
   onSurfacePointerDown(e: ReactPointerEvent): void;
+  onGroupHandlePointerDown(e: ReactPointerEvent, handle: Handle): void;
 }
 
 export function useCanvasInteraction(args: Args): CanvasInteraction {
@@ -81,7 +83,10 @@ export function useCanvasInteraction(args: Args): CanvasInteraction {
       const snap = computeResizeGuides(rect, d.handle, others, pageSize, thr);
       rect = clampRectToPage(applyResizeSnap(rect, d.handle, snap), pageSize);
       setPreviewBoth(new Map([[d.id, rect]])); setGuides(snap.lines);
-    } else {
+    } else if (d.mode === 'group-resize') {
+      // Group resize scales all members; alignment guides are deferred for this mode.
+      setPreviewBoth(scaleGroup(d.base, d.bbox, d.handle, dx, dy, pageSize)); setGuides([]);
+    } else if (d.mode === 'marquee') {
       const a = toModel(d.sx, d.sy, zoom), b = toModel(e.clientX, e.clientY, zoom);
       setMarquee(boxFromPoints(a.x, a.y, b.x, b.y));
     }
@@ -90,7 +95,7 @@ export function useCanvasInteraction(args: Args): CanvasInteraction {
   function onUp(e: PointerEvent) {
     const d = dragRef.current; if (!d) { end(); return; }
     const { page, zoom, selectedIds, onSelect, onCommitRects } = latest.current;
-    if (d.mode === 'move' || d.mode === 'resize') {
+    if (d.mode === 'move' || d.mode === 'resize' || d.mode === 'group-resize') {
       if (movedRef.current && previewRef.current) onCommitRects(previewRef.current);
     } else {
       if (movedRef.current) {
@@ -139,5 +144,17 @@ export function useCanvasInteraction(args: Args): CanvasInteraction {
     begin({ mode: 'marquee', sx: e.clientX, sy: e.clientY, additive: e.shiftKey });
   };
 
-  return { preview, guides, marquee, onElementPointerDown, onHandlePointerDown, onSurfacePointerDown };
+  const onGroupHandlePointerDown = (e: ReactPointerEvent, handle: Handle) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    const { page, selectedIds } = latest.current;
+    const sel = page.elements.filter((el) => selectedIds.includes(el.id));
+    if (sel.length < 2) return;
+    const b = new Map(sel.map((el) => [el.id, el.rect] as const));
+    const box = boundingBox([...b.values()]);
+    if (!box) return;
+    begin({ mode: 'group-resize', sx: e.clientX, sy: e.clientY, handle, base: b, bbox: box });
+  };
+
+  return { preview, guides, marquee, onElementPointerDown, onHandlePointerDown, onSurfacePointerDown, onGroupHandlePointerDown };
 }

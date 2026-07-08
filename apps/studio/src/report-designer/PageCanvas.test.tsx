@@ -125,6 +125,27 @@ function tplWith(el: Partial<import('./types').DesignElement> & { id: string; ki
     pages: [{ id: 'p1', elements: [{ name: el.id, rect: { x: 10, y: 10, w: 100, h: 40 }, ...el }] }] };
 }
 
+describe('PageCanvas group resize', () => {
+  it('renders group handles only for a 2+ selection and commits scaled rects', () => {
+    const onCommit = vi.fn();
+    render(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={1} selectedIds={['amr-title', 'amr-subtitle']} onSelect={vi.fn()} onCommitRects={onCommit} />);
+    const handle = screen.getByTestId('group-handle-se');
+    fireEvent.pointerDown(handle, { clientX: 0, clientY: 0, button: 0 });
+    fireEvent.pointerMove(window, { clientX: 40, clientY: 40 });
+    fireEvent.pointerUp(window, { clientX: 40, clientY: 40 });
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    const rects = onCommit.mock.calls[0][0] as Map<string, unknown>;
+    expect(rects.has('amr-title')).toBe(true);
+    expect(rects.has('amr-subtitle')).toBe(true);
+  });
+
+  it('does not render group handles for a single selection', () => {
+    render(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={1} selectedIds={['amr-title']} onSelect={vi.fn()} onCommitRects={vi.fn()} />);
+    expect(screen.queryByTestId('group-handle-se')).toBeNull();
+    expect(screen.getByTestId('handle-se')).toBeInTheDocument(); // element handles still show
+  });
+});
+
 describe('PageCanvas style rendering', () => {
   it('renders a bold, colored, sized text element', () => {
     render(<PageCanvas template={tplWith({ id: 'tx', kind: 'text', text: 'Hi', style: { bold: true, fontSize: 20, color: '#ff0000', align: 'center' } })}

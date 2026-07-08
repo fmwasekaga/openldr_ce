@@ -4,7 +4,7 @@ import { Image as ImageIcon } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import type { DesignElement, DesignPage, Margins, Rect, ReportTemplate } from './types';
 import { paperSize } from './model';
-import { HANDLES, type Handle } from './geometry';
+import { HANDLES, boundingBox, type Handle } from './geometry';
 import { useCanvasInteraction } from './useCanvasInteraction';
 
 const GUIDE_COLOR = '#e0369a'; // distinct alignment-guide color, drawn over the white page
@@ -42,6 +42,10 @@ function PageSurface({ page, zoom, pageSize, margins, selectedIds, onSelect, onC
 }): JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
   const ix = useCanvasInteraction({ page, zoom, pageSize, selectedIds, originRef: ref, onSelect, onCommitRects });
+  const selectedOnPage = page.elements.filter((el) => selectedIds.includes(el.id));
+  const groupBox = selectedOnPage.length > 1
+    ? boundingBox(selectedOnPage.map((el) => ix.preview?.get(el.id) ?? el.rect))
+    : null;
   return (
     <div ref={ref} data-testid={`page-surface-${page.id}`} onPointerDown={ix.onSurfacePointerDown}
       className="relative bg-white shadow-md ring-1 ring-border" style={{ width: pageSize.w * zoom, height: pageSize.h * zoom }}>
@@ -55,6 +59,15 @@ function PageSurface({ page, zoom, pageSize, margins, selectedIds, onSelect, onC
             onHandlePointerDown={(e, h) => ix.onHandlePointerDown(e, el.id, h)} />
         );
       })}
+      {groupBox && (
+        <div aria-hidden data-testid="group-box" className="pointer-events-none absolute outline outline-1 outline-dashed outline-primary"
+          style={{ left: groupBox.x * zoom, top: groupBox.y * zoom, width: groupBox.w * zoom, height: groupBox.h * zoom }}>
+          {HANDLES.map((h) => (
+            <span key={h} data-testid={`group-handle-${h}`} onPointerDown={(e) => ix.onGroupHandlePointerDown(e, h)}
+              className={cn('pointer-events-auto absolute h-2 w-2 border border-primary bg-white touch-none', HANDLE_CLASS[h])} />
+          ))}
+        </div>
+      )}
       {ix.guides.map((g, idx) => (
         <span key={idx} aria-hidden data-testid="guide" style={g.axis === 'x'
           ? { position: 'absolute', left: g.pos * zoom, top: g.from * zoom, height: (g.to - g.from) * zoom, width: 1, background: GUIDE_COLOR, pointerEvents: 'none' }
