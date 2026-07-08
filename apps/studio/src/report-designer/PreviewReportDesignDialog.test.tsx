@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { beforeEach, it, expect, vi } from 'vitest';
 import { PreviewReportDesignDialog } from './PreviewReportDesignDialog';
 
@@ -13,6 +13,14 @@ it('fetches and renders the design PDF when open', async () => {
   const { previewReportDesign } = await import('../api');
   await waitFor(() => expect(previewReportDesign).toHaveBeenCalledWith(design));
   expect(await screen.findByTestId('pdf-viewer')).toBeInTheDocument();
+});
+
+it('closes via the X button', async () => {
+  const design = { id: 'd', name: 'N', paper: 'A4', orientation: 'portrait', parameters: [], pages: [] } as never;
+  const onOpenChange = vi.fn();
+  render(<PreviewReportDesignDialog open design={design} onOpenChange={onOpenChange} />);
+  fireEvent.click(screen.getByLabelText('Close'));
+  expect(onOpenChange).toHaveBeenCalledWith(false);
 });
 
 it('does not fetch when closed', async () => {

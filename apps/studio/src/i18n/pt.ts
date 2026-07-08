@@ -17,6 +17,7 @@ export const pt: EnShape = {
     configUnreachable: 'Não foi possível contactar o servidor. Por favor recarregue.',
     previous: 'Anterior',
     next: 'Próximo',
+    close: 'Fechar',
   },
   table: {
     filter: 'Filtrar',
