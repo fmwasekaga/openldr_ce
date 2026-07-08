@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/cn';
-import type { DesignElement, ReportTemplate } from './types';
-import { findElement } from './model';
+import type { ReportTemplate } from './types';
 import { PropertiesTab } from './PropertiesTab';
 import { LayersTab } from './LayersTab';
 import { DataTab } from './DataTab';
@@ -11,14 +10,13 @@ type TabKey = 'properties' | 'layers' | 'data';
 
 interface Props {
   template: ReportTemplate;
-  selectedElementId: string | null;
-  onSelectElement(id: string | null): void;
+  selectedIds: string[];
+  onSelect(ids: string[]): void;
 }
 
-export function InspectorTabs({ template, selectedElementId, onSelectElement }: Props): JSX.Element {
+export function InspectorTabs({ template, selectedIds, onSelect }: Props): JSX.Element {
   const { t } = useTranslation();
   const [tab, setTab] = useState<TabKey>('properties');
-  const selected: DesignElement | null = findElement(template, selectedElementId);
 
   const tabs: { key: TabKey; label: string }[] = [
     { key: 'properties', label: t('reportDesigner.properties') },
@@ -43,8 +41,8 @@ export function InspectorTabs({ template, selectedElementId, onSelectElement }: 
         })}
       </div>
       <div className="min-h-0 flex-1 overflow-auto">
-        {tab === 'properties' && <PropertiesTab template={template} selected={selected} />}
-        {tab === 'layers' && <LayersTab template={template} selectedElementId={selectedElementId} onSelectElement={onSelectElement} />}
+        {tab === 'properties' && <PropertiesTab template={template} selectedIds={selectedIds} />}
+        {tab === 'layers' && <LayersTab template={template} selectedIds={selectedIds} onSelect={onSelect} />}
         {tab === 'data' && <DataTab template={template} />}
       </div>
     </div>

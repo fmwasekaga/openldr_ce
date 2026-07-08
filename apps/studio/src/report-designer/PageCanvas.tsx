@@ -4,27 +4,31 @@ import { Image as ImageIcon } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import type { DesignElement, ReportTemplate } from './types';
 import { paperSize } from './model';
+import { HANDLES, type Handle } from './geometry';
 
 interface Props {
   template: ReportTemplate;
   zoom: number;
-  selectedElementId: string | null;
-  onSelectElement(id: string | null): void;
+  selectedIds: string[];
+  onSelect(ids: string[]): void;
 }
 
-export function PageCanvas({ template, zoom, selectedElementId, onSelectElement }: Props): JSX.Element {
+export function PageCanvas({ template, zoom, selectedIds, onSelect }: Props): JSX.Element {
   const { t } = useTranslation();
   const size = paperSize(template.paper, template.orientation);
+  const toggle = (id: string, additive: boolean) =>
+    onSelect(additive ? (selectedIds.includes(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id]) : [id]);
   return (
-    <div data-testid="page-canvas" onClick={() => onSelectElement(null)}
+    <div data-testid="page-canvas" onClick={() => onSelect([])}
       className="flex min-h-0 flex-1 flex-col items-center gap-6 overflow-auto bg-neutral-200 p-6 dark:bg-neutral-800">
       {template.pages.map((page, i) => (
         <div key={page.id} className="flex flex-col items-center gap-1.5">
-          <div className="relative bg-white shadow-md ring-1 ring-border"
-            style={{ width: size.w * zoom, height: size.h * zoom }}>
+          <div className="relative bg-white shadow-md ring-1 ring-border" style={{ width: size.w * zoom, height: size.h * zoom }}>
             {page.elements.map((el) => (
-              <ElementBox key={el.id} el={el} zoom={zoom} selected={el.id === selectedElementId}
-                onSelect={(e) => { e.stopPropagation(); onSelectElement(el.id); }} />
+              <ElementBox key={el.id} el={el} zoom={zoom}
+                selected={selectedIds.includes(el.id)}
+                showHandles={selectedIds.length === 1 && selectedIds[0] === el.id}
+                onSelect={(e) => { e.stopPropagation(); toggle(el.id, e.shiftKey); }} />
             ))}
           </div>
           <span className="text-[11px] text-neutral-600 dark:text-neutral-300">
@@ -36,8 +40,14 @@ export function PageCanvas({ template, zoom, selectedElementId, onSelectElement 
   );
 }
 
-function ElementBox({ el, zoom, selected, onSelect }: {
-  el: DesignElement; zoom: number; selected: boolean; onSelect(e: MouseEvent): void;
+const HANDLE_CLASS: Record<Handle, string> = {
+  nw: '-left-1 -top-1', n: 'left-1/2 -top-1 -translate-x-1/2', ne: '-right-1 -top-1',
+  e: '-right-1 top-1/2 -translate-y-1/2', se: '-right-1 -bottom-1', s: 'left-1/2 -bottom-1 -translate-x-1/2',
+  sw: '-left-1 -bottom-1', w: '-left-1 top-1/2 -translate-y-1/2',
+};
+
+function ElementBox({ el, zoom, selected, showHandles, onSelect }: {
+  el: DesignElement; zoom: number; selected: boolean; showHandles: boolean; onSelect(e: MouseEvent): void;
 }): JSX.Element {
   const style: CSSProperties = { left: el.rect.x * zoom, top: el.rect.y * zoom, width: el.rect.w * zoom, height: el.rect.h * zoom };
   return (
@@ -45,19 +55,10 @@ function ElementBox({ el, zoom, selected, onSelect }: {
       className={cn('absolute cursor-pointer', selected && 'outline outline-2 outline-offset-2 outline-primary')}
       style={style}>
       <ElementContent el={el} />
-      {selected && <Handles />}
-    </div>
-  );
-}
-
-function Handles(): JSX.Element {
-  const positions = ['-left-1 -top-1', '-right-1 -top-1', '-left-1 -bottom-1', '-right-1 -bottom-1'];
-  return (
-    <>
-      {positions.map((p) => (
-        <span key={p} data-testid="handle" className={`absolute ${p} h-2 w-2 border border-primary bg-white`} />
+      {showHandles && HANDLES.map((h) => (
+        <span key={h} data-testid={`handle-${h}`} className={cn('absolute h-2 w-2 border border-primary bg-white', HANDLE_CLASS[h])} />
       ))}
-    </>
+    </div>
   );
 }
 

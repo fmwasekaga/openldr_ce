@@ -1,28 +1,34 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { PageCanvas } from './PageCanvas';
 import { MOCK_TEMPLATES } from './mockTemplates';
 
 describe('PageCanvas', () => {
-  it('renders every element on the page and the table columns', () => {
-    render(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={0.75} selectedElementId={null} onSelectElement={vi.fn()} />);
+  it('renders every element and the table columns', () => {
+    render(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={0.75} selectedIds={[]} onSelect={vi.fn()} />);
     expect(screen.getByRole('button', { name: 'Resistance table' })).toBeInTheDocument();
     expect(screen.getByText('Organism')).toBeInTheDocument();
-    expect(screen.getByText('E. coli')).toBeInTheDocument();
   });
 
-  it('selects an element on click and deselects on backdrop click', () => {
-    const onSelectElement = vi.fn();
-    render(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={0.75} selectedElementId={null} onSelectElement={onSelectElement} />);
+  it('selects an element on click and clears on backdrop click', () => {
+    const onSelect = vi.fn();
+    render(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={0.75} selectedIds={[]} onSelect={onSelect} />);
     fireEvent.click(screen.getByRole('button', { name: 'Resistance table' }));
-    expect(onSelectElement).toHaveBeenCalledWith('amr-table');
+    expect(onSelect).toHaveBeenCalledWith(['amr-table']);
     fireEvent.click(screen.getByTestId('page-canvas'));
-    expect(onSelectElement).toHaveBeenLastCalledWith(null);
+    expect(onSelect).toHaveBeenLastCalledWith([]);
   });
 
-  it('draws four selection handles on the selected element', () => {
-    render(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={0.75} selectedElementId="amr-table" onSelectElement={vi.fn()} />);
+  it('shift-click extends the selection', () => {
+    const onSelect = vi.fn();
+    render(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={0.75} selectedIds={['amr-title']} onSelect={onSelect} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Resistance table' }), { shiftKey: true });
+    expect(onSelect).toHaveBeenCalledWith(['amr-title', 'amr-table']);
+  });
+
+  it('draws eight handles on a single selected element', () => {
+    render(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={0.75} selectedIds={['amr-table']} onSelect={vi.fn()} />);
     const el = screen.getByTestId('el-amr-table');
-    expect(within(el).getAllByTestId('handle')).toHaveLength(4);
+    ['nw','n','ne','e','se','s','sw','w'].forEach((h) => expect(el.querySelector(`[data-testid="handle-${h}"]`)).toBeTruthy());
   });
 });

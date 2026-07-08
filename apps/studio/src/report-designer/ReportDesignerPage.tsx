@@ -19,7 +19,7 @@ export function ReportDesignerPage(): JSX.Element {
   const { t } = useTranslation();
   const [templates, setTemplates] = useState<ReportTemplate[]>(MOCK_TEMPLATES);
   const [selectedId, setSelectedId] = useState<string | null>(MOCK_TEMPLATES[0]?.id ?? null);
-  const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [zoom, setZoom] = useState(0.75);
   const [collapsed, setCollapsed] = useState(false);
 
@@ -48,7 +48,7 @@ export function ReportDesignerPage(): JSX.Element {
     if (!template) return;
     const el = newElement(kind);
     pushTemplate(addElement(template, 0, el));
-    setSelectedElementId(el.id);
+    setSelectedIds([el.id]);
   };
 
   const newTemplate = () => {
@@ -59,7 +59,7 @@ export function ReportDesignerPage(): JSX.Element {
     };
     setTemplates((ts) => [tpl, ...ts]);
     setSelectedId(id);
-    setSelectedElementId(null);
+    setSelectedIds([]);
   };
 
   // Keyboard: Ctrl/Cmd+Z = undo, Ctrl/Cmd+Shift+Z (or Ctrl+Y) = redo. Ignore while typing in a field.
@@ -90,7 +90,7 @@ export function ReportDesignerPage(): JSX.Element {
         ) : (
           <div className="flex w-60 shrink-0 flex-col border-r border-border" data-testid="templates-explorer">
             <TemplatesExplorer templates={templates} selectedId={selectedId}
-              onSelect={(id) => { setSelectedId(id); setSelectedElementId(null); }}
+              onSelect={(id) => { setSelectedId(id); setSelectedIds([]); }}
               onCollapse={() => setCollapsed(true)} />
           </div>
         )}
@@ -106,11 +106,10 @@ export function ReportDesignerPage(): JSX.Element {
                 onZoomIn={() => zoomStep(1)} onZoomOut={() => zoomStep(-1)}
                 onPreview={noop} onSave={noop} onExportPdf={noop} onExportExcel={noop}
                 onCheck={noop} onDuplicate={noop} onDelete={noop} />
-              <PageCanvas template={template} zoom={zoom}
-                selectedElementId={selectedElementId} onSelectElement={setSelectedElementId} />
+              <PageCanvas template={template} zoom={zoom} selectedIds={selectedIds} onSelect={setSelectedIds} />
             </div>
             <div className="flex w-64 shrink-0 flex-col border-l border-border" data-testid="inspector">
-              <InspectorTabs template={template} selectedElementId={selectedElementId} onSelectElement={setSelectedElementId} />
+              <InspectorTabs template={template} selectedIds={selectedIds} onSelect={setSelectedIds} />
             </div>
           </>
         ) : (
