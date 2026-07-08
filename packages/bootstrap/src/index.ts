@@ -16,6 +16,7 @@ import { getReport, reportSummaries, getEventSource, eventSourceCatalog, toCsv, 
 import { createDashboardStore, getModel, listModels, runBuilderQuery, runSqlQuery, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, seedDefaultDashboard, type DashboardStore, type WidgetQuery } from '@openldr/dashboards';
 import { createReportTemplateStore, renderReportTemplatePdf, type ReportTemplateStore } from '@openldr/report-builder';
 import type { ReportTemplate } from '@openldr/report-builder/pure';
+import { createReportDesignStore, type ReportDesignStore } from '@openldr/report-designer';
 import {
   createWorkflowStore, type WorkflowStore,
   createWorkflowRunStore, type WorkflowRunStore,
@@ -155,6 +156,7 @@ export interface AppContext {
   };
   dashboards: DashboardsApi;
   reportTemplates: ReportTemplateStore;
+  reportDesigns: ReportDesignStore;
   workflows: {
     store: WorkflowStore;
     runs: WorkflowRunStore;
@@ -293,6 +295,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
 
   const dashboardStore = createDashboardStore(internal.db);
   const reportTemplateStore = createReportTemplateStore(internal.db);
+  const reportDesignStore = createReportDesignStore(internal.db);
   const runDashboardQuery = async (q: WidgetQuery): Promise<ReportResult> => {
     let data;
     if (q.mode === 'builder') {
@@ -662,6 +665,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     terminology,
     dashboards,
     reportTemplates: reportTemplateStore,
+    reportDesigns: reportDesignStore,
     workflows,
     plugins,
     pluginData,
