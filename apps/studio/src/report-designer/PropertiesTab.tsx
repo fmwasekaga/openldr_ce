@@ -19,7 +19,10 @@ function NumberField({ label, value, onChange, min }: { label: string; value: nu
     <div className="flex-1">
       <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
       <Input type="number" aria-label={label} value={value} min={min}
-        onChange={(e) => { const n = Number(e.target.value); if (!Number.isNaN(n) && e.target.value !== '') onChange(n); }}
+        onChange={(e) => {
+          const n = Number(e.target.value);
+          if (e.target.value !== '' && !Number.isNaN(n)) onChange(min != null ? Math.max(min, n) : n);
+        }}
         className="h-8 text-xs" />
     </div>
   );

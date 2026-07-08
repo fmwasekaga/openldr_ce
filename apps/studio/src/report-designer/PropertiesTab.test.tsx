@@ -28,4 +28,11 @@ describe('PropertiesTab editing', () => {
     setup({ selectedIds: ['amr-title', 'amr-table'] });
     expect(screen.getByText('2 elements selected')).toBeInTheDocument();
   });
+
+  it('clamps W to the minimum when a too-small value is typed', () => {
+    const props = setup({ selectedIds: ['amr-title'] });
+    fireEvent.change(screen.getByLabelText('W'), { target: { value: '0' } });
+    const call = props.onPatchElement.mock.calls.at(-1)!;
+    expect(call[1].rect.w).toBe(8);
+  });
 });
