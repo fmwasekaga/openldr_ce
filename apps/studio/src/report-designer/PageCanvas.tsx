@@ -1,6 +1,7 @@
 import type { MouseEvent, CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Image as ImageIcon } from 'lucide-react';
+import { cn } from '@/lib/cn';
 import type { DesignElement, ReportTemplate } from './types';
 import { paperSize } from './model';
 
@@ -41,7 +42,7 @@ function ElementBox({ el, zoom, selected, onSelect }: {
   const style: CSSProperties = { left: el.rect.x * zoom, top: el.rect.y * zoom, width: el.rect.w * zoom, height: el.rect.h * zoom };
   return (
     <div role="button" tabIndex={0} aria-label={el.name} onClick={onSelect} data-testid={`el-${el.id}`}
-      className={'absolute cursor-pointer ' + (selected ? 'outline outline-2 outline-offset-2 outline-primary' : '')}
+      className={cn('absolute cursor-pointer', selected && 'outline outline-2 outline-offset-2 outline-primary')}
       style={style}>
       <ElementContent el={el} />
       {selected && <Handles />}
