@@ -8,7 +8,7 @@ import { CanvasHeader } from './CanvasHeader';
 import { PageCanvas } from './PageCanvas';
 import { InspectorTabs } from './InspectorTabs';
 import { MOCK_TEMPLATES } from './mockTemplates';
-import { addElement, allElements, newElement, paperSize, removeElements, updateElement, updateElementRects } from './model';
+import { addElement, allElements, newElement, paperSize, removeElements, updateElement, updateElementRects, updateElements } from './model';
 import { clampRectToPage } from './geometry';
 import type { ElementKind, Rect, ReportTemplate } from './types';
 
@@ -61,6 +61,11 @@ export function ReportDesignerPage(): JSX.Element {
   const patchPage = (patch: Partial<ReportTemplate>, opts?: { discrete?: boolean }) => {
     if (!template) return;
     const next = { ...template, ...patch };
+    if (opts?.discrete) pushTemplate(next); else updateTemplate(next);
+  };
+  const patchElements = (ids: string[], patch: Partial<import('./types').DesignElement>, opts?: { discrete?: boolean }) => {
+    if (!template) return;
+    const next = updateElements(template, ids, patch);
     if (opts?.discrete) pushTemplate(next); else updateTemplate(next);
   };
 
@@ -154,7 +159,7 @@ export function ReportDesignerPage(): JSX.Element {
             </div>
             <div className="flex w-64 shrink-0 flex-col border-l border-border" data-testid="inspector">
               <InspectorTabs template={template} selectedIds={selectedIds} onSelect={setSelectedIds}
-                onPatchElement={patchElement} onPatchPage={patchPage} />
+                onPatchElement={patchElement} onPatchPage={patchPage} onPatchElements={patchElements} />
             </div>
           </>
         ) : (

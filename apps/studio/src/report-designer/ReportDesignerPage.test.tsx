@@ -151,4 +151,21 @@ describe('ReportDesignerPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /undo/i }));
     expect(content()).toHaveValue('Antimicrobial resistance summary');
   });
+
+  it('bulk-bolds a multi-text selection as one undo step', () => {
+    renderPage();
+    const inspector = () => screen.getByTestId('inspector');
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Layers' }));
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Title' }));
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Subtitle' }), { shiftKey: true });
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Properties' }));
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Bold' }));
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Layers' }));
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Title' })); // single-select Title
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Properties' }));
+    // its per-element Bold now reflects active (both were bolded)
+    expect(within(inspector()).getByRole('button', { name: 'Bold' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: /undo/i }));
+    expect(within(inspector()).getByRole('button', { name: 'Bold' })).toHaveAttribute('aria-pressed', 'false');
+  });
 });
