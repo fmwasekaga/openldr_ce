@@ -59,4 +59,20 @@ describe('ReportDesignerPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /undo/i }));
     expect(within(screen.getByTestId('inspector')).queryByRole('button', { name: /^Text$/ })).not.toBeInTheDocument();
   });
+
+  it('deletes the selected element with the Delete key', async () => {
+    renderPage();
+    // insert a Text element (kebab → Insert → Text), which becomes selected
+    const kebab = screen.getByRole('button', { name: /more actions/i });
+    fireEvent.pointerDown(kebab, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menuitem', { name: 'Insert' })) fireEvent.keyDown(kebab, { key: 'Enter' });
+    const insertSub = await screen.findByRole('menuitem', { name: 'Insert' });
+    insertSub.focus();
+    fireEvent.keyDown(insertSub, { key: 'ArrowRight' });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Text' }));
+    fireEvent.click(within(screen.getByTestId('inspector')).getByRole('button', { name: 'Layers' }));
+    expect(within(screen.getByTestId('inspector')).getByRole('button', { name: /^Text$/ })).toBeInTheDocument();
+    fireEvent.keyDown(document.body, { key: 'Delete' });
+    expect(within(screen.getByTestId('inspector')).queryByRole('button', { name: /^Text$/ })).not.toBeInTheDocument();
+  });
 });
