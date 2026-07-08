@@ -126,17 +126,20 @@ function tplWith(el: Partial<import('./types').DesignElement> & { id: string; ki
 }
 
 describe('PageCanvas group resize', () => {
-  it('renders group handles only for a 2+ selection and commits scaled rects', () => {
+  it('renders group handles for a 2+ selection, scales live, and commits scaled rects', () => {
     const onCommit = vi.fn();
     render(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={1} selectedIds={['amr-title', 'amr-subtitle']} onSelect={vi.fn()} onCommitRects={onCommit} />);
-    const handle = screen.getByTestId('group-handle-se');
-    fireEvent.pointerDown(handle, { clientX: 0, clientY: 0, button: 0 });
+    fireEvent.pointerDown(screen.getByTestId('group-handle-se'), { clientX: 0, clientY: 0, button: 0 });
     fireEvent.pointerMove(window, { clientX: 40, clientY: 40 });
+    // both members are x:48,w:500 → group bbox x:48,w:500; se drag +40 → sx=1.08, anchored left:
+    // the group box scales live to width 540 at left 48
+    expect(screen.getByTestId('group-box')).toHaveStyle({ left: '48px', width: '540px' });
     fireEvent.pointerUp(window, { clientX: 40, clientY: 40 });
     expect(onCommit).toHaveBeenCalledTimes(1);
-    const rects = onCommit.mock.calls[0][0] as Map<string, unknown>;
-    expect(rects.has('amr-title')).toBe(true);
-    expect(rects.has('amr-subtitle')).toBe(true);
+    const rects = onCommit.mock.calls[0][0] as Map<string, { x: number; w: number }>;
+    expect(rects.get('amr-title')!.w).toBeCloseTo(540, 3);
+    expect(rects.get('amr-subtitle')!.w).toBeCloseTo(540, 3);
+    expect(rects.get('amr-title')!.x).toBeCloseTo(48, 3); // scaled about the left anchor
   });
 
   it('does not render group handles for a single selection', () => {
