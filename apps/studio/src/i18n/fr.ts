@@ -522,6 +522,11 @@ export const fr: EnShape = {
     pageOf: 'Page {{n}} sur {{total}}',
     emptyTitle: 'Sélectionnez ou créez un modèle',
     emptyBody: 'Un modèle organise du texte, des images et des tableaux de rapport sur des pages imprimables, puis les exporte en PDF ou Excel.',
+    savedToast: '« {{name}} » enregistré',
+    deletedToast: 'Conception de rapport supprimée',
+    deleteConfirmTitle: 'Supprimer cette conception de rapport ?',
+    deleteConfirmBody: 'Cela supprime définitivement la conception de rapport. Cette action est irréversible.',
+    deleteConfirmAction: 'Supprimer la conception',
     element: {
       text: 'Texte', table: 'Tableau', image: 'Image', line: 'Ligne', rect: 'Rectangle', datetime: 'Date/heure',
     },

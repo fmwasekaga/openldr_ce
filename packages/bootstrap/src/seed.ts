@@ -3,6 +3,7 @@ import { sampleForms, type FormStore } from '@openldr/forms';
 import { buildDefaultWorkflows, type WorkflowStore } from '@openldr/workflows';
 import { seedDefaultDashboard, type DashboardStore } from '@openldr/dashboards';
 import { seedSampleReportTemplate, seedAmrResistanceTemplate, seedPatientDemographicsTemplate, seedAmrFacilitySummaryTemplate, seedAnalyteInterpretationTemplate, type ReportTemplateStore } from '@openldr/report-builder';
+import { seedReportDesigns, type ReportDesignStore } from '@openldr/report-designer';
 import type { ConnectorStore, TerminologyAdminStore, AppSettingStore } from '@openldr/db';
 import { BUNDLED_TERMINOLOGY, readBundledTerminology } from '@openldr/db';
 import { FEATURE_FLAGS } from '@openldr/config';
@@ -15,6 +16,7 @@ export interface SeedResult {
   connectorsSeeded: number;
   dashboardsSeeded: number;
   reportTemplatesSeeded: number;
+  reportDesignsSeeded: number;
   settingsSeeded: number;
   /** Bundled terminology auto-imported on first boot: value sets from the FHIR R4 catalog
    *  and concepts from the full UCUM code system (0/0 once already present or on failure). */
@@ -47,6 +49,9 @@ export interface FormSeedTarget {
   // Report-template store, threaded so the seed can insert the sample "AMR Surveillance Summary"
   // report. Structural subset — AppContext.reportTemplates satisfies it.
   reportTemplates: Pick<ReportTemplateStore, 'get' | 'create'>;
+  // Report-design store, threaded so the seed can insert the default page designs (former studio
+  // MOCK_TEMPLATES). Structural subset — AppContext.reportDesigns satisfies it.
+  reportDesigns: Pick<ReportDesignStore, 'get' | 'create'>;
   // Terminology surface, threaded so the seed can auto-import the bundled license-safe sets
   // (FHIR R4 catalog + full UCUM) on first boot. Structural subset — AppContext satisfies it.
   terminology: {
@@ -170,6 +175,16 @@ export async function seedDatabase(db: DbContext, app: FormSeedTarget): Promise<
     console.warn('[seed] report template seed skipped:', e instanceof Error ? e.message : String(e));
   }
 
+  // Report designs — the default free-form page designs (former studio MOCK_TEMPLATES) so a fresh
+  // install has designs to open in the report designer. Idempotent (each skips when present by id)
+  // and best-effort (never aborts the rest of the seed).
+  let reportDesignsSeeded = 0;
+  try {
+    reportDesignsSeeded = await seedReportDesigns(app.reportDesigns);
+  } catch (e) {
+    console.warn('[seed] report design seed skipped:', e instanceof Error ? e.message : String(e));
+  }
+
   // Bundled license-safe terminology (FHIR R4 base catalog + full UCUM) — imported once on a
   // fresh install so Forms coded-field authoring works out of the box. Idempotent (skips when
   // already present) and best-effort (never aborts the rest of the seed).
@@ -186,7 +201,7 @@ export async function seedDatabase(db: DbContext, app: FormSeedTarget): Promise<
     }
   }
 
-  return { resources, formsSeeded, workflowsSeeded, connectorsSeeded, dashboardsSeeded, reportTemplatesSeeded, settingsSeeded, terminology };
+  return { resources, formsSeeded, workflowsSeeded, connectorsSeeded, dashboardsSeeded, reportTemplatesSeeded, reportDesignsSeeded, settingsSeeded, terminology };
 }
 
 // Auto-import the two bundled, freely-redistributable terminology sets on first boot:

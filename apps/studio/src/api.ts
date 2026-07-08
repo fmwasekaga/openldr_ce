@@ -1,6 +1,7 @@
 import { getAccessToken, notifyUnauthorized } from './auth/token';
 import type { PluginBrokerOp, PluginRpcResult } from '@openldr/plugin-ui-sdk';
 import type { ReportTemplate } from '@openldr/report-builder/pure';
+import type { ReportDesign } from '@openldr/report-designer/pure';
 
 /** fetch wrapper that attaches the bearer token when one is present. */
 export async function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
@@ -577,6 +578,18 @@ export const previewReportTemplate = async (id: string, params: Record<string, s
   if (!r.ok) throw new Error(`preview failed: ${r.status}`);
   return r.blob();
 };
+
+// ── Report designs (Report Designer) ─────────────────────────────────────────
+export const listReportDesigns = (): Promise<ReportDesign[]> =>
+  authFetch('/api/report-designs').then((r) => okJson<ReportDesign[]>(r, 'list report designs'));
+export const getReportDesign = (id: string): Promise<ReportDesign> =>
+  apiGet(`/api/report-designs/${encodeURIComponent(id)}`, 'get report design');
+export const createReportDesign = (d: ReportDesign): Promise<ReportDesign> =>
+  authFetch('/api/report-designs', jbody(d, 'POST')).then((r) => okJson<ReportDesign>(r, 'create report design'));
+export const updateReportDesign = (id: string, d: ReportDesign): Promise<ReportDesign> =>
+  authFetch(`/api/report-designs/${encodeURIComponent(id)}`, jbody(d, 'PUT')).then((r) => okJson<ReportDesign>(r, 'save report design'));
+export const deleteReportDesign = (id: string): Promise<void> =>
+  apiDelete(`/api/report-designs/${encodeURIComponent(id)}`, 'delete report design');
 
 // ── Terminology admin types & client ─────────────────────────────────────────
 export type PublisherRole = 'local' | 'standard' | 'external';

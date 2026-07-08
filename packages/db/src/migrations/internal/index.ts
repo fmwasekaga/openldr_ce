@@ -40,6 +40,7 @@ import * as m038 from './038_app_settings';
 import * as m039 from './039_workflow_runs_correlation';
 import * as m040 from './040_report_templates';
 import * as m041 from './041_custom_queries';
+import * as m042 from './042_report_designs';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -83,4 +84,5 @@ export const internalMigrations: Record<string, Migration> = {
   '039_workflow_runs_correlation': { up: m039.up, down: m039.down },
   '040_report_templates': { up: m040.up, down: m040.down },
   '041_custom_queries': { up: m041.up, down: m041.down },
+  '042_report_designs': { up: m042.up, down: m042.down },
 };

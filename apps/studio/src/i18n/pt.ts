@@ -522,6 +522,11 @@ export const pt: EnShape = {
     pageOf: 'Página {{n}} de {{total}}',
     emptyTitle: 'Selecione ou crie um modelo',
     emptyBody: 'Um modelo organiza texto, imagens e tabelas de relatório em páginas imprimíveis — e depois exporta para PDF ou Excel.',
+    savedToast: '“{{name}}” salvo',
+    deletedToast: 'Design de relatório excluído',
+    deleteConfirmTitle: 'Excluir este design de relatório?',
+    deleteConfirmBody: 'Isto exclui permanentemente o design de relatório. Esta ação não pode ser desfeita.',
+    deleteConfirmAction: 'Excluir design',
     element: {
       text: 'Texto', table: 'Tabela', image: 'Imagem', line: 'Linha', rect: 'Retângulo', datetime: 'Data/hora',
     },
