@@ -28,6 +28,17 @@ describe('renderReportDesignPdf', () => {
     expect(buf.subarray(0, 4).toString()).toBe('%PDF');
   });
 
+  it('does not throw or corrupt the stream when an image src is invalid, and still draws following elements', async () => {
+    const design = baseDesign({ pages: [{ id: 'p1', elements: [
+      { id: 'img', kind: 'image', name: 'I', rect: { x: 10, y: 10, w: 80, h: 60 }, src: 'data:image/png;base64,NOTVALID' },
+      { id: 'txt', kind: 'text', name: 'T', rect: { x: 10, y: 90, w: 300, h: 20 }, text: 'after the bad image' },
+      { id: 'box', kind: 'rect', name: 'R', rect: { x: 10, y: 120, w: 100, h: 40 }, style: { fill: '#eef' } },
+    ] }] });
+    const buf = await renderReportDesignPdf(design, new Map(), { now: NOW });
+    expect(buf.subarray(0, 4).toString()).toBe('%PDF');
+    expect(buf.length).toBeGreaterThan(100);
+  });
+
   it('emits one PDF page per design page', async () => {
     const two = baseDesign({ pages: [{ id: 'a', elements: [] }, { id: 'b', elements: [] }] });
     const buf = await renderReportDesignPdf(two, new Map(), { now: NOW });

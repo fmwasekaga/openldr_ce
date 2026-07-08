@@ -1,5 +1,5 @@
 import type { DesignElement, ReportDesign } from '../schema';
-import { toPt } from './units';
+import { toPt, PX_TO_PT } from './units';
 import type { ResolvedTable } from './index';
 
 type Doc = PDFKit.PDFDocument;
@@ -49,9 +49,11 @@ export function drawElement(
       return;
     }
     case 'image': {
-      try {
-        if (el.src) { doc.save().image(el.src, r.x, r.y, { fit: [r.w, r.h] }).restore(); return; }
-      } catch { /* fall through to placeholder */ }
+      if (el.src) {
+        doc.save();
+        try { doc.image(el.src, r.x, r.y, { fit: [r.w, r.h] }); doc.restore(); return; }
+        catch { doc.restore(); /* fall through to placeholder */ }
+      }
       doc.save().lineWidth(1).strokeColor(RECT_BORDER).dash(3, { space: 2 })
         .rect(r.x, r.y, r.w, r.h).stroke().undash().restore();
       return;
@@ -67,7 +69,7 @@ function drawText(doc: Doc, str: string, r: Box, s: DesignElement['style']): voi
   const st = s ?? {};
   doc.save()
     .font(st.bold ? 'Helvetica-Bold' : 'Helvetica')
-    .fontSize((st.fontSize ?? 11) * 0.75) // element fontSize is px@96 too → to pt
+    .fontSize((st.fontSize ?? 11) * PX_TO_PT) // element fontSize is px@96 too → to pt
     .fillColor(st.color ?? TEXT_COLOR)
     .text(str, r.x, r.y, { width: r.w, height: r.h, align: st.align ?? 'left', ellipsis: true });
   doc.restore();
@@ -83,7 +85,7 @@ function drawTable(doc: Doc, el: DesignElement, r: Box, resolved: ResolvedTable 
 }
 
 function drawStaticTable(doc: Doc, el: DesignElement, r: Box): void {
-  drawGrid(doc, r, el.columns ?? [], (el.rows ?? []).map((row) => row.map(String)));
+  drawGrid(doc, r, el.columns ?? [], el.rows ?? []);
 }
 
 function drawGrid(doc: Doc, r: Box, headers: string[], rows: string[][]): void {
