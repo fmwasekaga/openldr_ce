@@ -132,6 +132,21 @@ export function ReportDesignerPage(): JSX.Element {
     setSelectedIds([el.id]);
   };
 
+  // Open a design from the explorer. Normally navigate so the URL drives the `:id` load effect;
+  // but if the URL already points at `id` (e.g. after opening a transient without navigating),
+  // navigate() is a no-op and the effect never re-runs — so re-select locally instead. The design
+  // is always already in `templates` (the list endpoint returns full designs), so no fetch is needed.
+  const selectDesign = (id: string) => {
+    if (id === routeId) {
+      loadedIdRef.current = id;
+      setSelectedId(id);
+      setSelectedIds([]);
+      setEditingId(null);
+    } else {
+      navigate(`/report-designer/${id}`);
+    }
+  };
+
   const newTemplate = () => {
     const id = `rt-${Date.now()}`;
     const tpl: ReportTemplate = {
@@ -149,6 +164,7 @@ export function ReportDesignerPage(): JSX.Element {
 
   const onSave = async () => {
     if (!template) return;
+    setError(undefined);
     const isNew = transientIds.has(template.id);
     try {
       const saved = isNew ? await createReportDesign(template) : await updateReportDesign(template.id, template);
@@ -165,6 +181,7 @@ export function ReportDesignerPage(): JSX.Element {
 
   const onDelete = async () => {
     if (!template) return;
+    setError(undefined);
     const isNew = transientIds.has(template.id);
     const deletedId = template.id;
     try {
@@ -228,7 +245,7 @@ export function ReportDesignerPage(): JSX.Element {
         ) : (
           <div className="flex w-60 shrink-0 flex-col border-r border-border" data-testid="templates-explorer">
             <TemplatesExplorer templates={templates} selectedId={selectedId}
-              onSelect={(id) => navigate(`/report-designer/${id}`)}
+              onSelect={selectDesign}
               onCollapse={() => setCollapsed(true)} />
           </div>
         )}

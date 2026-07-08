@@ -588,10 +588,8 @@ export const createReportDesign = (d: ReportDesign): Promise<ReportDesign> =>
   authFetch('/api/report-designs', jbody(d, 'POST')).then((r) => okJson<ReportDesign>(r, 'create report design'));
 export const updateReportDesign = (id: string, d: ReportDesign): Promise<ReportDesign> =>
   authFetch(`/api/report-designs/${encodeURIComponent(id)}`, jbody(d, 'PUT')).then((r) => okJson<ReportDesign>(r, 'save report design'));
-export const deleteReportDesign = async (id: string): Promise<void> => {
-  const r = await authFetch(`/api/report-designs/${encodeURIComponent(id)}`, { method: 'DELETE' });
-  if (!r.ok && r.status !== 204) throw new Error(`delete report design failed: ${r.status}`);
-};
+export const deleteReportDesign = (id: string): Promise<void> =>
+  apiDelete(`/api/report-designs/${encodeURIComponent(id)}`, 'delete report design');
 
 // ── Terminology admin types & client ─────────────────────────────────────────
 export type PublisherRole = 'local' | 'standard' | 'external';

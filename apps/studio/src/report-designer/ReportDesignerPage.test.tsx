@@ -255,6 +255,18 @@ describe('ReportDesignerPage', () => {
     await waitFor(() => expect(createReportDesign).toHaveBeenCalled());
   });
 
+  it('reopens the original design after a transient is created and its card is clicked (URL unchanged)', async () => {
+    await renderPage(); // opens AMR summary at /report-designer/rt-amr-summary
+    // Create a transient design — this does NOT navigate, so the URL still points at rt-amr-summary.
+    await openKebab();
+    fireEvent.click(await screen.findByRole('menuitem', { name: /new template/i }));
+    expect(screen.getByLabelText('Report name')).toHaveValue('Untitled template');
+    // Click the AMR summary card. navigate('/report-designer/rt-amr-summary') would be a no-op
+    // (URL already there), so the :id effect never re-runs — selection must fall back to local state.
+    fireEvent.click(within(screen.getByTestId('templates-explorer')).getByText('AMR summary'));
+    expect(await screen.findByDisplayValue('AMR summary')).toBeInTheDocument();
+  });
+
   it('deletes the open design after confirmation via deleteReportDesign', async () => {
     await renderPage();
     await openKebab();
