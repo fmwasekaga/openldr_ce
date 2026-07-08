@@ -96,6 +96,7 @@ export function ReportDesignerPage(): JSX.Element {
     setTemplates((ts) => [tpl, ...ts]);
     setSelectedId(id);
     setSelectedIds([]);
+    setEditingId(null);
   };
 
   // Keyboard: undo/redo, select-all, Esc clear, Delete/Backspace remove, arrows nudge (Shift = 10px).
@@ -145,7 +146,7 @@ export function ReportDesignerPage(): JSX.Element {
         ) : (
           <div className="flex w-60 shrink-0 flex-col border-r border-border" data-testid="templates-explorer">
             <TemplatesExplorer templates={templates} selectedId={selectedId}
-              onSelect={(id) => { setSelectedId(id); setSelectedIds([]); }}
+              onSelect={(id) => { setSelectedId(id); setSelectedIds([]); setEditingId(null); }}
               onCollapse={() => setCollapsed(true)} />
           </div>
         )}

@@ -116,7 +116,6 @@ function ElementBox({ el, rect, zoom, selected, showHandles, editing, onPointerD
   useEffect(() => { if (editing) { editRef.current?.focus(); editRef.current?.select(); } }, [editing]);
   const style: CSSProperties = { left: rect.x * zoom, top: rect.y * zoom, width: rect.w * zoom, height: rect.h * zoom };
   const isText = el.kind === 'text' || el.kind === 'datetime';
-  const s = el.style ?? {};
   return (
     <div role="button" tabIndex={0} aria-label={el.name} data-testid={`el-${el.id}`}
       onPointerDown={editing ? undefined : onPointerDown}
@@ -130,7 +129,7 @@ function ElementBox({ el, rect, zoom, selected, showHandles, editing, onPointerD
           onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); onEditEnd(); } }}
           onBlur={onEditEnd}
           className="absolute inset-0 resize-none overflow-hidden border-0 bg-transparent p-0 leading-tight outline-none"
-          style={{ fontSize: (s.fontSize ?? 11) * zoom, fontWeight: s.bold ? 600 : 400, textAlign: s.align ?? 'left', color: s.color ?? '#262626' }} />
+          style={textStyle(el, zoom)} />
       ) : (
         <ElementContent el={el} zoom={zoom} />
       )}
@@ -142,14 +141,18 @@ function ElementBox({ el, rect, zoom, selected, showHandles, editing, onPointerD
   );
 }
 
+function textStyle(el: DesignElement, zoom: number): CSSProperties {
+  const s = el.style ?? {};
+  return { fontSize: (s.fontSize ?? 11) * zoom, fontWeight: s.bold ? 600 : 400, textAlign: s.align ?? 'left', color: s.color ?? '#262626' };
+}
+
 function ElementContent({ el, zoom }: { el: DesignElement; zoom: number }): JSX.Element {
   const s = el.style ?? {};
   switch (el.kind) {
     case 'text':
     case 'datetime':
       return (
-        <div className="h-full w-full overflow-hidden leading-tight"
-          style={{ fontSize: (s.fontSize ?? 11) * zoom, fontWeight: s.bold ? 600 : 400, textAlign: s.align ?? 'left', color: s.color ?? '#262626' }}>
+        <div className="h-full w-full overflow-hidden leading-tight" style={textStyle(el, zoom)}>
           {el.text}
         </div>
       );

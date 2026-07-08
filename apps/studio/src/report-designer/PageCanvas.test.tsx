@@ -174,6 +174,28 @@ describe('PageCanvas inline text editing', () => {
     fireEvent.pointerUp(window, { clientX: 80, clientY: 80 });
     expect(onCommit).not.toHaveBeenCalled();
   });
+
+  it('exits inline edit on blur', () => {
+    const onEditEnd = vi.fn();
+    render(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={1} selectedIds={['amr-title']} editingId="amr-title"
+      onSelect={vi.fn()} onCommitRects={vi.fn()} onEditStart={vi.fn()} onEditChange={vi.fn()} onEditEnd={onEditEnd} />);
+    fireEvent.blur(screen.getByTestId('edit-amr-title'));
+    expect(onEditEnd).toHaveBeenCalled();
+  });
+
+  it('scales the edit textarea font size by zoom', () => {
+    render(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={2} selectedIds={['amr-title']} editingId="amr-title"
+      onSelect={vi.fn()} onCommitRects={vi.fn()} onEditStart={vi.fn()} onEditChange={vi.fn()} onEditEnd={vi.fn()} />);
+    expect(screen.getByTestId('edit-amr-title')).toHaveStyle({ fontSize: '22px' }); // 11 * 2
+  });
+
+  it('does not enter edit mode on double-click of a non-text element', () => {
+    const onEditStart = vi.fn();
+    render(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={1} selectedIds={['amr-table']} editingId={null}
+      onSelect={vi.fn()} onCommitRects={vi.fn()} onEditStart={onEditStart} onEditChange={vi.fn()} onEditEnd={vi.fn()} />);
+    fireEvent.doubleClick(screen.getByTestId('el-amr-table'));
+    expect(onEditStart).not.toHaveBeenCalled();
+  });
 });
 
 describe('PageCanvas style rendering', () => {

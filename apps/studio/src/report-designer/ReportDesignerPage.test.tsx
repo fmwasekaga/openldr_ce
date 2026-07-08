@@ -179,4 +179,15 @@ describe('ReportDesignerPage', () => {
     fireEvent.click(within(screen.getByTestId('inspector')).getByRole('button', { name: 'Properties' }));
     expect(within(screen.getByTestId('inspector')).getByLabelText('Content')).toHaveValue('Inline edit');
   });
+
+  it('double-clicking a text element in a multi-selection collapses to editing just it', () => {
+    renderPage();
+    const inspector = () => screen.getByTestId('inspector');
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Layers' }));
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Title' }));
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Subtitle' }), { shiftKey: true });
+    fireEvent.doubleClick(screen.getByTestId('el-amr-title'));
+    expect(screen.getByTestId('edit-amr-title')).toBeInTheDocument();
+    expect(screen.queryByTestId('edit-amr-subtitle')).toBeNull();
+  });
 });
