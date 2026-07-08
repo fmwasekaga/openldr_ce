@@ -7,27 +7,27 @@ const tpl = MOCK_TEMPLATES[0];
 
 describe('InspectorTabs', () => {
   it('shows page settings in Properties when nothing is selected', () => {
-    render(<InspectorTabs template={tpl} selectedIds={[]} onSelect={vi.fn()} />);
+    render(<InspectorTabs template={tpl} selectedIds={[]} onSelect={vi.fn()} onPatchElement={vi.fn()} onPatchPage={vi.fn()} />);
     expect(screen.getByText('Page settings')).toBeInTheDocument();
     expect(screen.getByText('A4')).toBeInTheDocument();
   });
 
   it('shows element props in Properties when an element is selected', () => {
-    render(<InspectorTabs template={tpl} selectedIds={['amr-table']} onSelect={vi.fn()} />);
-    expect(screen.getByText('Bound report')).toBeInTheDocument();
-    expect(screen.getByText('AMR resistance')).toBeInTheDocument();
+    render(<InspectorTabs template={tpl} selectedIds={['amr-table']} onSelect={vi.fn()} onPatchElement={vi.fn()} onPatchPage={vi.fn()} />);
+    expect(screen.getByText('Position and size')).toBeInTheDocument();
+    expect(screen.getByLabelText('X')).toHaveValue(tpl.pages[0].elements.find((e) => e.id === 'amr-table')!.rect.x);
   });
 
   it('lists elements in Layers and selects one on click', () => {
     const onSelect = vi.fn();
-    render(<InspectorTabs template={tpl} selectedIds={[]} onSelect={onSelect} />);
+    render(<InspectorTabs template={tpl} selectedIds={[]} onSelect={onSelect} onPatchElement={vi.fn()} onPatchPage={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Layers' }));
     fireEvent.click(screen.getByRole('button', { name: /Resistance table/ }));
     expect(onSelect).toHaveBeenCalledWith(['amr-table']);
   });
 
   it('shows bound reports and parameters in Data', () => {
-    render(<InspectorTabs template={tpl} selectedIds={[]} onSelect={vi.fn()} />);
+    render(<InspectorTabs template={tpl} selectedIds={[]} onSelect={vi.fn()} onPatchElement={vi.fn()} onPatchPage={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Data' }));
     expect(screen.getByText('AMR resistance')).toBeInTheDocument();
     expect(screen.getByText('Facility')).toBeInTheDocument();
@@ -36,14 +36,14 @@ describe('InspectorTabs', () => {
 
   it('shift-click in Layers toggles an element into the selection', () => {
     const onSelect = vi.fn();
-    render(<InspectorTabs template={tpl} selectedIds={['amr-title']} onSelect={onSelect} />);
+    render(<InspectorTabs template={tpl} selectedIds={['amr-title']} onSelect={onSelect} onPatchElement={vi.fn()} onPatchPage={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Layers' }));
     fireEvent.click(screen.getByRole('button', { name: /Resistance table/ }), { shiftKey: true });
     expect(onSelect).toHaveBeenCalledWith(['amr-title', 'amr-table']);
   });
 
   it('Properties shows a count when multiple elements are selected', () => {
-    render(<InspectorTabs template={tpl} selectedIds={['amr-title', 'amr-table']} onSelect={vi.fn()} />);
+    render(<InspectorTabs template={tpl} selectedIds={['amr-title', 'amr-table']} onSelect={vi.fn()} onPatchElement={vi.fn()} onPatchPage={vi.fn()} />);
     expect(screen.getByText('2 elements selected')).toBeInTheDocument();
   });
 });
