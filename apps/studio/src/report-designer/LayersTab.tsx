@@ -1,11 +1,7 @@
 import { useTranslation } from 'react-i18next';
-import { Type, Table2, Image as ImageIcon, Minus, Square, CalendarClock } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import type { ElementKind, ReportTemplate } from './types';
-
-const KIND_ICON: Record<ElementKind, typeof Type> = {
-  text: Type, table: Table2, image: ImageIcon, line: Minus, rect: Square, datetime: CalendarClock,
-};
+import type { ReportTemplate } from './types';
+import { KIND_ICON } from './elementIcons';
 
 interface Props {
   template: ReportTemplate;

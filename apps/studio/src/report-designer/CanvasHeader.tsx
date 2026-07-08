@@ -1,7 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import {
   Plus, ChevronDown, Minus, Eye, MoreHorizontal,
-  Type, Table2, Image as ImageIcon, Square, CalendarClock,
   Save, FileText, FileSpreadsheet, ShieldCheck, Copy, Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -11,10 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import type { ElementKind } from './types';
 import { ELEMENT_KINDS } from './model';
-
-const KIND_ICON: Record<ElementKind, typeof Type> = {
-  text: Type, table: Table2, image: ImageIcon, line: Minus, rect: Square, datetime: CalendarClock,
-};
+import { KIND_ICON } from './elementIcons';
 
 interface Props {
   name: string;

@@ -10,7 +10,7 @@ export function DataTab({ template }: Props): JSX.Element {
   const reports = [...new Set(template.pages.flatMap((p) => reportsOnPage(p)))];
   return (
     <div className="flex flex-col gap-3 p-3">
-      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.reportsOnPage')}</div>
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.reportsInTemplate')}</div>
       {reports.length === 0 && <p className="text-xs text-muted-foreground">{t('reportDesigner.noReports')}</p>}
       {reports.map((r) => (
         <div key={r} className="flex items-center justify-between rounded-md border border-border px-2 py-1.5 text-xs">
