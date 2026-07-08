@@ -68,7 +68,8 @@ function KindControls({ el, onPatch }: {
           <div className="flex h-8 rounded-md border border-border">
             {aligns.map(({ v, icon: Icon, label }) => (
               <button key={v} type="button" aria-label={label} aria-pressed={(s.align ?? 'left') === v} onClick={() => style({ align: v }, true)}
-                className={cn('flex w-8 items-center justify-center', (s.align ?? 'left') === v ? 'text-foreground' : 'text-muted-foreground')}>
+                className={cn('flex w-8 items-center justify-center first:rounded-l-md last:rounded-r-md',
+                  (s.align ?? 'left') === v ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground')}>
                 <Icon className="h-4 w-4" />
               </button>
             ))}
