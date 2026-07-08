@@ -1,4 +1,4 @@
-import type { DesignElement, DesignPage, ElementKind, Orientation, Paper, ReportTemplate } from './types';
+import type { DesignElement, DesignPage, ElementKind, Orientation, Paper, Rect, ReportTemplate } from './types';
 
 /** Paper sizes in CSS px at 96dpi, portrait. */
 export const PAPER_PX: Record<Paper, { w: number; h: number }> = {
@@ -52,4 +52,24 @@ export function findElement(tpl: ReportTemplate, id: string | null): DesignEleme
     if (e) return e;
   }
   return null;
+}
+
+export function allElements(tpl: ReportTemplate): DesignElement[] {
+  return tpl.pages.flatMap((p) => p.elements);
+}
+
+export function updateElementRects(tpl: ReportTemplate, rects: Map<string, Rect>): ReportTemplate {
+  if (rects.size === 0) return tpl;
+  return {
+    ...tpl,
+    pages: tpl.pages.map((p) => ({
+      ...p,
+      elements: p.elements.map((e) => (rects.has(e.id) ? { ...e, rect: rects.get(e.id)! } : e)),
+    })),
+  };
+}
+
+export function removeElements(tpl: ReportTemplate, ids: Set<string>): ReportTemplate {
+  if (ids.size === 0) return tpl;
+  return { ...tpl, pages: tpl.pages.map((p) => ({ ...p, elements: p.elements.filter((e) => !ids.has(e.id)) })) };
 }
