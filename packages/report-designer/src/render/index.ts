@@ -1,7 +1,7 @@
 import PDFDocument from 'pdfkit';
 import type { ReportDesign } from '../schema';
 import { paperSizePt } from './units';
-import { drawElement, paramMap, pageChunkCount } from './draw';
+import { drawElement, paramMap, pageChunkCount, totalPhysicalPages, drawPageFooter } from './draw';
 
 export type ResolvedTable =
   | { columns: { key: string; label: string }[]; rows: Record<string, unknown>[] }
@@ -27,11 +27,15 @@ export function renderReportDesignPdf(
     doc.on('error', reject);
   });
 
+  const total = totalPhysicalPages(pages, resolved);
+  let physical = 0;
   for (const page of pages) {
     const pageCount = pageChunkCount(page, resolved);
     for (let c = 0; c < pageCount; c += 1) {
       doc.addPage({ size: [w, h], margin: 0 });
+      physical += 1;
       for (const el of page.elements) drawElement(doc, el, tokens, resolved.get(el.id), c);
+      if (design.pageNumbers) drawPageFooter(doc, w, h, physical, total);
     }
   }
   doc.end();

@@ -492,6 +492,7 @@ export const fr: EnShape = {
     data: 'Données',
     elementLabel: 'Élément',
     pageSettings: 'Paramètres de page',
+    pageNumbers: 'Numéros de page',
     paper: 'Papier',
     orientation: 'Orientation',
     columns: 'Colonnes',

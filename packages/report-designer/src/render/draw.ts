@@ -53,6 +53,23 @@ export function pageChunkCount(page: DesignPage, resolved: Map<string, ResolvedT
   return Math.max(1, ...page.elements.map((el) => tableChunkCount(el, resolved.get(el.id))));
 }
 
+/** Total physical PDF pages across the whole design = sum of each design page's chunk count. */
+export function totalPhysicalPages(pages: DesignPage[], resolved: Map<string, ResolvedTable>): number {
+  return pages.reduce((sum, p) => sum + pageChunkCount(p, resolved), 0);
+}
+
+/** Footer label for physical page `n` of `total` (hardcoded English, like the "Query error:" text). */
+export function pageFooterLabel(n: number, total: number): string {
+  return `Page ${n} / ${total}`;
+}
+
+/** Draw the "Page X / Y" footer centered ~24pt above the bottom edge of a full-bleed page. */
+export function drawPageFooter(doc: Doc, wPt: number, hPt: number, n: number, total: number): void {
+  doc.save().font('Helvetica').fontSize(8).fillColor('#737373')
+    .text(pageFooterLabel(n, total), 0, hPt - 24, { width: wPt, align: 'center' });
+  doc.restore();
+}
+
 export function drawElement(
   doc: Doc, el: DesignElement, tokens: Map<string, string>, resolved: ResolvedTable | undefined, chunk = 0,
 ): void {
