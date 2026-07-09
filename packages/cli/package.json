@@ -25,7 +25,6 @@
     "@openldr/fhir": "workspace:*",
     "@openldr/reporting": "workspace:*",
     "@openldr/forms": "workspace:*",
-    "@openldr/report-builder": "workspace:*",
     "@openldr/report-designer": "workspace:*",
     "commander": "^12.1.0"
   },
