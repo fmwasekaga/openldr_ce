@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { AppShell } from '../shell/AppShell';
 import {
   fetchReports, fetchReport, fetchReportOptions, logReportRun,
   type ReportSummary, type ReportResult,
 } from '../api';
 import { ReportLibrary } from '../reports/ReportLibrary';
+import { listReportCategories, type ReportCategory } from '../reports/reportCategoriesApi';
 import { ReportHistoryDrawer } from '../reports/ReportHistoryDrawer';
 import { ReportSchedulesDrawer } from '../reports/ReportSchedulesDrawer';
 import { useAuth } from '@/auth/AuthProvider';
-import { Button } from '@/components/ui/button';
 import { ReportParametersBar } from '../reports/ReportParametersBar';
 import { ReportSummaryStrip } from '../reports/ReportSummaryStrip';
 import { ReportActionsMenu } from '../reports/ReportActionsMenu';
@@ -19,7 +20,7 @@ import { computeSummaryMetrics } from '../reports/lib/report-summary';
 import {
   loadPinned, savePinned, togglePinned, loadLastParams, saveLastParams,
 } from '../reports/lib/report-preferences';
-import { NewReportDialog } from '../reports/NewReportDialog';
+import { deleteReportDef, setReportStatus } from '../reports/reportDefsApi';
 
 type Tab = 'document' | 'spreadsheet';
 
@@ -29,6 +30,7 @@ export function Reports() {
   const canManageSchedules = hasRole('lab_admin') || hasRole('lab_manager');
   const [schedulesOpen, setSchedulesOpen] = useState(false);
   const [reports, setReports] = useState<ReportSummary[]>([]);
+  const [categories, setCategories] = useState<ReportCategory[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [collapsed, setCollapsed] = useState(false);
@@ -48,10 +50,15 @@ export function Reports() {
 
   const selected = reports.find((r) => r.id === selectedId) ?? null;
 
+  const refreshCategories = useCallback(() => {
+    listReportCategories().then(setCategories).catch(() => setCategories([]));
+  }, []);
+
   useEffect(() => {
     fetchReports().then(setReports).catch((e) => setError(String(e)));
     setPinnedIds(loadPinned());
-  }, []);
+    refreshCategories();
+  }, [refreshCategories]);
 
   const handleSelect = useCallback((id: string) => {
     setSelectedId(id);
@@ -107,17 +114,37 @@ export function Reports() {
     fetchReports().then(setReports).catch((e) => setError(String(e)));
   }, []);
 
+  const handleUnpublish = useCallback(() => {
+    if (!selected) return;
+    setReportStatus(selected.id, 'draft')
+      .then(() => {
+        toast.success(t('reports.unpublished'));
+        setSelectedId(null);
+        setResult(null);
+        refreshReports();
+      })
+      .catch(() => toast.error(t('reports.actionFailed')));
+  }, [selected, t, refreshReports]);
+
+  const handleDeleteReport = useCallback(() => {
+    if (!selected) return;
+    deleteReportDef(selected.id)
+      .then(() => {
+        toast.success(t('reports.deleted'));
+        setSelectedId(null);
+        setResult(null);
+        refreshReports();
+      })
+      .catch(() => toast.error(t('reports.actionFailed')));
+  }, [selected, t, refreshReports]);
+
   return (
     <AppShell title={t('nav.reports')} fullBleed>
       <div className="flex h-full min-h-0">
         <div className="flex min-h-0 min-w-0 shrink-0 flex-col border-r border-border">
-          {!collapsed && (
-            <div className="flex items-center justify-end border-b border-border px-2 py-2">
-              <NewReportButton onCreated={refreshReports} />
-            </div>
-          )}
           <ReportLibrary
             reports={reports}
+            categories={categories}
             selectedId={selectedId}
             onSelect={handleSelect}
             pinnedIds={pinnedIds}
@@ -146,6 +173,11 @@ export function Reports() {
                   onOpenSchedules={() => setSchedulesOpen(true)}
                   canManageSchedules={canManageSchedules}
                   designId={selected.designId}
+                  reportId={selected.id}
+                  source={selected.source}
+                  canManage={canManageSchedules}
+                  onUnpublish={handleUnpublish}
+                  onDelete={handleDeleteReport}
                 />
               </div>
 
@@ -231,18 +263,5 @@ export function Reports() {
         />
       )}
     </AppShell>
-  );
-}
-
-export function NewReportButton({ onCreated }: { onCreated?: () => void } = {}): JSX.Element | null {
-  const { t } = useTranslation();
-  const { hasRole } = useAuth();
-  const [open, setOpen] = useState(false);
-  if (!(hasRole('lab_admin') || hasRole('lab_manager'))) return null;
-  return (
-    <>
-      <Button size="sm" onClick={() => setOpen(true)}>{t('reports.new.button')}</Button>
-      <NewReportDialog open={open} onOpenChange={setOpen} onCreated={() => onCreated?.()} />
-    </>
   );
 }

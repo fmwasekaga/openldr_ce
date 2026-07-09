@@ -39,6 +39,7 @@ import { createBatchStore } from '@openldr/ingest';
 import { createActivityService, type ActivityService } from './activity-service';
 import { createFeatureFlags, type FeatureFlags } from './feature-flags';
 import { createNumberSettings, type NumberSettings } from './number-settings';
+import { createReportCategoriesService, type ReportCategoriesService } from './report-categories';
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { policyFromConfig } from './policy';
 import { createPluginTarget } from './connector-target';
@@ -266,6 +267,7 @@ export interface AppContext {
   dashboards: DashboardsApi;
   reportDesigns: ReportDesignStore;
   reportDefs: ReportStore;
+  reportCategories: ReportCategoriesService;
   workflows: {
     store: WorkflowStore;
     runs: WorkflowRunStore;
@@ -524,6 +526,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   const appSettings = createAppSettingsStore(internal.db);
   const featureFlags = createFeatureFlags(appSettings);
   const numberSettings = createNumberSettings(appSettings);
+  const reportCategories = createReportCategoriesService(appSettings);
   const connectorSqlRunner = createConnectorSqlRunner({ connectors: connectorStore, secretsKey: cfg.SECRETS_ENCRYPTION_KEY });
   const connectorMongoRunner = createConnectorMongoRunner({ connectors: connectorStore, secretsKey: cfg.SECRETS_ENCRYPTION_KEY });
   const connectorRedisRunner = createConnectorRedisRunner({ connectors: connectorStore, secretsKey: cfg.SECRETS_ENCRYPTION_KEY });
@@ -780,6 +783,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     dashboards,
     reportDesigns: reportDesignStore,
     reportDefs: reportDefStore,
+    reportCategories,
     workflows,
     plugins,
     pluginData,
@@ -801,6 +805,8 @@ export { createFeatureFlags } from './feature-flags';
 export type { FeatureFlags, ResolvedFlag } from './feature-flags';
 export { createNumberSettings } from './number-settings';
 export type { NumberSettings, ResolvedNumberSetting } from './number-settings';
+export { createReportCategoriesService, REPORT_CATEGORIES_SETTING_KEY } from './report-categories';
+export type { ReportCategoriesService } from './report-categories';
 export { createActivityService } from './activity-service';
 export type { ActivityService, RecentPayload } from './activity-service';
 export { getSyncConfig, setSyncConfig } from './sync-settings';

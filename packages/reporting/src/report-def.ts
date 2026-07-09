@@ -18,7 +18,9 @@ export const ReportDefSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   description: z.string(),
-  category: z.enum(['amr', 'operational', 'quality', 'regulatory']),
+  // Free-form category id — was a hardcoded enum, now a reference into the global, editable
+  // report-category list (see report-category.ts / ReportCategoryListSchema).
+  category: z.string().min(1),
   designId: z.string().min(1),
   primaryQueryId: z.string().min(1),
   summaryMetrics: z.array(MetricSchema).optional(),

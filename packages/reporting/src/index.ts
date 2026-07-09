@@ -1,5 +1,6 @@
 export * from './types';
 export * from './report-def';
+export * from './report-category';
 export * from './helpers';
 export * from './schedule-period';
 export * from './eventsource';

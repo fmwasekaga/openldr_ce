@@ -1,18 +1,23 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { listReportDesigns, type ReportCategory } from '../api';
+import { MoreHorizontal } from 'lucide-react';
+import { listReportDesigns } from '../api';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { queryApi } from '../query/api';
 import type { CustomQuery } from '../query/custom-query-types';
 import { createReportDef } from './reportDefsApi';
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { listReportCategories, saveReportCategories, type ReportCategory } from './reportCategoriesApi';
+import { CategoryPicker } from './CategoryPicker';
+import { useAuth } from '@/auth/AuthProvider';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-
-const CATEGORIES: ReportCategory[] = ['amr', 'operational', 'quality', 'regulatory'];
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
 
 function newId(): string {
   const rand = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
@@ -40,12 +45,15 @@ interface Props {
   initialDesignId?: string;
 }
 
-export function NewReportDialog({ open, onOpenChange, onCreated, initialDesignId }: Props): JSX.Element {
+export function NewReportSheet({ open, onOpenChange, onCreated, initialDesignId }: Props): JSX.Element {
   const { t } = useTranslation();
+  const { hasRole } = useAuth();
+  const canManageCategories = hasRole('lab_admin') || hasRole('lab_manager');
   const [designs, setDesigns] = useState<ReportDesign[]>([]);
   const [queries, setQueries] = useState<CustomQuery[]>([]);
+  const [categories, setCategories] = useState<ReportCategory[]>([]);
   const [name, setName] = useState('');
-  const [category, setCategory] = useState<ReportCategory>('operational');
+  const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
   const [designId, setDesignId] = useState('');
   const [primaryQueryId, setPrimaryQueryId] = useState('');
@@ -55,13 +63,14 @@ export function NewReportDialog({ open, onOpenChange, onCreated, initialDesignId
   useEffect(() => {
     if (!open) return;
     setName('');
-    setCategory('operational');
     setDescription('');
     setError(undefined);
-    Promise.all([listReportDesigns(), queryApi.list()])
-      .then(([ds, qs]) => {
+    Promise.all([listReportDesigns(), queryApi.list(), listReportCategories()])
+      .then(([ds, qs, cats]) => {
         setDesigns(ds);
         setQueries(qs);
+        setCategories(cats);
+        setCategory(cats[0]?.id ?? '');
         const initial = (initialDesignId && ds.some((d) => d.id === initialDesignId)) ? initialDesignId : ds[0]?.id ?? '';
         setDesignId(initial);
         setPrimaryQueryId(firstBoundQueryId(ds.find((d) => d.id === initial)));
@@ -77,7 +86,12 @@ export function NewReportDialog({ open, onOpenChange, onCreated, initialDesignId
     setPrimaryQueryId(firstBoundQueryId(designs.find((d) => d.id === id)));
   };
 
-  const canCreate = name.trim().length > 0 && designId.length > 0 && primaryQueryId.length > 0 && !saving;
+  const handleCategoriesChange = (list: ReportCategory[]) => {
+    setCategories(list);
+    saveReportCategories(list).catch((e) => setError(e instanceof Error ? e.message : String(e)));
+  };
+
+  const canCreate = name.trim().length > 0 && designId.length > 0 && primaryQueryId.length > 0 && category.length > 0 && !saving;
 
   const handleCreate = async () => {
     if (!canCreate) return;
@@ -103,12 +117,26 @@ export function NewReportDialog({ open, onOpenChange, onCreated, initialDesignId
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-full max-w-md max-h-[85vh] flex flex-col p-0">
-        <div className="border-b border-border px-6 py-4">
-          <DialogTitle className="text-base font-semibold">{t('reports.new.title')}</DialogTitle>
-          <DialogDescription className="text-xs text-muted-foreground">{t('reports.new.subtitle')}</DialogDescription>
-        </div>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="flex w-full max-w-md flex-col gap-0 border-b-0 p-0">
+        <SheetHeader className="flex flex-row items-start justify-between gap-2 border-b border-border px-6 py-4">
+          <div className="min-w-0">
+            <SheetTitle>{t('reports.new.title')}</SheetTitle>
+            <SheetDescription>{t('reports.new.subtitle')}</SheetDescription>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="mr-6 mt-0.5 shrink-0" aria-label={t('common.actions')}>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem disabled={!canCreate} onSelect={() => { void handleCreate(); }}>
+                {t('reports.new.create')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </SheetHeader>
         <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-6 py-4">
           <div className="flex flex-col gap-1">
             <Label htmlFor="newReportName" className="text-xs uppercase text-muted-foreground">{t('reports.new.name')}</Label>
@@ -116,13 +144,14 @@ export function NewReportDialog({ open, onOpenChange, onCreated, initialDesignId
           </div>
 
           <div className="flex flex-col gap-1">
-            <Label htmlFor="newReportCategory" className="text-xs uppercase text-muted-foreground">{t('reports.new.category')}</Label>
-            <Select value={category} onValueChange={(v) => setCategory(v as ReportCategory)}>
-              <SelectTrigger id="newReportCategory" className="h-9"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{t(`reports.categories.${c}`)}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <Label className="text-xs uppercase text-muted-foreground">{t('reports.new.category')}</Label>
+            <CategoryPicker
+              value={category}
+              onChange={setCategory}
+              categories={categories}
+              onCategoriesChange={handleCategoriesChange}
+              canEdit={canManageCategories}
+            />
           </div>
 
           <div className="flex flex-col gap-1">
@@ -163,12 +192,7 @@ export function NewReportDialog({ open, onOpenChange, onCreated, initialDesignId
 
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
-
-        <div className="flex justify-end gap-2 border-t border-border px-6 py-3">
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>{t('reports.new.cancel')}</Button>
-          <Button onClick={() => { void handleCreate(); }} disabled={!canCreate}>{t('reports.new.create')}</Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }

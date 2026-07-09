@@ -324,6 +324,31 @@ describe('seedDatabase — data-driven reports (S4)', () => {
   });
 });
 
+describe('seedDatabase — default report categories', () => {
+  it('seeds the 4 default categories once when the setting is unset', async () => {
+    const { app, settings } = fakeApp();
+    const res = await seedDatabase(fakeDb, app);
+    expect(res.reportCategoriesSeeded).toBe(4);
+    const stored = JSON.parse(settings.get('report.categories')!);
+    expect(stored).toEqual([
+      { id: 'amr', label: 'AMR / Surveillance', order: 0 },
+      { id: 'operational', label: 'Operational', order: 1 },
+      { id: 'quality', label: 'Quality', order: 2 },
+      { id: 'regulatory', label: 'Regulatory', order: 3 },
+    ]);
+  });
+
+  it('is idempotent — re-running does not overwrite an operator-edited list', async () => {
+    const { app, settings } = fakeApp();
+    await seedDatabase(fakeDb, app);
+    // Simulate an operator edit between runs.
+    settings.set('report.categories', JSON.stringify([{ id: 'custom', label: 'Custom', order: 0 }]));
+    const second = await seedDatabase(fakeDb, app);
+    expect(second.reportCategoriesSeeded).toBe(0);
+    expect(JSON.parse(settings.get('report.categories')!)).toEqual([{ id: 'custom', label: 'Custom', order: 0 }]);
+  });
+});
+
 describe('fhirValueSetCatalogToInputs — bundled R4 fixture parses', () => {
   it('parses the bundled R4 catalog into value sets', async () => {
     const { BUNDLED_TERMINOLOGY, readBundledTerminology, fhirValueSetCatalogToInputs } = await import('@openldr/db');

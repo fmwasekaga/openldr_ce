@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, Star, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
-import type { ReportSummary, ReportCategory } from '../api';
+import type { ReportSummary } from '../api';
+import type { ReportCategory } from './reportCategoriesApi';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +11,8 @@ import { cn } from '@/lib/cn';
 
 interface Props {
   reports: ReportSummary[];
+  /** The dynamic, editable category list (order + label drive the section grouping below). */
+  categories: ReportCategory[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   pinnedIds: string[];
@@ -20,10 +23,8 @@ interface Props {
   onToggleCollapse: () => void;
 }
 
-const CATEGORY_ORDER: ReportCategory[] = ['amr', 'operational', 'quality', 'regulatory'];
-
 export function ReportLibrary({
-  reports, selectedId, onSelect, pinnedIds, onTogglePin,
+  reports, categories, selectedId, onSelect, pinnedIds, onTogglePin,
   search, onSearchChange, collapsed, onToggleCollapse,
 }: Props) {
   const { t } = useTranslation();
@@ -33,14 +34,19 @@ export function ReportLibrary({
     [reports, search],
   );
   const pinned = filtered.filter((r) => pinnedIds.includes(r.id));
-  const byCategory = CATEGORY_ORDER.map((cat) => ({
-    cat,
-    items: filtered.filter((r) => r.category === cat),
+  const sortedCategories = useMemo(() => [...categories].sort((a, b) => a.order - b.order), [categories]);
+  const knownCategoryIds = useMemo(() => new Set(categories.map((c) => c.id)), [categories]);
+  const byCategory = sortedCategories.map((cat) => ({
+    key: cat.id,
+    label: cat.label,
+    items: filtered.filter((r) => r.category === cat.id),
   })).filter((g) => g.items.length > 0);
+  const uncategorized = filtered.filter((r) => !knownCategoryIds.has(r.category));
 
   const sections: { key: string; label: string; items: ReportSummary[] }[] = [
     ...(pinned.length > 0 ? [{ key: 'pinned', label: t('reports.pinned'), items: pinned }] : []),
-    ...byCategory.map(({ cat, items }) => ({ key: cat, label: t(`reports.categories.${cat}`), items })),
+    ...byCategory,
+    ...(uncategorized.length > 0 ? [{ key: 'uncategorized', label: t('reports.uncategorized'), items: uncategorized }] : []),
   ];
 
   if (collapsed) {

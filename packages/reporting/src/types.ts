@@ -4,7 +4,9 @@ export type ChartHint =
   | { type: 'pie'; label: string; value: string }
   | { type: 'stat'; value: string; label: string };
 
-export type ReportCategory = 'amr' | 'operational' | 'quality' | 'regulatory';
+// Free-form category id (references the global, editable report-category list — see
+// report-category.ts's ReportCategoryEntry/ReportCategoryListSchema). Was a hardcoded enum.
+export type ReportCategory = string;
 
 export interface ReportParamMeta {
   id: string;

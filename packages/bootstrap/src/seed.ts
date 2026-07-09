@@ -3,11 +3,12 @@ import { sampleForms, type FormStore } from '@openldr/forms';
 import { buildDefaultWorkflows, type WorkflowStore } from '@openldr/workflows';
 import { seedDefaultDashboard, type DashboardStore } from '@openldr/dashboards';
 import { seedReportDesigns, removeRetiredDemoDesigns, type ReportDesignStore } from '@openldr/report-designer';
-import { seedDataDrivenReports, type SeedDataDrivenReportsResult } from '@openldr/reporting';
+import { seedDataDrivenReports, DEFAULT_REPORT_CATEGORIES, type SeedDataDrivenReportsResult } from '@openldr/reporting';
 import type { ConnectorStore, TerminologyAdminStore, AppSettingStore, ReportStore } from '@openldr/db';
 import { BUNDLED_TERMINOLOGY, readBundledTerminology, createCustomQueryStore } from '@openldr/db';
 import { FEATURE_FLAGS } from '@openldr/config';
 import type { DbContext } from './db-context';
+import { REPORT_CATEGORIES_SETTING_KEY } from './report-categories';
 
 export interface SeedResult {
   resources: { id: string; flattened: string }[];
@@ -28,6 +29,9 @@ export interface SeedResult {
   /** Bundled terminology auto-imported on first boot: value sets from the FHIR R4 catalog
    *  and concepts from the full UCUM code system (0/0 once already present or on failure). */
   terminology: { valueSetsImported: number; ucumConceptsImported: number };
+  /** Default global report-category list (amr/operational/quality/regulatory) written once on
+   *  first boot — see DEFAULT_REPORT_CATEGORIES. 0 once the operator has saved any list. */
+  reportCategoriesSeeded: number;
 }
 
 /** UCUM canonical url — matches migration 017's `cs-ucum-seed`, so the bundled import merges. */
@@ -228,7 +232,23 @@ export async function seedDatabase(db: DbContext, app: FormSeedTarget): Promise<
     }
   }
 
-  return { resources, formsSeeded, workflowsSeeded, connectorsSeeded, dashboardsSeeded, reportDesignsSeeded, demoDesignsRemoved, dataDrivenReportsSeeded, settingsSeeded, terminology };
+  // Default report categories — the global, editable list backing ReportDef.category (formerly
+  // a hardcoded enum). Seeded once, matching the ids the 8 built-in seeded reports already use
+  // (see seed/report-seeds.ts), so their grouping is unaffected. Idempotent: only writes when the
+  // setting is completely unset, so an operator's later add/rename/reorder/delete always wins on
+  // reseed — never clobbered, exactly like the feature-flag defaults above.
+  let reportCategoriesSeeded = 0;
+  try {
+    const existing = await app.appSettings.get(REPORT_CATEGORIES_SETTING_KEY);
+    if (!existing) {
+      await app.appSettings.set(REPORT_CATEGORIES_SETTING_KEY, JSON.stringify(DEFAULT_REPORT_CATEGORIES), 'system');
+      reportCategoriesSeeded = DEFAULT_REPORT_CATEGORIES.length;
+    }
+  } catch (e) {
+    console.warn('[seed] report categories seed skipped:', e instanceof Error ? e.message : String(e));
+  }
+
+  return { resources, formsSeeded, workflowsSeeded, connectorsSeeded, dashboardsSeeded, reportDesignsSeeded, demoDesignsRemoved, dataDrivenReportsSeeded, settingsSeeded, terminology, reportCategoriesSeeded };
 }
 
 // Auto-import the two bundled, freely-redistributable terminology sets on first boot:

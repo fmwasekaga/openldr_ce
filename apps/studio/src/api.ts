@@ -21,7 +21,9 @@ export async function authFetch(input: RequestInfo | URL, init?: RequestInit): P
   return res;
 }
 
-export type ReportCategory = 'amr' | 'operational' | 'quality' | 'regulatory';
+/** A report's category is a free-form id into the editable report-category list
+ *  (see reports/reportCategoriesApi.ts). Was previously a hardcoded enum. */
+export type ReportCategory = string;
 export interface ReportParamMeta {
   id: string;
   label: string;

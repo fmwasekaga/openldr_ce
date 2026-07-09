@@ -11,7 +11,7 @@ import { CanvasHeader } from './CanvasHeader';
 import { PageCanvas } from './PageCanvas';
 import { InspectorTabs } from './InspectorTabs';
 import { PreviewReportDesignDialog } from './PreviewReportDesignDialog';
-import { NewReportDialog } from '../reports/NewReportDialog';
+import { NewReportSheet } from '../reports/NewReportSheet';
 import { createReportDesign, deleteReportDesign, downloadReportDesignPdf, getReportDesign, listReportDesigns, updateReportDesign } from '../api';
 import { addElement, allElements, newElement, paperSize, removeElements, updateElement, updateElementRects, updateElements } from './model';
 import { clampRectToPage } from './geometry';
@@ -426,7 +426,7 @@ export function ReportDesignerPage(): JSX.Element {
       </AlertDialog>
       {template && previewOpen && <PreviewReportDesignDialog open={previewOpen} design={template} onOpenChange={setPreviewOpen} />}
       {template && (
-        <NewReportDialog
+        <NewReportSheet
           open={publishOpen}
           onOpenChange={setPublishOpen}
           initialDesignId={template.id}
