@@ -1,8 +1,9 @@
 import { useTranslation } from 'react-i18next';
-import { MoreHorizontal } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { MoreHorizontal, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 
 interface Props {
@@ -16,11 +17,14 @@ interface Props {
    * render for custom reports — so this currently gates nothing but keeps the contract explicit.)
    */
   pdfOnly?: boolean;
+  /** The linked report-designer template id for a data-driven (source==='design') report. */
+  designId?: string;
 }
 
 /** SP-3b: Run History (SP-2) and Schedules (manager-only) are live. */
-export function ReportActionsMenu({ onOpenHistory, onOpenSchedules, canManageSchedules, pdfOnly: _pdfOnly }: Props) {
+export function ReportActionsMenu({ onOpenHistory, onOpenSchedules, canManageSchedules, pdfOnly: _pdfOnly, designId }: Props) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -39,6 +43,18 @@ export function ReportActionsMenu({ onOpenHistory, onOpenSchedules, canManageSch
         >
           {t('reports.schedules')}
         </DropdownMenuItem>
+        {designId && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              disabled={!canManageSchedules}
+              title={canManageSchedules ? undefined : t('reports.comingSoon')}
+              onSelect={() => { if (canManageSchedules) navigate(`/report-designer/${designId}`); }}
+            >
+              <Pencil className="mr-2 h-4 w-4" /> {t('reports.editTemplate')}
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

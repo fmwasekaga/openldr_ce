@@ -8,6 +8,7 @@ function setup(overrides = {}) {
     onNameChange: vi.fn(), onNewTemplate: vi.fn(), onInsert: vi.fn(), onZoomIn: vi.fn(), onZoomOut: vi.fn(),
     onUndo: vi.fn(), onRedo: vi.fn(), canUndo: false, canRedo: false,
     onPreview: vi.fn(), onSave: vi.fn(), onExportPdf: vi.fn(), onExportExcel: vi.fn(),
+    onPublishAsReport: vi.fn(),
     onCheck: vi.fn(), onDuplicate: vi.fn(), onDelete: vi.fn(), ...overrides,
   };
   render(<CanvasHeader {...props} />);
@@ -67,9 +68,16 @@ describe('CanvasHeader', () => {
   it('lists the actions in the kebab menu', async () => {
     setup();
     await openKebab();
-    for (const name of ['New template', 'Insert', 'Preview', 'Save', 'Export', 'Check', 'Duplicate', 'Delete']) {
+    for (const name of ['New template', 'Insert', 'Preview', 'Save', 'Export', 'Publish as report', 'Check', 'Duplicate', 'Delete']) {
       expect(screen.getByRole('menuitem', { name })).toBeInTheDocument();
     }
+  });
+
+  it('fires Publish as report from the kebab', async () => {
+    const props = setup();
+    await openKebab();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Publish as report' }));
+    expect(props.onPublishAsReport).toHaveBeenCalled();
   });
 
   it('creates a new template from the kebab', async () => {

@@ -561,6 +561,8 @@ export const fr: EnShape = {
     exportedExcelToast: '« {{name}}.xlsx » exporté',
     nothingToExport: 'Cette conception ne contient aucun tableau à exporter.',
     deletedToast: 'Conception de rapport supprimée',
+    saveBeforePublish: 'Enregistrez ce modèle avant de le publier comme rapport.',
+    publishedToast: '« {{name}} » publié comme rapport',
     deleteConfirmTitle: 'Supprimer cette conception de rapport ?',
     deleteConfirmBody: 'Cela supprime définitivement la conception de rapport. Cette action est irréversible.',
     deleteConfirmAction: 'Supprimer la conception',

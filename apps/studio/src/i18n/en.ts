@@ -565,6 +565,8 @@ export const en = {
     exportedExcelToast: 'Exported “{{name}}.xlsx”',
     nothingToExport: 'This design has no tables to export.',
     deletedToast: 'Report design deleted',
+    saveBeforePublish: 'Save this template before publishing it as a report.',
+    publishedToast: 'Published “{{name}}” as a report',
     deleteConfirmTitle: 'Delete this report design?',
     deleteConfirmBody: 'This permanently deletes the report design. This cannot be undone.',
     deleteConfirmAction: 'Delete design',

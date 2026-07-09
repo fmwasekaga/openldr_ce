@@ -64,4 +64,15 @@ describe('ReportLibrary', () => {
     });
     expect(screen.queryByText(/^Custom$/)).not.toBeInTheDocument();
   });
+
+  it('shows a Template badge for a design-sourced (data-driven) report only', () => {
+    setup({
+      reports: [
+        { id: 'amr-resistance', name: 'AMR Resistance Rate', description: '', category: 'amr', parameters: [], source: 'catalog' },
+        { id: 'r1', name: 'Linked report', description: '', category: 'operational', parameters: [], source: 'design', designId: 'd1' },
+      ],
+    });
+    expect(screen.getByText(/^Template$/)).toBeInTheDocument();
+    expect(screen.getAllByText(/^Template$/)).toHaveLength(1);
+  });
 });

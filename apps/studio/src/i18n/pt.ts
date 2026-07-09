@@ -561,6 +561,8 @@ export const pt: EnShape = {
     exportedExcelToast: '“{{name}}.xlsx” exportado',
     nothingToExport: 'Este design não tem tabelas para exportar.',
     deletedToast: 'Design de relatório excluído',
+    saveBeforePublish: 'Salve este modelo antes de publicá-lo como relatório.',
+    publishedToast: '“{{name}}” publicado como relatório',
     deleteConfirmTitle: 'Excluir este design de relatório?',
     deleteConfirmBody: 'Isto exclui permanentemente o design de relatório. Esta ação não pode ser desfeita.',
     deleteConfirmAction: 'Excluir design',

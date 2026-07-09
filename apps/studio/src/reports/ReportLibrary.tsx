@@ -74,6 +74,11 @@ export function ReportLibrary({
           {t('reports.custom')}
         </Badge>
       )}
+      {r.source === 'design' && (
+        <Badge variant="outline" className="shrink-0 px-1 py-0 text-[9px] font-medium uppercase tracking-wide">
+          {t('reports.templateBadge')}
+        </Badge>
+      )}
       <button
         type="button"
         aria-label={`pin-${r.id}`}

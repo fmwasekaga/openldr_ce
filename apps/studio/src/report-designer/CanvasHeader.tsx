@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Plus, Minus, Eye, MoreHorizontal, Undo2, Redo2,
   FilePlus, Save, Download, FileText, FileSpreadsheet, ShieldCheck, Copy, Trash2,
-  Check, Loader2,
+  Check, Loader2, Share2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,6 +32,7 @@ interface Props {
   onSave(): void;
   onExportPdf(): void;
   onExportExcel(): void;
+  onPublishAsReport(): void;
   onCheck(): void;
   onDuplicate(): void;
   onDelete(): void;
@@ -112,6 +113,7 @@ export function CanvasHeader(props: Props): JSX.Element {
                 <DropdownMenuItem onSelect={props.onExportExcel}><FileSpreadsheet className="mr-2 h-4 w-4" /> Excel</DropdownMenuItem>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
+            <DropdownMenuItem onSelect={props.onPublishAsReport}><Share2 className="mr-2 h-4 w-4" /> {t('reportDesigner.publishAsReport')}</DropdownMenuItem>
             <DropdownMenuItem onSelect={props.onCheck}><ShieldCheck className="mr-2 h-4 w-4" /> {t('reportDesigner.check')}</DropdownMenuItem>
             <DropdownMenuItem onSelect={props.onDuplicate}><Copy className="mr-2 h-4 w-4" /> {t('reportDesigner.duplicate')}</DropdownMenuItem>
             <DropdownMenuSeparator />

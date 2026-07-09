@@ -162,6 +162,7 @@ export function Reports() {
                   onOpenSchedules={() => setSchedulesOpen(true)}
                   canManageSchedules={canManageSchedules}
                   pdfOnly={isCustom}
+                  designId={selected.designId}
                 />
               </div>
 
