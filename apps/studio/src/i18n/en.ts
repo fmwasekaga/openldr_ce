@@ -391,12 +391,6 @@ export const en = {
       add: 'Add',
       placeholder: 'New category…',
     },
-    categories: {
-      amr: 'AMR / Surveillance',
-      operational: 'Operational',
-      quality: 'Quality',
-      regulatory: 'Regulatory',
-    },
     new: {
       button: 'New report',
       title: 'New report',

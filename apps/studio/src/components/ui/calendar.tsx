@@ -10,15 +10,23 @@ export function Calendar({ className, classNames, showOutsideDays = true, ...pro
       showOutsideDays={showOutsideDays}
       className={cn('p-3', className)}
       classNames={{
-        months: 'flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0',
+        // `months` is the positioning context for `nav` below: in react-day-picker v10, the
+        // Nav element (holding both prev/next buttons) renders once as a sibling *before* the
+        // Month blocks, not nested inside `month_caption` as it was in v8. Without an explicit
+        // `relative` ancestor here, the buttons' `absolute` positioning falls back to a distant
+        // positioned ancestor (e.g. the popover), landing on top of the day grid instead of the
+        // caption row.
+        months: 'relative flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0',
         month: 'space-y-4',
-        month_caption: 'flex justify-center pt-1 relative items-center',
+        month_caption: 'flex h-9 items-center justify-center',
         caption_label: 'text-sm font-medium',
-        nav: 'space-x-1 flex items-center',
+        // Pinned to the top of `months` (same height as `month_caption`) so it overlays only the
+        // caption row, never the grid below.
+        nav: 'absolute inset-x-0 top-0 z-10 flex h-9 items-center justify-between px-1',
         button_previous:
-          'absolute left-1 h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100 inline-flex items-center justify-center rounded-md border border-input',
+          'h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100 inline-flex items-center justify-center rounded-md border border-input',
         button_next:
-          'absolute right-1 h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100 inline-flex items-center justify-center rounded-md border border-input',
+          'h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100 inline-flex items-center justify-center rounded-md border border-input',
         month_grid: 'w-full border-collapse space-y-1',
         weekdays: 'flex',
         weekday: 'text-muted-foreground rounded-md w-9 font-normal text-[0.8rem]',
