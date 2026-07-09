@@ -176,6 +176,53 @@ from paired
 group by test
 order by "avgHours" desc, test asc`,
   },
+  {
+    id: 'q-patient-demographics',
+    name: 'Patient demographics by age band',
+    connectorId: '',
+    // Mirrors packages/reporting/src/reports/patient-demographics.ts + helpers.ts's ageBand():
+    // calendar-exact age (Postgres `age()` performs the same year/month/day-borrow subtraction as
+    // the JS algorithm) banded into the same fixed buckets, grouped by band x gender (male/female/
+    // other, where 'other' folds NULL and any non-male/female value — matches the JS else-branch).
+    //  - `asOf` (optional, a single reference date — NOT a range): catalog defaults to
+    //    '2026-01-01T00:00:00Z' when unset/empty. Same '' = "use default" guard as facility below.
+    //  - facility filter (optional): same '' = no-filter guard as q-amr-resistance; direct equality
+    //    on patients.managing_organization (no subject_ref indirection — this query reads
+    //    `patients` directly, unlike the AMR/TAT queries).
+    //  - row order: the FIXED band order ['0-4','5-14','15-24','25-49','50+','unknown'], NOT a
+    //    count-based sort — matches the catalog's `ORDER.filter(b => counts.has(b)).map(...)`.
+    params: [
+      { id: 'facility', label: 'Facility', type: 'text', required: false },
+      { id: 'asOf', label: 'As of', type: 'text', required: false },
+    ],
+    sql: `with params as (
+  select coalesce(nullif({{param.asOf}}, ''), '2026-01-01T00:00:00Z')::date as ref_date
+),
+banded as (
+  select
+    case
+      when p.birth_date is null then 'unknown'
+      when p.birth_date::date > pr.ref_date then 'unknown'
+      when extract(year from age(pr.ref_date, p.birth_date::date)) <= 4 then '0-4'
+      when extract(year from age(pr.ref_date, p.birth_date::date)) <= 14 then '5-14'
+      when extract(year from age(pr.ref_date, p.birth_date::date)) <= 24 then '15-24'
+      when extract(year from age(pr.ref_date, p.birth_date::date)) <= 49 then '25-49'
+      else '50+'
+    end as band,
+    p.gender
+  from patients p, params pr
+  where ({{param.facility}} = '' or p.managing_organization = {{param.facility}})
+)
+select
+  band,
+  count(*)::int as total,
+  sum(case when gender = 'male' then 1 else 0 end)::int as male,
+  sum(case when gender = 'female' then 1 else 0 end)::int as female,
+  sum(case when gender is null or gender not in ('male', 'female') then 1 else 0 end)::int as other
+from banded
+group by band
+order by array_position(array['0-4','5-14','15-24','25-49','50+','unknown']::text[], band)`,
+  },
 ];
 
 /** Report-designer page designs, one table bound to a `SEED_QUERIES` entry (via `simpleTableDesign`). */
@@ -229,6 +276,22 @@ export const SEED_DESIGNS: ReportDesign[] = [
       { key: 'facility', label: 'Facility', type: 'select', required: false, value: '' },
     ],
   }),
+  simpleTableDesign({
+    id: 'rt-patient-demographics',
+    name: 'Patient Demographics',
+    queryId: 'q-patient-demographics',
+    columns: [
+      { key: 'band', label: 'Age band' },
+      { key: 'total', label: 'Total' },
+      { key: 'male', label: 'Male' },
+      { key: 'female', label: 'Female' },
+      { key: 'other', label: 'Other/unknown' },
+    ],
+    parameters: [
+      { key: 'facility', label: 'Facility', type: 'select', required: false, value: '' },
+      { key: 'asOf', label: 'As of (YYYY-MM-DD)', type: 'text', required: false, value: '' },
+    ],
+  }),
 ];
 
 /** `reports` records linking a `SEED_DESIGNS` design to its `SEED_QUERIES` primary query. */
@@ -275,6 +338,18 @@ export const SEED_REPORT_DEFS: ReportRecord[] = [
     // count-weighted average recomputed per-run, but a report record's `chart` is static.
     // Currently inert (the Reports page doesn't render `chart`).
     chart: { type: 'stat', value: '0', label: 'Overall avg hours' },
+    paramOptions: { facility: 'q-facilities' },
+    status: 'published',
+  },
+  {
+    id: 'r-patient-demographics',
+    name: 'Patient Demographics',
+    description: 'Patient counts by age band and gender.',
+    category: 'quality',
+    designId: 'rt-patient-demographics',
+    primaryQueryId: 'q-patient-demographics',
+    summaryMetrics: [{ id: 'patients', label: 'Patients', type: 'sum', column: 'total' }],
+    chart: { type: 'pie', label: 'band', value: 'total' },
     paramOptions: { facility: 'q-facilities' },
     status: 'published',
   },
