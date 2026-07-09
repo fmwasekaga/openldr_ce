@@ -21,6 +21,7 @@ export { BUNDLED_TERMINOLOGY, readBundledTerminology } from './bundled-terminolo
 export * from './resolve-publisher';
 export * from './seed-publishers';
 export * from './report-run-store';
+export * from './report-store';
 export * from './marketplace-install-store';
 export * from './connector-store';
 export * from './custom-query-store';

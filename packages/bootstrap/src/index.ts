@@ -35,7 +35,7 @@ import { createReportScheduler, type ReportScheduler } from './report-scheduler'
 import { createPluginScheduleApi, createPluginScheduleRunner, type PluginScheduleRunner } from './plugin-schedule';
 import { createFormArtifactInstaller, type FormArtifactInstaller } from './form-artifact-install';
 import { type PluginRuntime } from '@openldr/plugins';
-import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore } from '@openldr/db';
+import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore } from '@openldr/db';
 import { createBatchStore } from '@openldr/ingest';
 import { createActivityService, type ActivityService } from './activity-service';
 import { createFeatureFlags, type FeatureFlags } from './feature-flags';
@@ -157,6 +157,7 @@ export interface AppContext {
   dashboards: DashboardsApi;
   reportTemplates: ReportTemplateStore;
   reportDesigns: ReportDesignStore;
+  reportDefs: ReportStore;
   workflows: {
     store: WorkflowStore;
     runs: WorkflowRunStore;
@@ -296,6 +297,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   const dashboardStore = createDashboardStore(internal.db);
   const reportTemplateStore = createReportTemplateStore(internal.db);
   const reportDesignStore = createReportDesignStore(internal.db);
+  const reportDefStore = createReportStore(internal.db);
   const runDashboardQuery = async (q: WidgetQuery): Promise<ReportResult> => {
     let data;
     if (q.mode === 'builder') {
@@ -666,6 +668,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     dashboards,
     reportTemplates: reportTemplateStore,
     reportDesigns: reportDesignStore,
+    reportDefs: reportDefStore,
     workflows,
     plugins,
     pluginData,

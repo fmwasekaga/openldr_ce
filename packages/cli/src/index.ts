@@ -8,6 +8,7 @@ import { runDbMigrate, runDbReset, runDbSeed } from './db';
 import { runFormsExtract, runFormsList } from './forms';
 import { runList as runReportTemplateList, runExport as runReportTemplateExport, runImport as runReportTemplateImport, runDelete as runReportTemplateDelete, runRender as runReportTemplateRender } from './report-template';
 import { runList as runReportDesignList, runDelete as runReportDesignDelete } from './report-design';
+import { runList as runReportDefList, runDelete as runReportDefDelete } from './report-def';
 import { runIngest, runPipelineStatus, runPipelineRetry, runPipelineLogs, runQueueStatus, runProvenanceAudit } from './ingest';
 import { runPluginInstall, runPluginList, runPluginTest, runPluginRun, runPluginRemove } from './plugin';
 import { runReportList, runReportRun, runReportGlassExport } from './report';
@@ -278,6 +279,14 @@ reportDesign.command('list').description('List report designs').option('--json',
 });
 reportDesign.command('delete <id>').description('Delete a report design (destructive)').option('--force', 'confirm deletion', false).action(async (id: string, opts: { force: boolean }) => {
   try { process.exitCode = await runReportDesignDelete(id, opts); } catch (err) { process.stderr.write(`report-design delete failed: ${redactError(err)}\n`); process.exitCode = 1; }
+});
+
+const reportDef = program.command('report-def').description('Data-driven report definitions');
+reportDef.command('list').description('List report definitions').option('--json', 'emit JSON', false).action(async (opts: { json: boolean }) => {
+  try { process.exitCode = await runReportDefList(opts); } catch (err) { process.stderr.write(`report-def list failed: ${redactError(err)}\n`); process.exitCode = 1; }
+});
+reportDef.command('delete <id>').description('Delete a report definition (destructive)').option('--force', 'confirm deletion', false).action(async (id: string, opts: { force: boolean }) => {
+  try { process.exitCode = await runReportDefDelete(id, opts); } catch (err) { process.stderr.write(`report-def delete failed: ${redactError(err)}\n`); process.exitCode = 1; }
 });
 
 program
