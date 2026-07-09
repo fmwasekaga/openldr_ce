@@ -2,10 +2,8 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download } from 'lucide-react';
 import * as pdfjs from 'pdfjs-dist';
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import type { PDFDocumentProxy, PDFDocumentLoadingTask, RenderTask } from 'pdfjs-dist';
-
-pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+import { ensurePdfWorkerConfigured } from './pdfWorker';
 
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 3;
@@ -34,8 +32,8 @@ export function PdfCanvasViewer({ blob, fileName, onDownload }: Props) {
     let cancelled = false;
     setStatus('loading');
     setErrorMsg('');
-    blob
-      .arrayBuffer()
+    ensurePdfWorkerConfigured()
+      .then(() => blob.arrayBuffer())
       .then((buf) => {
         if (cancelled) return;
         const task = pdfjs.getDocument({ data: new Uint8Array(buf) });
