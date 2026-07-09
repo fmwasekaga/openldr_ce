@@ -17,8 +17,12 @@ function deps() {
     list: vi.fn(async () => [schedule]),
   };
   const reporting = {
-    list: () => [{ id: 'amr-resistance', name: 'AMR Resistance Rate', description: '', category: 'amr',
-      parameters: [{ id: 'dateRange', label: 'Date range', type: 'daterange', required: false }] }],
+    // Mirrors the real ReportingApi.findSummary: resolves a def (with its daterange param) across
+    // data-driven + template sources. The old catalog-only sync `list()` no longer exists.
+    findSummary: vi.fn(async (id: string) => (id === 'amr-resistance'
+      ? { id: 'amr-resistance', name: 'AMR Resistance Rate', description: '', category: 'amr',
+          parameters: [{ id: 'dateRange', label: 'Date range', type: 'daterange', required: false }] }
+      : undefined)),
     run: vi.fn(async () => ({ columns: [{ key: 'antibiotic', label: 'Antibiotic', kind: 'string' }],
       rows: [{ antibiotic: 'AMP' }], chart: { type: 'bar' }, meta: { generatedAt: '', rowCount: 1 } })),
     renderPdf: vi.fn(async () => Buffer.from('%PDF')),
@@ -43,6 +47,33 @@ describe('report scheduler runDue', () => {
     d.reporting.run.mockRejectedValueOnce(new Error('boom'));
     await expect(d.scheduler.runDue('s1')).resolves.toBeUndefined();
     expect(d.recorded[0]).toMatchObject({ status: 'failed', errorMessage: expect.stringContaining('boom'), objectKey: null });
+  });
+
+  // Regression (Slice S6): every report is now data-driven (`r-<id>`), resolved via findSummary —
+  // NOT the retired catalog-only sync list(). The design carries a required daterange param, so the
+  // scheduler must inject period from/to (their queries declare from/to REQUIRED). Before the fix,
+  // list() returned [] → def undefined → hasDateRange false → no from/to → substituteParams threw
+  // and the run was recorded FAILED.
+  it('resolves a DATA-DRIVEN report id via findSummary and injects period from/to', async () => {
+    const d = deps();
+    // Point the schedule at a data-driven id, and make findSummary resolve ONLY that id (a
+    // catalog-only list() would never contain it).
+    d.schedules.get.mockResolvedValue({
+      id: 's1', reportId: 'r-amr-resistance', params: { facility: 'F1' },
+      frequency: 'weekly', dayOfWeek: 1, dayOfMonth: null, outputFormat: 'csv',
+      enabled: true, lastRunAt: null, nextDueAt: null, createdBy: 'u1',
+    } as any);
+    d.reporting.findSummary.mockImplementation(async (id: string) => (id === 'r-amr-resistance'
+      ? { id: 'r-amr-resistance', name: 'AMR Resistance Rate', description: '', category: 'amr', source: 'design',
+          parameters: [{ id: 'dateRange', label: 'Date range', type: 'daterange', required: true }] }
+      : undefined));
+
+    await d.scheduler.runDue('s1');
+
+    expect(d.reporting.findSummary).toHaveBeenCalledWith('r-amr-resistance');
+    expect(d.reporting.run).toHaveBeenCalledWith('r-amr-resistance',
+      expect.objectContaining({ facility: 'F1', from: expect.any(String), to: expect.any(String) }));
+    expect(d.recorded[0]).toMatchObject({ scheduleId: 's1', reportId: 'r-amr-resistance', reportName: 'AMR Resistance Rate', status: 'success', outputFormat: 'csv' });
   });
 });
 
@@ -74,7 +105,7 @@ describe('reconcile', () => {
   function schedulerWith(schedule: Record<string, unknown>) {
     const setNextDue = vi.fn(async () => {});
     const scheduler = createReportScheduler({
-      reporting: { list: () => [], run: vi.fn(), renderPdf: vi.fn() } as any,
+      reporting: { findSummary: async () => undefined, run: vi.fn(), renderPdf: vi.fn() } as any,
       blob: { put: vi.fn() } as any,
       schedules: { list: async () => [schedule], setNextDue, get: async () => schedule } as any,
       logger: { error: vi.fn() } as any,

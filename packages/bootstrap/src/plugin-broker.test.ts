@@ -16,7 +16,7 @@ function memData() {
   };
 }
 
-const defaultReporting = () => ({ list: () => [], columns: async () => [], run: async () => ({ columns: [], rows: [], meta: {} }), eventSources: () => [] });
+const defaultReporting = () => ({ list: async () => [], columns: async () => [], run: async () => ({ columns: [], rows: [], meta: {} }), eventSources: () => [] });
 
 function broker(opts: {
   caps: unknown[] | undefined;

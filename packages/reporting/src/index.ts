@@ -1,7 +1,6 @@
 export * from './types';
 export * from './report-def';
 export * from './helpers';
-export * from './catalog';
 export * from './schedule-period';
 export * from './eventsource';
 export * from './amr/types';

@@ -7,7 +7,12 @@ import type { ReportScheduleStore } from '@openldr/db';
 interface ReportColumnLike { key: string; label: string }
 
 interface SchedulerReporting {
-  list(): { id: string; name: string; parameters?: { type: string }[] }[];
+  // Resolve a report def by id across ALL sources (data-driven + published templates). MUST NOT be
+  // the catalog-only sync `list()` — that returns [] now that the catalog is retired (Slice S6),
+  // which would leave `hasDateRange` false and skip from/to injection, breaking every data-driven
+  // report's scheduled run (their queries declare from/to REQUIRED → substituteParams throws
+  // "unbound parameter: from" → the run is recorded FAILED).
+  findSummary(id: string): Promise<{ name: string; parameters?: { type: string }[] } | undefined>;
   run(id: string, params: unknown): Promise<{ columns: ReportColumnLike[]; rows: Record<string, unknown>[]; meta: { rowCount: number } }>;
   renderPdf(id: string, params: unknown): Promise<Buffer>;
 }
@@ -43,7 +48,7 @@ export function createReportScheduler(deps: SchedulerDeps): ReportScheduler {
     const runId = randomUUID();
     const now = new Date();
     const period = periodFor(s.frequency as ScheduleFrequency, now);
-    const def = deps.reporting.list().find((r) => r.id === s.reportId);
+    const def = await deps.reporting.findSummary(s.reportId);
     const reportName = def?.name ?? s.reportId;
     try {
       const hasDateRange = def?.parameters?.some((p) => p.type === 'daterange') ?? false;

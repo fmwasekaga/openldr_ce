@@ -21,7 +21,10 @@ function parseParams(pairs: string[] = []): Record<string, string> {
 export async function runReportList(opts: { json: boolean }): Promise<number> {
   const ctx = await createAppContext(loadConfig());
   try {
-    const rows = ctx.reporting.list();
+    // listAll() (async) resolves ALL reports — data-driven records + published templates. The sync
+    // list() is catalog-only and returns [] now that the catalog is retired (Slice S6), so
+    // `report list` would otherwise print nothing.
+    const rows = await ctx.reporting.listAll();
     if (opts.json) process.stdout.write(JSON.stringify(rows, null, 2) + '\n');
     else process.stdout.write(rows.map((r) => `  ${r.id.padEnd(22)} ${r.name}`).join('\n') + '\n');
     return 0;
