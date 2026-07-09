@@ -223,6 +223,42 @@ from banded
 group by band
 order by array_position(array['0-4','5-14','15-24','25-49','50+','unknown']::text[], band)`,
   },
+  {
+    id: 'q-amr-facility-summary',
+    name: 'AMR resistance by facility',
+    connectorId: '',
+    // Mirrors packages/reporting/src/reports/amr-facility-summary.ts exactly: WIDE format, one row
+    // per facility (patients.managing_organization), tested = all AST results (interpretation_code
+    // in S/I/R) whose patient resolves to a facility, resistant = the R subset. Observations whose
+    // patient has no facility (or no matching patient row at all) are dropped by the join, mirroring
+    // the catalog's `if (!facility) continue`.
+    //  - date range: `from`/`to` REQUIRED here (catalog treats them as optional — same reasoning as
+    //    q-test-volume/q-turnaround-time: substituteParams throws "unbound parameter" for any
+    //    {{param.x}} token missing from values regardless of the param's own `required` flag, so
+    //    it's simpler to just require the range). endOfDay applied to `to`.
+    //  - patient join: reconstructs `'Patient/' || p.id` and compares directly against
+    //    o.subject_ref (matches the catalog's literal `.replace(/^Patient\//, '')` — a plain
+    //    equality join is the safe SQL mirror rather than a generic prefix-strip).
+    //  - row order: facility ASC — matches the catalog's explicit `.sort((a,b) =>
+    //    a.facility.localeCompare(b.facility))`.
+    params: [
+      { id: 'from', label: 'From', type: 'text', required: true },
+      { id: 'to', label: 'To', type: 'text', required: true },
+    ],
+    sql: `select
+  p.managing_organization as facility,
+  count(*)::int as tested,
+  sum(case when o.interpretation_code = 'R' then 1 else 0 end)::int as resistant
+from observations o
+join patients p on o.subject_ref = 'Patient/' || p.id
+where o.interpretation_code in ('S', 'I', 'R')
+  and o.subject_ref is not null and o.subject_ref <> ''
+  and p.managing_organization is not null
+  and o.effective_date_time >= {{param.from}}
+  and o.effective_date_time <= ({{param.to}} || 'T23:59:59.999Z')
+group by p.managing_organization
+order by p.managing_organization`,
+  },
 ];
 
 /** Report-designer page designs, one table bound to a `SEED_QUERIES` entry (via `simpleTableDesign`). */
@@ -292,6 +328,17 @@ export const SEED_DESIGNS: ReportDesign[] = [
       { key: 'asOf', label: 'As of (YYYY-MM-DD)', type: 'text', required: false, value: '' },
     ],
   }),
+  simpleTableDesign({
+    id: 'rt-amr-facility-summary',
+    name: 'AMR Resistance by Facility',
+    queryId: 'q-amr-facility-summary',
+    columns: [
+      { key: 'facility', label: 'Facility' },
+      { key: 'tested', label: 'Tested' },
+      { key: 'resistant', label: 'Resistant' },
+    ],
+    parameters: [{ key: 'dateRange', label: 'Date range', type: 'daterange', required: true }],
+  }),
 ];
 
 /** `reports` records linking a `SEED_DESIGNS` design to its `SEED_QUERIES` primary query. */
@@ -351,6 +398,21 @@ export const SEED_REPORT_DEFS: ReportRecord[] = [
     summaryMetrics: [{ id: 'patients', label: 'Patients', type: 'sum', column: 'total' }],
     chart: { type: 'pie', label: 'band', value: 'total' },
     paramOptions: { facility: 'q-facilities' },
+    status: 'published',
+  },
+  {
+    id: 'r-amr-facility-summary',
+    name: 'AMR Resistance by Facility',
+    description: 'Tested vs resistant AST-result counts per facility (wide format for DHIS2 aggregate push).',
+    category: 'amr',
+    designId: 'rt-amr-facility-summary',
+    primaryQueryId: 'q-amr-facility-summary',
+    summaryMetrics: [
+      { id: 'facilities', label: 'Facilities', type: 'count' },
+      { id: 'tested', label: 'Tested', type: 'sum', column: 'tested' },
+    ],
+    chart: { type: 'bar', x: 'facility', y: 'resistant' },
+    paramOptions: null,
     status: 'published',
   },
 ];
