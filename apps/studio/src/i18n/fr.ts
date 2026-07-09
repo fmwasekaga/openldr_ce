@@ -549,6 +549,10 @@ export const fr: EnShape = {
     previewTitle: 'Aperçu',
     rendering: 'Rendu en cours…',
     previewError: 'Impossible de générer l’aperçu',
+    saved: 'Enregistré',
+    saving: 'Enregistrement…',
+    unsaved: 'Modifications non enregistrées',
+    saveFailed: 'Échec de l’enregistrement',
     element: {
       text: 'Texte', table: 'Tableau', image: 'Image', line: 'Ligne', rect: 'Rectangle', datetime: 'Date/heure',
     },
