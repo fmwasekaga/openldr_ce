@@ -110,6 +110,72 @@ where sr.authored_on >= {{param.from}}
 group by 1, 2
 order by 1, 2`,
   },
+  {
+    id: 'q-turnaround-time',
+    name: 'Specimen turnaround time',
+    connectorId: '',
+    // Mirrors packages/reporting/src/reports/turnaround-time.ts: pair each diagnostic_report with
+    // its patient's EARLIEST specimen receipt (no direct report->specimen FK in the flat schema) —
+    // the `received` CTE is intentionally NOT date/facility filtered, matching the catalog, which
+    // builds its `earliest` map from ALL specimens up front and only filters the REPORTS side by
+    // date/facility while iterating. `hours` = round((issued - received) / 1h), matching
+    // hoursBetween's `Math.round((b-a)/3_600_000)`; rows with no specimen match or issued <
+    // received are excluded (mirrors `b < a -> null`). Grouped by test (code_text, coalesced
+    // '(unknown)'): count, avgHours = round(avg(already-rounded whole-hour values), 1) (mirrors
+    // `Math.round((sum/n)*10)/10` — the catalog rounds EACH report's hours to a whole number
+    // first, THEN averages those rounded values, THEN rounds the average to 1 decimal — the CTE's
+    // `hours` column is that first whole-number rounding), minHours/maxHours = min/max of the same
+    // whole-hour values.
+    //  - facility filter (optional): same '' = no-filter guard as q-amr-resistance, applied to
+    //    diagnostic_reports.subject_ref via patients.managing_organization.
+    //  - date range: from/to REQUIRED (see q-test-volume's note on why); endOfDay applied to `to`.
+    //  - row order: avgHours DESCENDING, matching `rows.sort((a,b) => b.avgHours - a.avgHours)`.
+    //    The catalog has no secondary tiebreaker (nondeterministic tie order there); `test asc` is
+    //    added here only as an explicit, documented tiebreaker for determinism — the parity check
+    //    normalizes ties the same way before comparing, not to mask a primary-order divergence.
+    //  - KNOWN GAP (fidelity, not fixable in SQL): the catalog's chart is
+    //    `{type:'stat', value:String(overallAvg), label:'Overall avg hours'}`, a value computed
+    //    FRESH from that run's rows (a count-weighted average across all test groups). A
+    //    data-driven report's `chart` is a static field on the `reports` record
+    //    (packages/bootstrap/src/index.ts `runDataDriven` uses `def.chart` as-is, never
+    //    recomputed), so this can't be reproduced as a live number — seeded with a placeholder.
+    //    Not a blocker in practice: the Reports page (apps/studio/src/reports/*) doesn't render
+    //    `chart` at all today (only `summaryMetrics`, which DOES recompute per-run generically).
+    params: [
+      { id: 'from', label: 'From', type: 'text', required: true },
+      { id: 'to', label: 'To', type: 'text', required: true },
+      { id: 'facility', label: 'Facility', type: 'text', required: false },
+    ],
+    sql: `with received as (
+  select subject_ref, min(received_time) as received_time
+  from specimens
+  where subject_ref is not null and received_time is not null
+  group by subject_ref
+),
+paired as (
+  select
+    coalesce(dr.code_text, '(unknown)') as test,
+    round(extract(epoch from (dr.issued::timestamptz - r.received_time::timestamptz)) / 3600.0)::int as hours
+  from diagnostic_reports dr
+  join received r on r.subject_ref = dr.subject_ref
+  where dr.issued is not null
+    and dr.issued >= r.received_time
+    and dr.issued >= {{param.from}}
+    and dr.issued <= ({{param.to}} || 'T23:59:59.999Z')
+    and ({{param.facility}} = '' or dr.subject_ref in (
+      select 'Patient/' || p.id from patients p where p.managing_organization = {{param.facility}}
+    ))
+)
+select
+  test,
+  count(*)::int as count,
+  round(avg(hours)::numeric, 1)::float8 as "avgHours",
+  min(hours)::int as "minHours",
+  max(hours)::int as "maxHours"
+from paired
+group by test
+order by "avgHours" desc, test asc`,
+  },
 ];
 
 /** Report-designer page designs, one table bound to a `SEED_QUERIES` entry (via `simpleTableDesign`). */
@@ -147,6 +213,22 @@ export const SEED_DESIGNS: ReportDesign[] = [
       { key: 'facility', label: 'Facility', type: 'select', required: false, value: '' },
     ],
   }),
+  simpleTableDesign({
+    id: 'rt-turnaround-time',
+    name: 'Specimen Turnaround Time',
+    queryId: 'q-turnaround-time',
+    columns: [
+      { key: 'test', label: 'Test' },
+      { key: 'count', label: 'Reports' },
+      { key: 'avgHours', label: 'Avg hours' },
+      { key: 'minHours', label: 'Min' },
+      { key: 'maxHours', label: 'Max' },
+    ],
+    parameters: [
+      { key: 'dateRange', label: 'Date range', type: 'daterange', required: true },
+      { key: 'facility', label: 'Facility', type: 'select', required: false, value: '' },
+    ],
+  }),
 ];
 
 /** `reports` records linking a `SEED_DESIGNS` design to its `SEED_QUERIES` primary query. */
@@ -175,6 +257,24 @@ export const SEED_REPORT_DEFS: ReportRecord[] = [
     primaryQueryId: 'q-test-volume',
     summaryMetrics: [{ id: 'total', label: 'Total tests', type: 'sum', column: 'count' }],
     chart: { type: 'line', x: 'month', y: 'count', series: 'test' },
+    paramOptions: { facility: 'q-facilities' },
+    status: 'published',
+  },
+  {
+    id: 'r-turnaround-time',
+    name: 'Specimen Turnaround Time',
+    description: 'Average hours from specimen received to report issued, by test.',
+    category: 'operational',
+    designId: 'rt-turnaround-time',
+    primaryQueryId: 'q-turnaround-time',
+    summaryMetrics: [
+      { id: 'avgHours', label: 'Avg hours', type: 'avg', column: 'avgHours' },
+      { id: 'reports', label: 'Reports', type: 'sum', column: 'count' },
+    ],
+    // Placeholder — see the "KNOWN GAP" note on q-turnaround-time: the catalog's stat value is a
+    // count-weighted average recomputed per-run, but a report record's `chart` is static.
+    // Currently inert (the Reports page doesn't render `chart`).
+    chart: { type: 'stat', value: '0', label: 'Overall avg hours' },
     paramOptions: { facility: 'q-facilities' },
     status: 'published',
   },
