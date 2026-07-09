@@ -63,4 +63,13 @@ describe('ReportDesignSchema — data binding', () => {
     const out = ReportDesignSchema.parse({ id: 'd', name: 'N', parameters: [{ key: 'k', label: 'L', value: 'v' }] });
     expect(out.parameters[0]).toMatchObject({ key: 'k', label: 'L', value: 'v' });
   });
+
+  it('preserves a param `required` flag through parse', () => {
+    const parsed = ReportDesignSchema.parse({
+      id: 'd', name: 'n',
+      parameters: [{ key: 'dateRange', label: 'Date range', type: 'daterange', required: true }],
+      pages: [],
+    });
+    expect(parsed.parameters[0].required).toBe(true);
+  });
 });

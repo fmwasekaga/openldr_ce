@@ -60,6 +60,7 @@ export const TemplateParamSchema = z.object({
   key: z.string(),
   label: z.string(),
   type: z.enum(['text', 'select', 'daterange']).optional(),
+  required: z.boolean().optional(),
   value: z.union([z.string(), DateRangeValueSchema]).optional(),
 });
 export type TemplateParam = z.infer<typeof TemplateParamSchema>;
