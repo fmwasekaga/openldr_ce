@@ -383,6 +383,99 @@ from results
 group by specimen_type, pathogen_code, antibiotic, gender, age_band, origin
 order by "Specimen", "PathogenCode", "AntibioticCode", "Gender", "AgeGroup", "Origin"`,
   },
+  {
+    id: 'q-amr-first-isolate-summary',
+    name: 'AMR first-isolate resistance summary',
+    connectorId: '',
+    // Mirrors packages/reporting/src/reports/amr-first-isolate-summary.ts + the shared AMR helpers
+    // (packages/reporting/src/amr/{query,isolates,aggregate}.ts) exactly. Same first-isolate CTE
+    // shape as q-amr-glass-ris (see its comment for the full dedup-key/tiebreak/window-scoping
+    // rationale — identical here), but the final aggregation groups only by specimenType x pathogen
+    // x antibiotic (no gender/age/origin stratification), matching `aggregateRIS`'s grouping key.
+    //  - aggregateRIS grouping: specimenType x pathogen x antibiotic -> tested/r/i/s/percentR (CASE
+    //    conditional aggregates, `percentR` rounding matches q-amr-resistance's pattern exactly).
+    //  - row order: specimenType ASC, pathogen ASC, antibiotic ASC — matches aggregateRIS's explicit
+    //    `.sort((a,b) => specimenType.localeCompare || pathogen.localeCompare || antibiotic.localeCompare)`.
+    params: [
+      { id: 'from', label: 'From', type: 'text', required: true },
+      { id: 'to', label: 'To', type: 'text', required: true },
+    ],
+    sql: `with org_obs as (
+  select o.id, o.specimen_ref, o.subject_ref, o.value_code, o.value_text, o.effective_date_time
+  from observations o
+  where o.code_code = '634-6'
+    and o.specimen_ref is not null and o.specimen_ref <> ''
+    and o.subject_ref is not null and o.subject_ref <> ''
+),
+isolate_meta as (
+  select
+    oo.id as obs_id,
+    oo.specimen_ref,
+    oo.subject_ref,
+    coalesce(s.type_code, '(unknown)') as specimen_type,
+    case when s.origin in ('inpatient', 'outpatient') then s.origin else 'unknown' end as origin,
+    coalesce(oo.value_code, '(unknown)') as pathogen_code,
+    coalesce(oo.value_text, oo.value_code, '(unknown)') as pathogen_name,
+    coalesce(oo.effective_date_time, s.received_time) as iso_date,
+    coalesce(p.gender, 'unknown') as gender,
+    p.birth_date
+  from org_obs oo
+  left join specimens s on oo.specimen_ref = 'Specimen/' || s.id
+  left join patients p on oo.subject_ref = 'Patient/' || p.id
+  where coalesce(oo.effective_date_time, s.received_time) is null
+     or (coalesce(oo.effective_date_time, s.received_time) >= {{param.from}}
+         and coalesce(oo.effective_date_time, s.received_time) <= ({{param.to}} || 'T23:59:59.999Z'))
+),
+age_banded as (
+  select im.*,
+    extract(year from age(coalesce(im.iso_date, '1970-01-01')::date, im.birth_date::date))::int as age_years
+  from isolate_meta im
+),
+first_isolates as (
+  select distinct on (subject_ref, pathogen_code, specimen_type)
+    obs_id, specimen_ref, subject_ref, specimen_type, origin, pathogen_code, pathogen_name, iso_date, gender,
+    case
+      when birth_date is null then 'unknown'
+      when age_years < 0 then 'unknown'
+      when age_years >= 65 then '65+'
+      when age_years = 0 then '0'
+      when age_years between 1 and 4 then '1-4'
+      when age_years between 5 and 14 then '5-14'
+      when age_years between 15 and 24 then '15-24'
+      when age_years between 25 and 34 then '25-34'
+      when age_years between 35 and 44 then '35-44'
+      when age_years between 45 and 54 then '45-54'
+      when age_years between 55 and 64 then '55-64'
+      else 'unknown'
+    end as age_band
+  from age_banded
+  order by subject_ref, pathogen_code, specimen_type, (iso_date is null), iso_date asc, obs_id asc
+),
+ast_obs as (
+  select o.specimen_ref, o.code_text as antibiotic, o.interpretation_code as ris
+  from observations o
+  where o.interpretation_code in ('S', 'I', 'R')
+    and o.code_text is not null
+    and o.specimen_ref is not null and o.specimen_ref <> ''
+),
+results as (
+  select fi.*, a.antibiotic, a.ris
+  from first_isolates fi
+  join ast_obs a on a.specimen_ref = fi.specimen_ref
+)
+select
+  specimen_type as "specimenType",
+  pathogen_code as "pathogen",
+  antibiotic,
+  count(*)::int as tested,
+  sum(case when ris = 'R' then 1 else 0 end)::int as r,
+  sum(case when ris = 'I' then 1 else 0 end)::int as i,
+  sum(case when ris = 'S' then 1 else 0 end)::int as s,
+  round(100.0 * sum(case when ris = 'R' then 1 else 0 end) / nullif(count(*), 0), 1)::float8 as "percentR"
+from results
+group by specimen_type, pathogen_code, antibiotic
+order by specimen_type, pathogen_code, antibiotic`,
+  },
 ];
 
 /** Report-designer page designs, one table bound to a `SEED_QUERIES` entry (via `simpleTableDesign`). */
@@ -489,6 +582,22 @@ export const SEED_DESIGNS: ReportDesign[] = [
       { key: 'year', label: 'Year', type: 'text', required: false, value: '' },
     ],
   }),
+  simpleTableDesign({
+    id: 'rt-amr-first-isolate-summary',
+    name: 'AMR First-Isolate Resistance Summary',
+    queryId: 'q-amr-first-isolate-summary',
+    columns: [
+      { key: 'specimenType', label: 'Specimen' },
+      { key: 'pathogen', label: 'Pathogen' },
+      { key: 'antibiotic', label: 'Antibiotic' },
+      { key: 'tested', label: 'Tested' },
+      { key: 'r', label: 'R' },
+      { key: 'i', label: 'I' },
+      { key: 's', label: 'S' },
+      { key: 'percentR', label: '%R' },
+    ],
+    parameters: [{ key: 'dateRange', label: 'Date range', type: 'daterange', required: true }],
+  }),
 ];
 
 /** `reports` records linking a `SEED_DESIGNS` design to its `SEED_QUERIES` primary query. */
@@ -577,6 +686,18 @@ export const SEED_REPORT_DEFS: ReportRecord[] = [
     // (`String(rows.length)`) is recomputed fresh per-run, but a report record's `chart` is static.
     // Currently inert (the Reports page doesn't render `chart`).
     chart: { type: 'stat', value: '0', label: 'strata' },
+    paramOptions: null,
+    status: 'published',
+  },
+  {
+    id: 'r-amr-first-isolate-summary',
+    name: 'AMR First-Isolate Resistance Summary',
+    description: 'R/I/S counts and %R by specimen type, pathogen, and antibiotic (first isolate per patient).',
+    category: 'amr',
+    designId: 'rt-amr-first-isolate-summary',
+    primaryQueryId: 'q-amr-first-isolate-summary',
+    summaryMetrics: [{ id: 'avgR', label: 'Avg %R', type: 'avg', column: 'percentR' }],
+    chart: { type: 'bar', x: 'antibiotic', y: 'percentR' },
     paramOptions: null,
     status: 'published',
   },
