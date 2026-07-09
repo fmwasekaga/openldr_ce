@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Input } from '@/components/ui/input';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { AlignLeft, AlignCenter, AlignRight, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -252,6 +253,11 @@ export function PropertiesTab({ template, selectedIds, onPatchElement, onPatchPa
             <NumberField label="Margin left" value={m.left} onChange={(left) => setMargin({ left })} min={0} />
           </div>
         </div>
+        <label className="flex items-center gap-2 text-xs text-foreground">
+          <Checkbox aria-label={t('reportDesigner.pageNumbers')} checked={template.pageNumbers ?? false}
+            onCheckedChange={(v) => onPatchPage({ pageNumbers: v === true }, { discrete: true })} />
+          {t('reportDesigner.pageNumbers')}
+        </label>
       </div>
     );
   }

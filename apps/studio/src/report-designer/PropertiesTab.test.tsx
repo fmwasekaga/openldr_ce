@@ -23,6 +23,12 @@ describe('PropertiesTab editing', () => {
     expect(props.onPatchPage).toHaveBeenCalledWith(expect.objectContaining({ margins: expect.objectContaining({ top: 12 }) }));
   });
 
+  it('toggles the page-numbers footer flag (discrete) when nothing is selected', () => {
+    const props = setup({ selectedIds: [] });
+    fireEvent.click(screen.getByLabelText('Page numbers'));
+    expect(props.onPatchPage).toHaveBeenCalledWith({ pageNumbers: true }, { discrete: true });
+  });
+
   it('edits X of a selected element (clamped, coalesced)', () => {
     const props = setup({ selectedIds: ['amr-title'] });
     fireEvent.change(screen.getByLabelText('X'), { target: { value: '100' } });

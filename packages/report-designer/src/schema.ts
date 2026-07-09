@@ -72,6 +72,8 @@ export const ReportDesignSchema = z.object({
   pages: z.array(DesignPageSchema).default([]),
   parameters: z.array(TemplateParamSchema).default([]),
   margins: MarginsSchema.optional(),
+  /** opt-in "Page X of Y" footer on every physical page (default off) */
+  pageNumbers: z.boolean().optional(),
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
 });

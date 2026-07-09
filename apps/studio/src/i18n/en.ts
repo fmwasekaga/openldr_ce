@@ -496,6 +496,7 @@ export const en = {
     data: 'Data',
     elementLabel: 'Element',
     pageSettings: 'Page settings',
+    pageNumbers: 'Page numbers',
     paper: 'Paper',
     orientation: 'Orientation',
     columns: 'Columns',

@@ -25,6 +25,11 @@ describe('ReportDesignSchema', () => {
   it('rejects a design with no name', () => {
     expect(ReportDesignSchema.safeParse({ id: 'd', name: '' }).success).toBe(false);
   });
+
+  it('round-trips the optional pageNumbers flag (default undefined)', () => {
+    expect(ReportDesignSchema.parse({ id: 'd', name: 'N', pageNumbers: true }).pageNumbers).toBe(true);
+    expect(ReportDesignSchema.parse({ id: 'd', name: 'N' }).pageNumbers).toBeUndefined();
+  });
 });
 
 describe('ReportDesignSchema — data binding', () => {

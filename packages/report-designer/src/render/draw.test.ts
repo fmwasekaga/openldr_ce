@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { interpolate, paramMap, tableChunkCount, pageChunkCount, rowsFor } from './draw';
+import { interpolate, paramMap, tableChunkCount, pageChunkCount, rowsFor, totalPhysicalPages, pageFooterLabel } from './draw';
 import type { ReportDesign, DesignElement, DesignPage } from '../schema';
 import type { ResolvedTable } from './index';
 
@@ -95,5 +95,22 @@ describe('pageChunkCount', () => {
   it('is 1 for a page with no tables', () => {
     const page: DesignPage = { id: 'p', elements: [{ id: 'x', kind: 'text', name: 'T', rect: { x: 0, y: 0, w: 10, h: 10 }, text: 'hi' } as DesignElement] };
     expect(pageChunkCount(page, new Map())).toBe(1);
+  });
+});
+
+describe('pageFooterLabel', () => {
+  it('formats "Page N / total"', () => {
+    expect(pageFooterLabel(2, 5)).toBe('Page 2 / 5');
+    expect(pageFooterLabel(1, 1)).toBe('Page 1 / 1');
+  });
+});
+
+describe('totalPhysicalPages', () => {
+  it('sums each design page chunk count (a 3-chunk table page + a plain page → 4)', () => {
+    const pages: DesignPage[] = [
+      { id: 'p1', elements: [tbl({ id: 'a', columns: ['A'], rows: [['1'], ['2'], ['3'], ['4'], ['5'], ['6'], ['7']] })] }, // ceil(7/3)=3
+      { id: 'p2', elements: [{ id: 'x', kind: 'text', name: 'T', rect: { x: 0, y: 0, w: 10, h: 10 }, text: 'hi' } as DesignElement] }, // 1
+    ];
+    expect(totalPhysicalPages(pages, new Map())).toBe(4);
   });
 });

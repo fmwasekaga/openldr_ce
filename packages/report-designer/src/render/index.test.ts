@@ -75,6 +75,18 @@ describe('renderReportDesignPdf', () => {
     expect(buf.toString('latin1')).toMatch(/\/Count 3/);
   });
 
+  it('draws the page-number footer as chrome — same /Count with pageNumbers on as off, and does not throw', async () => {
+    const pages = [{ id: 'p1', elements: [
+      { id: 't1', kind: 'table', name: 'T', rect: { x: 10, y: 10, w: 300, h: 100 }, dataSource: { kind: 'custom-query', queryId: 'q' }, boundColumns: [{ key: 'a', label: 'A' }] },
+    ] }] as ReportDesign['pages'];
+    const resolved = new Map<string, ResolvedTable>([['t1', { columns: [{ key: 'a', label: 'A' }], rows: Array.from({ length: 7 }, (_, i) => ({ a: `row${i}` })) }]]);
+    const off = await renderReportDesignPdf(baseDesign({ pages }), resolved, { now: NOW });
+    const on = await renderReportDesignPdf(baseDesign({ pages, pageNumbers: true }), resolved, { now: NOW });
+    expect(off.toString('latin1')).toMatch(/\/Count 3/);
+    expect(on.toString('latin1')).toMatch(/\/Count 3/); // footer is chrome, not extra pages
+    expect(on.subarray(0, 4).toString()).toBe('%PDF');
+  });
+
   it('an error table does not paginate (1 page) and does not throw', async () => {
     const design = baseDesign({ pages: [{ id: 'p1', elements: [
       { id: 't1', kind: 'table', name: 'T', rect: { x: 10, y: 10, w: 300, h: 100 }, dataSource: { kind: 'custom-query', queryId: 'q' } },
