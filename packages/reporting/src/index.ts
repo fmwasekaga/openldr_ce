@@ -9,3 +9,5 @@ export * from './amr/isolates';
 export * from './amr/aggregate';
 export * from './amr/glass';
 export * from './amr/query';
+export * from './seed/simple-design';
+export * from './seed/report-seeds';

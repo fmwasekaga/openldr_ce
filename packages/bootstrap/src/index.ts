@@ -123,12 +123,27 @@ export interface ReportingDataDrivenDeps {
   renderReportDesignPdf: typeof renderReportDesignPdf;
 }
 
+/** A data-driven report's `/reports` filter bar omits an optional select filter's key when the
+ *  user never touches it (see `ReportParametersBar`), but `substituteParams` throws on any
+ *  `{{param.X}}` token missing from `values`. Fall back to the design's own param defaults so an
+ *  untouched optional filter still resolves — incoming values always win. Only string defaults are
+ *  applied: a daterange param's `{from,to}` object value doesn't map to the flat `from`/`to` keys
+ *  the queries use, and daterange filters are required anyway (so there's nothing to default). */
+function designDefaults(design: ReportDesign): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const p of design.parameters) if (typeof p.value === 'string') out[p.key] = p.value;
+  return out;
+}
+
 function createDataDrivenReporting(deps: ReportingDataDrivenDeps) {
   const valuesOf = (rawParams: unknown) => (rawParams ?? {}) as Record<string, unknown>;
 
   async function runDataDriven(id: string, rawParams: unknown): Promise<ReportResult> {
     const def = (await deps.reportDefs.get(id))!;
-    const { columns, rows } = await deps.runStoredQuery(def.primaryQueryId, valuesOf(rawParams));
+    const design = await deps.reportDesigns.get(def.designId);
+    if (!design) throw new ReportNotFoundError(def.designId);
+    const values = { ...designDefaults(design), ...valuesOf(rawParams) };
+    const { columns, rows } = await deps.runStoredQuery(def.primaryQueryId, values);
     const chart = (def.chart ?? { type: 'stat', value: String(rows.length), label: 'rows' }) as ReportResult['chart'];
     const cols = columns.map((c) => ({ key: c.key, label: c.label, kind: 'string' as const }));
     return { columns: cols, rows, chart, meta: { generatedAt: new Date().toISOString(), rowCount: rows.length } };
@@ -138,7 +153,8 @@ function createDataDrivenReporting(deps: ReportingDataDrivenDeps) {
     const def = (await deps.reportDefs.get(id))!;
     const design = await deps.reportDesigns.get(def.designId);
     if (!design) throw new ReportNotFoundError(def.designId);
-    const resolved = await deps.resolveDesignTables(design, valuesOf(rawParams), deps.runStoredQuery);
+    const values = { ...designDefaults(design), ...valuesOf(rawParams) };
+    const resolved = await deps.resolveDesignTables(design, values, deps.runStoredQuery);
     return deps.renderReportDesignPdf(design, resolved);
   }
 
