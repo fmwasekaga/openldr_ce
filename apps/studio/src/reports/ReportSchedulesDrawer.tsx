@@ -17,8 +17,6 @@ interface Props {
   parameters: ReportParamMeta[];
   options: Record<string, string[]>;
   currentParams: Record<string, string>;
-  /** Custom (builder) templates are PDF-only — forwarded to the ScheduleDialog to lock output format. */
-  pdfOnly?: boolean;
   onClose: () => void;
 }
 
@@ -31,7 +29,7 @@ function freqLabel(s: ReportSchedule, t: (k: string) => string): string {
   return f;
 }
 
-export function ReportSchedulesDrawer({ open, reportId, parameters, options, currentParams, pdfOnly, onClose }: Props) {
+export function ReportSchedulesDrawer({ open, reportId, parameters, options, currentParams, onClose }: Props) {
   const { t } = useTranslation();
   const [schedules, setSchedules] = useState<ReportSchedule[]>([]);
   const [total, setTotal] = useState(0);
@@ -134,7 +132,6 @@ export function ReportSchedulesDrawer({ open, reportId, parameters, options, cur
           options={options}
           initialParams={currentParams}
           existing={editing ?? undefined}
-          pdfOnly={pdfOnly}
           onClose={() => setDialogOpen(false)}
           onSaved={reload}
         />

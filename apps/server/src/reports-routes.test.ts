@@ -33,20 +33,20 @@ describe('report routes', () => {
     expect(res.json()).toHaveLength(1);
   });
 
-  it('GET /api/reports lists via listAll (includes custom templates)', async () => {
+  it('GET /api/reports lists via listAll (includes data-driven reports)', async () => {
     const app = appWithCtx({ reporting: { listAll: async () => [
       { id: 'amr', name: 'AMR', description: 'd', source: 'catalog' },
-      { id: 'rt-1', name: 'Custom', description: 'c', source: 'builder' },
+      { id: 'rt-1', name: 'Design', description: 'c', source: 'design' },
     ] } });
     const res = await app.inject({ method: 'GET', url: '/api/reports' });
     expect(res.statusCode).toBe(200);
     expect(res.json().map((r: { id: string }) => r.id)).toContain('rt-1');
   });
 
-  it('records a run beacon for a template id (existence via findSummary)', async () => {
+  it('records a run beacon for a report id (existence via findSummary)', async () => {
     const record = vi.fn(async () => {});
     const app = appWithCtx({
-      reporting: { findSummary: async (id: string) => (id === 'rt-1' ? { id: 'rt-1', name: 'Custom', source: 'builder' } : undefined) },
+      reporting: { findSummary: async (id: string) => (id === 'rt-1' ? { id: 'rt-1', name: 'Design', source: 'design' } : undefined) },
       reportRuns: { record },
     });
     const res = await app.inject({ method: 'POST', url: '/api/reports/rt-1/runs', payload: { format: 'pdf' } });

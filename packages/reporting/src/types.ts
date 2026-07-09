@@ -49,7 +49,7 @@ export interface ReportSummary {
   category: ReportCategory;
   parameters: ReportParamMeta[];
   summaryMetrics?: ReportMetricMeta[];
-  source?: 'catalog' | 'builder' | 'design';
+  source?: 'catalog' | 'design';
   /** For source==='design': the linked report-designer template id, for a studio deep-link. */
   designId?: string;
 }

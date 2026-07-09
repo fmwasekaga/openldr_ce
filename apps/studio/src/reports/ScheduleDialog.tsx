@@ -21,19 +21,17 @@ interface Props {
   options: Record<string, string[]>;
   initialParams: Record<string, string>;
   existing?: ReportSchedule;
-  /** Custom (builder) templates render as PDF only — lock the output format to PDF and hide the CSV/XLSX choices. */
-  pdfOnly?: boolean;
   onClose: () => void;
   onSaved: () => void;
 }
 
-export function ScheduleDialog({ open, reportId, parameters, options, initialParams, existing, pdfOnly, onClose, onSaved }: Props) {
+export function ScheduleDialog({ open, reportId, parameters, options, initialParams, existing, onClose, onSaved }: Props) {
   const { t } = useTranslation();
   const [frequency, setFrequency] = useState<ScheduleInput['frequency']>(existing?.frequency ?? 'monthly');
   const [dayOfWeek, setDayOfWeek] = useState(String(existing?.dayOfWeek ?? 1));
   const [dayOfMonth, setDayOfMonth] = useState(String(existing?.dayOfMonth ?? 1));
   const [outputFormat, setOutputFormat] = useState<ScheduleInput['outputFormat']>(
-    pdfOnly ? 'pdf' : existing?.outputFormat ?? 'xlsx',
+    existing?.outputFormat ?? 'xlsx',
   );
   // Seed from the schedule's own params (edit) or the page's current params (new), but
   // drop the daterange-derived `from`/`to` — a schedule's date window is auto-computed
@@ -123,19 +121,17 @@ export function ScheduleDialog({ open, reportId, parameters, options, initialPar
             </div>
           )}
 
-          {!pdfOnly && (
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs uppercase text-muted-foreground">{t('reports.scheduling.outputFormat')}</Label>
-              <Select value={outputFormat} onValueChange={(v) => setOutputFormat(v as ScheduleInput['outputFormat'])}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="csv">CSV</SelectItem>
-                  <SelectItem value="xlsx">XLSX</SelectItem>
-                  <SelectItem value="pdf">PDF</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs uppercase text-muted-foreground">{t('reports.scheduling.outputFormat')}</Label>
+            <Select value={outputFormat} onValueChange={(v) => setOutputFormat(v as ScheduleInput['outputFormat'])}>
+              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="csv">CSV</SelectItem>
+                <SelectItem value="xlsx">XLSX</SelectItem>
+                <SelectItem value="pdf">PDF</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
           {paramFields.map((p) => (
             <div key={p.id} className="flex flex-col gap-1">
