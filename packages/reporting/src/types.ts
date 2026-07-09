@@ -1,7 +1,3 @@
-import type { Kysely } from 'kysely';
-import type { ExternalSchema } from '@openldr/db';
-import type { ZodType } from 'zod';
-
 export type ChartHint =
   | { type: 'bar'; x: string; y: string; series?: string }
   | { type: 'line'; x: string; y: string; series?: string }
@@ -56,17 +52,4 @@ export interface ReportSummary {
   source?: 'catalog' | 'builder' | 'design';
   /** For source==='design': the linked report-designer template id, for a studio deep-link. */
   designId?: string;
-}
-
-export interface ReportDefinition<P = unknown> {
-  id: string;
-  name: string;
-  description: string;
-  params: ZodType<P>;
-  run(db: Kysely<ExternalSchema>, params: P): Promise<ReportResultData>;
-  category: ReportCategory;
-  parameters: ReportParamMeta[];
-  summaryMetrics?: ReportMetricMeta[];
-  /** Resolves dynamic select options keyed by ReportParamMeta.optionsKey. */
-  options?(db: Kysely<ExternalSchema>): Promise<Record<string, string[]>>;
 }

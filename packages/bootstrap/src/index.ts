@@ -12,7 +12,7 @@ import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@
 import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore, createUserProfileStore, type UserProfileStore } from '@openldr/users';
 import { createFormStore, type FormStore } from '@openldr/forms';
-import { getReport, reportSummaries, getEventSource, eventSourceCatalog, toCsv, type ReportResult, type ReportSummary, type ReportParamMeta, type ReportMetricMeta } from '@openldr/reporting';
+import { getEventSource, eventSourceCatalog, toCsv, type ReportResult, type ReportSummary, type ReportParamMeta, type ReportMetricMeta } from '@openldr/reporting';
 import { createDashboardStore, getModel, listModels, runBuilderQuery, runSqlQuery, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, seedDefaultDashboard, runStoredQuery, type DashboardStore, type WidgetQuery, type RunStoredQueryDeps } from '@openldr/dashboards';
 import { createReportTemplateStore, renderReportTemplatePdf, type ReportTemplateStore } from '@openldr/report-builder';
 import type { ReportTemplate } from '@openldr/report-builder/pure';
@@ -350,22 +350,17 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   }
 
   const reportingDb = store.db as unknown as Kysely<ExternalSchema>;
-  const runReport = async (id: string, rawParams: unknown): Promise<ReportResult> => {
-    const def = getReport(id);
-    if (!def) throw new ReportNotFoundError(id);
-    // Defense-in-depth: report param schemas are z.object(...) which throw "Required" on undefined.
-    // "No params" is a valid input (all report fields are optional) → normalise undefined/null to {}.
-    // The DHIS2 push path (dispatchReportSource) is the source fix; this guards every other caller.
-    const params = def.params.parse(rawParams ?? {});
-    const data = await def.run(reportingDb, params);
-    return { ...data, meta: { generatedAt: new Date().toISOString(), rowCount: data.rows.length } };
-  };
 
-  // Third report source: data-driven "reports" records (a design + a bound primary query),
-  // resolved by id alongside the hardcoded catalog and published builder templates. Moved above
-  // the `reporting` object so its branch closures (via `dataDrivenReporting`, below) can reference
-  // them. `reportRenderDeps.runConnectorSql` reads `workflowServices` lazily at call time (it is
-  // declared further down this function) — mirrors the same lazy-read pattern in apps/server/app.ts.
+  // Reports are now fully data-driven ("reports" table: a design + a bound primary query) or
+  // published builder templates — the hardcoded catalog (`@openldr/reporting`'s `catalog.ts`,
+  // `getReport`/`reportSummaries`/`ReportDefinition`) was retired in Slice S6 of
+  // docs/superpowers/plans/2026-07-09-reports-template-linking.md once its last report
+  // (`amr-antibiogram`) was migrated to a fixed-panel data-driven report. Data-driven reports
+  // remain the SECOND source alongside published builder templates, resolved by id below. Declared
+  // above the `reporting` object so its branch closures (via `dataDrivenReporting`, below) can
+  // reference them. `reportRenderDeps.runConnectorSql` reads `workflowServices` lazily at call time
+  // (it is declared further down this function) — mirrors the same lazy-read pattern in
+  // apps/server/app.ts.
   const reportDesignStore = createReportDesignStore(internal.db);
   const reportDefStore = createReportStore(internal.db);
   const reportRenderDeps: RunStoredQueryDeps = {
@@ -387,15 +382,18 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   });
 
   const reporting: ReportingApi = {
-    list: () => reportSummaries(),
+    // Catalog-only, synchronous by design (see the 2026-07-05 phase4 spec's "Sync `list()`
+    // untouched" note — report-scheduler.ts/plugin-broker.ts/CLI `report list` are its only
+    // consumers). Now that the catalog is empty, this always returns []; those consumers already
+    // tolerate a missing definition (falling back to the raw id/no date-range default). `listAll()`
+    // (async, merges data-driven + templates) is what /api/reports and the Reports page use.
+    list: () => [],
     async listAll() {
       const templates = (await reportTemplateStore.list()).filter(isPublished).map(templateToSummary);
       const defSummaries = await dataDrivenReporting.listAllDataDriven();
-      return [...reportSummaries(), ...templates, ...defSummaries];
+      return [...defSummaries, ...templates];
     },
     async findSummary(id) {
-      const cat = reportSummaries().find((s) => s.id === id);
-      if (cat) return cat;
       const def = await dataDrivenReporting.findSummaryDataDriven(id);
       if (def) return def;
       const t = await reportTemplateStore.get(id);
@@ -405,7 +403,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     async run(id, rawParams) {
       if (await reportDefStore.get(id)) return dataDrivenReporting.runDataDriven(id, rawParams);
       if (await reportTemplateStore.get(id)) throw appError('RP0005', { message: `report is PDF-only: ${id}` });
-      return runReport(id, rawParams);
+      throw new ReportNotFoundError(id);
     },
     async runEventSource(id, window) {
       const src = getEventSource(id);
@@ -416,22 +414,12 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       if (await reportDefStore.get(id)) return dataDrivenReporting.renderDataDriven(id, rawParams);
       const t = await reportTemplateStore.get(id);
       if (t && isPublished(t)) return renderReportTemplatePdf(t, (rawParams ?? {}) as Record<string, string>, runDashboardQuery);
-      const result = await runReport(id, rawParams);
-      const def = getReport(id)!;
-      return renderReportPdf({
-        title: def.name,
-        generatedAt: result.meta.generatedAt,
-        params: (rawParams ?? {}) as Record<string, unknown>,
-        columns: result.columns.map((c) => ({ key: c.key, label: c.label })),
-        rows: result.rows,
-      });
+      throw new ReportNotFoundError(id);
     },
     async options(id) {
       if (await reportDefStore.get(id)) return dataDrivenReporting.optionsDataDriven(id);
       if (await reportTemplateStore.get(id)) return {};
-      const def = getReport(id);
-      if (!def) throw new ReportNotFoundError(id);
-      return def.options ? def.options(reportingDb) : {};
+      throw new ReportNotFoundError(id);
     },
   };
 
