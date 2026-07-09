@@ -49,7 +49,7 @@ function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
   const settings = new Map<string, string>();
   const reportTemplates: { id: string }[] = [];
   const reportDesigns: { id: string }[] = [];
-  const reportDefs: { id: string }[] = [];
+  const reportDefs: { id: string; designId?: string }[] = [];
   const app: FormSeedTarget = {
     appSettings: {
       get: async (key: string) => {
@@ -108,13 +108,18 @@ function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
         if (!reportDesigns.some((x) => x.id === d.id)) reportDesigns.push({ id: d.id });
         return d as never;
       },
+      remove: async (id: string) => {
+        const idx = reportDesigns.findIndex((x) => x.id === id);
+        if (idx !== -1) reportDesigns.splice(idx, 1);
+      },
     },
     reportDefs: {
       get: async (id: string) => reportDefs.find((r) => r.id === id) as never,
-      create: async (r: { id: string }) => {
-        if (!reportDefs.some((x) => x.id === r.id)) reportDefs.push({ id: r.id });
+      create: async (r: { id: string; designId?: string }) => {
+        if (!reportDefs.some((x) => x.id === r.id)) reportDefs.push({ id: r.id, designId: r.designId });
         return r as never;
       },
+      list: async () => reportDefs as never,
     },
     terminology,
     cfg,
@@ -273,13 +278,42 @@ describe('seedDatabase — report templates', () => {
 });
 
 describe('seedDatabase — report designs', () => {
-  it('seeds the default report designs on a fresh install, idempotent on reseed', async () => {
+  it('seeds no default report designs (SEED_DESIGNS is empty as of Slice S5)', async () => {
     const { app, reportDesigns } = fakeApp();
     const first = await seedDatabase(fakeDb, app);
-    expect(first.reportDesignsSeeded).toBe(3);
-    expect(reportDesigns.map((r) => r.id).sort()).toEqual(['rt-amr-summary', 'rt-lab-tat', 'rt-monthly-caseload']);
+    expect(first.reportDesignsSeeded).toBe(0);
+    expect(reportDesigns).toHaveLength(0);
     const second = await seedDatabase(fakeDb, app);
     expect(second.reportDesignsSeeded).toBe(0);
+  });
+});
+
+describe('seedDatabase — retired demo design cleanup (Slice S5)', () => {
+  it('removes leftover demo designs from a pre-S5 install when unreferenced', async () => {
+    const { app, reportDesigns } = fakeApp();
+    for (const id of ['rt-amr-summary', 'rt-monthly-caseload', 'rt-lab-tat']) reportDesigns.push({ id });
+
+    const res = await seedDatabase(fakeDb, app);
+    expect(res.demoDesignsRemoved).toBe(3);
+    expect(reportDesigns).toHaveLength(0);
+  });
+
+  it('skips a demo design still referenced by a reports record', async () => {
+    const { app, reportDesigns, reportDefs } = fakeApp();
+    for (const id of ['rt-amr-summary', 'rt-monthly-caseload', 'rt-lab-tat']) reportDesigns.push({ id });
+    reportDefs.push({ id: 'r-custom', designId: 'rt-amr-summary' });
+
+    const res = await seedDatabase(fakeDb, app);
+    expect(res.demoDesignsRemoved).toBe(2);
+    expect(reportDesigns.map((r) => r.id)).toEqual(['rt-amr-summary']);
+  });
+
+  it('is a no-op on a fresh install and idempotent on reseed', async () => {
+    const { app } = fakeApp();
+    const first = await seedDatabase(fakeDb, app);
+    expect(first.demoDesignsRemoved).toBe(0);
+    const second = await seedDatabase(fakeDb, app);
+    expect(second.demoDesignsRemoved).toBe(0);
   });
 });
 

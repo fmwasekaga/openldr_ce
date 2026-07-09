@@ -3,7 +3,7 @@ import { sampleForms, type FormStore } from '@openldr/forms';
 import { buildDefaultWorkflows, type WorkflowStore } from '@openldr/workflows';
 import { seedDefaultDashboard, type DashboardStore } from '@openldr/dashboards';
 import { seedSampleReportTemplate, seedAmrResistanceTemplate, seedPatientDemographicsTemplate, seedAmrFacilitySummaryTemplate, seedAnalyteInterpretationTemplate, type ReportTemplateStore } from '@openldr/report-builder';
-import { seedReportDesigns, type ReportDesignStore } from '@openldr/report-designer';
+import { seedReportDesigns, removeRetiredDemoDesigns, type ReportDesignStore } from '@openldr/report-designer';
 import { seedDataDrivenReports, type SeedDataDrivenReportsResult } from '@openldr/reporting';
 import type { ConnectorStore, TerminologyAdminStore, AppSettingStore, ReportStore } from '@openldr/db';
 import { BUNDLED_TERMINOLOGY, readBundledTerminology, createCustomQueryStore } from '@openldr/db';
@@ -18,6 +18,10 @@ export interface SeedResult {
   dashboardsSeeded: number;
   reportTemplatesSeeded: number;
   reportDesignsSeeded: number;
+  /** Slice S5: one-shot cleanup count of retired demo designs (`rt-amr-summary` etc.) removed
+   *  from an existing pre-cutover install — see `removeRetiredDemoDesigns`. Always 0 on a fresh
+   *  install (nothing to remove) and on every re-run after the first cleanup (idempotent). */
+  demoDesignsRemoved: number;
   /** S4: seeded data-driven query/design/report-record triples (`@openldr/reporting`'s
    *  SEED_QUERIES/SEED_DESIGNS/SEED_REPORT_DEFS). Zero if the default warehouse connector isn't
    *  seeded yet (see `seedDataDrivenReports`), or once the seed data already exists. */
@@ -56,12 +60,15 @@ export interface FormSeedTarget {
   reportTemplates: Pick<ReportTemplateStore, 'get' | 'create'>;
   // Report-design store, threaded so the seed can insert the default page designs (former studio
   // MOCK_TEMPLATES). Structural subset — AppContext.reportDesigns satisfies it.
-  reportDesigns: Pick<ReportDesignStore, 'get' | 'create'>;
+  // 'remove' is also needed so the Slice S5 one-shot cleanup can drop retired demo designs on an
+  // existing pre-cutover install — see `removeRetiredDemoDesigns`.
+  reportDesigns: Pick<ReportDesignStore, 'get' | 'create' | 'remove'>;
   // Report-def store, threaded so the seed can insert the S4 data-driven report records
   // (query+design triples that replace the hardcoded catalog). Structural subset —
   // AppContext.reportDefs satisfies it. Skipped (no-op) until the default warehouse connector
-  // (`connectors`, below) exists — see `seedDataDrivenReports`.
-  reportDefs: Pick<ReportStore, 'get' | 'create'>;
+  // (`connectors`, below) exists — see `seedDataDrivenReports`. 'list' is also needed so the
+  // Slice S5 demo-design cleanup can guard against deleting a design a report still references.
+  reportDefs: Pick<ReportStore, 'get' | 'create' | 'list'>;
   // Terminology surface, threaded so the seed can auto-import the bundled license-safe sets
   // (FHIR R4 catalog + full UCUM) on first boot. Structural subset — AppContext satisfies it.
   terminology: {
@@ -195,6 +202,17 @@ export async function seedDatabase(db: DbContext, app: FormSeedTarget): Promise<
     console.warn('[seed] report design seed skipped:', e instanceof Error ? e.message : String(e));
   }
 
+  // Slice S5 one-shot cleanup — the 3 demo designs above were retired from SEED_DESIGNS (the
+  // built-ins are now data-driven with their own seeded designs); remove any left over from an
+  // existing pre-cutover install, unless a `reports` record still links to one. Idempotent and
+  // best-effort (never aborts the rest of the seed).
+  let demoDesignsRemoved = 0;
+  try {
+    demoDesignsRemoved = await removeRetiredDemoDesigns(app.reportDesigns, app.reportDefs);
+  } catch (e) {
+    console.warn('[seed] retired demo design cleanup skipped:', e instanceof Error ? e.message : String(e));
+  }
+
   // Data-driven reports (S4) — the query/design/report-record triples that migrate the hardcoded
   // report catalog onto the linked (`reports` table) path. Idempotent (each of the three stores
   // skips when the id is already present) and best-effort. The custom-query store is built here
@@ -230,7 +248,7 @@ export async function seedDatabase(db: DbContext, app: FormSeedTarget): Promise<
     }
   }
 
-  return { resources, formsSeeded, workflowsSeeded, connectorsSeeded, dashboardsSeeded, reportTemplatesSeeded, reportDesignsSeeded, dataDrivenReportsSeeded, settingsSeeded, terminology };
+  return { resources, formsSeeded, workflowsSeeded, connectorsSeeded, dashboardsSeeded, reportTemplatesSeeded, reportDesignsSeeded, demoDesignsRemoved, dataDrivenReportsSeeded, settingsSeeded, terminology };
 }
 
 // Auto-import the two bundled, freely-redistributable terminology sets on first boot:
