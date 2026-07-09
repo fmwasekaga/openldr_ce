@@ -725,7 +725,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     pluginData,
     schedules: createPluginScheduleApi(pluginData),
     reporting: {
-      list: () => reporting.list(),
+      list: () => reporting.listAll(),
       columns: (id) => reporting.run(id, {}).then((r) => (r as { columns: unknown }).columns),
       run: (id, params) => reporting.run(id, params),
       eventSources: () => reporting.eventSources(),

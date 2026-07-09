@@ -149,7 +149,10 @@ export interface PluginBrokerDeps {
     loadSink(id: string, version?: string): Promise<{ invoke(entrypoint: string, input: unknown, opts?: unknown): Promise<unknown> } | undefined>;
   };
   pluginData: PluginDataStore;
-  reporting: { list(): unknown; columns(id: string): Promise<unknown>; run(id: string, params: unknown): Promise<unknown>; eventSources(): unknown };
+  // `list` resolves the FULL report list across all sources (data-driven + templates) via the
+  // async ReportingApi.listAll — NOT the catalog-only sync ReportingApi.list, which returns [] now
+  // that the catalog is retired (Slice S6). The plugin-ui-sdk already awaits this RPC.
+  reporting: { list(): Promise<unknown>; columns(id: string): Promise<unknown>; run(id: string, params: unknown): Promise<unknown>; eventSources(): unknown };
   connectors: { list(): Promise<unknown[]>; get(id: string): Promise<unknown | null> };
   /** Test a connector live (resolve→loadSink→health/metadata). Optional here; wired in app
    *  context. When absent, connectors.test returns a structured error. */
@@ -269,7 +272,7 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
             await emit(pluginId, principal, `invoke:${op.entrypoint}`, 'ok'); // wasm execution
             return { ok: true, data };
           }
-          case 'reports.list': return { ok: true, data: deps.reporting.list() };
+          case 'reports.list': return { ok: true, data: await deps.reporting.list() };
           case 'reports.columns': return { ok: true, data: await deps.reporting.columns(op.id) };
           case 'reports.run': return { ok: true, data: await deps.reporting.run(op.id, op.params ?? {}) };
           case 'reports.eventSources': return { ok: true, data: deps.reporting.eventSources() };
