@@ -395,12 +395,6 @@ export const fr: EnShape = {
       add: 'Ajouter',
       placeholder: 'Nouvelle catégorie…',
     },
-    categories: {
-      amr: 'RAM / Surveillance',
-      operational: 'Opérationnel',
-      quality: 'Qualité',
-      regulatory: 'Réglementaire',
-    },
     new: {
       button: 'Nouveau rapport',
       title: 'Nouveau rapport',
