@@ -11,6 +11,7 @@ import { CanvasHeader } from './CanvasHeader';
 import { PageCanvas } from './PageCanvas';
 import { InspectorTabs } from './InspectorTabs';
 import { PreviewReportDesignDialog } from './PreviewReportDesignDialog';
+import { NewReportDialog } from '../reports/NewReportDialog';
 import { createReportDesign, deleteReportDesign, downloadReportDesignPdf, getReportDesign, listReportDesigns, updateReportDesign } from '../api';
 import { addElement, allElements, newElement, paperSize, removeElements, updateElement, updateElementRects, updateElements } from './model';
 import { clampRectToPage } from './geometry';
@@ -53,6 +54,7 @@ export function ReportDesignerPage(): JSX.Element {
   const [error, setError] = useState<string>();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false);
   // Ids of unsaved (transient) designs created via "New template" — Save creates them server-side.
   const [transientIds, setTransientIds] = useState<Set<string>>(() => new Set());
   // Autosave / dirty-state indicator for the open design.
@@ -293,6 +295,14 @@ export function ReportDesignerPage(): JSX.Element {
     } catch (e) { fail(e); }
   };
 
+  // "Publish as report" needs a persisted design id (the report record links to it by id) —
+  // a transient (never-saved) design has no server-side id yet, so ask the user to save first.
+  const onPublishAsReport = () => {
+    if (!template) return;
+    if (transientIds.has(template.id)) { toast.info(t('reportDesigner.saveBeforePublish')); return; }
+    setPublishOpen(true);
+  };
+
   const onDelete = async () => {
     if (!template) return;
     setError(undefined);
@@ -384,6 +394,7 @@ export function ReportDesignerPage(): JSX.Element {
                 onUndo={undo} onRedo={redo} canUndo={history.canUndo} canRedo={history.canRedo}
                 onZoomIn={() => zoomStep(1)} onZoomOut={() => zoomStep(-1)}
                 onPreview={() => setPreviewOpen(true)} onSave={() => { void onSave(); }} onExportPdf={() => { void onExportPdf(); }} onExportExcel={() => { void onExportExcel(); }}
+                onPublishAsReport={onPublishAsReport}
                 onCheck={noop} onDuplicate={noop} onDelete={() => setConfirmDeleteOpen(true)} />
               <PageCanvas template={template} zoom={zoom} selectedIds={selectedIds} onSelect={setSelectedIds} onCommitRects={commitRects}
                 editingId={editingId} onEditStart={startEdit} onEditChange={editChange} onEditEnd={endEdit} />
@@ -414,6 +425,14 @@ export function ReportDesignerPage(): JSX.Element {
         </AlertDialogContent>
       </AlertDialog>
       {template && previewOpen && <PreviewReportDesignDialog open={previewOpen} design={template} onOpenChange={setPreviewOpen} />}
+      {template && (
+        <NewReportDialog
+          open={publishOpen}
+          onOpenChange={setPublishOpen}
+          initialDesignId={template.id}
+          onCreated={() => toast.success(t('reportDesigner.publishedToast', { name: template.name }))}
+        />
+      )}
     </AppShell>
   );
 }

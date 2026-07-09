@@ -107,6 +107,7 @@ export function reportDefToSummary(def: ReportRecord, design: ReportDesign): Rep
     parameters,
     summaryMetrics: (def.summaryMetrics ?? undefined) as ReportMetricMeta[] | undefined,
     source: 'design',
+    designId: def.designId,
   };
 }
 

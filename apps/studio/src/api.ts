@@ -44,8 +44,11 @@ export interface ReportSummary {
   category: ReportCategory;
   parameters: ReportParamMeta[];
   summaryMetrics?: ReportMetricMeta[];
-  /** 'catalog' = built-in report; 'builder' = published Report Builder template (PDF-only). Absent ⇒ catalog. */
-  source?: 'catalog' | 'builder';
+  /** 'catalog' = built-in report; 'builder' = published Report Builder template (PDF-only);
+   *  'design' = a report record linking a report-designer template + query. Absent ⇒ catalog. */
+  source?: 'catalog' | 'builder' | 'design';
+  /** For source==='design': the linked report-designer template id, for the "Edit template" deep-link. */
+  designId?: string;
 }
 export interface ChartHint {
   type: 'bar' | 'line' | 'pie' | 'stat';

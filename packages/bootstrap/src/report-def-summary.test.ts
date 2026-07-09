@@ -13,6 +13,7 @@ describe('reportDefToSummary', () => {
     ] } as any;
     const s = reportDefToSummary(def, design);
     expect(s.source).toBe('design');
+    expect(s.designId).toBe('d1');
     expect(s.category).toBe('amr');
     expect(s.summaryMetrics).toEqual([{ id: 'm', label: 'M', type: 'count' }]);
     expect(s.parameters).toEqual([
