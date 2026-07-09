@@ -13,10 +13,10 @@ import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore, createUserProfileStore, type UserProfileStore } from '@openldr/users';
 import { createFormStore, type FormStore } from '@openldr/forms';
 import { getReport, reportSummaries, getEventSource, eventSourceCatalog, toCsv, type ReportResult, type ReportSummary, type ReportParamMeta, type ReportMetricMeta } from '@openldr/reporting';
-import { createDashboardStore, getModel, listModels, runBuilderQuery, runSqlQuery, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, seedDefaultDashboard, type DashboardStore, type WidgetQuery } from '@openldr/dashboards';
+import { createDashboardStore, getModel, listModels, runBuilderQuery, runSqlQuery, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, seedDefaultDashboard, runStoredQuery, type DashboardStore, type WidgetQuery, type RunStoredQueryDeps } from '@openldr/dashboards';
 import { createReportTemplateStore, renderReportTemplatePdf, type ReportTemplateStore } from '@openldr/report-builder';
 import type { ReportTemplate } from '@openldr/report-builder/pure';
-import { createReportDesignStore, type ReportDesignStore } from '@openldr/report-designer';
+import { createReportDesignStore, renderReportDesignPdf, resolveDesignTables, type ReportDesignStore } from '@openldr/report-designer';
 import {
   createWorkflowStore, type WorkflowStore,
   createWorkflowRunStore, type WorkflowRunStore,
@@ -35,7 +35,7 @@ import { createReportScheduler, type ReportScheduler } from './report-scheduler'
 import { createPluginScheduleApi, createPluginScheduleRunner, type PluginScheduleRunner } from './plugin-schedule';
 import { createFormArtifactInstaller, type FormArtifactInstaller } from './form-artifact-install';
 import { type PluginRuntime } from '@openldr/plugins';
-import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord } from '@openldr/db';
+import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
 import { createActivityService, type ActivityService } from './activity-service';
@@ -107,6 +107,88 @@ export function reportDefToSummary(def: ReportRecord, design: ReportDesign): Rep
     parameters,
     summaryMetrics: (def.summaryMetrics ?? undefined) as ReportMetricMeta[] | undefined,
     source: 'design',
+  };
+}
+
+/** Deps for the data-driven ("reports" table) branch of the reporting service — the third
+ *  report source alongside the hardcoded catalog and published builder templates. Factored out
+ *  as a standalone, dependency-injected unit so it can be unit-tested without a real DB/connector
+ *  (see `buildReportingForTest`); production wires it with the real stores in `createAppContext`. */
+export interface ReportingDataDrivenDeps {
+  reportDefs: Pick<ReportStore, 'list' | 'get'>;
+  reportDesigns: Pick<ReportDesignStore, 'get'>;
+  runStoredQuery: (queryId: string, values: Record<string, unknown>) => Promise<{ columns: { key: string; label: string }[]; rows: Record<string, unknown>[] }>;
+  resolveDesignTables: typeof resolveDesignTables;
+  renderReportDesignPdf: typeof renderReportDesignPdf;
+}
+
+function createDataDrivenReporting(deps: ReportingDataDrivenDeps) {
+  const valuesOf = (rawParams: unknown) => (rawParams ?? {}) as Record<string, unknown>;
+
+  async function runDataDriven(id: string, rawParams: unknown): Promise<ReportResult> {
+    const def = (await deps.reportDefs.get(id))!;
+    const { columns, rows } = await deps.runStoredQuery(def.primaryQueryId, valuesOf(rawParams));
+    const chart = (def.chart ?? { type: 'stat', value: String(rows.length), label: 'rows' }) as ReportResult['chart'];
+    const cols = columns.map((c) => ({ key: c.key, label: c.label, kind: 'string' as const }));
+    return { columns: cols, rows, chart, meta: { generatedAt: new Date().toISOString(), rowCount: rows.length } };
+  }
+
+  async function renderDataDriven(id: string, rawParams: unknown): Promise<Buffer> {
+    const def = (await deps.reportDefs.get(id))!;
+    const design = await deps.reportDesigns.get(def.designId);
+    if (!design) throw new ReportNotFoundError(def.designId);
+    const resolved = await deps.resolveDesignTables(design, valuesOf(rawParams), deps.runStoredQuery);
+    return deps.renderReportDesignPdf(design, resolved);
+  }
+
+  async function optionsDataDriven(id: string): Promise<Record<string, string[]>> {
+    const def = (await deps.reportDefs.get(id))!;
+    const out: Record<string, string[]> = {};
+    for (const [paramKey, queryId] of Object.entries(def.paramOptions ?? {})) {
+      const { columns, rows } = await deps.runStoredQuery(queryId, {});
+      const col = columns[0]?.key;
+      out[paramKey] = col ? rows.map((r) => String(r[col])).filter((v) => v !== 'null' && v !== '') : [];
+    }
+    return out;
+  }
+
+  async function listAllDataDriven(): Promise<ReportSummary[]> {
+    const defs = await deps.reportDefs.list();
+    const summaries = await Promise.all(
+      defs.filter((d) => d.status === 'published').map(async (d) => {
+        const design = await deps.reportDesigns.get(d.designId);
+        return design ? reportDefToSummary(d, design) : null;
+      }),
+    );
+    return summaries.filter((s): s is ReportSummary => s !== null);
+  }
+
+  async function findSummaryDataDriven(id: string): Promise<ReportSummary | undefined> {
+    const def = await deps.reportDefs.get(id);
+    if (!def) return undefined;
+    const design = await deps.reportDesigns.get(def.designId);
+    return design ? reportDefToSummary(def, design) : undefined;
+  }
+
+  return { runDataDriven, renderDataDriven, optionsDataDriven, listAllDataDriven, findSummaryDataDriven };
+}
+
+/** Test seam for the data-driven reporting branch (Task 2.3): builds just the
+ *  listAll/findSummary/run/renderPdf/options surface backed by injected fakes, so
+ *  `reporting-data-driven.test.ts` can assert all five behaviors without a real DB/connector.
+ *  Production (`createAppContext`) wires the same `createDataDrivenReporting` factory with the
+ *  real `reportDefStore`/`reportDesignStore`/`runReportQuery` and folds it into the full
+ *  `ReportingApi` alongside the catalog + builder-template branches. */
+export function buildReportingForTest(
+  deps: ReportingDataDrivenDeps,
+): Pick<ReportingApi, 'listAll' | 'findSummary' | 'run' | 'renderPdf' | 'options'> {
+  const dd = createDataDrivenReporting(deps);
+  return {
+    listAll: () => dd.listAllDataDriven(),
+    findSummary: (id) => dd.findSummaryDataDriven(id),
+    run: (id, rawParams) => dd.runDataDriven(id, rawParams),
+    renderPdf: (id, rawParams) => dd.renderDataDriven(id, rawParams),
+    options: (id) => dd.optionsDataDriven(id),
   };
 }
 
@@ -261,20 +343,50 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     const data = await def.run(reportingDb, params);
     return { ...data, meta: { generatedAt: new Date().toISOString(), rowCount: data.rows.length } };
   };
+
+  // Third report source: data-driven "reports" records (a design + a bound primary query),
+  // resolved by id alongside the hardcoded catalog and published builder templates. Moved above
+  // the `reporting` object so its branch closures (via `dataDrivenReporting`, below) can reference
+  // them. `reportRenderDeps.runConnectorSql` reads `workflowServices` lazily at call time (it is
+  // declared further down this function) — mirrors the same lazy-read pattern in apps/server/app.ts.
+  const reportDesignStore = createReportDesignStore(internal.db);
+  const reportDefStore = createReportStore(internal.db);
+  const reportRenderDeps: RunStoredQueryDeps = {
+    customQueries: createCustomQueryStore(internal.db),
+    runConnectorSql: (input) => {
+      const run = workflowServices.runConnectorSql;
+      if (!run) throw new Error('connector SQL runner unavailable');
+      return run(input);
+    },
+  };
+  const runReportQuery = (queryId: string, values: Record<string, unknown>) =>
+    runStoredQuery(reportRenderDeps, queryId, values);
+  const dataDrivenReporting = createDataDrivenReporting({
+    reportDefs: reportDefStore,
+    reportDesigns: reportDesignStore,
+    runStoredQuery: runReportQuery,
+    resolveDesignTables,
+    renderReportDesignPdf,
+  });
+
   const reporting: ReportingApi = {
     list: () => reportSummaries(),
     async listAll() {
       const templates = (await reportTemplateStore.list()).filter(isPublished).map(templateToSummary);
-      return [...reportSummaries(), ...templates];
+      const defSummaries = await dataDrivenReporting.listAllDataDriven();
+      return [...reportSummaries(), ...templates, ...defSummaries];
     },
     async findSummary(id) {
       const cat = reportSummaries().find((s) => s.id === id);
       if (cat) return cat;
+      const def = await dataDrivenReporting.findSummaryDataDriven(id);
+      if (def) return def;
       const t = await reportTemplateStore.get(id);
       return t && isPublished(t) ? templateToSummary(t) : undefined;
     },
     eventSources: () => eventSourceCatalog().map((s) => ({ id: s.id, name: s.name, columns: s.columns })),
     async run(id, rawParams) {
+      if (await reportDefStore.get(id)) return dataDrivenReporting.runDataDriven(id, rawParams);
       if (await reportTemplateStore.get(id)) throw appError('RP0005', { message: `report is PDF-only: ${id}` });
       return runReport(id, rawParams);
     },
@@ -284,6 +396,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       return src.run(reportingDb, window);
     },
     async renderPdf(id, rawParams) {
+      if (await reportDefStore.get(id)) return dataDrivenReporting.renderDataDriven(id, rawParams);
       const t = await reportTemplateStore.get(id);
       if (t && isPublished(t)) return renderReportTemplatePdf(t, (rawParams ?? {}) as Record<string, string>, runDashboardQuery);
       const result = await runReport(id, rawParams);
@@ -297,6 +410,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       });
     },
     async options(id) {
+      if (await reportDefStore.get(id)) return dataDrivenReporting.optionsDataDriven(id);
       if (await reportTemplateStore.get(id)) return {};
       const def = getReport(id);
       if (!def) throw new ReportNotFoundError(id);
@@ -313,8 +427,6 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
 
   const dashboardStore = createDashboardStore(internal.db);
   const reportTemplateStore = createReportTemplateStore(internal.db);
-  const reportDesignStore = createReportDesignStore(internal.db);
-  const reportDefStore = createReportStore(internal.db);
   const runDashboardQuery = async (q: WidgetQuery): Promise<ReportResult> => {
     let data;
     if (q.mode === 'builder') {
