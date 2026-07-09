@@ -54,4 +54,33 @@ describe('TruncatedText', () => {
       expect(tooltip).toHaveTextContent('Now this one is much longer and overflows');
     });
   });
+
+  it('re-attaches the ResizeObserver to the newly-mounted node after the truncation flip', async () => {
+    // On the false→true flip the bare node is unmounted and a NEW element is
+    // mounted inside the tooltip trigger. A callback ref must disconnect the old
+    // observer and observe the currently-mounted (visible) element. Track every
+    // observed element with a spy ResizeObserver (the global stub is a no-op).
+    const observed: Element[] = [];
+    const disconnected: ResizeObserver[] = [];
+    const prevRO = globalThis.ResizeObserver;
+    class TrackingRO {
+      observe(el: Element) { observed.push(el); }
+      unobserve() {}
+      disconnect() { disconnected.push(this as unknown as ResizeObserver); }
+    }
+    globalThis.ResizeObserver = TrackingRO as unknown as typeof ResizeObserver;
+    try {
+      mockWidths(300, 100);
+      render(<TruncatedText text="Overflowing label re-attaches its observer" />);
+      // After the flip the element inside the tooltip trigger is the visible one.
+      const visible = screen.getByText('Overflowing label re-attaches its observer');
+      // The most recently observed element must be the one currently in the DOM.
+      expect(observed[observed.length - 1]).toBe(visible);
+      expect(document.body.contains(observed[observed.length - 1])).toBe(true);
+      // The original observer (on the now-detached pre-flip node) was disconnected.
+      expect(disconnected.length).toBeGreaterThan(0);
+    } finally {
+      globalThis.ResizeObserver = prevRO;
+    }
+  });
 });

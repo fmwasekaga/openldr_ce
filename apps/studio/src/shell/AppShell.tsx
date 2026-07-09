@@ -10,6 +10,7 @@ import { useAuth } from '@/auth/AuthProvider';
 import { useTheme } from './useTheme';
 import { useSidebar } from './useSidebar';
 import { Button } from '@/components/ui/button';
+import { TruncatedText } from '@/components/ui/truncated-text';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
   DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
@@ -131,7 +132,7 @@ export function AppShell({
                 </span>
                 {!collapsed && (
                   <div className="min-w-0 leading-tight">
-                    <div className="truncate text-xs font-medium text-foreground">{user?.username ?? ''}</div>
+                    <TruncatedText as="div" text={user?.username ?? ''} className="text-xs font-medium text-foreground" />
                     <div className="text-[10px] text-muted-foreground">{user?.roles?.[0] ?? ''}</div>
                   </div>
                 )}
@@ -139,7 +140,7 @@ export function AppShell({
             </DropdownMenuTrigger>
             <DropdownMenuContent side="top" align="start" className="w-52">
               <div className="px-2 py-1.5 leading-tight">
-                <div className="truncate text-sm font-medium text-foreground">{user?.username ?? ''}</div>
+                <TruncatedText as="div" text={user?.username ?? ''} className="text-sm font-medium text-foreground" />
                 {user?.roles?.[0] && (
                   <div className="truncate text-xs text-muted-foreground">{user.roles[0].replace(/_/g, ' ')}</div>
                 )}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/cn';
 
@@ -23,23 +23,41 @@ export interface TruncatedTextProps {
  * providers, so this is safe to nest inside a page that already has one).
  */
 export function TruncatedText({ text, className, as = 'span', side = 'top' }: TruncatedTextProps): JSX.Element {
-  const spanRef = useRef<HTMLSpanElement | null>(null);
-  const divRef = useRef<HTMLDivElement | null>(null);
+  const elRef = useRef<HTMLElement | null>(null);
+  const roRef = useRef<ResizeObserver | null>(null);
   const [truncated, setTruncated] = useState(false);
 
-  useEffect(() => {
-    const el = as === 'div' ? divRef.current : spanRef.current;
+  const measure = useCallback(() => {
+    const el = elRef.current;
+    if (el) setTruncated(el.scrollWidth > el.clientWidth);
+  }, []);
+
+  // Callback ref (not a plain useRef): when `truncated` flips false→true the
+  // returned root changes (bare node → TooltipTrigger tree), so React unmounts
+  // the original element and mounts a NEW one inside the trigger. A callback ref
+  // re-runs on that swap — attach(null) disconnects the observer on the old
+  // (now-detached) node, then attach(newEl) observes the currently-mounted one —
+  // so resize tracking keeps working after the first truncation. measure() sets
+  // state to the actual overflow for the current width, so it's stable for a
+  // given width (React bails on same-state, no oscillation).
+  const attach = useCallback((el: HTMLElement | null) => {
+    roRef.current?.disconnect();
+    roRef.current = null;
+    elRef.current = el;
     if (!el) return;
-    const measure = () => setTruncated(el.scrollWidth > el.clientWidth);
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
-    return () => ro.disconnect();
-  }, [text, as]);
+    roRef.current = ro;
+  }, [measure]);
+
+  // The callback ref only re-runs on mount/unmount, not when `text` changes on
+  // the same mounted node — re-measure here so a new value is checked for clip.
+  useEffect(() => { measure(); }, [text, measure]);
 
   const node = as === 'div'
-    ? <div ref={divRef} className={cn('block truncate', className)}>{text}</div>
-    : <span ref={spanRef} className={cn('block truncate', className)}>{text}</span>;
+    ? <div ref={attach} className={cn('block truncate', className)}>{text}</div>
+    : <span ref={attach} className={cn('block truncate', className)}>{text}</span>;
 
   if (!truncated) return node;
 
