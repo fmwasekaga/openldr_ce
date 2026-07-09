@@ -486,6 +486,10 @@ export const fr: EnShape = {
     deleteQuery: 'Supprimer la requête', confirmDeleteQuery: 'Supprimer cette requête personnalisée ?',
     collapseExplorer: 'Réduire l’explorateur', expandExplorer: 'Développer l’explorateur',
   },
+  dashboard: {
+    exportDashboard: 'Exporter',
+    importDashboard: 'Importer',
+  },
   reportDesigner: {
     title: 'Concepteur de rapports',
     templates: 'Modèles',

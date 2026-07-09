@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AppShell } from '../shell/AppShell';
 import { Button } from '@/components/ui/button';
 import {
@@ -33,6 +34,7 @@ function defaultsFor(filters: DashboardFilterDef[]): Record<string, unknown> {
 }
 
 export function DashboardPage() {
+  const { t } = useTranslation();
   const { current, editing, dirty, setCurrent, setEditing, markClean, addWidget, updateWidget, removeWidget } = useDashboardStore();
   const [all, setAll] = useState<Dashboard[]>([]);
   const [values, setValues] = useState<Record<string, unknown>>({});
@@ -196,11 +198,11 @@ export function DashboardPage() {
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={handleExport}>
                 <Download className="mr-2 h-4 w-4" />
-                Export dashboard
+                {t('dashboard.exportDashboard')}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => fileInput.current?.click()}>
                 <Upload className="mr-2 h-4 w-4" />
-                Import dashboard…
+                {t('dashboard.importDashboard')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
