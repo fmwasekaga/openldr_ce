@@ -386,6 +386,11 @@ export const en = {
     deleteConfirmBody: 'This will permanently remove the report from the library. This cannot be undone.',
     deleted: 'Report deleted',
     actionFailed: 'Action failed',
+    uncategorized: 'Uncategorized',
+    category: {
+      add: 'Add',
+      placeholder: 'New category…',
+    },
     categories: {
       amr: 'AMR / Surveillance',
       operational: 'Operational',

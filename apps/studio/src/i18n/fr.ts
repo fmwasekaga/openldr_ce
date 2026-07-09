@@ -390,6 +390,11 @@ export const fr: EnShape = {
     deleteConfirmBody: 'Cette action supprimera définitivement le rapport de la bibliothèque. Elle est irréversible.',
     deleted: 'Rapport supprimé',
     actionFailed: 'Échec de l’action',
+    uncategorized: 'Non catégorisé',
+    category: {
+      add: 'Ajouter',
+      placeholder: 'Nouvelle catégorie…',
+    },
     categories: {
       amr: 'RAM / Surveillance',
       operational: 'Opérationnel',

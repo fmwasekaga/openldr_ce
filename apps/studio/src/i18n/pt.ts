@@ -390,6 +390,11 @@ export const pt: EnShape = {
     deleteConfirmBody: 'Isso removerá permanentemente o relatório da biblioteca. Esta ação não pode ser desfeita.',
     deleted: 'Relatório excluído',
     actionFailed: 'Falha na ação',
+    uncategorized: 'Sem categoria',
+    category: {
+      add: 'Adicionar',
+      placeholder: 'Nova categoria…',
+    },
     categories: {
       amr: 'RAM / Vigilância',
       operational: 'Operacional',
