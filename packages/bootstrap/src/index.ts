@@ -97,7 +97,7 @@ export function templateToSummary(t: ReportTemplate): ReportSummary {
 export function reportDefToSummary(def: ReportRecord, design: ReportDesign): ReportSummary {
   const parameters: ReportParamMeta[] = design.parameters.map((p) => {
     const type = (p.type ?? 'text') as ReportParamMeta['type'];
-    const base: ReportParamMeta = { id: p.key, label: p.label, type, required: Boolean((p as { required?: boolean }).required) };
+    const base: ReportParamMeta = { id: p.key, label: p.label, type, required: Boolean(p.required) };
     if (type === 'select' && def.paramOptions?.[p.key]) base.optionsKey = p.key;
     return base;
   });
