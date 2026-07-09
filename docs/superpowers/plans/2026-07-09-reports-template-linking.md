@@ -844,6 +844,41 @@ git add packages/bootstrap/src/index.ts packages/bootstrap/src/report-def-summar
 git commit -m "feat(bootstrap): reportDefToSummary maps report record + design to a filter-bearing summary"
 ```
 
+### Task 2.2b: Add `required?` to `TemplateParamSchema` (schema gap fix)
+
+The spec calls for a design param to be markable as a required filter, and the S4 seed designs set `required: true` on daterange params. But `TemplateParamSchema` (`packages/report-designer/src/schema.ts`) currently has only `key/label/type/value`, so Zod **strips** any `required` key on persist — and `reportDefToSummary` (Task 2.2) casts `(p as {required?})` to read a field that isn't on the type. Add the field so it round-trips and is properly typed.
+
+**Files:**
+- Modify: `packages/report-designer/src/schema.ts` (`TemplateParamSchema` gains `required: z.boolean().optional()`)
+- Modify: `packages/bootstrap/src/index.ts` (`reportDefToSummary`: drop the `(p as { required?: boolean })` cast — read `p.required` directly now that it's typed)
+- Test: `packages/report-designer/src/schema.test.ts` (add a case asserting `required` survives `ReportDesignSchema.parse`)
+
+- [ ] **Step 1: Write the failing test** — in `packages/report-designer/src/schema.test.ts`, add:
+
+```ts
+it('preserves a param `required` flag through parse', () => {
+  const parsed = ReportDesignSchema.parse({
+    id: 'd', name: 'n',
+    parameters: [{ key: 'dateRange', label: 'Date range', type: 'daterange', required: true }],
+    pages: [],
+  });
+  expect(parsed.parameters[0].required).toBe(true);
+});
+```
+
+- [ ] **Step 2:** Run `pnpm --filter @openldr/report-designer test schema` → FAIL (`required` is stripped → `undefined`).
+
+- [ ] **Step 3:** In `packages/report-designer/src/schema.ts`, add `required: z.boolean().optional(),` to `TemplateParamSchema` (after `type`). In `packages/bootstrap/src/index.ts`, change the `reportDefToSummary` line `required: Boolean((p as { required?: boolean }).required)` to `required: Boolean(p.required)`.
+
+- [ ] **Step 4:** Run `pnpm --filter @openldr/report-designer test && pnpm --filter @openldr/bootstrap test report-def-summary && pnpm --filter @openldr/report-designer typecheck && pnpm --filter @openldr/bootstrap typecheck` → PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add packages/report-designer/src/schema.ts packages/report-designer/src/schema.test.ts packages/bootstrap/src/index.ts
+git commit -m "feat(report-designer): TemplateParam.required flag (round-trips; typed)"
+```
+
 ### Task 2.3: Extend `ReportingApi` — listAll / findSummary / run / renderPdf / options
 
 **Files:**
