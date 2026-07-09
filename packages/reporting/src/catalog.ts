@@ -1,14 +1,13 @@
 import type { ReportDefinition, ReportSummary } from './types';
-import { amrResistance } from './reports/amr-resistance';
-import { amrFacilitySummary } from './reports/amr-facility-summary';
-import { testVolume } from './reports/test-volume';
-import { patientDemographics } from './reports/patient-demographics';
-import { turnaroundTime } from './reports/turnaround-time';
 import { amrAntibiogram } from './reports/amr-antibiogram';
-import { amrFirstIsolateSummary } from './reports/amr-first-isolate-summary';
-import { amrGlassRis } from './reports/amr-glass-ris';
 
-const REPORTS: ReportDefinition[] = [amrResistance, amrFacilitySummary, testVolume, patientDemographics, turnaroundTime, amrAntibiogram, amrFirstIsolateSummary, amrGlassRis] as ReportDefinition[];
+// The other 7 hardcoded reports (amr-resistance, amr-facility-summary, test-volume,
+// patient-demographics, turnaround-time, amr-first-isolate-summary, amr-glass-ris) were retired in
+// Slice S5 of docs/superpowers/plans/2026-07-09-reports-template-linking.md — they are now
+// data-driven `r-<id>` report records (query + report-designer template), resolved via
+// `ctx.reportDefs`/`ctx.reporting` in packages/bootstrap/src/index.ts. `amr-antibiogram` stays here
+// until Slice S6 migrates it too (fixed antibiotic panel).
+const REPORTS: ReportDefinition[] = [amrAntibiogram] as ReportDefinition[];
 
 export function reportCatalog(): ReportDefinition[] {
   return REPORTS;

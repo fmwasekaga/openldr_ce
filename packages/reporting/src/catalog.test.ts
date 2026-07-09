@@ -2,16 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { reportCatalog, getReport, reportSummaries } from './catalog';
 
 describe('catalog', () => {
-  it('exposes the eight reports', () => {
-    expect(reportCatalog().map((r) => r.id).sort()).toEqual(['amr-antibiogram', 'amr-facility-summary', 'amr-first-isolate-summary', 'amr-glass-ris', 'amr-resistance', 'patient-demographics', 'test-volume', 'turnaround-time']);
+  it('exposes amr-antibiogram (the last catalog report; the other 7 are data-driven — see Slice S5)', () => {
+    expect(reportCatalog().map((r) => r.id).sort()).toEqual(['amr-antibiogram']);
   });
   it('getReport finds and misses', () => {
-    expect(getReport('amr-resistance')?.name).toBe('AMR Resistance Rate');
+    expect(getReport('amr-antibiogram')?.name).toBe('AMR Cumulative Antibiogram');
     expect(getReport('nope')).toBeUndefined();
   });
-  it('amr params reject wrong-typed input but accept empty', () => {
-    expect(getReport('amr-resistance')!.params.safeParse({}).success).toBe(true);
-    expect(getReport('amr-resistance')!.params.safeParse({ from: 5 }).success).toBe(false);
+  it('amr params accept empty', () => {
+    expect(getReport('amr-antibiogram')!.params.safeParse({}).success).toBe(true);
   });
   it('reportSummaries returns id+name+description', () => {
     expect(reportSummaries()[0]).toHaveProperty('description');
@@ -33,17 +32,9 @@ describe('report catalog metadata', () => {
     }
   });
 
-  it('summary metrics reference columns the report can produce', () => {
-    const amr = reportCatalog().find((r) => r.id === 'amr-resistance')!;
-    const cols = ['antibiotic', 'tested', 'r', 'i', 's', 'percentR'];
-    for (const m of amr.summaryMetrics ?? []) {
-      if (m.column) expect(cols).toContain(m.column);
-    }
-  });
-
   it('reportSummaries() exposes the enriched metadata', () => {
-    const s = reportSummaries().find((r) => r.id === 'test-volume')!;
-    expect(s.category).toBe('operational');
+    const s = reportSummaries().find((r) => r.id === 'amr-antibiogram')!;
+    expect(s.category).toBe('amr');
     expect(s.parameters.some((p) => p.type === 'daterange')).toBe(true);
   });
 
