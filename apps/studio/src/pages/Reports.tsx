@@ -1,20 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { MoreHorizontal } from 'lucide-react';
 import { AppShell } from '../shell/AppShell';
 import {
   fetchReports, fetchReport, fetchReportOptions, logReportRun,
   type ReportSummary, type ReportResult,
 } from '../api';
 import { ReportLibrary } from '../reports/ReportLibrary';
+import { listReportCategories, type ReportCategory } from '../reports/reportCategoriesApi';
 import { ReportHistoryDrawer } from '../reports/ReportHistoryDrawer';
 import { ReportSchedulesDrawer } from '../reports/ReportSchedulesDrawer';
 import { useAuth } from '@/auth/AuthProvider';
-import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
-} from '@/components/ui/dropdown-menu';
 import { ReportParametersBar } from '../reports/ReportParametersBar';
 import { ReportSummaryStrip } from '../reports/ReportSummaryStrip';
 import { ReportActionsMenu } from '../reports/ReportActionsMenu';
@@ -24,7 +20,6 @@ import { computeSummaryMetrics } from '../reports/lib/report-summary';
 import {
   loadPinned, savePinned, togglePinned, loadLastParams, saveLastParams,
 } from '../reports/lib/report-preferences';
-import { NewReportSheet } from '../reports/NewReportSheet';
 import { deleteReportDef, setReportStatus } from '../reports/reportDefsApi';
 
 type Tab = 'document' | 'spreadsheet';
@@ -35,6 +30,7 @@ export function Reports() {
   const canManageSchedules = hasRole('lab_admin') || hasRole('lab_manager');
   const [schedulesOpen, setSchedulesOpen] = useState(false);
   const [reports, setReports] = useState<ReportSummary[]>([]);
+  const [categories, setCategories] = useState<ReportCategory[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [collapsed, setCollapsed] = useState(false);
@@ -54,10 +50,15 @@ export function Reports() {
 
   const selected = reports.find((r) => r.id === selectedId) ?? null;
 
+  const refreshCategories = useCallback(() => {
+    listReportCategories().then(setCategories).catch(() => setCategories([]));
+  }, []);
+
   useEffect(() => {
     fetchReports().then(setReports).catch((e) => setError(String(e)));
     setPinnedIds(loadPinned());
-  }, []);
+    refreshCategories();
+  }, [refreshCategories]);
 
   const handleSelect = useCallback((id: string) => {
     setSelectedId(id);
@@ -141,13 +142,9 @@ export function Reports() {
     <AppShell title={t('nav.reports')} fullBleed>
       <div className="flex h-full min-h-0">
         <div className="flex min-h-0 min-w-0 shrink-0 flex-col border-r border-border">
-          {!collapsed && (
-            <div className="flex items-center justify-end border-b border-border px-2 py-2">
-              <LibraryActionsMenu onCreated={refreshReports} />
-            </div>
-          )}
           <ReportLibrary
             reports={reports}
+            categories={categories}
             selectedId={selectedId}
             onSelect={handleSelect}
             pinnedIds={pinnedIds}
@@ -266,30 +263,5 @@ export function Reports() {
         />
       )}
     </AppShell>
-  );
-}
-
-/** Library header ⋯ menu — currently only "New report" (manager-only), opened as a Sheet. */
-export function LibraryActionsMenu({ onCreated }: { onCreated?: () => void } = {}): JSX.Element | null {
-  const { t } = useTranslation();
-  const { hasRole } = useAuth();
-  const [sheetOpen, setSheetOpen] = useState(false);
-  if (!(hasRole('lab_admin') || hasRole('lab_manager'))) return null;
-  return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" aria-label={t('reports.libraryActions')}>
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-44">
-          <DropdownMenuItem onSelect={() => setSheetOpen(true)}>
-            {t('reports.new.button')}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <NewReportSheet open={sheetOpen} onOpenChange={setSheetOpen} onCreated={() => onCreated?.()} />
-    </>
   );
 }

@@ -43,10 +43,21 @@ const { setReportStatus, deleteReportDef } = vi.hoisted(() => ({
 }));
 vi.mock('../reports/reportDefsApi', () => ({ setReportStatus, deleteReportDef }));
 
+const { listReportCategoriesMock } = vi.hoisted(() => ({
+  listReportCategoriesMock: vi.fn(async () => [
+    { id: 'amr', label: 'AMR / Surveillance', order: 0 },
+    { id: 'operational', label: 'Operational', order: 1 },
+  ]),
+}));
+vi.mock('../reports/reportCategoriesApi', () => ({
+  listReportCategories: listReportCategoriesMock,
+  saveReportCategories: vi.fn(async (list: unknown) => list),
+}));
+
 import { Reports } from './Reports';
 
-// Exact 'Actions' name — distinguishes the report-detail ⋯ menu from the library header's
-// "Library actions" ⋯ menu, which also matches a loose /actions/i pattern.
+// The report-detail ⋯ menu (the library no longer has its own header ⋯ menu — see
+// [[reports-page-custom-queries-templates]] / the library New-report menu removal).
 function openActionsMenu() {
   const trigger = screen.getByRole('button', { name: 'Actions' });
   fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
@@ -61,6 +72,13 @@ beforeEach(() => {
 });
 
 describe('Reports page', () => {
+  it('has no library header ⋯ menu / New-report entry (moved to the designer\'s Publish action)', async () => {
+    render(<MemoryRouter><Reports /></MemoryRouter>);
+    await screen.findByText('AMR Resistance Rate');
+    expect(screen.queryByRole('button', { name: /library actions/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/^new report$/i)).not.toBeInTheDocument();
+  });
+
   it('lists reports; selecting + running shows the document tab', async () => {
     render(<MemoryRouter><Reports /></MemoryRouter>);
     fireEvent.click(await screen.findByText('AMR Resistance Rate'));
