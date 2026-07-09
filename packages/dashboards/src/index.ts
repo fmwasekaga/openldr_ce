@@ -6,4 +6,5 @@ export * from './store';
 export * from './seed';
 export * from './template';
 export * from './custom-query';
+export * from './custom-query-run';
 export { SAMPLE_DASHBOARD } from './samples';

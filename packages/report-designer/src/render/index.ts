@@ -7,6 +7,8 @@ export type ResolvedTable =
   | { columns: { key: string; label: string }[]; rows: Record<string, unknown>[] }
   | { error: string };
 
+export { resolveDesignTables, type RunQuery } from './resolve';
+
 export interface RenderOptions { now?: Date }
 
 export function renderReportDesignPdf(

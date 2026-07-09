@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { ReportDesignSchema } from '@openldr/report-designer/pure';
-import { renderReportDesignPdf, type ResolvedTable } from '@openldr/report-designer';
+import { renderReportDesignPdf, resolveDesignTables } from '@openldr/report-designer';
 import { runStoredQuery, type RunStoredQueryDeps } from './run-stored-query';
 import { recordAudit } from './audit-helper';
 import { requireRole } from './rbac';
@@ -63,20 +63,9 @@ export function registerReportDesignRoutes(
     const values: Record<string, unknown> = {};
     for (const dp of design.parameters) if (dp.value != null) values[dp.key] = dp.value;
 
-    const resolved = new Map<string, ResolvedTable>();
-    for (const page of design.pages) {
-      for (const el of page.elements) {
-        if (el.kind !== 'table' || !el.dataSource) continue;
-        try {
-          const { columns, rows } = await runStoredQuery(deps, el.dataSource.queryId, values);
-          resolved.set(el.id, { columns, rows });
-        } catch (e) {
-          // Per-table failures become an in-PDF placeholder, never a 500
-          // (all store access lives inside runStoredQuery, inside this catch).
-          resolved.set(el.id, { error: (e as Error).message });
-        }
-      }
-    }
+    // Per-table failures become an in-PDF placeholder, never a 500
+    // (all store access lives inside runStoredQuery, inside resolveDesignTables' per-table catch).
+    const resolved = await resolveDesignTables(design, values, (qid, v) => runStoredQuery(deps, qid, v));
 
     const pdf = await renderReportDesignPdf(design, resolved);
     reply.header('content-type', 'application/pdf');
