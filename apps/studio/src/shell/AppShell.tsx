@@ -2,7 +2,7 @@ import { type ReactNode, useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, BookOpen, Library, FileInput, Users, ShieldCheck, Settings,
-  Workflow, Activity, Database, ChevronLeft, ChevronRight, Sun, Moon, LogOut, PencilRuler, type LucideIcon,
+  Workflow, Activity, Database, PanelLeftClose, PanelLeftOpen, Sun, Moon, LogOut, PencilRuler, type LucideIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { SUPPORTED_LANGUAGES, setLanguage } from '@/i18n/language';
@@ -70,7 +70,7 @@ export function AppShell({
             aria-label={collapsed ? t('a11y.expandSidebar') : t('a11y.collapseSidebar')}
             title={collapsed ? t('a11y.expandSidebar') : t('a11y.collapseSidebar')}
           >
-            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+            {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
           </Button>
         </div>
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, Download } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { AppShell } from '../shell/AppShell';
 import {
@@ -160,9 +160,9 @@ export function Docs() {
               title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
               {collapsed ? (
-                <ChevronRight className="h-4 w-4" />
+                <PanelLeftOpen className="h-4 w-4" />
               ) : (
-                <ChevronLeft className="h-4 w-4" />
+                <PanelLeftClose className="h-4 w-4" />
               )}
             </Button>
             {!collapsed && (
