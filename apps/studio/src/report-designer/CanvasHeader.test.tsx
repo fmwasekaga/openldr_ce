@@ -68,15 +68,15 @@ describe('CanvasHeader', () => {
   it('lists the actions in the kebab menu', async () => {
     setup();
     await openKebab();
-    for (const name of ['New template', 'Insert', 'Preview', 'Save', 'Export', 'Publish as report', 'Check', 'Duplicate', 'Delete']) {
+    for (const name of ['New template', 'Insert', 'Preview', 'Save', 'Export', 'Publish', 'Check', 'Duplicate', 'Delete']) {
       expect(screen.getByRole('menuitem', { name })).toBeInTheDocument();
     }
   });
 
-  it('fires Publish as report from the kebab', async () => {
+  it('fires Publish from the kebab', async () => {
     const props = setup();
     await openKebab();
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Publish as report' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Publish' }));
     expect(props.onPublishAsReport).toHaveBeenCalled();
   });
 

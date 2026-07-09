@@ -514,7 +514,7 @@ export const en = {
     export: 'Export',
     exportPdf: 'Export PDF',
     exportExcel: 'Export Excel',
-    publishAsReport: 'Publish as report',
+    publishAsReport: 'Publish',
     check: 'Check',
     duplicate: 'Duplicate',
     delete: 'Delete',

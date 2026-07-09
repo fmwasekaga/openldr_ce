@@ -510,7 +510,7 @@ export const fr: EnShape = {
     export: 'Exporter',
     exportPdf: 'Exporter en PDF',
     exportExcel: 'Exporter en Excel',
-    publishAsReport: 'Publier comme rapport',
+    publishAsReport: 'Publier',
     check: 'Vérifier',
     duplicate: 'Dupliquer',
     delete: 'Supprimer',
