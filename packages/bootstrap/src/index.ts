@@ -12,7 +12,7 @@ import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@
 import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore, createUserProfileStore, type UserProfileStore } from '@openldr/users';
 import { createFormStore, type FormStore } from '@openldr/forms';
-import { getReport, reportSummaries, getEventSource, eventSourceCatalog, toCsv, type ReportResult, type ReportSummary } from '@openldr/reporting';
+import { getReport, reportSummaries, getEventSource, eventSourceCatalog, toCsv, type ReportResult, type ReportSummary, type ReportParamMeta, type ReportMetricMeta } from '@openldr/reporting';
 import { createDashboardStore, getModel, listModels, runBuilderQuery, runSqlQuery, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, seedDefaultDashboard, type DashboardStore, type WidgetQuery } from '@openldr/dashboards';
 import { createReportTemplateStore, renderReportTemplatePdf, type ReportTemplateStore } from '@openldr/report-builder';
 import type { ReportTemplate } from '@openldr/report-builder/pure';
@@ -35,7 +35,8 @@ import { createReportScheduler, type ReportScheduler } from './report-scheduler'
 import { createPluginScheduleApi, createPluginScheduleRunner, type PluginScheduleRunner } from './plugin-schedule';
 import { createFormArtifactInstaller, type FormArtifactInstaller } from './form-artifact-install';
 import { type PluginRuntime } from '@openldr/plugins';
-import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore } from '@openldr/db';
+import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord } from '@openldr/db';
+import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
 import { createActivityService, type ActivityService } from './activity-service';
 import { createFeatureFlags, type FeatureFlags } from './feature-flags';
@@ -91,6 +92,22 @@ export interface ReportingApi {
 export function isPublished(t: { status: string }): boolean { return t.status === 'published'; }
 export function templateToSummary(t: ReportTemplate): ReportSummary {
   return { id: t.id, name: t.name, description: t.description, category: t.category, parameters: t.parameters, source: 'builder' };
+}
+
+export function reportDefToSummary(def: ReportRecord, design: ReportDesign): ReportSummary {
+  const parameters: ReportParamMeta[] = design.parameters.map((p) => {
+    const type = (p.type ?? 'text') as ReportParamMeta['type'];
+    const base: ReportParamMeta = { id: p.key, label: p.label, type, required: Boolean((p as { required?: boolean }).required) };
+    if (type === 'select' && def.paramOptions?.[p.key]) base.optionsKey = p.key;
+    return base;
+  });
+  return {
+    id: def.id, name: def.name, description: def.description,
+    category: def.category as ReportSummary['category'],
+    parameters,
+    summaryMetrics: (def.summaryMetrics ?? undefined) as ReportMetricMeta[] | undefined,
+    source: 'design',
+  };
 }
 
 /** Map a dataset name to a safe `wf_ds_<...>` table identifier. */

@@ -53,7 +53,7 @@ export interface ReportSummary {
   category: ReportCategory;
   parameters: ReportParamMeta[];
   summaryMetrics?: ReportMetricMeta[];
-  source?: 'catalog' | 'builder';
+  source?: 'catalog' | 'builder' | 'design';
 }
 
 export interface ReportDefinition<P = unknown> {
