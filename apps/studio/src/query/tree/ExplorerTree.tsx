@@ -13,8 +13,8 @@ function Row({ depth, open, onClick, icon, label, active }:
     <button onClick={onClick}
       className={`flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-sm hover:bg-accent ${active ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'}`}
       style={{ paddingLeft: 8 + depth * 14 }}>
-      {open === undefined ? <span className="w-3.5" /> : open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-      {icon}<span className="truncate">{label}</span>
+      {open === undefined ? <span className="w-3.5 shrink-0" /> : open ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
+      <span className="flex shrink-0 items-center">{icon}</span><span className="min-w-0 truncate">{label}</span>
     </button>
   );
 }
