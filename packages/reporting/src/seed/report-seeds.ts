@@ -77,6 +77,39 @@ where o.interpretation_code in ('S', 'I', 'R')
 group by coalesce(o.code_text, '(unknown)')
 order by "percentR" desc`,
   },
+  {
+    id: 'q-test-volume',
+    name: 'Test volume by month',
+    connectorId: '',
+    // Mirrors packages/reporting/src/reports/test-volume.ts exactly: group service_requests by
+    // month(authored_on) x test (code_text, coalesced to '(unknown)'), COUNT(*). The catalog also
+    // declares a `facility` select parameter but never actually applies it in `run()` (only
+    // p.from/p.to are read) — reproduced faithfully by exposing `facility` on the seeded DESIGN's
+    // filter bar (so the UI matches) without referencing `{{param.facility}}` in this SQL at all.
+    //  - month bucket: to_char(date_trunc('month', authored_on), 'YYYY-MM'), matching monthKey()'s
+    //    `${getFullYear()}-${pad(getMonth()+1)}` (dev DB session TimeZone is UTC and authored_on is
+    //    a date-only string, so there's no local-vs-UTC boundary ambiguity here).
+    //  - date range: `from`/`to` are REQUIRED here (the catalog treats them as optional, but
+    //    substituteParams throws "unbound parameter" for any {{param.x}} token missing from the
+    //    values bag regardless of a param's own `required` flag — same reasoning as
+    //    q-amr-resistance; simpler to just require the range than guard every date comparison).
+    //    endOfDay: `<= (to || 'T23:59:59.999Z')`.
+    //  - row order: month ASC, then test ASC — matches the catalog's explicit
+    //    `.sort((a,b) => month asc, then test.localeCompare(test))`.
+    params: [
+      { id: 'from', label: 'From', type: 'text', required: true },
+      { id: 'to', label: 'To', type: 'text', required: true },
+    ],
+    sql: `select
+  to_char(date_trunc('month', sr.authored_on::timestamptz), 'YYYY-MM') as month,
+  coalesce(sr.code_text, '(unknown)') as test,
+  count(*)::int as count
+from service_requests sr
+where sr.authored_on >= {{param.from}}
+  and sr.authored_on <= ({{param.to}} || 'T23:59:59.999Z')
+group by 1, 2
+order by 1, 2`,
+  },
 ];
 
 /** Report-designer page designs, one table bound to a `SEED_QUERIES` entry (via `simpleTableDesign`). */
@@ -98,6 +131,22 @@ export const SEED_DESIGNS: ReportDesign[] = [
       { key: 'facility', label: 'Facility', type: 'select', required: false, value: '' },
     ],
   }),
+  simpleTableDesign({
+    id: 'rt-test-volume',
+    name: 'Test Volume Over Time',
+    queryId: 'q-test-volume',
+    columns: [
+      { key: 'month', label: 'Month' },
+      { key: 'test', label: 'Test' },
+      { key: 'count', label: 'Count' },
+    ],
+    parameters: [
+      { key: 'dateRange', label: 'Date range', type: 'daterange', required: true },
+      // Unused by the query itself (see q-test-volume's comment) — kept only so the filter bar
+      // matches the catalog, which also declares (but never applies) a facility select.
+      { key: 'facility', label: 'Facility', type: 'select', required: false, value: '' },
+    ],
+  }),
 ];
 
 /** `reports` records linking a `SEED_DESIGNS` design to its `SEED_QUERIES` primary query. */
@@ -114,6 +163,18 @@ export const SEED_REPORT_DEFS: ReportRecord[] = [
       { id: 'avgR', label: 'Avg %R', type: 'avg', column: 'percentR' },
     ],
     chart: { type: 'bar', x: 'antibiotic', y: 'percentR' },
+    paramOptions: { facility: 'q-facilities' },
+    status: 'published',
+  },
+  {
+    id: 'r-test-volume',
+    name: 'Test Volume Over Time',
+    description: 'Count of service requests by test and month.',
+    category: 'operational',
+    designId: 'rt-test-volume',
+    primaryQueryId: 'q-test-volume',
+    summaryMetrics: [{ id: 'total', label: 'Total tests', type: 'sum', column: 'count' }],
+    chart: { type: 'line', x: 'month', y: 'count', series: 'test' },
     paramOptions: { facility: 'q-facilities' },
     status: 'published',
   },
