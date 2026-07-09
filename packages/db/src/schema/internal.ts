@@ -496,6 +496,21 @@ export interface ReportDesignsTable {
   updated_at: Generated<Date>;
 }
 
+export interface ReportsTable {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  design_id: string;
+  primary_query_id: string;
+  summary_metrics: unknown | null;
+  chart: unknown | null;
+  param_options: unknown | null;
+  status: string;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface InternalSchema {
   fhir_resources: FhirResourcesTable;
   outbox_events: OutboxEventsTable;
@@ -541,4 +556,5 @@ export interface InternalSchema {
   app_settings: AppSettingsTable;
   report_templates: ReportTemplatesTable;
   report_designs: ReportDesignsTable;
+  reports: ReportsTable;
 }
