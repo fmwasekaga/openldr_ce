@@ -49,6 +49,7 @@ function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
   const settings = new Map<string, string>();
   const reportTemplates: { id: string }[] = [];
   const reportDesigns: { id: string }[] = [];
+  const reportDefs: { id: string }[] = [];
   const app: FormSeedTarget = {
     appSettings: {
       get: async (key: string) => {
@@ -108,10 +109,17 @@ function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
         return d as never;
       },
     },
+    reportDefs: {
+      get: async (id: string) => reportDefs.find((r) => r.id === id) as never,
+      create: async (r: { id: string }) => {
+        if (!reportDefs.some((x) => x.id === r.id)) reportDefs.push({ id: r.id });
+        return r as never;
+      },
+    },
     terminology,
     cfg,
   };
-  return { app, workflows, connectors, dashboards, reportTemplates, reportDesigns, valueSets, concepts, settings };
+  return { app, workflows, connectors, dashboards, reportTemplates, reportDesigns, reportDefs, valueSets, concepts, settings };
 }
 
 const fakeDb = { persist: vi.fn(async (r: { id: string }) => ({ flattened: JSON.stringify(r) })) } as unknown as DbContext;
@@ -272,6 +280,15 @@ describe('seedDatabase — report designs', () => {
     expect(reportDesigns.map((r) => r.id).sort()).toEqual(['rt-amr-summary', 'rt-lab-tat', 'rt-monthly-caseload']);
     const second = await seedDatabase(fakeDb, app);
     expect(second.reportDesignsSeeded).toBe(0);
+  });
+});
+
+describe('seedDatabase — data-driven reports (S4 scaffolding)', () => {
+  it('is a safe no-op while SEED_QUERIES/SEED_DESIGNS/SEED_REPORT_DEFS are empty', async () => {
+    const { app, reportDefs } = fakeApp();
+    const res = await seedDatabase(fakeDb, app);
+    expect(res.dataDrivenReportsSeeded).toEqual({ queriesSeeded: 0, designsSeeded: 0, reportDefsSeeded: 0 });
+    expect(reportDefs).toHaveLength(0);
   });
 });
 

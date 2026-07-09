@@ -12,6 +12,7 @@
   "dependencies": {
     "@openldr/core": "workspace:*",
     "@openldr/db": "workspace:*",
+    "@openldr/report-designer": "workspace:*",
     "kysely": "^0.27.5",
     "zod": "^3.24.1"
   },
