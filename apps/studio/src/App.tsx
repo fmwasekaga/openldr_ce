@@ -14,7 +14,6 @@ import { Connectors } from '@/pages/settings/Connectors';
 import { Forms } from './pages/Forms';
 import { FormCapture } from './pages/FormCapture';
 import { FormBuilderPage } from './forms-builder/FormBuilderPage';
-import { ReportBuilderPage } from './reports-builder/ReportBuilderPage';
 import { ReportDesignerPage } from './report-designer/ReportDesignerPage';
 import { Workflows } from './workflows/page';
 import { QueryPage } from './query/QueryPage';
@@ -48,8 +47,6 @@ export function App() {
       <Route path="/forms" element={<Forms />} />
       <Route path="/forms/new" element={<FormBuilderPage />} />
       <Route path="/forms/:id/builder" element={<FormBuilderPage />} />
-      <Route path="/reports/builder/new" element={<RequireRole roles={['lab_admin', 'lab_manager']}><ReportBuilderPage /></RequireRole>} />
-      <Route path="/reports/builder/:id" element={<RequireRole roles={['lab_admin', 'lab_manager']}><ReportBuilderPage /></RequireRole>} />
       <Route path="/report-designer" element={<RequireRole roles={['lab_admin', 'lab_manager']}><ReportDesignerPage /></RequireRole>} />
       <Route path="/report-designer/:id" element={<RequireRole roles={['lab_admin', 'lab_manager']}><ReportDesignerPage /></RequireRole>} />
       <Route path="/forms/:id" element={<FormCapture />} />

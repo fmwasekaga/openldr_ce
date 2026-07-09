@@ -6,7 +6,6 @@ import '@/i18n';
 vi.mock('../api', () => ({
   fetchReports: vi.fn(async () => [
     { id: 'amr-resistance', name: 'AMR Resistance Rate', description: 'desc', category: 'amr', parameters: [{ id: 'dateRange', label: 'Date range', type: 'daterange', required: false }], summaryMetrics: [{ id: 'antibiotics', label: 'Antibiotics', type: 'count' }], source: 'catalog' },
-    { id: 'custom-1', name: 'My Custom Report', description: 'built', category: 'operational', parameters: [], source: 'builder' },
   ]),
   fetchReport: vi.fn(async () => ({
     columns: [{ key: 'antibiotic', label: 'Antibiotic', kind: 'string' }],
@@ -61,23 +60,5 @@ describe('Reports page', () => {
     if (!document.querySelector('[role="menu"]')) fireEvent.keyDown(trigger, { key: 'Enter' });
     fireEvent.click(await screen.findByText(/schedules|planifications|agendamentos/i));
     expect(await screen.findByText('schedules-drawer')).toBeInTheDocument();
-  });
-
-  it('custom (builder) report shows only the PDF experience — no Spreadsheet tab', async () => {
-    render(<MemoryRouter><Reports /></MemoryRouter>);
-    fireEvent.click(await screen.findByText('My Custom Report'));
-    // PDF viewer is shown directly (no tabular Run required).
-    await waitFor(() => expect(screen.getByText('pdf-viewer')).toBeInTheDocument());
-    // The tabular Spreadsheet tab trigger must NOT be present.
-    expect(screen.queryByRole('button', { name: /spreadsheet|feuille|planilha/i })).not.toBeInTheDocument();
-  });
-
-  it('custom report never fetches tabular data', async () => {
-    const api = await import('../api');
-    (api.fetchReport as ReturnType<typeof vi.fn>).mockClear();
-    render(<MemoryRouter><Reports /></MemoryRouter>);
-    fireEvent.click(await screen.findByText('My Custom Report'));
-    await waitFor(() => expect(screen.getByText('pdf-viewer')).toBeInTheDocument());
-    expect(api.fetchReport).not.toHaveBeenCalled();
   });
 });
