@@ -13,6 +13,50 @@ import { simpleTableDesign } from './simple-design';
  *  resolved id on before `create`. */
 export const DEFAULT_CONNECTOR_NAME = 'Target Warehouse (Postgres)';
 
+/** Task 6.1: `amr-antibiogram`'s catalog columns are the SORTED UNION of whatever antibiotics
+ *  happen to appear in the AST result set for the current run (`amr-antibiogram.ts`:
+ *  `[...new Set(matrix.flatMap((m) => Object.keys(m.byAntibiotic)))].sort()`) — genuinely
+ *  data-dependent, so it cannot be reproduced as a SQL `SELECT` column list (columns are static in
+ *  SQL). The data-driven replacement instead uses a FIXED, curated antibiotic panel: one CASE
+ *  column per antibiotic in this list, in this order.
+ *
+ *  Fidelity trade-off: every antibiotic actually present in the dev analytics DB is included here
+ *  (`select distinct code_text from observations where interpretation_code in ('S','I','R') order
+ *  by 1` → Ampicillin, Ceftriaxone, Ciprofloxacin, Gentamicin — confirmed empty result set
+ *  otherwise, see amr-antibiogram-parity.test.ts), so parity holds on every column the catalog
+ *  could ever have populated from today's fixture data. A handful of standard WHONET-panel
+ *  antibiotics are appended as empty-until-tested columns so the report is useful as new AST data
+ *  arrives without requiring another migration. Genuine gap vs the old dynamic catalog: an
+ *  antibiotic tested in the future that isn't on this list won't get its own column (it's silently
+ *  dropped from the matrix) until this constant is edited — the catalog would have grown a column
+ *  automatically. Accepted per the plan (Task 6.1) as the "fixed panel" trade-off; SQL cannot
+ *  express a data-dependent column list. */
+export const ANTIBIOGRAM_PANEL: string[] = [
+  'Ampicillin',
+  'Amoxicillin/Clavulanate',
+  'Cefotaxime',
+  'Ceftriaxone',
+  'Ciprofloxacin',
+  'Gentamicin',
+  'Meropenem',
+  'Trimethoprim/Sulfamethoxazole',
+];
+
+/** Builds one CASE-column SQL fragment for `antibiotic`, matching `amr-antibiogram.ts`'s cell
+ *  format EXACTLY: `${cell.percentR}% (${cell.tested})` when the pathogen was tested against this
+ *  antibiotic (`aggregate.ts`'s `pct()` = `Math.round((r/tested)*1000)/10`, i.e. rounded to 1
+ *  decimal place, reproduced here via `round(..., 1)`), or `''` when it was never tested (mirrors
+ *  `cell ? ... : ''`). The `::float8::text` cast (same technique already used for `percentR`
+ *  columns elsewhere in this file) renders like JS `Number#toString` — no trailing `.0` for whole
+ *  percentages — so e.g. `100` (not `100.0`) matches the catalog's cell text byte-for-byte. */
+function antibiogramCellSql(antibiotic: string): string {
+  const lit = antibiotic.replace(/'/g, "''");
+  const ident = antibiotic.replace(/"/g, '""');
+  return `case when count(*) filter (where antibiotic = '${lit}') = 0 then ''
+    else (round(100.0 * count(*) filter (where antibiotic = '${lit}' and ris = 'R') / nullif(count(*) filter (where antibiotic = '${lit}'), 0), 1)::float8)::text
+      || '% (' || count(*) filter (where antibiotic = '${lit}')::text || ')' end as "${ident}"`;
+}
+
 /** Custom queries (bound to a connector) that back the seeded report designs. `connectorId: ''`
  *  is a placeholder — `seedDataDrivenReports` resolves the real default-connector id and stamps
  *  it on before insert (see `DEFAULT_CONNECTOR_NAME`). */
@@ -476,6 +520,86 @@ from results
 group by specimen_type, pathogen_code, antibiotic
 order by specimen_type, pathogen_code, antibiotic`,
   },
+  {
+    id: 'q-amr-antibiogram',
+    name: 'AMR cumulative antibiogram (fixed panel)',
+    connectorId: '',
+    // Mirrors packages/reporting/src/reports/amr-antibiogram.ts + the shared AMR helpers
+    // (fetchAmrData/buildIsolates/firstIsolate/antibiogram) exactly, EXCEPT the antibiotic columns:
+    // see ANTIBIOGRAM_PANEL's comment for why a fixed panel replaces the catalog's dynamic union.
+    //  - first-isolate CTE (org_obs/isolate_meta/first_isolates): IDENTICAL dedup key
+    //    (subject_ref, pathogen_code, specimen_type), tiebreak (earliest iso_date, dateless
+    //    retained, obs_id asc as an explicit deterministic tiebreaker), and window-scoping (only
+    //    the isolate-identifying observation's date is filtered; the antibiotic-result join is
+    //    never date-filtered) as q-amr-glass-ris/q-amr-first-isolate-summary — see their comments
+    //    for the full rationale. specimen_type is carried only to participate in the dedup key
+    //    (matches firstIsolate's key); the final aggregation collapses across specimen types,
+    //    matching `antibiogram()`'s grouping by pathogen alone (not `aggregateRIS`'s
+    //    specimen-type-stratified grouping).
+    //  - unlike q-amr-glass-ris, no gender/age/origin/country/year columns are needed (antibiogram
+    //    doesn't stratify by them), so isolate_meta only carries what antibiogram() actually uses.
+    //  - date range: from/to REQUIRED here even though the catalog's own zod schema declares both
+    //    optional (`z.object({from: z.string().optional(), to: z.string().optional()})`, and an
+    //    empty {} window disables date filtering entirely in `fetchAmrData`'s `inWindow`) — same
+    //    reasoning as every other AMR seed query: substituteParams throws "unbound parameter" for
+    //    any {{param.x}} token missing from values regardless of the param's own required flag, so
+    //    it's simpler to require the range than special-case an unfiltered run. The seeded design
+    //    marks `dateRange` required, matching rt-amr-glass-ris/rt-amr-first-isolate-summary.
+    //  - cell format: see antibiogramCellSql's comment — one CASE column per ANTIBIOGRAM_PANEL
+    //    antibiotic, `${percentR}% (${tested})` or `''`, byte-identical to the catalog's cells for
+    //    every antibiotic the panel and the catalog's dynamic union both contain.
+    //  - row order: pathogen_code ASC — matches antibiogram()'s explicit
+    //    `.sort(([a],[b]) => a.localeCompare(b))`.
+    params: [
+      { id: 'from', label: 'From', type: 'text', required: true },
+      { id: 'to', label: 'To', type: 'text', required: true },
+    ],
+    sql: `with org_obs as (
+  select o.id, o.specimen_ref, o.subject_ref, o.value_code, o.value_text, o.effective_date_time
+  from observations o
+  where o.code_code = '634-6'
+    and o.specimen_ref is not null and o.specimen_ref <> ''
+    and o.subject_ref is not null and o.subject_ref <> ''
+),
+isolate_meta as (
+  select
+    oo.id as obs_id,
+    oo.specimen_ref,
+    oo.subject_ref,
+    coalesce(s.type_code, '(unknown)') as specimen_type,
+    coalesce(oo.value_code, '(unknown)') as pathogen_code,
+    coalesce(oo.effective_date_time, s.received_time) as iso_date
+  from org_obs oo
+  left join specimens s on oo.specimen_ref = 'Specimen/' || s.id
+  where coalesce(oo.effective_date_time, s.received_time) is null
+     or (coalesce(oo.effective_date_time, s.received_time) >= {{param.from}}
+         and coalesce(oo.effective_date_time, s.received_time) <= ({{param.to}} || 'T23:59:59.999Z'))
+),
+first_isolates as (
+  select distinct on (subject_ref, pathogen_code, specimen_type)
+    obs_id, specimen_ref, pathogen_code
+  from isolate_meta
+  order by subject_ref, pathogen_code, specimen_type, (iso_date is null), iso_date asc, obs_id asc
+),
+ast_obs as (
+  select o.specimen_ref, o.code_text as antibiotic, o.interpretation_code as ris
+  from observations o
+  where o.interpretation_code in ('S', 'I', 'R')
+    and o.code_text is not null
+    and o.specimen_ref is not null and o.specimen_ref <> ''
+),
+results as (
+  select fi.pathogen_code, a.antibiotic, a.ris
+  from first_isolates fi
+  join ast_obs a on a.specimen_ref = fi.specimen_ref
+)
+select
+  pathogen_code as pathogen,
+  ${ANTIBIOGRAM_PANEL.map(antibiogramCellSql).join(',\n  ')}
+from results
+group by pathogen_code
+order by pathogen_code`,
+  },
 ];
 
 /** Report-designer page designs, one table bound to a `SEED_QUERIES` entry (via `simpleTableDesign`). */
@@ -599,6 +723,18 @@ export const SEED_DESIGNS: ReportDesign[] = [
     ],
     parameters: [{ key: 'dateRange', label: 'Date range', type: 'daterange', required: true }],
   }),
+  simpleTableDesign({
+    id: 'rt-amr-antibiogram',
+    name: 'AMR Cumulative Antibiogram',
+    queryId: 'q-amr-antibiogram',
+    paper: 'Letter',
+    orientation: 'landscape',
+    columns: [
+      { key: 'pathogen', label: 'Pathogen' },
+      ...ANTIBIOGRAM_PANEL.map((a) => ({ key: a, label: a })),
+    ],
+    parameters: [{ key: 'dateRange', label: 'Date range', type: 'daterange', required: true }],
+  }),
 ];
 
 /** `reports` records linking a `SEED_DESIGNS` design to its `SEED_QUERIES` primary query. */
@@ -699,6 +835,24 @@ export const SEED_REPORT_DEFS: ReportRecord[] = [
     primaryQueryId: 'q-amr-first-isolate-summary',
     summaryMetrics: [{ id: 'avgR', label: 'Avg %R', type: 'avg', column: 'percentR' }],
     chart: { type: 'bar', x: 'antibiotic', y: 'percentR' },
+    paramOptions: null,
+    status: 'published',
+  },
+  {
+    id: 'r-amr-antibiogram',
+    name: 'AMR Cumulative Antibiogram',
+    description: 'First-isolate %R matrix of pathogen x antibiotic (fixed WHONET panel; cell = %R with N tested).',
+    category: 'amr',
+    designId: 'rt-amr-antibiogram',
+    primaryQueryId: 'q-amr-antibiogram',
+    // Matches the catalog's summaryMetrics exactly (see amr-antibiogram.ts).
+    summaryMetrics: [{ id: 'pathogens', label: 'Pathogens', type: 'count' }],
+    // Placeholder — same "KNOWN GAP" as r-turnaround-time/r-amr-glass-ris: the catalog's stat chart
+    // (`{type:'stat', value:String(matrix.length), label:'pathogens'}`) is recomputed fresh
+    // per-run, but a report record's `chart` is static (summaryMetrics IS recomputed generically
+    // and is what the Reports page actually renders — this field is currently inert).
+    chart: { type: 'stat', value: '0', label: 'pathogens' },
+    // No facility filter — the catalog declares only `dateRange` (see amr-antibiogram.ts).
     paramOptions: null,
     status: 'published',
   },

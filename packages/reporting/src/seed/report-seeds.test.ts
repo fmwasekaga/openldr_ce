@@ -5,6 +5,7 @@ import {
   SEED_DESIGNS,
   SEED_REPORT_DEFS,
   DEFAULT_CONNECTOR_NAME,
+  ANTIBIOGRAM_PANEL,
   type SeedDataDrivenReportsDeps,
 } from './report-seeds';
 
@@ -103,6 +104,56 @@ describe('SEED_REPORT_DEFS — r-amr-resistance', () => {
       designId: 'rt-amr-resistance',
       primaryQueryId: 'q-amr-resistance',
       paramOptions: { facility: 'q-facilities' },
+      status: 'published',
+    });
+  });
+});
+
+describe('ANTIBIOGRAM_PANEL', () => {
+  it('includes every antibiotic actually present in the dev analytics DB (Task 6.1)', () => {
+    // select distinct code_text from observations where interpretation_code in ('S','I','R')
+    // order by 1 -- confirmed live against the dev DB (docker compose postgres, openldr_target).
+    for (const a of ['Ampicillin', 'Ceftriaxone', 'Ciprofloxacin', 'Gentamicin']) {
+      expect(ANTIBIOGRAM_PANEL).toContain(a);
+    }
+  });
+});
+
+describe('SEED_QUERIES — q-amr-antibiogram', () => {
+  it('declares from/to as required plain params and generates one CASE column per panel antibiotic', () => {
+    const q = SEED_QUERIES.find((x) => x.id === 'q-amr-antibiogram');
+    expect(q).toBeTruthy();
+    expect(q?.params).toEqual([
+      { id: 'from', label: 'From', type: 'text', required: true },
+      { id: 'to', label: 'To', type: 'text', required: true },
+    ]);
+    const tokens = [...(q?.sql.matchAll(/\{\{\s*param\.([a-zA-Z0-9_]+)\s*\}\}/g) ?? [])].map((m) => m[1]);
+    expect(new Set(tokens)).toEqual(new Set(['from', 'to']));
+    for (const a of ANTIBIOGRAM_PANEL) expect(q?.sql).toContain(`"${a}"`);
+    expect(q?.sql).toContain('group by pathogen_code');
+  });
+});
+
+describe('SEED_DESIGNS — rt-amr-antibiogram', () => {
+  it('binds pathogen + every panel antibiotic as a Letter/landscape table', () => {
+    const d = SEED_DESIGNS.find((x) => x.id === 'rt-amr-antibiogram');
+    expect(d).toBeTruthy();
+    expect(d?.paper).toBe('Letter');
+    expect(d?.orientation).toBe('landscape');
+    const table = d?.pages[0].elements.find((e) => e.kind === 'table');
+    expect(table?.boundColumns?.map((c) => c.key)).toEqual(['pathogen', ...ANTIBIOGRAM_PANEL]);
+  });
+});
+
+describe('SEED_REPORT_DEFS — r-amr-antibiogram', () => {
+  it('links rt-amr-antibiogram + q-amr-antibiogram, no facility filter, matching the catalog’s pathogens count metric', () => {
+    const def = SEED_REPORT_DEFS.find((r) => r.id === 'r-amr-antibiogram');
+    expect(def).toMatchObject({
+      category: 'amr',
+      designId: 'rt-amr-antibiogram',
+      primaryQueryId: 'q-amr-antibiogram',
+      summaryMetrics: [{ id: 'pathogens', label: 'Pathogens', type: 'count' }],
+      paramOptions: null,
       status: 'published',
     });
   });
