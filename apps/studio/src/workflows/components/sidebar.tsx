@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState, type DragEvent } from 'react';
-import { ChevronDown, ChevronRight, ChevronsLeft, ChevronsRight, Search, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen, Search, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { nodeCategories, IMPLEMENTED_TEMPLATE_IDS } from '../constants';
 import type { NodeCategory, NodeTemplate } from '../lib/types';
@@ -214,7 +214,7 @@ export function Sidebar() {
           title="Expand node library"
           className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
         >
-          <ChevronsRight className="h-4 w-4" />
+          <PanelLeftOpen className="h-4 w-4" />
         </button>
       </aside>
     );
@@ -242,7 +242,7 @@ export function Sidebar() {
           title="Collapse node library"
           className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
         >
-          <ChevronsLeft className="h-4 w-4" />
+          <PanelLeftClose className="h-4 w-4" />
         </button>
       </div>
       <div className="border-b border-border px-3 py-2">

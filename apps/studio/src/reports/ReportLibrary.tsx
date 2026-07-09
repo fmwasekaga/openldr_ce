@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, Star, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Star, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import type { ReportSummary, ReportCategory } from '../api';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -47,7 +47,7 @@ export function ReportLibrary({
     return (
       <aside className="flex w-10 shrink-0 flex-col items-center border-r border-border py-2">
         <Button variant="ghost" size="icon" onClick={onToggleCollapse} aria-label="Expand library">
-          <ChevronRight className="h-4 w-4" />
+          <PanelLeftOpen className="h-4 w-4" />
         </Button>
       </aside>
     );
@@ -99,7 +99,7 @@ export function ReportLibrary({
           />
         </div>
         <Button variant="ghost" size="icon" onClick={onToggleCollapse} aria-label="Collapse library">
-          <ChevronLeft className="h-4 w-4" />
+          <PanelLeftClose className="h-4 w-4" />
         </Button>
       </div>
       <TooltipProvider delayDuration={400}>
