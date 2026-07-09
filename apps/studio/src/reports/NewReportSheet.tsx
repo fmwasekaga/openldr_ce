@@ -5,7 +5,7 @@ import type { ReportDesign } from '@openldr/report-designer/pure';
 import { queryApi } from '../query/api';
 import type { CustomQuery } from '../query/custom-query-types';
 import { createReportDef } from './reportDefsApi';
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -40,7 +40,7 @@ interface Props {
   initialDesignId?: string;
 }
 
-export function NewReportDialog({ open, onOpenChange, onCreated, initialDesignId }: Props): JSX.Element {
+export function NewReportSheet({ open, onOpenChange, onCreated, initialDesignId }: Props): JSX.Element {
   const { t } = useTranslation();
   const [designs, setDesigns] = useState<ReportDesign[]>([]);
   const [queries, setQueries] = useState<CustomQuery[]>([]);
@@ -103,12 +103,12 @@ export function NewReportDialog({ open, onOpenChange, onCreated, initialDesignId
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-full max-w-md max-h-[85vh] flex flex-col p-0">
-        <div className="border-b border-border px-6 py-4">
-          <DialogTitle className="text-base font-semibold">{t('reports.new.title')}</DialogTitle>
-          <DialogDescription className="text-xs text-muted-foreground">{t('reports.new.subtitle')}</DialogDescription>
-        </div>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="flex w-full max-w-md flex-col gap-0 border-b-0 p-0">
+        <SheetHeader className="border-b border-border px-6 py-4">
+          <SheetTitle>{t('reports.new.title')}</SheetTitle>
+          <SheetDescription>{t('reports.new.subtitle')}</SheetDescription>
+        </SheetHeader>
         <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-6 py-4">
           <div className="flex flex-col gap-1">
             <Label htmlFor="newReportName" className="text-xs uppercase text-muted-foreground">{t('reports.new.name')}</Label>
@@ -164,11 +164,11 @@ export function NewReportDialog({ open, onOpenChange, onCreated, initialDesignId
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-border px-6 py-3">
+        <SheetFooter className="border-t border-border px-6 py-3">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>{t('reports.new.cancel')}</Button>
           <Button onClick={() => { void handleCreate(); }} disabled={!canCreate}>{t('reports.new.create')}</Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }

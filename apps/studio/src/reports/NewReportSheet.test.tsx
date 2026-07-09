@@ -21,19 +21,19 @@ vi.mock('../api', async (importOriginal) => {
 
 vi.mock('../query/api', () => ({ queryApi: { list: vi.fn(async () => [{ id: 'q1', name: 'AMR query', connectorId: 'c1', sql: 'select 1', params: [] }]) } }));
 
-import { NewReportDialog } from './NewReportDialog';
+import { NewReportSheet } from './NewReportSheet';
 
-describe('NewReportDialog', () => {
+describe('NewReportSheet', () => {
   beforeEach(() => createReportDef.mockClear());
 
   it("previews the chosen template's filters", async () => {
-    render(<NewReportDialog open onOpenChange={() => {}} onCreated={() => {}} />);
+    render(<NewReportSheet open onOpenChange={() => {}} onCreated={() => {}} />);
     await waitFor(() => expect(screen.getByText('Facility')).toBeInTheDocument());
   });
 
   it('creates a published report on submit', async () => {
     const onCreated = vi.fn();
-    render(<NewReportDialog open onOpenChange={() => {}} onCreated={onCreated} />);
+    render(<NewReportSheet open onOpenChange={() => {}} onCreated={onCreated} />);
     await waitFor(() => screen.getByText('Facility'));
     fireEvent.change(screen.getByLabelText(/name/i), { target: { value: 'AMR Resistance' } });
     fireEvent.click(screen.getByRole('button', { name: /create report/i }));
@@ -44,8 +44,14 @@ describe('NewReportDialog', () => {
   });
 
   it('disables Create while name is empty', async () => {
-    render(<NewReportDialog open onOpenChange={() => {}} onCreated={() => {}} />);
+    render(<NewReportSheet open onOpenChange={() => {}} onCreated={() => {}} />);
     await waitFor(() => screen.getByText('Facility'));
     expect(screen.getByRole('button', { name: /create report/i })).toBeDisabled();
+  });
+
+  it('renders as a Sheet (dialog role) sliding from the right', async () => {
+    render(<NewReportSheet open onOpenChange={() => {}} onCreated={() => {}} />);
+    await waitFor(() => screen.getByText('Facility'));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 });
