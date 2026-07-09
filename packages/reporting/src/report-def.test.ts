@@ -25,9 +25,16 @@ describe('ReportDefSchema', () => {
     expect(parsed.chart).toEqual({ type: 'bar', x: 'a', y: 'b' });
   });
 
-  it('rejects an unknown category', () => {
-    expect(() => ReportDefSchema.parse({
+  it('accepts any non-empty category id (category is now a free-form reference into the global category list)', () => {
+    const parsed = ReportDefSchema.parse({
       id: 'r1', name: 'n', description: '', category: 'nope', designId: 'd', primaryQueryId: 'q',
+    });
+    expect(parsed.category).toBe('nope');
+  });
+
+  it('rejects an empty category id', () => {
+    expect(() => ReportDefSchema.parse({
+      id: 'r1', name: 'n', description: '', category: '', designId: 'd', primaryQueryId: 'q',
     })).toThrow();
   });
 });
