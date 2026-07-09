@@ -553,6 +553,10 @@ export const en = {
     previewTitle: 'Preview',
     rendering: 'Rendering…',
     previewError: 'Could not render the preview',
+    saved: 'Saved',
+    saving: 'Saving…',
+    unsaved: 'Unsaved changes',
+    saveFailed: 'Save failed',
     element: {
       text: 'Text', table: 'Table', image: 'Image', line: 'Line', rect: 'Rectangle', datetime: 'Date/time',
     },

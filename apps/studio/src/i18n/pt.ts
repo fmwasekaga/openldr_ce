@@ -549,6 +549,10 @@ export const pt: EnShape = {
     previewTitle: 'Pré-visualização',
     rendering: 'Renderizando…',
     previewError: 'Não foi possível renderizar a pré-visualização',
+    saved: 'Salvo',
+    saving: 'Salvando…',
+    unsaved: 'Alterações não salvas',
+    saveFailed: 'Falha ao salvar',
     element: {
       text: 'Texto', table: 'Tabela', image: 'Imagem', line: 'Linha', rect: 'Retângulo', datetime: 'Data/hora',
     },

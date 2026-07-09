@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { ReportDesignerPage } from './ReportDesignerPage';
@@ -51,6 +51,11 @@ async function openKebab(): Promise<void> {
 }
 
 describe('ReportDesignerPage', () => {
+  // Call history accumulates across tests otherwise (no clearMocks in config); the autosave tests
+  // assert *absence* of calls, so start each test with a clean slate. clearAllMocks keeps the
+  // vi.mock implementations, only wiping recorded calls.
+  beforeEach(() => vi.clearAllMocks());
+
   it('loads the design list into the explorer', async () => {
     await renderPage();
     const explorer = screen.getByTestId('templates-explorer');
@@ -277,5 +282,39 @@ describe('ReportDesignerPage', () => {
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Delete design' }));
     await waitFor(() => expect(deleteReportDesign).toHaveBeenCalledWith('rt-amr-summary'));
+  });
+
+  it('autosaves a persisted design after the debounce and reflects Saving/Saved in the header', async () => {
+    await renderPage(); // opens the persisted rt-amr-summary
+    expect(screen.getByTestId('save-status')).toHaveTextContent('Saved');
+    // Edit the name → immediately dirty, then autosaved after the ~1200ms debounce.
+    fireEvent.change(screen.getByLabelText('Report name'), { target: { value: 'AMR summary edited' } });
+    expect(screen.getByTestId('save-status')).toHaveTextContent('Unsaved changes');
+    await waitFor(
+      () => expect(updateReportDesign).toHaveBeenCalledWith('rt-amr-summary', expect.objectContaining({ id: 'rt-amr-summary', name: 'AMR summary edited' })),
+      { timeout: 2500 },
+    );
+    await waitFor(() => expect(screen.getByTestId('save-status')).toHaveTextContent('Saved'));
+  });
+
+  it('does NOT autosave a transient (unsaved) design — it stays "Unsaved" until explicit Save', async () => {
+    await renderPage();
+    await openKebab();
+    fireEvent.click(await screen.findByRole('menuitem', { name: /new template/i }));
+    expect(screen.getByLabelText('Report name')).toHaveValue('Untitled template');
+    expect(screen.getByTestId('save-status')).toHaveTextContent('Unsaved changes');
+    // Edit the transient design, then wait past the debounce window.
+    fireEvent.change(screen.getByLabelText('Report name'), { target: { value: 'My draft' } });
+    await new Promise((r) => setTimeout(r, 1400));
+    expect(createReportDesign).not.toHaveBeenCalled(); // never auto-created
+    expect(updateReportDesign).not.toHaveBeenCalled();
+    expect(screen.getByTestId('save-status')).toHaveTextContent('Unsaved changes');
+  });
+
+  it('does not autosave a freshly loaded design when nothing is edited', async () => {
+    await renderPage();
+    expect(screen.getByTestId('save-status')).toHaveTextContent('Saved');
+    await new Promise((r) => setTimeout(r, 1400));
+    expect(updateReportDesign).not.toHaveBeenCalled();
   });
 });

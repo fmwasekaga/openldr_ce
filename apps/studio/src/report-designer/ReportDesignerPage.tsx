@@ -18,12 +18,24 @@ import { exportDesignToExcel } from './exportExcel';
 import type { ElementKind, Rect, ReportDesign, ReportTemplate } from './types';
 
 const ZOOMS = [0.5, 0.75, 1, 1.25];
+const AUTOSAVE_MS = 1200;
+
+/** Autosave / dirty-state of the open design shown in the header. */
+export type SaveStatus = 'saved' | 'unsaved' | 'saving' | 'error';
 
 function noop(): void { /* wired to real actions in a later port */ }
 
 /** Replace `d` in the list (matched by id) or prepend it if new. */
 function upsert(list: ReportDesign[], d: ReportDesign): ReportDesign[] {
   return list.some((x) => x.id === d.id) ? list.map((x) => (x.id === d.id ? d : x)) : [d, ...list];
+}
+
+/**
+ * Stable serialization for dirty-detection: excludes the server-managed `createdAt`/`updatedAt`
+ * so a save that returns a fresh `updatedAt` doesn't read back as dirty.
+ */
+function stableJson(d: ReportDesign): string {
+  return JSON.stringify({ ...d, createdAt: undefined, updatedAt: undefined });
 }
 
 export function ReportDesignerPage(): JSX.Element {
@@ -41,6 +53,10 @@ export function ReportDesignerPage(): JSX.Element {
   const [previewOpen, setPreviewOpen] = useState(false);
   // Ids of unsaved (transient) designs created via "New template" — Save creates them server-side.
   const [transientIds, setTransientIds] = useState<Set<string>>(() => new Set());
+  // Autosave / dirty-state indicator for the open design.
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
+  // stableJson of the last-persisted state of the OPEN design; compared against the working design to detect edits.
+  const savedJsonRef = useRef<string>('');
   // The last id loaded from / persisted to the API — guards the :id effect from re-loading over local edits.
   const loadedIdRef = useRef<string | null>(null);
 
@@ -78,6 +94,52 @@ export function ReportDesignerPage(): JSX.Element {
   // Undo/redo history, scoped to the open template (reset whenever the selection changes).
   const history = useTemplateHistory<ReportTemplate>(() => template ?? templates[0]);
   useEffect(() => { if (template) history.reset(template); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [selectedId]);
+
+  // A freshly-opened/selected design starts clean: snapshot its serialization as the last-saved baseline
+  // so subsequent edits (below) are what read as dirty. A transient (never-persisted) design shows "Unsaved".
+  useEffect(() => {
+    if (!template) return;
+    savedJsonRef.current = stableJson(template);
+    setSaveStatus(transientIds.has(template.id) ? 'unsaved' : 'saved');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
+
+  // Autosave: debounce edits to the open PERSISTED design, then PUT them. Transient designs are never
+  // auto-saved (would create junk rows) — they show "Unsaved" until an explicit Save creates them.
+  const dirtyJson = template ? stableJson(template) : null;
+  useEffect(() => {
+    if (!template || dirtyJson === null) return;
+    const isTransient = transientIds.has(template.id);
+    if (dirtyJson === savedJsonRef.current) { setSaveStatus(isTransient ? 'unsaved' : 'saved'); return; }
+    // The working design differs from the last-saved snapshot → dirty.
+    if (isTransient) { setSaveStatus('unsaved'); return; }
+    setSaveStatus('unsaved');
+    const design = template;
+    const timer = setTimeout(() => {
+      setSaveStatus('saving');
+      void updateReportDesign(design.id, design)
+        .then((saved) => {
+          savedJsonRef.current = stableJson(saved ?? design);
+          setTemplates((ts) => upsert(ts, saved ?? design));
+          setSaveStatus('saved');
+        })
+        .catch((e) => { setSaveStatus('error'); toast.error(e instanceof Error ? e.message : String(e)); });
+    }, AUTOSAVE_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirtyJson, selectedId]);
+
+  // Fire-and-forget: persist the open design's pending edits immediately (no debounce) before leaving it,
+  // so switching designs never drops the last edit sitting in the autosave window. Transient designs are
+  // skipped — they need an explicit Save. Navigation is not blocked on the response.
+  const flushOpen = () => {
+    if (!template || transientIds.has(template.id)) return;
+    const snap = stableJson(template);
+    if (snap === savedJsonRef.current) return; // clean — nothing pending
+    savedJsonRef.current = snap; // optimistic
+    const design = template;
+    void updateReportDesign(design.id, design).then((saved) => setTemplates((ts) => upsert(ts, saved ?? design))).catch(() => {});
+  };
 
   const patchTemplate = (next: ReportTemplate) =>
     setTemplates((ts) => ts.map((tpl) => (tpl.id === next.id ? next : tpl)));
@@ -144,6 +206,7 @@ export function ReportDesignerPage(): JSX.Element {
   // navigate() is a no-op and the effect never re-runs — so re-select locally instead. The design
   // is always already in `templates` (the list endpoint returns full designs), so no fetch is needed.
   const selectDesign = (id: string) => {
+    if (id !== selectedId) flushOpen();
     if (id === routeId) {
       loadedIdRef.current = id;
       setSelectedId(id);
@@ -155,6 +218,7 @@ export function ReportDesignerPage(): JSX.Element {
   };
 
   const newTemplate = () => {
+    flushOpen(); // persist any pending edits on the currently-open design before switching away
     const id = `rt-${Date.now()}`;
     const tpl: ReportTemplate = {
       id, name: 'Untitled template', paper: 'A4', orientation: 'portrait',
@@ -176,6 +240,8 @@ export function ReportDesignerPage(): JSX.Element {
     try {
       const saved = isNew ? await createReportDesign(template) : await updateReportDesign(template.id, template);
       setTemplates((ts) => upsert(ts, saved));
+      savedJsonRef.current = stableJson(saved ?? template);
+      setSaveStatus('saved');
       if (isNew) {
         setTransientIds((s) => { const n = new Set(s); n.delete(template.id); return n; });
         loadedIdRef.current = saved.id;
@@ -214,6 +280,8 @@ export function ReportDesignerPage(): JSX.Element {
       if (!isNew) await deleteReportDesign(deletedId);
       setTemplates((ts) => ts.filter((x) => x.id !== deletedId));
       setTransientIds((s) => { const n = new Set(s); n.delete(deletedId); return n; });
+      savedJsonRef.current = '';
+      setSaveStatus('saved');
       loadedIdRef.current = null;
       setSelectedId(null);
       setSelectedIds([]);
@@ -257,6 +325,14 @@ export function ReportDesignerPage(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [template]);
 
+  // Warn on tab close / reload while there are unsaved (or in-flight / failed) autosave changes.
+  useEffect(() => {
+    if (saveStatus === 'saved') return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [saveStatus]);
+
   return (
     <AppShell title={t('reportDesigner.title')} fullBleed>
       {error && <div className="shrink-0 border-b border-border px-4 py-2 text-xs text-destructive">{error}</div>}
@@ -279,7 +355,7 @@ export function ReportDesignerPage(): JSX.Element {
         {template ? (
           <>
             <div className="flex min-w-0 flex-1 flex-col">
-              <CanvasHeader name={template.name} zoom={zoom}
+              <CanvasHeader name={template.name} zoom={zoom} saveStatus={saveStatus}
                 onNameChange={(name) => updateTemplate({ ...template, name })}
                 onNewTemplate={newTemplate}
                 onInsert={insert}

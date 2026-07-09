@@ -4,7 +4,7 @@ import { CanvasHeader } from './CanvasHeader';
 
 function setup(overrides = {}) {
   const props = {
-    name: 'AMR summary', zoom: 0.75,
+    name: 'AMR summary', zoom: 0.75, saveStatus: 'saved' as const,
     onNameChange: vi.fn(), onNewTemplate: vi.fn(), onInsert: vi.fn(), onZoomIn: vi.fn(), onZoomOut: vi.fn(),
     onUndo: vi.fn(), onRedo: vi.fn(), canUndo: false, canRedo: false,
     onPreview: vi.fn(), onSave: vi.fn(), onExportPdf: vi.fn(), onExportExcel: vi.fn(),
@@ -35,6 +35,11 @@ describe('CanvasHeader', () => {
     setup();
     expect(screen.getByLabelText('Report name')).toHaveValue('AMR summary');
     expect(screen.getByText('75%')).toBeInTheDocument();
+  });
+
+  it('shows the save-status indicator text for each status', () => {
+    setup({ saveStatus: 'saving' });
+    expect(screen.getByTestId('save-status')).toHaveTextContent('Saving');
   });
 
   it('steps zoom from the header controls', () => {

@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Plus, Minus, Eye, MoreHorizontal, Undo2, Redo2,
   FilePlus, Save, Download, FileText, FileSpreadsheet, ShieldCheck, Copy, Trash2,
+  Check, Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,12 +11,14 @@ import {
   DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
 import type { ElementKind } from './types';
+import type { SaveStatus } from './ReportDesignerPage';
 import { ELEMENT_KINDS } from './model';
 import { KIND_ICON } from './elementIcons';
 
 interface Props {
   name: string;
   zoom: number;
+  saveStatus: SaveStatus;
   onNameChange(name: string): void;
   onNewTemplate(): void;
   onInsert(kind: ElementKind): void;
@@ -36,10 +39,22 @@ interface Props {
 
 export function CanvasHeader(props: Props): JSX.Element {
   const { t } = useTranslation();
+  const status = props.saveStatus;
   return (
     <div className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-border px-3">
-      <Input value={props.name} onChange={(e) => props.onNameChange(e.target.value)}
-        aria-label={t('reportDesigner.reportName')} className="h-8 max-w-xs text-sm font-medium" />
+      <div className="flex min-w-0 items-center gap-2">
+        <Input value={props.name} onChange={(e) => props.onNameChange(e.target.value)}
+          aria-label={t('reportDesigner.reportName')} className="h-8 max-w-xs text-sm font-medium" />
+        <span data-testid="save-status"
+          className={`flex shrink-0 items-center gap-1 text-[11px] ${status === 'error' ? 'text-destructive' : 'text-muted-foreground'}`}>
+          {status === 'saved' && <Check className="h-3 w-3" />}
+          {status === 'saving' && <Loader2 className="h-3 w-3 animate-spin" />}
+          {status === 'saved' && t('reportDesigner.saved')}
+          {status === 'saving' && t('reportDesigner.saving')}
+          {status === 'unsaved' && t('reportDesigner.unsaved')}
+          {status === 'error' && t('reportDesigner.saveFailed')}
+        </span>
+      </div>
 
       <div className="flex items-center gap-1.5">
         <div className="flex items-center rounded-md border border-border">
