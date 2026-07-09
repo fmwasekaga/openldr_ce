@@ -562,14 +562,15 @@ export const SEED_DESIGNS: ReportDesign[] = [
     queryId: 'q-amr-glass-ris',
     paper: 'Letter',
     orientation: 'landscape',
+    // boundColumns mirror amr-glass-ris.ts's `columns` array 1:1 (keys + labels + order). The query
+    // additionally SELECTs Iso3Country/Year, but the catalog table never projected them, so they are
+    // intentionally NOT bound into the displayed table.
     columns: [
-      { key: 'Iso3Country', label: 'Country' },
-      { key: 'Year', label: 'Year' },
       { key: 'Specimen', label: 'Specimen' },
       { key: 'PathogenCode', label: 'Pathogen' },
       { key: 'AntibioticCode', label: 'Antibiotic' },
       { key: 'Gender', label: 'Gender' },
-      { key: 'AgeGroup', label: 'Age group' },
+      { key: 'AgeGroup', label: 'Age' },
       { key: 'Origin', label: 'Origin' },
       { key: 'Resistant', label: 'R' },
       { key: 'Intermediate', label: 'I' },
