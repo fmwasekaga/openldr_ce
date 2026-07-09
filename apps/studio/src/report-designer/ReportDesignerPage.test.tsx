@@ -317,4 +317,30 @@ describe('ReportDesignerPage', () => {
     await new Promise((r) => setTimeout(r, 1400));
     expect(updateReportDesign).not.toHaveBeenCalled();
   });
+
+  it('a late-resolving autosave for design A does not force the now-open design B to "Saved"', async () => {
+    await renderPage(); // opens A = rt-amr-summary (persisted)
+    // Make A's autosave PUT hang until we resolve it manually.
+    let resolveA: (v: unknown) => void = () => {};
+    const deferred = new Promise((res) => { resolveA = res; });
+    vi.mocked(updateReportDesign).mockImplementationOnce(() => deferred as never);
+    // Edit A → schedules the autosave debounce.
+    fireEvent.change(screen.getByLabelText('Report name'), { target: { value: 'A edited' } });
+    // Debounce fires the PUT, which now hangs on our deferred → status is "Saving…".
+    await waitFor(
+      () => expect(updateReportDesign).toHaveBeenCalledWith('rt-amr-summary', expect.objectContaining({ name: 'A edited' })),
+      { timeout: 2500 },
+    );
+    expect(screen.getByTestId('save-status')).toHaveTextContent('Saving');
+    // Switch to a fresh transient design B BEFORE A resolves. B is unsaved and never autosaves.
+    await openKebab();
+    fireEvent.click(await screen.findByRole('menuitem', { name: /new template/i }));
+    expect(screen.getByLabelText('Report name')).toHaveValue('Untitled template');
+    expect(screen.getByTestId('save-status')).toHaveTextContent('Unsaved changes');
+    // Now let A's PUT resolve LATE. Without the open-id guard, A's .then would force status → "Saved".
+    resolveA({ id: 'rt-amr-summary', name: 'A edited', paper: 'A4', orientation: 'portrait', pages: [], parameters: [] });
+    await new Promise((r) => setTimeout(r, 0)); // flush the resolution microtasks
+    // B's status must still reflect B (unsaved), not be clobbered by A's late save.
+    expect(screen.getByTestId('save-status')).toHaveTextContent('Unsaved changes');
+  });
 });

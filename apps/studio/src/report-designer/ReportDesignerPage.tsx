@@ -35,6 +35,8 @@ function upsert(list: ReportDesign[], d: ReportDesign): ReportDesign[] {
  * so a save that returns a fresh `updatedAt` doesn't read back as dirty.
  */
 function stableJson(d: ReportDesign): string {
+  // Relies on both compared sides being built from the same object shape (so key insertion order
+  // matches); not a canonical/sorted serializer.
   return JSON.stringify({ ...d, createdAt: undefined, updatedAt: undefined });
 }
 
@@ -57,6 +59,9 @@ export function ReportDesignerPage(): JSX.Element {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
   // stableJson of the last-persisted state of the OPEN design; compared against the working design to detect edits.
   const savedJsonRef = useRef<string>('');
+  // Mirror of `selectedId` readable inside async callbacks — lets a late-resolving autosave tell whether
+  // the design it saved is still the open one before it touches the shared savedJsonRef / status.
+  const selectedIdRef = useRef<string | null>(null);
   // The last id loaded from / persisted to the API — guards the :id effect from re-loading over local edits.
   const loadedIdRef = useRef<string | null>(null);
 
@@ -95,6 +100,9 @@ export function ReportDesignerPage(): JSX.Element {
   const history = useTemplateHistory<ReportTemplate>(() => template ?? templates[0]);
   useEffect(() => { if (template) history.reset(template); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [selectedId]);
 
+  // Keep the id-mirror ref in step with the open design so async callbacks can guard on it.
+  useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
+
   // A freshly-opened/selected design starts clean: snapshot its serialization as the last-saved baseline
   // so subsequent edits (below) are what read as dirty. A transient (never-persisted) design shows "Unsaved".
   useEffect(() => {
@@ -115,15 +123,25 @@ export function ReportDesignerPage(): JSX.Element {
     if (isTransient) { setSaveStatus('unsaved'); return; }
     setSaveStatus('unsaved');
     const design = template;
+    const savingId = design.id;
     const timer = setTimeout(() => {
       setSaveStatus('saving');
       void updateReportDesign(design.id, design)
         .then((saved) => {
-          savedJsonRef.current = stableJson(saved ?? design);
-          setTemplates((ts) => upsert(ts, saved ?? design));
-          setSaveStatus('saved');
+          const persisted = saved ?? design;
+          // Always keep the list current — the design may no longer be open, but its saved form is still valid.
+          setTemplates((ts) => upsert(ts, persisted));
+          // Only touch the shared dirty-baseline / status when this design is STILL the open one; otherwise a
+          // late resolution would corrupt the now-open design's baseline and falsely flip it to "Saved".
+          if (selectedIdRef.current === savingId) {
+            savedJsonRef.current = stableJson(persisted);
+            setSaveStatus('saved');
+          }
         })
-        .catch((e) => { setSaveStatus('error'); toast.error(e instanceof Error ? e.message : String(e)); });
+        .catch((e) => {
+          if (selectedIdRef.current === savingId) setSaveStatus('error');
+          toast.error(e instanceof Error ? e.message : String(e));
+        });
     }, AUTOSAVE_MS);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -132,13 +150,17 @@ export function ReportDesignerPage(): JSX.Element {
   // Fire-and-forget: persist the open design's pending edits immediately (no debounce) before leaving it,
   // so switching designs never drops the last edit sitting in the autosave window. Transient designs are
   // skipped — they need an explicit Save. Navigation is not blocked on the response.
+  //
+  // Deliberately does NOT touch `savedJsonRef` or `saveStatus`: the debounce timer for the leaving design is
+  // cancelled by this effect's cleanup on switch, and after the switch those shared refs belong to whatever
+  // design is now open — writing them here would corrupt the new design's baseline. Failures are surfaced.
   const flushOpen = () => {
     if (!template || transientIds.has(template.id)) return;
-    const snap = stableJson(template);
-    if (snap === savedJsonRef.current) return; // clean — nothing pending
-    savedJsonRef.current = snap; // optimistic
+    if (stableJson(template) === savedJsonRef.current) return; // clean — nothing pending
     const design = template;
-    void updateReportDesign(design.id, design).then((saved) => setTemplates((ts) => upsert(ts, saved ?? design))).catch(() => {});
+    void updateReportDesign(design.id, design)
+      .then((saved) => setTemplates((ts) => upsert(ts, saved ?? design)))
+      .catch((e) => toast.error(e instanceof Error ? e.message : String(e)));
   };
 
   const patchTemplate = (next: ReportTemplate) =>
