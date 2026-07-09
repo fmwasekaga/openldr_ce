@@ -19,7 +19,7 @@ import { computeSummaryMetrics } from '../reports/lib/report-summary';
 import {
   loadPinned, savePinned, togglePinned, loadLastParams, saveLastParams,
 } from '../reports/lib/report-preferences';
-import { StarterGalleryDialog } from '@/reports-builder/StarterGalleryDialog';
+import { NewReportDialog } from '../reports/NewReportDialog';
 
 type Tab = 'document' | 'spreadsheet';
 
@@ -119,13 +119,17 @@ export function Reports() {
     [selected, result],
   );
 
+  const refreshReports = useCallback(() => {
+    fetchReports().then(setReports).catch((e) => setError(String(e)));
+  }, []);
+
   return (
     <AppShell title={t('nav.reports')} fullBleed>
       <div className="flex h-full min-h-0">
         <div className="flex min-h-0 min-w-0 shrink-0 flex-col border-r border-border">
           {!collapsed && (
             <div className="flex items-center justify-end border-b border-border px-2 py-2">
-              <NewReportButton />
+              <NewReportButton onCreated={refreshReports} />
             </div>
           )}
           <ReportLibrary
@@ -255,14 +259,15 @@ export function Reports() {
   );
 }
 
-export function NewReportButton(): JSX.Element | null {
+export function NewReportButton({ onCreated }: { onCreated?: () => void } = {}): JSX.Element | null {
+  const { t } = useTranslation();
   const { hasRole } = useAuth();
-  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [open, setOpen] = useState(false);
   if (!(hasRole('lab_admin') || hasRole('lab_manager'))) return null;
   return (
     <>
-      <Button size="sm" onClick={() => setGalleryOpen(true)}>New report</Button>
-      <StarterGalleryDialog open={galleryOpen} onOpenChange={setGalleryOpen} />
+      <Button size="sm" onClick={() => setOpen(true)}>{t('reports.new.button')}</Button>
+      <NewReportDialog open={open} onOpenChange={setOpen} onCreated={() => onCreated?.()} />
     </>
   );
 }
