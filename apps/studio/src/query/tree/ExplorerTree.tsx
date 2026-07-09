@@ -87,7 +87,7 @@ export function ExplorerTree(): JSX.Element {
       <Row depth={0} open={!!openBranch.queries} onClick={() => toggle('queries')} icon={<Zap className="h-3.5 w-3.5" />} label={t('query.customQueries')} />
       {openBranch.queries && queries.map((q) => (
         <div key={q.id} className="group relative">
-          <Row depth={1} onClick={() => openQueryTab({ customQueryId: q.id, title: q.name, connectorId: q.connectorId, sql: q.sql, params: q.params })} icon={<Zap className="h-3.5 w-3.5" />} label={q.name} />
+          <Row depth={3} onClick={() => openQueryTab({ customQueryId: q.id, title: q.name, connectorId: q.connectorId, sql: q.sql, params: q.params })} icon={<Zap className="h-3.5 w-3.5" />} label={q.name} />
           <button onClick={(e) => { e.stopPropagation(); setDeleteId(q.id); }}
             className="absolute right-2 top-1/2 hidden -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-destructive group-hover:block"
             aria-label={t('query.deleteQuery')} title={t('query.deleteQuery')}>

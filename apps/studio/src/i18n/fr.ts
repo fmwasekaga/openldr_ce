@@ -486,6 +486,10 @@ export const fr: EnShape = {
     deleteQuery: 'Supprimer la requête', confirmDeleteQuery: 'Supprimer cette requête personnalisée ?',
     collapseExplorer: 'Réduire l’explorateur', expandExplorer: 'Développer l’explorateur',
   },
+  dashboard: {
+    exportDashboard: 'Exporter',
+    importDashboard: 'Importer',
+  },
   reportDesigner: {
     title: 'Concepteur de rapports',
     templates: 'Modèles',
@@ -506,7 +510,7 @@ export const fr: EnShape = {
     export: 'Exporter',
     exportPdf: 'Exporter en PDF',
     exportExcel: 'Exporter en Excel',
-    publishAsReport: 'Publier comme rapport',
+    publishAsReport: 'Publier',
     check: 'Vérifier',
     duplicate: 'Dupliquer',
     delete: 'Supprimer',

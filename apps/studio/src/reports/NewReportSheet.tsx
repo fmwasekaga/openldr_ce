@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 
 function newId(): string {
@@ -118,7 +118,7 @@ export function NewReportSheet({ open, onOpenChange, onCreated, initialDesignId 
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="flex w-full max-w-md flex-col gap-0 border-b-0 p-0">
+      <SheetContent hideClose className="flex w-full max-w-md flex-col gap-0 border-b-0 p-0">
         <SheetHeader className="flex flex-row items-start justify-between gap-2 border-b border-border px-6 py-4">
           <div className="min-w-0">
             <SheetTitle>{t('reports.new.title')}</SheetTitle>
@@ -126,13 +126,17 @@ export function NewReportSheet({ open, onOpenChange, onCreated, initialDesignId 
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="mr-6 mt-0.5 shrink-0" aria-label={t('common.actions')}>
+              <Button variant="ghost" size="icon" className="mt-0.5 shrink-0" aria-label={t('common.actions')}>
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
               <DropdownMenuItem disabled={!canCreate} onSelect={() => { void handleCreate(); }}>
                 {t('reports.new.create')}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => onOpenChange(false)}>
+                {t('common.cancel')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

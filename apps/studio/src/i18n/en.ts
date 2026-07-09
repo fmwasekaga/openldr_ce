@@ -490,6 +490,10 @@ export const en = {
     deleteQuery: 'Delete query', confirmDeleteQuery: 'Delete this custom query?',
     collapseExplorer: 'Collapse explorer', expandExplorer: 'Expand explorer',
   },
+  dashboard: {
+    exportDashboard: 'Export',
+    importDashboard: 'Import',
+  },
   reportDesigner: {
     title: 'Report Designer',
     templates: 'Templates',
@@ -510,7 +514,7 @@ export const en = {
     export: 'Export',
     exportPdf: 'Export PDF',
     exportExcel: 'Export Excel',
-    publishAsReport: 'Publish as report',
+    publishAsReport: 'Publish',
     check: 'Check',
     duplicate: 'Duplicate',
     delete: 'Delete',
