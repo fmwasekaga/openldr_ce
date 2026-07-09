@@ -7,21 +7,23 @@
 //
 //   pnpm seed:dhis2-mapping            # after pnpm seed:dhis2-connector
 //
-// Uses the `amr-facility-summary` report (wide format: one row per facility, with `tested` and
-// `resistant` numeric columns) — unlike `amr-resistance` (long format, no facility dimension),
-// this shape maps cleanly onto DHIS2 aggregate dataValues. This only reads DHIS2 metadata + the
-// report + writes rows to the internal DB — no plugin egress worker is spawned, so it is safe
-// under tsx. Open Settings ▸ DHIS2 to refine the column→dataElement mapping if needed.
+// Uses the `r-amr-facility-summary` data-driven report (wide format: one row per facility, with
+// `tested` and `resistant` numeric columns) — unlike `amr-resistance` (long format, no facility
+// dimension), this shape maps cleanly onto DHIS2 aggregate dataValues. The 7 hardcoded catalog
+// reports (including the old `amr-facility-summary` id) were retired in favour of data-driven
+// `r-<id>` report records (see docs/superpowers/plans/2026-07-09-reports-template-linking.md
+// Slice S5) — this seed now goes through the full `ctx.reporting` resolver (via
+// `createAppContext`) instead of calling the deleted catalog directly, so both the mapping
+// record AND the facility-discovery run resolve the data-driven report. No plugin egress worker
+// is spawned, so it is safe under tsx. Open Settings ▸ DHIS2 to refine the column→dataElement
+// mapping if needed.
 import { loadConfig } from '@openldr/config';
-import { createInternalDb, createConnectorStore, createPluginDataStore } from '@openldr/db';
-import type { ExternalSchema } from '@openldr/db';
-import { getReport } from '@openldr/reporting';
-import type { Kysely } from 'kysely';
+import { createAppContext } from '@openldr/bootstrap';
 import { randomUUID } from 'node:crypto';
 
 const PLUGIN_ID = 'dhis2-sink';
 const CONNECTOR_NAME = process.env.DHIS2_CONNECTOR_NAME ?? 'DHIS2 SL Demo (local)';
-const REPORT_ID = 'amr-facility-summary';
+const REPORT_ID = 'r-amr-facility-summary';
 const MAPPING_NAME = 'AMR Resistance → DHIS2 (sample)';
 const MAX_FACILITIES = 3;
 
@@ -33,12 +35,9 @@ async function dhis2<T>(base: string, auth: string, path: string): Promise<T> {
 
 async function main(): Promise<void> {
   const cfg = loadConfig();
-  const internal = createInternalDb(cfg.INTERNAL_DATABASE_URL);
-  // Second connection to the target/external store so we can run the report and discover the
-  // real facilities it emits (the same store the host's reporting runs against).
-  const external = createInternalDb(cfg.TARGET_DATABASE_URL);
-  const connectors = createConnectorStore(internal.db);
-  const pdata = createPluginDataStore(internal.db);
+  const ctx = await createAppContext(cfg);
+  const connectors = ctx.connectors;
+  const pdata = ctx.pluginData;
   try {
     const connector = (await connectors.list()).find((c) => c.name === CONNECTOR_NAME);
     if (!connector) throw new Error(`connector "${CONNECTOR_NAME}" not found — run \`pnpm seed:dhis2-connector\` first`);
@@ -47,10 +46,11 @@ async function main(): Promise<void> {
     const auth = `Basic ${Buffer.from(`${config.username}:${config.password}`).toString('base64')}`;
 
     // Discover the actual facilities the report emits, so the org-unit map keys MATCH the report
-    // output (otherwise every row skips with "no orgUnit mapping for facility 'X'").
-    const def = getReport(REPORT_ID);
+    // output (otherwise every row skips with "no orgUnit mapping for facility 'X'"). Goes through
+    // ctx.reporting (data-driven `r-<id>` source) rather than the retired catalog.
+    const def = await ctx.reportDefs.get(REPORT_ID);
     if (!def) throw new Error(`report "${REPORT_ID}" not found`);
-    const report = await def.run(external.db as unknown as Kysely<ExternalSchema>, {});
+    const report = await ctx.reporting.run(REPORT_ID, {});
     const facilities = [...new Set(report.rows.map((r) => String((r as { facility?: unknown }).facility ?? '')).filter(Boolean))].slice(0, MAX_FACILITIES);
     if (facilities.length === 0) {
       console.warn(`⚠ report "${REPORT_ID}" produced no facilities (no AST data in the target store?) — seeding the mapping with an empty org-unit map. Ingest WHONET sample data, then re-run.`);
@@ -101,7 +101,7 @@ async function main(): Promise<void> {
     console.log(`✓ Org-unit map: ${mapped.length} facilities mapped${mapped.length ? ` → ${mapped.join(', ')}` : ''}`);
     console.log('\nOpen Settings ▸ DHIS2 and run the mapping (dry-run) — it should now produce dataValues.');
   } finally {
-    await Promise.allSettled([internal.db.destroy(), external.db.destroy()]);
+    await ctx.close();
   }
 }
 

@@ -4,63 +4,21 @@ import type { ReportDesignStore } from './store';
 /**
  * Default report designs. These replace the studio's former `MOCK_TEMPLATES` as the durable
  * defaults; their `id`s are stable (used for idempotency and the studio deep-link route).
+ *
+ * Empty as of Slice S5 (docs/superpowers/plans/2026-07-09-reports-template-linking.md) — the 3
+ * demo designs below (`RETIRED_DEMO_DESIGN_IDS`) are no longer seeded on a fresh install now that
+ * the built-in reports are data-driven (query + template) with their own seeded designs (see
+ * `@openldr/reporting`'s `report-seeds.ts`). Kept as an extension point for future non-demo
+ * default designs.
  */
-export const SEED_DESIGNS: ReportDesign[] = [
-  {
-    id: 'rt-amr-summary',
-    name: 'AMR summary',
-    paper: 'A4',
-    orientation: 'portrait',
-    parameters: [
-      { key: 'facility', label: 'Facility', value: 'Ndola' },
-      { key: 'period', label: 'Period', value: 'Q2 2026' },
-    ],
-    pages: [
-      {
-        id: 'rt-amr-summary-p1',
-        elements: [
-          { id: 'amr-title', kind: 'text', name: 'Title', rect: { x: 48, y: 40, w: 500, h: 28 }, text: 'Antimicrobial resistance summary' },
-          { id: 'amr-subtitle', kind: 'text', name: 'Subtitle', rect: { x: 48, y: 74, w: 500, h: 20 }, text: 'Q2 2026 · Ndola reference lab' },
-          {
-            id: 'amr-table', kind: 'table', name: 'Resistance table', rect: { x: 48, y: 120, w: 560, h: 200 },
-            columns: ['Organism', '%R', 'n'],
-            rows: [['E. coli', '62%', '418'], ['K. pneumoniae', '54%', '203'], ['S. aureus', '31%', '156']],
-          },
-          { id: 'amr-footer', kind: 'datetime', name: 'Footer date', rect: { x: 48, y: 1060, w: 300, h: 18 }, text: 'Generated {{date}} · Page 1 of 2' },
-        ],
-      },
-      { id: 'rt-amr-summary-p2', elements: [
-        { id: 'amr-p2-note', kind: 'text', name: 'Notes', rect: { x: 48, y: 40, w: 500, h: 40 }, text: 'Appendix: methodology' },
-      ] },
-    ],
-  },
-  {
-    id: 'rt-monthly-caseload',
-    name: 'Monthly caseload',
-    paper: 'A4',
-    orientation: 'portrait',
-    parameters: [{ key: 'month', label: 'Month', value: 'June 2026' }],
-    pages: [
-      { id: 'rt-monthly-caseload-p1', elements: [
-        { id: 'cl-title', kind: 'text', name: 'Title', rect: { x: 48, y: 40, w: 500, h: 28 }, text: 'Monthly caseload' },
-        { id: 'cl-table', kind: 'table', name: 'Caseload table', rect: { x: 48, y: 100, w: 560, h: 160 }, columns: ['Test', 'Count'], rows: [['HIV VL', '1,204'], ['TB', '842']] },
-      ] },
-    ],
-  },
-  {
-    id: 'rt-lab-tat',
-    name: 'Lab TAT',
-    paper: 'Letter',
-    orientation: 'landscape',
-    parameters: [],
-    pages: [
-      { id: 'rt-lab-tat-p1', elements: [
-        { id: 'tat-title', kind: 'text', name: 'Title', rect: { x: 48, y: 40, w: 600, h: 28 }, text: 'Turnaround time' },
-        { id: 'tat-table', kind: 'table', name: 'TAT table', rect: { x: 48, y: 100, w: 900, h: 160 }, columns: ['Analyte', 'Median hrs', 'p90'], rows: [['CD4', '18', '42'], ['Chemistry', '6', '20']] },
-      ] },
-    ],
-  },
-];
+export const SEED_DESIGNS: ReportDesign[] = [];
+
+/**
+ * The 3 former demo designs (`rt-amr-summary`, `rt-monthly-caseload`, `rt-lab-tat`), retired from
+ * `SEED_DESIGNS` in Slice S5. Kept here only as the target list for `removeRetiredDemoDesigns`'s
+ * one-shot cleanup on existing installs that already seeded them.
+ */
+export const RETIRED_DEMO_DESIGN_IDS = ['rt-amr-summary', 'rt-monthly-caseload', 'rt-lab-tat'] as const;
 
 /** Idempotently insert the default designs. Returns how many were newly created. */
 export async function seedReportDesigns(store: Pick<ReportDesignStore, 'get' | 'create'>): Promise<number> {
@@ -72,4 +30,32 @@ export async function seedReportDesigns(store: Pick<ReportDesignStore, 'get' | '
     }
   }
   return n;
+}
+
+/**
+ * One-shot idempotent cleanup for existing installs that seeded the 3 retired demo designs before
+ * Slice S5 removed them from `SEED_DESIGNS`. Deletes each `RETIRED_DEMO_DESIGN_IDS` entry ONLY IF
+ * no `reports` record's `designId` still references it (a user may have linked one of the demo
+ * designs to a report before the cutover — never delete a design that's in use). No-ops entirely
+ * on a fresh install (the designs were never created). Logs what it removes/skips. Returns the
+ * count actually removed.
+ */
+export async function removeRetiredDemoDesigns(
+  store: Pick<ReportDesignStore, 'get' | 'remove'>,
+  reportDefs: { list(): Promise<{ designId: string }[]> },
+): Promise<number> {
+  const referencedDesignIds = new Set((await reportDefs.list()).map((r) => r.designId));
+  let removed = 0;
+  for (const id of RETIRED_DEMO_DESIGN_IDS) {
+    if (referencedDesignIds.has(id)) {
+      console.log(`[seed] retired demo design "${id}" is referenced by a report record — keeping it`);
+      continue;
+    }
+    const existing = await store.get(id);
+    if (!existing) continue; // already removed, or never seeded on this install
+    await store.remove(id);
+    removed += 1;
+    console.log(`[seed] removed retired demo design "${id}"`);
+  }
+  return removed;
 }

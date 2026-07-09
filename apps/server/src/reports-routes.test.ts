@@ -91,6 +91,21 @@ describe('report routes', () => {
     expect(res.headers['content-type']).toContain('text/csv');
     expect(res.body).toContain('Antibiotic,%R');
   });
+
+  // Regression (Slice S5 cutover): the WHO GLASS RIS CSV export MUST resolve the data-driven
+  // report id `r-amr-glass-ris` (the hardcoded catalog `amr-glass-ris` was retired). This route
+  // hardcodes the id server-side, so a wrong literal would 404/500 at runtime with no type error —
+  // exactly how the break slipped the gate. Assert it calls run() with the r-<id> and 200s.
+  it('GET /api/reports/glass/ris.csv resolves the data-driven r-amr-glass-ris id', async () => {
+    const run = vi.fn(async (_id: string, _params?: unknown) => okResult);
+    const app = appWith({ list: vi.fn(), run });
+    const res = await app.inject({ method: 'GET', url: '/api/reports/glass/ris.csv?country=ZM&year=2026' });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('text/csv');
+    expect(res.headers['content-disposition']).toContain('glass-ris.csv');
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(run).toHaveBeenCalledWith('r-amr-glass-ris', expect.anything());
+  });
 });
 
 describe('GET /api/reports/:id/options', () => {
