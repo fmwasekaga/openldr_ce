@@ -85,11 +85,21 @@ describe('NewReportSheet', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
-  it('has no standalone Cancel/Create footer buttons — only the ✕ close and the ⋯ menu', async () => {
+  it('has no standalone Cancel/Create footer buttons or ✕ close — only the ⋯ menu', async () => {
     render(<NewReportSheet open onOpenChange={() => {}} onCreated={() => {}} />);
     await waitFor(() => screen.getByText('Facility'));
     expect(screen.queryByRole('button', { name: /^cancel$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^create report$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^close$/i })).not.toBeInTheDocument();
+  });
+
+  it('closes the sheet via Cancel in the ⋯ menu', async () => {
+    const onOpenChange = vi.fn();
+    render(<NewReportSheet open onOpenChange={onOpenChange} onCreated={() => {}} />);
+    await waitFor(() => screen.getByText('Facility'));
+    openMenu();
+    fireEvent.click(await screen.findByText(/^cancel$/i));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
   it('loads categories and defaults the selection to the first one', async () => {
