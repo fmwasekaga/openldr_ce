@@ -16,6 +16,16 @@ export default defineConfig({
     baseURL: BASE_URL,
     browserName: 'chromium',
     headless: true,
+    // The reports PDF Document tab uses pdfjs-dist@6, which calls
+    // `Map.prototype.getOrInsertComputed` (TC39 "upsert" proposal). That method
+    // ships natively only in Chromium >= 144, but the newest Chromium the
+    // npmmirror mirror hosts is rev 1200 / Chromium 143 (Playwright 1.57 — see
+    // README + memory playwright-toolchain). V8 already implements it behind the
+    // `--harmony` flag on 143, so enable it here; without this the Document tab
+    // throws `getOrInsertComputed is not a function` and never renders. This is
+    // TEST-HARNESS-only — production hardens real browsers via the app's own
+    // Uint8Array hex/base64 polyfill, which stays.
+    launchOptions: { args: ['--js-flags=--harmony'] },
     contextOptions: { reducedMotion: 'reduce' },
     trace: 'retain-on-failure',
   },

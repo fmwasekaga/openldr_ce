@@ -7,8 +7,16 @@ plus an agent-driven visual-verification gallery. Satisfies P1-NFR-5.
 
 Chromium downloads need a mirror — the direct Playwright CDN (`storage.googleapis.com`)
 times out here. The install script sets `PLAYWRIGHT_DOWNLOAD_HOST` to npmmirror and the
-package pins `@playwright/test@1.50.0` (Chromium rev 1155, the newest rev with both
-chromium and chromium-headless-shell mirrored on npmmirror).
+package pins `@playwright/test@1.57.0` (Chromium rev 1200, Chromium 143 — the newest
+Playwright release with both chromium and chromium-headless-shell mirrored on npmmirror;
+1.58.0+ (rev 1208+) 404s on the mirror).
+
+The reports **PDF Document tab** uses `pdfjs-dist@6`, which calls
+`Map.prototype.getOrInsertComputed` — native only in Chromium >= 144. Chromium 143 has it
+behind V8's `--harmony` flag, so `playwright.config.ts` launches Chromium with
+`--js-flags=--harmony`; otherwise the Document tab throws `getOrInsertComputed is not a
+function` and never renders. (Production hardens real browsers via the app's own
+Uint8Array hex/base64 polyfill — a separate concern that stays.)
 
     pnpm install
     pnpm e2e:install-browsers
