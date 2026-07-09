@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { MoreHorizontal } from 'lucide-react';
 import { AppShell } from '../shell/AppShell';
 import {
@@ -24,6 +25,7 @@ import {
   loadPinned, savePinned, togglePinned, loadLastParams, saveLastParams,
 } from '../reports/lib/report-preferences';
 import { NewReportSheet } from '../reports/NewReportSheet';
+import { deleteReportDef, setReportStatus } from '../reports/reportDefsApi';
 
 type Tab = 'document' | 'spreadsheet';
 
@@ -111,6 +113,30 @@ export function Reports() {
     fetchReports().then(setReports).catch((e) => setError(String(e)));
   }, []);
 
+  const handleUnpublish = useCallback(() => {
+    if (!selected) return;
+    setReportStatus(selected.id, 'draft')
+      .then(() => {
+        toast.success(t('reports.unpublished'));
+        setSelectedId(null);
+        setResult(null);
+        refreshReports();
+      })
+      .catch(() => toast.error(t('reports.actionFailed')));
+  }, [selected, t, refreshReports]);
+
+  const handleDeleteReport = useCallback(() => {
+    if (!selected) return;
+    deleteReportDef(selected.id)
+      .then(() => {
+        toast.success(t('reports.deleted'));
+        setSelectedId(null);
+        setResult(null);
+        refreshReports();
+      })
+      .catch(() => toast.error(t('reports.actionFailed')));
+  }, [selected, t, refreshReports]);
+
   return (
     <AppShell title={t('nav.reports')} fullBleed>
       <div className="flex h-full min-h-0">
@@ -150,6 +176,11 @@ export function Reports() {
                   onOpenSchedules={() => setSchedulesOpen(true)}
                   canManageSchedules={canManageSchedules}
                   designId={selected.designId}
+                  reportId={selected.id}
+                  source={selected.source}
+                  canManage={canManageSchedules}
+                  onUnpublish={handleUnpublish}
+                  onDelete={handleDeleteReport}
                 />
               </div>
 
