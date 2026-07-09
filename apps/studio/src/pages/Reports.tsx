@@ -122,7 +122,7 @@ export function Reports() {
   return (
     <AppShell title={t('nav.reports')} fullBleed>
       <div className="flex h-full min-h-0">
-        <div className="flex min-w-0 shrink-0 flex-col">
+        <div className="flex min-h-0 min-w-0 shrink-0 flex-col border-r border-border">
           {!collapsed && (
             <div className="flex items-center justify-end border-b border-border px-2 py-2">
               <NewReportButton />

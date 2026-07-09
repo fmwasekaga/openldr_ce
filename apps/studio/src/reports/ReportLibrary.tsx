@@ -45,7 +45,7 @@ export function ReportLibrary({
 
   if (collapsed) {
     return (
-      <aside className="flex w-10 shrink-0 flex-col items-center border-r border-border py-2">
+      <aside className="flex min-h-0 w-10 flex-1 shrink-0 flex-col items-center py-2">
         <Button variant="ghost" size="icon" onClick={onToggleCollapse} aria-label="Expand library">
           <PanelLeftOpen className="h-4 w-4" />
         </Button>
@@ -87,7 +87,7 @@ export function ReportLibrary({
   );
 
   return (
-    <aside className="flex w-[230px] shrink-0 flex-col border-r border-border">
+    <aside className="flex min-h-0 w-[230px] flex-1 shrink-0 flex-col">
       <div className="flex items-center gap-2 border-b border-border p-2">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
