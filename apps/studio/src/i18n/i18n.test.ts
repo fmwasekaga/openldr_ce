@@ -20,13 +20,13 @@ describe('i18n wiring', () => {
   it('resolves a known common key to English', () => {
     expect(i18n.t('common.save')).toBe('Save');
   });
-  it('exposes the reportBuilder namespace', () => {
-    expect((en as Record<string, unknown>).reportBuilder).toBeDefined();
+  it('exposes the queryParams namespace', () => {
+    expect((en as Record<string, unknown>).queryParams).toBeDefined();
   });
-  it('serves the French reportBuilder value when language is fr', async () => {
+  it('serves the French queryParams value when language is fr', async () => {
     await i18n.changeLanguage('fr');
-    expect(i18n.t('reportBuilder.palette.heading')).toBe(fr.reportBuilder.palette.heading);
-    expect(i18n.t('reportBuilder.header.publish')).toBe(fr.reportBuilder.header.publish);
+    expect(i18n.t('queryParams.variableId')).toBe(fr.queryParams.variableId);
+    expect(i18n.t('queryParams.required')).toBe(fr.queryParams.required);
     await i18n.changeLanguage('en'); // restore for other tests
   });
 });
