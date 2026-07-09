@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import { sampleForms, type FormStore } from '@openldr/forms';
 import { buildDefaultWorkflows, type WorkflowStore } from '@openldr/workflows';
 import { seedDefaultDashboard, type DashboardStore } from '@openldr/dashboards';
-import { seedSampleReportTemplate, seedAmrResistanceTemplate, seedPatientDemographicsTemplate, seedAmrFacilitySummaryTemplate, seedAnalyteInterpretationTemplate, type ReportTemplateStore } from '@openldr/report-builder';
 import { seedReportDesigns, removeRetiredDemoDesigns, type ReportDesignStore } from '@openldr/report-designer';
 import { seedDataDrivenReports, type SeedDataDrivenReportsResult } from '@openldr/reporting';
 import type { ConnectorStore, TerminologyAdminStore, AppSettingStore, ReportStore } from '@openldr/db';
@@ -16,7 +15,6 @@ export interface SeedResult {
   workflowsSeeded: number;
   connectorsSeeded: number;
   dashboardsSeeded: number;
-  reportTemplatesSeeded: number;
   reportDesignsSeeded: number;
   /** Slice S5: one-shot cleanup count of retired demo designs (`rt-amr-summary` etc.) removed
    *  from an existing pre-cutover install — see `removeRetiredDemoDesigns`. Always 0 on a fresh
@@ -55,9 +53,6 @@ export interface FormSeedTarget {
   // Dashboards store, threaded the same way so the seed can insert the vetted sample dashboard
   // through the store (bypassing the authoring gate). AppContext.dashboards satisfies this.
   dashboards: { store: Pick<DashboardStore, 'get' | 'create'> };
-  // Report-template store, threaded so the seed can insert the sample "AMR Surveillance Summary"
-  // report. Structural subset — AppContext.reportTemplates satisfies it.
-  reportTemplates: Pick<ReportTemplateStore, 'get' | 'create'>;
   // Report-design store, threaded so the seed can insert the default page designs (former studio
   // MOCK_TEMPLATES). Structural subset — AppContext.reportDesigns satisfies it.
   // 'remove' is also needed so the Slice S5 one-shot cleanup can drop retired demo designs on an
@@ -177,21 +172,6 @@ export async function seedDatabase(db: DbContext, app: FormSeedTarget): Promise<
     console.warn('[seed] sample dashboard seed skipped:', e instanceof Error ? e.message : String(e));
   }
 
-  // Report templates — a published "AMR Surveillance Summary" sample plus the editable
-  // amr-resistance code report, so a fresh install has real templates to open in the builder
-  // (and, being published, ones that also appear in the Reports library). Idempotent (each
-  // skips when present) and best-effort (never aborts the rest of the seed).
-  let reportTemplatesSeeded = 0;
-  try {
-    reportTemplatesSeeded = await seedSampleReportTemplate(app.reportTemplates);
-    reportTemplatesSeeded += await seedAmrResistanceTemplate(app.reportTemplates);
-    reportTemplatesSeeded += await seedPatientDemographicsTemplate(app.reportTemplates);
-    reportTemplatesSeeded += await seedAmrFacilitySummaryTemplate(app.reportTemplates);
-    reportTemplatesSeeded += await seedAnalyteInterpretationTemplate(app.reportTemplates);
-  } catch (e) {
-    console.warn('[seed] report template seed skipped:', e instanceof Error ? e.message : String(e));
-  }
-
   // Report designs — the default free-form page designs (former studio MOCK_TEMPLATES) so a fresh
   // install has designs to open in the report designer. Idempotent (each skips when present by id)
   // and best-effort (never aborts the rest of the seed).
@@ -248,7 +228,7 @@ export async function seedDatabase(db: DbContext, app: FormSeedTarget): Promise<
     }
   }
 
-  return { resources, formsSeeded, workflowsSeeded, connectorsSeeded, dashboardsSeeded, reportTemplatesSeeded, reportDesignsSeeded, demoDesignsRemoved, dataDrivenReportsSeeded, settingsSeeded, terminology };
+  return { resources, formsSeeded, workflowsSeeded, connectorsSeeded, dashboardsSeeded, reportDesignsSeeded, demoDesignsRemoved, dataDrivenReportsSeeded, settingsSeeded, terminology };
 }
 
 // Auto-import the two bundled, freely-redistributable terminology sets on first boot:

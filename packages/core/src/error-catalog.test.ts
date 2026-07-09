@@ -68,9 +68,4 @@ describe('error catalog', () => {
     expect(codeForUnknown(new Error('reconnect attempt failed'))).toBe('SY0500');
     expect(codeForUnknown(new Error('connection refused'))).toBe('SY0503');
   });
-
-  it('has the RP0005 pdf-only code', () => {
-    expect(CATALOG.RP0005.domain).toBe('reports');
-    expect(CATALOG.RP0005.httpStatus).toBe(400);
-  });
 });

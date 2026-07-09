@@ -416,7 +416,6 @@ function ctxWith(status: 'up' | 'down'): AppContext {
     marketplaceForms: {} as never,
     terminology: { ops: {} as never, admin: buildFakeAdmin(), ontology: buildFakeOntology(), loaders: buildFakeLoaders() },
     dashboards: {} as never,
-    reportTemplates: {} as never,
     reportDesigns: {} as never,
     reportDefs: {} as never,
     workflows: {} as never,

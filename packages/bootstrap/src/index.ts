@@ -5,7 +5,7 @@ import { createAuth } from '@openldr/adapter-auth';
 import { createEventBus } from '@openldr/adapter-event-bus';
 import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import type { Config } from '@openldr/config';
-import { createLogger, HealthRegistry, redact, appError, type Logger } from '@openldr/core';
+import { createLogger, HealthRegistry, redact, type Logger } from '@openldr/core';
 import { createInternalDb, createFhirStore, createFlatWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema, Provenance } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
@@ -14,8 +14,6 @@ import { createUserStore, type UserStore, createUserProfileStore, type UserProfi
 import { createFormStore, type FormStore } from '@openldr/forms';
 import { getEventSource, eventSourceCatalog, toCsv, type ReportResult, type ReportSummary, type ReportParamMeta, type ReportMetricMeta } from '@openldr/reporting';
 import { createDashboardStore, getModel, listModels, runBuilderQuery, runSqlQuery, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, seedDefaultDashboard, runStoredQuery, type DashboardStore, type WidgetQuery, type RunStoredQueryDeps } from '@openldr/dashboards';
-import { createReportTemplateStore, renderReportTemplatePdf, type ReportTemplateStore } from '@openldr/report-builder';
-import type { ReportTemplate } from '@openldr/report-builder/pure';
 import { createReportDesignStore, renderReportDesignPdf, resolveDesignTables, type ReportDesignStore } from '@openldr/report-designer';
 import {
   createWorkflowStore, type WorkflowStore,
@@ -87,11 +85,6 @@ export interface ReportingApi {
   eventSources(): { id: string; name: string; columns: { key: string; label: string }[] }[];
   renderPdf(id: string, rawParams: unknown): Promise<Buffer>;
   options(id: string): Promise<Record<string, string[]>>;
-}
-
-export function isPublished(t: { status: string }): boolean { return t.status === 'published'; }
-export function templateToSummary(t: ReportTemplate): ReportSummary {
-  return { id: t.id, name: t.name, description: t.description, category: t.category, parameters: t.parameters, source: 'builder' };
 }
 
 export function reportDefToSummary(def: ReportRecord, design: ReportDesign): ReportSummary {
@@ -271,7 +264,6 @@ export interface AppContext {
     };
   };
   dashboards: DashboardsApi;
-  reportTemplates: ReportTemplateStore;
   reportDesigns: ReportDesignStore;
   reportDefs: ReportStore;
   workflows: {
@@ -351,16 +343,16 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
 
   const reportingDb = store.db as unknown as Kysely<ExternalSchema>;
 
-  // Reports are now fully data-driven ("reports" table: a design + a bound primary query) or
-  // published builder templates — the hardcoded catalog (`@openldr/reporting`'s `catalog.ts`,
-  // `getReport`/`reportSummaries`/`ReportDefinition`) was retired in Slice S6 of
+  // Reports are now fully data-driven ("reports" table: a design + a bound primary query) — the
+  // hardcoded catalog (`@openldr/reporting`'s `catalog.ts`, `getReport`/`reportSummaries`/
+  // `ReportDefinition`) was retired in Slice S6 of
   // docs/superpowers/plans/2026-07-09-reports-template-linking.md once its last report
-  // (`amr-antibiogram`) was migrated to a fixed-panel data-driven report. Data-driven reports
-  // remain the SECOND source alongside published builder templates, resolved by id below. Declared
-  // above the `reporting` object so its branch closures (via `dataDrivenReporting`, below) can
-  // reference them. `reportRenderDeps.runConnectorSql` reads `workflowServices` lazily at call time
-  // (it is declared further down this function) — mirrors the same lazy-read pattern in
-  // apps/server/app.ts.
+  // (`amr-antibiogram`) was migrated to a fixed-panel data-driven report, and the deprecated
+  // `@openldr/report-builder` (PDF-only templates, `source:'builder'`) was retired entirely once
+  // Report Designer superseded it. Declared above the `reporting` object so its branch closures
+  // (via `dataDrivenReporting`, below) can reference them. `reportRenderDeps.runConnectorSql` reads
+  // `workflowServices` lazily at call time (it is declared further down this function) — mirrors
+  // the same lazy-read pattern in apps/server/app.ts.
   const reportDesignStore = createReportDesignStore(internal.db);
   const reportDefStore = createReportStore(internal.db);
   const reportRenderDeps: RunStoredQueryDeps = {
@@ -386,23 +378,13 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     // untouched" note — report-scheduler.ts/plugin-broker.ts/CLI `report list` are its only
     // consumers). Now that the catalog is empty, this always returns []; those consumers already
     // tolerate a missing definition (falling back to the raw id/no date-range default). `listAll()`
-    // (async, merges data-driven + templates) is what /api/reports and the Reports page use.
+    // (async) is what /api/reports and the Reports page use.
     list: () => [],
-    async listAll() {
-      const templates = (await reportTemplateStore.list()).filter(isPublished).map(templateToSummary);
-      const defSummaries = await dataDrivenReporting.listAllDataDriven();
-      return [...defSummaries, ...templates];
-    },
-    async findSummary(id) {
-      const def = await dataDrivenReporting.findSummaryDataDriven(id);
-      if (def) return def;
-      const t = await reportTemplateStore.get(id);
-      return t && isPublished(t) ? templateToSummary(t) : undefined;
-    },
+    listAll: () => dataDrivenReporting.listAllDataDriven(),
+    findSummary: (id) => dataDrivenReporting.findSummaryDataDriven(id),
     eventSources: () => eventSourceCatalog().map((s) => ({ id: s.id, name: s.name, columns: s.columns })),
     async run(id, rawParams) {
       if (await reportDefStore.get(id)) return dataDrivenReporting.runDataDriven(id, rawParams);
-      if (await reportTemplateStore.get(id)) throw appError('RP0005', { message: `report is PDF-only: ${id}` });
       throw new ReportNotFoundError(id);
     },
     async runEventSource(id, window) {
@@ -412,13 +394,10 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     },
     async renderPdf(id, rawParams) {
       if (await reportDefStore.get(id)) return dataDrivenReporting.renderDataDriven(id, rawParams);
-      const t = await reportTemplateStore.get(id);
-      if (t && isPublished(t)) return renderReportTemplatePdf(t, (rawParams ?? {}) as Record<string, string>, runDashboardQuery);
       throw new ReportNotFoundError(id);
     },
     async options(id) {
       if (await reportDefStore.get(id)) return dataDrivenReporting.optionsDataDriven(id);
-      if (await reportTemplateStore.get(id)) return {};
       throw new ReportNotFoundError(id);
     },
   };
@@ -431,7 +410,6 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   });
 
   const dashboardStore = createDashboardStore(internal.db);
-  const reportTemplateStore = createReportTemplateStore(internal.db);
   const runDashboardQuery = async (q: WidgetQuery): Promise<ReportResult> => {
     let data;
     if (q.mode === 'builder') {
@@ -800,7 +778,6 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     health,
     terminology,
     dashboards,
-    reportTemplates: reportTemplateStore,
     reportDesigns: reportDesignStore,
     reportDefs: reportDefStore,
     workflows,

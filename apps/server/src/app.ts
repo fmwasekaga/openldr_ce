@@ -15,7 +15,6 @@ import { registerDashboardRoutes } from './dashboards-routes';
 import { registerAuditRoutes } from './audit-routes';
 import { registerUsersRoutes } from './users-routes';
 import { registerFormsRoutes } from './forms-routes';
-import { registerReportTemplateRoutes } from './report-templates-routes';
 import { registerReportDesignRoutes } from './report-designs-routes';
 import { registerReportDefRoutes } from './report-defs-routes';
 import { registerMarketplaceRoutes } from './marketplace-routes';
@@ -84,7 +83,6 @@ export function buildApp(ctx: AppContext) {
   registerAuditRoutes(app, ctx);
   registerUsersRoutes(app, ctx);
   registerFormsRoutes(app, ctx);
-  registerReportTemplateRoutes(app, ctx);
   registerReportDesignRoutes(app, ctx, {
     customQueries: createCustomQueryStore(ctx.internalDb),
     runConnectorSql: (input) => {

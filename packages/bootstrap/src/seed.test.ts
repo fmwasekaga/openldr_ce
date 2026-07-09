@@ -47,7 +47,6 @@ function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
     },
   };
   const settings = new Map<string, string>();
-  const reportTemplates: { id: string }[] = [];
   const reportDesigns: { id: string }[] = [];
   const reportDefs: { id: string; designId?: string }[] = [];
   const app: FormSeedTarget = {
@@ -95,13 +94,6 @@ function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
         },
       },
     },
-    reportTemplates: {
-      get: async (id: string) => reportTemplates.find((r) => r.id === id) as never,
-      create: async (t: { id: string }) => {
-        if (!reportTemplates.some((x) => x.id === t.id)) reportTemplates.push({ id: t.id });
-        return t as never;
-      },
-    },
     reportDesigns: {
       get: async (id: string) => reportDesigns.find((r) => r.id === id) as never,
       create: async (d: { id: string }) => {
@@ -124,7 +116,7 @@ function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
     terminology,
     cfg,
   };
-  return { app, workflows, connectors, dashboards, reportTemplates, reportDesigns, reportDefs, valueSets, concepts, settings };
+  return { app, workflows, connectors, dashboards, reportDesigns, reportDefs, valueSets, concepts, settings };
 }
 
 const fakeDb = { persist: vi.fn(async (r: { id: string }) => ({ flattened: JSON.stringify(r) })) } as unknown as DbContext;
@@ -263,17 +255,6 @@ describe('seedDatabase — bundled terminology', () => {
     expect(res.terminology).toEqual({ valueSetsImported: 0, ucumConceptsImported: 0 });
     expect(res.workflowsSeeded).toBe(2);
     expect(res.dashboardsSeeded).toBe(1);
-  });
-});
-
-describe('seedDatabase — report templates', () => {
-  it('seeds both report templates on a fresh install, idempotent on reseed', async () => {
-    const { app, reportTemplates } = fakeApp();
-    const first = await seedDatabase(fakeDb, app);
-    expect(first.reportTemplatesSeeded).toBe(5);
-    expect(reportTemplates.map((r) => r.id).sort()).toEqual(['rt-amr-facility-summary', 'rt-amr-resistance', 'rt-analyte-interpretation', 'rt-patient-demographics', 'rt-sample-amr']);
-    const second = await seedDatabase(fakeDb, app);
-    expect(second.reportTemplatesSeeded).toBe(0);
   });
 });
 
