@@ -19,7 +19,8 @@ export interface SeedResult {
   reportTemplatesSeeded: number;
   reportDesignsSeeded: number;
   /** S4: seeded data-driven query/design/report-record triples (`@openldr/reporting`'s
-   *  SEED_QUERIES/SEED_DESIGNS/SEED_REPORT_DEFS). All zero until Tasks 4.2-4.8 fill those arrays. */
+   *  SEED_QUERIES/SEED_DESIGNS/SEED_REPORT_DEFS). Zero if the default warehouse connector isn't
+   *  seeded yet (see `seedDataDrivenReports`), or once the seed data already exists. */
   dataDrivenReportsSeeded: SeedDataDrivenReportsResult;
   settingsSeeded: number;
   /** Bundled terminology auto-imported on first boot: value sets from the FHIR R4 catalog
@@ -58,7 +59,8 @@ export interface FormSeedTarget {
   reportDesigns: Pick<ReportDesignStore, 'get' | 'create'>;
   // Report-def store, threaded so the seed can insert the S4 data-driven report records
   // (query+design triples that replace the hardcoded catalog). Structural subset —
-  // AppContext.reportDefs satisfies it. A no-op until Tasks 4.2-4.8 populate SEED_REPORT_DEFS.
+  // AppContext.reportDefs satisfies it. Skipped (no-op) until the default warehouse connector
+  // (`connectors`, below) exists — see `seedDataDrivenReports`.
   reportDefs: Pick<ReportStore, 'get' | 'create'>;
   // Terminology surface, threaded so the seed can auto-import the bundled license-safe sets
   // (FHIR R4 catalog + full UCUM) on first boot. Structural subset — AppContext satisfies it.
@@ -197,14 +199,16 @@ export async function seedDatabase(db: DbContext, app: FormSeedTarget): Promise<
   // report catalog onto the linked (`reports` table) path. Idempotent (each of the three stores
   // skips when the id is already present) and best-effort. The custom-query store is built here
   // from the raw internal-DB handle (rather than threaded through FormSeedTarget) since it isn't
-  // otherwise part of AppContext's public surface. SEED_QUERIES/SEED_DESIGNS/SEED_REPORT_DEFS are
-  // empty until Tasks 4.2-4.8 populate them, so this is currently a no-op.
+  // otherwise part of AppContext's public surface. Must run AFTER `seedDefaultConnector` above —
+  // `seedDataDrivenReports` resolves each seed query's connector by the same `DEFAULT_CONNECTOR_NAME`
+  // and skips entirely (no-op) if that connector doesn't exist yet.
   let dataDrivenReportsSeeded: SeedDataDrivenReportsResult = { queriesSeeded: 0, designsSeeded: 0, reportDefsSeeded: 0 };
   try {
     dataDrivenReportsSeeded = await seedDataDrivenReports({
       customQueries: createCustomQueryStore(db.internalDb),
       designs: app.reportDesigns,
       reportDefs: app.reportDefs,
+      connectors: app.connectors,
     });
   } catch (e) {
     console.warn('[seed] data-driven report seed skipped:', e instanceof Error ? e.message : String(e));

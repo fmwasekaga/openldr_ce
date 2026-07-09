@@ -283,12 +283,29 @@ describe('seedDatabase — report designs', () => {
   });
 });
 
-describe('seedDatabase — data-driven reports (S4 scaffolding)', () => {
-  it('is a safe no-op while SEED_QUERIES/SEED_DESIGNS/SEED_REPORT_DEFS are empty', async () => {
+describe('seedDatabase — data-driven reports (S4)', () => {
+  it('skips (best-effort, no throw) when no default connector is configured', async () => {
+    // fakeApp() with no cfg → seedDefaultConnector skips (SECRETS_ENCRYPTION_KEY/TARGET_DATABASE_URL
+    // unset) → seedDataDrivenReports finds no connector named DEFAULT_CONNECTOR_NAME and skips too,
+    // even though SEED_QUERIES/SEED_DESIGNS/SEED_REPORT_DEFS are populated as of Task 4.2.
     const { app, reportDefs } = fakeApp();
     const res = await seedDatabase(fakeDb, app);
     expect(res.dataDrivenReportsSeeded).toEqual({ queriesSeeded: 0, designsSeeded: 0, reportDefsSeeded: 0 });
     expect(reportDefs).toHaveLength(0);
+  });
+
+  it('degrades gracefully when the connector IS seeded (real SEED_QUERIES content exercised, no crash)', async () => {
+    // With a connector configured, seedDataDrivenReports proceeds past the connector-resolution
+    // guard and touches SEED_QUERIES/SEED_DESIGNS/SEED_REPORT_DEFS — this fake harness has no real
+    // Kysely `db.internalDb` (see `fakeDb` above), so `createCustomQueryStore(db.internalDb)`'s
+    // store throws once queried; the surrounding try/catch in seed.ts (best-effort, matching every
+    // other seed step) swallows it and the rest of the seed still completes.
+    const cfg = { SECRETS_ENCRYPTION_KEY: 'k', TARGET_DATABASE_URL: 'postgres://openldr:pw@warehouse:5433/openldr_target' };
+    const { app } = fakeApp(cfg);
+    const res = await seedDatabase(fakeDb, app);
+    expect(res.connectorsSeeded).toBe(1);
+    expect(res.dataDrivenReportsSeeded).toEqual({ queriesSeeded: 0, designsSeeded: 0, reportDefsSeeded: 0 });
+    expect(res.formsSeeded).toBeGreaterThan(0);
   });
 });
 
