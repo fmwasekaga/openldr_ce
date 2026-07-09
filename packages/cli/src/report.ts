@@ -60,7 +60,7 @@ export async function runReportGlassExport(opts: { country: string; year: string
     const params: Record<string, string> = { country: opts.country, year: opts.year };
     if (opts.from) params.from = opts.from;
     if (opts.to) params.to = opts.to;
-    const result = await ctx.reporting.run('amr-glass-ris', params);
+    const result = await ctx.reporting.run('r-amr-glass-ris', params);
     const csv = toCsv(result.columns, result.rows);
     if (opts.out) { writeFileSync(opts.out, csv); process.stdout.write(`wrote ${opts.out}\n`); }
     else if (opts.json) process.stdout.write(JSON.stringify(result.rows, null, 2) + '\n');

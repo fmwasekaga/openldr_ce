@@ -53,7 +53,7 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
 
   app.get('/api/reports/glass/ris.csv', async (req, reply) => {
     try {
-      const result = await ctx.reporting.run('amr-glass-ris', req.query as Record<string, unknown>);
+      const result = await ctx.reporting.run('r-amr-glass-ris', req.query as Record<string, unknown>);
       reply.header('content-type', 'text/csv').header('content-disposition', 'attachment; filename="glass-ris.csv"');
       return toCsv(result.columns, result.rows);
     } catch (err) { rethrowAsAppError(err); }

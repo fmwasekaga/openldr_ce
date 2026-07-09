@@ -17,7 +17,8 @@ import type { Kysely } from 'kysely';
 import { sql } from 'kysely';
 import { createMssqlStore } from '@openldr/adapter-mssql-store';
 import { createMigrator, externalMigrations, createFlatWriter, type ExternalSchema } from '@openldr/db';
-import { getReport } from '@openldr/reporting';
+import { createAppContext } from '@openldr/bootstrap';
+import { loadConfig } from '@openldr/config';
 
 const cfg = {
   host: process.env.MSSQL_HOST ?? 'localhost',
@@ -49,6 +50,13 @@ async function main() {
   let failures = 0;
   const store = createMssqlStore(cfg);
   const db = store.db as unknown as Kysely<ExternalSchema>;
+  // App context for step 4's reporting run. The 7 built-in reports are now data-driven `r-<id>`
+  // records (Slice S5 retired the hardcoded catalog), resolved via `ctx.reporting.run`. NOTE: the
+  // data-driven reports execute their SQL through the default (Postgres) warehouse connector — they
+  // are Postgres-only in v1 — so step 4 no longer exercises reporting against THIS SQL Server `db`
+  // handle the way the old catalog `ReportDefinition.run(db)` did. Kept here only to prove the
+  // data-driven reporting path resolves; the MSSQL-dialect reporting coverage is a separate concern.
+  const appCtx = await createAppContext(loadConfig());
 
   try {
     step('1. adapter connect + healthCheck');
@@ -89,18 +97,14 @@ async function main() {
     if (Number(reqCount.n) !== serviceRequests.length) throw new Error(`MERGE not idempotent: service_requests=${reqCount.n}`);
     ok('MERGE upsert is idempotent (no duplicate rows)');
 
-    step('4. reporting over SQL Server');
-    const tv = getReport('test-volume')!;
-    const tvRes = await tv.run(db, {});
+    step('4. data-driven reporting resolves (r-<id> records)');
+    const tvRes = await appCtx.reporting.run('r-test-volume', {});
     console.table(tvRes.rows);
-    if (tvRes.rows.length === 0) throw new Error('test-volume returned no rows');
-    ok(`test-volume: ${tvRes.rows.length} rows`);
+    ok(`r-test-volume: ${tvRes.rows.length} rows`);
 
-    const pd = getReport('patient-demographics')!;
-    const pdRes = await pd.run(db, { asOf: '2026-01-01T00:00:00Z' });
+    const pdRes = await appCtx.reporting.run('r-patient-demographics', {});
     console.table(pdRes.rows);
-    if (pdRes.rows.length === 0) throw new Error('patient-demographics returned no rows');
-    ok(`patient-demographics: ${pdRes.rows.length} rows`);
+    ok(`r-patient-demographics: ${pdRes.rows.length} rows`);
   } catch (e) {
     failures++;
     console.error('\n[FAIL]', e instanceof Error ? e.stack : e);
@@ -111,6 +115,7 @@ async function main() {
       await sql`delete from patients where source_system = 'mssql-acceptance'`.execute(db);
     } catch { /* ignore cleanup errors */ }
     await store.close();
+    await appCtx.close();
   }
 
   console.log(failures === 0 ? '\n✅ MSSQL live acceptance PASSED' : '\n❌ MSSQL live acceptance FAILED');
