@@ -470,20 +470,6 @@ export interface AppSettingsTable {
   updated_by: string | null;
 }
 
-export interface ReportTemplatesTable {
-  id: string;
-  name: string;
-  description: Generated<string>;
-  category: Generated<string>;
-  status: Generated<string>;
-  page: unknown;
-  parameters: unknown;
-  dataset: unknown | null;
-  rows: unknown;
-  created_at: Generated<Date>;
-  updated_at: Generated<Date>;
-}
-
 export interface ReportDesignsTable {
   id: string;
   name: string;
@@ -554,7 +540,6 @@ export interface InternalSchema {
   registries: RegistriesTable;
   plugin_data: PluginDataTable;
   app_settings: AppSettingsTable;
-  report_templates: ReportTemplatesTable;
   report_designs: ReportDesignsTable;
   reports: ReportsTable;
 }

@@ -43,28 +43,6 @@ describe('ReportLibrary', () => {
     expect(screen.getByText('Test Volume')).toBeInTheDocument();
   });
 
-  it('shows a Custom badge for builder-source reports only', () => {
-    setup({
-      reports: [
-        { id: 'amr-resistance', name: 'AMR Resistance Rate', description: '', category: 'amr', parameters: [], source: 'catalog' },
-        { id: 'custom-1', name: 'My Custom Report', description: '', category: 'operational', parameters: [], source: 'builder' },
-      ],
-    });
-    expect(screen.getByText(/^Custom$/)).toBeInTheDocument();
-    // The catalog report row must NOT carry the badge — exactly one badge exists.
-    expect(screen.getAllByText(/^Custom$/)).toHaveLength(1);
-  });
-
-  it('shows no Custom badge when source is catalog or absent', () => {
-    setup({
-      reports: [
-        { id: 'amr-resistance', name: 'AMR Resistance Rate', description: '', category: 'amr', parameters: [] },
-        { id: 'test-volume', name: 'Test Volume', description: '', category: 'operational', parameters: [], source: 'catalog' },
-      ],
-    });
-    expect(screen.queryByText(/^Custom$/)).not.toBeInTheDocument();
-  });
-
   it('shows a Template badge for a design-sourced (data-driven) report only', () => {
     setup({
       reports: [

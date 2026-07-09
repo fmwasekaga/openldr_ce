@@ -71,9 +71,6 @@ importers:
       '@openldr/marketplace':
         specifier: workspace:*
         version: link:../../packages/marketplace
-      '@openldr/report-builder':
-        specifier: workspace:*
-        version: link:../../packages/report-builder
       '@openldr/report-designer':
         specifier: workspace:*
         version: link:../../packages/report-designer
@@ -165,9 +162,6 @@ importers:
       '@openldr/plugin-ui-sdk':
         specifier: workspace:*
         version: link:../../packages/plugin-ui-sdk
-      '@openldr/report-builder':
-        specifier: workspace:*
-        version: link:../../packages/report-builder
       '@openldr/report-designer':
         specifier: workspace:*
         version: link:../../packages/report-designer
@@ -606,9 +600,6 @@ importers:
       '@openldr/ports':
         specifier: workspace:*
         version: link:../ports
-      '@openldr/report-builder':
-        specifier: workspace:*
-        version: link:../report-builder
       '@openldr/report-designer':
         specifier: workspace:*
         version: link:../report-designer
@@ -706,9 +697,6 @@ importers:
       '@openldr/plugins':
         specifier: workspace:*
         version: link:../plugins
-      '@openldr/report-builder':
-        specifier: workspace:*
-        version: link:../report-builder
       '@openldr/report-designer':
         specifier: workspace:*
         version: link:../report-designer
@@ -1000,40 +988,6 @@ importers:
       vitest:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.19.21)(jsdom@25.0.1)(lightningcss@1.32.0)
-
-  packages/report-builder:
-    dependencies:
-      '@openldr/dashboards':
-        specifier: workspace:*
-        version: link:../dashboards
-      '@openldr/db':
-        specifier: workspace:*
-        version: link:../db
-      '@openldr/reporting':
-        specifier: workspace:*
-        version: link:../reporting
-      kysely:
-        specifier: ^0.27.5
-        version: 0.27.6
-      pdfkit:
-        specifier: ^0.15.0
-        version: 0.15.2
-      zod:
-        specifier: 3.24.0
-        version: 3.24.0
-    devDependencies:
-      '@types/pdfkit':
-        specifier: ^0.13.4
-        version: 0.13.9
-      pg-mem:
-        specifier: ^3.0.14
-        version: 3.0.14(kysely@0.27.6)
-      typescript:
-        specifier: 5.7.2
-        version: 5.7.2
-      vitest:
-        specifier: 2.1.8
-        version: 2.1.8(@types/node@25.9.3)(jsdom@25.0.1)(lightningcss@1.32.0)
 
   packages/report-designer:
     dependencies:

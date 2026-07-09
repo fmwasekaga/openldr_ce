@@ -69,11 +69,6 @@ export function ReportLibrary({
         </TooltipTrigger>
         <TooltipContent side="right">{r.name}</TooltipContent>
       </Tooltip>
-      {r.source === 'builder' && (
-        <Badge variant="outline" className="shrink-0 px-1 py-0 text-[9px] font-medium uppercase tracking-wide">
-          {t('reports.custom')}
-        </Badge>
-      )}
       {r.source === 'design' && (
         <Badge variant="outline" className="shrink-0 px-1 py-0 text-[9px] font-medium uppercase tracking-wide">
           {t('reports.templateBadge')}

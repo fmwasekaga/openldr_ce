@@ -38,9 +38,6 @@ export function Reports() {
   // PDF + spreadsheet/CSV) always reflect the run that produced `result`, even if the
   // user edits the parameter controls afterwards without re-running.
   const [ranParams, setRanParams] = useState<Record<string, string>>({});
-  // Custom (builder) reports skip the tabular Run entirely; the PDF preview is driven by
-  // this snapshot, seeded on select and refreshed when the user hits Run/preview.
-  const [pdfParams, setPdfParams] = useState<Record<string, string>>({});
   const [options, setOptions] = useState<Record<string, string[]>>({});
   const [result, setResult] = useState<ReportResult | null>(null);
   const [running, setRunning] = useState(false);
@@ -50,9 +47,6 @@ export function Reports() {
   const [historyOpen, setHistoryOpen] = useState(false);
 
   const selected = reports.find((r) => r.id === selectedId) ?? null;
-  // Builder-sourced templates are PDF-only: the server rejects tabular run/.csv (RP0005),
-  // so the UI offers only the PDF preview/download + schedule (no Spreadsheet tab, no CSV/XLSX).
-  const isCustom = selected?.source === 'builder';
 
   useEffect(() => {
     fetchReports().then(setReports).catch((e) => setError(String(e)));
@@ -65,7 +59,6 @@ export function Reports() {
     setActiveTab('document');
     const seeded = loadLastParams()[id] ?? {};
     setParams(seeded);
-    setPdfParams(seeded);
     setError(undefined);
     setOptions({});
     fetchReportOptions(id).then(setOptions).catch(() => setOptions({}));
@@ -88,15 +81,6 @@ export function Reports() {
 
   const handleRun = useCallback(async () => {
     if (!selectedId) return;
-    // Custom (builder) templates are PDF-only — never hit the tabular run/.csv endpoints
-    // (they 400 with RP0005). "Run" just refreshes the PDF preview with the current params.
-    if (isCustom) {
-      setPdfParams(params);
-      const next = { ...loadLastParams(), [selectedId]: params };
-      saveLastParams(next);
-      logReportRun(selectedId, { format: 'pdf', rowCount: 0, params });
-      return;
-    }
     setRunning(true);
     setError(undefined);
     try {
@@ -112,7 +96,7 @@ export function Reports() {
     } finally {
       setRunning(false);
     }
-  }, [selectedId, params, isCustom]);
+  }, [selectedId, params]);
 
   const metrics = useMemo(
     () => (selected?.summaryMetrics && result ? computeSummaryMetrics(selected.summaryMetrics, result.rows) : []),
@@ -161,7 +145,6 @@ export function Reports() {
                   onOpenHistory={() => setHistoryOpen(true)}
                   onOpenSchedules={() => setSchedulesOpen(true)}
                   canManageSchedules={canManageSchedules}
-                  pdfOnly={isCustom}
                   designId={selected.designId}
                 />
               </div>
@@ -176,19 +159,11 @@ export function Reports() {
                 canRun={canRun}
               />
 
-              {!isCustom && <ReportSummaryStrip metrics={metrics} />}
+              <ReportSummaryStrip metrics={metrics} />
 
               {error && <div className="border-b border-border px-4 py-3 text-sm text-destructive">{error}</div>}
 
-              {isCustom ? (
-                <div className="min-h-0 flex-1">
-                  <ReportDocumentTab
-                    reportId={selected.id}
-                    params={pdfParams}
-                    onDownload={() => logReportRun(selected.id, { format: 'pdf', rowCount: 0, params: pdfParams })}
-                  />
-                </div>
-              ) : !result ? (
+              {!result ? (
                 <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
                   {running ? t('reports.running') : t('reports.runReport')}
                 </div>
@@ -252,7 +227,6 @@ export function Reports() {
           parameters={selected.parameters}
           options={options}
           currentParams={params}
-          pdfOnly={isCustom}
           onClose={() => setSchedulesOpen(false)}
         />
       )}

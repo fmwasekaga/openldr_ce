@@ -42,6 +42,7 @@ import * as m040 from './040_report_templates';
 import * as m041 from './041_custom_queries';
 import * as m042 from './042_report_designs';
 import * as m043 from './043_reports';
+import * as m044 from './044_drop_report_templates';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -87,4 +88,5 @@ export const internalMigrations: Record<string, Migration> = {
   '041_custom_queries': { up: m041.up, down: m041.down },
   '042_report_designs': { up: m042.up, down: m042.down },
   '043_reports': { up: m043.up, down: m043.down },
+  '044_drop_report_templates': { up: m044.up, down: m044.down },
 };

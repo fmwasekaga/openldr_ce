@@ -1,6 +1,5 @@
 import { getAccessToken, notifyUnauthorized } from './auth/token';
 import type { PluginBrokerOp, PluginRpcResult } from '@openldr/plugin-ui-sdk';
-import type { ReportTemplate } from '@openldr/report-builder/pure';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 
 /** fetch wrapper that attaches the bearer token when one is present. */
@@ -44,9 +43,9 @@ export interface ReportSummary {
   category: ReportCategory;
   parameters: ReportParamMeta[];
   summaryMetrics?: ReportMetricMeta[];
-  /** 'catalog' = built-in report; 'builder' = published Report Builder template (PDF-only);
-   *  'design' = a report record linking a report-designer template + query. Absent ⇒ catalog. */
-  source?: 'catalog' | 'builder' | 'design';
+  /** 'catalog' = built-in report; 'design' = a report record linking a report-designer template +
+   *  query. Absent ⇒ catalog. */
+  source?: 'catalog' | 'design';
   /** For source==='design': the linked report-designer template id, for the "Edit template" deep-link. */
   designId?: string;
 }
@@ -564,23 +563,6 @@ export async function exportFormBundle(id: string): Promise<void> {
 }
 export const submitFormResponse = (id: string, answers: unknown): Promise<unknown> =>
   authFetch(`/api/forms/${id}/responses`, jbody({ answers }, 'POST')).then((r) => okJson<unknown>(r, 'submit form response'));
-
-// ── Report templates (Report Builder) ────────────────────────────────────────
-export const fetchReportTemplates = (): Promise<ReportTemplate[]> =>
-  authFetch('/api/report-templates').then((r) => okJson<ReportTemplate[]>(r, 'list report templates'));
-export const getReportTemplate = (id: string): Promise<ReportTemplate> =>
-  apiGet(`/api/report-templates/${id}`, 'get report template');
-export const createReportTemplate = (t: ReportTemplate): Promise<ReportTemplate> =>
-  authFetch('/api/report-templates', jbody(t, 'POST')).then((r) => okJson<ReportTemplate>(r, 'create report template'));
-export const updateReportTemplate = (id: string, t: ReportTemplate): Promise<ReportTemplate> =>
-  authFetch(`/api/report-templates/${id}`, jbody(t, 'PUT')).then((r) => okJson<ReportTemplate>(r, 'update report template'));
-export const deleteReportTemplate = (id: string): Promise<void> =>
-  authFetch(`/api/report-templates/${id}`, jbody({}, 'DELETE')).then((r) => { if (!r.ok) throw new Error('delete report template'); });
-export const previewReportTemplate = async (id: string, params: Record<string, string>): Promise<Blob> => {
-  const r = await authFetch(`/api/report-templates/${id}/preview`, jbody({ params }, 'POST'));
-  if (!r.ok) throw new Error(`preview failed: ${r.status}`);
-  return r.blob();
-};
 
 // ── Report designs (Report Designer) ─────────────────────────────────────────
 export const listReportDesigns = (): Promise<ReportDesign[]> =>
