@@ -50,6 +50,8 @@ order by 1`,
     //    coalesced to '(unknown)' as the JS pivot does via `?? '(unknown)'`)
     //  - tested/r/i/s via CASE conditional aggregates (replaces the JS pivot)
     //  - percentR = round(100 * r / tested, 1), matching `Math.round((r/tested)*1000)/10`
+    //  - row order: `percentR` DESCENDING, matching pivotResistance's `b.percentR - a.percentR`
+    //    (the catalog has no secondary tiebreaker, so tie order is nondeterministic there)
     //  - date range: `effective_date_time >= from` and `<= to || 'T23:59:59.999Z'` (== endOfDay)
     //  - facility: optional equality on patients.managing_organization, mapped to
     //    subject_ref = 'Patient/'||id (catalog's `subjectRefs` mapping). The `{{param.facility}}`
@@ -73,7 +75,7 @@ where o.interpretation_code in ('S', 'I', 'R')
     select 'Patient/' || p.id from patients p where p.managing_organization = {{param.facility}}
   ))
 group by coalesce(o.code_text, '(unknown)')
-order by coalesce(o.code_text, '(unknown)')`,
+order by "percentR" desc`,
   },
 ];
 
