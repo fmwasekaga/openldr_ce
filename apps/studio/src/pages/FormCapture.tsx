@@ -10,6 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { TruncatedText } from '@/components/ui/truncated-text';
 import { getForm, submitFormResponse, type FormDefinition } from '@/api';
 import { FormRuntime } from '@/forms-runtime/FormRuntime';
 import type { FormSchema } from '@/forms-runtime/types';
@@ -72,10 +73,10 @@ export function FormCapture() {
         {/* Single-line header: status badge + name/meta on left, ⋯ menu on right */}
         <div className="flex items-center gap-2 border-b border-border px-3 py-2">
           {form ? <Badge variant="outline">{form.status}</Badge> : null}
-          <div className="min-w-0 flex-1">
-            <span className="truncate text-sm font-semibold">{schema?.name ?? form?.name ?? 'Form'}</span>
+          <div className="flex min-w-0 flex-1 items-baseline">
+            <TruncatedText text={schema?.name ?? form?.name ?? 'Form'} className="min-w-0 shrink text-sm font-semibold" />
             {form ? (
-              <span className="ml-2 text-xs text-muted-foreground">
+              <span className="ml-2 shrink-0 text-xs text-muted-foreground">
                 {form.versionLabel ?? 'No version'} · {form.fhirResourceType ?? 'Custom'}
               </span>
             ) : null}

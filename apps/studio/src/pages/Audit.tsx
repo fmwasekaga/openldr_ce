@@ -9,6 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TablePagination } from '@/components/ui/table-pagination';
+import { TruncatedText } from '@/components/ui/truncated-text';
 import { getAuditEvent, queryAudit, type AuditEvent, type AuditQuery } from '@/api';
 import { JsonView } from '@/workflows/components/panels/json-view';
 
@@ -182,7 +183,7 @@ function AuditFilterChips({ filters, onRemove }: { filters: AuditFilters; onRemo
             onClick={() => onRemove(key)}
           >
             <span className="font-medium text-foreground">{FILTER_LABELS[key]}</span>
-            <span className="max-w-[14rem] truncate">{value}</span>
+            <TruncatedText text={value} className="min-w-0 max-w-[14rem]" />
             <X className="h-3 w-3" />
           </button>
         ))}

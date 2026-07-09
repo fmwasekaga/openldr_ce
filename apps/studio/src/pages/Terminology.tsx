@@ -42,6 +42,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
+import { TruncatedText } from '../components/ui/truncated-text';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -388,7 +389,7 @@ export function Terminology(): JSX.Element {
                     }`}
                   >
                     <Library className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <span className="flex-1 truncate text-foreground">{p.name}</span>
+                    <TruncatedText text={p.name} className="min-w-0 flex-1 text-foreground" />
                     <Badge variant="outline" className="text-[9px] uppercase">
                       {roleLabel(p.role)}
                     </Badge>

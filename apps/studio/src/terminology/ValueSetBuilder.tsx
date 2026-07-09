@@ -15,6 +15,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { TruncatedText } from '../components/ui/truncated-text';
 import { ValueSetPicker } from './ValueSetPicker';
 import {
   DropdownMenu,
@@ -169,7 +170,9 @@ export function ValueSetBuilder({
   return (
     <div className="flex h-full flex-col gap-3 overflow-auto p-3">
       <div className="-mx-3 -mt-3 flex items-center justify-between border-b border-border px-3 py-2">
-        <h3 className="min-w-0 truncate text-sm font-medium text-foreground">{title.trim() || 'New value set'}</h3>
+        <h3 className="min-w-0 text-sm font-medium text-foreground">
+          <TruncatedText text={title.trim() || 'New value set'} className="min-w-0" />
+        </h3>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label="Actions">
@@ -246,7 +249,7 @@ export function ValueSetBuilder({
               <div key={inc._key} className="flex items-center gap-2 rounded-md border border-border p-2 text-xs">
                 <span className="text-muted-foreground">Import</span>
                 <span className="font-medium">Imports</span>
-                <span className="flex-1 truncate font-mono text-primary">{inc.valueSet.join(', ')}</span>
+                <TruncatedText text={inc.valueSet.join(', ')} className="min-w-0 flex-1 font-mono text-primary" />
                 <button type="button" className="ml-auto px-1 text-muted-foreground hover:text-destructive" onClick={() => removeInclude(i)} aria-label="Delete" disabled={readOnly}><Trash2 className="h-3.5 w-3.5" /></button>
               </div>
             );

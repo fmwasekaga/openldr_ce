@@ -2,6 +2,7 @@ import { ChevronDown } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { TruncatedText } from '@/components/ui/truncated-text';
 import {
   Select,
   SelectContent,
@@ -235,9 +236,10 @@ export function BuilderHeader({
                 aria-label="Target pages"
                 className="flex h-9 w-44 items-center justify-between gap-2 whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
               >
-                <span className={`block truncate ${targetPages.length === 0 ? 'text-muted-foreground' : ''}`}>
-                  {targetLabel}
-                </span>
+                <TruncatedText
+                  text={targetLabel}
+                  className={targetPages.length === 0 ? 'min-w-0 text-muted-foreground' : 'min-w-0'}
+                />
                 <ChevronDown className="h-4 w-4 opacity-50" />
               </button>
             </DropdownMenuTrigger>

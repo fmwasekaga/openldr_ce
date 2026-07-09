@@ -5,6 +5,7 @@ import { cn } from '@/lib/cn';
 import { useWorkflowStore, type NodeRunStatus } from '../../hooks/use-workflow-store';
 import { NodeIcon } from '../../lib/icons';
 import { Button } from '@/components/ui/button';
+import { TruncatedText } from '@/components/ui/truncated-text';
 
 export type NodeVariant = 'trigger' | 'action' | 'code' | 'condition' | 'loop' | 'webhook';
 
@@ -201,9 +202,7 @@ export function NodeShell({
           {label}
         </div>
         {subtitle && (
-          <div className="max-w-[120px] truncate text-center text-[10px] leading-tight text-muted-foreground">
-            {subtitle}
-          </div>
+          <TruncatedText text={subtitle} className="max-w-[120px] text-center text-[10px] leading-tight text-muted-foreground" />
         )}
         {children}
       </div>

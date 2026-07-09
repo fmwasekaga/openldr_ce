@@ -13,6 +13,7 @@ import {
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
+import { TruncatedText } from '../../components/ui/truncated-text';
 
 interface OntologyBrowserProps {
   codingSystemId: string;
@@ -97,7 +98,7 @@ function renderChildren(parent: OntologyNode, children: OntologyNode[], depth: n
               <span className="flex h-4 w-4 shrink-0 items-center justify-center">
                 {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
               </span>
-              <span className="truncate">{ctx.groupCountLabel(label, rows.length)}</span>
+              <TruncatedText text={ctx.groupCountLabel(label, rows.length)} className="min-w-0" />
             </button>
             {!collapsed && rows.map(renderRow)}
           </Fragment>
@@ -155,7 +156,7 @@ function TreeRow({
             )
           ) : null}
         </span>
-        <span className="flex-1 truncate text-foreground">{node.display}</span>
+        <TruncatedText text={node.display} className="min-w-0 flex-1 text-foreground" />
         {node.kind && (
           <Badge variant="outline" className="shrink-0 whitespace-nowrap text-[9px] uppercase">
             {node.kind}
@@ -360,7 +361,7 @@ export function OntologyBrowser({
                   onClick={() => void handleResultClick(node)}
                   className="flex w-full items-center gap-1.5 px-3 py-1 text-left text-sm transition-colors hover:bg-[rgba(70,130,180,0.08)]"
                 >
-                  <span className="flex-1 truncate text-foreground">{node.display}</span>
+                  <TruncatedText text={node.display} className="min-w-0 flex-1 text-foreground" />
                   {node.kind && (
                     <Badge variant="outline" className="shrink-0 whitespace-nowrap text-[9px] uppercase">
                       {node.kind}
@@ -412,7 +413,7 @@ export function OntologyBrowser({
                 {breadcrumb.map((crumb, i) => (
                   <Fragment key={crumb.code}>
                     {i > 0 && <span className="text-muted-foreground/60">/</span>}
-                    <span className="truncate">{crumb.display}</span>
+                    <TruncatedText text={crumb.display} className="min-w-0" />
                   </Fragment>
                 ))}
               </nav>

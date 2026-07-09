@@ -12,6 +12,7 @@ import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { TruncatedText } from '../components/ui/truncated-text';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -748,13 +749,9 @@ function MappingsTabBody({
                     </TableCell>
                     <TableCell className="max-w-[220px]">
                       <div className="flex min-w-0 flex-col">
-                        <span className="truncate font-mono text-xs text-primary">
-                          {displayCode ?? '—'}
-                        </span>
+                        <TruncatedText text={displayCode ?? '—'} className="min-w-0 font-mono text-xs text-primary" />
                         {displayLabel != null && (
-                          <span className="truncate text-[11px] text-muted-foreground">
-                            {displayLabel}
-                          </span>
+                          <TruncatedText text={displayLabel} className="min-w-0 text-[11px] text-muted-foreground" />
                         )}
                       </div>
                     </TableCell>

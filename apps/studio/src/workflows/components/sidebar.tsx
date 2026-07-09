@@ -6,6 +6,7 @@ import type { NodeCategory, NodeTemplate } from '../lib/types';
 import type { NodeVariant } from './node-types/base-node';
 import { NodeIcon, resolveLucideIcon } from '../lib/icons';
 import { fetchWorkflowNodes, pluginNodeDeclId, type WorkflowNodeDescriptor } from '@/api';
+import { TruncatedText } from '@/components/ui/truncated-text';
 
 const VARIANT_ICON_COLORS: Record<NodeVariant, string> = {
   trigger: 'text-emerald-400',
@@ -68,9 +69,7 @@ function NodeCard({ template }: { template: NodeTemplate }) {
         />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[12px] font-medium leading-tight text-foreground">
-          {template.label}
-        </div>
+        <TruncatedText text={template.label} className="min-w-0 text-[12px] font-medium leading-tight text-foreground" />
         <div className="truncate text-[10.5px] leading-tight text-muted-foreground">
           {template.description}
         </div>

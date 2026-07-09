@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { listValueSets, type ValueSetSummary } from '../api';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
+import { TruncatedText } from '../components/ui/truncated-text';
 
 interface Props {
   onPick: (valueSet: ValueSetSummary) => void;
@@ -79,7 +80,7 @@ export function ValueSetPicker({ onPick, placeholder, autoFocus, className }: Pr
                 className="flex w-full items-start gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-accent"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-foreground">{vs.title ?? vs.name ?? vs.url}</p>
+                  <TruncatedText text={vs.title ?? vs.name ?? vs.url} className="min-w-0 text-foreground" />
                   <p className="truncate text-[11px] text-muted-foreground">{vs.url}</p>
                 </div>
                 <Badge variant="outline" className="shrink-0 text-[10px] uppercase tracking-wide">
