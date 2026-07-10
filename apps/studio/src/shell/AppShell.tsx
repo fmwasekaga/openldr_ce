@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, useMatch } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, BookOpen, Library, FileInput, Users, ShieldCheck, Settings,
   Workflow, Activity, Database, PanelLeftClose, PanelLeftOpen, Sun, Moon, LogOut, PencilRuler, type LucideIcon,
@@ -33,6 +33,36 @@ const NAV: { to: string; labelKey: string; end: boolean; icon: LucideIcon; roles
   { to: '/activity', labelKey: 'nav.activity', end: false, icon: Activity, roles: ['lab_admin', 'lab_manager', 'data_analyst', 'system_auditor'] },
   { to: '/docs', labelKey: 'nav.docs', end: false, icon: BookOpen },
 ];
+
+// One sidebar entry. Active state is computed with useMatch and passed to NavLink as a
+// STRING className. When collapsed the item is wrapped in a Tooltip via `asChild`, and
+// Radix's Slot stringifies a FUNCTION className (dumping BOTH color classes into the class
+// list → every icon rendered primary/blue). A resolved string className avoids that.
+function SidebarNavItem({
+  to, end, icon: Icon, label, collapsed,
+}: { to: string; end?: boolean; icon: LucideIcon; label: string; collapsed: boolean }) {
+  const active = useMatch({ path: to, end: Boolean(end) }) != null;
+  const link = (
+    <NavLink
+      to={to}
+      end={end}
+      className={cn(
+        'flex h-9 items-center gap-3 rounded-md px-3 text-sm font-medium no-underline transition-colors',
+        collapsed && 'justify-center px-0',
+        active ? 'bg-accent text-primary' : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+      )}
+    >
+      <Icon className="h-4 w-4 shrink-0" />
+      {!collapsed && <span>{label}</span>}
+    </NavLink>
+  );
+  return collapsed ? (
+    <Tooltip>
+      <TooltipTrigger asChild>{link}</TooltipTrigger>
+      <TooltipContent side="right">{label}</TooltipContent>
+    </Tooltip>
+  ) : link;
+}
 
 export function AppShell({
   title,
@@ -104,58 +134,12 @@ export function AppShell({
         </div>
 
         <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
-          {NAV.filter((n) => !n.roles || n.roles.some((r) => hasRole(r))).map(({ to, labelKey, end, icon: Icon }) => {
-            const link = (
-              <NavLink
-                key={to}
-                to={to}
-                end={end}
-                className={({ isActive }) =>
-                  cn(
-                    'flex h-9 items-center gap-3 rounded-md px-3 text-sm font-medium no-underline transition-colors',
-                    collapsed && 'justify-center px-0',
-                    isActive ? 'bg-accent text-primary' : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-                  )
-                }
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                {!collapsed && <span>{t(labelKey)}</span>}
-              </NavLink>
-            );
-            // When collapsed the label span is hidden, so surface it as an
-            // always-on tooltip; expanded, the visible label needs no tooltip.
-            return collapsed ? (
-              <Tooltip key={to}>
-                <TooltipTrigger asChild>{link}</TooltipTrigger>
-                <TooltipContent side="right">{t(labelKey)}</TooltipContent>
-              </Tooltip>
-            ) : link;
-          })}
-          {pluginUis.map((p) => {
-            const Icon = pluginIcon(p.nav.icon);
-            const link = (
-              <NavLink
-                key={p.id}
-                to={`/x/${p.id}`}
-                className={({ isActive }) =>
-                  cn(
-                    'flex h-9 items-center gap-3 rounded-md px-3 text-sm font-medium no-underline transition-colors',
-                    collapsed && 'justify-center px-0',
-                    isActive ? 'bg-accent text-primary' : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-                  )
-                }
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                {!collapsed && <span>{p.nav.label}</span>}
-              </NavLink>
-            );
-            return collapsed ? (
-              <Tooltip key={p.id}>
-                <TooltipTrigger asChild>{link}</TooltipTrigger>
-                <TooltipContent side="right">{p.nav.label}</TooltipContent>
-              </Tooltip>
-            ) : link;
-          })}
+          {NAV.filter((n) => !n.roles || n.roles.some((r) => hasRole(r))).map(({ to, labelKey, end, icon: Icon }) => (
+            <SidebarNavItem key={to} to={to} end={end} icon={Icon} label={t(labelKey)} collapsed={collapsed} />
+          ))}
+          {pluginUis.map((p) => (
+            <SidebarNavItem key={p.id} to={`/x/${p.id}`} icon={pluginIcon(p.nav.icon)} label={p.nav.label} collapsed={collapsed} />
+          ))}
         </nav>
 
         <div className="border-t border-border p-2">
