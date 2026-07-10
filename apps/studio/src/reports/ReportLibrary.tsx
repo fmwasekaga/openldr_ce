@@ -6,7 +6,7 @@ import type { ReportCategory } from './reportCategoriesApi';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { TruncatedText } from '@/components/ui/truncated-text';
 import { cn } from '@/lib/cn';
 
 interface Props {
@@ -69,12 +69,7 @@ export function ReportLibrary({
       )}
       onClick={() => onSelect(r.id)}
     >
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="min-w-0 flex-1 truncate">{r.name}</span>
-        </TooltipTrigger>
-        <TooltipContent side="right">{r.name}</TooltipContent>
-      </Tooltip>
+      <TruncatedText text={r.name} side="right" className="min-w-0 flex-1" />
       {r.source === 'design' && (
         <Badge variant="outline" className="shrink-0 px-1 py-0 text-[9px] font-medium uppercase tracking-wide">
           {t('reports.templateBadge')}
@@ -108,18 +103,16 @@ export function ReportLibrary({
           <PanelLeftClose className="h-4 w-4" />
         </Button>
       </div>
-      <TooltipProvider delayDuration={400}>
-        <div className="min-h-0 flex-1 overflow-y-auto py-1">
-          {sections.map((s, idx) => (
-            <div key={s.key} className={cn('pb-1', idx > 0 && 'mt-1 border-t border-border pt-2')}>
-              <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60">
-                {s.label}
-              </div>
-              {s.items.map((r) => <Row key={`${s.key}-${r.id}`} r={r} />)}
+      <div className="min-h-0 flex-1 overflow-y-auto py-1">
+        {sections.map((s, idx) => (
+          <div key={s.key} className={cn('pb-1', idx > 0 && 'mt-1 border-t border-border pt-2')}>
+            <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60">
+              {s.label}
             </div>
-          ))}
-        </div>
-      </TooltipProvider>
+            {s.items.map((r) => <Row key={`${s.key}-${r.id}`} r={r} />)}
+          </div>
+        ))}
+      </div>
     </aside>
   );
 }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { searchTerms, type Term } from '../api';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
+import { TruncatedText } from '../components/ui/truncated-text';
 
 export interface PickedTerm { system: string; code: string; display: string | null }
 
@@ -87,7 +88,7 @@ export function TermPicker({ value, onChange, systemId, statuses }: {
                 className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-accent"
               >
                 <span className="shrink-0 font-mono text-xs text-primary">{r.code}</span>
-                <span className="truncate text-foreground">{r.display ?? '—'}</span>
+                <TruncatedText text={r.display ?? '—'} className="min-w-0 text-foreground" />
               </button>
             ))
           )}

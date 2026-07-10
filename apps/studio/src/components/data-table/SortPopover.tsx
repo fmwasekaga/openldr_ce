@@ -13,6 +13,7 @@ import {
   SelectItem,
   SelectTrigger,
 } from "../ui/select";
+import { TruncatedText } from "../ui/truncated-text";
 import type { ColumnDef, SortRule } from "./types";
 import { newId } from "./types";
 
@@ -84,9 +85,7 @@ export function SortPopover<T>({ columns, sorts, onApply }: SortPopoverProps<T>)
                 const col = sortable.find((c) => c.id === rule.column);
                 return (
                   <li key={rule.id} className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1.5">
-                    <div className="flex-1 text-xs text-foreground truncate">
-                      {col ? t(col.labelKey) : rule.column}
-                    </div>
+                    <TruncatedText text={col ? t(col.labelKey) : rule.column} className="min-w-0 flex-1 text-xs text-foreground" />
                     <Button
                       variant="ghost"
                       size="sm"

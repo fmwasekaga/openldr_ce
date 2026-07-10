@@ -3,6 +3,7 @@ import { Check, ChevronsUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { TruncatedText } from '@/components/ui/truncated-text';
 import { cn } from '@/lib/cn';
 
 export interface ComboboxOption { value: string; label: string }
@@ -29,7 +30,7 @@ export function Combobox({
     <Popover open={open} onOpenChange={(o) => { setOpen(o); if (!o) setQuery(''); }}>
       <PopoverTrigger asChild>
         <Button variant="outline" disabled={disabled} className="w-full justify-between font-normal" aria-label={selected ? selected.label : placeholder}>
-          <span className={cn('truncate', !selected && 'text-muted-foreground')}>{selected ? selected.label : placeholder}</span>
+          <TruncatedText text={selected ? selected.label : placeholder} className={cn('min-w-0', !selected && 'text-muted-foreground')} />
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -45,7 +46,7 @@ export function Combobox({
               className="flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
               onClick={() => { onChange(o.value); setOpen(false); setQuery(''); }}
             >
-              <span className="truncate">{o.label}</span>
+              <TruncatedText text={o.label} className="min-w-0" />
               {o.value === value ? <Check className="ml-2 h-4 w-4 shrink-0" /> : null}
             </button>
           ))}

@@ -2,6 +2,7 @@ import { ChevronDown } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { TruncatedText } from '@/components/ui/truncated-text';
 import {
   Select,
   SelectContent,
@@ -163,6 +164,16 @@ export function BuilderHeader({
         ? (PAGE_TARGETS.find((p) => p.id === targetPages[0])?.label ?? targetPages[0])
         : `${targetPages.length} pages selected`;
 
+  // The Select value is always set (falls back to the '__none' item), so we can
+  // render a computed label as SelectValue's child wrapped in TruncatedText —
+  // giving these clip-prone labels (e.g. "R4 (most common)",
+  // "CoverageEligibilityResponse") a tooltip-when-clipped instead of a bare cut-off.
+  const fhirVersionLabel =
+    schema.fhirVersion == null
+      ? 'None'
+      : (FHIR_VERSIONS.find((v) => v.value === schema.fhirVersion)?.label ?? schema.fhirVersion);
+  const resourceTypeLabel = schema.fhirResourceType ?? 'None';
+
   return (
     <div>
       {/* Header bar */}
@@ -211,8 +222,10 @@ export function BuilderHeader({
             value={schema.fhirVersion ?? '__none'}
             onValueChange={(v) => onChange({ fhirVersion: v === '__none' ? null : v })}
           >
-            <SelectTrigger className="w-44 text-xs whitespace-nowrap [&>span]:block [&>span]:truncate" aria-label="FHIR Version">
-              <SelectValue placeholder="None" />
+            <SelectTrigger className="w-44 text-xs whitespace-nowrap [&>span]:min-w-0 [&>span]:flex-1" aria-label="FHIR Version">
+              <SelectValue placeholder="None">
+                <TruncatedText text={fhirVersionLabel} className="min-w-0" />
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="__none">None</SelectItem>
@@ -235,9 +248,10 @@ export function BuilderHeader({
                 aria-label="Target pages"
                 className="flex h-9 w-44 items-center justify-between gap-2 whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
               >
-                <span className={`block truncate ${targetPages.length === 0 ? 'text-muted-foreground' : ''}`}>
-                  {targetLabel}
-                </span>
+                <TruncatedText
+                  text={targetLabel}
+                  className={targetPages.length === 0 ? 'min-w-0 text-muted-foreground' : 'min-w-0'}
+                />
                 <ChevronDown className="h-4 w-4 opacity-50" />
               </button>
             </DropdownMenuTrigger>
@@ -266,8 +280,10 @@ export function BuilderHeader({
             value={schema.fhirResourceType ?? '__none'}
             onValueChange={(v) => onChange({ fhirResourceType: v === '__none' ? null : v })}
           >
-            <SelectTrigger className="w-44 text-xs whitespace-nowrap [&>span]:block [&>span]:truncate" aria-label="Resource Type">
-              <SelectValue placeholder="None" />
+            <SelectTrigger className="w-44 text-xs whitespace-nowrap [&>span]:min-w-0 [&>span]:flex-1" aria-label="Resource Type">
+              <SelectValue placeholder="None">
+                <TruncatedText text={resourceTypeLabel} className="min-w-0" />
+              </SelectValue>
             </SelectTrigger>
             <SelectContent className="max-h-72">
               <SelectItem value="__none">None</SelectItem>

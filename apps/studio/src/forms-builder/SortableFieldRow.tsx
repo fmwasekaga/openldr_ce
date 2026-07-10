@@ -5,6 +5,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { TruncatedText } from '@/components/ui/truncated-text';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -84,16 +85,14 @@ export function SortableFieldRow({
 
       {/* Label region */}
       <div className="flex-1 min-w-0 leading-tight">
-        <p className="m-0 text-sm font-medium text-foreground truncate leading-5">
-          {field.displayLabel}
+        <p className="m-0 flex items-baseline gap-0.5 text-sm font-medium text-foreground leading-5">
+          <TruncatedText text={field.displayLabel} className="min-w-0 shrink" />
           {field.required && (
-            <span className="text-destructive ml-0.5">*</span>
+            <span className="text-destructive">*</span>
           )}
         </p>
         {field.fhirPath && (
-          <p className="m-0 text-[10px] text-muted-foreground font-mono truncate leading-4">
-            {field.fhirPath}
-          </p>
+          <TruncatedText text={field.fhirPath} className="m-0 text-[10px] text-muted-foreground font-mono leading-4" />
         )}
       </div>
 

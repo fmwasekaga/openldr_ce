@@ -6,6 +6,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
+import { TruncatedText } from '@/components/ui/truncated-text';
 import type { ReportCategory } from './reportCategoriesApi';
 
 export interface CategoryPickerProps {
@@ -84,7 +85,7 @@ export function CategoryPicker({ value, onChange, categories, onCategoriesChange
     <Popover>
       <PopoverTrigger asChild>
         <Button type="button" variant="outline" className="h-9 w-full justify-between font-normal">
-          <span className="truncate">{selected ? selected.label : t('reports.category.placeholder')}</span>
+          <TruncatedText text={selected ? selected.label : t('reports.category.placeholder')} className="min-w-0" />
           <span className="ml-1 shrink-0 text-muted-foreground">▾</span>
         </Button>
       </PopoverTrigger>
@@ -121,10 +122,10 @@ export function CategoryPicker({ value, onChange, categories, onCategoriesChange
                   ) : (
                     <button
                       type="button"
-                      className="min-w-0 flex-1 truncate text-left text-sm"
+                      className="flex min-w-0 flex-1 text-left text-sm"
                       onClick={() => handleSelect(cat.id)}
                     >
-                      {cat.label}
+                      <TruncatedText text={cat.label} className="min-w-0" />
                     </button>
                   )}
 

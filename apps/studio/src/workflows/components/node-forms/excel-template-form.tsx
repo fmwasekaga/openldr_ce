@@ -5,6 +5,7 @@ import type { ActionNodeData } from '../../lib/types';
 import { useWorkflowStore } from '../../hooks/use-workflow-store';
 import { uploadWorkflowFile } from '@/api';
 import { Button } from '@/components/ui/button';
+import { TruncatedText } from '@/components/ui/truncated-text';
 import { FormField, TextInput } from './shared';
 
 const XLSX_ACCEPT = '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -54,7 +55,7 @@ export function ExcelTemplateForm({ node, update }: NodeFormProps) {
               {uploading ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Upload className="mr-2 h-3.5 w-3.5" />}
               {config.templateRef ? 'Replace template' : 'Upload template'}
             </Button>
-            {uploadedName && <span className="truncate text-xs text-muted-foreground">{uploadedName}</span>}
+            {uploadedName && <TruncatedText text={uploadedName} className="min-w-0 text-xs text-muted-foreground" />}
           </div>
           {error && <p className="text-xs text-destructive">{error}</p>}
           <TextInput

@@ -6,6 +6,7 @@ import { queryApi, type ConnectorRef, type DatasetRef } from '../api';
 import { useQueryStore } from '../store';
 import type { CustomQuery } from '../custom-query-types';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { TruncatedText } from '@/components/ui/truncated-text';
 
 function Row({ depth, open, onClick, icon, label, active }:
   { depth: number; open?: boolean; onClick(): void; icon: React.ReactNode; label: string; active?: boolean }) {
@@ -14,7 +15,8 @@ function Row({ depth, open, onClick, icon, label, active }:
       className={`flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-sm hover:bg-accent ${active ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'}`}
       style={{ paddingLeft: 8 + depth * 14 }}>
       {open === undefined ? <span className="w-3.5 shrink-0" /> : open ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
-      <span className="flex shrink-0 items-center">{icon}</span><span className="min-w-0 truncate">{label}</span>
+      <span className="flex shrink-0 items-center">{icon}</span>
+      <TruncatedText text={label} side="right" className="min-w-0" />
     </button>
   );
 }

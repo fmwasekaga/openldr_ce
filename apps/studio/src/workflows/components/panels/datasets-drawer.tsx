@@ -3,6 +3,7 @@ import { Download } from 'lucide-react';
 import { fetchWorkflowDatasets, type WorkflowDatasetSummary } from '@/api';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
+import { TruncatedText } from '@/components/ui/truncated-text';
 
 interface Props {
   open: boolean;
@@ -58,9 +59,10 @@ export function DatasetsDrawer({ open, onClose }: Props) {
                     <TableCell className="font-mono text-xs">
                       <div>{d.name}</div>
                       {d.publishedTable && (
-                        <code className="mt-0.5 block max-w-[220px] truncate rounded bg-muted/60 px-1 py-0.5 font-mono text-[10px] text-muted-foreground" title={`SELECT data->>'<col>' FROM ${d.publishedTable}`}>
-                          {`SELECT data->>'<col>' FROM ${d.publishedTable}`}
-                        </code>
+                        <TruncatedText
+                          text={`SELECT data->>'<col>' FROM ${d.publishedTable}`}
+                          className="mt-0.5 max-w-[220px] rounded bg-muted/60 px-1 py-0.5 font-mono text-[10px] text-muted-foreground"
+                        />
                       )}
                     </TableCell>
                     <TableCell className="text-right text-xs text-muted-foreground">
