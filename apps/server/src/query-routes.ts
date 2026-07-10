@@ -123,8 +123,8 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
   });
 
   // ---- Connector introspection ----
-  // Postgres and SQL Server are both supported: the run wrapper (`runConnectorSql`) is
-  // dialect-aware (paginateSql picks the correct limit/offset syntax per connector type), and
+  // Postgres and SQL Server are both supported: the run path (`runConnectorSql` → `planPagination`)
+  // is dialect-aware (Postgres LIMIT/OFFSET vs SQL Server SET ROWCOUNT + JS offset), and the
   // information_schema introspection below picks a dialect-appropriate system-schema filter.
   // (Identifier quoting for the studio TableTab is handled separately.)
   const SQL_TYPES = new Set(['postgres', 'microsoft-sql']);

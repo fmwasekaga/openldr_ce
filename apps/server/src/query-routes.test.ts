@@ -114,6 +114,19 @@ describe('POST /api/query/run', () => {
     expect(unpaged.json().total).toBeUndefined();
   });
 
+  it('skips the total (count) for a microsoft-sql connector — no derived-table count query', async () => {
+    const deps = makeDeps();
+    deps.connectors.get = (async (id: string) => (id === 'c1' ? { id, name: 'MS', type: 'microsoft-sql', enabled: true } : null)) as any;
+    const calls: string[] = [];
+    deps.runConnectorSql = (async ({ sql }: { sql: string }) => { calls.push(sql); return { columns: [{ key: 'n', label: 'n' }], rows: [{ n: 1 }] }; }) as any;
+    const app = await build(deps);
+    const paged = await app.inject({ method: 'POST', url: '/api/query/run',
+      payload: { connectorId: 'c1', sql: 'select 1 as n', limit: 50, offset: 0 } });
+    expect(paged.json().total).toBeUndefined();
+    // The count(*) derived-table query (invalid T-SQL for ORDER BY queries) must not be issued.
+    expect(calls.some((s) => /count\(\*\)/i.test(s))).toBe(false);
+  });
+
   it('substitutes declared params before running', async () => {
     const deps = makeDeps();
     let seen = '';
