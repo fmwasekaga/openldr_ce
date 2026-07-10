@@ -39,7 +39,7 @@ export function registerConfigRoute(
 ): void {
   const version = readAppVersion();
   app.get('/api/config', async () => ({
-    dashboardSqlEnabled: (await ctx.featureFlags.get('dashboard.raw_sql')) && ctx.cfg.TARGET_STORE_ADAPTER === 'pg',
+    dashboardSqlEnabled: await ctx.featureFlags.get('dashboard.raw_sql'),
     authEnforced: !ctx.cfg.AUTH_DEV_BYPASS,
     version,
     environment: process.env.NODE_ENV ?? 'development',

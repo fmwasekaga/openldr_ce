@@ -419,10 +419,6 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       if (!model) throw new DashboardQueryError(`unknown model: ${q.model}`);
       data = await runBuilderQuery(reportingDb, model, q);
     } else {
-      // Any SQL execution requires the Postgres warehouse.
-      if (cfg.TARGET_STORE_ADAPTER !== 'pg') {
-        throw new DashboardQueryError('raw SQL widgets are disabled');
-      }
       // `q.sql` is the STORED template verbatim (the client sends resolved filter `values`
       // separately and the server applies the substitution). Vet the untouched template against
       // the SQL persisted on stored dashboards so filtered widgets still match. Execution is
@@ -436,7 +432,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       data = await runSqlQuery(reportingDb, finalSql, {
         timeoutMs: await numberSettings.get('dashboard.sql_timeout_ms'),
         rowCap: await numberSettings.get('dashboard.sql_row_cap'),
-      });
+      }, cfg.TARGET_STORE_ADAPTER === 'mssql' ? 'mssql' : 'postgres');
     }
     return { ...data, meta: { generatedAt: new Date().toISOString(), rowCount: data.rows.length } };
   };

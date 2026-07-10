@@ -1,6 +1,49 @@
 import { describe, it, expect } from 'vitest';
 import { validateSelectSql, runSqlQuery, planPagination } from './sql-runner';
 
+// --- Fake Kysely db/executor for driving runSqlQuery's `sql`/`sql.raw` calls through the
+// transaction. Mirrors just enough of kysely's RawBuilder.execute() contract (getExecutor() →
+// transformQuery() → compileQuery() → executeQuery()) to record the exact SQL text issued,
+// without depending on kysely's real dialect compilers. Only RawNode + immediate ValueNode
+// (what `sql` tags / `sql.lit` / `sql.raw` produce) need to be rendered.
+interface FakeOpNode {
+  kind: string;
+  sqlFragments?: readonly string[];
+  parameters?: readonly FakeOpNode[];
+  value?: unknown;
+}
+
+function renderNode(node: FakeOpNode): string {
+  // `sql.lit(x)` (used to inline the timeout) is itself a RawBuilder, so it arrives here as a
+  // nested RawNode wrapping a ValueNode (`sql.lit`'s `toOperationNode()`), not a bare ValueNode.
+  if (node.kind === 'RawNode') return compileRawNode(node);
+  if (node.kind === 'ValueNode') return String(node.value);
+  throw new Error(`fake compiler: unsupported node kind ${node.kind}`);
+}
+
+function compileRawNode(node: FakeOpNode): string {
+  const fragments = node.sqlFragments ?? [];
+  const params = node.parameters ?? [];
+  let out = fragments[0] ?? '';
+  for (let i = 0; i < params.length; i++) out += renderNode(params[i]) + (fragments[i + 1] ?? '');
+  return out;
+}
+
+function makeFakeDb(rows: Record<string, unknown>[]): { db: any; executed: string[] } {
+  const executed: string[] = [];
+  const executor = {
+    transformQuery: (node: FakeOpNode) => node,
+    compileQuery: (node: FakeOpNode) => ({ sql: compileRawNode(node), parameters: [], query: node }),
+    executeQuery: async (compiledQuery: { sql: string }) => {
+      executed.push(compiledQuery.sql);
+      return { rows };
+    },
+  };
+  const trx = { getExecutor: () => executor };
+  const db = { transaction: () => ({ execute: (cb: (trx: unknown) => unknown) => cb(trx) }) };
+  return { db, executed };
+}
+
 describe('validateSelectSql', () => {
   it('accepts a single SELECT', () => { expect(() => validateSelectSql('SELECT 1')).not.toThrow(); });
   it('accepts a CTE (WITH)', () => { expect(() => validateSelectSql('WITH t AS (SELECT 1) SELECT * FROM t')).not.toThrow(); });
@@ -33,6 +76,36 @@ describe('runSqlQuery numeric guards', () => {
   it('rejects negative rowCap before reaching the db', async () => {
     await expect(runSqlQuery(db, 'select 1', { timeoutMs: 5000, rowCap: -1 }))
       .rejects.toThrow(/finite positive/);
+  });
+});
+
+describe('runSqlQuery dialect-aware session setup + capped query', () => {
+  it('postgres (default engine): read-only txn + statement_timeout + LIMIT/OFFSET capped query', async () => {
+    const { db, executed } = makeFakeDb([{ a: 1 }]);
+    const result = await runSqlQuery(db, 'select 1 as a', { timeoutMs: 5000, rowCap: 100 });
+    expect(executed).toContain('set transaction read only');
+    expect(executed).toContain('set local statement_timeout = 5000');
+    expect(executed).toContain('select * from (select 1 as a) as _q limit 100 offset 0');
+    expect(result.rows).toEqual([{ a: 1 }]);
+    expect(result.columns).toEqual([{ key: 'a', label: 'a', kind: 'number' }]);
+  });
+
+  it('postgres (explicit engine): same shape as the default', async () => {
+    const { db, executed } = makeFakeDb([{ a: 1 }]);
+    await runSqlQuery(db, 'select 1 as a', { timeoutMs: 2500, rowCap: 10 }, 'postgres');
+    expect(executed).toContain('set transaction read only');
+    expect(executed).toContain('set local statement_timeout = 2500');
+    expect(executed).toContain('select * from (select 1 as a) as _q limit 10 offset 0');
+  });
+
+  it('mssql: SET LOCK_TIMEOUT (no read-only/statement_timeout) + SET ROWCOUNT capped batch', async () => {
+    const { db, executed } = makeFakeDb([{ a: 1 }]);
+    const result = await runSqlQuery(db, 'select 1 as a', { timeoutMs: 5000, rowCap: 100 }, 'mssql');
+    expect(executed).toContain('set lock_timeout 5000');
+    expect(executed.some((s) => /read only/i.test(s))).toBe(false);
+    expect(executed.some((s) => /statement_timeout/i.test(s))).toBe(false);
+    expect(executed).toContain('set rowcount 100; select 1 as a; set rowcount 0');
+    expect(result.rows).toEqual([{ a: 1 }]);
   });
 });
 
