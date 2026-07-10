@@ -186,31 +186,27 @@ describe('seedDatabase — default connector', () => {
     expect(connectors).toHaveLength(0);
   });
 
+  const mssqlCfg = {
+    SECRETS_ENCRYPTION_KEY: 'k'.repeat(32),
+    TARGET_STORE_ADAPTER: 'mssql' as const,
+    MSSQL_HOST: 'sqlserver.local',
+    MSSQL_PORT: 1433,
+    MSSQL_DATABASE: 'openldr_target',
+    MSSQL_USER: 'sa',
+    MSSQL_PASSWORD: 'p@ss',
+    MSSQL_ENCRYPT: false,
+    MSSQL_TRUST_SERVER_CERT: true,
+  };
+
   it('seeds a microsoft-sql warehouse connector when TARGET_STORE_ADAPTER=mssql', async () => {
-    const created: Array<{ name: string; type: string; config: Record<string, string> }> = [];
-    const app = fakeApp({
-      SECRETS_ENCRYPTION_KEY: 'k'.repeat(32),
-      TARGET_STORE_ADAPTER: 'mssql',
-      MSSQL_HOST: 'sqlserver.local',
-      MSSQL_PORT: 1433,
-      MSSQL_DATABASE: 'openldr_target',
-      MSSQL_USER: 'sa',
-      MSSQL_PASSWORD: 'p@ss',
-      MSSQL_ENCRYPT: false,
-      MSSQL_TRUST_SERVER_CERT: true,
-    }).app;
-    app.connectors.create = async (rec) => {
-      created.push({ name: rec.name, type: rec.type ?? '', config: rec.config });
-    };
-    app.connectors.list = async () => [];
-
+    const { app, connectors } = fakeApp(mssqlCfg);
     const n = await seedDefaultConnector(app);
-
     expect(n).toBe(1);
-    expect(created).toHaveLength(1);
-    expect(created[0].type).toBe('microsoft-sql');
-    expect(created[0].name).toBe('Target Warehouse (SQL Server)');
-    expect(created[0].config).toMatchObject({
+    expect(connectors).toHaveLength(1);
+    const c = connectors[0];
+    expect(c.name).toBe('Target Warehouse (SQL Server)');
+    expect(c.type).toBe('microsoft-sql');
+    expect(c.config).toEqual({
       host: 'sqlserver.local',
       port: '1433',
       database: 'openldr_target',
@@ -221,16 +217,24 @@ describe('seedDatabase — default connector', () => {
     });
   });
 
+  it('is idempotent by name — re-running does not duplicate the mssql connector', async () => {
+    const { app, connectors } = fakeApp(mssqlCfg);
+    await seedDefaultConnector(app);
+    const n2 = await seedDefaultConnector(app);
+    expect(n2).toBe(0);
+    expect(connectors.filter((c) => c.name === 'Target Warehouse (SQL Server)')).toHaveLength(1);
+  });
+
   it('skips the mssql connector when required MSSQL_* vars are missing', async () => {
-    const { app } = fakeApp({
+    const { app, connectors } = fakeApp({
       SECRETS_ENCRYPTION_KEY: 'k'.repeat(32),
       TARGET_STORE_ADAPTER: 'mssql',
       MSSQL_HOST: 'sqlserver.local',
       // MSSQL_DATABASE / MSSQL_USER / MSSQL_PASSWORD intentionally absent
     });
-    app.connectors.list = async () => [];
     const n = await seedDefaultConnector(app);
     expect(n).toBe(0);
+    expect(connectors).toHaveLength(0);
   });
 });
 
