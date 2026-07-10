@@ -42,14 +42,16 @@ if ($Letsencrypt) {
 
 function Die($m) { Write-Error "X $m"; exit 1 }
 
-# Run a native command with $ErrorActionPreference relaxed so its stderr/progress
-# output does not become a terminating NativeCommandError under this script's global
-# 'Stop' preference (Docker Compose and OpenSSL both write progress to stderr even on
-# success). Streams output live and decides success from the process exit code.
+# Run a native command whose stderr/progress output (Docker Compose, OpenSSL, ...) would
+# otherwise surface as red NativeCommandError records under Windows PowerShell 5.1. Merging
+# stderr into the output stream (2>&1) and re-emitting each line via Write-Host keeps that
+# progress as plain text instead of error records, while EAP=Continue stops a mid-stream
+# stderr line from terminating. Output still streams live; success is decided from the exit
+# code, not from anything written to stderr.
 function Invoke-NativeChecked([scriptblock]$Command, [string]$ErrorMessage) {
   $prevEAP = $ErrorActionPreference
   $ErrorActionPreference = "Continue"
-  try { & $Command; $code = $LASTEXITCODE } finally { $ErrorActionPreference = $prevEAP }
+  try { & $Command 2>&1 | ForEach-Object { Write-Host $_ }; $code = $LASTEXITCODE } finally { $ErrorActionPreference = $prevEAP }
   if ($code -ne 0) { Die "$ErrorMessage (exit $code)" }
 }
 
