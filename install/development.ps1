@@ -1,21 +1,21 @@
 # OpenLDR CE developer bootstrap (Windows PowerShell): clone + install + services + DB.
 # For running from SOURCE while the published images aren't available yet.
-#   irm https://raw.githubusercontent.com/fmwasekaga/openldr_ce/main/install/development.ps1 | iex
+#   irm https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/development.ps1 | iex
 # Flags:
-#   -Dir <path>     where to clone (default ./openldr_ce)
+#   -Dir <path>     where to clone (default ./openldr)
 #   -Branch <name>  branch to clone (default main)
 #   -Seed           also load WHONET sample data (needs the wasm build toolchain)
 #   -ResetDb        force a db reset even on an existing setup (DESTRUCTIVE)
 #   -NoServices     just clone + install; skip Docker + DB
 param(
-  [string]$Dir = "./openldr_ce",
+  [string]$Dir = "./openldr",
   [string]$Branch = "main",
   [switch]$Seed,
   [switch]$ResetDb,
   [switch]$NoServices
 )
 $ErrorActionPreference = "Stop"
-$RepoUrl = "https://github.com/fmwasekaga/openldr_ce.git"
+$RepoUrl = "https://github.com/Open-Laboratory-Data-Repository/openldr.git"
 
 function Die($m) { Write-Error "X $m"; exit 1 }
 

@@ -1,9 +1,9 @@
-# Installer-target stack: pulls the published fmwasekaga/openldr-* images and
+# Installer-target stack: pulls the published ghcr.io/open-laboratory-data-repository/openldr-* images and
 # mounts only the config files the installer downloads next to this file.
 # Do not use build: here.
 services:
   api:
-    image: fmwasekaga/openldr-api:${OPENLDR_VERSION:-latest}
+    image: ghcr.io/open-laboratory-data-repository/openldr-api:${OPENLDR_VERSION:-latest}
     env_file: .env
     expose: ["3000"]
     depends_on:
@@ -13,17 +13,17 @@ services:
     restart: unless-stopped
 
   studio:
-    image: fmwasekaga/openldr-studio:${OPENLDR_VERSION:-latest}
+    image: ghcr.io/open-laboratory-data-repository/openldr-studio:${OPENLDR_VERSION:-latest}
     expose: ["80"]
     restart: unless-stopped
 
   web:
-    image: fmwasekaga/openldr-web:${OPENLDR_VERSION:-latest}
+    image: ghcr.io/open-laboratory-data-repository/openldr-web:${OPENLDR_VERSION:-latest}
     expose: ["80"]
     restart: unless-stopped
 
   gateway:
-    image: fmwasekaga/openldr-gateway:${OPENLDR_VERSION:-latest}
+    image: ghcr.io/open-laboratory-data-repository/openldr-gateway:${OPENLDR_VERSION:-latest}
     environment:
       SERVER_NAME: ${SERVER_NAME:-localhost}
     ports:

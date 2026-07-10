@@ -265,7 +265,7 @@ describe('authored guide structure', () => {
     expect(resolved!.content).toContain('# Deployment & developer docs');
     expect(resolved!.content).toContain('OpenLDR website');
     expect(resolved!.content).toContain('CLI');
-    expect(resolved!.content).toContain('github.com/fmwasekaga/openldr_ce');
+    expect(resolved!.content).toContain('github.com/Open-Laboratory-Data-Repository/openldr');
     expect(resolved!.content).toContain('/docs/start-here');
     expect(resolved!.content).toContain('/docs/settings');
     expect(resolved!.content).not.toMatch(/!\[[^\]]*]\(/);

@@ -19,12 +19,12 @@ services, writes a dev `.env`, and initializes the database.
 
 **Linux / macOS**
 ```
-curl -fsSL https://raw.githubusercontent.com/fmwasekaga/openldr_ce/main/install/development.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/development.sh | bash
 ```
 
 **Windows (PowerShell)**
 ```
-irm https://raw.githubusercontent.com/fmwasekaga/openldr_ce/main/install/development.ps1 | iex
+irm https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/development.ps1 | iex
 ```
 
 Useful flags: `--dir <path>` where to clone, `--branch <name>` which branch,
@@ -37,8 +37,8 @@ Useful flags: `--dir <path>` where to clone, `--branch <name>` which branch,
 If you'd rather do it by hand:
 
 ```
-git clone https://github.com/fmwasekaga/openldr_ce.git
-cd openldr_ce
+git clone https://github.com/Open-Laboratory-Data-Repository/openldr.git
+cd openldr
 pnpm install
 
 # dev config — enables a no-login dev admin so you don't need to configure Keycloak

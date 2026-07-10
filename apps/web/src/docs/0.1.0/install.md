@@ -8,12 +8,12 @@ admin credentials.
 
 **Linux / macOS**
 ```
-curl -fsSL https://raw.githubusercontent.com/fmwasekaga/openldr_ce/main/install/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.sh | bash
 ```
 
 **Windows (PowerShell)**
 ```
-irm https://raw.githubusercontent.com/fmwasekaga/openldr_ce/main/install/install.ps1 | iex
+irm https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.ps1 | iex
 ```
 
 This brings the stack up on `https://localhost` with a self-signed certificate — your
@@ -28,7 +28,7 @@ renewal** (a cron job that renews and reloads the gateway).
 
 **Linux / macOS**
 ```
-curl -fsSL https://raw.githubusercontent.com/fmwasekaga/openldr_ce/main/install/install.sh \
+curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.sh \
   | bash -s -- --server-name your.domain.com --letsencrypt you@email.com
 ```
 
@@ -76,12 +76,12 @@ launch the dev servers.
 
 **Linux / macOS**
 ```
-curl -fsSL https://raw.githubusercontent.com/fmwasekaga/openldr_ce/main/install/development.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/development.sh | bash
 ```
 
 **Windows (PowerShell)**
 ```
-irm https://raw.githubusercontent.com/fmwasekaga/openldr_ce/main/install/development.ps1 | iex
+irm https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/development.ps1 | iex
 ```
 
 Requires git, Node.js 20+, pnpm (or Corepack), and Docker. Then start the app in two

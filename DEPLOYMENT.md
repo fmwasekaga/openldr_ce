@@ -20,14 +20,14 @@ JWKS URL (`http://keycloak:8080/auth/...`) so it never depends on the gateway's 
 
 ## Images
 
-OpenLDR CE ships four independently-versioned images on Docker Hub:
+OpenLDR CE ships four independently-versioned images on GHCR (GitHub Container Registry):
 
 | Image | Contents |
 |-------|----------|
-| `fmwasekaga/openldr-api` | server/API + `/health` (no SPA) |
-| `fmwasekaga/openldr-studio` | studio SPA (static nginx, served under `/studio/`) |
-| `fmwasekaga/openldr-web` | public landing site |
-| `fmwasekaga/openldr-gateway` | nginx reverse proxy (routes `/`→web, `/studio`→studio, `/api`+`/health`→api, `/auth`→keycloak) |
+| `ghcr.io/open-laboratory-data-repository/openldr-api` | server/API + `/health` (no SPA) |
+| `ghcr.io/open-laboratory-data-repository/openldr-studio` | studio SPA (static nginx, served under `/studio/`) |
+| `ghcr.io/open-laboratory-data-repository/openldr-web` | public landing site |
+| `ghcr.io/open-laboratory-data-repository/openldr-gateway` | nginx reverse proxy (routes `/`→web, `/studio`→studio, `/api`+`/health`→api, `/auth`→keycloak) |
 
 Postgres, MinIO, and Keycloak use their stock upstream images.
 
@@ -35,7 +35,7 @@ Postgres, MinIO, and Keycloak use their stock upstream images.
 
 ```bash
 docker login
-pnpm run publish:images            # fmwasekaga/*, tags :latest + :<package.json version>, amd64
+pnpm run publish:images            # ghcr.io/open-laboratory-data-repository/*, tags :latest + :<package.json version>, amd64
 # or: ./scripts/build-and-push.sh --tag rc1 --no-push   # local build without pushing
 ```
 
@@ -49,7 +49,7 @@ pnpm run publish:images            # fmwasekaga/*, tags :latest + :<package.json
 For a public domain, issue a trusted, auto-renewing cert in the install command:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/fmwasekaga/openldr_ce/main/install/install.sh \
+curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.sh \
   | bash -s -- --server-name your.domain.com --letsencrypt you@email.com
 ```
 

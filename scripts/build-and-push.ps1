@@ -1,8 +1,8 @@
 #!/usr/bin/env pwsh
-# Build and push the OpenLDR CE images to Docker Hub (Windows).
-#   ./scripts/build-and-push.ps1 [-Registry fmwasekaga] [-Tag latest] [-Platform linux/amd64] [-NoPush] [-DryRun]
+# Build and push the OpenLDR CE images to GHCR (GitHub Container Registry) (Windows).
+#   ./scripts/build-and-push.ps1 [-Registry ghcr.io/open-laboratory-data-repository] [-Tag latest] [-Platform linux/amd64] [-NoPush] [-DryRun]
 param(
-  [string]$Registry = "fmwasekaga",
+  [string]$Registry = "ghcr.io/open-laboratory-data-repository",
   [string]$Tag = "latest",
   [string]$Platform = "linux/amd64",
   [switch]$NoPush,

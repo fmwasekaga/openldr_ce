@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 
 // Served from raw GitHub until the landing has a stable domain; then switch to
 // https://<domain>/install.sh and /install.ps1.
-const BASE = 'https://raw.githubusercontent.com/fmwasekaga/openldr_ce/main/install';
+const BASE = 'https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install';
 const COMMANDS: Record<string, string> = {
   unix: `curl -fsSL ${BASE}/install.sh | bash`,
   windows: `irm ${BASE}/install.ps1 | iex`,

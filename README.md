@@ -99,8 +99,8 @@ flowchart LR
 
 ```bash
 # Clone
-git clone <repo-url> openldr_ce
-cd openldr_ce
+git clone https://github.com/Open-Laboratory-Data-Repository/openldr.git
+cd openldr
 
 # Install workspace dependencies
 pnpm install
@@ -140,7 +140,7 @@ For the complete source-backed CLI, configuration, HTTP API, and operator refere
 ## Project Structure
 
 ```
-openldr_ce/
+openldr/
 ├── apps/
 │   ├── server/         # Fastify API + built-SPA host
 │   └── web/            # React + Vite SPA

@@ -13,7 +13,7 @@ Docs section:
   terminology, ingest, plugins, reports, users, marketplace).
 
 You'll find all of these on the project website and in the source repository:
-<https://github.com/fmwasekaga/openldr_ce>.
+<https://github.com/Open-Laboratory-Data-Repository/openldr>.
 
 ## Related guides
 

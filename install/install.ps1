@@ -1,5 +1,5 @@
 # OpenLDR CE one-line installer (Windows PowerShell).
-#   irm https://raw.githubusercontent.com/fmwasekaga/openldr_ce/main/install/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.ps1 | iex
 # Flags (download the script first to pass these  -  see bottom of this file):
 #   -Dir <path>        install dir (default ./openldr)
 #   -Version <tag>      image tag (default latest)
@@ -18,7 +18,7 @@ param(
   [switch]$NoPull
 )
 $ErrorActionPreference = "Stop"
-$RepoRaw = "https://raw.githubusercontent.com/fmwasekaga/openldr_ce/main"
+$RepoRaw = "https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main"
 $envPath = "$Dir/.env"
 
 # An existing .env (from a prior run in this dir) is never overwritten below, so its
@@ -151,7 +151,7 @@ KEYCLOAK_ADMIN_PASSWORD=$kc
 SECRETS_ENCRYPTION_KEY=$secretsKey
 MIGRATE_ON_START=true
 SEED_ON_START=true
-MARKETPLACE_REGISTRY_URL=https://raw.githubusercontent.com/fmwasekaga/openldr-ce-marketplace/main
+MARKETPLACE_REGISTRY_URL=https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/marketplace/main
 "@ | Out-File -FilePath $envPath -Encoding ascii
   # Lock the secrets file down to the current user (drop inherited ACLs).
   icacls $envPath /inheritance:r /grant:r "$($env:USERNAME):(R,W)" *> $null

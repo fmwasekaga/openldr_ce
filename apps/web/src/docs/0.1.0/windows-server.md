@@ -77,12 +77,12 @@ Now you are on a real Linux Docker host — run the standard one-line installer.
 
 **Local / self-signed:**
 ```
-curl -fsSL https://raw.githubusercontent.com/fmwasekaga/openldr_ce/main/install/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.sh | bash
 ```
 
 **Public domain + trusted TLS:**
 ```
-curl -fsSL https://raw.githubusercontent.com/fmwasekaga/openldr_ce/main/install/install.sh \
+curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.sh \
   | bash -s -- --server-name your.domain.com --letsencrypt you@email.com
 ```
 

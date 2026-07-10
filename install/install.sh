@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 # OpenLDR CE one-line installer (Linux/macOS).
-#   curl -fsSL https://raw.githubusercontent.com/fmwasekaga/openldr_ce/main/install/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.sh | bash
 # Flags: --dir <path> (default ./openldr), --version <tag> (default latest),
 #        --server-name <host> (default localhost — the public hostname/domain),
 #        --http-port <n> (default 80), --https-port <n> (default 443 — gateway ports),
@@ -9,7 +9,7 @@
 #        --no-start (scaffold + config only), --no-pull (skip image pull).
 set -eu
 
-REPO_RAW="https://raw.githubusercontent.com/fmwasekaga/openldr_ce/main"
+REPO_RAW="https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main"
 DIR="./openldr"
 VERSION="latest"
 HOST="localhost"
@@ -174,7 +174,7 @@ SECRETS_ENCRYPTION_KEY=$SECRETS_KEY
 MIGRATE_ON_START=true
 SEED_ON_START=true
 LETSENCRYPT_EMAIL=$LE_EMAIL
-MARKETPLACE_REGISTRY_URL=https://raw.githubusercontent.com/fmwasekaga/openldr-ce-marketplace/main
+MARKETPLACE_REGISTRY_URL=https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/marketplace/main
 EOF
   echo "→ Wrote $DIR/.env (generated secrets, compose project '$PROJECT_NAME')"
 else

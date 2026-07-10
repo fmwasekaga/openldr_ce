@@ -29,8 +29,8 @@ docker-network only (no host ports):
 Requires Node ≥ 20, pnpm, Docker with Compose plugin.
 
 ```bash
-git clone https://github.com/fmwasekaga/openldr_ce
-cd openldr_ce
+git clone https://github.com/Open-Laboratory-Data-Repository/openldr
+cd openldr
 pnpm install --frozen-lockfile
 pnpm run init
 ```
@@ -137,20 +137,20 @@ The one-line installer targets hosts that pull published images from GHCR rather
 **Linux / macOS:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/fmwasekaga/openldr_ce/main/install/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.sh | bash
 ```
 
 **Windows PowerShell:**
 
 ```powershell
-irm https://raw.githubusercontent.com/fmwasekaga/openldr_ce/main/install/install.ps1 | iex
+irm https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.ps1 | iex
 ```
 
 Optional flags: `--dir <path>` (default `./openldr`), `--version <tag>`, `--no-start`, `--no-pull`.
 
 The installer scaffolds `./openldr/`, generates secrets, writes `.env` with gateway-era defaults (`PUBLIC_ORIGIN=https://localhost`, Keycloak proxied at `/auth`), generates a self-signed cert, and runs `docker compose up -d`.
 
-> **Note:** The installer stack uses `ghcr.io/fmwasekaga/openldr-landing:${OPENLDR_VERSION:-latest}` for the landing service. This image must be published alongside the main app image (`ghcr.io/fmwasekaga/openldr:...`).
+> **Note:** The installer stack uses `ghcr.io/open-laboratory-data-repository/openldr-landing:${OPENLDR_VERSION:-latest}` for the landing service. This image must be published alongside the main app image (`ghcr.io/open-laboratory-data-repository/openldr:...`).
 
 For a non-localhost host (IP or domain) or Let's Encrypt TLS, either run `pnpm run init` from source, or edit `SERVER_NAME`, `PUBLIC_ORIGIN`, `OIDC_ISSUER_URL`, `KC_HOSTNAME`, and `TLS_MODE` in `.env` and re-run `docker compose up -d`.
 

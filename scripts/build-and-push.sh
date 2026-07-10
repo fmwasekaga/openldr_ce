@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Build and push the OpenLDR CE images to Docker Hub.
-#   ./scripts/build-and-push.sh                      # fmwasekaga/*, :latest + :<version>, push
+# Build and push the OpenLDR CE images to GHCR (GitHub Container Registry).
+#   ./scripts/build-and-push.sh                      # ghcr.io/open-laboratory-data-repository/*, :latest + :<version>, push
 #   ./scripts/build-and-push.sh --registry myorg
 #   ./scripts/build-and-push.sh --tag rc1
 #   ./scripts/build-and-push.sh --platform linux/amd64,linux/arm64
@@ -9,7 +9,7 @@
 # Must be run from the repo root.
 set -euo pipefail
 
-REGISTRY="${DOCKER_REGISTRY:-fmwasekaga}"
+REGISTRY="${DOCKER_REGISTRY:-ghcr.io/open-laboratory-data-repository}"
 TAG="${IMAGE_TAG:-latest}"
 PLATFORM="${PLATFORM:-linux/amd64}"
 DRY_RUN=false

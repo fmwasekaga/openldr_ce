@@ -1,17 +1,17 @@
 #!/usr/bin/env sh
 # OpenLDR CE developer bootstrap (Linux/macOS): clone + install + backing services + DB.
 # For running from SOURCE while the published images aren't available yet.
-#   curl -fsSL https://raw.githubusercontent.com/fmwasekaga/openldr_ce/main/install/development.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/development.sh | bash
 # Flags:
-#   --dir <path>     where to clone (default ./openldr_ce)
+#   --dir <path>     where to clone (default ./openldr)
 #   --branch <name>  branch to clone (default main)
 #   --seed           also load WHONET sample data (needs the wasm build toolchain)
 #   --reset-db       force a db reset even on an existing setup (DESTRUCTIVE)
 #   --no-services    just clone + install; skip Docker + DB
 set -eu
 
-REPO_URL="https://github.com/fmwasekaga/openldr_ce.git"
-DIR="./openldr_ce"
+REPO_URL="https://github.com/Open-Laboratory-Data-Repository/openldr.git"
+DIR="./openldr"
 BRANCH="main"
 SEED=0
 RESET_DB=0
