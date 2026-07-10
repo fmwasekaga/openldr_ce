@@ -7,15 +7,27 @@ function stripComments(input: string): string {
   return input.replace(/--[^\n]*/g, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ');
 }
 
+/** Replace single-quoted string literals (including `''` escapes) with an empty literal so a
+ *  keyword like `into` sitting inside a quoted string isn't mistaken for the SQL keyword. Only
+ *  applied to the validation copy — never to the SQL that actually runs. */
+function stripStringLiterals(input: string): string {
+  return input.replace(/'(?:[^']|'')*'/g, "''");
+}
+
 export function validateSelectSql(rawSql: string): void {
-  const stripped = stripComments(rawSql).trim();
+  // Strip comments AND string literals before the structural/keyword checks so quoted text (e.g.
+  // 'convert this into that') can't trigger a false positive or smuggle a banned keyword.
+  const stripped = stripStringLiterals(stripComments(rawSql)).trim();
   if (!stripped) throw new Error('empty query');
   // Reject multiple statements: any semicolon that is not the final char.
   const noTrailing = stripped.replace(/;\s*$/, '');
   if (noTrailing.includes(';')) throw new Error('only a single statement is allowed');
   if (!/^(select|with)\b/i.test(noTrailing)) throw new Error('only SELECT/WITH queries are allowed');
-  if (/\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|merge|call|copy)\b/i.test(noTrailing)) {
-    throw new Error('only read-only SELECT queries are allowed');
+  // `into` is banned too: `SELECT … INTO <table>` creates a table and writes rows (a write
+  // masquerading as a SELECT). On Postgres a read-only txn caught this; on MSSQL there is no
+  // read-only txn, so this shared validator is the only guard for both Path A and Path B.
+  if (/\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|merge|call|copy|into)\b/i.test(noTrailing)) {
+    throw new Error('only read-only SELECT queries are allowed (INTO/DDL/DML rejected)');
   }
 }
 
@@ -62,7 +74,7 @@ export async function runSqlQuery(
     if (engine === 'mssql') {
       // SQL Server has no `set transaction read only`; the SELECT-only validation above enforces
       // read-only-ness. SET LOCK_TIMEOUT bounds lock waits (T-SQL has no per-statement time cap).
-      await sql.raw(`set lock_timeout ${Math.floor(opts.timeoutMs)}`).execute(trx);
+      await sql`set lock_timeout ${sql.lit(Math.floor(opts.timeoutMs))}`.execute(trx);
     } else {
       await sql`set transaction read only`.execute(trx);
       await sql`set local statement_timeout = ${sql.lit(Math.floor(opts.timeoutMs))}`.execute(trx);

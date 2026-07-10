@@ -53,6 +53,13 @@ describe('validateSelectSql', () => {
   });
   it('rejects multiple statements', () => { expect(() => validateSelectSql('SELECT 1; DROP TABLE x')).toThrow(); });
   it('strips a trailing comment so it does not smuggle a second statement', () => { expect(() => validateSelectSql('SELECT 1 -- ; DROP')).not.toThrow(); });
+  it('rejects SELECT ... INTO (creates a table — not read-only)', () => {
+    expect(() => validateSelectSql('SELECT * INTO shadow FROM t')).toThrow();
+    expect(() => validateSelectSql('select id into #tmp from t')).toThrow();
+  });
+  it('allows "into" inside a string literal (not a false positive)', () => {
+    expect(() => validateSelectSql("SELECT 'convert this into that' as note")).not.toThrow();
+  });
 });
 
 describe('runSqlQuery numeric guards', () => {
