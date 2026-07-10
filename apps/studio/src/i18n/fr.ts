@@ -594,6 +594,8 @@ export const fr: EnShape = {
     switchToDark: 'Passer en mode sombre',
     lightMode: 'Mode clair',
     darkMode: 'Mode sombre',
+    devBypassLabel: 'Contournement d’authentification actif',
+    devBypassTooltip: 'Le contournement d’authentification est ACTIVÉ — les requêtes API ne sont PAS authentifiées (AUTH_DEV_BYPASS). Réservé au développement local ; il est désactivé de force en production. N’exécutez jamais un déploiement réel dans ce mode.',
   },
   plugins: {
     notFound: "Extension introuvable ou non installée.",

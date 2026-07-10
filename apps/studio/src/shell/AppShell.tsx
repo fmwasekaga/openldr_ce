@@ -2,7 +2,7 @@ import { type ReactNode, useEffect, useState } from 'react';
 import { NavLink, useNavigate, useMatch } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, BookOpen, Library, FileInput, Users, ShieldCheck, Settings,
-  Workflow, Activity, Database, PanelLeftClose, PanelLeftOpen, Sun, Moon, LogOut, PencilRuler, type LucideIcon,
+  Workflow, Activity, Database, PanelLeftClose, PanelLeftOpen, Sun, Moon, LogOut, PencilRuler, ShieldAlert, type LucideIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { SUPPORTED_LANGUAGES, setLanguage } from '@/i18n/language';
@@ -75,7 +75,7 @@ export function AppShell({
 }) {
   const [theme, toggleTheme] = useTheme();
   const [collapsed, toggleSidebar] = useSidebar();
-  const { user, signOut, hasRole } = useAuth();
+  const { user, signOut, hasRole, authEnforced } = useAuth();
   const [pluginUis, setPluginUis] = useState<PluginUiEntry[]>([]);
   useEffect(() => {
     let cancelled = false;
@@ -194,6 +194,20 @@ export function AppShell({
         <header className="flex h-12 shrink-0 items-center justify-between border-b border-border px-6">
           <span className="font-medium">{title}</span>
           <div className="flex items-center gap-2">
+            {!authEnforced && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    role="status"
+                    aria-label={t('a11y.devBypassLabel')}
+                    className="flex h-9 w-9 items-center justify-center rounded-md text-amber-500 dark:text-amber-400"
+                  >
+                    <ShieldAlert className="h-[18px] w-[18px]" />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs">{t('a11y.devBypassTooltip')}</TooltipContent>
+              </Tooltip>
+            )}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
