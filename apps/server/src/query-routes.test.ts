@@ -127,6 +127,19 @@ describe('POST /api/query/run', () => {
     expect(seen).toContain("f = 'Ndola'");
   });
 
+  it('delegates pagination to runConnectorSql via the inner sql plus rowCap/offset', async () => {
+    const deps = makeDeps();
+    const calls: { connectorId: string; sql: string; rowCap?: number; offset?: number }[] = [];
+    deps.runConnectorSql = async (input) => { calls.push(input); return { columns: [{ key: 'n', label: 'n' }], rows: [{ n: 1 }] }; };
+    const app = await build(deps);
+    const res = await app.inject({ method: 'POST', url: '/api/query/run',
+      payload: { connectorId: 'c1', sql: 'select 1 as n', limit: 50, offset: 10 } });
+    expect(res.statusCode).toBe(200);
+    // The first call is the paginated run: the raw inner sql (no manual limit/offset wrapper),
+    // with pagination expressed via rowCap/offset for runConnectorSql to apply per-dialect.
+    expect(calls[0]).toEqual({ connectorId: 'c1', sql: 'select 1 as n', rowCap: 50, offset: 10 });
+  });
+
   it('rejects a connector that is missing or disabled', async () => {
     const app = await build();
     const res = await app.inject({ method: 'POST', url: '/api/query/run',
@@ -152,9 +165,9 @@ describe('introspection', () => {
     expect(res.json()).toEqual([{ id: 'c1', name: 'PG', type: 'postgres' }]);
   });
 
-  it('lists only postgres connectors (v1)', async () => {
-    // v1 is Postgres-only: microsoft-sql/mysql introspection is portable but the run path is not,
-    // so a SQL Server connector must NOT be advertised; a non-SQL dhis2 connector is excluded too.
+  it('lists postgres and microsoft-sql connectors, excluding non-SQL types', async () => {
+    // Both Postgres and SQL Server are dialect-aware end to end (run + introspection); a non-SQL
+    // dhis2 connector is still excluded.
     const deps = makeDeps();
     deps.connectors.list = async () => [
       { id: 'c1', name: 'PG', type: 'postgres', enabled: true } as any,
@@ -163,7 +176,33 @@ describe('introspection', () => {
     ];
     const app = await build(deps);
     const res = await app.inject({ method: 'GET', url: '/api/query/connectors' });
-    expect(res.json()).toEqual([{ id: 'c1', name: 'PG', type: 'postgres' }]);
+    expect(res.json()).toEqual([
+      { id: 'c1', name: 'PG', type: 'postgres' },
+      { id: 'c2', name: 'SQLSvr', type: 'microsoft-sql' },
+    ]);
+  });
+
+  it('issues the MSSQL system-schema filter for a microsoft-sql connector', async () => {
+    const deps = makeDeps();
+    deps.connectors.get = async (id) => (id === 'c2' ? ({ id, name: 'SQLSvr', type: 'microsoft-sql', enabled: true } as any) : null);
+    let seenSql = '';
+    deps.runConnectorSql = async ({ sql }) => { seenSql = sql; return { columns: [], rows: [] }; };
+    const app = await build(deps);
+    const res = await app.inject({ method: 'GET', url: '/api/query/connectors/c2/schemas' });
+    expect(res.statusCode).toBe(200);
+    expect(seenSql).toContain("'sys'");
+    expect(seenSql).not.toContain('pg_catalog');
+  });
+
+  it('issues the Postgres system-schema filter for a postgres connector', async () => {
+    const deps = makeDeps();
+    let seenSql = '';
+    deps.runConnectorSql = async ({ sql }) => { seenSql = sql; return { columns: [], rows: [] }; };
+    const app = await build(deps);
+    const res = await app.inject({ method: 'GET', url: '/api/query/connectors/c1/schemas' });
+    expect(res.statusCode).toBe(200);
+    expect(seenSql).toContain('pg_catalog');
+    expect(seenSql).not.toContain("'sys'");
   });
 
   it('rejects a schema name that is not a bare identifier', async () => {
