@@ -10,7 +10,8 @@
 #        --target-db postgres|mssql (default postgres — selects the external analytics/target DB),
 #        --mssql-demo (spin up a bundled MSSQL container for evaluation; implies --target-db mssql),
 #        --mssql-host/--mssql-port/--mssql-database/--mssql-user/--mssql-password (BYO MSSQL
-#          connection — required when --target-db mssql without --mssql-demo),
+#          connection — required when --target-db mssql without --mssql-demo; keep the password
+#          free of '#', spaces, or quote characters — they confuse Docker Compose's .env reader),
 #        --mssql-encrypt true|false (default false), --mssql-trust-cert true|false (default true).
 set -eu
 
@@ -70,6 +71,14 @@ if [ -f "$DIR/.env" ]; then
   [ -n "$EXISTING_HTTP" ] && HTTP_PORT="$EXISTING_HTTP"
   [ -n "$EXISTING_HTTPS" ] && HTTPS_PORT="$EXISTING_HTTPS"
   [ -n "$EXISTING_HOST" ] && HOST="$EXISTING_HOST"
+  EXISTING_ADAPTER="$(grep -E '^TARGET_STORE_ADAPTER=' "$DIR/.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r')"
+  if [ "$EXISTING_ADAPTER" = "mssql" ]; then
+    TARGET_DB="mssql"
+    EXISTING_MSSQL_HOST="$(grep -E '^MSSQL_HOST=' "$DIR/.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r')"
+    [ -n "$EXISTING_MSSQL_HOST" ] && MSSQL_HOST="$EXISTING_MSSQL_HOST"
+    # host 'mssql' is the managed-demo signature → re-enable the overlay on re-runs
+    [ "$EXISTING_MSSQL_HOST" = "mssql" ] && MSSQL_DEMO=1
+  fi
 fi
 if [ "$HTTPS_PORT" = "443" ]; then
   ORIGIN="https://$HOST"
@@ -83,19 +92,29 @@ if [ "$TARGET_DB" != "postgres" ] && [ "$TARGET_DB" != "mssql" ]; then
   echo "✗ --target-db must be 'postgres' or 'mssql' (got '$TARGET_DB')" >&2; exit 2
 fi
 
+for bv in "encrypt=$MSSQL_ENCRYPT" "trust-cert=$MSSQL_TRUST_CERT"; do
+  bname="${bv%%=*}"; bval="${bv#*=}"
+  if [ "$bval" != "true" ] && [ "$bval" != "false" ]; then
+    echo "✗ --mssql-$bname must be 'true' or 'false' (got '$bval')" >&2; exit 2
+  fi
+done
+
 # Managed-demo MSSQL: point the app at the bundled 'mssql' compose service and (below) generate a
 # policy-compliant SA password. Developer/Express editions are NOT licensed for production — this
 # container is for evaluation only.
 if [ "$MSSQL_DEMO" -eq 1 ]; then
   MSSQL_HOST="mssql"
   MSSQL_PORT="1433"
+  MSSQL_DATABASE="openldr_target"
   MSSQL_USER="sa"
   MSSQL_ENCRYPT="false"
   MSSQL_TRUST_CERT="true"
 fi
 
 # BYO MSSQL: require connection details before writing .env / starting the stack.
-if [ "$TARGET_DB" = "mssql" ] && [ "$MSSQL_DEMO" -eq 0 ]; then
+# Fresh install only — on a re-run the never-overwritten on-disk .env is authoritative,
+# so don't demand flags the operator already provided the first time.
+if [ "$ENV_EXISTS" -eq 0 ] && [ "$TARGET_DB" = "mssql" ] && [ "$MSSQL_DEMO" -eq 0 ]; then
   for pair in "MSSQL_HOST=$MSSQL_HOST" "MSSQL_USER=$MSSQL_USER" "MSSQL_PASSWORD=$MSSQL_PASSWORD"; do
     key="${pair%%=*}"; val="${pair#*=}"
     [ -n "$val" ] || err "--target-db mssql (BYO) requires --mssql-host, --mssql-user, and --mssql-password (missing $key). The target database '$MSSQL_DATABASE' must already exist on your SQL Server."
