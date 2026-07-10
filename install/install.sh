@@ -182,11 +182,27 @@ else
 fi
 
 if [ ! -f "$DIR/config/nginx/certs/fullchain.pem" ]; then
-  openssl req -x509 -newkey rsa:2048 -nodes -days 825 \
-    -keyout "$DIR/config/nginx/certs/privkey.pem" \
-    -out "$DIR/config/nginx/certs/fullchain.pem" \
-    -subj "/CN=$HOST" -addext "subjectAltName=DNS:$HOST,DNS:localhost,IP:127.0.0.1" 2>/dev/null \
-    && echo "→ Generated self-signed cert" || echo "! openssl not found — provide certs in $DIR/config/nginx/certs/"
+  CERT_DIR="$DIR/config/nginx/certs"
+  SUBJ="/CN=$HOST"
+  SAN="subjectAltName=DNS:$HOST,DNS:localhost,IP:127.0.0.1"
+  if command -v openssl >/dev/null 2>&1; then
+    openssl req -x509 -newkey rsa:2048 -nodes -days 825 \
+      -keyout "$CERT_DIR/privkey.pem" -out "$CERT_DIR/fullchain.pem" \
+      -subj "$SUBJ" -addext "$SAN" 2>/dev/null || true
+  else
+    # No local openssl — Docker is a prereq, so generate the cert via a throwaway container.
+    echo "→ openssl not on PATH; generating cert via Docker (alpine/openssl)"
+    CERT_DIR_ABS="$(cd "$CERT_DIR" && pwd)"
+    docker run --rm -v "$CERT_DIR_ABS:/certs" alpine/openssl \
+      req -x509 -newkey rsa:2048 -nodes -days 825 \
+      -keyout /certs/privkey.pem -out /certs/fullchain.pem \
+      -subj "$SUBJ" -addext "$SAN" >/dev/null 2>&1 || true
+  fi
+  if [ -f "$CERT_DIR/fullchain.pem" ] && [ -f "$CERT_DIR/privkey.pem" ]; then
+    echo "→ Generated self-signed cert"
+  else
+    echo "! Could not generate a self-signed cert — provide certs in $CERT_DIR/ (fullchain.pem + privkey.pem)."
+  fi
 fi
 
 # 4. Start

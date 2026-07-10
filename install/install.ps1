@@ -42,6 +42,17 @@ if ($Letsencrypt) {
 
 function Die($m) { Write-Error "X $m"; exit 1 }
 
+# Run a native command with $ErrorActionPreference relaxed so its stderr/progress
+# output does not become a terminating NativeCommandError under this script's global
+# 'Stop' preference (Docker Compose and OpenSSL both write progress to stderr even on
+# success). Streams output live and decides success from the process exit code.
+function Invoke-NativeChecked([scriptblock]$Command, [string]$ErrorMessage) {
+  $prevEAP = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try { & $Command; $code = $LASTEXITCODE } finally { $ErrorActionPreference = $prevEAP }
+  if ($code -ne 0) { Die "$ErrorMessage (exit $code)" }
+}
+
 # 1. Preflight
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { Die "Docker is not installed. See https://docs.docker.com/get-docker/" }
 docker compose version *> $null; if ($LASTEXITCODE -ne 0) { Die "Docker Compose plugin not found. Update Docker Desktop." }
@@ -52,6 +63,14 @@ docker info *> $null; if ($LASTEXITCODE -ne 0) { Die "Docker daemon is not runni
 # $HttpPort/$HttpsPort above were adopted from it, so "in use" almost certainly means
 # this same install's own (already running) stack, not a real conflict.
 function Test-PortInUse([int]$Port) {
+  # Get-NetTCPConnection catches listeners that Docker Desktop / the WSL relay publish
+  # on :: and 0.0.0.0 that a fresh TcpListener bind on 0.0.0.0 can miss (a second
+  # default-port install would otherwise scaffold instead of detecting the conflict).
+  # Fall back to TcpListener only where the cmdlet is unavailable.
+  if (Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue) {
+    if (Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue) { return $true }
+    return $false
+  }
   try {
     $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Any, $Port)
     $listener.Start()
@@ -153,8 +172,10 @@ MIGRATE_ON_START=true
 SEED_ON_START=true
 MARKETPLACE_REGISTRY_URL=https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/marketplace/main
 "@ | Out-File -FilePath $envPath -Encoding ascii
-  # Lock the secrets file down to the current user (drop inherited ACLs).
-  icacls $envPath /inheritance:r /grant:r "$($env:USERNAME):(R,W)" *> $null
+  # Lock the secrets file down to the current user (drop inherited ACLs). Grant Modify
+  # (M) rather than just (R,W) so the same user can later delete the install dir during
+  # cleanup  -  (R,W) omits the Delete right and makes `Remove-Item` fail on .env.
+  icacls $envPath /inheritance:r /grant:r "$($env:USERNAME):(M)" *> $null
   Write-Host "-> Wrote $envPath (generated secrets, compose project '$projectName')"
 } else {
   Write-Host "-> Reusing existing $envPath"
@@ -164,30 +185,37 @@ $certDir = "$Dir/config/nginx/certs"
 $cert = "$certDir/fullchain.pem"
 $key = "$certDir/privkey.pem"
 if (-not (Test-Path $cert)) {
-  if (Get-Command openssl -ErrorAction SilentlyContinue) {
-    # OpenSSL writes its progress dots/status to stderr. Under Windows PowerShell 5.1,
-    # a native command writing to stderr becomes a terminating NativeCommandError when
-    # $ErrorActionPreference = "Stop" is in effect (as it is for this whole script)  - 
-    # even though the cert files are produced successfully. Temporarily relax it around
-    # just this call, capture stderr into a variable instead of losing it, and decide
-    # success from $LASTEXITCODE + whether both output files actually exist.
-    $prevEAP = $ErrorActionPreference
-    $ErrorActionPreference = "Continue"
-    $opensslOutput = & openssl req -x509 -newkey rsa:2048 -nodes -days 825 `
-      -keyout $key -out $cert `
-      -subj "/CN=$ServerName" -addext "subjectAltName=DNS:$ServerName,DNS:localhost,IP:127.0.0.1" 2>&1
-    $opensslExit = $LASTEXITCODE
-    $ErrorActionPreference = $prevEAP
-    if ($opensslExit -eq 0 -or ((Test-Path $cert) -and (Test-Path $key))) {
-      Write-Host "-> Generated self-signed cert"
+  # Docker is a verified prereq (preflight above), so a cert can always be produced:
+  # use local openssl when present, otherwise a throwaway alpine/openssl container  -
+  # this keeps the install zero-prereq on a machine that only has Docker.
+  # Both openssl and docker write progress to stderr, which becomes a terminating
+  # NativeCommandError under $ErrorActionPreference='Stop'; relax it around the call and
+  # decide success from whether both cert files actually appear.
+  $certDirAbs = (Resolve-Path -LiteralPath $certDir).Path
+  $subj = "/CN=$ServerName"
+  $san  = "subjectAltName=DNS:$ServerName,DNS:localhost,IP:127.0.0.1"
+  $prevEAP = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try {
+    if (Get-Command openssl -ErrorAction SilentlyContinue) {
+      Write-Host "-> Generating self-signed cert (openssl)"
+      $certOutput = & openssl req -x509 -newkey rsa:2048 -nodes -days 825 `
+        -keyout $key -out $cert -subj $subj -addext $san 2>&1
     } else {
-      Write-Host "! openssl failed (exit $opensslExit) and no cert was produced:"
-      $opensslOutput | ForEach-Object { Write-Host "    $_" }
-      Write-Host "! Provide certs manually in $certDir/ (fullchain.pem + privkey.pem)."
+      Write-Host "-> openssl not on PATH; generating cert via Docker (alpine/openssl)"
+      $mount = $certDirAbs -replace '\\', '/'
+      $certOutput = & docker run --rm -v "${mount}:/certs" alpine/openssl `
+        req -x509 -newkey rsa:2048 -nodes -days 825 `
+        -keyout /certs/privkey.pem -out /certs/fullchain.pem -subj $subj -addext $san 2>&1
     }
+  } finally { $ErrorActionPreference = $prevEAP }
+  if ((Test-Path $cert) -and (Test-Path $key)) {
+    Write-Host "-> Generated self-signed cert"
   } else {
-    Write-Host "! openssl not found on PATH  -  provide certs in $certDir/ (fullchain.pem + privkey.pem)."
-    Write-Host "  (Git for Windows bundles openssl; or install it separately and re-run.)"
+    Write-Host "! Could not generate a self-signed cert automatically:"
+    $certOutput | ForEach-Object { Write-Host "    $_" }
+    Write-Host "! Provide certs in $certDir/ (fullchain.pem + privkey.pem) and re-run,"
+    Write-Host "  or install openssl / ensure Docker is running."
   }
 }
 
@@ -195,14 +223,14 @@ if (-not (Test-Path $cert)) {
 if ($NoStart) { Write-Host "OK Scaffolded $Dir (-NoStart). Run: cd $Dir; docker compose up -d"; exit 0 }
 Push-Location $Dir
 try {
-  # $ErrorActionPreference=Stop does NOT catch native exit codes, so check them
-  # explicitly  -  otherwise a failed pull/up would still print the success banner.
+  # Docker Compose streams "... Pulling/Pulled" progress to stderr, which becomes a
+  # terminating NativeCommandError under $ErrorActionPreference='Stop' BEFORE any
+  # $LASTEXITCODE check can run  -  aborting a perfectly good pull. Invoke-NativeChecked
+  # relaxes the preference for the call and decides success from the exit code.
   if (-not $NoPull) {
-    docker compose pull
-    if ($LASTEXITCODE -ne 0) { Die "docker compose pull failed (is the image published yet? see RELEASE.md)" }
+    Invoke-NativeChecked { docker compose pull } "docker compose pull failed (are the images published + public? see RELEASE.md)"
   }
-  docker compose up -d
-  if ($LASTEXITCODE -ne 0) { Die "docker compose up failed" }
+  Invoke-NativeChecked { docker compose up -d } "docker compose up failed"
 } finally { Pop-Location }
 Write-Host ""
 Write-Host "OK OpenLDR is starting. Open $Origin"
