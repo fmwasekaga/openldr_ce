@@ -2,6 +2,17 @@ import type { NewCustomQuery, ReportRecord, CustomQueryStore, ReportStore, Conne
 import type { ReportDesign, ReportDesignStore } from '@openldr/report-designer';
 import { simpleTableDesign } from './simple-design';
 
+// NOTE on why this isn't `import type { SqlDialect } from '@openldr/dashboards'` (as the plan
+// sketch suggested): `@openldr/dashboards` already depends on `@openldr/reporting` (for the
+// shared `ReportResultData`/`ReportColumn`/`ChartHint` types used by `compile.ts`/`sql-runner.ts`),
+// so importing from dashboards here would introduce a package cycle. Re-declared locally instead,
+// mirroring the same already-established convention `@openldr/db`'s `custom-query-store.ts` uses
+// for `CustomQueryParam`/`CustomQuery` (structurally identical to `@openldr/dashboards`'s source
+// of truth, kept in sync by hand). `packages/bootstrap` (the actual caller, which depends on both
+// `db` and `dashboards` with no cycle) can and does import the real `SqlDialect` from
+// `@openldr/dashboards` directly.
+export type SqlDialect = 'postgres' | 'mssql';
+
 // S4 seed data: the query + design + report-record triples that replace the hardcoded catalog
 // reports (`packages/reporting/src/reports/*.ts`) with data-driven ones. Task 4.2 (worked example)
 // appends `amr-resistance`'s triple below; Tasks 4.3-4.8 append one each for the remaining six.
@@ -46,30 +57,56 @@ export const ANTIBIOGRAM_PANEL: string[] = [
  *  format EXACTLY: `${cell.percentR}% (${cell.tested})` when the pathogen was tested against this
  *  antibiotic (`aggregate.ts`'s `pct()` = `Math.round((r/tested)*1000)/10`, i.e. rounded to 1
  *  decimal place, reproduced here via `round(..., 1)`), or `''` when it was never tested (mirrors
- *  `cell ? ... : ''`). The `::float8::text` cast (same technique already used for `percentR`
- *  columns elsewhere in this file) renders like JS `Number#toString` — no trailing `.0` for whole
- *  percentages — so e.g. `100` (not `100.0`) matches the catalog's cell text byte-for-byte. */
-function antibiogramCellSql(antibiotic: string): string {
+ *  `cell ? ... : ''`). The postgres `::float8::text` cast (same technique already used for
+ *  `percentR` columns elsewhere in this file) renders like JS `Number#toString` — no trailing
+ *  `.0` for whole percentages — so e.g. `100` (not `100.0`) matches the catalog's cell text
+ *  byte-for-byte. The mssql variant (Task 2 port) uses `cast(... as float)` +
+ *  `cast(... as nvarchar(max))` per the porting rules; SQL Server's float->nvarchar text
+ *  formatting is NOT guaranteed byte-identical to Postgres's `::text` cast (may render trailing
+ *  zeros/scientific notation differently for edge-case values) — flagged for the cross-dialect
+ *  parity harness to verify against a live MSSQL warehouse. */
+function antibiogramCellSql(antibiotic: string, dialect: SqlDialect): string {
   const lit = antibiotic.replace(/'/g, "''");
   const ident = antibiotic.replace(/"/g, '""');
+  if (dialect === 'mssql') {
+    return `case when sum(case when antibiotic = '${lit}' then 1 else 0 end) = 0 then ''
+    else cast(cast(round(100.0 * sum(case when antibiotic = '${lit}' and ris = 'R' then 1 else 0 end) / nullif(sum(case when antibiotic = '${lit}' then 1 else 0 end), 0), 1) as float) as nvarchar(max))
+      + '% (' + cast(sum(case when antibiotic = '${lit}' then 1 else 0 end) as nvarchar(max)) + ')' end as "${ident}"`;
+  }
   return `case when count(*) filter (where antibiotic = '${lit}') = 0 then ''
     else (round(100.0 * count(*) filter (where antibiotic = '${lit}' and ris = 'R') / nullif(count(*) filter (where antibiotic = '${lit}'), 0), 1)::float8)::text
       || '% (' || count(*) filter (where antibiotic = '${lit}')::text || ')' end as "${ident}"`;
 }
 
+/** One query's SQL in both supported warehouse dialects — Task 2 (mssql-slice2b): every built-in
+ *  report query now carries a Postgres variant (unchanged from before this task — still the one
+ *  and only source of truth the `amr-*-parity.test.ts` fixtures were built against) and a T-SQL
+ *  variant (first pass; ported per the documented rules table, validated by a later live
+ *  cross-dialect parity harness, not guaranteed byte-perfect yet). `seedDataDrivenReports` picks
+ *  the variant matching the resolved warehouse connector's dialect. */
+type DialectSql = { postgres: string; mssql: string };
+type SeedQuery = Omit<NewCustomQuery, 'sql'> & { sql: DialectSql };
+
 /** Custom queries (bound to a connector) that back the seeded report designs. `connectorId: ''`
  *  is a placeholder — `seedDataDrivenReports` resolves the real default-connector id and stamps
  *  it on before insert (see `DEFAULT_CONNECTOR_NAME`). */
-export const SEED_QUERIES: NewCustomQuery[] = [
+export const SEED_QUERIES: SeedQuery[] = [
   {
     id: 'q-facilities',
     name: 'Facilities (options)',
     connectorId: '',
     params: [],
-    sql: `select distinct managing_organization as facility
+    // No postgres-isms at all — the mssql variant is byte-identical (see Task 2's porting notes).
+    sql: {
+      postgres: `select distinct managing_organization as facility
 from patients
 where managing_organization is not null
 order by 1`,
+      mssql: `select distinct managing_organization as facility
+from patients
+where managing_organization is not null
+order by 1`,
+    },
   },
   {
     id: 'q-amr-resistance',
@@ -104,7 +141,8 @@ order by 1`,
     //    is only truly optional if every caller always supplies `facility` (empty string for
     //    "no filter"); the seeded design's `facility` param should default to `''` for this
     //    reason. Confirmed live in the Task 4.2 parity check.
-    sql: `select
+    sql: {
+      postgres: `select
   coalesce(o.code_text, '(unknown)') as antibiotic,
   count(*)::int as tested,
   sum(case when o.interpretation_code = 'R' then 1 else 0 end)::int as r,
@@ -120,6 +158,27 @@ where o.interpretation_code in ('S', 'I', 'R')
   ))
 group by coalesce(o.code_text, '(unknown)')
 order by "percentR" desc`,
+      // Task 2 port: count(*) filter(...) -> sum(case...), ::int -> cast(...as int),
+      // ::float8 -> cast(...as float), string || -> +. `{{param.to}}`/`{{param.facility}}` are
+      // always quoted string literals at substitution time (see custom-query-run.ts's
+      // `sqlString`), so `+` concatenation here is always string+string — no cast needed.
+      mssql: `select
+  coalesce(o.code_text, '(unknown)') as antibiotic,
+  cast(count(*) as int) as tested,
+  cast(sum(case when o.interpretation_code = 'R' then 1 else 0 end) as int) as r,
+  cast(sum(case when o.interpretation_code = 'I' then 1 else 0 end) as int) as i,
+  cast(sum(case when o.interpretation_code = 'S' then 1 else 0 end) as int) as s,
+  cast(round(100.0 * sum(case when o.interpretation_code = 'R' then 1 else 0 end) / nullif(count(*), 0), 1) as float) as "percentR"
+from observations o
+where o.interpretation_code in ('S', 'I', 'R')
+  and o.effective_date_time >= {{param.from}}
+  and o.effective_date_time <= ({{param.to}} + 'T23:59:59.999Z')
+  and ({{param.facility}} = '' or o.subject_ref in (
+    select 'Patient/' + p.id from patients p where p.managing_organization = {{param.facility}}
+  ))
+group by coalesce(o.code_text, '(unknown)')
+order by "percentR" desc`,
+    },
   },
   {
     id: 'q-test-volume',
@@ -144,7 +203,8 @@ order by "percentR" desc`,
       { id: 'from', label: 'From', type: 'text', required: true },
       { id: 'to', label: 'To', type: 'text', required: true },
     ],
-    sql: `select
+    sql: {
+      postgres: `select
   to_char(date_trunc('month', sr.authored_on::timestamptz), 'YYYY-MM') as month,
   coalesce(sr.code_text, '(unknown)') as test,
   count(*)::int as count
@@ -153,6 +213,20 @@ where sr.authored_on >= {{param.from}}
   and sr.authored_on <= ({{param.to}} || 'T23:59:59.999Z')
 group by 1, 2
 order by 1, 2`,
+      // Task 2 port: to_char(date_trunc('month', ...), 'YYYY-MM') -> format(cast(...as
+      // datetime2), 'yyyy-MM'); ::int -> cast(...as int); string || -> +. GROUP BY ordinals
+      // (`group by 1, 2`) are NOT supported by T-SQL (unlike ORDER BY, which does support them
+      // there too) — the grouped expressions are spelled out instead.
+      mssql: `select
+  format(cast(sr.authored_on as datetime2), 'yyyy-MM') as month,
+  coalesce(sr.code_text, '(unknown)') as test,
+  cast(count(*) as int) as count
+from service_requests sr
+where sr.authored_on >= {{param.from}}
+  and sr.authored_on <= ({{param.to}} + 'T23:59:59.999Z')
+group by format(cast(sr.authored_on as datetime2), 'yyyy-MM'), coalesce(sr.code_text, '(unknown)')
+order by 1, 2`,
+    },
   },
   {
     id: 'q-turnaround-time',
@@ -190,7 +264,8 @@ order by 1, 2`,
       { id: 'to', label: 'To', type: 'text', required: true },
       { id: 'facility', label: 'Facility', type: 'text', required: false },
     ],
-    sql: `with received as (
+    sql: {
+      postgres: `with received as (
   select subject_ref, min(received_time) as received_time
   from specimens
   where subject_ref is not null and received_time is not null
@@ -219,6 +294,45 @@ select
 from paired
 group by test
 order by "avgHours" desc, test asc`,
+      // Task 2 port: extract(epoch from (a::timestamptz - b::timestamptz))/3600.0 ->
+      // datediff(second, cast(b as datetime2), cast(a as datetime2))/3600.0 (datediff's arg
+      // order is (start, end) = (received, issued), matching issued-minus-received). T-SQL's
+      // ROUND requires an explicit `length` argument (unlike Postgres, where it defaults to 0)
+      // — `, 0` added for the single-arg `round(hours)` call. AVG() of an integer expression
+      // truncates to integer in T-SQL (unlike Postgres, where avg(int) already returns numeric)
+      // — `hours` is cast to decimal(18,4) BEFORE avg() to avoid silently truncating the
+      // average; flagged for the parity harness as the most likely subtle divergence in this
+      // query. string || -> +.
+      mssql: `with received as (
+  select subject_ref, min(received_time) as received_time
+  from specimens
+  where subject_ref is not null and received_time is not null
+  group by subject_ref
+),
+paired as (
+  select
+    coalesce(dr.code_text, '(unknown)') as test,
+    cast(round(datediff(second, cast(r.received_time as datetime2), cast(dr.issued as datetime2)) / 3600.0, 0) as int) as hours
+  from diagnostic_reports dr
+  join received r on r.subject_ref = dr.subject_ref
+  where dr.issued is not null
+    and dr.issued >= r.received_time
+    and dr.issued >= {{param.from}}
+    and dr.issued <= ({{param.to}} + 'T23:59:59.999Z')
+    and ({{param.facility}} = '' or dr.subject_ref in (
+      select 'Patient/' + p.id from patients p where p.managing_organization = {{param.facility}}
+    ))
+)
+select
+  test,
+  cast(count(*) as int) as count,
+  cast(round(avg(cast(hours as decimal(18,4))), 1) as float) as "avgHours",
+  cast(min(hours) as int) as "minHours",
+  cast(max(hours) as int) as "maxHours"
+from paired
+group by test
+order by "avgHours" desc, test asc`,
+    },
   },
   {
     id: 'q-patient-demographics',
@@ -239,7 +353,8 @@ order by "avgHours" desc, test asc`,
       { id: 'facility', label: 'Facility', type: 'text', required: false },
       { id: 'asOf', label: 'As of', type: 'text', required: false },
     ],
-    sql: `with params as (
+    sql: {
+      postgres: `with params as (
   select coalesce(nullif({{param.asOf}}, ''), '2026-01-01T00:00:00Z')::date as ref_date
 ),
 banded as (
@@ -266,6 +381,44 @@ select
 from banded
 group by band
 order by array_position(array['0-4','5-14','15-24','25-49','50+','unknown']::text[], band)`,
+      // Task 2 port — the trickiest of the nine (flagged for extra parity-harness attention):
+      //  - X::date -> cast(X as date); SQL Server's CAST(...AS date) does parse ISO-8601
+      //    'YYYY-MM-DDTHH:MM:SSZ' strings (ODBC canonical style), matching the `asOf` default.
+      //  - extract(year from age(ref, birth)) -> the documented datediff(year,...) - borrow-day
+      //    formula, per the porting rules table. The formula is repeated inline for every band
+      //    boundary (T-SQL has no cheap equivalent of reusing a CTE-computed `age_years` here
+      //    without another CTE layer) — verbose but mechanical; each occurrence is identical.
+      //  - array_position(...) ORDER BY -> the fixed CASE-mapping per the rules table.
+      //  - `from patients p, params pr` (implicit cross join) -> explicit `cross join` (same
+      //    semantics, only a style change).
+      mssql: `with params as (
+  select cast(coalesce(nullif({{param.asOf}}, ''), '2026-01-01T00:00:00Z') as date) as ref_date
+),
+banded as (
+  select
+    case
+      when p.birth_date is null then 'unknown'
+      when cast(p.birth_date as date) > pr.ref_date then 'unknown'
+      when (datediff(year, cast(p.birth_date as date), pr.ref_date) - case when (month(cast(p.birth_date as date)) > month(pr.ref_date)) or (month(cast(p.birth_date as date)) = month(pr.ref_date) and day(cast(p.birth_date as date)) > day(pr.ref_date)) then 1 else 0 end) <= 4 then '0-4'
+      when (datediff(year, cast(p.birth_date as date), pr.ref_date) - case when (month(cast(p.birth_date as date)) > month(pr.ref_date)) or (month(cast(p.birth_date as date)) = month(pr.ref_date) and day(cast(p.birth_date as date)) > day(pr.ref_date)) then 1 else 0 end) <= 14 then '5-14'
+      when (datediff(year, cast(p.birth_date as date), pr.ref_date) - case when (month(cast(p.birth_date as date)) > month(pr.ref_date)) or (month(cast(p.birth_date as date)) = month(pr.ref_date) and day(cast(p.birth_date as date)) > day(pr.ref_date)) then 1 else 0 end) <= 24 then '15-24'
+      when (datediff(year, cast(p.birth_date as date), pr.ref_date) - case when (month(cast(p.birth_date as date)) > month(pr.ref_date)) or (month(cast(p.birth_date as date)) = month(pr.ref_date) and day(cast(p.birth_date as date)) > day(pr.ref_date)) then 1 else 0 end) <= 49 then '25-49'
+      else '50+'
+    end as band,
+    p.gender
+  from patients p cross join params pr
+  where ({{param.facility}} = '' or p.managing_organization = {{param.facility}})
+)
+select
+  band,
+  cast(count(*) as int) as total,
+  cast(sum(case when gender = 'male' then 1 else 0 end) as int) as male,
+  cast(sum(case when gender = 'female' then 1 else 0 end) as int) as female,
+  cast(sum(case when gender is null or gender not in ('male', 'female') then 1 else 0 end) as int) as other
+from banded
+group by band
+order by case band when '0-4' then 1 when '5-14' then 2 when '15-24' then 3 when '25-49' then 4 when '50+' then 5 when 'unknown' then 6 end`,
+    },
   },
   {
     id: 'q-amr-facility-summary',
@@ -289,7 +442,8 @@ order by array_position(array['0-4','5-14','15-24','25-49','50+','unknown']::tex
       { id: 'from', label: 'From', type: 'text', required: true },
       { id: 'to', label: 'To', type: 'text', required: true },
     ],
-    sql: `select
+    sql: {
+      postgres: `select
   p.managing_organization as facility,
   count(*)::int as tested,
   sum(case when o.interpretation_code = 'R' then 1 else 0 end)::int as resistant
@@ -302,6 +456,24 @@ where o.interpretation_code in ('S', 'I', 'R')
   and o.effective_date_time <= ({{param.to}} || 'T23:59:59.999Z')
 group by p.managing_organization
 order by p.managing_organization`,
+      // Task 2 port: ::int -> cast(...as int); string || -> +ing (both `'Patient/' + p.id`
+      // and the `{{param.to}}` concat — `id` is `varchar(450)` on mssql per the shared external
+      // schema (packages/db/src/migrations/external/dialect.ts's keyType), so it concatenates
+      // with the nvarchar literal without an extra cast).
+      mssql: `select
+  p.managing_organization as facility,
+  cast(count(*) as int) as tested,
+  cast(sum(case when o.interpretation_code = 'R' then 1 else 0 end) as int) as resistant
+from observations o
+join patients p on o.subject_ref = 'Patient/' + p.id
+where o.interpretation_code in ('S', 'I', 'R')
+  and o.subject_ref is not null and o.subject_ref <> ''
+  and p.managing_organization is not null
+  and o.effective_date_time >= {{param.from}}
+  and o.effective_date_time <= ({{param.to}} + 'T23:59:59.999Z')
+group by p.managing_organization
+order by p.managing_organization`,
+    },
   },
   {
     id: 'q-amr-glass-ris',
@@ -347,7 +519,8 @@ order by p.managing_organization`,
       { id: 'country', label: 'Country code', type: 'text', required: false },
       { id: 'year', label: 'Year', type: 'text', required: false },
     ],
-    sql: `with org_obs as (
+    sql: {
+      postgres: `with org_obs as (
   select o.id, o.specimen_ref, o.subject_ref, o.value_code, o.value_text, o.effective_date_time
   from observations o
   where o.code_code = '634-6'
@@ -426,6 +599,117 @@ select
 from results
 group by specimen_type, pathogen_code, antibiotic, gender, age_band, origin
 order by "Specimen", "PathogenCode", "AntibioticCode", "Gender", "AgeGroup", "Origin"`,
+      // Task 2 port — FLAGGED for extra parity-harness attention (the most structurally complex
+      // query in the seed set):
+      //  - `distinct on (...) order by k1,k2,k3,(iso_date is null),iso_date asc,obs_id asc` has
+      //    no T-SQL equivalent; ported to `row_number() over (partition by k1,k2,k3 order by
+      //    case when iso_date is null then 1 else 0 end asc, iso_date asc, obs_id asc) = 1`,
+      //    which is the standard dedup-first-row idiom and preserves the same tiebreak order
+      //    (non-null dates sort first, exactly like Postgres's boolean-ascending `(iso_date is
+      //    null)`; `iso_date`/`obs_id` are plain nvarchar/varchar columns on both engines, so the
+      //    ORDER BY is a lexicographic string sort on both sides — consistent, not a divergence).
+      //  - `age(ref, birth)` extract-year -> the documented datediff(year,...) - borrow-day
+      //    formula (ref = coalesce(iso_date, '1970-01-01')::date here, not a fixed reference —
+      //    same rule, different operands than q-patient-demographics). When birth_date is NULL,
+      //    `datediff(year, cast(NULL as date), ...)` returns NULL and the borrow CASE's
+      //    `month(NULL)`/`day(NULL)` comparisons are also NULL (falls to the CASE's ELSE 0),
+      //    so age_years ends up NULL — consistent with Postgres's `age(x, null) -> null` and
+      //    harmless since the outer CASE checks `birth_date is null` first regardless.
+      //  - string || -> +; ::int -> cast(...as int).
+      mssql: `with org_obs as (
+  select o.id, o.specimen_ref, o.subject_ref, o.value_code, o.value_text, o.effective_date_time
+  from observations o
+  where o.code_code = '634-6'
+    and o.specimen_ref is not null and o.specimen_ref <> ''
+    and o.subject_ref is not null and o.subject_ref <> ''
+),
+isolate_meta as (
+  select
+    oo.id as obs_id,
+    oo.specimen_ref,
+    oo.subject_ref,
+    coalesce(s.type_code, '(unknown)') as specimen_type,
+    case when s.origin in ('inpatient', 'outpatient') then s.origin else 'unknown' end as origin,
+    coalesce(oo.value_code, '(unknown)') as pathogen_code,
+    coalesce(oo.value_text, oo.value_code, '(unknown)') as pathogen_name,
+    coalesce(oo.effective_date_time, s.received_time) as iso_date,
+    coalesce(p.gender, 'unknown') as gender,
+    p.birth_date
+  from org_obs oo
+  left join specimens s on oo.specimen_ref = 'Specimen/' + s.id
+  left join patients p on oo.subject_ref = 'Patient/' + p.id
+  where coalesce(oo.effective_date_time, s.received_time) is null
+     or (coalesce(oo.effective_date_time, s.received_time) >= {{param.from}}
+         and coalesce(oo.effective_date_time, s.received_time) <= ({{param.to}} + 'T23:59:59.999Z'))
+),
+age_banded as (
+  select im.*,
+    cast(
+      datediff(year, cast(im.birth_date as date), cast(coalesce(im.iso_date, '1970-01-01') as date))
+      - case when (month(cast(im.birth_date as date)) > month(cast(coalesce(im.iso_date, '1970-01-01') as date)))
+              or (month(cast(im.birth_date as date)) = month(cast(coalesce(im.iso_date, '1970-01-01') as date))
+                  and day(cast(im.birth_date as date)) > day(cast(coalesce(im.iso_date, '1970-01-01') as date)))
+             then 1 else 0 end
+    as int) as age_years
+  from isolate_meta im
+),
+ranked as (
+  select ab.*,
+    row_number() over (
+      partition by subject_ref, pathogen_code, specimen_type
+      order by case when iso_date is null then 1 else 0 end asc, iso_date asc, obs_id asc
+    ) as rn
+  from age_banded ab
+),
+first_isolates as (
+  select
+    obs_id, specimen_ref, subject_ref, specimen_type, origin, pathogen_code, pathogen_name, iso_date, gender,
+    case
+      when birth_date is null then 'unknown'
+      when age_years < 0 then 'unknown'
+      when age_years >= 65 then '65+'
+      when age_years = 0 then '0'
+      when age_years between 1 and 4 then '1-4'
+      when age_years between 5 and 14 then '5-14'
+      when age_years between 15 and 24 then '15-24'
+      when age_years between 25 and 34 then '25-34'
+      when age_years between 35 and 44 then '35-44'
+      when age_years between 45 and 54 then '45-54'
+      when age_years between 55 and 64 then '55-64'
+      else 'unknown'
+    end as age_band
+  from ranked
+  where rn = 1
+),
+ast_obs as (
+  select o.specimen_ref, o.code_text as antibiotic, o.interpretation_code as ris
+  from observations o
+  where o.interpretation_code in ('S', 'I', 'R')
+    and o.code_text is not null
+    and o.specimen_ref is not null and o.specimen_ref <> ''
+),
+results as (
+  select fi.*, a.antibiotic, a.ris
+  from first_isolates fi
+  join ast_obs a on a.specimen_ref = fi.specimen_ref
+)
+select
+  coalesce(nullif({{param.country}}, ''), 'XXX') as "Iso3Country",
+  cast(coalesce(nullif({{param.year}}, ''), '0') as int) as "Year",
+  specimen_type as "Specimen",
+  pathogen_code as "PathogenCode",
+  antibiotic as "AntibioticCode",
+  gender as "Gender",
+  age_band as "AgeGroup",
+  origin as "Origin",
+  cast(sum(case when ris = 'R' then 1 else 0 end) as int) as "Resistant",
+  cast(sum(case when ris = 'I' then 1 else 0 end) as int) as "Intermediate",
+  cast(sum(case when ris = 'S' then 1 else 0 end) as int) as "Susceptible",
+  cast(count(*) as int) as "Total"
+from results
+group by specimen_type, pathogen_code, antibiotic, gender, age_band, origin
+order by "Specimen", "PathogenCode", "AntibioticCode", "Gender", "AgeGroup", "Origin"`,
+    },
   },
   {
     id: 'q-amr-first-isolate-summary',
@@ -444,7 +728,8 @@ order by "Specimen", "PathogenCode", "AntibioticCode", "Gender", "AgeGroup", "Or
       { id: 'from', label: 'From', type: 'text', required: true },
       { id: 'to', label: 'To', type: 'text', required: true },
     ],
-    sql: `with org_obs as (
+    sql: {
+      postgres: `with org_obs as (
   select o.id, o.specimen_ref, o.subject_ref, o.value_code, o.value_text, o.effective_date_time
   from observations o
   where o.code_code = '634-6'
@@ -519,6 +804,100 @@ select
 from results
 group by specimen_type, pathogen_code, antibiotic
 order by specimen_type, pathogen_code, antibiotic`,
+      // Task 2 port: identical CTE chain/rationale as q-amr-glass-ris's mssql variant (distinct
+      // on -> row_number()/rn=1, age() -> datediff(year,...) borrow-day formula, ::int ->
+      // cast(...as int), string || -> +) — see its comment for the full explanation. Flagged for
+      // the same extra parity-harness attention.
+      mssql: `with org_obs as (
+  select o.id, o.specimen_ref, o.subject_ref, o.value_code, o.value_text, o.effective_date_time
+  from observations o
+  where o.code_code = '634-6'
+    and o.specimen_ref is not null and o.specimen_ref <> ''
+    and o.subject_ref is not null and o.subject_ref <> ''
+),
+isolate_meta as (
+  select
+    oo.id as obs_id,
+    oo.specimen_ref,
+    oo.subject_ref,
+    coalesce(s.type_code, '(unknown)') as specimen_type,
+    case when s.origin in ('inpatient', 'outpatient') then s.origin else 'unknown' end as origin,
+    coalesce(oo.value_code, '(unknown)') as pathogen_code,
+    coalesce(oo.value_text, oo.value_code, '(unknown)') as pathogen_name,
+    coalesce(oo.effective_date_time, s.received_time) as iso_date,
+    coalesce(p.gender, 'unknown') as gender,
+    p.birth_date
+  from org_obs oo
+  left join specimens s on oo.specimen_ref = 'Specimen/' + s.id
+  left join patients p on oo.subject_ref = 'Patient/' + p.id
+  where coalesce(oo.effective_date_time, s.received_time) is null
+     or (coalesce(oo.effective_date_time, s.received_time) >= {{param.from}}
+         and coalesce(oo.effective_date_time, s.received_time) <= ({{param.to}} + 'T23:59:59.999Z'))
+),
+age_banded as (
+  select im.*,
+    cast(
+      datediff(year, cast(im.birth_date as date), cast(coalesce(im.iso_date, '1970-01-01') as date))
+      - case when (month(cast(im.birth_date as date)) > month(cast(coalesce(im.iso_date, '1970-01-01') as date)))
+              or (month(cast(im.birth_date as date)) = month(cast(coalesce(im.iso_date, '1970-01-01') as date))
+                  and day(cast(im.birth_date as date)) > day(cast(coalesce(im.iso_date, '1970-01-01') as date)))
+             then 1 else 0 end
+    as int) as age_years
+  from isolate_meta im
+),
+ranked as (
+  select ab.*,
+    row_number() over (
+      partition by subject_ref, pathogen_code, specimen_type
+      order by case when iso_date is null then 1 else 0 end asc, iso_date asc, obs_id asc
+    ) as rn
+  from age_banded ab
+),
+first_isolates as (
+  select
+    obs_id, specimen_ref, subject_ref, specimen_type, origin, pathogen_code, pathogen_name, iso_date, gender,
+    case
+      when birth_date is null then 'unknown'
+      when age_years < 0 then 'unknown'
+      when age_years >= 65 then '65+'
+      when age_years = 0 then '0'
+      when age_years between 1 and 4 then '1-4'
+      when age_years between 5 and 14 then '5-14'
+      when age_years between 15 and 24 then '15-24'
+      when age_years between 25 and 34 then '25-34'
+      when age_years between 35 and 44 then '35-44'
+      when age_years between 45 and 54 then '45-54'
+      when age_years between 55 and 64 then '55-64'
+      else 'unknown'
+    end as age_band
+  from ranked
+  where rn = 1
+),
+ast_obs as (
+  select o.specimen_ref, o.code_text as antibiotic, o.interpretation_code as ris
+  from observations o
+  where o.interpretation_code in ('S', 'I', 'R')
+    and o.code_text is not null
+    and o.specimen_ref is not null and o.specimen_ref <> ''
+),
+results as (
+  select fi.*, a.antibiotic, a.ris
+  from first_isolates fi
+  join ast_obs a on a.specimen_ref = fi.specimen_ref
+)
+select
+  specimen_type as "specimenType",
+  pathogen_code as "pathogen",
+  antibiotic,
+  cast(count(*) as int) as tested,
+  cast(sum(case when ris = 'R' then 1 else 0 end) as int) as r,
+  cast(sum(case when ris = 'I' then 1 else 0 end) as int) as i,
+  cast(sum(case when ris = 'S' then 1 else 0 end) as int) as s,
+  cast(round(100.0 * sum(case when ris = 'R' then 1 else 0 end) / nullif(count(*), 0), 1) as float) as "percentR"
+from results
+group by specimen_type, pathogen_code, antibiotic
+order by specimen_type, pathogen_code, antibiotic`,
+    },
   },
   {
     id: 'q-amr-antibiogram',
@@ -554,7 +933,8 @@ order by specimen_type, pathogen_code, antibiotic`,
       { id: 'from', label: 'From', type: 'text', required: true },
       { id: 'to', label: 'To', type: 'text', required: true },
     ],
-    sql: `with org_obs as (
+    sql: {
+      postgres: `with org_obs as (
   select o.id, o.specimen_ref, o.subject_ref, o.value_code, o.value_text, o.effective_date_time
   from observations o
   where o.code_code = '634-6'
@@ -595,10 +975,67 @@ results as (
 )
 select
   pathogen_code as pathogen,
-  ${ANTIBIOGRAM_PANEL.map(antibiogramCellSql).join(',\n  ')}
+  ${ANTIBIOGRAM_PANEL.map((a) => antibiogramCellSql(a, 'postgres')).join(',\n  ')}
 from results
 group by pathogen_code
 order by pathogen_code`,
+      // Task 2 port: distinct on -> row_number()/rn=1 (no age/gender columns needed here, so
+      // the CTE chain is simpler than glass-ris/first-isolate-summary — same dedup rationale,
+      // see q-amr-glass-ris's comment); string || -> +; antibiogramCellSql('mssql') ports each
+      // CASE column per the rules table (see its own doc comment for the float->text caveat).
+      mssql: `with org_obs as (
+  select o.id, o.specimen_ref, o.subject_ref, o.value_code, o.value_text, o.effective_date_time
+  from observations o
+  where o.code_code = '634-6'
+    and o.specimen_ref is not null and o.specimen_ref <> ''
+    and o.subject_ref is not null and o.subject_ref <> ''
+),
+isolate_meta as (
+  select
+    oo.id as obs_id,
+    oo.specimen_ref,
+    oo.subject_ref,
+    coalesce(s.type_code, '(unknown)') as specimen_type,
+    coalesce(oo.value_code, '(unknown)') as pathogen_code,
+    coalesce(oo.effective_date_time, s.received_time) as iso_date
+  from org_obs oo
+  left join specimens s on oo.specimen_ref = 'Specimen/' + s.id
+  where coalesce(oo.effective_date_time, s.received_time) is null
+     or (coalesce(oo.effective_date_time, s.received_time) >= {{param.from}}
+         and coalesce(oo.effective_date_time, s.received_time) <= ({{param.to}} + 'T23:59:59.999Z'))
+),
+ranked as (
+  select im.*,
+    row_number() over (
+      partition by subject_ref, pathogen_code, specimen_type
+      order by case when iso_date is null then 1 else 0 end asc, iso_date asc, obs_id asc
+    ) as rn
+  from isolate_meta im
+),
+first_isolates as (
+  select obs_id, specimen_ref, pathogen_code
+  from ranked
+  where rn = 1
+),
+ast_obs as (
+  select o.specimen_ref, o.code_text as antibiotic, o.interpretation_code as ris
+  from observations o
+  where o.interpretation_code in ('S', 'I', 'R')
+    and o.code_text is not null
+    and o.specimen_ref is not null and o.specimen_ref <> ''
+),
+results as (
+  select fi.pathogen_code, a.antibiotic, a.ris
+  from first_isolates fi
+  join ast_obs a on a.specimen_ref = fi.specimen_ref
+)
+select
+  pathogen_code as pathogen,
+  ${ANTIBIOGRAM_PANEL.map((a) => antibiogramCellSql(a, 'mssql')).join(',\n  ')}
+from results
+group by pathogen_code
+order by pathogen_code`,
+    },
   },
 ];
 
@@ -858,14 +1295,24 @@ export const SEED_REPORT_DEFS: ReportRecord[] = [
   },
 ];
 
+/** Task 2 (mssql-slice2b) reversal of Slice 1's "reports skip on MSSQL": the seed now resolves
+ *  EITHER default warehouse connector by name (Postgres or SQL Server — `seedDefaultConnector`
+ *  creates exactly one of the two, mutually exclusive on `TARGET_STORE_ADAPTER`) and derives the
+ *  SQL dialect from its `type`, so `seedDataDrivenReports` seeds working queries on both engines
+ *  instead of only ever finding `DEFAULT_CONNECTOR_NAME` (Postgres) and silently no-op'ing on an
+ *  MSSQL install. */
+const WAREHOUSE_NAMES = ['Target Warehouse (Postgres)', 'Target Warehouse (SQL Server)'];
+
 export interface SeedDataDrivenReportsDeps {
   customQueries: Pick<CustomQueryStore, 'get' | 'create'>;
   designs: Pick<ReportDesignStore, 'get' | 'create'>;
   reportDefs: Pick<ReportStore, 'get' | 'create'>;
-  /** Used to resolve `DEFAULT_CONNECTOR_NAME` → its server-generated id, stamped onto every
-   *  `SEED_QUERIES` entry before insert. If no such connector exists yet (e.g. `TARGET_DATABASE_URL`
-   *  / `SECRETS_ENCRYPTION_KEY` unset — see `seedDefaultConnector`), data-driven seeding is
-   *  skipped entirely: a query bound to a nonexistent connector could never run. */
+  /** Used to resolve the default warehouse connector (by `WAREHOUSE_NAMES`) → its server-generated
+   *  id (stamped onto every `SEED_QUERIES` entry before insert) and its `type` (used to pick the
+   *  matching `sql.postgres`/`sql.mssql` variant). If no such connector exists yet (e.g.
+   *  `TARGET_DATABASE_URL`/`MSSQL_*`/`SECRETS_ENCRYPTION_KEY` unset — see `seedDefaultConnector`),
+   *  data-driven seeding is skipped entirely: a query bound to a nonexistent connector could never
+   *  run. */
   connectors: Pick<ConnectorStore, 'list'>;
 }
 
@@ -890,16 +1337,17 @@ const EMPTY_RESULT: SeedDataDrivenReportsResult = { queriesSeeded: 0, designsSee
  *  never run) — mirrors how `seedDefaultConnector` itself skips gracefully when unconfigured. */
 export async function seedDataDrivenReports(deps: SeedDataDrivenReportsDeps): Promise<SeedDataDrivenReportsResult> {
   const connectors = await deps.connectors.list();
-  const connector = connectors.find((c) => c.name === DEFAULT_CONNECTOR_NAME);
+  const connector = connectors.find((c) => WAREHOUSE_NAMES.includes(c.name));
   if (!connector) {
-    console.log(`[seed] default connector "${DEFAULT_CONNECTOR_NAME}" not found — skipping data-driven report seed`);
+    console.log(`[seed] no default warehouse connector found (looked for ${WAREHOUSE_NAMES.join(' / ')}) — skipping data-driven report seed`);
     return EMPTY_RESULT;
   }
+  const dialect: SqlDialect = connector.type === 'microsoft-sql' ? 'mssql' : 'postgres';
 
   let queriesSeeded = 0;
   for (const q of SEED_QUERIES) {
     if (!(await deps.customQueries.get(q.id))) {
-      await deps.customQueries.create({ ...q, connectorId: connector.id });
+      await deps.customQueries.create({ ...q, sql: q.sql[dialect], connectorId: connector.id });
       queriesSeeded += 1;
     }
   }
