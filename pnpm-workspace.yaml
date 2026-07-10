@@ -7,6 +7,21 @@ packages:
 # sub-dependency during `pnpm deploy` (production Docker build). pnpm 10+ blocks URL-resolved
 # subdeps by default; our only exotic dep is xlsx, pinned + integrity-hashed in the lockfile.
 blockExoticSubdeps: false
+# Pin the vitest toolchain to a single version. Packages declare `vitest: ^2.1.8`, but the
+# caret lets the lockfile drift to resolve BOTH 2.1.8 and 2.1.9. Two copies of `@vitest/expect`
+# both patch the shared `chai` singleton's `throws`, double-wrapping the `.rejects.toThrow(...)`
+# reason so chai catches a wrapper function (no `.message`) and its bundled `compatibleMessage`
+# crashes on `undefined.indexOf(...)`. Surfaced under turbo CPU oversubscription (both copies
+# packed into one worker) as a flaky studio#test red.
+overrides:
+  vitest: 2.1.8
+  '@vitest/expect': 2.1.8
+  '@vitest/runner': 2.1.8
+  '@vitest/snapshot': 2.1.8
+  '@vitest/spy': 2.1.8
+  '@vitest/mocker': 2.1.8
+  '@vitest/utils': 2.1.8
+  '@vitest/pretty-format': 2.1.8
 allowBuilds:
   esbuild: true
   '@extism/extism': true
