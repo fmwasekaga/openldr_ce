@@ -3,5 +3,6 @@
 # The official nginx entrypoint runs envsubst on /etc/nginx/templates/*.template at start,
 # so ${SERVER_NAME} is still substituted at runtime. TLS certs stay mounted (host-specific).
 FROM nginx:1.27-alpine
+LABEL org.opencontainers.image.source="https://github.com/Open-Laboratory-Data-Repository/openldr"
 COPY openldr.conf.template /etc/nginx/templates/default.conf.template
 EXPOSE 80 443

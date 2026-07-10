@@ -10,6 +10,7 @@ RUN pnpm turbo build --filter @openldr/studio
 
 # ---- serve the static site ----
 FROM nginx:1.27-alpine AS runtime
+LABEL org.opencontainers.image.source="https://github.com/Open-Laboratory-Data-Repository/openldr"
 COPY --from=build /repo/apps/studio/dist /usr/share/nginx/html/studio
 COPY apps/studio/nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80

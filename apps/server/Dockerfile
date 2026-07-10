@@ -17,6 +17,7 @@ RUN mkdir -p /deploy/fixtures/fhir && cp packages/db/fixtures/fhir/*.gz /deploy/
 
 # ---- runtime: slim node, non-root, API-only (no SPA — WEB_DIST_DIR unset) ----
 FROM node:22-bookworm-slim AS runtime
+LABEL org.opencontainers.image.source="https://github.com/Open-Laboratory-Data-Repository/openldr"
 ENV NODE_ENV=production
 ENV PORT=3000
 WORKDIR /app
