@@ -190,7 +190,7 @@ database may be **PostgreSQL** (default) or **self-hosted Microsoft SQL Server**
 |--------------------|-----------|-------|
 | 2017               | ✅ Yes    | Minimum supported release (nearest upgrade for 2014 sites). |
 | 2019               | ✅ Yes    | |
-| 2022               | ✅ Yes    | Used for the optional managed **demo** container. |
+| 2022               | ✅ Yes    | Pinned for local evaluation + the acceptance matrix. |
 | 2016 and earlier   | ❌ No     | End of life / no official Linux container. Upgrade to 2017. |
 | Azure SQL, Managed Instance, AWS RDS, any hosted/cloud SQL | ❌ Never | See data-sovereignty policy below. |
 
@@ -208,11 +208,19 @@ roadmap gap.
 
 ### Demo vs. production
 
-- **Demo/evaluation:** the installer can provision a pinned SQL Server 2022 container. SQL Server
-  Developer/Express editions are **not licensed for production** — this container is for
+- **Demo/evaluation:** a pinned SQL Server 2022 container can be run locally for evaluation — the
+  acceptance matrix (`scripts/mssql-matrix-accept.sh`) boots one per version. SQL Server
+  Developer/Express editions are **not licensed for production**, so any such container is for
   evaluation only and must never back a production deployment.
-- **Production:** bring your own self-hosted SQL Server (2017/2019/2022) and provide its
-  connection details at install time.
+- **Production:** use a self-hosted SQL Server (2017/2019/2022). The backend targets it via
+  `TARGET_STORE_ADAPTER=mssql` plus the `MSSQL_HOST` / `MSSQL_PORT` / `MSSQL_DATABASE` / `MSSQL_USER` /
+  `MSSQL_PASSWORD` / `MSSQL_ENCRYPT` / `MSSQL_TRUST_SERVER_CERT` environment variables (see the
+  Environment section).
+
+> **Note:** the guided installer does not yet prompt for the external database type — it currently
+> provisions a PostgreSQL target. Selecting SQL Server at install time (and seeding a matching
+> default connector) is planned follow-up work; today an MSSQL target is configured by setting the
+> `TARGET_STORE_ADAPTER=mssql` + `MSSQL_*` environment variables directly.
 
 ## Environment
 
