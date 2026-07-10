@@ -8,9 +8,12 @@ function tabIcon(t: Tab) {
   return <Zap className="h-4 w-4 shrink-0" />;
 }
 
-/** A table tab is "dirty" when its inline SQL diverges from the default browse query. */
+/** A table tab is "dirty" when its inline SQL diverges from the default browse query
+ * (quoted per the connector's dialect — `[schema].[table]` for SQL Server, ANSI double-quotes otherwise). */
 function isDirty(t: Tab): boolean {
-  return t.kind === 'table' && t.sql !== `select * from "${t.schema}"."${t.table}"`;
+  if (t.kind !== 'table') return false;
+  const def = t.type === 'microsoft-sql' ? `select * from [${t.schema}].[${t.table}]` : `select * from "${t.schema}"."${t.table}"`;
+  return t.sql !== def;
 }
 
 export function TabBar(): JSX.Element {
