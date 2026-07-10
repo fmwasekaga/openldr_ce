@@ -5,6 +5,12 @@
 //   2. externalMigrations('mssql') — dialect-aware flat-schema migrations apply (P2-DB-2/4)
 //   3. createFlatWriter(db, 'mssql') — flatten FHIR + batched MERGE upsert (P2-DB-2 bulk load)
 //   4. reporting run() over ExternalSchema — reports execute against SQL Server (P2-DB-3)
+//   5-8. Edge cases against the SQL Server `db` handle: unicode round-trip (nvarchar),
+//        null handling for missing optional fields, N=500 batched-MERGE idempotency, and
+//        text ordering + a real datetime2 (created_at) round-trip.
+//
+// Set MSSQL_ACCEPT_TARGET_ONLY=1 to skip step 4 (which needs the full Postgres app context) so
+// the script is self-contained for the SQL Server version matrix; steps 1-3 and 5-8 still run.
 //
 // Preconditions: a reachable SQL Server with the target database created.
 //   docker run -d --name openldr-mssql-test -e ACCEPT_EULA=Y \
@@ -51,14 +57,11 @@ async function main() {
   const store = createMssqlStore(cfg);
   const db = store.db as unknown as Kysely<ExternalSchema>;
   // App context for step 4's reporting run. The 7 built-in reports are now data-driven `r-<id>`
-  // records (Slice S5 retired the hardcoded catalog), resolved via `ctx.reporting.run`. NOTE: the
-  // data-driven reports execute their SQL through the default (Postgres) warehouse connector — they
-  // are Postgres-only in v1 — so step 4 no longer exercises reporting against THIS SQL Server `db`
-  // handle the way the old catalog `ReportDefinition.run(db)` did. Kept here only to prove the
-  // data-driven reporting path resolves; the MSSQL-dialect reporting coverage is a separate concern.
-  //
-  // Step 4 resolves the data-driven reports through the DEFAULT (Postgres) warehouse connector,
-  // so it needs the full app context (internal Postgres / S3 / OIDC). In target-only mode the
+  // records (Slice S5 retired the hardcoded catalog), resolved via `ctx.reporting.run`. Those
+  // reports execute their SQL through the DEFAULT (Postgres) warehouse connector — they are
+  // Postgres-only in v1 — so step 4 needs the full app context (internal Postgres / S3 / OIDC) and
+  // does NOT exercise reporting against THIS SQL Server `db` handle; it only proves the data-driven
+  // reporting path resolves (MSSQL-dialect reporting is a separate concern). In target-only mode the
   // matrix runner skips it: MSSQL_ACCEPT_TARGET_ONLY=1 exercises only the SQL Server `db` handle.
   const targetOnly = process.env.MSSQL_ACCEPT_TARGET_ONLY === '1';
   const appCtx = targetOnly ? null : await createAppContext(loadConfig());
@@ -149,14 +152,22 @@ async function main() {
     if (Number(bulkCount.n) !== BULK) throw new Error(`expected ${BULK} bulk rows after 2x write, got ${bulkCount.n}`);
     ok(`${BULK} rows batched + idempotent across two writes`);
 
-    step('8. datetime2 column round-trips and orders correctly');
+    step('8. authored_on text ordering + created_at datetime2 round-trip');
     await writer.writeMany([
       { resource: { resourceType: 'ServiceRequest', id: 'd-late', status: 'active', intent: 'order', code: { text: 'Date test' }, subject: { reference: 'Patient/u1' }, authoredOn: '2026-05-20T09:00:00Z' }, provenance: prov },
       { resource: { resourceType: 'ServiceRequest', id: 'd-early', status: 'active', intent: 'order', code: { text: 'Date test' }, subject: { reference: 'Patient/u1' }, authoredOn: '2026-01-05T09:00:00Z' }, provenance: prov },
     ]);
+    // authored_on is a text (nvarchar) column holding the raw ISO-8601 string — verify it
+    // round-trips and its ISO-8601 form sorts chronologically.
     const ordered = await db.selectFrom('service_requests').select(['id', 'authored_on']).where('code_text', '=', 'Date test').orderBy('authored_on', 'asc').execute();
-    if (ordered.map((r) => r.id).join(',') !== 'd-early,d-late') throw new Error(`date ordering wrong: ${ordered.map((r) => r.id).join(',')}`);
-    ok('authored_on orders chronologically (date type preserved)');
+    if (ordered.map((r) => r.id).join(',') !== 'd-early,d-late') throw new Error(`authored_on ISO ordering wrong: ${ordered.map((r) => r.id).join(',')}`);
+    ok('authored_on (text) preserves ISO-8601 lexicographic ordering');
+    // created_at IS a real datetime2 column (server default SYSUTCDATETIME on insert) — verify it
+    // round-trips from SQL Server as a valid timestamp, exercising datetime2 handling for real.
+    const stamped = await db.selectFrom('service_requests').select(['created_at']).where('id', '=', 'd-early').executeTakeFirstOrThrow();
+    if (stamped.created_at == null) throw new Error('expected created_at to be populated (datetime2 default)');
+    if (Number.isNaN(new Date(stamped.created_at as unknown as string).getTime())) throw new Error(`created_at not a valid datetime2 round-trip: ${JSON.stringify(stamped.created_at)}`);
+    ok('created_at (datetime2) round-trips as a valid timestamp');
   } catch (e) {
     failures++;
     console.error('\n[FAIL]', e instanceof Error ? e.stack : e);
