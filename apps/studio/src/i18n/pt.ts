@@ -594,6 +594,8 @@ export const pt: EnShape = {
     switchToDark: 'Mudar para modo escuro',
     lightMode: 'Modo claro',
     darkMode: 'Modo escuro',
+    devBypassLabel: 'Desvio de autenticação ativo',
+    devBypassTooltip: 'O desvio de autenticação está LIGADO — os pedidos à API NÃO são autenticados (AUTH_DEV_BYPASS). Apenas para desenvolvimento local; é desativado à força em produção. Nunca execute uma implantação real neste modo.',
   },
   plugins: {
     notFound: 'Plugin não encontrado ou não instalado.',

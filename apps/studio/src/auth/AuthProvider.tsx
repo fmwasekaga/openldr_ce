@@ -16,6 +16,8 @@ interface AuthState {
   loading: boolean;
   hasRole: (role: string) => boolean;
   signOut: () => void;
+  /** Whether the server enforces auth. False when AUTH_DEV_BYPASS is on (dev only). Defaults true (fail-safe). */
+  authEnforced: boolean;
 }
 
 const AuthContext = createContext<AuthState>({
@@ -23,6 +25,7 @@ const AuthContext = createContext<AuthState>({
   loading: true,
   hasRole: () => false,
   signOut: () => {},
+  authEnforced: true,
 });
 
 export function useAuth(): AuthState {
@@ -33,6 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [configError, setConfigError] = useState(false);
+  const [authEnforced, setAuthEnforced] = useState(true);
   const oidcRef = useRef<OidcClient | null>(null);
   const location = useLocation();
   const { t } = useTranslation();
@@ -45,6 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const r = await authFetch('/api/config');
         if (!r.ok) throw new Error('config');
         const cfg = await r.json() as ClientConfig;
+        if (active) setAuthEnforced(cfg.authEnforced);
 
         if (!cfg.authEnforced || !cfg.oidc) {
           // Dev-bypass: server injects the dev actor; no interactive login.
@@ -104,5 +109,5 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
   }
 
-  return <AuthContext.Provider value={{ user, loading, hasRole, signOut }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, loading, hasRole, signOut, authEnforced }}>{children}</AuthContext.Provider>;
 }

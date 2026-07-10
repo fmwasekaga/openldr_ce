@@ -598,6 +598,8 @@ export const en = {
     switchToDark: 'Switch to dark mode',
     lightMode: 'Light mode',
     darkMode: 'Dark mode',
+    devBypassLabel: 'Authentication bypass active',
+    devBypassTooltip: 'Auth bypass is ON — API requests are NOT authenticated (AUTH_DEV_BYPASS). For local development only; it is force-disabled in production. Never run a real deployment in this mode.',
   },
   plugins: {
     notFound: 'Plugin not found or not installed.',
