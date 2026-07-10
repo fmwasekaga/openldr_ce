@@ -26,15 +26,37 @@ for pair in "${VERSIONS[@]}"; do
   echo "=================================================================="
 
   docker rm -f "${name}" >/dev/null 2>&1 || true
-  docker run -d --name "${name}" -e ACCEPT_EULA=Y \
-    -e "MSSQL_SA_PASSWORD=${PW}" -p "${port}:1433" "${image}" >/dev/null
+  if ! docker run -d --name "${name}" -e ACCEPT_EULA=Y \
+       -e "MSSQL_SA_PASSWORD=${PW}" -p "${port}:1433" "${image}" >/dev/null; then
+    echo "  ❌ docker run failed for SQL Server ${major} (image pull / port ${port} in use / daemon?) — skipping"
+    overall=1
+    continue
+  fi
+
+  # Resolve sqlcmd path + TLS flag: 2022 ships mssql-tools18 (ODBC 18 defaults to encrypt=yes,
+  # so it needs -C to trust the self-signed cert); 2017/2019 ship legacy mssql-tools (no -C flag).
+  SQLCMD=""; SQLCMD_TLS=""
+  for _ in $(seq 1 10); do
+    if MSYS_NO_PATHCONV=1 docker exec "${name}" test -x /opt/mssql-tools18/bin/sqlcmd >/dev/null 2>&1; then
+      SQLCMD=/opt/mssql-tools18/bin/sqlcmd; SQLCMD_TLS="-C"; break
+    elif MSYS_NO_PATHCONV=1 docker exec "${name}" test -x /opt/mssql-tools/bin/sqlcmd >/dev/null 2>&1; then
+      SQLCMD=/opt/mssql-tools/bin/sqlcmd; SQLCMD_TLS=""; break
+    fi
+    sleep 1
+  done
+  if [ -z "${SQLCMD}" ]; then
+    echo "  ❌ no sqlcmd found in container ${name} (checked tools18 + tools) — skipping"
+    docker rm -f "${name}" >/dev/null 2>&1 || true
+    overall=1
+    continue
+  fi
 
   # Wait for the server to accept connections (up to ~90s).
   echo "  waiting for SQL Server ${major} to become ready..."
   ready=0
   for _ in $(seq 1 45); do
-    if MSYS_NO_PATHCONV=1 docker exec "${name}" /opt/mssql-tools18/bin/sqlcmd \
-         -S localhost -U sa -P "${PW}" -C -Q "SELECT 1" >/dev/null 2>&1; then
+    if MSYS_NO_PATHCONV=1 docker exec "${name}" "${SQLCMD}" \
+         -S localhost -U sa -P "${PW}" ${SQLCMD_TLS} -Q "SELECT 1" >/dev/null 2>&1; then
       ready=1; break
     fi
     sleep 2
@@ -47,8 +69,8 @@ for pair in "${VERSIONS[@]}"; do
     continue
   fi
 
-  MSYS_NO_PATHCONV=1 docker exec "${name}" /opt/mssql-tools18/bin/sqlcmd \
-    -S localhost -U sa -P "${PW}" -C -Q "IF DB_ID('${DB}') IS NULL CREATE DATABASE ${DB};"
+  MSYS_NO_PATHCONV=1 docker exec "${name}" "${SQLCMD}" \
+    -S localhost -U sa -P "${PW}" ${SQLCMD_TLS} -Q "IF DB_ID('${DB}') IS NULL CREATE DATABASE ${DB};"
 
   # MSSQL_ACCEPT_TARGET_ONLY=1 skips the app-context/reporting step (step 4) so the matrix
   # runner needs only Docker + a SQL Server container — no internal Postgres / S3 / Keycloak.
