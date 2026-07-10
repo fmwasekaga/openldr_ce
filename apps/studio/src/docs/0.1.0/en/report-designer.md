@@ -6,6 +6,8 @@ Report Designer is a free-form, drag-and-drop page designer for printable report
 
 You can create a template, place and arrange Text, Table, Image, Line, Rectangle, and Date elements on A4 or Letter pages, bind a table to a Custom Query and choose its columns, add filter parameters, preview the template with live data, export it to PDF or Excel, and publish it as a report.
 
+![Report Designer canvas with a bound template open](report-designer-canvas.png)
+
 ## Before you begin
 
 - You need the Lab Admin or Lab Manager role.
