@@ -7,6 +7,12 @@
 #   -HttpPort <n>       gateway HTTP port (default 80)
 #   -HttpsPort <n>      gateway HTTPS port (default 443)
 #   -NoStart / -NoPull
+#   -TargetDb postgres|mssql (default postgres  -  selects the external analytics/target DB)
+#   -MssqlDemo (spin up a bundled MSSQL container for evaluation; implies -TargetDb mssql)
+#   -MssqlHost/-MssqlPort/-MssqlDatabase/-MssqlUser/-MssqlPassword (BYO MSSQL connection  -
+#     required when -TargetDb mssql without -MssqlDemo; keep the password free of '#', spaces,
+#     or quote characters  -  they confuse Docker Compose's .env reader)
+#   -MssqlEncrypt true|false (default false), -MssqlTrustCert true|false (default true)
 param(
   [string]$Dir = "./openldr",
   [string]$Version = "latest",
@@ -15,7 +21,19 @@ param(
   [int]$HttpPort = 80,
   [int]$HttpsPort = 443,
   [switch]$NoStart,
-  [switch]$NoPull
+  [switch]$NoPull,
+  [ValidateSet('postgres','mssql')]
+  [string]$TargetDb = 'postgres',
+  [switch]$MssqlDemo,
+  [string]$MssqlHost = '',
+  [string]$MssqlPort = '1433',
+  [string]$MssqlDatabase = 'openldr_target',
+  [string]$MssqlUser = '',
+  [string]$MssqlPassword = '',
+  [ValidateSet('true','false')]
+  [string]$MssqlEncrypt = 'false',
+  [ValidateSet('true','false')]
+  [string]$MssqlTrustCert = 'true'
 )
 $ErrorActionPreference = "Stop"
 $RepoRaw = "https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main"
@@ -31,8 +49,44 @@ if ($envExists) {
   if ($existingEnv -match '(?m)^GATEWAY_HTTP_PORT=(\d+)')     { $HttpPort   = [int]$Matches[1] }
   if ($existingEnv -match '(?m)^GATEWAY_HTTPS_PORT=(\d+)')    { $HttpsPort  = [int]$Matches[1] }
   if ($existingEnv -match '(?m)^SERVER_NAME=(.+?)\s*$')       { $ServerName = $Matches[1].Trim() }
+  if ($existingEnv -match '(?m)^TARGET_STORE_ADAPTER=(.+?)\s*$') {
+    $existingAdapter = $Matches[1].Trim()
+    if ($existingAdapter -eq 'mssql') {
+      $TargetDb = 'mssql'
+      if ($existingEnv -match '(?m)^MSSQL_HOST=(.+?)\s*$') {
+        $existingMssqlHost = $Matches[1].Trim()
+        $MssqlHost = $existingMssqlHost
+        # host 'mssql' is the managed-demo signature -> re-enable the overlay on re-runs
+        if ($existingMssqlHost -eq 'mssql') { $MssqlDemo = $true }
+      }
+    }
+  }
 }
 if ($HttpsPort -eq 443) { $Origin = "https://$ServerName" } else { $Origin = "https://${ServerName}:$HttpsPort" }
+
+if ($MssqlDemo) { $TargetDb = 'mssql' }
+
+# Managed-demo MSSQL: point the app at the bundled 'mssql' compose service and (below) generate a
+# policy-compliant SA password. Developer/Express editions are NOT licensed for production  -  this
+# container is for evaluation only.
+if ($MssqlDemo) {
+  $MssqlHost = 'mssql'
+  $MssqlPort = '1433'
+  $MssqlDatabase = 'openldr_target'
+  $MssqlUser = 'sa'
+  $MssqlEncrypt = 'false'
+  $MssqlTrustCert = 'true'
+}
+
+# BYO MSSQL: require connection details before writing .env / starting the stack.
+# Fresh install only  -  on a re-run the never-overwritten on-disk .env is authoritative,
+# so don't demand flags the operator already provided the first time.
+if ((-not $envExists) -and ($TargetDb -eq 'mssql') -and (-not $MssqlDemo)) {
+  if ([string]::IsNullOrEmpty($MssqlHost) -or [string]::IsNullOrEmpty($MssqlUser) -or [string]::IsNullOrEmpty($MssqlPassword)) {
+    Write-Error "X -TargetDb mssql (BYO) requires -MssqlHost, -MssqlUser, and -MssqlPassword. The target database '$MssqlDatabase' must already exist on your SQL Server."
+    exit 2
+  }
+}
 
 if ($Letsencrypt) {
   Write-Host "! Let's Encrypt is only automated by the Linux installer (install.sh --letsencrypt)."
@@ -106,6 +160,10 @@ function Fetch($rel, $out) { Invoke-WebRequest -UseBasicParsing "$RepoRaw/$rel" 
 Fetch "deploy/install/docker-compose.yml" "$Dir/docker-compose.yml"
 Fetch "infra/keycloak/openldr-realm.json" "$Dir/config/keycloak/openldr-realm.json"
 Fetch "scripts/init-target-db.sql" "$Dir/config/init-target-db.sql"
+if ($MssqlDemo) {
+  Fetch "deploy/install/docker-compose.mssql.yml" "$Dir/docker-compose.mssql.yml"
+  Fetch "scripts/init-target-db-mssql.sql" "$Dir/config/init-target-db-mssql.sql"
+}
 
 # Register this deploy's origin as a valid OIDC redirect so studio login works behind the gateway.
 # The shipped realm lists localhost + dev URLs; a non-localhost host (or a non-default port) must be
@@ -130,6 +188,7 @@ function Rand {
 }
 if (-not $envExists) {
   $pg = Rand; $kc = Rand; $s3k = Rand; $s3s = Rand
+  if ($MssqlDemo -and [string]::IsNullOrEmpty($MssqlPassword)) { $MssqlPassword = "$(Rand)Aa1!" }
   $secretBytes = New-Object 'System.Byte[]' 32
   $rngKey = [System.Security.Cryptography.RNGCryptoServiceProvider]::new()
   try { $rngKey.GetBytes($secretBytes) } finally { $rngKey.Dispose() }
@@ -151,6 +210,24 @@ if (-not $envExists) {
   $hashHex = -join ($hashBytes[0..3] | ForEach-Object { $_.ToString("x2") })
   $projectName = "$leaf-$hashHex"
 
+  if ($TargetDb -eq 'mssql') {
+    $targetDbEnvBlock = @"
+TARGET_STORE_ADAPTER=mssql
+MSSQL_HOST=$MssqlHost
+MSSQL_PORT=$MssqlPort
+MSSQL_DATABASE=$MssqlDatabase
+MSSQL_USER=$MssqlUser
+MSSQL_PASSWORD=$MssqlPassword
+MSSQL_ENCRYPT=$MssqlEncrypt
+MSSQL_TRUST_SERVER_CERT=$MssqlTrustCert
+"@
+  } else {
+    $targetDbEnvBlock = @"
+TARGET_STORE_ADAPTER=pg
+TARGET_DATABASE_URL=postgres://openldr:$pg@postgres:5432/openldr_target
+"@
+  }
+
   @"
 OPENLDR_VERSION=$Version
 SERVER_NAME=$ServerName
@@ -162,7 +239,7 @@ TLS_MODE=self-signed
 PORT=3000
 NODE_ENV=production
 INTERNAL_DATABASE_URL=postgres://openldr:$pg@postgres:5432/openldr
-TARGET_DATABASE_URL=postgres://openldr:$pg@postgres:5432/openldr_target
+$targetDbEnvBlock
 POSTGRES_PASSWORD=$pg
 S3_ENDPOINT=http://minio:9000
 S3_REGION=us-east-1
@@ -235,17 +312,24 @@ try {
   # Run compose via Invoke-NativeProcessChecked (Start-Process + redirected files) so Docker's
   # stderr progress never becomes a NativeCommandError record on a successful install. Output is
   # buffered until each step finishes, so print a heads-up first ($PWD is $Dir under Push-Location).
+  $ComposeFiles = @("-f", "docker-compose.yml")
+  if ($MssqlDemo) { $ComposeFiles += @("-f", "docker-compose.mssql.yml") }
   if (-not $NoPull) {
     Write-Host "-> Pulling images (first run can take a few minutes)..."
-    Invoke-NativeProcessChecked "docker" @("compose", "pull") "docker compose pull failed (are the images published + public? see RELEASE.md)"
+    Invoke-NativeProcessChecked "docker" (@("compose") + $ComposeFiles + @("pull")) "docker compose pull failed (are the images published + public? see RELEASE.md)"
   }
   Write-Host "-> Starting the stack..."
-  Invoke-NativeProcessChecked "docker" @("compose", "up", "-d") "docker compose up failed"
+  Invoke-NativeProcessChecked "docker" (@("compose") + $ComposeFiles + @("up", "-d")) "docker compose up failed"
 } finally { Pop-Location }
 Write-Host ""
 Write-Host "OK OpenLDR is starting. Open $Origin"
 $kcLine = (Select-String -Path $envPath -Pattern '^KEYCLOAK_ADMIN_PASSWORD=').Line
 if ($kcLine) { Write-Host "   Keycloak admin password: $($kcLine -replace '^KEYCLOAK_ADMIN_PASSWORD=','')" }
+if ($MssqlDemo) {
+  $mssqlLine = (Select-String -Path $envPath -Pattern '^MSSQL_PASSWORD=').Line
+  if ($mssqlLine) { Write-Host "   MSSQL (demo) SA password: $($mssqlLine -replace '^MSSQL_PASSWORD=','')" }
+  Write-Host "   ! The demo SQL Server container is for evaluation only -- not licensed for production."
+}
 if ($HttpPort -ne 80 -or $HttpsPort -ne 443) { Write-Host "   Gateway ports: HTTP $HttpPort / HTTPS $HttpsPort" }
 Write-Host ""
 Write-Host "   For a public domain, install with: -ServerName your.domain.com"
