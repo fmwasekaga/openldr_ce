@@ -44,15 +44,28 @@ describe('createConnectorSqlRunner', () => {
     expect(seen[0]).toBe('select * from (select * from t) as _q limit 100 offset 0');
   });
 
-  it('applies a T-SQL OFFSET/FETCH wrapper when rowCap is given (type=microsoft-sql)', async () => {
+  it('caps MSSQL with SET ROWCOUNT when rowCap is given (works with ORDER BY, no derived-table wrap)', async () => {
     const seen: string[] = [];
     const run = createConnectorSqlRunner({
       connectors: connectorsFake({ type: 'microsoft-sql', enabled: true }),
       secretsKey: 'k',
       createDb: () => ({ query: async (s: string) => { seen.push(s); return { rows: [] }; }, close: async () => {} }) as never,
     });
-    await run({ connectorId: 'c1', sql: 'select * from t', rowCap: 100 });
-    expect(seen[0]).toBe('select * from (select * from t) as _q order by (select null) offset 0 rows fetch next 100 rows only');
+    await run({ connectorId: 'c1', sql: 'select * from t order by id', rowCap: 100 });
+    expect(seen[0]).toBe('set rowcount 100; select * from t order by id; set rowcount 0');
+  });
+
+  it('applies the MSSQL offset by slicing the returned rows (SET ROWCOUNT fetched offset+limit)', async () => {
+    const seen: string[] = [];
+    // Simulate SQL Server returning offset+limit rows under SET ROWCOUNT; the runner slices the offset.
+    const run = createConnectorSqlRunner({
+      connectors: connectorsFake({ type: 'microsoft-sql', enabled: true }),
+      secretsKey: 'k',
+      createDb: () => ({ query: async (s: string) => { seen.push(s); return { rows: [{ id: 1 }, { id: 2 }, { id: 3 }] }; }, close: async () => {} }) as never,
+    });
+    const out = await run({ connectorId: 'c1', sql: 'select id from t', rowCap: 2, offset: 1 });
+    expect(seen[0]).toBe('set rowcount 3; select id from t; set rowcount 0');
+    expect(out.rows).toEqual([{ id: 2 }, { id: 3 }]); // dropped the first (offset 1)
   });
 
   it('applies a LIMIT/OFFSET wrapper for mysql (shares Postgres syntax — row cap preserved)', async () => {

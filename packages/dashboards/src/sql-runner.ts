@@ -21,16 +21,27 @@ export function validateSelectSql(rawSql: string): void {
 
 export type SqlDialect = 'postgres' | 'mssql';
 
-/** Wrap an inner SELECT with a dialect-correct row-cap + offset. Postgres uses LIMIT/OFFSET;
- *  SQL Server uses OFFSET…FETCH, which requires an ORDER BY - `(SELECT NULL)` is a stable no-op
- *  order for an arbitrary wrapped subquery. */
-export function paginateSql(inner: string, dialect: SqlDialect, opts: { limit: number; offset?: number }): string {
+export interface PaginationPlan {
+  /** SQL to execute (a multi-statement batch for MSSQL). */
+  sql: string;
+  /** Rows to drop from the front of the result set. MSSQL applies its offset here (in JS)
+   *  rather than in SQL; Postgres does the offset in SQL so this is 0. */
+  sliceOffset: number;
+}
+
+/** Plan a dialect-correct row-cap + offset for an ARBITRARY user SELECT (which may end in its
+ *  own ORDER BY). Postgres wraps in a derived table with LIMIT/OFFSET (server-side offset).
+ *  SQL Server cannot wrap an ORDER BY query in a derived table (T-SQL forbids it, and OFFSET…FETCH
+ *  requires the ORDER BY at the statement's own top level), so it caps rows with SET ROWCOUNT —
+ *  which works for any SELECT including one ending in ORDER BY — and applies the offset by slicing
+ *  the returned rows. */
+export function planPagination(inner: string, dialect: SqlDialect, opts: { limit: number; offset?: number }): PaginationPlan {
   const limit = Math.floor(opts.limit);
   const offset = Math.floor(opts.offset ?? 0);
   if (dialect === 'mssql') {
-    return `select * from (${inner}) as _q order by (select null) offset ${offset} rows fetch next ${limit} rows only`;
+    return { sql: `set rowcount ${offset + limit}; ${inner}; set rowcount 0`, sliceOffset: offset };
   }
-  return `select * from (${inner}) as _q limit ${limit} offset ${offset}`;
+  return { sql: `select * from (${inner}) as _q limit ${limit} offset ${offset}`, sliceOffset: 0 };
 }
 
 export interface SqlRunOpts { timeoutMs: number; rowCap: number }

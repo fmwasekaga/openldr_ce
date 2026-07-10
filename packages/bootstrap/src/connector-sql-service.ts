@@ -1,5 +1,5 @@
 import type { SqlResult } from '@openldr/workflows';
-import { paginateSql, type SqlDialect } from '@openldr/dashboards';
+import { planPagination, type SqlDialect } from '@openldr/dashboards';
 import { createConnectorDb, type ConnectorDb } from './connector-db';
 
 function dialectFor(type: string): SqlDialect | null {
@@ -33,10 +33,16 @@ export function createConnectorSqlRunner(deps: ConnectorSqlDeps) {
     const conn = make(c.type, config);
     try {
       const dialect = dialectFor(c.type);
-      const finalSql = (rowCap !== undefined && dialect)
-        ? paginateSql(userSql.replace(/;\s*$/, ''), dialect, { limit: rowCap, offset })
-        : userSql;
-      const { rows } = await conn.query(finalSql);
+      let rows: Record<string, unknown>[];
+      if (rowCap !== undefined && dialect) {
+        const plan = planPagination(userSql.replace(/;\s*$/, ''), dialect, { limit: rowCap, offset });
+        const res = await conn.query(plan.sql);
+        // MSSQL applies its offset in JS (SET ROWCOUNT fetched offset+limit rows); Postgres already
+        // offset in SQL, so sliceOffset is 0.
+        rows = plan.sliceOffset ? res.rows.slice(plan.sliceOffset) : res.rows;
+      } else {
+        rows = (await conn.query(userSql)).rows;
+      }
       const columns = rows[0] ? Object.keys(rows[0]).map((k) => ({ key: k, label: k })) : [];
       return { columns, rows };
     } finally {

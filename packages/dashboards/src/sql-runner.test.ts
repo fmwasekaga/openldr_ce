@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateSelectSql, runSqlQuery, paginateSql } from './sql-runner';
+import { validateSelectSql, runSqlQuery, planPagination } from './sql-runner';
 
 describe('validateSelectSql', () => {
   it('accepts a single SELECT', () => { expect(() => validateSelectSql('SELECT 1')).not.toThrow(); });
@@ -36,27 +36,28 @@ describe('runSqlQuery numeric guards', () => {
   });
 });
 
-describe('paginateSql', () => {
-  it('wraps Postgres with LIMIT/OFFSET', () => {
-    expect(paginateSql('select 1', 'postgres', { limit: 100, offset: 0 }))
-      .toBe('select * from (select 1) as _q limit 100 offset 0');
+describe('planPagination', () => {
+  it('wraps Postgres with LIMIT/OFFSET (server-side offset, no slice)', () => {
+    expect(planPagination('select 1', 'postgres', { limit: 100, offset: 0 }))
+      .toEqual({ sql: 'select * from (select 1) as _q limit 100 offset 0', sliceOffset: 0 });
   });
-  it('wraps Postgres with a non-zero offset', () => {
-    expect(paginateSql('select 1', 'postgres', { limit: 50, offset: 25 }))
-      .toBe('select * from (select 1) as _q limit 50 offset 25');
+  it('wraps Postgres with a non-zero offset in SQL', () => {
+    expect(planPagination('select 1', 'postgres', { limit: 50, offset: 25 }))
+      .toEqual({ sql: 'select * from (select 1) as _q limit 50 offset 25', sliceOffset: 0 });
   });
-  it('wraps MSSQL with ORDER BY (SELECT NULL) OFFSET/FETCH', () => {
-    expect(paginateSql('select 1', 'mssql', { limit: 100, offset: 0 }))
-      .toBe('select * from (select 1) as _q order by (select null) offset 0 rows fetch next 100 rows only');
+  it('caps MSSQL with SET ROWCOUNT (works with an ORDER BY query), offset applied by slicing', () => {
+    // ORDER BY in the inner query would be invalid inside a derived table on SQL Server; SET ROWCOUNT avoids that.
+    expect(planPagination('select 1 order by 1', 'mssql', { limit: 100, offset: 0 }))
+      .toEqual({ sql: 'set rowcount 100; select 1 order by 1; set rowcount 0', sliceOffset: 0 });
   });
-  it('wraps MSSQL with a non-zero offset', () => {
-    expect(paginateSql('select 1', 'mssql', { limit: 50, offset: 25 }))
-      .toBe('select * from (select 1) as _q order by (select null) offset 25 rows fetch next 50 rows only');
+  it('MSSQL fetches offset+limit rows via SET ROWCOUNT and reports sliceOffset', () => {
+    expect(planPagination('select 1', 'mssql', { limit: 50, offset: 25 }))
+      .toEqual({ sql: 'set rowcount 75; select 1; set rowcount 0', sliceOffset: 25 });
   });
   it('defaults offset to 0 and floors non-integers', () => {
-    expect(paginateSql('select 1', 'postgres', { limit: 10.9 }))
-      .toBe('select * from (select 1) as _q limit 10 offset 0');
-    expect(paginateSql('select 1', 'mssql', { limit: 10.9 }))
-      .toBe('select * from (select 1) as _q order by (select null) offset 0 rows fetch next 10 rows only');
+    expect(planPagination('select 1', 'postgres', { limit: 10.9 }))
+      .toEqual({ sql: 'select * from (select 1) as _q limit 10 offset 0', sliceOffset: 0 });
+    expect(planPagination('select 1', 'mssql', { limit: 10.9 }))
+      .toEqual({ sql: 'set rowcount 10; select 1; set rowcount 0', sliceOffset: 0 });
   });
 });

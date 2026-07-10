@@ -110,9 +110,11 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
       const { columns, rows } = await deps.runConnectorSql({ connectorId: parsed.data.connectorId, sql: inner, rowCap: cap, offset: parsed.data.offset ?? 0 });
       const capped = rows.slice(0, ROW_CAP);
       // Total row count for the pagination control — only when the caller paginates (passes a
-      // limit), since it costs a second aggregate query over the same statement.
+      // limit), since it costs a second aggregate query over the same statement. Skipped for
+      // SQL Server: the count wraps the user SQL in a derived table (`… from (inner) as _q`), which
+      // T-SQL rejects when the inner query ends in ORDER BY — so MSSQL results page without a total.
       let total: number | undefined;
-      if (parsed.data.limit !== undefined) {
+      if (parsed.data.limit !== undefined && c.type !== 'microsoft-sql') {
         const cnt = await deps.runConnectorSql({ connectorId: parsed.data.connectorId, sql: `select count(*) as _n from (${inner}) as _q` });
         total = Number(Object.values(cnt.rows[0] ?? {})[0] ?? capped.length);
       }
