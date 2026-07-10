@@ -12,14 +12,14 @@ interface Props {
 export function ReportDocumentTab({ reportId, params, onDownload }: Props) {
   const { t } = useTranslation();
   const [blob, setBlob] = useState<Blob | null>(null);
-  const [error, setError] = useState<string>();
+  const [error, setError] = useState(false);
   const [loading, setLoading] = useState(true);
   const key = `${reportId}?${new URLSearchParams(params).toString()}`;
 
   useEffect(() => {
     let active = true;
     setLoading(true);
-    setError(undefined);
+    setError(false);
     setBlob(null);
     fetchReportPdf(reportId, params)
       .then((b) => {
@@ -30,7 +30,10 @@ export function ReportDocumentTab({ reportId, params, onDownload }: Props) {
       })
       .catch((e: unknown) => {
         if (active) {
-          setError(e instanceof Error ? e.message : String(e));
+          // Keep the technical detail out of the report view (it belongs in logs);
+          // show the user a clean message instead.
+          console.error('[reports] failed to render report PDF:', e);
+          setError(true);
           setLoading(false);
         }
       });
@@ -49,9 +52,8 @@ export function ReportDocumentTab({ reportId, params, onDownload }: Props) {
   }
   if (error) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-1 px-6 text-center">
+      <div className="flex h-full items-center justify-center px-6 text-center">
         <p className="text-sm text-destructive">{t('reports.pdfRenderError')}</p>
-        <p className="text-xs text-muted-foreground">{error}</p>
       </div>
     );
   }
