@@ -21,7 +21,7 @@ export interface QueryRouteDeps {
     list(): Promise<{ id: string; name: string; rowCount: number; publishedTable?: string | null }[]>;
     getByName(name: string): Promise<{ name: string; columns: unknown; rows: unknown[]; publishedTable?: string | null } | null>;
   };
-  runConnectorSql(input: { connectorId: string; sql: string }): Promise<{ columns: { key: string; label: string }[]; rows: Record<string, unknown>[] }>;
+  runConnectorSql(input: { connectorId: string; sql: string; rowCap?: number; offset?: number }): Promise<{ columns: { key: string; label: string }[]; rows: Record<string, unknown>[] }>;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -101,18 +101,20 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
       inner = prepareSelect(parsed.data.sql, (parsed.data.params ?? []) as never, parsed.data.values ?? {});
     } catch (e) { reply.code(400); return { error: (e as Error).message }; }
     // Always wrap with a LIMIT so an unbounded `select * from big_table` never streams every row
-    // into memory; the requested limit is clamped to ROW_CAP.
+    // into memory; the requested limit is clamped to ROW_CAP. Pagination is delegated to
+    // runConnectorSql, which wraps the inner SQL with a dialect-appropriate limit/offset clause.
     inner = inner.replace(/;\s*$/, '');
     const cap = Math.min(parsed.data.limit ?? ROW_CAP, ROW_CAP);
-    const pageSql = `select * from (${inner}) as _q limit ${cap} offset ${parsed.data.offset ?? 0}`;
     try {
       const started = Date.now();
-      const { columns, rows } = await deps.runConnectorSql({ connectorId: parsed.data.connectorId, sql: pageSql });
+      const { columns, rows } = await deps.runConnectorSql({ connectorId: parsed.data.connectorId, sql: inner, rowCap: cap, offset: parsed.data.offset ?? 0 });
       const capped = rows.slice(0, ROW_CAP);
       // Total row count for the pagination control — only when the caller paginates (passes a
-      // limit), since it costs a second aggregate query over the same statement.
+      // limit), since it costs a second aggregate query over the same statement. Skipped for
+      // SQL Server: the count wraps the user SQL in a derived table (`… from (inner) as _q`), which
+      // T-SQL rejects when the inner query ends in ORDER BY — so MSSQL results page without a total.
       let total: number | undefined;
-      if (parsed.data.limit !== undefined) {
+      if (parsed.data.limit !== undefined && c.type !== 'microsoft-sql') {
         const cnt = await deps.runConnectorSql({ connectorId: parsed.data.connectorId, sql: `select count(*) as _n from (${inner}) as _q` });
         total = Number(Object.values(cnt.rows[0] ?? {})[0] ?? capped.length);
       }
@@ -121,11 +123,13 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
   });
 
   // ---- Connector introspection ----
-  // v1 supports Postgres only. information_schema introspection is portable across Postgres/MySQL/SQL Server,
-  // but the EXECUTION path is Postgres-specific: the run wrapper (`select * from (…) limit N offset M`) is
-  // invalid T-SQL and the TableTab identifier quoting (`"schema"."table"`) breaks on MySQL. Other dialects
-  // are deferred until the run pagination wrapper + identifier quoting are made dialect-aware.
-  const SQL_TYPES = new Set(['postgres']);
+  // Postgres and SQL Server are both supported: the run path (`runConnectorSql` → `planPagination`)
+  // is dialect-aware (Postgres LIMIT/OFFSET vs SQL Server SET ROWCOUNT + JS offset), and the
+  // information_schema introspection below picks a dialect-appropriate system-schema filter.
+  // (Identifier quoting for the studio TableTab is handled separately.)
+  const SQL_TYPES = new Set(['postgres', 'microsoft-sql']);
+  const PG_SYS = "schema_name not in ('pg_catalog','information_schema') and schema_name not like 'pg\\_%'";
+  const MSSQL_SYS = "schema_name not in ('sys','INFORMATION_SCHEMA','guest','db_owner','db_accessadmin','db_securityadmin','db_ddladmin','db_backupoperator','db_datareader','db_datawriter','db_denydatareader','db_denydatawriter')";
 
   app.get('/api/query/connectors', GUARD, async () => {
     const all = await deps.connectors.list();
@@ -137,8 +141,9 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
     const c = await deps.connectors.get(id);
     if (!c || !c.enabled) { reply.code(404); return { error: 'connector not found' }; }
     try {
+      const sysFilter = c.type === 'microsoft-sql' ? MSSQL_SYS : PG_SYS;
       const { rows } = await deps.runConnectorSql({ connectorId: id,
-        sql: "select schema_name from information_schema.schemata where schema_name not in ('pg_catalog','information_schema') and schema_name not like 'pg\\_%' order by 1" });
+        sql: `select schema_name from information_schema.schemata where ${sysFilter} order by 1` });
       return rows.map((r) => String(r.schema_name));
     } catch (e) { reply.code(400); return { error: (e as Error).message }; }
   });

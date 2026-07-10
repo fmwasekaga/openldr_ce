@@ -45,7 +45,7 @@ const ROW_CAP = 1000;
 
 export interface RunStoredQueryDeps {
   customQueries: Pick<CustomQueryStore, 'get'>;
-  runConnectorSql(input: { connectorId: string; sql: string }): Promise<{ columns: { key: string; label: string }[]; rows: Record<string, unknown>[] }>;
+  runConnectorSql(input: { connectorId: string; sql: string; rowCap?: number; offset?: number }): Promise<{ columns: { key: string; label: string }[]; rows: Record<string, unknown>[] }>;
 }
 
 /** Substitute {{param.*}} then enforce SELECT-only. Returns the safe inner SQL. Throws on bad param/SQL. */
@@ -62,6 +62,5 @@ export async function runStoredQuery(
   const rec = await deps.customQueries.get(queryId);
   if (!rec) throw new Error(`custom query not found: ${queryId}`);
   const inner = prepareSelect(rec.sql, rec.params, values).replace(/;\s*$/, '');
-  const sql = `select * from (${inner}) as _q limit ${ROW_CAP}`;
-  return deps.runConnectorSql({ connectorId: rec.connectorId, sql });
+  return deps.runConnectorSql({ connectorId: rec.connectorId, sql: inner, rowCap: ROW_CAP });
 }

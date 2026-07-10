@@ -74,7 +74,7 @@ export function ExplorerTree(): JSX.Element {
             <div key={sc}>
               <Row depth={2} open={!!openBranch[`s:${c.id}/${sc}`]} onClick={() => loadTables(c.id, sc)} icon={<Package className="h-3.5 w-3.5" />} label={sc} />
               {openBranch[`s:${c.id}/${sc}`] && (tables[`${c.id}/${sc}`] ?? []).map((tb) => (
-                <Row key={tb} depth={3} onClick={() => openTableTab({ connectorId: c.id, schema: sc, table: tb })} icon={<Table2 className="h-3.5 w-3.5" />} label={tb} />
+                <Row key={tb} depth={3} onClick={() => openTableTab({ connectorId: c.id, type: c.type ?? '', schema: sc, table: tb })} icon={<Table2 className="h-3.5 w-3.5" />} label={tb} />
               ))}
             </div>
           ))}

@@ -11,7 +11,7 @@ vi.mock('../api', () => ({ queryApi: {
   connectors: vi.fn(async () => [{ id: 'c1', name: 'PG', type: 'postgres' }]),
 } }));
 
-const tab: TableTabModel = { id: 't1', kind: 'table', connectorId: 'c1', schema: 'public', table: 'products', title: 'products', sql: 'select * from "public"."products"', showSql: false };
+const tab: TableTabModel = { id: 't1', kind: 'table', connectorId: 'c1', type: 'postgres', schema: 'public', table: 'products', title: 'products', sql: 'select * from "public"."products"', showSql: false };
 
 describe('TableTab', () => {
   beforeEach(() => vi.clearAllMocks());

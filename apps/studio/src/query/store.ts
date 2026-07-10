@@ -6,7 +6,7 @@ let seq = 0;
 const nextId = () => `t${++seq}`;
 
 export interface TableTab {
-  id: string; kind: 'table'; connectorId: string; schema: string; table: string; title: string;
+  id: string; kind: 'table'; connectorId: string; type: string; schema: string; table: string; title: string;
   // Inline ad-hoc SQL for this table view: `sql` is the query the grid runs (defaults to a plain
   // browse SELECT); `showSql` toggles the inline editor's visibility.
   sql: string; showSql: boolean;
@@ -21,7 +21,7 @@ export type Tab = TableTab | DatasetTab | QueryTab;
 interface State {
   tabs: Tab[];
   activeId: string | null;
-  openTableTab(t: { connectorId: string; schema: string; table: string }): void;
+  openTableTab(t: { connectorId: string; type: string; schema: string; table: string }): void;
   openDatasetTab(d: { name: string }): void;
   openQueryTab(q: { title?: string; customQueryId?: string; connectorId?: string; sql?: string; params?: CustomQueryParam[] }): void;
   setActive(id: string): void;
@@ -34,11 +34,12 @@ interface State {
 
 export const useQueryStore = create<State>((set, get) => ({
   tabs: [], activeId: null,
-  openTableTab({ connectorId, schema, table }) {
+  openTableTab({ connectorId, type, schema, table }) {
     const existing = get().tabs.find((t) => t.kind === 'table' && t.connectorId === connectorId && t.schema === schema && t.table === table);
     if (existing) { set({ activeId: existing.id }); return; }
-    const tab: TableTab = { id: nextId(), kind: 'table', connectorId, schema, table, title: table,
-      sql: `select * from "${schema}"."${table}"`, showSql: false };
+    const sql = type === 'microsoft-sql' ? `select * from [${schema}].[${table}]` : `select * from "${schema}"."${table}"`;
+    const tab: TableTab = { id: nextId(), kind: 'table', connectorId, type, schema, table, title: table,
+      sql, showSql: false };
     set((s) => ({ tabs: [...s.tabs, tab], activeId: tab.id }));
   },
   openDatasetTab({ name }) {
