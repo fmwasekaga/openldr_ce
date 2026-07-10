@@ -30,6 +30,7 @@ interface EventSource {
 interface Connector {
   id: string;
   name: string;
+  kind?: string;
   enabled?: boolean;
 }
 
@@ -228,7 +229,9 @@ export function MappingEditor({ mappingId: editId, onDone }: { mappingId?: strin
     () => (meta?.programStages ?? []).filter((s) => s.program === program),
     [meta, program],
   );
-  const enabledConnectors = useMemo(() => connectors.filter((c) => c.enabled), [connectors]);
+  // Only DHIS2 connectors (kind 'sink') are valid push targets — exclude the host's
+  // Postgres warehouse (kind 'database') and any other non-DHIS2 connector.
+  const enabledConnectors = useMemo(() => connectors.filter((c) => c.enabled && c.kind === 'sink'), [connectors]);
   const metaEmpty = (meta?.dataElements.length ?? 0) === 0;
 
   const def = useCallback((): Record<string, unknown> => {

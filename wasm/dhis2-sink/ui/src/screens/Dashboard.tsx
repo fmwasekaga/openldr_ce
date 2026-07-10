@@ -93,7 +93,10 @@ export function Dashboard({ onNavigate }: { onNavigate?: (screen: string) => voi
         ]);
         if (!alive) return;
         const connectors = asArray<Connector>(connectorsRaw);
-        setActive(connectors.find((c) => c.enabled) ?? null);
+        // Only DHIS2 connectors (kind 'sink') are relevant here — never the host's
+        // Postgres warehouse (kind 'database'), which would otherwise show up as the
+        // "active connector" on a fresh install where it's the only enabled connector.
+        setActive(connectors.find((c) => c.enabled && c.kind === 'sink') ?? null);
         const cachedMeta = (cached as { metadata?: RawMetadata } | null)?.metadata ?? null;
         setMeta(cachedMeta ? counts(cachedMeta) : null);
         setPushes(

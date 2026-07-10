@@ -44,8 +44,8 @@ const METADATA_CACHE = {
 };
 
 const CONNECTORS = [
-  { id: 'c1', name: 'DHIS2 demo', enabled: true },
-  { id: 'c2', name: 'Disabled', enabled: false },
+  { id: 'c1', name: 'DHIS2 demo', kind: 'sink', enabled: true },
+  { id: 'c2', name: 'Disabled', kind: 'sink', enabled: false },
 ];
 
 /** Build a mock with the editor's load deps wired, plus optional saved mappings. */
