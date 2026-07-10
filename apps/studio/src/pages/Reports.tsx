@@ -7,6 +7,7 @@ import {
   type ReportSummary, type ReportResult,
 } from '../api';
 import { ReportLibrary } from '../reports/ReportLibrary';
+import { TruncatedText } from '@/components/ui/truncated-text';
 import { listReportCategories, type ReportCategory } from '../reports/reportCategoriesApi';
 import { ReportHistoryDrawer } from '../reports/ReportHistoryDrawer';
 import { ReportSchedulesDrawer } from '../reports/ReportSchedulesDrawer';
@@ -166,7 +167,7 @@ export function Reports() {
               <div className="flex items-start justify-between border-b border-border px-4 py-3">
                 <div className="min-w-0">
                   <h2 className="text-[15px] font-semibold">{selected.name}</h2>
-                  <p className="truncate text-xs text-muted-foreground">{selected.description}</p>
+                  <TruncatedText text={selected.description} className="text-xs text-muted-foreground" />
                 </div>
                 <ReportActionsMenu
                   onOpenHistory={() => setHistoryOpen(true)}

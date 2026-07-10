@@ -70,9 +70,7 @@ function NodeCard({ template }: { template: NodeTemplate }) {
       </div>
       <div className="min-w-0 flex-1">
         <TruncatedText text={template.label} className="min-w-0 text-[12px] font-medium leading-tight text-foreground" />
-        <div className="truncate text-[10.5px] leading-tight text-muted-foreground">
-          {template.description}
-        </div>
+        <TruncatedText text={template.description} className="min-w-0 text-[10.5px] leading-tight text-muted-foreground" />
       </div>
     </div>
   );

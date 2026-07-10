@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { TruncatedText } from '@/components/ui/truncated-text';
 
 export interface CodesEditorProps {
   field: FormField;
@@ -55,9 +56,10 @@ export function CodesEditor({ field, onUpdate }: CodesEditorProps): JSX.Element 
               key={`${c.system}|${c.code}|${i}`}
               className="flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5"
             >
-              <span className="text-[10px] text-muted-foreground truncate max-w-[120px]" title={c.system}>
-                {c.system.replace(/^https?:\/\//, '')}
-              </span>
+              <TruncatedText
+                text={c.system.replace(/^https?:\/\//, '')}
+                className="max-w-[120px] text-[10px] text-muted-foreground"
+              />
               <Badge
                 variant="secondary"
                 className="rounded-full font-mono text-xs px-1.5 py-0"

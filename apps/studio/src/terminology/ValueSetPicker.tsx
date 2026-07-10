@@ -81,7 +81,7 @@ export function ValueSetPicker({ onPick, placeholder, autoFocus, className }: Pr
               >
                 <div className="min-w-0 flex-1">
                   <TruncatedText text={vs.title ?? vs.name ?? vs.url} className="min-w-0 text-foreground" />
-                  <p className="truncate text-[11px] text-muted-foreground">{vs.url}</p>
+                  <TruncatedText text={vs.url} className="min-w-0 text-[11px] text-muted-foreground" />
                 </div>
                 <Badge variant="outline" className="shrink-0 text-[10px] uppercase tracking-wide">
                   {vs.codeCount} codes

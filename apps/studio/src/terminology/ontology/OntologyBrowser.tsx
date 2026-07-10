@@ -438,7 +438,9 @@ export function OntologyBrowser({
                   .filter(([, v]) => v !== null && v !== undefined)
                   .map(([k, v]) => (
                     <Fragment key={k}>
-                      <dt className="truncate text-muted-foreground">{k}</dt>
+                      <dt className="min-w-0 text-muted-foreground">
+                        <TruncatedText text={k} className="min-w-0" />
+                      </dt>
                       <dd className="break-words text-foreground">{String(v)}</dd>
                     </Fragment>
                   ))}

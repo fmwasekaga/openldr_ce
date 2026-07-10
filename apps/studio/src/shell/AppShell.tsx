@@ -11,6 +11,7 @@ import { useTheme } from './useTheme';
 import { useSidebar } from './useSidebar';
 import { Button } from '@/components/ui/button';
 import { TruncatedText } from '@/components/ui/truncated-text';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
   DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
@@ -56,7 +57,30 @@ export function AppShell({
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
 
+  const userTrigger = (
+    <DropdownMenuTrigger asChild>
+      <button
+        type="button"
+        className={cn(
+          'flex w-full items-center gap-2 rounded-md p-1 text-left transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          collapsed && 'justify-center',
+        )}
+      >
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+          {(user?.username?.[0] ?? 'O').toUpperCase()}
+        </span>
+        {!collapsed && (
+          <div className="min-w-0 leading-tight">
+            <TruncatedText as="div" text={user?.username ?? ''} className="text-xs font-medium text-foreground" />
+            <TruncatedText as="div" text={user?.roles?.[0] ?? ''} className="text-[10px] text-muted-foreground" />
+          </div>
+        )}
+      </button>
+    </DropdownMenuTrigger>
+  );
+
   return (
+    <TooltipProvider delayDuration={300}>
     <div className="ui-scope flex h-screen overflow-hidden">
       <aside
         className={cn('flex flex-col border-r border-border transition-[width] duration-200', collapsed ? 'w-14' : 'w-60')}
@@ -64,43 +88,55 @@ export function AppShell({
       >
         <div className={cn('flex h-12 shrink-0 items-center border-b border-border', collapsed ? 'justify-center px-0' : 'justify-between px-3')}>
           {!collapsed && <span className="font-semibold text-primary">OpenLDR</span>}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleSidebar}
-            aria-label={collapsed ? t('a11y.expandSidebar') : t('a11y.collapseSidebar')}
-            title={collapsed ? t('a11y.expandSidebar') : t('a11y.collapseSidebar')}
-          >
-            {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleSidebar}
+                aria-label={collapsed ? t('a11y.expandSidebar') : t('a11y.collapseSidebar')}
+              >
+                {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">{collapsed ? t('a11y.expandSidebar') : t('a11y.collapseSidebar')}</TooltipContent>
+          </Tooltip>
         </div>
 
         <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
-          {NAV.filter((n) => !n.roles || n.roles.some((r) => hasRole(r))).map(({ to, labelKey, end, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              title={collapsed ? t(labelKey) : undefined}
-              className={({ isActive }) =>
-                cn(
-                  'flex h-9 items-center gap-3 rounded-md px-3 text-sm font-medium no-underline transition-colors',
-                  collapsed && 'justify-center px-0',
-                  isActive ? 'bg-accent text-primary' : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-                )
-              }
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              {!collapsed && <span>{t(labelKey)}</span>}
-            </NavLink>
-          ))}
+          {NAV.filter((n) => !n.roles || n.roles.some((r) => hasRole(r))).map(({ to, labelKey, end, icon: Icon }) => {
+            const link = (
+              <NavLink
+                key={to}
+                to={to}
+                end={end}
+                className={({ isActive }) =>
+                  cn(
+                    'flex h-9 items-center gap-3 rounded-md px-3 text-sm font-medium no-underline transition-colors',
+                    collapsed && 'justify-center px-0',
+                    isActive ? 'bg-accent text-primary' : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                  )
+                }
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                {!collapsed && <span>{t(labelKey)}</span>}
+              </NavLink>
+            );
+            // When collapsed the label span is hidden, so surface it as an
+            // always-on tooltip; expanded, the visible label needs no tooltip.
+            return collapsed ? (
+              <Tooltip key={to}>
+                <TooltipTrigger asChild>{link}</TooltipTrigger>
+                <TooltipContent side="right">{t(labelKey)}</TooltipContent>
+              </Tooltip>
+            ) : link;
+          })}
           {pluginUis.map((p) => {
             const Icon = pluginIcon(p.nav.icon);
-            return (
+            const link = (
               <NavLink
                 key={p.id}
                 to={`/x/${p.id}`}
-                title={collapsed ? p.nav.label : undefined}
                 className={({ isActive }) =>
                   cn(
                     'flex h-9 items-center gap-3 rounded-md px-3 text-sm font-medium no-underline transition-colors',
@@ -113,36 +149,28 @@ export function AppShell({
                 {!collapsed && <span>{p.nav.label}</span>}
               </NavLink>
             );
+            return collapsed ? (
+              <Tooltip key={p.id}>
+                <TooltipTrigger asChild>{link}</TooltipTrigger>
+                <TooltipContent side="right">{p.nav.label}</TooltipContent>
+              </Tooltip>
+            ) : link;
           })}
         </nav>
 
         <div className="border-t border-border p-2">
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                title={collapsed ? (user?.username ?? '') : undefined}
-                className={cn(
-                  'flex w-full items-center gap-2 rounded-md p-1 text-left transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  collapsed && 'justify-center',
-                )}
-              >
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-                  {(user?.username?.[0] ?? 'O').toUpperCase()}
-                </span>
-                {!collapsed && (
-                  <div className="min-w-0 leading-tight">
-                    <TruncatedText as="div" text={user?.username ?? ''} className="text-xs font-medium text-foreground" />
-                    <div className="text-[10px] text-muted-foreground">{user?.roles?.[0] ?? ''}</div>
-                  </div>
-                )}
-              </button>
-            </DropdownMenuTrigger>
+            {collapsed ? (
+              <Tooltip>
+                <TooltipTrigger asChild>{userTrigger}</TooltipTrigger>
+                <TooltipContent side="right">{user?.username ?? ''}</TooltipContent>
+              </Tooltip>
+            ) : userTrigger}
             <DropdownMenuContent side="top" align="start" className="w-52">
               <div className="px-2 py-1.5 leading-tight">
                 <TruncatedText as="div" text={user?.username ?? ''} className="text-sm font-medium text-foreground" />
                 {user?.roles?.[0] && (
-                  <div className="truncate text-xs text-muted-foreground">{user.roles[0].replace(/_/g, ' ')}</div>
+                  <TruncatedText as="div" text={user.roles[0].replace(/_/g, ' ')} className="text-xs text-muted-foreground" />
                 )}
               </div>
               <DropdownMenuSeparator />
@@ -182,19 +210,24 @@ export function AppShell({
         <header className="flex h-12 shrink-0 items-center justify-between border-b border-border px-6">
           <span className="font-medium">{title}</span>
           <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleTheme}
-              aria-label={theme === 'dark' ? t('a11y.switchToLight') : t('a11y.switchToDark')}
-              title={theme === 'dark' ? t('a11y.lightMode') : t('a11y.darkMode')}
-            >
-              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={toggleTheme}
+                  aria-label={theme === 'dark' ? t('a11y.switchToLight') : t('a11y.switchToDark')}
+                >
+                  {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{theme === 'dark' ? t('a11y.lightMode') : t('a11y.darkMode')}</TooltipContent>
+            </Tooltip>
           </div>
         </header>
         <main className={fullBleed ? 'flex min-h-0 flex-1 flex-col' : 'min-h-0 flex-1 overflow-y-auto p-6'}>{children}</main>
       </div>
     </div>
+    </TooltipProvider>
   );
 }

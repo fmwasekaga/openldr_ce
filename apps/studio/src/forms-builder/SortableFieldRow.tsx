@@ -92,9 +92,7 @@ export function SortableFieldRow({
           )}
         </p>
         {field.fhirPath && (
-          <p className="m-0 text-[10px] text-muted-foreground font-mono truncate leading-4">
-            {field.fhirPath}
-          </p>
+          <TruncatedText text={field.fhirPath} className="m-0 text-[10px] text-muted-foreground font-mono leading-4" />
         )}
       </div>
 
