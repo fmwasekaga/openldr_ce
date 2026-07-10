@@ -27,7 +27,9 @@ describe('runStoredQuery', () => {
     const d = deps();
     const out = await runStoredQuery(d, 'cq_1', { facility: 'HQ' });
     expect(out.rows).toEqual([{ f: 'HQ' }]);
-    expect(d.runConnectorSql).toHaveBeenCalledWith({ connectorId: 'c1', sql: expect.stringContaining("'HQ'") });
+    // runStoredQuery now delegates the row cap to the dialect-aware runConnectorSql (passes the
+    // inner SQL + rowCap) instead of building a Postgres `limit` wrapper itself.
+    expect(d.runConnectorSql).toHaveBeenCalledWith({ connectorId: 'c1', sql: expect.stringContaining("'HQ'"), rowCap: 1000 });
   });
   it('throws when the query id is unknown', async () => {
     await expect(runStoredQuery(deps(), 'nope', {})).rejects.toThrow(/not found/);
