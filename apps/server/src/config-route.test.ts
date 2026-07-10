@@ -23,4 +23,14 @@ describe('GET /api/config', () => {
     const res = await app.inject({ method: 'GET', url: '/api/config' });
     expect(res.json().dashboardSqlEnabled).toBe(false);
   });
+
+  it('is enabled for an mssql target when the flag is on (pg-only gate lifted)', async () => {
+    const app = Fastify();
+    registerConfigRoute(app, {
+      cfg: { TARGET_STORE_ADAPTER: 'mssql', AUTH_DEV_BYPASS: true, OIDC_ISSUER_URL: '', OIDC_WEB_CLIENT_ID: '' },
+      featureFlags: { get: async () => true },
+    } as any);
+    const res = await app.inject({ method: 'GET', url: '/api/config' });
+    expect(res.json().dashboardSqlEnabled).toBe(true);
+  });
 });

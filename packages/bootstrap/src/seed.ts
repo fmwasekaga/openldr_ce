@@ -45,9 +45,10 @@ const FHIR_PUBLISHER_ID = 'pub-hl7-fhir';
 /** Name used to dedup the default target-warehouse connector — idempotency key. */
 const DEFAULT_CONNECTOR_NAME = 'Target Warehouse (Postgres)';
 
-/** Name for the MSSQL target-warehouse connector — deliberately DIFFERENT from
- *  DEFAULT_CONNECTOR_NAME so the Postgres-dialect built-in report seeding (which resolves
- *  'Target Warehouse (Postgres)') skips cleanly on an MSSQL install. */
+/** Name for the MSSQL target-warehouse connector — distinct from DEFAULT_CONNECTOR_NAME so the
+ *  two warehouse connectors are identifiable by name. `seedDataDrivenReports` resolves EITHER name
+ *  and seeds the dialect-appropriate report SQL (Slice 2b), so built-in reports now seed on an
+ *  MSSQL install too (with the T-SQL query variants). */
 const MSSQL_CONNECTOR_NAME = 'Target Warehouse (SQL Server)';
 
 // Minimal structural shape of the forms surface seedDatabase needs. Typed against FormStore

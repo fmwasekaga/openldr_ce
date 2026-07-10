@@ -11,16 +11,17 @@ import {
 
 // In-memory fakes — no real Kysely instance needed (unlike `packages/bootstrap/src/seed.ts`,
 // which builds `customQueries` from a real DB handle; here we inject fakes directly to unit-test
-// `seedDataDrivenReports`'s own logic, in particular the Task-4.2 connector-resolution refinement).
-function fakeDeps(connectorList: { id: string; name: string }[]) {
-  const queries = new Map<string, { id: string; connectorId: string }>();
+// `seedDataDrivenReports`'s own logic, in particular the Task-4.2 connector-resolution refinement
+// and (Task 2, mssql-slice2b) the dialect-variant-selection refinement).
+function fakeDeps(connectorList: { id: string; name: string; type?: string | null }[]) {
+  const queries = new Map<string, { id: string; connectorId: string; sql: string }>();
   const designs = new Map<string, { id: string }>();
   const reportDefs = new Map<string, { id: string }>();
   const deps: SeedDataDrivenReportsDeps = {
     customQueries: {
       get: async (id) => (queries.has(id) ? (queries.get(id) as never) : null),
       create: async (q) => {
-        queries.set(q.id, { id: q.id, connectorId: q.connectorId });
+        queries.set(q.id, { id: q.id, connectorId: q.connectorId, sql: q.sql });
       },
     },
     designs: {
@@ -78,6 +79,35 @@ describe('seedDataDrivenReports', () => {
     const second = await seedDataDrivenReports(deps);
     expect(second).toEqual({ queriesSeeded: 0, designsSeeded: 0, reportDefsSeeded: 0 });
   });
+
+  // Task 2 (mssql-slice2b): seedDataDrivenReports must pick the SQL variant matching the
+  // resolved warehouse connector's dialect (reversing Slice 1's "reports skip on MSSQL").
+  it('resolves a postgres-typed warehouse connector and seeds the postgres SQL variant', async () => {
+    const { deps, queries } = fakeDeps([{ id: 'conn-pg', name: DEFAULT_CONNECTOR_NAME, type: 'postgres' }]);
+    await seedDataDrivenReports(deps);
+    const testVolume = queries.get('q-test-volume');
+    expect(testVolume?.sql).toContain('to_char(');
+    expect(testVolume?.sql).not.toContain('format(');
+  });
+
+  it('resolves a microsoft-sql-typed warehouse connector by its own name and seeds the mssql SQL variant', async () => {
+    const { deps, queries } = fakeDeps([{ id: 'conn-mssql', name: 'Target Warehouse (SQL Server)', type: 'microsoft-sql' }]);
+    const res = await seedDataDrivenReports(deps);
+    expect(res.queriesSeeded).toBe(SEED_QUERIES.length);
+    const testVolume = queries.get('q-test-volume');
+    expect(testVolume?.sql).toContain('format(');
+    expect(testVolume?.sql).not.toContain('to_char(');
+    for (const q of queries.values()) expect(q.connectorId).toBe('conn-mssql');
+  });
+});
+
+describe('SEED_QUERIES — every entry carries both dialect variants', () => {
+  it('has non-empty sql.postgres and sql.mssql for every seed query', () => {
+    for (const q of SEED_QUERIES) {
+      expect(q.sql.postgres.trim().length).toBeGreaterThan(0);
+      expect(q.sql.mssql.trim().length).toBeGreaterThan(0);
+    }
+  });
 });
 
 describe('SEED_QUERIES — q-amr-resistance', () => {
@@ -90,9 +120,11 @@ describe('SEED_QUERIES — q-amr-resistance', () => {
       { id: 'facility', label: 'Facility', type: 'text', required: false },
     ]);
     // {{param.*}} tokens present in the SQL must all be declared params, or substituteParams
-    // throws "unbound parameter" at run time.
-    const tokens = [...(q?.sql.matchAll(/\{\{\s*param\.([a-zA-Z0-9_]+)\s*\}\}/g) ?? [])].map((m) => m[1]);
-    expect(new Set(tokens)).toEqual(new Set(['from', 'to', 'facility']));
+    // throws "unbound parameter" at run time. Checked for BOTH dialect variants.
+    for (const variant of [q?.sql.postgres, q?.sql.mssql]) {
+      const tokens = [...(variant?.matchAll(/\{\{\s*param\.([a-zA-Z0-9_]+)\s*\}\}/g) ?? [])].map((m) => m[1]);
+      expect(new Set(tokens)).toEqual(new Set(['from', 'to', 'facility']));
+    }
   });
 });
 
@@ -127,10 +159,12 @@ describe('SEED_QUERIES — q-amr-antibiogram', () => {
       { id: 'from', label: 'From', type: 'text', required: true },
       { id: 'to', label: 'To', type: 'text', required: true },
     ]);
-    const tokens = [...(q?.sql.matchAll(/\{\{\s*param\.([a-zA-Z0-9_]+)\s*\}\}/g) ?? [])].map((m) => m[1]);
-    expect(new Set(tokens)).toEqual(new Set(['from', 'to']));
-    for (const a of ANTIBIOGRAM_PANEL) expect(q?.sql).toContain(`"${a}"`);
-    expect(q?.sql).toContain('group by pathogen_code');
+    for (const variant of [q?.sql.postgres, q?.sql.mssql]) {
+      const tokens = [...(variant?.matchAll(/\{\{\s*param\.([a-zA-Z0-9_]+)\s*\}\}/g) ?? [])].map((m) => m[1]);
+      expect(new Set(tokens)).toEqual(new Set(['from', 'to']));
+      for (const a of ANTIBIOGRAM_PANEL) expect(variant).toContain(`"${a}"`);
+      expect(variant).toContain('group by pathogen_code');
+    }
   });
 });
 

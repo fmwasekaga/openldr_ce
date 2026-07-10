@@ -7,15 +7,27 @@ function stripComments(input: string): string {
   return input.replace(/--[^\n]*/g, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ');
 }
 
+/** Replace single-quoted string literals (including `''` escapes) with an empty literal so a
+ *  keyword like `into` sitting inside a quoted string isn't mistaken for the SQL keyword. Only
+ *  applied to the validation copy — never to the SQL that actually runs. */
+function stripStringLiterals(input: string): string {
+  return input.replace(/'(?:[^']|'')*'/g, "''");
+}
+
 export function validateSelectSql(rawSql: string): void {
-  const stripped = stripComments(rawSql).trim();
+  // Strip comments AND string literals before the structural/keyword checks so quoted text (e.g.
+  // 'convert this into that') can't trigger a false positive or smuggle a banned keyword.
+  const stripped = stripStringLiterals(stripComments(rawSql)).trim();
   if (!stripped) throw new Error('empty query');
   // Reject multiple statements: any semicolon that is not the final char.
   const noTrailing = stripped.replace(/;\s*$/, '');
   if (noTrailing.includes(';')) throw new Error('only a single statement is allowed');
   if (!/^(select|with)\b/i.test(noTrailing)) throw new Error('only SELECT/WITH queries are allowed');
-  if (/\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|merge|call|copy)\b/i.test(noTrailing)) {
-    throw new Error('only read-only SELECT queries are allowed');
+  // `into` is banned too: `SELECT … INTO <table>` creates a table and writes rows (a write
+  // masquerading as a SELECT). On Postgres a read-only txn caught this; on MSSQL there is no
+  // read-only txn, so this shared validator is the only guard for both Path A and Path B.
+  if (/\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|merge|call|copy|into)\b/i.test(noTrailing)) {
+    throw new Error('only read-only SELECT queries are allowed (INTO/DDL/DML rejected)');
   }
 }
 
@@ -46,21 +58,30 @@ export function planPagination(inner: string, dialect: SqlDialect, opts: { limit
 
 export interface SqlRunOpts { timeoutMs: number; rowCap: number }
 
-/** Run user SQL inside a READ ONLY transaction with a statement timeout and row cap. Postgres only. */
+/** Run user SQL inside a read-only transaction with a statement/lock timeout and row cap.
+ *  Dialect-aware: Postgres uses `set transaction read only` + `statement_timeout`; SQL Server
+ *  has no equivalent transaction-level read-only mode or per-statement timeout, so it relies on
+ *  the SELECT-only validation above for read-only-ness and bounds lock waits with LOCK_TIMEOUT. */
 export async function runSqlQuery(
-  db: Kysely<ExternalSchema>, rawSql: string, opts: SqlRunOpts,
+  db: Kysely<ExternalSchema>, rawSql: string, opts: SqlRunOpts, engine: SqlDialect = 'postgres',
 ): Promise<ReportResultData> {
   if (!Number.isFinite(opts.timeoutMs) || opts.timeoutMs < 1) throw new Error('timeoutMs must be a finite positive number');
   if (!Number.isFinite(opts.rowCap) || opts.rowCap < 1) throw new Error('rowCap must be a finite positive number');
   validateSelectSql(rawSql);
   const inner = rawSql.replace(/;\s*$/, '');
   const cap = Math.floor(opts.rowCap);
-  const capped = `select * from (${inner}) as _q limit ${cap}`;
   return db.transaction().execute(async (trx) => {
-    await sql`set transaction read only`.execute(trx);
-    await sql`set local statement_timeout = ${sql.lit(Math.floor(opts.timeoutMs))}`.execute(trx);
-    const result = await sql.raw<Record<string, unknown>>(capped).execute(trx);
-    const rows = result.rows;
+    if (engine === 'mssql') {
+      // SQL Server has no `set transaction read only`; the SELECT-only validation above enforces
+      // read-only-ness. SET LOCK_TIMEOUT bounds lock waits (T-SQL has no per-statement time cap).
+      await sql`set lock_timeout ${sql.lit(Math.floor(opts.timeoutMs))}`.execute(trx);
+    } else {
+      await sql`set transaction read only`.execute(trx);
+      await sql`set local statement_timeout = ${sql.lit(Math.floor(opts.timeoutMs))}`.execute(trx);
+    }
+    const plan = planPagination(inner, engine, { limit: cap });
+    const result = await sql.raw<Record<string, unknown>>(plan.sql).execute(trx);
+    const rows = plan.sliceOffset ? result.rows.slice(plan.sliceOffset) : result.rows;
     const keys = rows.length ? Object.keys(rows[0]) : [];
     const columns: ReportColumn[] = keys.map((k) => ({
       key: k, label: k,
