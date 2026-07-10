@@ -19,6 +19,20 @@ export function validateSelectSql(rawSql: string): void {
   }
 }
 
+export type SqlDialect = 'postgres' | 'mssql';
+
+/** Wrap an inner SELECT with a dialect-correct row-cap + offset. Postgres uses LIMIT/OFFSET;
+ *  SQL Server uses OFFSET…FETCH, which requires an ORDER BY - `(SELECT NULL)` is a stable no-op
+ *  order for an arbitrary wrapped subquery. */
+export function paginateSql(inner: string, dialect: SqlDialect, opts: { limit: number; offset?: number }): string {
+  const limit = Math.floor(opts.limit);
+  const offset = Math.floor(opts.offset ?? 0);
+  if (dialect === 'mssql') {
+    return `select * from (${inner}) as _q order by (select null) offset ${offset} rows fetch next ${limit} rows only`;
+  }
+  return `select * from (${inner}) as _q limit ${limit} offset ${offset}`;
+}
+
 export interface SqlRunOpts { timeoutMs: number; rowCap: number }
 
 /** Run user SQL inside a READ ONLY transaction with a statement timeout and row cap. Postgres only. */

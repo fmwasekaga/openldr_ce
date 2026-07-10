@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateSelectSql, runSqlQuery } from './sql-runner';
+import { validateSelectSql, runSqlQuery, paginateSql } from './sql-runner';
 
 describe('validateSelectSql', () => {
   it('accepts a single SELECT', () => { expect(() => validateSelectSql('SELECT 1')).not.toThrow(); });
@@ -33,5 +33,30 @@ describe('runSqlQuery numeric guards', () => {
   it('rejects negative rowCap before reaching the db', async () => {
     await expect(runSqlQuery(db, 'select 1', { timeoutMs: 5000, rowCap: -1 }))
       .rejects.toThrow(/finite positive/);
+  });
+});
+
+describe('paginateSql', () => {
+  it('wraps Postgres with LIMIT/OFFSET', () => {
+    expect(paginateSql('select 1', 'postgres', { limit: 100, offset: 0 }))
+      .toBe('select * from (select 1) as _q limit 100 offset 0');
+  });
+  it('wraps Postgres with a non-zero offset', () => {
+    expect(paginateSql('select 1', 'postgres', { limit: 50, offset: 25 }))
+      .toBe('select * from (select 1) as _q limit 50 offset 25');
+  });
+  it('wraps MSSQL with ORDER BY (SELECT NULL) OFFSET/FETCH', () => {
+    expect(paginateSql('select 1', 'mssql', { limit: 100, offset: 0 }))
+      .toBe('select * from (select 1) as _q order by (select null) offset 0 rows fetch next 100 rows only');
+  });
+  it('wraps MSSQL with a non-zero offset', () => {
+    expect(paginateSql('select 1', 'mssql', { limit: 50, offset: 25 }))
+      .toBe('select * from (select 1) as _q order by (select null) offset 25 rows fetch next 50 rows only');
+  });
+  it('defaults offset to 0 and floors non-integers', () => {
+    expect(paginateSql('select 1', 'postgres', { limit: 10.9 }))
+      .toBe('select * from (select 1) as _q limit 10 offset 0');
+    expect(paginateSql('select 1', 'mssql', { limit: 10.9 }))
+      .toBe('select * from (select 1) as _q order by (select null) offset 0 rows fetch next 10 rows only');
   });
 });
