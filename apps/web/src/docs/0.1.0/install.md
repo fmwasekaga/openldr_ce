@@ -44,6 +44,25 @@ self-signed certificate; re-run the same command once DNS and ports are ready.
 > configures a self-signed certificate; front it with your own reverse proxy or
 > certificate if you need trusted TLS.
 
+## Bring your own certificate
+
+Already have a certificate — a `fullchain.pem` + `privkey.pem` from elsewhere, a wildcard, or
+an internal CA? Scaffold without starting, drop the files in, then start:
+
+**Linux / macOS**
+```
+curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.sh \
+  | bash -s -- --server-name your.domain.com --no-start
+cp /path/to/fullchain.pem openldr/config/nginx/certs/fullchain.pem
+cp /path/to/privkey.pem   openldr/config/nginx/certs/privkey.pem
+cd openldr && docker compose up -d
+```
+
+`--server-name` sets the domain in the generated `.env` and the OIDC redirect. On Windows use
+`install.ps1 -ServerName your.domain.com -NoStart`, copy the two files into
+`openldr\config\nginx\certs\`, then `docker compose up -d`. Already running on the self-signed
+certificate? Overwrite the two files and run `docker compose restart gateway`.
+
 ## Installer flags
 
 | Flag | Default | Purpose |

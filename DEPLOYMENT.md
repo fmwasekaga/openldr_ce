@@ -65,6 +65,49 @@ same idea (certbot over the http-01 webroot, cron-driven renewal), different ent
 (`pnpm run cert` / `deploy/letsencrypt.sh` instead of `renew-cert.sh`). `install.ps1` does not
 automate Let's Encrypt on Windows; it prints a warning and falls back to self-signed.
 
+### Trusted TLS (bring your own certificate)
+
+Already have a cert — a `fullchain.pem` + `privkey.pem` from another host, a wildcard, or a
+corporate/internal CA? Skip issuance and drop them in. Scaffold without starting, replace the
+placeholder cert, then bring the stack up:
+
+```bash
+# 1. Scaffold only: writes .env + a placeholder self-signed cert, does NOT start the stack
+curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.sh \
+  | bash -s -- --dir ./openldr --server-name your.domain.com --no-start
+
+# 2. Replace the placeholder with your real cert (keys stay owner-only)
+cp /path/to/fullchain.pem ./openldr/config/nginx/certs/fullchain.pem
+cp /path/to/privkey.pem   ./openldr/config/nginx/certs/privkey.pem
+
+# 3. Pull the published images and start
+cd ./openldr
+docker compose pull
+docker compose up -d
+```
+
+`--dir <path>` scaffolds **directly** into `<path>` (no nested `openldr/`). Pass `--server-name` so the
+generated `.env` (`PUBLIC_ORIGIN`, `OIDC_ISSUER_URL`, `KC_HOSTNAME`) and the OIDC redirect match your
+domain. Windows is identical: `install.ps1 -Dir .\openldr -ServerName your.domain.com -NoStart`, then
+copy the two files into `.\openldr\config\nginx\certs\` and `docker compose up -d`.
+
+Already running on the self-signed placeholder? Just overwrite the two files and reload the gateway
+(no downtime, no re-pull):
+
+```bash
+cp /path/to/fullchain.pem config/nginx/certs/fullchain.pem
+cp /path/to/privkey.pem   config/nginx/certs/privkey.pem
+docker compose restart gateway
+```
+
+Verify the trusted chain is served (no `-k`, and `verify=0`):
+
+```bash
+curl -sI https://your.domain.com/health
+echo | openssl s_client -connect your.domain.com:443 -servername your.domain.com 2>/dev/null \
+  | openssl x509 -noout -issuer -subject -enddate
+```
+
 ## Prerequisites
 
 - Docker + Docker Compose v2.
