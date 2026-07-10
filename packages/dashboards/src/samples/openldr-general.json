@@ -80,7 +80,7 @@
       "visual": { "yAxisKey": "value", "suffix": "%", "minValue": 0, "maxValue": 100, "greenThreshold": 80, "amberThreshold": 60 },
       "query": {
         "mode": "sql",
-        "sql": "SELECT CASE WHEN COUNT(*) > 0\n  THEN ROUND(SUM(CASE WHEN status IN ('final','amended') THEN 1 ELSE 0 END) * 100.0 / COUNT(*))\n  ELSE 100 END AS value\nFROM observations"
+        "sql": "SELECT CASE WHEN COUNT(*) > 0\n  THEN ROUND(SUM(CASE WHEN status IN ('final','amended') THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 0)\n  ELSE 100 END AS value\nFROM observations"
       }
     },
     {
@@ -91,7 +91,7 @@
       "visual": { "xAxisKey": "label", "yAxisKey": "value", "color": "#10b981" },
       "query": {
         "mode": "sql",
-        "sql": "SELECT code_text AS label, COUNT(*) AS value FROM service_requests\nWHERE code_text IS NOT NULL\n[[AND substring(authored_on,1,10) >= {{period_from}}]]\n[[AND substring(authored_on,1,10) <= {{period_to}}]]\n[[AND priority = {{priority}}]]\nGROUP BY code_text\nORDER BY value DESC\nLIMIT 15",
+        "sql": "SELECT code_text AS label, COUNT(*) AS value FROM service_requests\nWHERE code_text IS NOT NULL\n[[AND substring(authored_on,1,10) >= {{period_from}}]]\n[[AND substring(authored_on,1,10) <= {{period_to}}]]\n[[AND priority = {{priority}}]]\nGROUP BY code_text\nORDER BY value DESC\nOFFSET 0 ROWS FETCH NEXT 15 ROWS ONLY",
         "variableBindings": { "period": "period", "priority": "priority" },
         "variables": {
           "period": { "type": "date-range", "label": "Period" },
@@ -102,14 +102,15 @@
     {
       "id": "s6",
       "type": "area-chart",
-      "title": "Orders Trend (30 days)",
+      "title": "Orders Trend",
       "refreshIntervalSec": 300,
       "visual": { "xAxisKey": "label", "yAxisKey": "value", "color": "#3b82f6" },
       "query": {
         "mode": "sql",
-        "sql": "SELECT substring(authored_on,1,10) AS label, COUNT(*) AS value FROM service_requests\nWHERE authored_on >= to_char(now() - interval '30 days', 'YYYY-MM-DD')\n[[AND code_text = {{test}}]]\n[[AND priority = {{priority}}]]\nGROUP BY substring(authored_on,1,10)\nORDER BY label",
-        "variableBindings": { "test": "test", "priority": "priority" },
+        "sql": "SELECT substring(authored_on,1,10) AS label, COUNT(*) AS value FROM service_requests\nWHERE 1=1\n[[AND substring(authored_on,1,10) >= {{period_from}}]]\n[[AND substring(authored_on,1,10) <= {{period_to}}]]\n[[AND code_text = {{test}}]]\n[[AND priority = {{priority}}]]\nGROUP BY substring(authored_on,1,10)\nORDER BY label",
+        "variableBindings": { "period": "period", "test": "test", "priority": "priority" },
         "variables": {
+          "period": { "type": "date-range", "label": "Period" },
           "test": { "type": "text", "label": "Test" },
           "priority": { "type": "text", "label": "Priority", "options": ["routine", "urgent", "asap", "stat"] }
         }
@@ -177,14 +178,15 @@
     {
       "id": "s11",
       "type": "line-chart",
-      "title": "Results Trend (30 days)",
+      "title": "Results Trend",
       "refreshIntervalSec": 300,
       "visual": { "xAxisKey": "label", "yAxisKey": "value", "color": "#8b5cf6" },
       "query": {
         "mode": "sql",
-        "sql": "SELECT substring(effective_date_time,1,10) AS label, COUNT(*) AS value FROM observations\nWHERE effective_date_time >= to_char(now() - interval '30 days', 'YYYY-MM-DD')\n[[AND code_text = {{test}}]]\nGROUP BY substring(effective_date_time,1,10)\nORDER BY label",
-        "variableBindings": { "test": "test" },
+        "sql": "SELECT substring(effective_date_time,1,10) AS label, COUNT(*) AS value FROM observations\nWHERE 1=1\n[[AND substring(effective_date_time,1,10) >= {{period_from}}]]\n[[AND substring(effective_date_time,1,10) <= {{period_to}}]]\n[[AND code_text = {{test}}]]\nGROUP BY substring(effective_date_time,1,10)\nORDER BY label",
+        "variableBindings": { "period": "period", "test": "test" },
         "variables": {
+          "period": { "type": "date-range", "label": "Period" },
           "test": { "type": "text", "label": "Test" }
         }
       }
@@ -197,7 +199,7 @@
       "visual": { "xAxisKey": "x", "yAxisKey": "y", "sizeKey": "y" },
       "query": {
         "mode": "sql",
-        "sql": "SELECT code_text AS label, COUNT(*) AS x, ROUND(AVG(value_quantity)::numeric, 2) AS y\nFROM observations\nWHERE value_quantity IS NOT NULL AND code_text IS NOT NULL\nGROUP BY code_text\nORDER BY x DESC\nLIMIT 30"
+        "sql": "SELECT code_text AS label, COUNT(*) AS x, ROUND(CAST(AVG(value_quantity) AS decimal(18,4)), 2) AS y\nFROM observations\nWHERE value_quantity IS NOT NULL AND code_text IS NOT NULL\nGROUP BY code_text\nORDER BY x DESC\nOFFSET 0 ROWS FETCH NEXT 30 ROWS ONLY"
       }
     },
     {
@@ -217,7 +219,7 @@
       },
       "query": {
         "mode": "sql",
-        "sql": "SELECT identifier_value AS order_id, code_text AS test, status, priority, substring(authored_on,1,10) AS authored\nFROM service_requests\nWHERE 1=1\n[[AND substring(authored_on,1,10) >= {{period_from}}]]\n[[AND substring(authored_on,1,10) <= {{period_to}}]]\n[[AND code_text = {{test}}]]\n[[AND priority = {{priority}}]]\nORDER BY authored_on DESC\nLIMIT 50",
+        "sql": "SELECT identifier_value AS order_id, code_text AS test, status, priority, substring(authored_on,1,10) AS authored\nFROM service_requests\nWHERE 1=1\n[[AND substring(authored_on,1,10) >= {{period_from}}]]\n[[AND substring(authored_on,1,10) <= {{period_to}}]]\n[[AND code_text = {{test}}]]\n[[AND priority = {{priority}}]]\nORDER BY authored_on DESC\nOFFSET 0 ROWS FETCH NEXT 50 ROWS ONLY",
         "variableBindings": { "period": "period", "test": "test", "priority": "priority" },
         "variables": {
           "period": { "type": "date-range", "label": "Period" },
