@@ -7,6 +7,11 @@
 #        --letsencrypt <email> (issue a trusted Let's Encrypt cert for --server-name),
 #        --staging (use the LE staging CA — for testing, avoids rate limits),
 #        --no-start (scaffold + config only), --no-pull (skip image pull).
+#        --target-db postgres|mssql (default postgres — selects the external analytics/target DB),
+#        --mssql-demo (spin up a bundled MSSQL container for evaluation; implies --target-db mssql),
+#        --mssql-host/--mssql-port/--mssql-database/--mssql-user/--mssql-password (BYO MSSQL
+#          connection — required when --target-db mssql without --mssql-demo),
+#        --mssql-encrypt true|false (default false), --mssql-trust-cert true|false (default true).
 set -eu
 
 REPO_RAW="https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main"
@@ -19,6 +24,15 @@ LE_EMAIL=""
 LE_STAGING=""
 NO_START=0
 NO_PULL=0
+TARGET_DB="postgres"
+MSSQL_DEMO=0
+MSSQL_HOST=""
+MSSQL_PORT="1433"
+MSSQL_DATABASE="openldr_target"
+MSSQL_USER=""
+MSSQL_PASSWORD=""
+MSSQL_ENCRYPT="false"
+MSSQL_TRUST_CERT="true"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -31,6 +45,15 @@ while [ $# -gt 0 ]; do
     --staging) LE_STAGING=1; shift ;;
     --no-start) NO_START=1; shift ;;
     --no-pull) NO_PULL=1; shift ;;
+    --target-db) TARGET_DB="$2"; shift 2 ;;
+    --mssql-demo) MSSQL_DEMO=1; TARGET_DB="mssql"; shift ;;
+    --mssql-host) MSSQL_HOST="$2"; shift 2 ;;
+    --mssql-port) MSSQL_PORT="$2"; shift 2 ;;
+    --mssql-database) MSSQL_DATABASE="$2"; shift 2 ;;
+    --mssql-user) MSSQL_USER="$2"; shift 2 ;;
+    --mssql-password) MSSQL_PASSWORD="$2"; shift 2 ;;
+    --mssql-encrypt) MSSQL_ENCRYPT="$2"; shift 2 ;;
+    --mssql-trust-cert) MSSQL_TRUST_CERT="$2"; shift 2 ;;
     *) echo "unknown flag: $1" >&2; exit 2 ;;
   esac
 done
@@ -55,6 +78,29 @@ else
 fi
 
 err() { echo "✗ $1" >&2; exit 1; }
+
+if [ "$TARGET_DB" != "postgres" ] && [ "$TARGET_DB" != "mssql" ]; then
+  echo "✗ --target-db must be 'postgres' or 'mssql' (got '$TARGET_DB')" >&2; exit 2
+fi
+
+# Managed-demo MSSQL: point the app at the bundled 'mssql' compose service and (below) generate a
+# policy-compliant SA password. Developer/Express editions are NOT licensed for production — this
+# container is for evaluation only.
+if [ "$MSSQL_DEMO" -eq 1 ]; then
+  MSSQL_HOST="mssql"
+  MSSQL_PORT="1433"
+  MSSQL_USER="sa"
+  MSSQL_ENCRYPT="false"
+  MSSQL_TRUST_CERT="true"
+fi
+
+# BYO MSSQL: require connection details before writing .env / starting the stack.
+if [ "$TARGET_DB" = "mssql" ] && [ "$MSSQL_DEMO" -eq 0 ]; then
+  for pair in "MSSQL_HOST=$MSSQL_HOST" "MSSQL_USER=$MSSQL_USER" "MSSQL_PASSWORD=$MSSQL_PASSWORD"; do
+    key="${pair%%=*}"; val="${pair#*=}"
+    [ -n "$val" ] || err "--target-db mssql (BYO) requires --mssql-host, --mssql-user, and --mssql-password (missing $key). The target database '$MSSQL_DATABASE' must already exist on your SQL Server."
+  done
+fi
 
 # Let's Encrypt needs a public hostname reachable over :80 — reject localhost / bare IPs.
 if [ -n "$LE_EMAIL" ]; then
@@ -105,6 +151,10 @@ fetch "infra/keycloak/openldr-realm.json" "$DIR/config/keycloak/openldr-realm.js
 fetch "scripts/init-target-db.sql" "$DIR/config/init-target-db.sql"
 fetch "deploy/install/renew-cert.sh" "$DIR/renew-cert.sh"
 chmod +x "$DIR/renew-cert.sh" 2>/dev/null || true
+if [ "$MSSQL_DEMO" -eq 1 ]; then
+  fetch "deploy/install/docker-compose.mssql.yml" "$DIR/docker-compose.mssql.yml"
+  fetch "scripts/init-target-db-mssql.sql" "$DIR/config/init-target-db-mssql.sql"
+fi
 
 # Register this deploy's origin as a valid OIDC redirect so studio login works behind the
 # gateway. The shipped realm lists localhost + dev URLs; a non-localhost host (or https://localhost)
@@ -122,6 +172,7 @@ fi
 rand() { head -c 3072 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | cut -c1-24; }
 if [ ! -f "$DIR/.env" ]; then
   PG_PW="$(rand)"; KC_PW="$(rand)"; S3_KEY="$(rand)"; S3_SECRET="$(rand)"
+  if [ "$MSSQL_DEMO" -eq 1 ] && [ -z "$MSSQL_PASSWORD" ]; then MSSQL_PASSWORD="$(rand)Aa1!"; fi
   SECRETS_KEY="$(openssl rand -base64 32 2>/dev/null || head -c 32 /dev/urandom | base64 | tr -d '\n')"
 
   # COMPOSE_PROJECT_NAME: Compose's own default (the install dir's leaf name) collides
@@ -145,6 +196,19 @@ if [ ! -f "$DIR/.env" ]; then
 
   # Restrict before writing so the plaintext secrets are never briefly world-readable.
   ( umask 077; : > "$DIR/.env" )
+  if [ "$TARGET_DB" = "mssql" ]; then
+    TARGET_DB_ENV_BLOCK="TARGET_STORE_ADAPTER=mssql
+MSSQL_HOST=$MSSQL_HOST
+MSSQL_PORT=$MSSQL_PORT
+MSSQL_DATABASE=$MSSQL_DATABASE
+MSSQL_USER=$MSSQL_USER
+MSSQL_PASSWORD=$MSSQL_PASSWORD
+MSSQL_ENCRYPT=$MSSQL_ENCRYPT
+MSSQL_TRUST_SERVER_CERT=$MSSQL_TRUST_CERT"
+  else
+    TARGET_DB_ENV_BLOCK="TARGET_STORE_ADAPTER=pg
+TARGET_DATABASE_URL=postgres://openldr:$PG_PW@postgres:5432/openldr_target"
+  fi
   cat > "$DIR/.env" <<EOF
 OPENLDR_VERSION=$VERSION
 SERVER_NAME=$HOST
@@ -156,7 +220,7 @@ TLS_MODE=self-signed
 PORT=3000
 NODE_ENV=production
 INTERNAL_DATABASE_URL=postgres://openldr:$PG_PW@postgres:5432/openldr
-TARGET_DATABASE_URL=postgres://openldr:$PG_PW@postgres:5432/openldr_target
+$TARGET_DB_ENV_BLOCK
 POSTGRES_PASSWORD=$PG_PW
 S3_ENDPOINT=http://minio:9000
 S3_REGION=us-east-1
@@ -211,8 +275,10 @@ if [ "$NO_START" -eq 1 ]; then
   exit 0
 fi
 cd "$DIR"
-[ "$NO_PULL" -eq 1 ] || docker compose pull
-docker compose up -d
+COMPOSE_FILES="-f docker-compose.yml"
+[ "$MSSQL_DEMO" -eq 1 ] && COMPOSE_FILES="$COMPOSE_FILES -f docker-compose.mssql.yml"
+[ "$NO_PULL" -eq 1 ] || docker compose $COMPOSE_FILES pull
+docker compose $COMPOSE_FILES up -d
 
 # Let's Encrypt: the stack is up (nginx serving the http-01 webroot on :80). Issue a trusted cert,
 # install it where the gateway reads it, reload, and wire up auto-renewal. Non-fatal: on failure the
@@ -247,6 +313,10 @@ fi
 echo ""
 echo "✓ OpenLDR is starting. Open $ORIGIN"
 echo "  Keycloak admin password: $(grep '^KEYCLOAK_ADMIN_PASSWORD=' .env | cut -d= -f2)"
+if [ "$MSSQL_DEMO" -eq 1 ]; then
+  echo "  MSSQL (demo) SA password: $(grep '^MSSQL_PASSWORD=' .env | cut -d= -f2-)"
+  echo "  ⚠ The demo SQL Server container is for evaluation only — not licensed for production."
+fi
 if [ "$HTTP_PORT" != "80" ] || [ "$HTTPS_PORT" != "443" ]; then
   echo "  Gateway ports: HTTP $HTTP_PORT / HTTPS $HTTPS_PORT"
 fi
