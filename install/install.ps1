@@ -42,17 +42,24 @@ if ($Letsencrypt) {
 
 function Die($m) { Write-Error "X $m"; exit 1 }
 
-# Run a native command whose stderr/progress output (Docker Compose, OpenSSL, ...) would
-# otherwise surface as red NativeCommandError records under Windows PowerShell 5.1. Merging
-# stderr into the output stream (2>&1) and re-emitting each line via Write-Host keeps that
-# progress as plain text instead of error records, while EAP=Continue stops a mid-stream
-# stderr line from terminating. Output still streams live; success is decided from the exit
-# code, not from anything written to stderr.
-function Invoke-NativeChecked([scriptblock]$Command, [string]$ErrorMessage) {
-  $prevEAP = $ErrorActionPreference
-  $ErrorActionPreference = "Continue"
-  try { & $Command 2>&1 | ForEach-Object { Write-Host $_ }; $code = $LASTEXITCODE } finally { $ErrorActionPreference = $prevEAP }
-  if ($code -ne 0) { Die "$ErrorMessage (exit $code)" }
+# Run a native process with stdout/stderr redirected to temp files, then echo them as plain
+# text. Because the child writes to FILES rather than PowerShell's streams, its stderr/progress
+# (Docker Compose's "... Pulling/Creating") can never be turned into a NativeCommandError
+# record  -  so a successful install's console AND Start-Transcript output stay clean under
+# Windows PowerShell 5.1 (a bare `& docker ...`, even with 2>&1, still logs those records).
+# Success is decided strictly from the process exit code.
+function Invoke-NativeProcessChecked([string]$FilePath, [string[]]$ArgumentList, [string]$ErrorMessage, [string]$WorkingDirectory = (Get-Location).Path) {
+  $outFile = [System.IO.Path]::GetTempFileName()
+  $errFile = [System.IO.Path]::GetTempFileName()
+  try {
+    $p = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -WorkingDirectory $WorkingDirectory `
+      -NoNewWindow -Wait -PassThru -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+    Get-Content -LiteralPath $outFile -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
+    Get-Content -LiteralPath $errFile -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
+    if ($p.ExitCode -ne 0) { Die "$ErrorMessage (exit $($p.ExitCode))" }
+  } finally {
+    Remove-Item -LiteralPath $outFile, $errFile -Force -ErrorAction SilentlyContinue
+  }
 }
 
 # 1. Preflight
@@ -225,14 +232,15 @@ if (-not (Test-Path $cert)) {
 if ($NoStart) { Write-Host "OK Scaffolded $Dir (-NoStart). Run: cd $Dir; docker compose up -d"; exit 0 }
 Push-Location $Dir
 try {
-  # Docker Compose streams "... Pulling/Pulled" progress to stderr, which becomes a
-  # terminating NativeCommandError under $ErrorActionPreference='Stop' BEFORE any
-  # $LASTEXITCODE check can run  -  aborting a perfectly good pull. Invoke-NativeChecked
-  # relaxes the preference for the call and decides success from the exit code.
+  # Run compose via Invoke-NativeProcessChecked (Start-Process + redirected files) so Docker's
+  # stderr progress never becomes a NativeCommandError record on a successful install. Output is
+  # buffered until each step finishes, so print a heads-up first ($PWD is $Dir under Push-Location).
   if (-not $NoPull) {
-    Invoke-NativeChecked { docker compose pull } "docker compose pull failed (are the images published + public? see RELEASE.md)"
+    Write-Host "-> Pulling images (first run can take a few minutes)..."
+    Invoke-NativeProcessChecked "docker" @("compose", "pull") "docker compose pull failed (are the images published + public? see RELEASE.md)"
   }
-  Invoke-NativeChecked { docker compose up -d } "docker compose up failed"
+  Write-Host "-> Starting the stack..."
+  Invoke-NativeProcessChecked "docker" @("compose", "up", "-d") "docker compose up failed"
 } finally { Pop-Location }
 Write-Host ""
 Write-Host "OK OpenLDR is starting. Open $Origin"
