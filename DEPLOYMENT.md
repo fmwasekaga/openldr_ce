@@ -178,6 +178,50 @@ migrations are idempotent. `SEED_ON_START=true` seeds idempotent sample data (or
 the bundled sample forms, and the default lab-order ingestion workflows) after migration. Loading
 real reference terminology (LOINC/RxNorm/SNOMED) and lab data is a separate, heavier import.
 
+## Supported external databases
+
+OpenLDR CE stores operational data in an internal **PostgreSQL** database (always) and writes
+flattened analytics/reporting data to a separate **external/target** database. The external
+database may be **PostgreSQL** (default) or **self-hosted Microsoft SQL Server**.
+
+### Microsoft SQL Server support matrix
+
+| SQL Server version | Supported | Notes |
+|--------------------|-----------|-------|
+| 2017               | ✅ Yes    | Minimum supported release (nearest upgrade for 2014 sites). |
+| 2019               | ✅ Yes    | |
+| 2022               | ✅ Yes    | Pinned for local evaluation + the acceptance matrix. |
+| 2016 and earlier   | ❌ No     | End of life / no official Linux container. Upgrade to 2017. |
+| Azure SQL, Managed Instance, AWS RDS, any hosted/cloud SQL | ❌ Never | See data-sovereignty policy below. |
+
+The supported set is validated end-to-end on every listed version by the acceptance matrix
+(`pnpm mssql:accept:matrix`), and is the single source of truth defined in
+`packages/adapter-mssql-store/src/supported-versions.ts`.
+
+### Data-sovereignty policy: no cloud databases
+
+OpenLDR CE does **not** support any cloud-hosted or managed database service for either the
+internal or external database. Ministry of Health and laboratory data must remain within the
+operator's own geographic and administrative boundaries, on infrastructure they control.
+SQL Server must be a self-hosted instance. This is a deliberate, permanent constraint — not a
+roadmap gap.
+
+### Demo vs. production
+
+- **Demo/evaluation:** a pinned SQL Server 2022 container can be run locally for evaluation — the
+  acceptance matrix (`scripts/mssql-matrix-accept.sh`) boots one per version. SQL Server
+  Developer/Express editions are **not licensed for production**, so any such container is for
+  evaluation only and must never back a production deployment.
+- **Production:** use a self-hosted SQL Server (2017/2019/2022). The backend targets it via
+  `TARGET_STORE_ADAPTER=mssql` plus the `MSSQL_HOST` / `MSSQL_PORT` / `MSSQL_DATABASE` / `MSSQL_USER` /
+  `MSSQL_PASSWORD` / `MSSQL_ENCRYPT` / `MSSQL_TRUST_SERVER_CERT` environment variables (see the
+  Environment section).
+
+> **Note:** the guided installer does not yet prompt for the external database type — it currently
+> provisions a PostgreSQL target. Selecting SQL Server at install time (and seeding a matching
+> default connector) is planned follow-up work; today an MSSQL target is configured by setting the
+> `TARGET_STORE_ADAPTER=mssql` + `MSSQL_*` environment variables directly.
+
 ## Environment
 
 All configuration is environment-driven — see **`.env.prod.example`** for the full, annotated set.

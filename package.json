@@ -33,6 +33,7 @@
     "make:lab-sample": "node scripts/make-lab-sample.mjs",
     "load:measure": "node scripts/load-measure.mjs",
     "mssql:accept": "tsx scripts/mssql-live-acceptance.ts",
+    "mssql:accept:matrix": "bash scripts/mssql-matrix-accept.sh",
     "make:marketplace-bundle": "tsx scripts/make-marketplace-bundle.ts",
     "marketplace:accept": "tsx scripts/marketplace-live-acceptance.ts",
     "init": "node scripts/init.mjs",

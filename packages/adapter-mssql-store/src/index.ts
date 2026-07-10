@@ -57,3 +57,11 @@ export function createMssqlStore(cfg: MssqlStoreConfig, deps: MssqlStoreDeps = {
     },
   };
 }
+
+export {
+  SUPPORTED_MSSQL_VERSIONS,
+  MIN_SUPPORTED_MSSQL_MAJOR,
+  isSupportedMssqlVersion,
+  demoMssqlImage,
+  type MssqlVersion,
+} from './supported-versions';
