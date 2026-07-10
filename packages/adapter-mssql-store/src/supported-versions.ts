@@ -4,11 +4,11 @@
 
 export interface MssqlVersion {
   /** Marketing major year, e.g. 2017. */
-  major: number;
+  readonly major: number;
   /** Official Microsoft Linux container image for the acceptance matrix. */
-  image: string;
+  readonly image: string;
   /** The single version used for the non-production managed demo container. */
-  demoDefault: boolean;
+  readonly demoDefault: boolean;
 }
 
 /** Supported, self-hosted only. Ordered oldest → newest. */
@@ -19,7 +19,7 @@ export const SUPPORTED_MSSQL_VERSIONS: readonly MssqlVersion[] = [
 ];
 
 /** Lowest supported major. Operators on 2014/2016 upgrade to this. */
-export const MIN_SUPPORTED_MSSQL_MAJOR = 2017;
+export const MIN_SUPPORTED_MSSQL_MAJOR = Math.min(...SUPPORTED_MSSQL_VERSIONS.map((v) => v.major));
 
 export function isSupportedMssqlVersion(major: number): boolean {
   return SUPPORTED_MSSQL_VERSIONS.some((v) => v.major === major);
@@ -27,7 +27,9 @@ export function isSupportedMssqlVersion(major: number): boolean {
 
 /** Image for the pinned non-production managed demo container. */
 export function demoMssqlImage(): string {
-  const demo = SUPPORTED_MSSQL_VERSIONS.find((v) => v.demoDefault);
-  if (!demo) throw new Error('no demo-default MSSQL version configured');
-  return demo.image;
+  const demos = SUPPORTED_MSSQL_VERSIONS.filter((v) => v.demoDefault);
+  if (demos.length !== 1) {
+    throw new Error(`expected exactly one demo-default MSSQL version, found ${demos.length}`);
+  }
+  return demos[0].image;
 }
