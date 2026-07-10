@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { FEATURE_FLAGS } from '@openldr/config';
-import { seedDatabase, type FormSeedTarget } from './seed';
+import { seedDatabase, seedDefaultConnector, type FormSeedTarget } from './seed';
 import type { DbContext } from './db-context';
 
 // In-memory fakes so we exercise the real seedDatabase logic without a database.
@@ -184,6 +184,53 @@ describe('seedDatabase — default connector', () => {
     const res = await seedDatabase(fakeDb, app);
     expect(res.connectorsSeeded).toBe(0);
     expect(connectors).toHaveLength(0);
+  });
+
+  it('seeds a microsoft-sql warehouse connector when TARGET_STORE_ADAPTER=mssql', async () => {
+    const created: Array<{ name: string; type: string; config: Record<string, string> }> = [];
+    const app = fakeApp({
+      SECRETS_ENCRYPTION_KEY: 'k'.repeat(32),
+      TARGET_STORE_ADAPTER: 'mssql',
+      MSSQL_HOST: 'sqlserver.local',
+      MSSQL_PORT: 1433,
+      MSSQL_DATABASE: 'openldr_target',
+      MSSQL_USER: 'sa',
+      MSSQL_PASSWORD: 'p@ss',
+      MSSQL_ENCRYPT: false,
+      MSSQL_TRUST_SERVER_CERT: true,
+    }).app;
+    app.connectors.create = async (rec) => {
+      created.push({ name: rec.name, type: rec.type ?? '', config: rec.config });
+    };
+    app.connectors.list = async () => [];
+
+    const n = await seedDefaultConnector(app);
+
+    expect(n).toBe(1);
+    expect(created).toHaveLength(1);
+    expect(created[0].type).toBe('microsoft-sql');
+    expect(created[0].name).toBe('Target Warehouse (SQL Server)');
+    expect(created[0].config).toMatchObject({
+      host: 'sqlserver.local',
+      port: '1433',
+      database: 'openldr_target',
+      user: 'sa',
+      password: 'p@ss',
+      encrypt: 'false',
+      trustServerCertificate: 'true',
+    });
+  });
+
+  it('skips the mssql connector when required MSSQL_* vars are missing', async () => {
+    const { app } = fakeApp({
+      SECRETS_ENCRYPTION_KEY: 'k'.repeat(32),
+      TARGET_STORE_ADAPTER: 'mssql',
+      MSSQL_HOST: 'sqlserver.local',
+      // MSSQL_DATABASE / MSSQL_USER / MSSQL_PASSWORD intentionally absent
+    });
+    app.connectors.list = async () => [];
+    const n = await seedDefaultConnector(app);
+    expect(n).toBe(0);
   });
 });
 
