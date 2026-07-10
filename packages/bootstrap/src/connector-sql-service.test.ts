@@ -55,6 +55,17 @@ describe('createConnectorSqlRunner', () => {
     expect(seen[0]).toBe('select * from (select * from t) as _q order by (select null) offset 0 rows fetch next 100 rows only');
   });
 
+  it('applies a LIMIT/OFFSET wrapper for mysql (shares Postgres syntax — row cap preserved)', async () => {
+    const seen: string[] = [];
+    const run = createConnectorSqlRunner({
+      connectors: connectorsFake({ type: 'mysql', enabled: true }),
+      secretsKey: 'k',
+      createDb: () => ({ query: async (s: string) => { seen.push(s); return { rows: [] }; }, close: async () => {} }) as never,
+    });
+    await run({ connectorId: 'c1', sql: 'select * from t', rowCap: 100 });
+    expect(seen[0]).toBe('select * from (select * from t) as _q limit 100 offset 0');
+  });
+
   it('runs raw SQL unwrapped when rowCap is omitted (workflow node path)', async () => {
     const seen: string[] = [];
     const run = createConnectorSqlRunner({

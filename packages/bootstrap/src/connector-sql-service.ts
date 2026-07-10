@@ -5,6 +5,9 @@ import { createConnectorDb, type ConnectorDb } from './connector-db';
 function dialectFor(type: string): SqlDialect | null {
   if (type === 'postgres') return 'postgres';
   if (type === 'microsoft-sql') return 'mssql';
+  // MySQL shares Postgres's LIMIT/OFFSET syntax, so reuse the postgres wrapper so a
+  // mysql-backed custom query still gets its row cap.
+  if (type === 'mysql') return 'postgres';
   return null;
 }
 
