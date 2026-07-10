@@ -208,19 +208,24 @@ roadmap gap.
 
 ### Demo vs. production
 
-- **Demo/evaluation:** a pinned SQL Server 2022 container can be run locally for evaluation — the
-  acceptance matrix (`scripts/mssql-matrix-accept.sh`) boots one per version. SQL Server
-  Developer/Express editions are **not licensed for production**, so any such container is for
-  evaluation only and must never back a production deployment.
-- **Production:** use a self-hosted SQL Server (2017/2019/2022). The backend targets it via
-  `TARGET_STORE_ADAPTER=mssql` plus the `MSSQL_HOST` / `MSSQL_PORT` / `MSSQL_DATABASE` / `MSSQL_USER` /
-  `MSSQL_PASSWORD` / `MSSQL_ENCRYPT` / `MSSQL_TRUST_SERVER_CERT` environment variables (see the
-  Environment section).
+Select the external database at install time with `--target-db` (default `postgres`):
 
-> **Note:** the guided installer does not yet prompt for the external database type — it currently
-> provisions a PostgreSQL target. Selecting SQL Server at install time (and seeding a matching
-> default connector) is planned follow-up work; today an MSSQL target is configured by setting the
-> `TARGET_STORE_ADAPTER=mssql` + `MSSQL_*` environment variables directly.
+- **Demo/evaluation:** `install.sh --mssql-demo` (or `install.ps1 -MssqlDemo`) provisions a pinned
+  SQL Server 2022 container alongside the stack, generates its SA password, and creates the
+  `openldr_target` database automatically. SQL Server Developer/Express editions are **not licensed
+  for production**, so this container is for evaluation only and must never back a production
+  deployment.
+- **Production (BYO):** `install.sh --target-db mssql --mssql-host <host> --mssql-user <user>
+  --mssql-password <pw>` (plus optional `--mssql-port` / `--mssql-database` / `--mssql-encrypt` /
+  `--mssql-trust-cert`) points OpenLDR at your own self-hosted SQL Server (2017/2019/2022). The
+  target database must already exist. Keep the password free of `#`, spaces, and quote characters.
+  These map to `TARGET_STORE_ADAPTER=mssql` + the `MSSQL_*` environment variables (see the
+  Environment section); you can also set them in `.env` directly.
+
+> **Note:** the internal operational database is always PostgreSQL — only the external/target
+> database can be SQL Server. On an MSSQL install the built-in reports (which use Postgres-dialect
+> SQL) do not yet execute against SQL Server; making the query workbench and reports dialect-aware
+> on MSSQL is planned follow-up work.
 
 ## Environment
 

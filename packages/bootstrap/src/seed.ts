@@ -45,6 +45,11 @@ const FHIR_PUBLISHER_ID = 'pub-hl7-fhir';
 /** Name used to dedup the default target-warehouse connector — idempotency key. */
 const DEFAULT_CONNECTOR_NAME = 'Target Warehouse (Postgres)';
 
+/** Name for the MSSQL target-warehouse connector — deliberately DIFFERENT from
+ *  DEFAULT_CONNECTOR_NAME so the Postgres-dialect built-in report seeding (which resolves
+ *  'Target Warehouse (Postgres)') skips cleanly on an MSSQL install. */
+const MSSQL_CONNECTOR_NAME = 'Target Warehouse (SQL Server)';
+
 // Minimal structural shape of the forms surface seedDatabase needs. Typed against FormStore
 // directly (not AppContext) to keep seed.ts from importing ./index, which re-exports this
 // module — that would be a circular dependency. AppContext satisfies this at the call sites.
@@ -76,7 +81,18 @@ export interface FormSeedTarget {
     loaders: { resource(json: unknown): Promise<{ conceptsLoaded: number }> };
   };
   appSettings: Pick<AppSettingStore, 'get' | 'set'>;
-  cfg: { TARGET_DATABASE_URL?: string; SECRETS_ENCRYPTION_KEY?: string };
+  cfg: {
+    TARGET_DATABASE_URL?: string;
+    SECRETS_ENCRYPTION_KEY?: string;
+    TARGET_STORE_ADAPTER?: 'pg' | 'mssql';
+    MSSQL_HOST?: string;
+    MSSQL_PORT?: number;
+    MSSQL_DATABASE?: string;
+    MSSQL_USER?: string;
+    MSSQL_PASSWORD?: string;
+    MSSQL_ENCRYPT?: boolean;
+    MSSQL_TRUST_SERVER_CERT?: boolean;
+  };
 }
 
 // Idempotent sample-data seed shared by the `openldr db seed` CLI and the server's
@@ -306,11 +322,43 @@ async function seedBundledTerminology(app: FormSeedTarget): Promise<SeedResult['
 // warehouse. Idempotent by name. Skips gracefully (with a clear log) when the secrets key is
 // unset — connectors.create() would otherwise throw, and `db seed` must still succeed. Returns
 // the number of connectors created (0 or 1).
-async function seedDefaultConnector(app: FormSeedTarget): Promise<number> {
+export async function seedDefaultConnector(app: FormSeedTarget): Promise<number> {
   if (!app.cfg.SECRETS_ENCRYPTION_KEY) {
     console.log('[seed] SECRETS_ENCRYPTION_KEY unset — skipping default connector');
     return 0;
   }
+
+  if (app.cfg.TARGET_STORE_ADAPTER === 'mssql') {
+    const missing = (['MSSQL_HOST', 'MSSQL_DATABASE', 'MSSQL_USER', 'MSSQL_PASSWORD'] as const)
+      .filter((k) => !app.cfg[k]);
+    if (missing.length > 0) {
+      console.log(`[seed] ${missing.join(', ')} unset — skipping default MSSQL connector`);
+      return 0;
+    }
+    const existing = await app.connectors.list();
+    if (existing.some((c) => c.name === MSSQL_CONNECTOR_NAME)) return 0; // idempotent by name
+    await app.connectors.create(
+      {
+        id: randomUUID(),
+        name: MSSQL_CONNECTOR_NAME,
+        type: 'microsoft-sql',
+        kind: 'database',
+        config: {
+          host: app.cfg.MSSQL_HOST!,
+          port: String(app.cfg.MSSQL_PORT),
+          database: app.cfg.MSSQL_DATABASE!,
+          user: app.cfg.MSSQL_USER!,
+          password: app.cfg.MSSQL_PASSWORD!,
+          encrypt: String(app.cfg.MSSQL_ENCRYPT),
+          trustServerCertificate: String(app.cfg.MSSQL_TRUST_SERVER_CERT),
+        },
+      },
+      app.cfg.SECRETS_ENCRYPTION_KEY,
+    );
+    console.log(`[seed] created default connector "${MSSQL_CONNECTOR_NAME}"`);
+    return 1;
+  }
+
   if (!app.cfg.TARGET_DATABASE_URL) {
     console.log('[seed] TARGET_DATABASE_URL unset — skipping default connector');
     return 0;
