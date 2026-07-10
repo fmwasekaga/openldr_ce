@@ -32,4 +32,37 @@ describe('createConnectorSqlRunner', () => {
     const run = createConnectorSqlRunner({ connectors: connectorsFake({ type: null, enabled: true }), secretsKey: 'k', createDb: vi.fn() });
     await expect(run({ connectorId: 'p1', sql: 's' })).rejects.toThrow(/not a database connector/);
   });
+
+  it('applies a Postgres LIMIT/OFFSET wrapper when rowCap is given (type=postgres)', async () => {
+    const seen: string[] = [];
+    const run = createConnectorSqlRunner({
+      connectors: connectorsFake({ type: 'postgres', enabled: true }),
+      secretsKey: 'k',
+      createDb: () => ({ query: async (s: string) => { seen.push(s); return { rows: [] }; }, close: async () => {} }) as never,
+    });
+    await run({ connectorId: 'c1', sql: 'select * from t', rowCap: 100, offset: 0 });
+    expect(seen[0]).toBe('select * from (select * from t) as _q limit 100 offset 0');
+  });
+
+  it('applies a T-SQL OFFSET/FETCH wrapper when rowCap is given (type=microsoft-sql)', async () => {
+    const seen: string[] = [];
+    const run = createConnectorSqlRunner({
+      connectors: connectorsFake({ type: 'microsoft-sql', enabled: true }),
+      secretsKey: 'k',
+      createDb: () => ({ query: async (s: string) => { seen.push(s); return { rows: [] }; }, close: async () => {} }) as never,
+    });
+    await run({ connectorId: 'c1', sql: 'select * from t', rowCap: 100 });
+    expect(seen[0]).toBe('select * from (select * from t) as _q order by (select null) offset 0 rows fetch next 100 rows only');
+  });
+
+  it('runs raw SQL unwrapped when rowCap is omitted (workflow node path)', async () => {
+    const seen: string[] = [];
+    const run = createConnectorSqlRunner({
+      connectors: connectorsFake({ type: 'postgres', enabled: true }),
+      secretsKey: 'k',
+      createDb: () => ({ query: async (s: string) => { seen.push(s); return { rows: [] }; }, close: async () => {} }) as never,
+    });
+    await run({ connectorId: 'c1', sql: 'select 1' });
+    expect(seen[0]).toBe('select 1');
+  });
 });
