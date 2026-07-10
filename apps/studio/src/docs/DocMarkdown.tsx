@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -49,10 +50,15 @@ export function DocMarkdown({
     },
     a(props) {
       const href = typeof props.href === 'string' ? props.href : '';
-      const external = /^https?:\/\//.test(href);
-      return external
-        ? <a href={href} target="_blank" rel="noopener noreferrer">{props.children}</a>
-        : <a href={href}>{props.children}</a>;
+      if (/^https?:\/\//.test(href)) {
+        return <a href={href} target="_blank" rel="noopener noreferrer">{props.children}</a>;
+      }
+      // Internal docs link (e.g. /docs/report-designer): use a router Link so it resolves
+      // against the app basename (/studio) instead of a bare absolute href that drops it.
+      if (href.startsWith('/')) {
+        return <Link to={href}>{props.children}</Link>;
+      }
+      return <a href={href}>{props.children}</a>;
     },
     h1: (p) => <h1 id={slugify(text(p.children))}>{p.children}</h1>,
     h2: (p) => <h2 id={slugify(text(p.children))}>{p.children}</h2>,

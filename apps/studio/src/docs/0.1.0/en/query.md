@@ -6,6 +6,10 @@ The Query workbench is a SQL editor for exploring your connected databases and s
 
 You can browse connectors, schemas, and tables in the Explorer, write and run a parameterized `SELECT` against the results grid, declare parameters, and save the query for reuse.
 
+![Explorer tree with Connectors and Custom Queries expanded](query-workbench.png)
+
+![SQL editor with a saved Custom Query run and results in the grid](query-sql-editor.png)
+
 ## Before you begin
 
 - You need the Lab Admin, Lab Manager, or Data Analyst role.

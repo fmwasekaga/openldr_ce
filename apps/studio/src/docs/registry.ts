@@ -116,7 +116,7 @@ export const DOC_GUIDES: DocGuide[] = [
     estimatedMinutes: 15,
     difficulty: 'intermediate',
     relatedSlugs: ['reports', 'report-designer', 'connectors'],
-    screenshotNames: [],
+    screenshotNames: ['query-workbench.png', 'query-sql-editor.png'],
     status: 'published',
   },
   {
@@ -129,7 +129,7 @@ export const DOC_GUIDES: DocGuide[] = [
     estimatedMinutes: 20,
     difficulty: 'intermediate',
     relatedSlugs: ['reports', 'query', 'connectors'],
-    screenshotNames: [],
+    screenshotNames: ['report-designer-canvas.png'],
     status: 'published',
   },
   {

@@ -24,8 +24,9 @@ async function validateReports(ctx: Awaited<ReturnType<typeof request.newContext
   if (!Array.isArray(reports) || reports.length === 0) {
     throw new Error(`GET /api/reports returned no reports.${help}`);
   }
-  const amrRes = await ctx.get('/api/reports/amr-resistance');
-  if (!amrRes.ok()) throw new Error(`GET /api/reports/amr-resistance -> ${amrRes.status()}${help}`);
+  // r-amr-resistance is data-driven (seedDataDrivenReports) and requires a from/to window.
+  const amrRes = await ctx.get('/api/reports/r-amr-resistance?from=2000-01-01&to=2100-01-01');
+  if (!amrRes.ok()) throw new Error(`GET /api/reports/r-amr-resistance -> ${amrRes.status()}${help}`);
   const amr = (await amrRes.json()) as { rows: unknown[] };
   if (!Array.isArray(amr.rows) || amr.rows.length === 0) {
     throw new Error(`amr-resistance has no rows (DB not seeded with WHONET data?).${help}`);
