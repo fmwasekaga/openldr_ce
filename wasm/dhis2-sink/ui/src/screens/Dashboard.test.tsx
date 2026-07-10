@@ -5,7 +5,7 @@ import { Dashboard } from './Dashboard';
 function mountMock() {
   const o = createMockOpenldr({ pluginId: 'dhis2-sink', capabilities: ['host:connectors'] });
   o.connectors.list = async () => [
-    { id: 'c1', name: 'DHIS2 demo', enabled: true, allowedHost: 'play.dhis2.org' },
+    { id: 'c1', name: 'DHIS2 demo', kind: 'sink', enabled: true, allowedHost: 'play.dhis2.org' },
   ] as unknown[];
   o.storage.get = async (c: string, k: string) =>
     c === 'metadataCache' && k === 'latest'
@@ -79,6 +79,22 @@ describe('dhis2-sink Dashboard', () => {
     (window as unknown as { openldr: unknown }).openldr = o;
     render(<Dashboard />);
     expect(await screen.findByText('Not configured')).toBeTruthy();
+    const btn = await screen.findByTestId('dhis2-pull-metadata');
+    expect((btn as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('ignores a non-sink warehouse connector (kind database) as the active connector', async () => {
+    const o = createMockOpenldr({ pluginId: 'dhis2-sink', capabilities: ['host:connectors'] });
+    // On a fresh install the only enabled connector is the host's Postgres
+    // warehouse (kind 'database'); it must NOT be shown as the active DHIS2 target.
+    o.connectors.list = async () =>
+      [{ id: 'wh', name: 'Target Warehouse (Postgres)', kind: 'database', enabled: true, allowedHost: 'localhost' }] as unknown[];
+    o.storage.get = async () => null;
+    o.storage.list = async () => [];
+    (window as unknown as { openldr: unknown }).openldr = o;
+    render(<Dashboard />);
+    expect(await screen.findByText('Not configured')).toBeTruthy();
+    expect(screen.queryByText('Target Warehouse (Postgres)')).toBeNull();
     const btn = await screen.findByTestId('dhis2-pull-metadata');
     expect((btn as HTMLButtonElement).disabled).toBe(true);
   });
