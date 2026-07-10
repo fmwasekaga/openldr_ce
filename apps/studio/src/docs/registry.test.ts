@@ -22,13 +22,15 @@ describe('docs registry', () => {
     ]);
   });
 
-  it('defines exactly the fourteen approved guides in navigation order', () => {
+  it('defines exactly the sixteen approved guides in navigation order', () => {
     expect(DOC_GUIDES.map((guide) => guide.slug)).toEqual([
       'start-here',
       'dashboard',
       'reports',
       'workflows',
       'report-pipeline',
+      'query',
+      'report-designer',
       'forms',
       'terminology',
       'users',
@@ -48,15 +50,17 @@ describe('docs registry', () => {
     ).toEqual({
       'start-here': ['dashboard', 'reports', 'advanced-docs'],
       dashboard: ['reports', 'workflows'],
-      reports: ['dashboard', 'audit'],
+      reports: ['dashboard', 'audit', 'report-designer', 'query'],
       workflows: ['report-pipeline', 'reports', 'connectors', 'audit'],
       'report-pipeline': ['workflows', 'connectors', 'reports'],
+      query: ['reports', 'report-designer', 'connectors'],
+      'report-designer': ['reports', 'query', 'connectors'],
       forms: ['terminology', 'marketplace'],
       terminology: ['forms', 'audit'],
       users: ['audit', 'settings'],
       audit: ['users', 'workflows'],
       settings: ['connectors', 'marketplace', 'environment'],
-      connectors: ['report-pipeline', 'settings', 'workflows', 'marketplace'],
+      connectors: ['report-pipeline', 'settings', 'workflows', 'marketplace', 'query'],
       marketplace: ['settings', 'connectors', 'forms'],
       environment: ['settings', 'connectors'],
       'advanced-docs': ['start-here', 'settings'],
