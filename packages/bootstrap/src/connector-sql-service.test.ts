@@ -79,6 +79,22 @@ describe('createConnectorSqlRunner', () => {
     expect(seen[0]).toBe('select * from (select * from t) as _q limit 100 offset 0');
   });
 
+  it('runs a mysql connector query through the LIMIT/OFFSET pagination wrapper', async () => {
+    const seen: string[] = [];
+    const runner = createConnectorSqlRunner({
+      connectors: connectorsFake({ type: 'mysql', enabled: true }),
+      secretsKey: undefined,
+      createDb: () => ({
+        query: async (sqlText: string) => { seen.push(sqlText); return { rows: [{ n: 1 }] }; },
+        close: async () => {},
+      }),
+    });
+    const res = await runner({ connectorId: 'c1', sql: 'select 1 as n', rowCap: 50, offset: 10 });
+    expect(seen[0]).toBe('select * from (select 1 as n) as _q limit 50 offset 10');
+    expect(seen[0]).not.toMatch(/rowcount/i);
+    expect(res.rows).toEqual([{ n: 1 }]);
+  });
+
   it('runs raw SQL unwrapped when rowCap is omitted (workflow node path)', async () => {
     const seen: string[] = [];
     const run = createConnectorSqlRunner({

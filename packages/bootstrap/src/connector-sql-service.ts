@@ -5,9 +5,9 @@ import { createConnectorDb, type ConnectorDb } from './connector-db';
 function dialectFor(type: string): SqlDialect | null {
   if (type === 'postgres') return 'postgres';
   if (type === 'microsoft-sql') return 'mssql';
-  // MySQL shares Postgres's LIMIT/OFFSET syntax, so reuse the postgres wrapper so a
-  // mysql-backed custom query still gets its row cap.
-  if (type === 'mysql') return 'postgres';
+  // mysql has its own SqlDialect; planPagination's mysql arm internally reuses the
+  // postgres LIMIT/OFFSET wrapper (same syntax), so behavior is unchanged.
+  if (type === 'mysql') return 'mysql';
   return null;
 }
 
