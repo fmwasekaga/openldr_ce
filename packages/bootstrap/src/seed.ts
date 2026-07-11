@@ -51,6 +51,11 @@ const DEFAULT_CONNECTOR_NAME = 'Target Warehouse (Postgres)';
  *  MSSQL install too (with the T-SQL query variants). */
 const MSSQL_CONNECTOR_NAME = 'Target Warehouse (SQL Server)';
 
+// Name for the MySQL/MariaDB target-warehouse connector — distinct from the PG/MSSQL names.
+// Deliberately NOT in @openldr/reporting's WAREHOUSE_NAMES yet: built-in data-driven reports need
+// the MySQL report-SQL variant (S2), so a mysql install seeds NO data-driven reports until then.
+const MYSQL_CONNECTOR_NAME = 'Target Warehouse (MySQL/MariaDB)';
+
 // Minimal structural shape of the forms surface seedDatabase needs. Typed against FormStore
 // directly (not AppContext) to keep seed.ts from importing ./index, which re-exports this
 // module — that would be a circular dependency. AppContext satisfies this at the call sites.
@@ -93,6 +98,12 @@ export interface FormSeedTarget {
     MSSQL_PASSWORD?: string;
     MSSQL_ENCRYPT?: boolean;
     MSSQL_TRUST_SERVER_CERT?: boolean;
+    MYSQL_HOST?: string;
+    MYSQL_PORT?: number;
+    MYSQL_DATABASE?: string;
+    MYSQL_USER?: string;
+    MYSQL_PASSWORD?: string;
+    MYSQL_SSL?: boolean;
   };
 }
 
@@ -357,6 +368,36 @@ export async function seedDefaultConnector(app: FormSeedTarget): Promise<number>
       app.cfg.SECRETS_ENCRYPTION_KEY,
     );
     console.log(`[seed] created default connector "${MSSQL_CONNECTOR_NAME}"`);
+    return 1;
+  }
+
+  if (app.cfg.TARGET_STORE_ADAPTER === 'mysql') {
+    const missing = (['MYSQL_HOST', 'MYSQL_DATABASE', 'MYSQL_USER', 'MYSQL_PASSWORD'] as const)
+      .filter((k) => !app.cfg[k]);
+    if (missing.length > 0) {
+      console.log(`[seed] ${missing.join(', ')} unset — skipping default MySQL connector`);
+      return 0;
+    }
+    const existing = await app.connectors.list();
+    if (existing.some((c) => c.name === MYSQL_CONNECTOR_NAME)) return 0; // idempotent by name
+    await app.connectors.create(
+      {
+        id: randomUUID(),
+        name: MYSQL_CONNECTOR_NAME,
+        type: 'mysql',
+        kind: 'database',
+        config: {
+          host: app.cfg.MYSQL_HOST!,
+          port: String(app.cfg.MYSQL_PORT),
+          database: app.cfg.MYSQL_DATABASE!,
+          user: app.cfg.MYSQL_USER!,
+          password: app.cfg.MYSQL_PASSWORD!,
+          ssl: String(app.cfg.MYSQL_SSL),
+        },
+      },
+      app.cfg.SECRETS_ENCRYPTION_KEY,
+    );
+    console.log(`[seed] created default connector "${MYSQL_CONNECTOR_NAME}"`);
     return 1;
   }
 
