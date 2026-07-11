@@ -236,6 +236,49 @@ describe('seedDatabase — default connector', () => {
     expect(n).toBe(0);
     expect(connectors).toHaveLength(0);
   });
+
+  const mysqlCfg = {
+    TARGET_STORE_ADAPTER: 'mysql' as const,
+    SECRETS_ENCRYPTION_KEY: 'k',
+    MYSQL_HOST: 'h',
+    MYSQL_PORT: 3306,
+    MYSQL_DATABASE: 'openldr_target',
+    MYSQL_USER: 'u',
+    MYSQL_PASSWORD: 'p',
+    MYSQL_SSL: false,
+  };
+
+  it('seeds a mysql warehouse connector when TARGET_STORE_ADAPTER=mysql', async () => {
+    const { app, connectors } = fakeApp(mysqlCfg);
+    const n = await seedDefaultConnector(app);
+    expect(n).toBe(1);
+    expect(connectors).toHaveLength(1);
+    const c = connectors[0];
+    expect(c.type).toBe('mysql');
+    expect(c.name).toBe('Target Warehouse (MySQL/MariaDB)');
+    expect(c.config.host).toBe('h');
+    expect(c.config.port).toBe('3306'); // config values are strings
+  });
+
+  it('is idempotent by name — re-running does not duplicate the mysql connector', async () => {
+    const { app, connectors } = fakeApp(mysqlCfg);
+    await seedDefaultConnector(app);
+    const n2 = await seedDefaultConnector(app);
+    expect(n2).toBe(0);
+    expect(connectors.filter((c) => c.name === 'Target Warehouse (MySQL/MariaDB)')).toHaveLength(1);
+  });
+
+  it('skips the mysql connector when required MYSQL_* vars are missing', async () => {
+    const { app, connectors } = fakeApp({
+      SECRETS_ENCRYPTION_KEY: 'k'.repeat(32),
+      TARGET_STORE_ADAPTER: 'mysql',
+      MYSQL_HOST: 'h',
+      // MYSQL_DATABASE / MYSQL_USER / MYSQL_PASSWORD intentionally absent
+    });
+    const n = await seedDefaultConnector(app);
+    expect(n).toBe(0);
+    expect(connectors).toHaveLength(0);
+  });
 });
 
 describe('seedDatabase — sample dashboard', () => {

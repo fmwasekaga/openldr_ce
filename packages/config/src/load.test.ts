@@ -47,6 +47,17 @@ describe('config target-store engine', () => {
   it('rejects mssql adapter without MSSQL connection fields', () => {
     expect(() => loadConfig({ ...basePg, TARGET_STORE_ADAPTER: 'mssql' } as never)).toThrow(/MSSQL_HOST/);
   });
+  it('accepts TARGET_STORE_ADAPTER=mysql with the MYSQL_* vars', () => {
+    const cfg = loadConfig({
+      ...basePg, TARGET_STORE_ADAPTER: 'mysql',
+      MYSQL_HOST: 'db', MYSQL_DATABASE: 'openldr_target', MYSQL_USER: 'u', MYSQL_PASSWORD: 'p',
+    } as never);
+    expect(cfg.TARGET_STORE_ADAPTER).toBe('mysql');
+    expect(cfg.MYSQL_PORT).toBe(3306);
+  });
+  it('rejects TARGET_STORE_ADAPTER=mysql without required MYSQL_* vars', () => {
+    expect(() => loadConfig({ ...basePg, TARGET_STORE_ADAPTER: 'mysql' } as never)).toThrow(/MYSQL_HOST is required when TARGET_STORE_ADAPTER=mysql/);
+  });
   it('rejects pg adapter without TARGET_DATABASE_URL', () => {
     const { TARGET_DATABASE_URL: _omit, ...noUrl } = basePg;
     expect(() => loadConfig({ ...noUrl } as never)).toThrow(/TARGET_DATABASE_URL/);

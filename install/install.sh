@@ -7,12 +7,17 @@
 #        --letsencrypt <email> (issue a trusted Let's Encrypt cert for --server-name),
 #        --staging (use the LE staging CA — for testing, avoids rate limits),
 #        --no-start (scaffold + config only), --no-pull (skip image pull).
-#        --target-db postgres|mssql (default postgres — selects the external analytics/target DB),
+#        --target-db postgres|mssql|mysql (default postgres — selects the external analytics/target DB),
 #        --mssql-demo (spin up a bundled MSSQL container for evaluation; implies --target-db mssql),
 #        --mssql-host/--mssql-port/--mssql-database/--mssql-user/--mssql-password (BYO MSSQL
 #          connection — required when --target-db mssql without --mssql-demo; keep the password
 #          free of '#', spaces, or quote characters — they confuse Docker Compose's .env reader),
 #        --mssql-encrypt true|false (default false), --mssql-trust-cert true|false (default true).
+#        --mysql-demo (spin up a bundled MySQL container for evaluation; implies --target-db mysql),
+#        --mysql-host/--mysql-port/--mysql-database/--mysql-user/--mysql-password (BYO MySQL
+#          connection — required when --target-db mysql without --mysql-demo; keep the password
+#          free of '#', spaces, or quote characters — they confuse Docker Compose's .env reader),
+#        --mysql-ssl true|false (default false).
 set -eu
 
 REPO_RAW="https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main"
@@ -34,6 +39,13 @@ MSSQL_USER=""
 MSSQL_PASSWORD=""
 MSSQL_ENCRYPT="false"
 MSSQL_TRUST_CERT="true"
+MYSQL_DEMO=0
+MYSQL_HOST=""
+MYSQL_PORT="3306"
+MYSQL_DATABASE="openldr_target"
+MYSQL_USER=""
+MYSQL_PASSWORD=""
+MYSQL_SSL="false"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -55,6 +67,13 @@ while [ $# -gt 0 ]; do
     --mssql-password) MSSQL_PASSWORD="$2"; shift 2 ;;
     --mssql-encrypt) MSSQL_ENCRYPT="$2"; shift 2 ;;
     --mssql-trust-cert) MSSQL_TRUST_CERT="$2"; shift 2 ;;
+    --mysql-demo) MYSQL_DEMO=1; TARGET_DB="mysql"; shift ;;
+    --mysql-host) MYSQL_HOST="$2"; shift 2 ;;
+    --mysql-port) MYSQL_PORT="$2"; shift 2 ;;
+    --mysql-database) MYSQL_DATABASE="$2"; shift 2 ;;
+    --mysql-user) MYSQL_USER="$2"; shift 2 ;;
+    --mysql-password) MYSQL_PASSWORD="$2"; shift 2 ;;
+    --mysql-ssl) MYSQL_SSL="$2"; shift 2 ;;
     *) echo "unknown flag: $1" >&2; exit 2 ;;
   esac
 done
@@ -79,6 +98,13 @@ if [ -f "$DIR/.env" ]; then
     # host 'mssql' is the managed-demo signature → re-enable the overlay on re-runs
     [ "$EXISTING_MSSQL_HOST" = "mssql" ] && MSSQL_DEMO=1
   fi
+  if [ "$EXISTING_ADAPTER" = "mysql" ]; then
+    TARGET_DB="mysql"
+    EXISTING_MYSQL_HOST="$(grep -E '^MYSQL_HOST=' "$DIR/.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r')"
+    [ -n "$EXISTING_MYSQL_HOST" ] && MYSQL_HOST="$EXISTING_MYSQL_HOST"
+    # host 'mysql' is the managed-demo signature → re-enable the overlay on re-runs
+    [ "$EXISTING_MYSQL_HOST" = "mysql" ] && MYSQL_DEMO=1
+  fi
 fi
 if [ "$HTTPS_PORT" = "443" ]; then
   ORIGIN="https://$HOST"
@@ -88,14 +114,14 @@ fi
 
 err() { echo "✗ $1" >&2; exit 1; }
 
-if [ "$TARGET_DB" != "postgres" ] && [ "$TARGET_DB" != "mssql" ]; then
-  echo "✗ --target-db must be 'postgres' or 'mssql' (got '$TARGET_DB')" >&2; exit 2
+if [ "$TARGET_DB" != "postgres" ] && [ "$TARGET_DB" != "mssql" ] && [ "$TARGET_DB" != "mysql" ]; then
+  echo "✗ --target-db must be 'postgres', 'mssql', or 'mysql' (got '$TARGET_DB')" >&2; exit 2
 fi
 
-for bv in "encrypt=$MSSQL_ENCRYPT" "trust-cert=$MSSQL_TRUST_CERT"; do
+for bv in "mssql-encrypt=$MSSQL_ENCRYPT" "mssql-trust-cert=$MSSQL_TRUST_CERT" "mysql-ssl=$MYSQL_SSL"; do
   bname="${bv%%=*}"; bval="${bv#*=}"
   if [ "$bval" != "true" ] && [ "$bval" != "false" ]; then
-    echo "✗ --mssql-$bname must be 'true' or 'false' (got '$bval')" >&2; exit 2
+    echo "✗ --$bname must be 'true' or 'false' (got '$bval')" >&2; exit 2
   fi
 done
 
@@ -111,6 +137,16 @@ if [ "$MSSQL_DEMO" -eq 1 ]; then
   MSSQL_TRUST_CERT="true"
 fi
 
+# Managed-demo MySQL: point the app at the bundled 'mysql' compose service and (below) generate a
+# root password. For evaluation only.
+if [ "$MYSQL_DEMO" -eq 1 ]; then
+  MYSQL_HOST="mysql"
+  MYSQL_PORT="3306"
+  MYSQL_DATABASE="openldr_target"
+  MYSQL_USER="root"
+  MYSQL_SSL="false"
+fi
+
 # BYO MSSQL: require connection details before writing .env / starting the stack.
 # Fresh install only — on a re-run the never-overwritten on-disk .env is authoritative,
 # so don't demand flags the operator already provided the first time.
@@ -118,6 +154,16 @@ if [ "$ENV_EXISTS" -eq 0 ] && [ "$TARGET_DB" = "mssql" ] && [ "$MSSQL_DEMO" -eq 
   for pair in "MSSQL_HOST=$MSSQL_HOST" "MSSQL_USER=$MSSQL_USER" "MSSQL_PASSWORD=$MSSQL_PASSWORD"; do
     key="${pair%%=*}"; val="${pair#*=}"
     [ -n "$val" ] || err "--target-db mssql (BYO) requires --mssql-host, --mssql-user, and --mssql-password (missing $key). The target database '$MSSQL_DATABASE' must already exist on your SQL Server."
+  done
+fi
+
+# BYO MySQL: require connection details before writing .env / starting the stack.
+# Fresh install only — on a re-run the never-overwritten on-disk .env is authoritative,
+# so don't demand flags the operator already provided the first time.
+if [ "$ENV_EXISTS" -eq 0 ] && [ "$TARGET_DB" = "mysql" ] && [ "$MYSQL_DEMO" -eq 0 ]; then
+  for pair in "MYSQL_HOST=$MYSQL_HOST" "MYSQL_USER=$MYSQL_USER" "MYSQL_PASSWORD=$MYSQL_PASSWORD"; do
+    key="${pair%%=*}"; val="${pair#*=}"
+    [ -n "$val" ] || err "--target-db mysql (BYO) requires --mysql-host, --mysql-user, and --mysql-password (missing $key). The target database '$MYSQL_DATABASE' must already exist on your MySQL/MariaDB server."
   done
 fi
 
@@ -174,6 +220,10 @@ if [ "$MSSQL_DEMO" -eq 1 ]; then
   fetch "deploy/install/docker-compose.mssql.yml" "$DIR/docker-compose.mssql.yml"
   fetch "scripts/init-target-db-mssql.sql" "$DIR/config/init-target-db-mssql.sql"
 fi
+if [ "$MYSQL_DEMO" -eq 1 ]; then
+  fetch "deploy/install/docker-compose.mysql.yml" "$DIR/docker-compose.mysql.yml"
+  fetch "scripts/init-target-db-mysql.sql" "$DIR/config/init-target-db-mysql.sql"
+fi
 
 # Register this deploy's origin as a valid OIDC redirect so studio login works behind the
 # gateway. The shipped realm lists localhost + dev URLs; a non-localhost host (or https://localhost)
@@ -192,6 +242,7 @@ rand() { head -c 3072 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | cut -c1-24; }
 if [ ! -f "$DIR/.env" ]; then
   PG_PW="$(rand)"; KC_PW="$(rand)"; S3_KEY="$(rand)"; S3_SECRET="$(rand)"
   if [ "$MSSQL_DEMO" -eq 1 ] && [ -z "$MSSQL_PASSWORD" ]; then MSSQL_PASSWORD="$(rand)Aa1!"; fi
+  if [ "$MYSQL_DEMO" -eq 1 ] && [ -z "$MYSQL_PASSWORD" ]; then MYSQL_PASSWORD="$(rand)Aa1"; fi
   SECRETS_KEY="$(openssl rand -base64 32 2>/dev/null || head -c 32 /dev/urandom | base64 | tr -d '\n')"
 
   # COMPOSE_PROJECT_NAME: Compose's own default (the install dir's leaf name) collides
@@ -224,6 +275,14 @@ MSSQL_USER=$MSSQL_USER
 MSSQL_PASSWORD=$MSSQL_PASSWORD
 MSSQL_ENCRYPT=$MSSQL_ENCRYPT
 MSSQL_TRUST_SERVER_CERT=$MSSQL_TRUST_CERT"
+  elif [ "$TARGET_DB" = "mysql" ]; then
+    TARGET_DB_ENV_BLOCK="TARGET_STORE_ADAPTER=mysql
+MYSQL_HOST=$MYSQL_HOST
+MYSQL_PORT=$MYSQL_PORT
+MYSQL_DATABASE=$MYSQL_DATABASE
+MYSQL_USER=$MYSQL_USER
+MYSQL_PASSWORD=$MYSQL_PASSWORD
+MYSQL_SSL=$MYSQL_SSL"
   else
     TARGET_DB_ENV_BLOCK="TARGET_STORE_ADAPTER=pg
 TARGET_DATABASE_URL=postgres://openldr:$PG_PW@postgres:5432/openldr_target"
@@ -296,6 +355,7 @@ fi
 cd "$DIR"
 COMPOSE_FILES="-f docker-compose.yml"
 [ "$MSSQL_DEMO" -eq 1 ] && COMPOSE_FILES="$COMPOSE_FILES -f docker-compose.mssql.yml"
+[ "$MYSQL_DEMO" -eq 1 ] && COMPOSE_FILES="$COMPOSE_FILES -f docker-compose.mysql.yml"
 [ "$NO_PULL" -eq 1 ] || docker compose $COMPOSE_FILES pull
 docker compose $COMPOSE_FILES up -d
 
@@ -335,6 +395,9 @@ echo "  Keycloak admin password: $(grep '^KEYCLOAK_ADMIN_PASSWORD=' .env | cut -
 if [ "$MSSQL_DEMO" -eq 1 ]; then
   echo "  MSSQL (demo) SA password: $(grep '^MSSQL_PASSWORD=' .env | cut -d= -f2-)"
   echo "  ⚠ The demo SQL Server container is for evaluation only — not licensed for production."
+fi
+if [ "$MYSQL_DEMO" -eq 1 ]; then
+  echo "  MySQL (demo) root password: $(grep '^MYSQL_PASSWORD=' .env | cut -d= -f2-)"
 fi
 if [ "$HTTP_PORT" != "80" ] || [ "$HTTPS_PORT" != "443" ]; then
   echo "  Gateway ports: HTTP $HTTP_PORT / HTTPS $HTTPS_PORT"

@@ -1,0 +1,40 @@
+# Managed-demo MySQL overlay. Layered ONLY when the installer is run with --mysql-demo.
+# NOT for production — this bundled container is for evaluation only; production points at a
+# self-hosted MySQL/MariaDB (BYO).
+services:
+  mysql:
+    image: mysql:8.4
+    command: ["--character-set-server=utf8mb4"]
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_DATABASE: openldr_target
+    volumes:
+      - mysqldata:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+
+  mysql-init:
+    image: mysql:8.4
+    depends_on:
+      mysql:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "mysql -h mysql -uroot -p\"$$MYSQL_ROOT_PASSWORD\" < /init/init-target-db-mysql.sql"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - ./config/init-target-db-mysql.sql:/init/init-target-db-mysql.sql:ro
+    restart: "no"
+
+  api:
+    depends_on:
+      mysql-init:
+        condition: service_completed_successfully
+
+volumes:
+  mysqldata:

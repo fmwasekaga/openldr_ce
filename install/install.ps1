@@ -7,12 +7,17 @@
 #   -HttpPort <n>       gateway HTTP port (default 80)
 #   -HttpsPort <n>      gateway HTTPS port (default 443)
 #   -NoStart / -NoPull
-#   -TargetDb postgres|mssql (default postgres  -  selects the external analytics/target DB)
+#   -TargetDb postgres|mssql|mysql (default postgres  -  selects the external analytics/target DB)
 #   -MssqlDemo (spin up a bundled MSSQL container for evaluation; implies -TargetDb mssql)
 #   -MssqlHost/-MssqlPort/-MssqlDatabase/-MssqlUser/-MssqlPassword (BYO MSSQL connection  -
 #     required when -TargetDb mssql without -MssqlDemo; keep the password free of '#', spaces,
 #     or quote characters  -  they confuse Docker Compose's .env reader)
 #   -MssqlEncrypt true|false (default false), -MssqlTrustCert true|false (default true)
+#   -MysqlDemo (spin up a bundled MySQL container for evaluation; implies -TargetDb mysql)
+#   -MysqlHost/-MysqlPort/-MysqlDatabase/-MysqlUser/-MysqlPassword (BYO MySQL connection  -
+#     required when -TargetDb mysql without -MysqlDemo; keep the password free of '#', spaces,
+#     or quote characters  -  they confuse Docker Compose's .env reader)
+#   -MysqlSsl true|false (default false)
 param(
   [string]$Dir = "./openldr",
   [string]$Version = "latest",
@@ -22,7 +27,7 @@ param(
   [int]$HttpsPort = 443,
   [switch]$NoStart,
   [switch]$NoPull,
-  [ValidateSet('postgres','mssql')]
+  [ValidateSet('postgres','mssql','mysql')]
   [string]$TargetDb = 'postgres',
   [switch]$MssqlDemo,
   [string]$MssqlHost = '',
@@ -33,7 +38,15 @@ param(
   [ValidateSet('true','false')]
   [string]$MssqlEncrypt = 'false',
   [ValidateSet('true','false')]
-  [string]$MssqlTrustCert = 'true'
+  [string]$MssqlTrustCert = 'true',
+  [switch]$MysqlDemo,
+  [string]$MysqlHost = '',
+  [string]$MysqlPort = '3306',
+  [string]$MysqlDatabase = 'openldr_target',
+  [string]$MysqlUser = '',
+  [string]$MysqlPassword = '',
+  [ValidateSet('true','false')]
+  [string]$MysqlSsl = 'false'
 )
 $ErrorActionPreference = "Stop"
 $RepoRaw = "https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main"
@@ -60,11 +73,21 @@ if ($envExists) {
         if ($existingMssqlHost -eq 'mssql') { $MssqlDemo = $true }
       }
     }
+    if ($existingAdapter -eq 'mysql') {
+      $TargetDb = 'mysql'
+      if ($existingEnv -match '(?m)^MYSQL_HOST=(.+?)\s*$') {
+        $existingMysqlHost = $Matches[1].Trim()
+        $MysqlHost = $existingMysqlHost
+        # host 'mysql' is the managed-demo signature -> re-enable the overlay on re-runs
+        if ($existingMysqlHost -eq 'mysql') { $MysqlDemo = $true }
+      }
+    }
   }
 }
 if ($HttpsPort -eq 443) { $Origin = "https://$ServerName" } else { $Origin = "https://${ServerName}:$HttpsPort" }
 
 if ($MssqlDemo) { $TargetDb = 'mssql' }
+if ($MysqlDemo) { $TargetDb = 'mysql' }
 
 # Managed-demo MSSQL: point the app at the bundled 'mssql' compose service and (below) generate a
 # policy-compliant SA password. Developer/Express editions are NOT licensed for production  -  this
@@ -78,12 +101,32 @@ if ($MssqlDemo) {
   $MssqlTrustCert = 'true'
 }
 
+# Managed-demo MySQL: point the app at the bundled 'mysql' compose service and (below) generate a
+# root password. For evaluation only.
+if ($MysqlDemo) {
+  $MysqlHost = 'mysql'
+  $MysqlPort = '3306'
+  $MysqlDatabase = 'openldr_target'
+  $MysqlUser = 'root'
+  $MysqlSsl = 'false'
+}
+
 # BYO MSSQL: require connection details before writing .env / starting the stack.
 # Fresh install only  -  on a re-run the never-overwritten on-disk .env is authoritative,
 # so don't demand flags the operator already provided the first time.
 if ((-not $envExists) -and ($TargetDb -eq 'mssql') -and (-not $MssqlDemo)) {
   if ([string]::IsNullOrEmpty($MssqlHost) -or [string]::IsNullOrEmpty($MssqlUser) -or [string]::IsNullOrEmpty($MssqlPassword)) {
     Write-Error "X -TargetDb mssql (BYO) requires -MssqlHost, -MssqlUser, and -MssqlPassword. The target database '$MssqlDatabase' must already exist on your SQL Server."
+    exit 2
+  }
+}
+
+# BYO MySQL: require connection details before writing .env / starting the stack.
+# Fresh install only  -  on a re-run the never-overwritten on-disk .env is authoritative,
+# so don't demand flags the operator already provided the first time.
+if ((-not $envExists) -and ($TargetDb -eq 'mysql') -and (-not $MysqlDemo)) {
+  if ([string]::IsNullOrEmpty($MysqlHost) -or [string]::IsNullOrEmpty($MysqlUser) -or [string]::IsNullOrEmpty($MysqlPassword)) {
+    Write-Error "X -TargetDb mysql (BYO) requires -MysqlHost, -MysqlUser, and -MysqlPassword. The target database '$MysqlDatabase' must already exist on your MySQL/MariaDB server."
     exit 2
   }
 }
@@ -164,6 +207,10 @@ if ($MssqlDemo) {
   Fetch "deploy/install/docker-compose.mssql.yml" "$Dir/docker-compose.mssql.yml"
   Fetch "scripts/init-target-db-mssql.sql" "$Dir/config/init-target-db-mssql.sql"
 }
+if ($MysqlDemo) {
+  Fetch "deploy/install/docker-compose.mysql.yml" "$Dir/docker-compose.mysql.yml"
+  Fetch "scripts/init-target-db-mysql.sql" "$Dir/config/init-target-db-mysql.sql"
+}
 
 # Register this deploy's origin as a valid OIDC redirect so studio login works behind the gateway.
 # The shipped realm lists localhost + dev URLs; a non-localhost host (or a non-default port) must be
@@ -189,6 +236,7 @@ function Rand {
 if (-not $envExists) {
   $pg = Rand; $kc = Rand; $s3k = Rand; $s3s = Rand
   if ($MssqlDemo -and [string]::IsNullOrEmpty($MssqlPassword)) { $MssqlPassword = "$(Rand)Aa1!" }
+  if ($MysqlDemo -and [string]::IsNullOrEmpty($MysqlPassword)) { $MysqlPassword = "$(Rand)Aa1" }
   $secretBytes = New-Object 'System.Byte[]' 32
   $rngKey = [System.Security.Cryptography.RNGCryptoServiceProvider]::new()
   try { $rngKey.GetBytes($secretBytes) } finally { $rngKey.Dispose() }
@@ -220,6 +268,16 @@ MSSQL_USER=$MssqlUser
 MSSQL_PASSWORD=$MssqlPassword
 MSSQL_ENCRYPT=$MssqlEncrypt
 MSSQL_TRUST_SERVER_CERT=$MssqlTrustCert
+"@
+  } elseif ($TargetDb -eq 'mysql') {
+    $targetDbEnvBlock = @"
+TARGET_STORE_ADAPTER=mysql
+MYSQL_HOST=$MysqlHost
+MYSQL_PORT=$MysqlPort
+MYSQL_DATABASE=$MysqlDatabase
+MYSQL_USER=$MysqlUser
+MYSQL_PASSWORD=$MysqlPassword
+MYSQL_SSL=$MysqlSsl
 "@
   } else {
     $targetDbEnvBlock = @"
@@ -314,6 +372,7 @@ try {
   # buffered until each step finishes, so print a heads-up first ($PWD is $Dir under Push-Location).
   $ComposeFiles = @("-f", "docker-compose.yml")
   if ($MssqlDemo) { $ComposeFiles += @("-f", "docker-compose.mssql.yml") }
+  if ($MysqlDemo) { $ComposeFiles += @("-f", "docker-compose.mysql.yml") }
   if (-not $NoPull) {
     Write-Host "-> Pulling images (first run can take a few minutes)..."
     Invoke-NativeProcessChecked "docker" (@("compose") + $ComposeFiles + @("pull")) "docker compose pull failed (are the images published + public? see RELEASE.md)"
@@ -329,6 +388,10 @@ if ($MssqlDemo) {
   $mssqlLine = (Select-String -Path $envPath -Pattern '^MSSQL_PASSWORD=').Line
   if ($mssqlLine) { Write-Host "   MSSQL (demo) SA password: $($mssqlLine -replace '^MSSQL_PASSWORD=','')" }
   Write-Host "   ! The demo SQL Server container is for evaluation only -- not licensed for production."
+}
+if ($MysqlDemo) {
+  $mysqlLine = (Select-String -Path $envPath -Pattern '^MYSQL_PASSWORD=').Line
+  if ($mysqlLine) { Write-Host "   MySQL (demo) root password: $($mysqlLine -replace '^MYSQL_PASSWORD=','')" }
 }
 if ($HttpPort -ne 80 -or $HttpsPort -ne 443) { Write-Host "   Gateway ports: HTTP $HttpPort / HTTPS $HttpsPort" }
 Write-Host ""

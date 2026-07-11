@@ -115,6 +115,52 @@ Optional: `--mssql-port` (default `1433`), `--mssql-database` (`openldr_target`)
 These map to `TARGET_STORE_ADAPTER=mssql` and the `MSSQL_*` [environment variables](/docs/environment);
 you can also set them in `.env` directly.
 
+## MySQL/MariaDB as the analytics database
+
+OpenLDR can also write analytics/reporting data to a **self-hosted MySQL** or **MariaDB** database —
+chosen at install time. Dashboards, reports, custom queries, and the report designer all read from it.
+
+**Supported versions:** MySQL 8.4 LTS and MariaDB 11.4 LTS — self-hosted only.
+
+> **No cloud databases — ever.** Azure Database for MySQL, AWS RDS, and any hosted MySQL/MariaDB
+> are **not supported**. Ministry-of-Health and laboratory data must stay on infrastructure
+> the operator controls — a permanent data-sovereignty constraint.
+
+Select the target with `--target-db` (default `postgres`). There are two MySQL/MariaDB paths.
+
+### Demo / evaluation
+
+Spin up a bundled MySQL 8.4 container alongside the stack — the installer generates the password and
+creates the `openldr_target` database automatically.
+
+```
+curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.sh \
+  | bash -s -- --mysql-demo
+```
+
+On Windows: `install.ps1 -MysqlDemo`.
+
+> The bundled MySQL container is for evaluation only and must never back a production deployment.
+
+### Production (bring your own MySQL/MariaDB)
+
+Point OpenLDR at your own self-hosted MySQL or MariaDB. **The target database must already exist.**
+
+```
+curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.sh \
+  | bash -s -- --target-db mysql \
+      --mysql-host mysql.internal --mysql-user openldr --mysql-password 'YourStrongPassword1'
+```
+
+On Windows: `install.ps1 -TargetDb mysql -MysqlHost mysql.internal -MysqlUser openldr -MysqlPassword '...'`.
+Optional: `--mysql-port` (default `3306`), `--mysql-database` (`openldr_target`), `--mysql-ssl` (`false`).
+
+> Keep the MySQL/MariaDB password free of `#`, spaces, and quote characters — they confuse Docker
+> Compose's `.env` reader.
+
+These map to `TARGET_STORE_ADAPTER=mysql` and the `MYSQL_*` [environment variables](/docs/environment);
+you can also set them in `.env` directly.
+
 ## Installer flags
 
 | Flag | Default | Purpose |
@@ -126,7 +172,7 @@ you can also set them in `.env` directly.
 | `--staging` | off | Use the Let's Encrypt staging CA (testing; avoids rate limits). |
 | `--no-start` | off | Scaffold and configure only; don't start the stack. |
 | `--no-pull` | off | Skip pulling images (use what's already local). |
-| `--target-db <db>` | `postgres` | External analytics database: `postgres` or `mssql`. |
+| `--target-db <db>` | `postgres` | External analytics database: `postgres`, `mssql`, or `mysql`. |
 | `--mssql-demo` | off | Bundle a SQL Server 2022 container (evaluation only); implies `--target-db mssql`. |
 | `--mssql-host <host>` | — | BYO SQL Server host (required for `--target-db mssql` without `--mssql-demo`). |
 | `--mssql-port <n>` | `1433` | BYO SQL Server port. |
@@ -135,6 +181,13 @@ you can also set them in `.env` directly.
 | `--mssql-password <pw>` | — | BYO SQL Server password (avoid `#`, spaces, quotes). |
 | `--mssql-encrypt <bool>` | `false` | Encrypt the SQL Server connection. |
 | `--mssql-trust-cert <bool>` | `true` | Trust the server's TLS certificate (self-signed on-prem). |
+| `--mysql-demo` | off | Bundle a MySQL 8.4 container (evaluation only); implies `--target-db mysql`. |
+| `--mysql-host <host>` | — | BYO MySQL/MariaDB host (required for `--target-db mysql` without `--mysql-demo`). |
+| `--mysql-port <n>` | `3306` | BYO MySQL/MariaDB port. |
+| `--mysql-database <name>` | `openldr_target` | Target database name (must already exist for BYO). |
+| `--mysql-user <user>` | — | BYO MySQL/MariaDB login. |
+| `--mysql-password <pw>` | — | BYO MySQL/MariaDB password (avoid `#`, spaces, quotes). |
+| `--mysql-ssl <bool>` | `false` | Enable SSL/TLS for the MySQL/MariaDB connection. |
 
 After it finishes, manage the stack from inside the `openldr/` directory:
 
