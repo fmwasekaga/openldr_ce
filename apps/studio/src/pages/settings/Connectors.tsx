@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -25,7 +25,7 @@ type FieldKind = 'text' | 'number' | 'password' | 'boolean';
 interface TypeField { key: string; labelKey: string; kind: FieldKind }
 const HOST_TYPES: Array<{ value: string; label: string }> = [
   { value: 'postgres', label: 'Postgres' },
-  { value: 'mysql', label: 'MySQL' },
+  { value: 'mysql', label: 'MySQL / MariaDB' },
   { value: 'microsoft-sql', label: 'Microsoft SQL' },
   { value: 'mongodb', label: 'MongoDB' },
   { value: 'redis', label: 'Redis' },
@@ -35,6 +35,8 @@ const HOST_TYPES: Array<{ value: string; label: string }> = [
   { value: 'outlook', label: 'Microsoft Outlook' },
   { value: 'sftp', label: 'SFTP' },
 ];
+// Render a divider after these values to group the menu: relational SQL | NoSQL/cache | email | file.
+const SEPARATOR_AFTER = new Set(['microsoft-sql', 'redis', 'outlook']);
 const SQL_FIELDS: TypeField[] = [
   { key: 'host', labelKey: 'settings.connectors.fieldHost', kind: 'text' },
   { key: 'port', labelKey: 'settings.connectors.fieldPort', kind: 'number' },
@@ -374,7 +376,10 @@ export function Connectors() {
                         </SelectTrigger>
                         <SelectContent>
                           {HOST_TYPES.map((ht) => (
-                            <SelectItem key={ht.value} value={ht.value}>{ht.label}</SelectItem>
+                            <Fragment key={ht.value}>
+                              <SelectItem value={ht.value}>{ht.label}</SelectItem>
+                              {SEPARATOR_AFTER.has(ht.value) && <SelectSeparator />}
+                            </Fragment>
                           ))}
                         </SelectContent>
                       </Select>
@@ -404,6 +409,9 @@ export function Connectors() {
                               id={fieldId}
                               data-testid={fieldId}
                               type={field.kind === 'password' ? 'password' : field.kind === 'number' ? 'number' : 'text'}
+                              // Stop the browser/password manager autofilling the logged-in user's
+                              // credentials into a connector's User/Password fields (this is not a login form).
+                              autoComplete={field.kind === 'password' ? 'new-password' : 'off'}
                               value={val}
                               onChange={(e) => setDraft({ ...draft, dbConfig: { ...draft.dbConfig, [field.key]: e.target.value } })}
                               placeholder={field.kind === 'password' && isEdit ? t('settings.connectors.secretSet') : undefined}
@@ -428,13 +436,13 @@ export function Connectors() {
                         </div>
                       ) : null}
                       <Label htmlFor="connector-baseurl" className="whitespace-nowrap">{t('settings.connectors.fieldBaseUrl')}</Label>
-                      <Input id="connector-baseurl" data-testid="connector-baseurl" value={draft.baseUrl} onChange={(e) => setDraft({ ...draft, baseUrl: e.target.value })}
+                      <Input id="connector-baseurl" data-testid="connector-baseurl" autoComplete="off" value={draft.baseUrl} onChange={(e) => setDraft({ ...draft, baseUrl: e.target.value })}
                         placeholder={draft.id === null ? 'https://external-system.example.org/api' : t('settings.connectors.secretSet')} />
                       <Label htmlFor="connector-username" className="whitespace-nowrap">{t('settings.connectors.fieldUsername')}</Label>
-                      <Input id="connector-username" data-testid="connector-username" value={draft.username} onChange={(e) => setDraft({ ...draft, username: e.target.value })}
+                      <Input id="connector-username" data-testid="connector-username" autoComplete="off" value={draft.username} onChange={(e) => setDraft({ ...draft, username: e.target.value })}
                         placeholder={draft.id === null ? '' : t('settings.connectors.secretSet')} />
                       <Label htmlFor="connector-password" className="whitespace-nowrap">{t('settings.connectors.fieldPassword')}</Label>
-                      <Input id="connector-password" data-testid="connector-password" type="password" value={draft.password} onChange={(e) => setDraft({ ...draft, password: e.target.value })}
+                      <Input id="connector-password" data-testid="connector-password" type="password" autoComplete="new-password" value={draft.password} onChange={(e) => setDraft({ ...draft, password: e.target.value })}
                         placeholder={draft.id === null ? '' : t('settings.connectors.secretSet')} />
                     </>
                   )}
