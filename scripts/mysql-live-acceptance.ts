@@ -3,21 +3,23 @@
 // Exercises the REAL code paths against a live MySQL 8.4 or MariaDB 11.4 with an
 // `openldr_target` database:
 //   1. createMysqlStore — adapter connects + healthCheck
-//   2. externalMigrations('mysql') — dialect-aware flat-schema migrations apply
-//   3. createFlatWriter(db, 'mysql') — flatten FHIR + batched ON DUPLICATE KEY UPDATE upsert,
-//      2x write idempotency (no duplicate rows)
-//   4. Unicode round-trip (utf8mb4) + null handling for missing optional fields
+//   2. externalMigrations('mysql') — dialect-aware flat-schema migrations apply; all 7 flat tables present
+//   3. createFlatWriter(db, 'mysql') — flatten FHIR + batched ON DUPLICATE KEY UPDATE upsert (bulk
+//      load), with 2x-write idempotency (no duplicate rows)
+//   4. Unicode round-trip (utf8mb4 longtext — Cyrillic/CJK/emoji)
+//   5. Null handling for missing optional fields (persist as SQL NULL, not empty string)
+//   6. Scale + idempotency (N=500 rows batched, idempotent across two writes)
 //
 // Only the WRITE path is validated here — report queries need MySQL SQL variants that land in a
 // later slice, so reporting is intentionally NOT exercised (unlike the MSSQL harness's step 4).
 //
 // Preconditions: a reachable MySQL/MariaDB server with the target database created.
 //   docker run -d --name openldr-mysql-test -e MYSQL_ROOT_PASSWORD='Openldr_Local_2026!' \
-//     -p 13306:3306 mysql:8.4
+//     -p 3306:3306 mysql:8.4
 //   docker exec openldr-mysql-test mysql -uroot -p'Openldr_Local_2026!' \
 //     -e "create database if not exists openldr_target"
 //
-// Run: node_modules/.bin/tsx scripts/mysql-live-acceptance.ts
+// Run: MYSQL_DATABASE=openldr_target node_modules/.bin/tsx scripts/mysql-live-acceptance.ts
 //
 // Env overrides:
 //   MYSQL_HOST (localhost) MYSQL_PORT (3306) MYSQL_DATABASE (openldr_target)

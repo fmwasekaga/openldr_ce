@@ -60,7 +60,7 @@ for triple in "${ENGINES[@]}"; do
 
   MYSQL_HOST=127.0.0.1 MYSQL_PORT="${port}" MYSQL_DATABASE="${DB}" \
     MYSQL_USER=root MYSQL_PASSWORD="${PW}" \
-    node_modules/.bin/tsx scripts/mysql-live-acceptance.ts
+    pnpm mysql:accept
   rc=$?
   if [ "${rc}" -ne 0 ]; then
     echo "  ❌ acceptance FAILED on ${image} (exit ${rc})"
