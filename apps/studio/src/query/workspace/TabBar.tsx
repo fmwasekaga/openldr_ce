@@ -9,10 +9,14 @@ function tabIcon(t: Tab) {
 }
 
 /** A table tab is "dirty" when its inline SQL diverges from the default browse query
- * (quoted per the connector's dialect — `[schema].[table]` for SQL Server, ANSI double-quotes otherwise). */
+ * (quoted per the connector's dialect — `[schema].[table]` for SQL Server, backticks for
+ * MySQL/MariaDB, ANSI double-quotes otherwise). */
 function isDirty(t: Tab): boolean {
   if (t.kind !== 'table') return false;
-  const def = t.type === 'microsoft-sql' ? `select * from [${t.schema}].[${t.table}]` : `select * from "${t.schema}"."${t.table}"`;
+  const def =
+    t.type === 'microsoft-sql' ? `select * from [${t.schema}].[${t.table}]`
+    : t.type === 'mysql' ? `select * from \`${t.schema}\`.\`${t.table}\``
+    : `select * from "${t.schema}"."${t.table}"`;
   return t.sql !== def;
 }
 
