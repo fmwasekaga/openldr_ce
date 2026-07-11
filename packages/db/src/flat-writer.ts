@@ -42,7 +42,9 @@ async function upsertMssql(
 // Each row contributes one bound parameter PER COLUMN, so the safe rows-per-statement depends on
 // the column width — a fixed row cap silently blows the limit for wider tables. Size the chunk
 // from the actual column count. Postgres caps at 65535 params; SQL Server at 2100 params and a
-// 1000-row VALUES constructor. Budgets sit under each hard limit with margin.
+// 1000-row VALUES constructor. MySQL and MariaDB cap at 65535 placeholders per statement (like
+// Postgres) and have no MSSQL-style VALUES-row ceiling, so MySQL reuses the ~60000 budget with
+// margin. Budgets sit under each hard limit with margin.
 const PG_PARAM_BUDGET = 60000;
 const MSSQL_PARAM_BUDGET = 2000;
 const MSSQL_MAX_VALUES_ROWS = 1000;
@@ -110,6 +112,8 @@ export function createFlatWriter(db: Kysely<ExternalSchema>, engine: TargetEngin
       if (engine === 'mssql') {
         await upsertMssql(anyDb, table, row, updateRow);
       } else if (engine === 'mysql') {
+        // Single row: update to literal `updateRow` values (like the pg single-row path). The batch
+        // helper instead uses VALUES(col) to reference each incoming row — that asymmetry is intentional.
         await anyDb.insertInto(table).values(row).onDuplicateKeyUpdate(updateRow).execute();
       } else {
         await anyDb.insertInto(table).values(row).onConflict((oc: any) => oc.column('id').doUpdateSet(updateRow)).execute();
