@@ -63,6 +63,58 @@ cd openldr && docker compose up -d
 `openldr\config\nginx\certs\`, then `docker compose up -d`. Already running on the self-signed
 certificate? Overwrite the two files and run `docker compose restart gateway`.
 
+## SQL Server as the analytics database
+
+OpenLDR keeps operational data in an internal **PostgreSQL** database (always) and writes flattened
+analytics/reporting data to a separate **external** database. That external database is **PostgreSQL by
+default**, or a **self-hosted Microsoft SQL Server** — chosen at install time. Dashboards, reports,
+custom queries, and the report designer all read from it, and the query surfaces are SQL Server–aware.
+
+**Supported SQL Server versions:** 2017, 2019, and 2022 — self-hosted only. 2017 is the minimum (the
+nearest upgrade for sites still on 2014).
+
+> **No cloud databases — ever.** Azure SQL, Managed Instance, AWS RDS, and any hosted SQL are **not
+> supported**, for either database. Ministry-of-Health and laboratory data must stay on infrastructure
+> the operator controls — a permanent data-sovereignty constraint. SQL Server 2016 and earlier are
+> unsupported (end of life / no official Linux container); upgrade to 2017.
+
+Select the target with `--target-db` (default `postgres`). There are two SQL Server paths.
+
+### Demo / evaluation
+
+Spin up a bundled SQL Server 2022 container alongside the stack — the installer generates its SA
+password and creates the `openldr_target` database automatically.
+
+```
+curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.sh \
+  | bash -s -- --mssql-demo
+```
+
+On Windows: `install.ps1 -MssqlDemo`.
+
+> SQL Server Developer/Express editions are **not licensed for production**, so the bundled container
+> is for evaluation only and must never back a production deployment.
+
+### Production (bring your own SQL Server)
+
+Point OpenLDR at your own self-hosted SQL Server. **The target database must already exist.**
+
+```
+curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.sh \
+  | bash -s -- --target-db mssql \
+      --mssql-host sql.internal --mssql-user openldr --mssql-password 'YourStrongPassword1'
+```
+
+On Windows: `install.ps1 -TargetDb mssql -MssqlHost sql.internal -MssqlUser openldr -MssqlPassword '...'`.
+Optional: `--mssql-port` (default `1433`), `--mssql-database` (`openldr_target`), `--mssql-encrypt`
+(`false`), `--mssql-trust-cert` (`true`).
+
+> Keep the SQL Server password free of `#`, spaces, and quote characters — they confuse Docker
+> Compose's `.env` reader.
+
+These map to `TARGET_STORE_ADAPTER=mssql` and the `MSSQL_*` [environment variables](/docs/environment);
+you can also set them in `.env` directly.
+
 ## Installer flags
 
 | Flag | Default | Purpose |
@@ -74,6 +126,15 @@ certificate? Overwrite the two files and run `docker compose restart gateway`.
 | `--staging` | off | Use the Let's Encrypt staging CA (testing; avoids rate limits). |
 | `--no-start` | off | Scaffold and configure only; don't start the stack. |
 | `--no-pull` | off | Skip pulling images (use what's already local). |
+| `--target-db <db>` | `postgres` | External analytics database: `postgres` or `mssql`. |
+| `--mssql-demo` | off | Bundle a SQL Server 2022 container (evaluation only); implies `--target-db mssql`. |
+| `--mssql-host <host>` | — | BYO SQL Server host (required for `--target-db mssql` without `--mssql-demo`). |
+| `--mssql-port <n>` | `1433` | BYO SQL Server port. |
+| `--mssql-database <name>` | `openldr_target` | Target database name (must already exist for BYO). |
+| `--mssql-user <user>` | — | BYO SQL Server login. |
+| `--mssql-password <pw>` | — | BYO SQL Server password (avoid `#`, spaces, quotes). |
+| `--mssql-encrypt <bool>` | `false` | Encrypt the SQL Server connection. |
+| `--mssql-trust-cert <bool>` | `true` | Trust the server's TLS certificate (self-signed on-prem). |
 
 After it finishes, manage the stack from inside the `openldr/` directory:
 
