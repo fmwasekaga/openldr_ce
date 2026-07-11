@@ -223,9 +223,10 @@ Select the external database at install time with `--target-db` (default `postgr
   Environment section); you can also set them in `.env` directly.
 
 > **Note:** the internal operational database is always PostgreSQL — only the external/target
-> database can be SQL Server. On an MSSQL install the built-in reports (which use Postgres-dialect
-> SQL) do not yet execute against SQL Server; making the query workbench and reports dialect-aware
-> on MSSQL is planned follow-up work.
+> database can be SQL Server. The read surfaces are SQL Server–aware: the query workbench, custom
+> queries, dashboards (including raw SQL), the report designer, and the built-in reports all execute
+> against a SQL Server target, validated end-to-end on 2017/2019/2022 by `pnpm mssql:accept:matrix`
+> and the cross-dialect report parity harness (`pnpm reports:parity`).
 
 ## Environment
 
