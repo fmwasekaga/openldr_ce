@@ -123,13 +123,15 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
   });
 
   // ---- Connector introspection ----
-  // Postgres and SQL Server are both supported: the run path (`runConnectorSql` → `planPagination`)
-  // is dialect-aware (Postgres LIMIT/OFFSET vs SQL Server SET ROWCOUNT + JS offset), and the
-  // information_schema introspection below picks a dialect-appropriate system-schema filter.
-  // (Identifier quoting for the studio TableTab is handled separately.)
-  const SQL_TYPES = new Set(['postgres', 'microsoft-sql']);
+  // Postgres, SQL Server, and MySQL/MariaDB are all supported: the run path (`runConnectorSql` →
+  // `planPagination`) is dialect-aware (Postgres LIMIT/OFFSET, SQL Server SET ROWCOUNT + JS offset,
+  // MySQL LIMIT/OFFSET), and the information_schema introspection below picks a dialect-appropriate
+  // system-schema filter. (Identifier quoting — e.g. MySQL backticks — for the studio TableTab is
+  // handled separately in the studio.)
+  const SQL_TYPES = new Set(['postgres', 'microsoft-sql', 'mysql']);
   const PG_SYS = "schema_name not in ('pg_catalog','information_schema') and schema_name not like 'pg\\_%'";
   const MSSQL_SYS = "schema_name not in ('sys','INFORMATION_SCHEMA','guest','db_owner','db_accessadmin','db_securityadmin','db_ddladmin','db_backupoperator','db_datareader','db_datawriter','db_denydatareader','db_denydatawriter')";
+  const MYSQL_SYS = "schema_name not in ('information_schema','mysql','performance_schema','sys')";
 
   app.get('/api/query/connectors', GUARD, async () => {
     const all = await deps.connectors.list();
@@ -141,7 +143,7 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
     const c = await deps.connectors.get(id);
     if (!c || !c.enabled) { reply.code(404); return { error: 'connector not found' }; }
     try {
-      const sysFilter = c.type === 'microsoft-sql' ? MSSQL_SYS : PG_SYS;
+      const sysFilter = c.type === 'microsoft-sql' ? MSSQL_SYS : c.type === 'mysql' ? MYSQL_SYS : PG_SYS;
       const { rows } = await deps.runConnectorSql({ connectorId: id,
         sql: `select schema_name from information_schema.schemata where ${sysFilter} order by 1` });
       return rows.map((r) => String(r.schema_name));

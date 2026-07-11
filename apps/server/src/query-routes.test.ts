@@ -207,6 +207,38 @@ describe('introspection', () => {
     expect(seenSql).not.toContain('pg_catalog');
   });
 
+  it('lists mysql connectors alongside postgres and microsoft-sql', async () => {
+    const deps = makeDeps();
+    deps.connectors.list = async () => [
+      { id: 'c1', name: 'PG', type: 'postgres', enabled: true } as any,
+      { id: 'c2', name: 'SQLSvr', type: 'microsoft-sql', enabled: true } as any,
+      { id: 'c3', name: 'MyDB', type: 'mysql', enabled: true } as any,
+    ];
+    const app = await build(deps);
+    const res = await app.inject({ method: 'GET', url: '/api/query/connectors' });
+    expect(res.json()).toEqual([
+      { id: 'c1', name: 'PG', type: 'postgres' },
+      { id: 'c2', name: 'SQLSvr', type: 'microsoft-sql' },
+      { id: 'c3', name: 'MyDB', type: 'mysql' },
+    ]);
+  });
+
+  it('issues the MySQL system-schema filter for a mysql connector', async () => {
+    const deps = makeDeps();
+    deps.connectors.get = async (id) => (id === 'c3' ? ({ id, name: 'MyDB', type: 'mysql', enabled: true } as any) : null);
+    let capturedSql = '';
+    deps.runConnectorSql = async ({ sql }) => { capturedSql = sql; return { columns: [], rows: [] }; };
+    const app = await build(deps);
+    const res = await app.inject({ method: 'GET', url: '/api/query/connectors/c3/schemas' });
+    expect(res.statusCode).toBe(200);
+    expect(capturedSql).toContain('not in (');
+    expect(capturedSql).toContain("'information_schema'");
+    expect(capturedSql).toContain("'mysql'");
+    expect(capturedSql).toContain("'performance_schema'");
+    expect(capturedSql).toContain("'sys'");
+    expect(capturedSql).not.toContain('pg_catalog');
+  });
+
   it('issues the Postgres system-schema filter for a postgres connector', async () => {
     const deps = makeDeps();
     let seenSql = '';
