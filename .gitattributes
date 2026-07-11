@@ -15,3 +15,10 @@ docker-compose*.yml        text eol=lf
 
 # Gzipped bundled fixtures are binary — never EOL-normalize (would corrupt the gzip stream).
 *.json.gz binary
+
+# Signed marketplace-bundle assets are byte-hashed at pack time (payload sha256 + UI sha256), so a
+# CRLF checkout on Windows changes their bytes and breaks signature verification. Pin them so the
+# bytes are identical on every platform: .wasm never touched, UI html normalized to LF (its canonical
+# packed form). See packages/marketplace/src/bundle-fs.ts (verifyBundle).
+*.wasm                       binary
+reference-plugins/**/ui.html text eol=lf

@@ -88,7 +88,7 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
             <p className="mt-0.5 flex items-center gap-2 text-sm text-muted-foreground">
               <span>{(publisher?.name || '—')} · v{entry.version}</span>
               <Badge variant="outline" className="text-[10px] uppercase">{entry.type}</Badge>
-              {entry.ref ? <SignatureBadge valid={detail ? detail.valid : entry.valid} publisher={publisher} /> : null}
+              {entry.ref ? <SignatureBadge valid={detail ? detail.valid : entry.valid} invalidReason={detail ? detail.invalidReason : entry.invalidReason} publisher={publisher} /> : null}
               {entry.drifted ? <Badge variant="outline" className="border-amber-500 text-amber-700">{t('settings.marketplace.modifiedLocally')}</Badge> : null}
             </p>
           </div>

@@ -71,7 +71,9 @@ describe('bundle ui integrity', () => {
       await writeFile(join(dir, 'ui.html'), ui);
       await writeFile(join(dir, 'publisher.pub'), Buffer.from(kp.publicKeyDer).toString('hex'));
       const b = await readBundle(dir);
-      expect(verifyBundle(b).valid).toBe(true);
+      const res = verifyBundle(b);
+      expect(res.valid).toBe(true);
+      expect(res.reason).toBeUndefined();
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -96,7 +98,10 @@ describe('bundle ui integrity', () => {
       await writeFile(join(dir, 'ui.html'), new TextEncoder().encode('<script>evil()</script>'));
       await writeFile(join(dir, 'publisher.pub'), Buffer.from(kp.publicKeyDer).toString('hex'));
       const b = await readBundle(dir);
-      expect(verifyBundle(b).valid).toBe(false);
+      const res = verifyBundle(b);
+      expect(res.valid).toBe(false);
+      // The signature is valid; only the UI asset hash mismatches (e.g. a CRLF checkout on Windows).
+      expect(res.reason).toBe('ui-hash-mismatch');
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -136,7 +141,34 @@ describe('bundle-fs', () => {
   it('rejects a tampered manifest', async () => {
     const { dir } = await makeBundle(true);
     const b = await readBundle(dir);
-    expect(verifyBundle(b).valid).toBe(false);
+    const res = verifyBundle(b);
+    expect(res.valid).toBe(false);
+    // Manifest body was altered after signing → the Ed25519 signature no longer verifies.
+    expect(res.reason).toBe('bad-signature');
     await rm(dir, { recursive: true, force: true });
+  });
+
+  it('reports payload-hash-mismatch when the wasm bytes differ from the signed sha', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'mkt-payload-'));
+    try {
+      const kp = generatePublisherKeypair();
+      const wasm = new Uint8Array([1, 2, 3, 4]);
+      const base = {
+        schemaVersion: 1, type: 'plugin', id: 'demo', version: '1.0.0',
+        publisher: { id: 'acme', name: 'Acme', keyFingerprint: kp.fingerprint },
+        compatibility: { ceVersion: '*' }, capabilities: [],
+        payload: { kind: 'plugin', wasmSha256: sha256Hex(wasm) },
+      };
+      const manifest = { ...base, signature: signManifest(base, sha256Hex(wasm), kp.privateKeyDer) };
+      await writeFile(join(dir, 'manifest.json'), JSON.stringify(manifest));
+      // Different wasm bytes than the signed wasmSha256.
+      await writeFile(join(dir, 'plugin.wasm'), new Uint8Array([9, 9, 9, 9]));
+      await writeFile(join(dir, 'publisher.pub'), Buffer.from(kp.publicKeyDer).toString('hex'));
+      const res = verifyBundle(await readBundle(dir));
+      expect(res.valid).toBe(false);
+      expect(res.reason).toBe('payload-hash-mismatch');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

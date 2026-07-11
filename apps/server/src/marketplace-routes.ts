@@ -105,6 +105,7 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
             ref: packRef(reg.id, l.ref), id: l.id, version: l.version, type: l.type,
             publisher: l.publisher, description: l.description, license: l.license,
             summary: l.summary, signatureFingerprint: l.signatureFingerprint, valid: l.valid,
+            ...(l.invalidReason ? { invalidReason: l.invalidReason } : {}),
             registryId: reg.id, registryName: reg.name,
             versions: (l.versions ?? []).map((v) => ({ version: v.version, ref: packRef(reg.id, v.ref) })),
           });
@@ -139,6 +140,7 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
         compatibility: b.manifest.compatibility,
         compatible: isCompatible(b.manifest.compatibility.ceVersion, CE_VERSION),
         ceVersion: CE_VERSION, payload: b.manifest.payload, valid: v.valid,
+        ...(v.reason ? { invalidReason: v.reason } : {}),
         registryId: reg.id, registryName: reg.name,
       };
     } catch {

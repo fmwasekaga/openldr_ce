@@ -845,6 +845,8 @@ export interface AvailableArtifact {
   capabilities?: unknown[];
   compatibility?: { ceVersion: string };
   valid?: boolean;
+  /** When valid === false, the specific check that failed (so the UI shows the real cause). */
+  invalidReason?: 'fingerprint-mismatch' | 'payload-hash-mismatch' | 'ui-hash-mismatch' | 'bad-signature';
   description?: string;
   license?: string;
   summary?: string;
@@ -913,6 +915,7 @@ export interface InstalledArtifactDetail {
   ceVersion: string;
   compatibility?: { ceVersion: string };
   valid?: boolean;
+  invalidReason?: AvailableArtifact['invalidReason'];
 }
 
 export const getInstalledArtifact = (id: string): Promise<InstalledArtifactDetail> =>
