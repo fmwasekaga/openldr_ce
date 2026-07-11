@@ -27,7 +27,7 @@ export const ConfigSchema = z
     AUTH_ADAPTER: z.enum(['keycloak']).default('keycloak'),
     BLOB_ADAPTER: z.enum(['minio']).default('minio'),
     EVENTING_ADAPTER: z.enum(['pg']).default('pg'),
-    TARGET_STORE_ADAPTER: z.enum(['pg', 'mssql']).default('pg'),
+    TARGET_STORE_ADAPTER: z.enum(['pg', 'mssql', 'mysql']).default('pg'),
 
     // Internal operational Postgres (always pg) — used by the event bus, audit, users, plugins.
     INTERNAL_DATABASE_URL: z.string().url(),
@@ -42,6 +42,14 @@ export const ConfigSchema = z
     MSSQL_PASSWORD: z.string().min(1).optional(),
     MSSQL_ENCRYPT: envBoolean(false),
     MSSQL_TRUST_SERVER_CERT: envBoolean(true),
+
+    // MySQL/MariaDB target store (required when TARGET_STORE_ADAPTER=mysql).
+    MYSQL_HOST: z.string().min(1).optional(),
+    MYSQL_PORT: z.coerce.number().int().positive().default(3306),
+    MYSQL_DATABASE: z.string().min(1).optional(),
+    MYSQL_USER: z.string().min(1).optional(),
+    MYSQL_PASSWORD: z.string().min(1).optional(),
+    MYSQL_SSL: envBoolean(false),
 
     // S3 / blob storage.
     S3_ENDPOINT: z.string().url(),
@@ -154,6 +162,12 @@ export const ConfigSchema = z
       for (const key of ['MSSQL_HOST', 'MSSQL_DATABASE', 'MSSQL_USER', 'MSSQL_PASSWORD'] as const) {
         if (!cfg[key]) {
           ctx.addIssue({ code: z.ZodIssueCode.custom, path: [key], message: `${key} is required when TARGET_STORE_ADAPTER=mssql` });
+        }
+      }
+    } else if (cfg.TARGET_STORE_ADAPTER === 'mysql') {
+      for (const key of ['MYSQL_HOST', 'MYSQL_DATABASE', 'MYSQL_USER', 'MYSQL_PASSWORD'] as const) {
+        if (!cfg[key]) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: [key], message: `${key} is required when TARGET_STORE_ADAPTER=mysql` });
         }
       }
     } else if (!cfg.TARGET_DATABASE_URL) {
