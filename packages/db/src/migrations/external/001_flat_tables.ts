@@ -4,12 +4,18 @@ import { textType, keyType, floatType, timestampType, nowExpr } from './dialect'
 
 function withCommon(b: CreateTableBuilder<string, never>, engine: TargetEngine): CreateTableBuilder<string, never> {
   const text = sql.raw(textType(engine));
-  const built = b
+  let built = b
     .addColumn('source_system', text)
     .addColumn('plugin_id', text)
     .addColumn('plugin_version', text)
     .addColumn('batch_id', text)
     .addColumn('created_at', sql.raw(timestampType(engine)), (c) => c.notNull().defaultTo(nowExpr(engine)));
+  // Pin the table storage charset to utf8mb4 explicitly. Without this, Unicode integrity
+  // (CJK, emoji, any non-BMP clinical text) depends entirely on the server's default charset
+  // (character-set-server), which self-hosted MySQL/MariaDB installs may set to latin1/utf8mb3.
+  // No explicit COLLATE: MySQL 8.4's default utf8mb4 collation (utf8mb4_0900_ai_ci) doesn't
+  // exist on MariaDB, so pinning a specific collation would break portability across engines.
+  if (engine === 'mysql') built = built.modifyEnd(sql`character set utf8mb4`);
   // SQL Server has no CREATE TABLE ... IF NOT EXISTS; the Kysely migrator already guarantees
   // each migration runs once, so ifNotExists is only a Postgres convenience.
   return engine === 'postgres' ? built.ifNotExists() : built;

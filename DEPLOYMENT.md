@@ -198,6 +198,20 @@ The supported set is validated end-to-end on every listed version by the accepta
 (`pnpm mssql:accept:matrix`), and is the single source of truth defined in
 `packages/adapter-mssql-store/src/supported-versions.ts`.
 
+### MySQL / MariaDB support matrix
+
+| Engine / version | Supported | Notes |
+|------------------|-----------|-------|
+| MySQL 8.4 LTS    | ✅ Yes    | Pinned for the managed demo container + acceptance matrix. |
+| MariaDB 11.4 LTS | ✅ Yes    | Validated by the acceptance matrix. |
+| MySQL 8.0 / MariaDB 10.11 | ⚠️ Best-effort | Likely works via the same mysql2 adapter; not validated. |
+| MySQL 5.7 and earlier | ❌ No | End of life. Upgrade to 8.4. |
+| RDS / Aurora / Azure Database for MySQL / Cloud SQL / PlanetScale | ❌ Never | See the data-sovereignty policy above. |
+
+Validated end-to-end on both engines by `pnpm mysql:accept:matrix`; the supported set is the single
+source of truth in `packages/adapter-mysql-store/src/supported-versions.ts`. As with SQL Server, only
+self-hosted MySQL/MariaDB is supported — no cloud/hosted database, for data-sovereignty reasons.
+
 ### Data-sovereignty policy: no cloud databases
 
 OpenLDR CE does **not** support any cloud-hosted or managed database service for either the
