@@ -31,16 +31,17 @@ function compileRawNode(node: FakeOpNode): string {
 
 function makeFakeDb(
   rows: Record<string, unknown>[],
-  throwOn?: (sql: string) => unknown,
+  version = '',
 ): { db: any; executed: string[] } {
   const executed: string[] = [];
   const executor = {
     transformQuery: (node: FakeOpNode) => node,
     compileQuery: (node: FakeOpNode) => ({ sql: compileRawNode(node), parameters: [], query: node }),
     executeQuery: async (compiledQuery: { sql: string }) => {
-      const err = throwOn?.(compiledQuery.sql);
-      if (err) throw err;
       executed.push(compiledQuery.sql);
+      // Serve version() (the mysql/mariadb per-statement-timeout variant detection) from the
+      // configured string; every other query returns the configured rows.
+      if (/version\(\)/i.test(compiledQuery.sql)) return { rows: [{ v: version }] };
       return { rows };
     },
   };
@@ -120,37 +121,32 @@ describe('runSqlQuery dialect-aware session setup + capped query', () => {
     expect(result.rows).toEqual([{ a: 1 }]);
   });
 
-  it('mysql: portable statement timeout (max_execution_time ms + max_statement_time s), no read-only txn, LIMIT/OFFSET capped query', async () => {
-    const { db, executed } = makeFakeDb([{ a: 1 }]);
+  it('mysql (MySQL 8): per-statement MAX_EXECUTION_TIME hint on the capped query — no session SET, no read-only txn', async () => {
+    const { db, executed } = makeFakeDb([{ a: 1 }], '8.4.0'); // version() has no "MariaDB"
     const result = await runSqlQuery(db, 'select 1 as a', { timeoutMs: 5000, rowCap: 100 }, 'mysql');
-    expect(executed).toContain('set session max_execution_time = 5000'); // MySQL 8.4 (ms)
-    expect(executed).toContain('set session max_statement_time = 5');    // MariaDB 11.4 (seconds)
+    // The row cap is the wrapping SELECT; the timeout rides on it as an optimizer hint (ms).
+    expect(executed).toContain('select /*+ MAX_EXECUTION_TIME(5000) */ * from (select 1 as a) as _q limit 100 offset 0');
+    // Nothing session-scoped and no pg/mssql pragmas — no leak onto the pooled connection.
+    expect(executed.some((s) => /set session/i.test(s))).toBe(false);
+    expect(executed.some((s) => /max_statement_time/i.test(s))).toBe(false); // that's MariaDB's, not MySQL's
     expect(executed.some((s) => /read only/i.test(s))).toBe(false);
-    expect(executed.some((s) => /statement_timeout/i.test(s))).toBe(false); // that's the pg var, not mysql's
-    expect(executed).toContain('select * from (select 1 as a) as _q limit 100 offset 0');
+    expect(executed.some((s) => /statement_timeout/i.test(s))).toBe(false);
     expect(result.rows).toEqual([{ a: 1 }]);
   });
 
-  it('mysql: swallows the unknown-system-variable error (errno 1193) on max_execution_time; other SET + capped query still run', async () => {
-    const { db, executed } = makeFakeDb(
-      [{ a: 1 }],
-      (s) => (s.includes('max_execution_time') ? { errno: 1193 } : undefined), // MariaDB lacks this var
-    );
+  it('mysql (MariaDB): per-statement SET STATEMENT max_statement_time wrapper (seconds) — no hint, no session SET', async () => {
+    const { db, executed } = makeFakeDb([{ a: 1 }], '11.4.2-MariaDB-1:11.4.2+maria~ubu2404');
     const result = await runSqlQuery(db, 'select 1 as a', { timeoutMs: 5000, rowCap: 100 }, 'mysql');
-    // The failed (swallowed) SET is never recorded; the surviving SET and the capped query are.
-    expect(executed).not.toContain('set session max_execution_time = 5000');
-    expect(executed).toContain('set session max_statement_time = 5');
-    expect(executed).toContain('select * from (select 1 as a) as _q limit 100 offset 0');
+    expect(executed).toContain('set statement max_statement_time=5 for select * from (select 1 as a) as _q limit 100 offset 0');
+    expect(executed.some((s) => /max_execution_time/i.test(s))).toBe(false); // that's MySQL's hint, not MariaDB's
+    expect(executed.some((s) => /set session/i.test(s))).toBe(false);
     expect(result.rows).toEqual([{ a: 1 }]);
   });
 
-  it('mysql: propagates a non-unknown-variable error (e.g. permission denied) from a SET', async () => {
-    const { db } = makeFakeDb(
-      [{ a: 1 }],
-      (s) => (s.includes('max_execution_time') ? { errno: 1142, code: 'ER_TABLEACCESS_DENIED_ERROR' } : undefined),
-    );
-    await expect(runSqlQuery(db, 'select 1 as a', { timeoutMs: 5000, rowCap: 100 }, 'mysql'))
-      .rejects.toMatchObject({ errno: 1142 });
+  it('mysql: a fractional-second timeout renders a decimal max_statement_time on MariaDB', async () => {
+    const { db, executed } = makeFakeDb([{ a: 1 }], '11.4.2-MariaDB');
+    await runSqlQuery(db, 'select 1 as a', { timeoutMs: 2500, rowCap: 10 }, 'mysql');
+    expect(executed).toContain('set statement max_statement_time=2.5 for select * from (select 1 as a) as _q limit 10 offset 0');
   });
 });
 

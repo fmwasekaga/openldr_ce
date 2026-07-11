@@ -1,4 +1,4 @@
-import { type Kysely, sql, type RawBuilder } from 'kysely';
+import { type Kysely, sql } from 'kysely';
 import type { ExternalSchema } from '@openldr/db';
 import type { ReportResultData, ReportColumn } from '@openldr/reporting';
 
@@ -59,23 +59,31 @@ export function planPagination(inner: string, dialect: SqlDialect, opts: { limit
 
 export interface SqlRunOpts { timeoutMs: number; rowCap: number }
 
-/** mysql2 raises errno 1193 / code ER_UNKNOWN_SYSTEM_VARIABLE when the engine lacks the var
- *  (MariaDB has no max_execution_time; MySQL has no max_statement_time). Any OTHER error
- *  (e.g. permission denied) must surface, not be silently swallowed. */
-function isUnknownSystemVariable(err: unknown): boolean {
-  const e = err as { errno?: number; code?: string } | null;
-  return e?.errno === 1193 || e?.code === 'ER_UNKNOWN_SYSTEM_VARIABLE';
+/** MariaDB's `version()` string contains "MariaDB"; MySQL's does not. The engine variant is a
+ *  server property (identical across every connection in the pool), so it is detected once via a
+ *  trivial `version()` query and cached per db handle. Used to pick the per-statement timeout
+ *  mechanism below (MySQL optimizer hint vs MariaDB `SET STATEMENT`). */
+const mariaDbByDb = new WeakMap<object, boolean>();
+async function isMariaDb(db: object, trx: Kysely<ExternalSchema>): Promise<boolean> {
+  const cached = mariaDbByDb.get(db);
+  if (cached !== undefined) return cached;
+  const r = await sql<{ v: string }>`select version() as v`.execute(trx);
+  const isMaria = /mariadb/i.test(String(r.rows[0]?.v ?? ''));
+  mariaDbByDb.set(db, isMaria);
+  return isMaria;
 }
 
 /** Run user SQL inside a read-only transaction with a statement/lock timeout and row cap.
- *  Dialect-aware: Postgres uses `set transaction read only` + `statement_timeout`; SQL Server
- *  has no equivalent transaction-level read-only mode or per-statement timeout, so it relies on
- *  the SELECT-only validation above for read-only-ness and bounds lock waits with LOCK_TIMEOUT.
- *  MySQL/MariaDB likewise have no read-only pragma usable mid-transaction, so they too rely on
- *  the SELECT-only validation; the per-statement timeout var name differs by engine (MySQL 8.4
- *  `max_execution_time` in ms vs MariaDB 11.4 `max_statement_time` in seconds), so both are set
- *  and the "unknown system variable" error from whichever engine lacks the other's name is
- *  swallowed. */
+ *  Dialect-aware: Postgres uses `set transaction read only` + `statement_timeout`; SQL Server has
+ *  no equivalent transaction-level read-only mode or per-statement timeout, so it relies on the
+ *  SELECT-only validation above for read-only-ness and bounds lock waits with LOCK_TIMEOUT.
+ *  MySQL/MariaDB likewise have no read-only pragma usable mid-transaction (so they too rely on
+ *  SELECT-only validation), and their statement timeout is applied PER-STATEMENT — no session var
+ *  is mutated, so nothing leaks onto the pooled connection: MySQL 8 uses the
+ *  `MAX_EXECUTION_TIME(<ms>)` optimizer hint on the wrapping SELECT, MariaDB uses
+ *  `SET STATEMENT max_statement_time=<sec> FOR <stmt>`. The two are mutually exclusive (MySQL has no
+ *  `SET STATEMENT … FOR`; MariaDB ignores the hint), so the engine variant is detected once (cached)
+ *  from `version()`. */
 export async function runSqlQuery(
   db: Kysely<ExternalSchema>, rawSql: string, opts: SqlRunOpts, engine: SqlDialect = 'postgres',
 ): Promise<ReportResultData> {
@@ -84,37 +92,30 @@ export async function runSqlQuery(
   validateSelectSql(rawSql);
   const inner = rawSql.replace(/;\s*$/, '');
   const cap = Math.floor(opts.rowCap);
+  const ms = Math.floor(opts.timeoutMs);
   return db.transaction().execute(async (trx) => {
+    const plan = planPagination(inner, engine, { limit: cap });
+    let execSql = plan.sql;
     if (engine === 'mssql') {
       // SQL Server has no `set transaction read only`; SELECT-only validation enforces read-only-ness.
       // SET LOCK_TIMEOUT bounds lock waits (T-SQL has no per-statement time cap).
-      await sql`set lock_timeout ${sql.lit(Math.floor(opts.timeoutMs))}`.execute(trx);
+      await sql`set lock_timeout ${sql.lit(ms)}`.execute(trx);
     } else if (engine === 'mysql') {
       // MySQL/MariaDB reject changing txn characteristics inside an already-open txn (kysely has
-      // sent BEGIN), so there is no read-only pragma here — the shared SELECT-only validation is
-      // the read-only guard (same rationale as mssql). The per-statement timeout var differs by
-      // engine and the two names are mutually exclusive (MySQL 8.4: max_execution_time in ms;
-      // MariaDB 11.4: max_statement_time in seconds). Set BOTH; only the "unknown system variable"
-      // error (errno 1193) from whichever engine lacks the other's name is swallowed — a failed SET
-      // does not roll back a MySQL/MariaDB transaction. Any other error (e.g. permission denied)
-      // must surface, else the query would run with NO statement timeout.
-      // NOTE: these are SESSION-scoped SETs (MySQL/MariaDB have no `SET LOCAL` for them), so the
-      // value persists on the pooled connection after commit. A per-statement fix
-      // (`/*+ MAX_EXECUTION_TIME */` on MySQL vs `SET STATEMENT … FOR` on MariaDB) is deferred
-      // because it would require MySQL-vs-MariaDB runtime detection this layer intentionally avoids.
-      const ms = Math.floor(opts.timeoutMs);
-      const trySet = async (stmt: RawBuilder<unknown>) => {
-        try { await stmt.execute(trx); }
-        catch (err) { if (!isUnknownSystemVariable(err)) throw err; }
-      };
-      await trySet(sql`set session max_execution_time = ${sql.lit(ms)}`);       // MySQL 8.4
-      await trySet(sql`set session max_statement_time = ${sql.lit(ms / 1000)}`); // MariaDB 11.4
+      // sent BEGIN), so there is no read-only pragma here — the shared SELECT-only validation is the
+      // read-only guard (same rationale as mssql). The statement timeout is applied PER-STATEMENT so
+      // no session var is mutated (nothing leaks onto the pooled connection): MySQL 8 via the
+      // MAX_EXECUTION_TIME(<ms>) optimizer hint on the wrapping SELECT; MariaDB via
+      // `SET STATEMENT max_statement_time=<sec> FOR <stmt>` (seconds). MySQL has no
+      // `SET STATEMENT … FOR` and MariaDB ignores the hint, so the variant is detected (cached) once.
+      execSql = (await isMariaDb(db, trx))
+        ? `set statement max_statement_time=${ms / 1000} for ${plan.sql}`
+        : plan.sql.replace(/^\s*select\b/i, `select /*+ MAX_EXECUTION_TIME(${ms}) */`);
     } else {
       await sql`set transaction read only`.execute(trx);
-      await sql`set local statement_timeout = ${sql.lit(Math.floor(opts.timeoutMs))}`.execute(trx);
+      await sql`set local statement_timeout = ${sql.lit(ms)}`.execute(trx);
     }
-    const plan = planPagination(inner, engine, { limit: cap });
-    const result = await sql.raw<Record<string, unknown>>(plan.sql).execute(trx);
+    const result = await sql.raw<Record<string, unknown>>(execSql).execute(trx);
     const rows = plan.sliceOffset ? result.rows.slice(plan.sliceOffset) : result.rows;
     const keys = rows.length ? Object.keys(rows[0]) : [];
     const columns: ReportColumn[] = keys.map((k) => ({
