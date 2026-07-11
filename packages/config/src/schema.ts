@@ -50,6 +50,7 @@ export const ConfigSchema = z
     MYSQL_USER: z.string().min(1).optional(),
     MYSQL_PASSWORD: z.string().min(1).optional(),
     MYSQL_SSL: envBoolean(false),
+    MYSQL_SSL_REJECT_UNAUTHORIZED: envBoolean(false),
 
     // S3 / blob storage.
     S3_ENDPOINT: z.string().url(),

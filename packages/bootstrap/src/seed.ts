@@ -105,6 +105,7 @@ export interface FormSeedTarget {
     MYSQL_USER?: string;
     MYSQL_PASSWORD?: string;
     MYSQL_SSL?: boolean;
+    MYSQL_SSL_REJECT_UNAUTHORIZED?: boolean;
   };
 }
 
@@ -394,6 +395,7 @@ export async function seedDefaultConnector(app: FormSeedTarget): Promise<number>
           user: app.cfg.MYSQL_USER!,
           password: app.cfg.MYSQL_PASSWORD!,
           ssl: String(app.cfg.MYSQL_SSL),
+          sslRejectUnauthorized: String(app.cfg.MYSQL_SSL_REJECT_UNAUTHORIZED),
         },
       },
       app.cfg.SECRETS_ENCRYPTION_KEY,
