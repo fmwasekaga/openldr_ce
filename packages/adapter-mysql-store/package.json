@@ -1,0 +1,15 @@
+{
+  "name": "@openldr/adapter-mysql-store",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit", "test": "vitest run", "lint": "echo \"no lint\"" },
+  "dependencies": {
+    "@openldr/core": "workspace:*",
+    "@openldr/ports": "workspace:*",
+    "kysely": "^0.27.5",
+    "mysql2": "^3.11.0"
+  },
+  "devDependencies": { "typescript": "^5.7.2", "vitest": "^2.1.8" }
+}
