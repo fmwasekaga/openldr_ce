@@ -4,16 +4,23 @@ import { SAMPLE_DASHBOARD } from './samples';
 
 /**
  * Build the vetted SQL-template set from a list of stored dashboards: every `mode:'sql'` widget
- * SQL string (trimmed). These templates are first-party — the server-seeded sample plus anything
- * an admin persisted while the `dashboard.raw_sql` feature flag was on (the authoring gate blocks untrusted SQL
- * when the flag is off). A submitted SQL template that exact-matches this set is safe to execute
- * even with the flag off, because it can only be admin-authored SQL.
+ * SQL string, plus every first-party filter/variable `optionsSql` (the queries that populate
+ * filter dropdowns), all trimmed. These templates are first-party — the server-seeded sample plus
+ * anything an admin persisted while the `dashboard.raw_sql` feature flag was on (the authoring gate
+ * blocks untrusted SQL when the flag is off). A submitted SQL template that exact-matches this set
+ * is safe to execute even with the flag off, because it can only be admin-authored SQL. Filter
+ * option queries must be included or the sample dashboard's dropdowns fail with the flag off.
  */
 export function collectVettedSqlTemplates(dashboards: Dashboard[]): Set<string> {
   const set = new Set<string>();
+  const add = (sql: unknown) => { if (typeof sql === 'string' && sql.trim()) set.add(sql.trim()); };
   for (const d of dashboards) {
+    for (const f of d.filters) add(f.optionsSql);
     for (const w of d.widgets) {
-      if (w.query.mode === 'sql' && typeof w.query.sql === 'string') set.add(w.query.sql.trim());
+      if (w.query.mode === 'sql') {
+        add(w.query.sql);
+        for (const v of Object.values(w.query.variables ?? {})) add(v.optionsSql);
+      }
     }
   }
   return set;
