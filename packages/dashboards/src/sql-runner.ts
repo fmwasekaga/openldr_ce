@@ -1,4 +1,4 @@
-import { type Kysely, sql } from 'kysely';
+import { type Kysely, sql, type RawBuilder } from 'kysely';
 import type { ExternalSchema } from '@openldr/db';
 import type { ReportResultData, ReportColumn } from '@openldr/reporting';
 
@@ -59,6 +59,14 @@ export function planPagination(inner: string, dialect: SqlDialect, opts: { limit
 
 export interface SqlRunOpts { timeoutMs: number; rowCap: number }
 
+/** mysql2 raises errno 1193 / code ER_UNKNOWN_SYSTEM_VARIABLE when the engine lacks the var
+ *  (MariaDB has no max_execution_time; MySQL has no max_statement_time). Any OTHER error
+ *  (e.g. permission denied) must surface, not be silently swallowed. */
+function isUnknownSystemVariable(err: unknown): boolean {
+  const e = err as { errno?: number; code?: string } | null;
+  return e?.errno === 1193 || e?.code === 'ER_UNKNOWN_SYSTEM_VARIABLE';
+}
+
 /** Run user SQL inside a read-only transaction with a statement/lock timeout and row cap.
  *  Dialect-aware: Postgres uses `set transaction read only` + `statement_timeout`; SQL Server
  *  has no equivalent transaction-level read-only mode or per-statement timeout, so it relies on
@@ -86,12 +94,18 @@ export async function runSqlQuery(
       // sent BEGIN), so there is no read-only pragma here — the shared SELECT-only validation is
       // the read-only guard (same rationale as mssql). The per-statement timeout var differs by
       // engine and the two names are mutually exclusive (MySQL 8.4: max_execution_time in ms;
-      // MariaDB 11.4: max_statement_time in seconds). Set BOTH, swallowing the "unknown system
-      // variable" error on whichever engine lacks the other's name — a failed SET does not roll
-      // back a MySQL/MariaDB transaction.
+      // MariaDB 11.4: max_statement_time in seconds). Set BOTH; only the "unknown system variable"
+      // error (errno 1193) from whichever engine lacks the other's name is swallowed — a failed SET
+      // does not roll back a MySQL/MariaDB transaction. Any other error (e.g. permission denied)
+      // must surface, else the query would run with NO statement timeout.
+      // NOTE: these are SESSION-scoped SETs (MySQL/MariaDB have no `SET LOCAL` for them), so the
+      // value persists on the pooled connection after commit. A per-statement fix
+      // (`/*+ MAX_EXECUTION_TIME */` on MySQL vs `SET STATEMENT … FOR` on MariaDB) is deferred
+      // because it would require MySQL-vs-MariaDB runtime detection this layer intentionally avoids.
       const ms = Math.floor(opts.timeoutMs);
-      const trySet = async (stmt: ReturnType<typeof sql>) => {
-        try { await stmt.execute(trx); } catch { /* wrong-engine unknown-variable: ignore */ }
+      const trySet = async (stmt: RawBuilder<unknown>) => {
+        try { await stmt.execute(trx); }
+        catch (err) { if (!isUnknownSystemVariable(err)) throw err; }
       };
       await trySet(sql`set session max_execution_time = ${sql.lit(ms)}`);       // MySQL 8.4
       await trySet(sql`set session max_statement_time = ${sql.lit(ms / 1000)}`); // MariaDB 11.4
