@@ -60,11 +60,36 @@ describe('seedDefaultDashboard', () => {
 });
 
 describe('vetted SQL execution', () => {
-  it('collects trimmed sql templates from stored sql widgets only', () => {
+  it('collects trimmed sql from stored sql widgets plus first-party filter optionsSql', () => {
     const set = collectVettedSqlTemplates([SAMPLE_DASHBOARD, DEFAULT_DASHBOARD]);
-    // The sample's 13 sql widgets are collected; DEFAULT_DASHBOARD is all builder → none.
-    expect(set.size).toBe(SAMPLE_DASHBOARD.widgets.length);
+    const sampleOptionsSql = SAMPLE_DASHBOARD.filters.filter((f) => f.optionsSql).length;
+    // Sample: every sql widget + each filter's optionsSql. DEFAULT_DASHBOARD is all builder, filters [] → none.
+    expect(set.size).toBe(SAMPLE_DASHBOARD.widgets.length + sampleOptionsSql);
     expect(set.has(String((SAMPLE_DASHBOARD.widgets[0].query as { sql: string }).sql).trim())).toBe(true);
+  });
+
+  it('collects optionsSql from dashboard filters (first-party filter dropdowns execute with the flag off)', () => {
+    const filter = SAMPLE_DASHBOARD.filters.find((f) => f.optionsSql);
+    expect(filter?.optionsSql).toBeTruthy();
+    const vetted = collectVettedSqlTemplates([SAMPLE_DASHBOARD]);
+    expect(vetted.has(filter!.optionsSql!.trim())).toBe(true);
+    expect(isSqlExecutionAllowed(false, filter!.optionsSql!, vetted)).toBe(true);
+  });
+
+  it('collects optionsSql from a widget sql-query variable', () => {
+    const dash: Dashboard = DashboardSchema.parse({
+      id: 'd-var', name: 'Var', isDefault: false, refreshIntervalSec: 0, filters: [],
+      widgets: [{
+        id: 'w1', type: 'kpi', title: 'W1', refreshIntervalSec: 0, visual: {},
+        query: {
+          mode: 'sql', sql: 'SELECT 1 AS value',
+          variables: { site: { type: 'text', label: 'Site', optionsSql: 'SELECT DISTINCT name FROM organizations ORDER BY name' } },
+        },
+      }],
+      layout: [{ i: 'w1', x: 0, y: 0, w: 3, h: 2 }],
+    });
+    const vetted = collectVettedSqlTemplates([dash]);
+    expect(vetted.has('SELECT DISTINCT name FROM organizations ORDER BY name')).toBe(true);
   });
 
   it('allows any sql when the flag is on', () => {
