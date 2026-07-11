@@ -146,7 +146,10 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
       const sysFilter = c.type === 'microsoft-sql' ? MSSQL_SYS : c.type === 'mysql' ? MYSQL_SYS : PG_SYS;
       const { rows } = await deps.runConnectorSql({ connectorId: id,
         sql: `select schema_name from information_schema.schemata where ${sysFilter} order by 1` });
-      return rows.map((r) => String(r.schema_name));
+      // Read the single selected column positionally: MySQL's information_schema returns the column
+      // UPPERCASE (`SCHEMA_NAME`), while Postgres/SQL Server return `schema_name` — a positional read
+      // is dialect-agnostic (each query selects exactly one column).
+      return rows.map((r) => String(Object.values(r)[0]));
     } catch (e) { reply.code(400); return { error: (e as Error).message }; }
   });
 
@@ -161,7 +164,8 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
     try {
       const { rows } = await deps.runConnectorSql({ connectorId: id,
         sql: `select table_name from information_schema.tables where table_schema = '${safeSchema}' order by 1` });
-      return rows.map((r) => String(r.table_name));
+      // Positional read — MySQL returns `TABLE_NAME` (uppercase), Postgres/SQL Server `table_name`.
+      return rows.map((r) => String(Object.values(r)[0]));
     } catch (e) { reply.code(400); return { error: (e as Error).message }; }
   });
 
