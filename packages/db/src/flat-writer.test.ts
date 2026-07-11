@@ -7,11 +7,12 @@ const patient = { resourceType: 'Patient', id: 'p1', gender: 'male' };
 function fakeDb() {
   const exec = { execute: vi.fn(async () => undefined) };
   const onConflict = (cb: (oc: { column: () => { doUpdateSet: () => typeof exec } }) => unknown) => { cb({ column: () => ({ doUpdateSet: () => exec }) }); return exec; };
-  const insertInto = vi.fn(() => ({ values: vi.fn(() => ({ onConflict })) }));
+  const onDuplicateKeyUpdate = vi.fn(() => exec);
+  const insertInto = vi.fn(() => ({ values: vi.fn(() => ({ onConflict, onDuplicateKeyUpdate })) }));
   const mergeInto = vi.fn(() => ({
     using: () => ({ whenMatched: () => ({ thenUpdateSet: () => ({ whenNotMatched: () => ({ thenInsertValues: () => exec }) }) }) }),
   }));
-  return { db: { insertInto, mergeInto } as never, insertInto, mergeInto };
+  return { db: { insertInto, mergeInto } as never, insertInto, mergeInto, onDuplicateKeyUpdate };
 }
 
 describe('createFlatWriter dialect branch', () => {
@@ -28,6 +29,14 @@ describe('createFlatWriter dialect branch', () => {
     expect(await w.write(patient)).toBe('written');
     expect(mergeInto).toHaveBeenCalled();
     expect(insertInto).not.toHaveBeenCalled();
+  });
+  it('mysql uses insertInto + onDuplicateKeyUpdate (not onConflict / merge)', async () => {
+    const { db, insertInto, mergeInto, onDuplicateKeyUpdate } = fakeDb();
+    const w = createFlatWriter(db, 'mysql');
+    expect(await w.write(patient)).toBe('written');
+    expect(insertInto).toHaveBeenCalledWith('patients');
+    expect(onDuplicateKeyUpdate).toHaveBeenCalled();
+    expect(mergeInto).not.toHaveBeenCalled();
   });
   it('skips non-domain resources', async () => {
     const { db } = fakeDb();
@@ -64,6 +73,17 @@ describe('createFlatWriter writeMany', () => {
     expect(res).toEqual(['written', 'written']);
     expect(mergeInto).toHaveBeenCalled();
     expect(insertInto).not.toHaveBeenCalled();
+  });
+
+  it('mysql batches same-table rows into one insert + onDuplicateKeyUpdate per table', async () => {
+    const { db, insertInto, mergeInto, onDuplicateKeyUpdate } = fakeDb();
+    const w = createFlatWriter(db, 'mysql');
+    const res = await w.writeMany([{ resource: a }, { resource: b }]);
+    expect(res).toEqual(['written', 'written']);
+    expect(insertInto).toHaveBeenCalledTimes(1);
+    expect(insertInto).toHaveBeenCalledWith('patients');
+    expect(onDuplicateKeyUpdate).toHaveBeenCalled();
+    expect(mergeInto).not.toHaveBeenCalled();
   });
 
   // SQL Server caps a statement at 2100 parameters (params = rows x columns). A fixed row cap

@@ -46,6 +46,7 @@ async function upsertMssql(
 const PG_PARAM_BUDGET = 60000;
 const MSSQL_PARAM_BUDGET = 2000;
 const MSSQL_MAX_VALUES_ROWS = 1000;
+const MYSQL_PARAM_BUDGET = 60000;
 
 const chunkSize = (budget: number, cols: number, cap = Infinity): number =>
   Math.min(cap, Math.max(1, Math.floor(budget / Math.max(1, cols))));
@@ -82,6 +83,19 @@ async function mergeBatchMssql(db: Kysely<any>, table: string, rows: Record<stri
   }
 }
 
+async function insertBatchMysql(db: Kysely<any>, table: string, rows: Record<string, unknown>[]): Promise<void> {
+  if (rows.length === 0) return;
+  const step = chunkSize(MYSQL_PARAM_BUDGET, Object.keys(rows[0]).length);
+  for (let i = 0; i < rows.length; i += step) {
+    const chunk = rows.slice(i, i + step);
+    const updateCols = Object.keys(chunk[0]).filter((c) => c !== 'id' && c !== 'created_at');
+    // ON DUPLICATE KEY UPDATE col = VALUES(col): references the incoming per-row value.
+    // VALUES() works on MySQL 8.4 and MariaDB 11.4 (deprecated-but-present on MySQL; canonical on MariaDB).
+    const set = Object.fromEntries(updateCols.map((c) => [c, sql`values(${sql.ref(c)})`]));
+    await db.insertInto(table).values(chunk).onDuplicateKeyUpdate(set).execute();
+  }
+}
+
 export function createFlatWriter(db: Kysely<ExternalSchema>, engine: TargetEngine = 'postgres'): FlatWriter {
   const anyDb = db as unknown as Kysely<any>;
   return {
@@ -95,6 +109,8 @@ export function createFlatWriter(db: Kysely<ExternalSchema>, engine: TargetEngin
 
       if (engine === 'mssql') {
         await upsertMssql(anyDb, table, row, updateRow);
+      } else if (engine === 'mysql') {
+        await anyDb.insertInto(table).values(row).onDuplicateKeyUpdate(updateRow).execute();
       } else {
         await anyDb.insertInto(table).values(row).onConflict((oc: any) => oc.column('id').doUpdateSet(updateRow)).execute();
       }
@@ -114,6 +130,7 @@ export function createFlatWriter(db: Kysely<ExternalSchema>, engine: TargetEngin
       });
       for (const [table, rows] of byTable) {
         if (engine === 'mssql') await mergeBatchMssql(anyDb, table, rows);
+        else if (engine === 'mysql') await insertBatchMysql(anyDb, table, rows);
         else await insertBatchPg(anyDb, table, rows);
       }
       return results;
