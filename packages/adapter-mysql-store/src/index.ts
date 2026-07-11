@@ -28,6 +28,14 @@ export function createMysqlStore(cfg: MysqlStoreConfig, deps: MysqlStoreDeps = {
     user: cfg.user,
     password: cfg.password,
     database: cfg.database,
+    // Belt-and-suspenders alongside the utf8mb4 table charset pinned in the migration DDL:
+    // ensures the client<->server connection itself negotiates utf8mb4, independent of the
+    // server's default charset/collation. mysql2 requires a specific charset/collation name
+    // (not the bare charset family) here; utf8mb4_unicode_ci is supported by both MySQL and
+    // MariaDB (unlike MySQL 8's utf8mb4_0900_ai_ci default), matching the DDL's portability
+    // stance of pinning charset without a MySQL-8-only collation. This is also mysql2's own
+    // built-in default charsetNumber, so this makes that default explicit rather than implicit.
+    charset: 'UTF8MB4_UNICODE_CI',
     ...(cfg.ssl ? { ssl: { rejectUnauthorized: false } } : {}),
   });
   // mysql2 callback Pool is runtime-correct for kysely (getConnection(callback)); cast bridges the structural type gap.
