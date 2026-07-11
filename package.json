@@ -37,6 +37,8 @@
     "mysql:accept": "tsx scripts/mysql-live-acceptance.ts",
     "mysql:accept:matrix": "bash scripts/mysql-matrix-accept.sh",
     "reports:parity": "tsx scripts/mssql-reports-parity.ts",
+    "reports:parity:mysql": "tsx scripts/mysql-reports-parity.ts",
+    "reports:parity:mysql:matrix": "bash scripts/mysql-reports-parity-matrix.sh",
     "make:marketplace-bundle": "tsx scripts/make-marketplace-bundle.ts",
     "marketplace:accept": "tsx scripts/marketplace-live-acceptance.ts",
     "init": "node scripts/init.mjs",
