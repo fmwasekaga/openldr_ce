@@ -207,6 +207,55 @@ describe('introspection', () => {
     expect(seenSql).not.toContain('pg_catalog');
   });
 
+  it('lists mysql connectors alongside postgres and microsoft-sql', async () => {
+    const deps = makeDeps();
+    deps.connectors.list = async () => [
+      { id: 'c1', name: 'PG', type: 'postgres', enabled: true } as any,
+      { id: 'c2', name: 'SQLSvr', type: 'microsoft-sql', enabled: true } as any,
+      { id: 'c3', name: 'MyDB', type: 'mysql', enabled: true } as any,
+    ];
+    const app = await build(deps);
+    const res = await app.inject({ method: 'GET', url: '/api/query/connectors' });
+    expect(res.json()).toEqual([
+      { id: 'c1', name: 'PG', type: 'postgres' },
+      { id: 'c2', name: 'SQLSvr', type: 'microsoft-sql' },
+      { id: 'c3', name: 'MyDB', type: 'mysql' },
+    ]);
+  });
+
+  it('issues the MySQL system-schema filter for a mysql connector', async () => {
+    const deps = makeDeps();
+    deps.connectors.get = async (id) => (id === 'c3' ? ({ id, name: 'MyDB', type: 'mysql', enabled: true } as any) : null);
+    let capturedSql = '';
+    deps.runConnectorSql = async ({ sql }) => { capturedSql = sql; return { columns: [], rows: [] }; };
+    const app = await build(deps);
+    const res = await app.inject({ method: 'GET', url: '/api/query/connectors/c3/schemas' });
+    expect(res.statusCode).toBe(200);
+    expect(capturedSql).toContain('not in (');
+    expect(capturedSql).toContain("'information_schema'");
+    expect(capturedSql).toContain("'mysql'");
+    expect(capturedSql).toContain("'performance_schema'");
+    expect(capturedSql).toContain("'sys'");
+    expect(capturedSql).not.toContain('pg_catalog');
+  });
+
+  it('reads MySQL uppercase information_schema keys (SCHEMA_NAME/TABLE_NAME) positionally', async () => {
+    // MySQL's information_schema returns the column UPPERCASE, unlike Postgres/SQL Server. The
+    // handler must read the single selected column positionally, not by a lowercase `schema_name`
+    // key (which would yield ["undefined"]).
+    const deps = makeDeps();
+    deps.connectors.get = async (id) => (id === 'c3' ? ({ id, name: 'MyDB', type: 'mysql', enabled: true } as any) : null);
+    deps.runConnectorSql = async ({ sql }) =>
+      sql.includes('information_schema.tables')
+        ? { columns: [], rows: [{ TABLE_NAME: 'patients' }, { TABLE_NAME: 'observations' }] } as any
+        : { columns: [], rows: [{ SCHEMA_NAME: 'openldr_target' }] } as any;
+    const app = await build(deps);
+    const schemas = await app.inject({ method: 'GET', url: '/api/query/connectors/c3/schemas' });
+    expect(schemas.json()).toEqual(['openldr_target']);
+    const tables = await app.inject({ method: 'GET', url: '/api/query/connectors/c3/schemas/openldr_target/tables' });
+    expect(tables.json()).toEqual(['patients', 'observations']);
+  });
+
   it('issues the Postgres system-schema filter for a postgres connector', async () => {
     const deps = makeDeps();
     let seenSql = '';

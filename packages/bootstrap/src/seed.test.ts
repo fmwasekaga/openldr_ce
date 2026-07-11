@@ -246,6 +246,7 @@ describe('seedDatabase — default connector', () => {
     MYSQL_USER: 'u',
     MYSQL_PASSWORD: 'p',
     MYSQL_SSL: false,
+    MYSQL_SSL_REJECT_UNAUTHORIZED: false,
   };
 
   it('seeds a mysql warehouse connector when TARGET_STORE_ADAPTER=mysql', async () => {
@@ -258,6 +259,7 @@ describe('seedDatabase — default connector', () => {
     expect(c.name).toBe('Target Warehouse (MySQL/MariaDB)');
     expect(c.config.host).toBe('h');
     expect(c.config.port).toBe('3306'); // config values are strings
+    expect(c.config.sslRejectUnauthorized).toBe('false');
   });
 
   it('is idempotent by name — re-running does not duplicate the mysql connector', async () => {

@@ -56,6 +56,7 @@ export function selectTargetStore(cfg: Config, engineOverride?: TargetEngine): S
         user: cfg.MYSQL_USER!,
         password: cfg.MYSQL_PASSWORD!,
         ssl: cfg.MYSQL_SSL,
+        rejectUnauthorized: cfg.MYSQL_SSL_REJECT_UNAUTHORIZED,
       }),
     };
   }

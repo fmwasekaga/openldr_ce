@@ -10,6 +10,10 @@ export interface MysqlStoreConfig {
   user: string;
   password: string;
   ssl: boolean;
+  /** When ssl is on, verify the server certificate chain. Defaults to false because on-prem
+   *  MySQL/MariaDB commonly uses self-signed certs (mirrors MSSQL's trustServerCertificate default).
+   *  Set true to enforce strict TLS verification against a CA-signed cert. */
+  rejectUnauthorized?: boolean;
 }
 
 export interface MysqlStoreDeps {
@@ -36,7 +40,7 @@ export function createMysqlStore(cfg: MysqlStoreConfig, deps: MysqlStoreDeps = {
     // stance of pinning charset without a MySQL-8-only collation. This is also mysql2's own
     // built-in default charsetNumber, so this makes that default explicit rather than implicit.
     charset: 'UTF8MB4_UNICODE_CI',
-    ...(cfg.ssl ? { ssl: { rejectUnauthorized: false } } : {}),
+    ...(cfg.ssl ? { ssl: { rejectUnauthorized: cfg.rejectUnauthorized ?? false } } : {}),
   });
   // mysql2 callback Pool is runtime-correct for kysely (getConnection(callback)); cast bridges the structural type gap.
   const db = new Kysely<TargetSchema>({ dialect: new MysqlDialect({ pool: pool as unknown as MysqlPool }) });

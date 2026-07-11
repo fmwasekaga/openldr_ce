@@ -37,7 +37,10 @@ export const useQueryStore = create<State>((set, get) => ({
   openTableTab({ connectorId, type, schema, table }) {
     const existing = get().tabs.find((t) => t.kind === 'table' && t.connectorId === connectorId && t.schema === schema && t.table === table);
     if (existing) { set({ activeId: existing.id }); return; }
-    const sql = type === 'microsoft-sql' ? `select * from [${schema}].[${table}]` : `select * from "${schema}"."${table}"`;
+    const sql =
+      type === 'microsoft-sql' ? `select * from [${schema}].[${table}]`
+      : type === 'mysql' ? `select * from \`${schema}\`.\`${table}\``
+      : `select * from "${schema}"."${table}"`;
     const tab: TableTab = { id: nextId(), kind: 'table', connectorId, type, schema, table, title: table,
       sql, showSql: false };
     set((s) => ({ tabs: [...s.tabs, tab], activeId: tab.id }));

@@ -11,7 +11,7 @@ import { simpleTableDesign } from './simple-design';
 // of truth, kept in sync by hand). `packages/bootstrap` (the actual caller, which depends on both
 // `db` and `dashboards` with no cycle) can and does import the real `SqlDialect` from
 // `@openldr/dashboards` directly.
-export type SqlDialect = 'postgres' | 'mssql';
+export type SqlDialect = 'postgres' | 'mssql' | 'mysql';
 
 // S4 seed data: the query + design + report-record triples that replace the hardcoded catalog
 // reports (`packages/reporting/src/reports/*.ts`) with data-driven ones. Task 4.2 (worked example)
@@ -67,12 +67,22 @@ export const ANTIBIOGRAM_PANEL: string[] = [
  *  parity harness to verify against a live MSSQL warehouse. */
 function antibiogramCellSql(antibiotic: string, dialect: SqlDialect): string {
   const lit = antibiotic.replace(/'/g, "''");
-  const ident = antibiotic.replace(/"/g, '""');
   if (dialect === 'mssql') {
+    const ident = antibiotic.replace(/"/g, '""');
     return `case when sum(case when antibiotic = '${lit}' then 1 else 0 end) = 0 then ''
     else cast(cast(round(100.0 * sum(case when antibiotic = '${lit}' and ris = 'R' then 1 else 0 end) / nullif(sum(case when antibiotic = '${lit}' then 1 else 0 end), 0), 1) as float) as nvarchar(max))
       + '% (' + cast(sum(case when antibiotic = '${lit}' then 1 else 0 end) as nvarchar(max)) + ')' end as "${ident}"`;
   }
+  if (dialect === 'mysql') {
+    // MySQL: `||` is logical OR, not concat — use concat(); `"..."` is a string literal, not an
+    // identifier — use backtick aliases; float->char cast mirrors the pg ::float8::text render
+    // (flagged for the parity harness, like the mssql float->nvarchar note above).
+    const ident = antibiotic.replace(/`/g, '``');
+    return `case when sum(case when antibiotic = '${lit}' then 1 else 0 end) = 0 then ''
+    else concat(cast(cast(round(100.0 * sum(case when antibiotic = '${lit}' and ris = 'R' then 1 else 0 end) / nullif(sum(case when antibiotic = '${lit}' then 1 else 0 end), 0), 1) as double) as char),
+      '% (', cast(sum(case when antibiotic = '${lit}' then 1 else 0 end) as char), ')') end as \`${ident}\``;
+  }
+  const ident = antibiotic.replace(/"/g, '""');
   return `case when count(*) filter (where antibiotic = '${lit}') = 0 then ''
     else (round(100.0 * count(*) filter (where antibiotic = '${lit}' and ris = 'R') / nullif(count(*) filter (where antibiotic = '${lit}'), 0), 1)::float8)::text
       || '% (' || count(*) filter (where antibiotic = '${lit}')::text || ')' end as "${ident}"`;
@@ -84,7 +94,7 @@ function antibiogramCellSql(antibiotic: string, dialect: SqlDialect): string {
  *  variant (first pass; ported per the documented rules table, validated by a later live
  *  cross-dialect parity harness, not guaranteed byte-perfect yet). `seedDataDrivenReports` picks
  *  the variant matching the resolved warehouse connector's dialect. */
-type DialectSql = { postgres: string; mssql: string };
+type DialectSql = { postgres: string; mssql: string; mysql: string };
 type SeedQuery = Omit<NewCustomQuery, 'sql'> & { sql: DialectSql };
 
 /** Custom queries (bound to a connector) that back the seeded report designs. `connectorId: ''`
@@ -103,6 +113,11 @@ from patients
 where managing_organization is not null
 order by 1`,
       mssql: `select distinct managing_organization as facility
+from patients
+where managing_organization is not null
+order by 1`,
+      // No postgres-isms at all — byte-identical (see Task 5's mysql porting notes).
+      mysql: `select distinct managing_organization as facility
 from patients
 where managing_organization is not null
 order by 1`,
@@ -178,6 +193,25 @@ where o.interpretation_code in ('S', 'I', 'R')
   ))
 group by coalesce(o.code_text, '(unknown)')
 order by "percentR" desc`,
+      // Task 5 mysql port: ::int -> cast(...as signed); ::float8 -> cast(...as double); string
+      // || -> concat(); double-quoted alias "percentR" -> backtick `percentR` (MySQL treats
+      // "..." as a string literal, so it must be a backtick to be a usable result key/order key).
+      mysql: `select
+  coalesce(o.code_text, '(unknown)') as antibiotic,
+  cast(count(*) as signed) as tested,
+  cast(sum(case when o.interpretation_code = 'R' then 1 else 0 end) as signed) as r,
+  cast(sum(case when o.interpretation_code = 'I' then 1 else 0 end) as signed) as i,
+  cast(sum(case when o.interpretation_code = 'S' then 1 else 0 end) as signed) as s,
+  cast(round(100.0 * sum(case when o.interpretation_code = 'R' then 1 else 0 end) / nullif(count(*), 0), 1) as double) as \`percentR\`
+from observations o
+where o.interpretation_code in ('S', 'I', 'R')
+  and o.effective_date_time >= {{param.from}}
+  and o.effective_date_time <= concat({{param.to}}, 'T23:59:59.999Z')
+  and ({{param.facility}} = '' or o.subject_ref in (
+    select concat('Patient/', p.id) from patients p where p.managing_organization = {{param.facility}}
+  ))
+group by coalesce(o.code_text, '(unknown)')
+order by \`percentR\` desc`,
     },
   },
   {
@@ -225,6 +259,20 @@ from service_requests sr
 where sr.authored_on >= {{param.from}}
   and sr.authored_on <= ({{param.to}} + 'T23:59:59.999Z')
 group by format(cast(sr.authored_on as datetime2), 'yyyy-MM'), coalesce(sr.code_text, '(unknown)')
+order by 1, 2`,
+      // Task 5 mysql port: authored_on is an ISO 'YYYY-MM-DD...' string, so substr(...,1,7) IS
+      // 'YYYY-MM' (avoids MySQL's fussy T/Z timestamp parsing); ::int -> cast(...as signed);
+      // string || -> concat(). ONLY_FULL_GROUP_BY is ON by default in MySQL 8, so the grouped
+      // expressions are spelled out (ordinal `group by 1,2` is accepted by MySQL, but spelling
+      // out matches the mssql variant and is unambiguous). ORDER BY ordinals are fine.
+      mysql: `select
+  substr(sr.authored_on, 1, 7) as month,
+  coalesce(sr.code_text, '(unknown)') as test,
+  cast(count(*) as signed) as count
+from service_requests sr
+where sr.authored_on >= {{param.from}}
+  and sr.authored_on <= concat({{param.to}}, 'T23:59:59.999Z')
+group by substr(sr.authored_on, 1, 7), coalesce(sr.code_text, '(unknown)')
 order by 1, 2`,
     },
   },
@@ -332,6 +380,43 @@ select
 from paired
 group by test
 order by "avgHours" desc, test asc`,
+      // Task 5 mysql port: seconds-diff via timestampdiff(second, received, issued) where each
+      // ISO string is parsed by str_to_date(substr(x,1,19), '%Y-%m-%dT%H:%i:%s') — a plain cast
+      // to datetime does NOT accept the embedded literal 'T', so str_to_date is required; substr
+      // (…,1,19) = 'YYYY-MM-DDTHH:MM:SS'. Arg order (start,end)=(received,issued)=issued-minus-
+      // received. round(x)::int -> cast(round(x,0) as signed); avg rounded like the mssql variant
+      // (cast to decimal before avg to avoid integer truncation, then to double); min/max::int ->
+      // cast(...as signed); string || -> concat(); backtick aliases so ORDER BY key resolves.
+      // Flagged for the parity harness (same subtle avg/rounding divergence risk as mssql).
+      mysql: `with received as (
+  select subject_ref, min(received_time) as received_time
+  from specimens
+  where subject_ref is not null and received_time is not null
+  group by subject_ref
+),
+paired as (
+  select
+    coalesce(dr.code_text, '(unknown)') as test,
+    cast(round(timestampdiff(second, str_to_date(substr(r.received_time, 1, 19), '%Y-%m-%dT%H:%i:%s'), str_to_date(substr(dr.issued, 1, 19), '%Y-%m-%dT%H:%i:%s')) / 3600.0, 0) as signed) as hours
+  from diagnostic_reports dr
+  join received r on r.subject_ref = dr.subject_ref
+  where dr.issued is not null
+    and dr.issued >= r.received_time
+    and dr.issued >= {{param.from}}
+    and dr.issued <= concat({{param.to}}, 'T23:59:59.999Z')
+    and ({{param.facility}} = '' or dr.subject_ref in (
+      select concat('Patient/', p.id) from patients p where p.managing_organization = {{param.facility}}
+    ))
+)
+select
+  test,
+  cast(count(*) as signed) as count,
+  cast(round(avg(cast(hours as decimal(18,4))), 1) as double) as \`avgHours\`,
+  cast(min(hours) as signed) as \`minHours\`,
+  cast(max(hours) as signed) as \`maxHours\`
+from paired
+group by test
+order by \`avgHours\` desc, test asc`,
     },
   },
   {
@@ -418,6 +503,40 @@ select
 from banded
 group by band
 order by case band when '0-4' then 1 when '5-14' then 2 when '15-24' then 3 when '25-49' then 4 when '50+' then 5 when 'unknown' then 6 end`,
+      // Task 5 mysql port — MySQL SIMPLIFIES the age ladder vs mssql: timestampdiff(YEAR, birth,
+      // ref) is calendar-exact (handles month/day borrow) so NO borrow-day CASE is needed. Age
+      // computed once as a single expression per band boundary. substr(x,1,10) strips any T..Z
+      // before casting to date (raw ISO-with-T casts unreliably in MySQL). ref_date derives from
+      // asOf the same way (cast(substr(coalesce(nullif(...),'<default>'),1,10) as date)).
+      // X::date -> cast(substr(X,1,10) as date); ::int -> cast(...as signed); implicit cross join
+      // -> explicit cross join; array_position ORDER BY -> the fixed CASE-mapping.
+      mysql: `with params as (
+  select cast(substr(coalesce(nullif({{param.asOf}}, ''), '2026-01-01T00:00:00Z'), 1, 10) as date) as ref_date
+),
+banded as (
+  select
+    case
+      when p.birth_date is null then 'unknown'
+      when cast(substr(p.birth_date, 1, 10) as date) > pr.ref_date then 'unknown'
+      when timestampdiff(year, cast(substr(p.birth_date, 1, 10) as date), pr.ref_date) <= 4 then '0-4'
+      when timestampdiff(year, cast(substr(p.birth_date, 1, 10) as date), pr.ref_date) <= 14 then '5-14'
+      when timestampdiff(year, cast(substr(p.birth_date, 1, 10) as date), pr.ref_date) <= 24 then '15-24'
+      when timestampdiff(year, cast(substr(p.birth_date, 1, 10) as date), pr.ref_date) <= 49 then '25-49'
+      else '50+'
+    end as band,
+    p.gender
+  from patients p cross join params pr
+  where ({{param.facility}} = '' or p.managing_organization = {{param.facility}})
+)
+select
+  band,
+  cast(count(*) as signed) as total,
+  cast(sum(case when gender = 'male' then 1 else 0 end) as signed) as male,
+  cast(sum(case when gender = 'female' then 1 else 0 end) as signed) as female,
+  cast(sum(case when gender is null or gender not in ('male', 'female') then 1 else 0 end) as signed) as other
+from banded
+group by band
+order by case band when '0-4' then 1 when '5-14' then 2 when '15-24' then 3 when '25-49' then 4 when '50+' then 5 when 'unknown' then 6 end`,
     },
   },
   {
@@ -471,6 +590,21 @@ where o.interpretation_code in ('S', 'I', 'R')
   and p.managing_organization is not null
   and o.effective_date_time >= {{param.from}}
   and o.effective_date_time <= ({{param.to}} + 'T23:59:59.999Z')
+group by p.managing_organization
+order by p.managing_organization`,
+      // Task 5 mysql port: ::int -> cast(...as signed); join 'Patient/' || p.id -> concat(...);
+      // end-of-day string || -> concat(). Otherwise identical structure.
+      mysql: `select
+  p.managing_organization as facility,
+  cast(count(*) as signed) as tested,
+  cast(sum(case when o.interpretation_code = 'R' then 1 else 0 end) as signed) as resistant
+from observations o
+join patients p on o.subject_ref = concat('Patient/', p.id)
+where o.interpretation_code in ('S', 'I', 'R')
+  and o.subject_ref is not null and o.subject_ref <> ''
+  and p.managing_organization is not null
+  and o.effective_date_time >= {{param.from}}
+  and o.effective_date_time <= concat({{param.to}}, 'T23:59:59.999Z')
 group by p.managing_organization
 order by p.managing_organization`,
     },
@@ -709,6 +843,103 @@ select
 from results
 group by specimen_type, pathogen_code, antibiotic, gender, age_band, origin
 order by "Specimen", "PathogenCode", "AntibioticCode", "Gender", "AgeGroup", "Origin"`,
+      // Task 5 mysql port — same CTE-chain shape as the mssql variant (distinct on ->
+      // row_number()/rn=1 dedup) but with MySQL's simpler calendar-exact age:
+      //  - age = timestampdiff(year, birth, iso_date-or-'1970-01-01'); calendar-exact, NO
+      //    borrow-day CASE. substr(x,1,10) strips T..Z before casting to date; NULL birth_date ->
+      //    NULL age_years (outer CASE checks `birth_date is null` first, so harmless).
+      //  - 'Specimen/' || s.id / 'Patient/' || p.id / end-of-day || -> concat().
+      //  - ::int -> cast(...as signed); coalesce(nullif({{param.year}},''),'0')::int ->
+      //    cast(coalesce(nullif(...),'0') as signed).
+      //  - all double-quoted result aliases -> BACKTICK aliases (MySQL "..." is a string literal);
+      //    ORDER BY references those backtick aliases so it sorts by column, not by a literal.
+      mysql: `with org_obs as (
+  select o.id, o.specimen_ref, o.subject_ref, o.value_code, o.value_text, o.effective_date_time
+  from observations o
+  where o.code_code = '634-6'
+    and o.specimen_ref is not null and o.specimen_ref <> ''
+    and o.subject_ref is not null and o.subject_ref <> ''
+),
+isolate_meta as (
+  select
+    oo.id as obs_id,
+    oo.specimen_ref,
+    oo.subject_ref,
+    coalesce(s.type_code, '(unknown)') as specimen_type,
+    case when s.origin in ('inpatient', 'outpatient') then s.origin else 'unknown' end as origin,
+    coalesce(oo.value_code, '(unknown)') as pathogen_code,
+    coalesce(oo.value_text, oo.value_code, '(unknown)') as pathogen_name,
+    coalesce(oo.effective_date_time, s.received_time) as iso_date,
+    coalesce(p.gender, 'unknown') as gender,
+    p.birth_date
+  from org_obs oo
+  left join specimens s on oo.specimen_ref = concat('Specimen/', s.id)
+  left join patients p on oo.subject_ref = concat('Patient/', p.id)
+  where coalesce(oo.effective_date_time, s.received_time) is null
+     or (coalesce(oo.effective_date_time, s.received_time) >= {{param.from}}
+         and coalesce(oo.effective_date_time, s.received_time) <= concat({{param.to}}, 'T23:59:59.999Z'))
+),
+age_banded as (
+  select im.*,
+    timestampdiff(year, cast(substr(im.birth_date, 1, 10) as date), cast(substr(coalesce(im.iso_date, '1970-01-01'), 1, 10) as date)) as age_years
+  from isolate_meta im
+),
+ranked as (
+  select ab.*,
+    row_number() over (
+      partition by subject_ref, pathogen_code, specimen_type
+      order by case when iso_date is null then 1 else 0 end asc, iso_date asc, obs_id asc
+    ) as rn
+  from age_banded ab
+),
+first_isolates as (
+  select
+    obs_id, specimen_ref, subject_ref, specimen_type, origin, pathogen_code, pathogen_name, iso_date, gender,
+    case
+      when birth_date is null then 'unknown'
+      when age_years < 0 then 'unknown'
+      when age_years >= 65 then '65+'
+      when age_years = 0 then '0'
+      when age_years between 1 and 4 then '1-4'
+      when age_years between 5 and 14 then '5-14'
+      when age_years between 15 and 24 then '15-24'
+      when age_years between 25 and 34 then '25-34'
+      when age_years between 35 and 44 then '35-44'
+      when age_years between 45 and 54 then '45-54'
+      when age_years between 55 and 64 then '55-64'
+      else 'unknown'
+    end as age_band
+  from ranked
+  where rn = 1
+),
+ast_obs as (
+  select o.specimen_ref, o.code_text as antibiotic, o.interpretation_code as ris
+  from observations o
+  where o.interpretation_code in ('S', 'I', 'R')
+    and o.code_text is not null
+    and o.specimen_ref is not null and o.specimen_ref <> ''
+),
+results as (
+  select fi.*, a.antibiotic, a.ris
+  from first_isolates fi
+  join ast_obs a on a.specimen_ref = fi.specimen_ref
+)
+select
+  coalesce(nullif({{param.country}}, ''), 'XXX') as \`Iso3Country\`,
+  cast(coalesce(nullif({{param.year}}, ''), '0') as signed) as \`Year\`,
+  specimen_type as \`Specimen\`,
+  pathogen_code as \`PathogenCode\`,
+  antibiotic as \`AntibioticCode\`,
+  gender as \`Gender\`,
+  age_band as \`AgeGroup\`,
+  origin as \`Origin\`,
+  cast(sum(case when ris = 'R' then 1 else 0 end) as signed) as \`Resistant\`,
+  cast(sum(case when ris = 'I' then 1 else 0 end) as signed) as \`Intermediate\`,
+  cast(sum(case when ris = 'S' then 1 else 0 end) as signed) as \`Susceptible\`,
+  cast(count(*) as signed) as \`Total\`
+from results
+group by specimen_type, pathogen_code, antibiotic, gender, age_band, origin
+order by \`Specimen\`, \`PathogenCode\`, \`AntibioticCode\`, \`Gender\`, \`AgeGroup\`, \`Origin\``,
     },
   },
   {
@@ -897,6 +1128,94 @@ select
 from results
 group by specimen_type, pathogen_code, antibiotic
 order by specimen_type, pathogen_code, antibiotic`,
+      // Task 5 mysql port: same CTE-chain port as q-amr-glass-ris's mysql variant (row_number
+      // dedup + timestampdiff calendar-exact age + concat + substr date-strip) — see its comment.
+      // Final grouping is specimenType x pathogen x antibiotic only. Backtick the quoted result
+      // aliases (`specimenType`, `pathogen`, `percentR`); round(...,1)::float8 -> cast(round(...,1)
+      // as double); ::int -> cast(...as signed). ORDER BY uses the raw grouped columns (bare, fine).
+      mysql: `with org_obs as (
+  select o.id, o.specimen_ref, o.subject_ref, o.value_code, o.value_text, o.effective_date_time
+  from observations o
+  where o.code_code = '634-6'
+    and o.specimen_ref is not null and o.specimen_ref <> ''
+    and o.subject_ref is not null and o.subject_ref <> ''
+),
+isolate_meta as (
+  select
+    oo.id as obs_id,
+    oo.specimen_ref,
+    oo.subject_ref,
+    coalesce(s.type_code, '(unknown)') as specimen_type,
+    case when s.origin in ('inpatient', 'outpatient') then s.origin else 'unknown' end as origin,
+    coalesce(oo.value_code, '(unknown)') as pathogen_code,
+    coalesce(oo.value_text, oo.value_code, '(unknown)') as pathogen_name,
+    coalesce(oo.effective_date_time, s.received_time) as iso_date,
+    coalesce(p.gender, 'unknown') as gender,
+    p.birth_date
+  from org_obs oo
+  left join specimens s on oo.specimen_ref = concat('Specimen/', s.id)
+  left join patients p on oo.subject_ref = concat('Patient/', p.id)
+  where coalesce(oo.effective_date_time, s.received_time) is null
+     or (coalesce(oo.effective_date_time, s.received_time) >= {{param.from}}
+         and coalesce(oo.effective_date_time, s.received_time) <= concat({{param.to}}, 'T23:59:59.999Z'))
+),
+age_banded as (
+  select im.*,
+    timestampdiff(year, cast(substr(im.birth_date, 1, 10) as date), cast(substr(coalesce(im.iso_date, '1970-01-01'), 1, 10) as date)) as age_years
+  from isolate_meta im
+),
+ranked as (
+  select ab.*,
+    row_number() over (
+      partition by subject_ref, pathogen_code, specimen_type
+      order by case when iso_date is null then 1 else 0 end asc, iso_date asc, obs_id asc
+    ) as rn
+  from age_banded ab
+),
+first_isolates as (
+  select
+    obs_id, specimen_ref, subject_ref, specimen_type, origin, pathogen_code, pathogen_name, iso_date, gender,
+    case
+      when birth_date is null then 'unknown'
+      when age_years < 0 then 'unknown'
+      when age_years >= 65 then '65+'
+      when age_years = 0 then '0'
+      when age_years between 1 and 4 then '1-4'
+      when age_years between 5 and 14 then '5-14'
+      when age_years between 15 and 24 then '15-24'
+      when age_years between 25 and 34 then '25-34'
+      when age_years between 35 and 44 then '35-44'
+      when age_years between 45 and 54 then '45-54'
+      when age_years between 55 and 64 then '55-64'
+      else 'unknown'
+    end as age_band
+  from ranked
+  where rn = 1
+),
+ast_obs as (
+  select o.specimen_ref, o.code_text as antibiotic, o.interpretation_code as ris
+  from observations o
+  where o.interpretation_code in ('S', 'I', 'R')
+    and o.code_text is not null
+    and o.specimen_ref is not null and o.specimen_ref <> ''
+),
+results as (
+  select fi.*, a.antibiotic, a.ris
+  from first_isolates fi
+  join ast_obs a on a.specimen_ref = fi.specimen_ref
+)
+select
+  specimen_type as \`specimenType\`,
+  pathogen_code as \`pathogen\`,
+  antibiotic,
+  cast(count(*) as signed) as tested,
+  cast(sum(case when ris = 'R' then 1 else 0 end) as signed) as r,
+  cast(sum(case when ris = 'I' then 1 else 0 end) as signed) as i,
+  cast(sum(case when ris = 'S' then 1 else 0 end) as signed) as s,
+  cast(round(100.0 * sum(case when ris = 'R' then 1 else 0 end) / nullif(count(*), 0), 1) as double) as \`percentR\`
+from results
+group by specimen_type, pathogen_code, antibiotic
+order by specimen_type, pathogen_code, antibiotic`,
     },
   },
   {
@@ -1032,6 +1351,62 @@ results as (
 select
   pathogen_code as pathogen,
   ${ANTIBIOGRAM_PANEL.map((a) => antibiogramCellSql(a, 'mssql')).join(',\n  ')}
+from results
+group by pathogen_code
+order by pathogen_code`,
+      // Task 5 mysql port: simpler CTE chain (no age/gender) — distinct on -> row_number()/rn=1;
+      // 'Specimen/' || s.id / end-of-day || -> concat(); the SELECT emits one backtick-aliased CASE
+      // column per panel antibiotic via antibiogramCellSql(a, 'mysql'). pathogen_code as pathogen
+      // (bare alias, fine); group by / order by pathogen_code unchanged.
+      mysql: `with org_obs as (
+  select o.id, o.specimen_ref, o.subject_ref, o.value_code, o.value_text, o.effective_date_time
+  from observations o
+  where o.code_code = '634-6'
+    and o.specimen_ref is not null and o.specimen_ref <> ''
+    and o.subject_ref is not null and o.subject_ref <> ''
+),
+isolate_meta as (
+  select
+    oo.id as obs_id,
+    oo.specimen_ref,
+    oo.subject_ref,
+    coalesce(s.type_code, '(unknown)') as specimen_type,
+    coalesce(oo.value_code, '(unknown)') as pathogen_code,
+    coalesce(oo.effective_date_time, s.received_time) as iso_date
+  from org_obs oo
+  left join specimens s on oo.specimen_ref = concat('Specimen/', s.id)
+  where coalesce(oo.effective_date_time, s.received_time) is null
+     or (coalesce(oo.effective_date_time, s.received_time) >= {{param.from}}
+         and coalesce(oo.effective_date_time, s.received_time) <= concat({{param.to}}, 'T23:59:59.999Z'))
+),
+ranked as (
+  select im.*,
+    row_number() over (
+      partition by subject_ref, pathogen_code, specimen_type
+      order by case when iso_date is null then 1 else 0 end asc, iso_date asc, obs_id asc
+    ) as rn
+  from isolate_meta im
+),
+first_isolates as (
+  select obs_id, specimen_ref, pathogen_code
+  from ranked
+  where rn = 1
+),
+ast_obs as (
+  select o.specimen_ref, o.code_text as antibiotic, o.interpretation_code as ris
+  from observations o
+  where o.interpretation_code in ('S', 'I', 'R')
+    and o.code_text is not null
+    and o.specimen_ref is not null and o.specimen_ref <> ''
+),
+results as (
+  select fi.pathogen_code, a.antibiotic, a.ris
+  from first_isolates fi
+  join ast_obs a on a.specimen_ref = fi.specimen_ref
+)
+select
+  pathogen_code as pathogen,
+  ${ANTIBIOGRAM_PANEL.map((a) => antibiogramCellSql(a, 'mysql')).join(',\n  ')}
 from results
 group by pathogen_code
 order by pathogen_code`,
@@ -1300,8 +1675,15 @@ export const SEED_REPORT_DEFS: ReportRecord[] = [
  *  creates exactly one of the two, mutually exclusive on `TARGET_STORE_ADAPTER`) and derives the
  *  SQL dialect from its `type`, so `seedDataDrivenReports` seeds working queries on both engines
  *  instead of only ever finding `DEFAULT_CONNECTOR_NAME` (Postgres) and silently no-op'ing on an
- *  MSSQL install. */
-const WAREHOUSE_NAMES = ['Target Warehouse (Postgres)', 'Target Warehouse (SQL Server)'];
+ *  MSSQL install.
+ *
+ *  Task 6 (mysql-target-s2) extends this the same way for MySQL/MariaDB: now that every
+ *  `SEED_QUERIES` entry carries a `sql.mysql` variant (Task 5), the mysql warehouse connector name
+ *  (`packages/bootstrap/src/seed.ts`'s `MYSQL_CONNECTOR_NAME`, kept byte-identical here) is
+ *  registered too, so a mysql install seeds working queries on all three engines instead of
+ *  silently no-op'ing (S1's deliberate "reports skip on mysql" until the mysql SQL variant
+ *  existed). */
+const WAREHOUSE_NAMES = ['Target Warehouse (Postgres)', 'Target Warehouse (SQL Server)', 'Target Warehouse (MySQL/MariaDB)'];
 
 export interface SeedDataDrivenReportsDeps {
   customQueries: Pick<CustomQueryStore, 'get' | 'create'>;
@@ -1342,7 +1724,10 @@ export async function seedDataDrivenReports(deps: SeedDataDrivenReportsDeps): Pr
     console.log(`[seed] no default warehouse connector found (looked for ${WAREHOUSE_NAMES.join(' / ')}) — skipping data-driven report seed`);
     return EMPTY_RESULT;
   }
-  const dialect: SqlDialect = connector.type === 'microsoft-sql' ? 'mssql' : 'postgres';
+  const dialect: SqlDialect =
+    connector.type === 'microsoft-sql' ? 'mssql'
+    : connector.type === 'mysql' ? 'mysql'
+    : 'postgres';
 
   let queriesSeeded = 0;
   for (const q of SEED_QUERIES) {

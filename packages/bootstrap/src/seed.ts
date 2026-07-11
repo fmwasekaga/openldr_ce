@@ -52,8 +52,9 @@ const DEFAULT_CONNECTOR_NAME = 'Target Warehouse (Postgres)';
 const MSSQL_CONNECTOR_NAME = 'Target Warehouse (SQL Server)';
 
 // Name for the MySQL/MariaDB target-warehouse connector — distinct from the PG/MSSQL names.
-// Deliberately NOT in @openldr/reporting's WAREHOUSE_NAMES yet: built-in data-driven reports need
-// the MySQL report-SQL variant (S2), so a mysql install seeds NO data-driven reports until then.
+// Registered in @openldr/reporting's WAREHOUSE_NAMES (S2, mysql-target-s2 Task 6): built-in
+// data-driven reports now resolve this connector by name and seed the MySQL report-SQL variant
+// (Task 5), so a mysql install seeds the full data-driven report set just like Postgres/MSSQL.
 const MYSQL_CONNECTOR_NAME = 'Target Warehouse (MySQL/MariaDB)';
 
 // Minimal structural shape of the forms surface seedDatabase needs. Typed against FormStore
@@ -104,6 +105,7 @@ export interface FormSeedTarget {
     MYSQL_USER?: string;
     MYSQL_PASSWORD?: string;
     MYSQL_SSL?: boolean;
+    MYSQL_SSL_REJECT_UNAUTHORIZED?: boolean;
   };
 }
 
@@ -393,6 +395,7 @@ export async function seedDefaultConnector(app: FormSeedTarget): Promise<number>
           user: app.cfg.MYSQL_USER!,
           password: app.cfg.MYSQL_PASSWORD!,
           ssl: String(app.cfg.MYSQL_SSL),
+          sslRejectUnauthorized: String(app.cfg.MYSQL_SSL_REJECT_UNAUTHORIZED),
         },
       },
       app.cfg.SECRETS_ENCRYPTION_KEY,

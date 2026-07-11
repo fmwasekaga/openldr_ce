@@ -58,6 +58,7 @@ describe('selectTargetStore', () => {
       MYSQL_USER: 'u',
       MYSQL_PASSWORD: 'p',
       MYSQL_SSL: false,
+      MYSQL_SSL_REJECT_UNAUTHORIZED: false,
     } as any);
     expect(sel.engine).toBe('mysql');
     expect(typeof sel.store.healthCheck).toBe('function');

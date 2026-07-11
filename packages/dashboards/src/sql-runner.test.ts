@@ -29,12 +29,17 @@ function compileRawNode(node: FakeOpNode): string {
   return out;
 }
 
-function makeFakeDb(rows: Record<string, unknown>[]): { db: any; executed: string[] } {
+function makeFakeDb(
+  rows: Record<string, unknown>[],
+  throwOn?: (sql: string) => unknown,
+): { db: any; executed: string[] } {
   const executed: string[] = [];
   const executor = {
     transformQuery: (node: FakeOpNode) => node,
     compileQuery: (node: FakeOpNode) => ({ sql: compileRawNode(node), parameters: [], query: node }),
     executeQuery: async (compiledQuery: { sql: string }) => {
+      const err = throwOn?.(compiledQuery.sql);
+      if (err) throw err;
       executed.push(compiledQuery.sql);
       return { rows };
     },
@@ -114,6 +119,39 @@ describe('runSqlQuery dialect-aware session setup + capped query', () => {
     expect(executed).toContain('set rowcount 100; select 1 as a; set rowcount 0');
     expect(result.rows).toEqual([{ a: 1 }]);
   });
+
+  it('mysql: portable statement timeout (max_execution_time ms + max_statement_time s), no read-only txn, LIMIT/OFFSET capped query', async () => {
+    const { db, executed } = makeFakeDb([{ a: 1 }]);
+    const result = await runSqlQuery(db, 'select 1 as a', { timeoutMs: 5000, rowCap: 100 }, 'mysql');
+    expect(executed).toContain('set session max_execution_time = 5000'); // MySQL 8.4 (ms)
+    expect(executed).toContain('set session max_statement_time = 5');    // MariaDB 11.4 (seconds)
+    expect(executed.some((s) => /read only/i.test(s))).toBe(false);
+    expect(executed.some((s) => /statement_timeout/i.test(s))).toBe(false); // that's the pg var, not mysql's
+    expect(executed).toContain('select * from (select 1 as a) as _q limit 100 offset 0');
+    expect(result.rows).toEqual([{ a: 1 }]);
+  });
+
+  it('mysql: swallows the unknown-system-variable error (errno 1193) on max_execution_time; other SET + capped query still run', async () => {
+    const { db, executed } = makeFakeDb(
+      [{ a: 1 }],
+      (s) => (s.includes('max_execution_time') ? { errno: 1193 } : undefined), // MariaDB lacks this var
+    );
+    const result = await runSqlQuery(db, 'select 1 as a', { timeoutMs: 5000, rowCap: 100 }, 'mysql');
+    // The failed (swallowed) SET is never recorded; the surviving SET and the capped query are.
+    expect(executed).not.toContain('set session max_execution_time = 5000');
+    expect(executed).toContain('set session max_statement_time = 5');
+    expect(executed).toContain('select * from (select 1 as a) as _q limit 100 offset 0');
+    expect(result.rows).toEqual([{ a: 1 }]);
+  });
+
+  it('mysql: propagates a non-unknown-variable error (e.g. permission denied) from a SET', async () => {
+    const { db } = makeFakeDb(
+      [{ a: 1 }],
+      (s) => (s.includes('max_execution_time') ? { errno: 1142, code: 'ER_TABLEACCESS_DENIED_ERROR' } : undefined),
+    );
+    await expect(runSqlQuery(db, 'select 1 as a', { timeoutMs: 5000, rowCap: 100 }, 'mysql'))
+      .rejects.toMatchObject({ errno: 1142 });
+  });
 });
 
 describe('planPagination', () => {
@@ -139,5 +177,11 @@ describe('planPagination', () => {
       .toEqual({ sql: 'select * from (select 1) as _q limit 10 offset 0', sliceOffset: 0 });
     expect(planPagination('select 1', 'mssql', { limit: 10.9 }))
       .toEqual({ sql: 'set rowcount 10; select 1; set rowcount 0', sliceOffset: 0 });
+  });
+  it('wraps MySQL with LIMIT/OFFSET (reuses the Postgres server-side-offset path)', () => {
+    expect(planPagination('select 1', 'mysql', { limit: 100, offset: 0 }))
+      .toEqual({ sql: 'select * from (select 1) as _q limit 100 offset 0', sliceOffset: 0 });
+    expect(planPagination('select 1', 'mysql', { limit: 50, offset: 25 }))
+      .toEqual({ sql: 'select * from (select 1) as _q limit 50 offset 25', sliceOffset: 0 });
   });
 });

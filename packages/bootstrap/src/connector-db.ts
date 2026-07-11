@@ -63,7 +63,7 @@ export function createConnectorDb(type: string, config: Record<string, string>):
     }
     const pool = createPool({
       host, port, user: config.user ?? '', password: config.password ?? '', database: config.database ?? '',
-      ...(config.ssl === 'true' ? { ssl: { rejectUnauthorized: false } } : {}),
+      ...(config.ssl === 'true' ? { ssl: { rejectUnauthorized: config.sslRejectUnauthorized === 'true' } } : {}),
     });
     // mysql2 callback Pool is runtime-correct for kysely (getConnection(callback)); cast bridges the structural type gap.
     const db = new Kysely<TargetSchema>({ dialect: new MysqlDialect({ pool: pool as unknown as MysqlPool }) });

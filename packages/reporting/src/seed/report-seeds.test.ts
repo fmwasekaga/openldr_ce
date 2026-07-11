@@ -99,13 +99,26 @@ describe('seedDataDrivenReports', () => {
     expect(testVolume?.sql).not.toContain('to_char(');
     for (const q of queries.values()) expect(q.connectorId).toBe('conn-mssql');
   });
+
+  it('resolves a mysql-typed warehouse connector by its own name and seeds the mysql SQL variant', async () => {
+    const { deps, queries } = fakeDeps([{ id: 'conn-mysql', name: 'Target Warehouse (MySQL/MariaDB)', type: 'mysql' }]);
+    const res = await seedDataDrivenReports(deps);
+    expect(res.queriesSeeded).toBe(SEED_QUERIES.length);
+    const testVolume = queries.get('q-test-volume');
+    // MySQL variant uses substr(...) month bucketing, not to_char/format.
+    expect(testVolume?.sql).toContain('substr(');
+    expect(testVolume?.sql).not.toContain('to_char(');
+    expect(testVolume?.sql).not.toContain('format(');
+    for (const q of queries.values()) expect(q.connectorId).toBe('conn-mysql');
+  });
 });
 
-describe('SEED_QUERIES — every entry carries both dialect variants', () => {
-  it('has non-empty sql.postgres and sql.mssql for every seed query', () => {
+describe('SEED_QUERIES — every entry carries all three dialect variants', () => {
+  it('has non-empty sql.postgres, sql.mssql, and sql.mysql for every seed query', () => {
     for (const q of SEED_QUERIES) {
       expect(q.sql.postgres.trim().length).toBeGreaterThan(0);
       expect(q.sql.mssql.trim().length).toBeGreaterThan(0);
+      expect(q.sql.mysql.trim().length).toBeGreaterThan(0);
     }
   });
 });
@@ -120,8 +133,8 @@ describe('SEED_QUERIES — q-amr-resistance', () => {
       { id: 'facility', label: 'Facility', type: 'text', required: false },
     ]);
     // {{param.*}} tokens present in the SQL must all be declared params, or substituteParams
-    // throws "unbound parameter" at run time. Checked for BOTH dialect variants.
-    for (const variant of [q?.sql.postgres, q?.sql.mssql]) {
+    // throws "unbound parameter" at run time. Checked for ALL THREE dialect variants.
+    for (const variant of [q?.sql.postgres, q?.sql.mssql, q?.sql.mysql]) {
       const tokens = [...(variant?.matchAll(/\{\{\s*param\.([a-zA-Z0-9_]+)\s*\}\}/g) ?? [])].map((m) => m[1]);
       expect(new Set(tokens)).toEqual(new Set(['from', 'to', 'facility']));
     }
@@ -164,6 +177,14 @@ describe('SEED_QUERIES — q-amr-antibiogram', () => {
       expect(new Set(tokens)).toEqual(new Set(['from', 'to']));
       for (const a of ANTIBIOGRAM_PANEL) expect(variant).toContain(`"${a}"`);
       expect(variant).toContain('group by pathogen_code');
+    }
+    // The mysql variant uses BACKTICK aliases (double quotes are string literals in MySQL),
+    // so assert the backtick-quoted identifier instead of the double-quoted one.
+    {
+      const tokens = [...(q?.sql.mysql?.matchAll(/\{\{\s*param\.([a-zA-Z0-9_]+)\s*\}\}/g) ?? [])].map((m) => m[1]);
+      expect(new Set(tokens)).toEqual(new Set(['from', 'to']));
+      for (const a of ANTIBIOGRAM_PANEL) expect(q?.sql.mysql).toContain(`\`${a}\``);
+      expect(q?.sql.mysql).toContain('group by pathogen_code');
     }
   });
 });

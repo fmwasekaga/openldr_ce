@@ -27,6 +27,12 @@ describe('query store', () => {
     expect(s.tabs[0]).toMatchObject({ type: 'microsoft-sql', sql: 'select * from [public].[products]' });
   });
 
+  it('quotes mysql table identifiers with backticks', () => {
+    useQueryStore.getState().openTableTab({ connectorId: 'c3', type: 'mysql', schema: 'openldr_target', table: 'patients' });
+    const s = useQueryStore.getState();
+    expect(s.tabs[0]).toMatchObject({ type: 'mysql', sql: 'select * from `openldr_target`.`patients`' });
+  });
+
   it('opens a query tab and closes tabs, re-activating a neighbour', () => {
     const st = useQueryStore.getState();
     st.openQueryTab({ title: 'Query #1' });

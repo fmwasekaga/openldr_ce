@@ -208,9 +208,13 @@ The supported set is validated end-to-end on every listed version by the accepta
 | MySQL 5.7 and earlier | ❌ No | End of life. Upgrade to 8.4. |
 | RDS / Aurora / Azure Database for MySQL / Cloud SQL / PlanetScale | ❌ Never | See the data-sovereignty policy above. |
 
-Validated end-to-end on both engines by `pnpm mysql:accept:matrix`; the supported set is the single
-source of truth in `packages/adapter-mysql-store/src/supported-versions.ts`. As with SQL Server, only
-self-hosted MySQL/MariaDB is supported — no cloud/hosted database, for data-sovereignty reasons.
+The write path is validated end-to-end on both engines by `pnpm mysql:accept:matrix`, and the full
+**read surface** — the query workbench, custom queries, dashboards (including raw SQL), the report
+designer, and all built-in data-driven reports — is MySQL/MariaDB-aware and validated on both engines
+by the cross-dialect report parity harness (`pnpm reports:parity:mysql:matrix`, Postgres vs MySQL 8.4
+and MariaDB 11.4). The supported set is the single source of truth in
+`packages/adapter-mysql-store/src/supported-versions.ts`. As with SQL Server, only self-hosted
+MySQL/MariaDB is supported — no cloud/hosted database, for data-sovereignty reasons.
 
 ### Data-sovereignty policy: no cloud databases
 

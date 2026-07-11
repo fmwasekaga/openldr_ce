@@ -17,4 +17,9 @@ describe('createMysqlStore', () => {
     expect(r.detail).toContain('ECONNREFUSED');
     await store.close();
   });
+  it('accepts an explicit rejectUnauthorized flag in the config type', () => {
+    const store = createMysqlStore({ host: 'h', port: 3306, database: 'd', user: 'u', password: 'p', ssl: true, rejectUnauthorized: true });
+    expect(typeof store.close).toBe('function');
+    return store.close();
+  });
 });

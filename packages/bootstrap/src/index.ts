@@ -432,7 +432,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       data = await runSqlQuery(reportingDb, finalSql, {
         timeoutMs: await numberSettings.get('dashboard.sql_timeout_ms'),
         rowCap: await numberSettings.get('dashboard.sql_row_cap'),
-      }, cfg.TARGET_STORE_ADAPTER === 'mssql' ? 'mssql' : 'postgres');
+      }, cfg.TARGET_STORE_ADAPTER === 'mssql' ? 'mssql' : cfg.TARGET_STORE_ADAPTER === 'mysql' ? 'mysql' : 'postgres');
     }
     return { ...data, meta: { generatedAt: new Date().toISOString(), rowCount: data.rows.length } };
   };

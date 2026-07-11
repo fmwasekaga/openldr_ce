@@ -86,3 +86,10 @@ describe('config MSSQL boolean flags', () => {
     expect(loadConfig({ ...basePg, MSSQL_TRUST_SERVER_CERT: 'false' } as never).MSSQL_TRUST_SERVER_CERT).toBe(false);
   });
 });
+
+describe('config MySQL boolean flags', () => {
+  it('parses MYSQL_SSL_REJECT_UNAUTHORIZED (default false, "true" -> true)', () => {
+    expect(loadConfig({ ...basePg } as never).MYSQL_SSL_REJECT_UNAUTHORIZED).toBe(false);
+    expect(loadConfig({ ...basePg, MYSQL_SSL_REJECT_UNAUTHORIZED: 'true' } as never).MYSQL_SSL_REJECT_UNAUTHORIZED).toBe(true);
+  });
+});
