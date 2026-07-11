@@ -297,6 +297,23 @@ describe('Connectors page', () => {
     }));
   });
 
+  it('database credential fields opt out of browser autofill', async () => {
+    (api.listConnectors as any).mockResolvedValue([]);
+    (api.listSinkPlugins as any).mockResolvedValue([]);
+    render(<MemoryRouter><Connectors /></MemoryRouter>);
+
+    fireEvent.click(await screen.findByTestId('add-connector'));
+    fireEvent.keyDown(screen.getByTestId('connector-category'), { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: /host/i }));
+
+    // Postgres is the default host type, so the User/Password fields render immediately.
+    const user = await screen.findByTestId('connector-db-user');
+    const password = await screen.findByTestId('connector-db-password');
+    // Prevents the browser autofilling the logged-in operator's credentials into these fields.
+    expect(user.getAttribute('autocomplete')).toBe('off');
+    expect(password.getAttribute('autocomplete')).toBe('new-password');
+  });
+
   it('saves a Redis connector with correct shape — no database/user keys', async () => {
     (api.listConnectors as any).mockResolvedValue([]);
     (api.listSinkPlugins as any).mockResolvedValue([]);
