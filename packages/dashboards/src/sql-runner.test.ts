@@ -114,6 +114,17 @@ describe('runSqlQuery dialect-aware session setup + capped query', () => {
     expect(executed).toContain('set rowcount 100; select 1 as a; set rowcount 0');
     expect(result.rows).toEqual([{ a: 1 }]);
   });
+
+  it('mysql: portable statement timeout (max_execution_time ms + max_statement_time s), no read-only txn, LIMIT/OFFSET capped query', async () => {
+    const { db, executed } = makeFakeDb([{ a: 1 }]);
+    const result = await runSqlQuery(db, 'select 1 as a', { timeoutMs: 5000, rowCap: 100 }, 'mysql');
+    expect(executed).toContain('set session max_execution_time = 5000'); // MySQL 8.4 (ms)
+    expect(executed).toContain('set session max_statement_time = 5');    // MariaDB 11.4 (seconds)
+    expect(executed.some((s) => /read only/i.test(s))).toBe(false);
+    expect(executed.some((s) => /statement_timeout/i.test(s))).toBe(false); // that's the pg var, not mysql's
+    expect(executed).toContain('select * from (select 1 as a) as _q limit 100 offset 0');
+    expect(result.rows).toEqual([{ a: 1 }]);
+  });
 });
 
 describe('planPagination', () => {
@@ -139,5 +150,11 @@ describe('planPagination', () => {
       .toEqual({ sql: 'select * from (select 1) as _q limit 10 offset 0', sliceOffset: 0 });
     expect(planPagination('select 1', 'mssql', { limit: 10.9 }))
       .toEqual({ sql: 'set rowcount 10; select 1; set rowcount 0', sliceOffset: 0 });
+  });
+  it('wraps MySQL with LIMIT/OFFSET (reuses the Postgres server-side-offset path)', () => {
+    expect(planPagination('select 1', 'mysql', { limit: 100, offset: 0 }))
+      .toEqual({ sql: 'select * from (select 1) as _q limit 100 offset 0', sliceOffset: 0 });
+    expect(planPagination('select 1', 'mysql', { limit: 50, offset: 25 }))
+      .toEqual({ sql: 'select * from (select 1) as _q limit 50 offset 25', sliceOffset: 0 });
   });
 });

@@ -31,7 +31,7 @@ export function validateSelectSql(rawSql: string): void {
   }
 }
 
-export type SqlDialect = 'postgres' | 'mssql';
+export type SqlDialect = 'postgres' | 'mssql' | 'mysql';
 
 export interface PaginationPlan {
   /** SQL to execute (a multi-statement batch for MSSQL). */
@@ -53,6 +53,7 @@ export function planPagination(inner: string, dialect: SqlDialect, opts: { limit
   if (dialect === 'mssql') {
     return { sql: `set rowcount ${offset + limit}; ${inner}; set rowcount 0`, sliceOffset: offset };
   }
+  // Postgres AND MySQL/MariaDB: native LIMIT/OFFSET in a derived table (server-side offset).
   return { sql: `select * from (${inner}) as _q limit ${limit} offset ${offset}`, sliceOffset: 0 };
 }
 
@@ -61,7 +62,12 @@ export interface SqlRunOpts { timeoutMs: number; rowCap: number }
 /** Run user SQL inside a read-only transaction with a statement/lock timeout and row cap.
  *  Dialect-aware: Postgres uses `set transaction read only` + `statement_timeout`; SQL Server
  *  has no equivalent transaction-level read-only mode or per-statement timeout, so it relies on
- *  the SELECT-only validation above for read-only-ness and bounds lock waits with LOCK_TIMEOUT. */
+ *  the SELECT-only validation above for read-only-ness and bounds lock waits with LOCK_TIMEOUT.
+ *  MySQL/MariaDB likewise have no read-only pragma usable mid-transaction, so they too rely on
+ *  the SELECT-only validation; the per-statement timeout var name differs by engine (MySQL 8.4
+ *  `max_execution_time` in ms vs MariaDB 11.4 `max_statement_time` in seconds), so both are set
+ *  and the "unknown system variable" error from whichever engine lacks the other's name is
+ *  swallowed. */
 export async function runSqlQuery(
   db: Kysely<ExternalSchema>, rawSql: string, opts: SqlRunOpts, engine: SqlDialect = 'postgres',
 ): Promise<ReportResultData> {
@@ -72,9 +78,23 @@ export async function runSqlQuery(
   const cap = Math.floor(opts.rowCap);
   return db.transaction().execute(async (trx) => {
     if (engine === 'mssql') {
-      // SQL Server has no `set transaction read only`; the SELECT-only validation above enforces
-      // read-only-ness. SET LOCK_TIMEOUT bounds lock waits (T-SQL has no per-statement time cap).
+      // SQL Server has no `set transaction read only`; SELECT-only validation enforces read-only-ness.
+      // SET LOCK_TIMEOUT bounds lock waits (T-SQL has no per-statement time cap).
       await sql`set lock_timeout ${sql.lit(Math.floor(opts.timeoutMs))}`.execute(trx);
+    } else if (engine === 'mysql') {
+      // MySQL/MariaDB reject changing txn characteristics inside an already-open txn (kysely has
+      // sent BEGIN), so there is no read-only pragma here — the shared SELECT-only validation is
+      // the read-only guard (same rationale as mssql). The per-statement timeout var differs by
+      // engine and the two names are mutually exclusive (MySQL 8.4: max_execution_time in ms;
+      // MariaDB 11.4: max_statement_time in seconds). Set BOTH, swallowing the "unknown system
+      // variable" error on whichever engine lacks the other's name — a failed SET does not roll
+      // back a MySQL/MariaDB transaction.
+      const ms = Math.floor(opts.timeoutMs);
+      const trySet = async (stmt: ReturnType<typeof sql>) => {
+        try { await stmt.execute(trx); } catch { /* wrong-engine unknown-variable: ignore */ }
+      };
+      await trySet(sql`set session max_execution_time = ${sql.lit(ms)}`);       // MySQL 8.4
+      await trySet(sql`set session max_statement_time = ${sql.lit(ms / 1000)}`); // MariaDB 11.4
     } else {
       await sql`set transaction read only`.execute(trx);
       await sql`set local statement_timeout = ${sql.lit(Math.floor(opts.timeoutMs))}`.execute(trx);
