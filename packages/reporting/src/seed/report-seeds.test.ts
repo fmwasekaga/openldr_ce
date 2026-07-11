@@ -99,6 +99,18 @@ describe('seedDataDrivenReports', () => {
     expect(testVolume?.sql).not.toContain('to_char(');
     for (const q of queries.values()) expect(q.connectorId).toBe('conn-mssql');
   });
+
+  it('resolves a mysql-typed warehouse connector by its own name and seeds the mysql SQL variant', async () => {
+    const { deps, queries } = fakeDeps([{ id: 'conn-mysql', name: 'Target Warehouse (MySQL/MariaDB)', type: 'mysql' }]);
+    const res = await seedDataDrivenReports(deps);
+    expect(res.queriesSeeded).toBe(SEED_QUERIES.length);
+    const testVolume = queries.get('q-test-volume');
+    // MySQL variant uses substr(...) month bucketing, not to_char/format.
+    expect(testVolume?.sql).toContain('substr(');
+    expect(testVolume?.sql).not.toContain('to_char(');
+    expect(testVolume?.sql).not.toContain('format(');
+    for (const q of queries.values()) expect(q.connectorId).toBe('conn-mysql');
+  });
 });
 
 describe('SEED_QUERIES — every entry carries all three dialect variants', () => {

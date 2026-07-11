@@ -1675,8 +1675,15 @@ export const SEED_REPORT_DEFS: ReportRecord[] = [
  *  creates exactly one of the two, mutually exclusive on `TARGET_STORE_ADAPTER`) and derives the
  *  SQL dialect from its `type`, so `seedDataDrivenReports` seeds working queries on both engines
  *  instead of only ever finding `DEFAULT_CONNECTOR_NAME` (Postgres) and silently no-op'ing on an
- *  MSSQL install. */
-const WAREHOUSE_NAMES = ['Target Warehouse (Postgres)', 'Target Warehouse (SQL Server)'];
+ *  MSSQL install.
+ *
+ *  Task 6 (mysql-target-s2) extends this the same way for MySQL/MariaDB: now that every
+ *  `SEED_QUERIES` entry carries a `sql.mysql` variant (Task 5), the mysql warehouse connector name
+ *  (`packages/bootstrap/src/seed.ts`'s `MYSQL_CONNECTOR_NAME`, kept byte-identical here) is
+ *  registered too, so a mysql install seeds working queries on all three engines instead of
+ *  silently no-op'ing (S1's deliberate "reports skip on mysql" until the mysql SQL variant
+ *  existed). */
+const WAREHOUSE_NAMES = ['Target Warehouse (Postgres)', 'Target Warehouse (SQL Server)', 'Target Warehouse (MySQL/MariaDB)'];
 
 export interface SeedDataDrivenReportsDeps {
   customQueries: Pick<CustomQueryStore, 'get' | 'create'>;
@@ -1717,7 +1724,10 @@ export async function seedDataDrivenReports(deps: SeedDataDrivenReportsDeps): Pr
     console.log(`[seed] no default warehouse connector found (looked for ${WAREHOUSE_NAMES.join(' / ')}) — skipping data-driven report seed`);
     return EMPTY_RESULT;
   }
-  const dialect: SqlDialect = connector.type === 'microsoft-sql' ? 'mssql' : 'postgres';
+  const dialect: SqlDialect =
+    connector.type === 'microsoft-sql' ? 'mssql'
+    : connector.type === 'mysql' ? 'mysql'
+    : 'postgres';
 
   let queriesSeeded = 0;
   for (const q of SEED_QUERIES) {
