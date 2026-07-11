@@ -35,7 +35,7 @@ export function PackageCard({ entry, onClick }: { entry: CardEntry; onClick: () 
       ) : null}
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {stateBadge}
-        {entry.ref ? <SignatureBadge valid={entry.valid} publisher={entry.publisher} /> : null}
+        {entry.ref ? <SignatureBadge valid={entry.valid} invalidReason={entry.invalidReason} publisher={entry.publisher} /> : null}
       </div>
     </button>
   );

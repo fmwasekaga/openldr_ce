@@ -283,6 +283,9 @@ export const pt: EnShape = {
       unverified: 'Não verificado',
       firstUse: 'Novo editor',
       invalid: 'Assinatura inválida', // review
+      invalidUi: 'Recurso de UI modificado', // review
+      invalidPayload: 'Carga útil modificada', // review
+      invalidFingerprint: 'Chave do publicador não corresponde', // review
       notConfigured: 'Nenhum registo marketplace configurado (defina MARKETPLACE_REGISTRY_DIR).',
       consentTitle: 'Rever e aprovar: {{id}}',
       requestedCapabilities: 'Capacidades solicitadas',

@@ -1,7 +1,7 @@
 import { readdir } from 'node:fs/promises';
 import { join, basename, resolve, sep } from 'node:path';
 import { isIP } from 'node:net';
-import { readBundle, assembleBundle, payloadFileName, verifyBundle, type Bundle } from './bundle-fs';
+import { readBundle, assembleBundle, payloadFileName, verifyBundle, type Bundle, type BundleInvalidReason } from './bundle-fs';
 import { parseIndex, type MarketplaceIndexEntry } from './index-json';
 
 // ── SEC-09: registry URL validation (SSRF guard) ──────────────────────────────
@@ -126,6 +126,7 @@ export interface RegistryListing {
   summary?: string;
   signatureFingerprint?: string;
   valid?: boolean;        // computed only for local (which reads bundles); undefined for http
+  invalidReason?: BundleInvalidReason; // set only when valid === false (local); the specific failing check
   versions?: { version: string; ref: string }[];
 }
 
@@ -205,11 +206,13 @@ export class LocalRegistrySource implements RegistrySource {
     for (const d of dirs) {
       try {
         const b = await readBundle(join(this.dir, d.name));
+        const v = verifyBundle(b);
         out.push({
           ref: d.name, id: b.manifest.id, version: b.manifest.version, type: b.manifest.type,
           publisher: b.manifest.publisher ?? null, description: b.manifest.description,
           readme: b.manifest.readme,
-          license: b.manifest.license, valid: verifyBundle(b).valid,
+          license: b.manifest.license, valid: v.valid,
+          ...(v.reason ? { invalidReason: v.reason } : {}),
         });
       } catch { /* not a readable bundle dir — skip */ }
     }

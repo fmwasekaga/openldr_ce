@@ -12,6 +12,7 @@ export interface CardEntry {
   payload?: ArtifactPayloadMeta | null;
   capabilities: unknown[];
   valid?: boolean;       // Browse only (signature validity)
+  invalidReason?: AvailableArtifact['invalidReason']; // Browse only: which check failed when valid === false
   installed?: boolean;   // is this id currently installed?
   active?: boolean;      // installed AND active version
   enabled?: boolean;     // installed AND user-enabled (on/off toggle)
@@ -40,7 +41,7 @@ export function availableToEntry(b: AvailableArtifact, installed: Map<string, In
   return {
     ref: b.ref, id: b.id, version: b.version, type: b.type,
     publisher: b.publisher, description: b.description, license: b.license,
-    capabilities: b.capabilities ?? [], valid: b.valid,
+    capabilities: b.capabilities ?? [], valid: b.valid, invalidReason: b.invalidReason,
     installed: Boolean(inst), enabled: inst?.enabled, active: inst?.active,
     versions: b.versions ?? [], registryName: b.registryName,
   };

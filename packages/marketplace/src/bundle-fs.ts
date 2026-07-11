@@ -65,11 +65,19 @@ export async function readBundle(dir: string): Promise<Bundle> {
   return assembleBundle(raw, payload, pubHex, ui);
 }
 
+/** Why a bundle failed verification — the specific check that failed, most-fundamental first.
+ *  Note `bad-signature` is distinct from the hash mismatches: a valid signature over a bundle
+ *  whose UI/payload bytes were later altered (e.g. a CRLF checkout on Windows) fails on the hash,
+ *  NOT the signature, so surfacing this lets the UI say "asset modified" instead of the misleading
+ *  "invalid signature". */
+export type BundleInvalidReason = 'fingerprint-mismatch' | 'payload-hash-mismatch' | 'ui-hash-mismatch' | 'bad-signature';
+
 /**
  * Verify a bundle's integrity and signature.
- * Returns `{ valid: true, fingerprint }` on success, `{ valid: false, fingerprint }` otherwise.
+ * Returns `{ valid: true, fingerprint }` on success; on failure `{ valid: false, fingerprint, reason }`
+ * where `reason` names the specific failing check (fingerprint → payload hash → ui hash → signature).
  */
-export function verifyBundle(b: Bundle): { valid: boolean; fingerprint: string } {
+export function verifyBundle(b: Bundle): { valid: boolean; fingerprint: string; reason?: BundleInvalidReason } {
   const fingerprint = keyFingerprint(b.publicKeyDer);
   const okFp = b.manifest.publisher ? b.manifest.publisher.keyFingerprint === fingerprint : false;
   const kind = String((b.raw.payload as { kind?: string } | null)?.kind ?? 'plugin');
@@ -80,6 +88,9 @@ export function verifyBundle(b: Bundle): { valid: boolean; fingerprint: string }
   // UI integrity: when a manifest declares payload.ui, its bytes must match the signed sha.
   const uiMeta = (b.raw.payload as { ui?: { sha256?: string } } | null)?.ui;
   const okUi = !uiMeta ? true : !!b.ui && createHash('sha256').update(b.ui).digest('hex') === uiMeta.sha256;
-  const valid = okFp && okSha && okUi && verifyArtifact(b.raw, b.payloadSha256, b.publicKeyDer);
-  return { valid, fingerprint };
+  const okSig = verifyArtifact(b.raw, b.payloadSha256, b.publicKeyDer);
+  const valid = okFp && okSha && okUi && okSig;
+  const reason: BundleInvalidReason | undefined =
+    valid ? undefined : !okFp ? 'fingerprint-mismatch' : !okSha ? 'payload-hash-mismatch' : !okUi ? 'ui-hash-mismatch' : 'bad-signature';
+  return { valid, fingerprint, ...(reason ? { reason } : {}) };
 }
