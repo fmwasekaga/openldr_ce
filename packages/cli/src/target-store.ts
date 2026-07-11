@@ -6,8 +6,8 @@ import type { TargetEngine } from '@openldr/db';
 export async function runTargetStoreTest(opts: { engine?: string; json: boolean }): Promise<number> {
   let engine: TargetEngine | undefined;
   if (opts.engine !== undefined) {
-    if (opts.engine !== 'postgres' && opts.engine !== 'mssql') {
-      const msg = `invalid --engine '${opts.engine}' (expected postgres|mssql)`;
+    if (opts.engine !== 'postgres' && opts.engine !== 'mssql' && opts.engine !== 'mysql') {
+      const msg = `invalid --engine '${opts.engine}' (expected postgres|mssql|mysql)`;
       process.stderr.write(`${msg}\n`);
       return 1;
     }

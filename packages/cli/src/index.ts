@@ -155,11 +155,11 @@ settings.command('danger <action>')
     try { process.exitCode = await runSettingsDanger(action, opts); } catch (err) { process.stderr.write(`settings danger failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
 
-const targetStore = program.command('target-store').description('Target warehouse (Postgres/SQL Server) tools');
+const targetStore = program.command('target-store').description('Target warehouse (Postgres/SQL Server/MySQL/MariaDB) tools');
 targetStore
   .command('test')
   .description('Probe the target store connection')
-  .option('--engine <engine>', 'postgres|mssql (defaults to TARGET_STORE_ADAPTER)')
+  .option('--engine <engine>', 'postgres|mssql|mysql (defaults to TARGET_STORE_ADAPTER)')
   .option('--json', 'emit machine-readable JSON', false)
   .action(async (opts: { engine?: string; json: boolean }) => {
     process.exitCode = await runTargetStoreTest(opts);
