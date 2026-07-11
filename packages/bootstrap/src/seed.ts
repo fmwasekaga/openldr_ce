@@ -85,7 +85,7 @@ export interface FormSeedTarget {
   cfg: {
     TARGET_DATABASE_URL?: string;
     SECRETS_ENCRYPTION_KEY?: string;
-    TARGET_STORE_ADAPTER?: 'pg' | 'mssql';
+    TARGET_STORE_ADAPTER?: 'pg' | 'mssql' | 'mysql';
     MSSQL_HOST?: string;
     MSSQL_PORT?: number;
     MSSQL_DATABASE?: string;
