@@ -109,10 +109,11 @@ export const SEED_QUERIES: SeedQuery[] = [
     name: 'Facilities (options)',
     connectorId: '',
     params: [],
-    // R3c cutover: reads `patients` (not the thin `patients` table) — `managing_organization`
-    // is unchanged (still the full-organization-ref column) in v2, so this is a bare table-name
-    // swap. No postgres-isms at all — the mssql variant is byte-identical (see Task 2's porting
-    // notes).
+    // R3c cutover: reads the v2 `patients` table (originally `v2_patients`, renamed to canonical
+    // `patients` in R3e — replacing the old thin `patients` table it superseded) —
+    // `managing_organization` is unchanged (still the full-organization-ref column) in v2, so this
+    // was a bare table-name swap. No postgres-isms at all — the mssql variant is byte-identical
+    // (see Task 2's porting notes).
     sql: {
       postgres: `select distinct managing_organization as facility
 from patients
@@ -305,8 +306,10 @@ order by 1, 2`,
     // whole-hour values.
     //  - facility filter (optional): same '' = no-filter guard as q-amr-resistance, applied to
     //    diagnostic_reports.subject_ref via patients.managing_organization.
-    //  - R3c cutover: reads `specimens`/`diagnostic_reports`/`patients` (not the thin
-    //    `specimens`/`diagnostic_reports`/`patients` tables). v2 stores the bare FHIR id directly
+    //  - R3c cutover: reads the v2 `specimens`/`diagnostic_reports`/`patients` tables (originally
+    //    `v2_specimens`/`v2_diagnostic_reports`/`v2_patients`, renamed to canonical in R3e —
+    //    replacing the old thin `specimens`/`diagnostic_reports`/`patients` tables they superseded).
+    //    v2 stores the bare FHIR id directly
     //    (`patient_id`) rather than a `Patient/`-prefixed reference string (`subject_ref`), so the
     //    `received` CTE keys on `patient_id`, the report<->specimen join compares `patient_id` to
     //    `patient_id`, and the facility subquery compares the bare `dr.patient_id` against bare
@@ -445,8 +448,10 @@ order by \`avgHours\` desc, test asc`,
     // calendar-exact age (Postgres `age()` performs the same year/month/day-borrow subtraction as
     // the JS algorithm) banded into the same fixed buckets, grouped by band x gender (male/female/
     // other, where 'other' folds NULL and any non-male/female value — matches the JS else-branch).
-    //  - R3b cutover: reads `patients` (not the thin `patients` table) — `date_of_birth` in
-    //    place of thin `birth_date`, and `sex` ('M'/'F'/'O'/'U'/null) in place of thin `gender`
+    //  - R3b cutover: reads the v2 `patients` table (originally `v2_patients`, renamed to
+    //    canonical in R3e — replacing the old thin `patients` table it superseded) —
+    //    `date_of_birth` in place of thin `birth_date`, and `sex` ('M'/'F'/'O'/'U'/null) in place
+    //    of thin `gender`
     //    ('male'/'female'/other); the outer aggregates map sex='M'/'F' to male/female and
     //    everything else (including null) to 'other', preserving the same male/female/other shape.
     //  - `asOf` (optional, a single reference date — NOT a range): catalog defaults to
