@@ -34,6 +34,6 @@ export function planProjection(rows: ChangeRow[], boundary: number, cursor: numb
   const tasks = [...byKey.values()];
   let newCursor = cursor;
   if (firstUnsafe !== Infinity) newCursor = firstUnsafe - 1;
-  else if (rows.length > 0) newCursor = rows[rows.length - 1].seq;
+  else newCursor = rows.reduce((m, r) => Math.max(m, r.seq), cursor);
   return { tasks, newCursor };
 }
