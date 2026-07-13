@@ -1,7 +1,7 @@
 import type { Provenance } from '../provenance';
 import type { Insertable } from 'kysely';
 import type { V2LabRequestsTable } from '../schema/external';
-import { provColumns, firstIdentifier, codeable, referenceId, str } from '../flatten/extract';
+import { provColumns, firstIdentifier, codeable, referenceId, str } from './extract';
 
 export function projectServiceRequest(r: Record<string, unknown>, prov: Provenance): Insertable<V2LabRequestsTable> {
   const idn = firstIdentifier(r);

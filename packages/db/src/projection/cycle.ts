@@ -1,7 +1,6 @@
 import type { Kysely } from 'kysely';
 import type { InternalSchema } from '../schema/internal';
 import type { FhirStore } from '../fhir-store';
-import type { FlatWriter } from '../flat-writer';
 import type { RelationalWriter } from '../relational-writer';
 import { planProjection, type ProjectionTask, type Gap } from './plan';
 import { readCursor, advanceCursor } from './cursor';
@@ -14,7 +13,6 @@ export interface Logger { info(o: unknown, m?: string): void; error(o: unknown, 
 export interface ProjectionDeps {
   internalDb: Kysely<InternalSchema>;
   fhirStore: FhirStore;
-  flatWriter: FlatWriter;
   relationalWriter: RelationalWriter;
   logger: Logger;
   fetch: FetchSafeRows;
@@ -28,10 +26,8 @@ export interface ProjectionRunner {
 async function applyProjection(task: ProjectionTask, deps: ProjectionDeps): Promise<void> {
   const canonical = await deps.fhirStore.get(task.resourceType, task.id);
   if (canonical) {
-    await deps.flatWriter.write(canonical);
     await deps.relationalWriter.write(canonical);
   } else {
-    await deps.flatWriter.deleteById(task.resourceType, task.id);
     await deps.relationalWriter.deleteById(task.resourceType, task.id);
   }
 }
@@ -62,7 +58,7 @@ export function createProjectionRunner(deps: ProjectionDeps): ProjectionRunner {
 }
 
 /** Rebuild the read-model from the canonical store, then set the cursor to the current max seq. */
-export async function reprojectAll(deps: Pick<ProjectionDeps, 'internalDb' | 'flatWriter' | 'relationalWriter'>): Promise<number> {
+export async function reprojectAll(deps: Pick<ProjectionDeps, 'internalDb' | 'relationalWriter'>): Promise<number> {
   const maxRow = await deps.internalDb
     .selectFrom('fhir.change_log')
     .select((eb) => eb.fn.max('seq').as('m'))
@@ -82,7 +78,6 @@ export async function reprojectAll(deps: Pick<ProjectionDeps, 'internalDb' | 'fl
       .offset(offset)
       .execute();
     if (rows.length === 0) break;
-    await deps.flatWriter.writeMany(rows.map((r) => ({ resource: r.resource })));
     await deps.relationalWriter.writeMany(rows.map((r) => ({ resource: r.resource })));
     projected += rows.length;
     offset += rows.length;

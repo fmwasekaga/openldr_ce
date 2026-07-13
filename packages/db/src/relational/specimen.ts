@@ -2,7 +2,7 @@ import type { Provenance } from '../provenance';
 import type { Insertable } from 'kysely';
 import type { V2SpecimensTable } from '../schema/external';
 import { readSpecimenOrigin } from '@openldr/fhir';
-import { provColumns, codeable, referenceId, str } from '../flatten/extract';
+import { provColumns, codeable, referenceId, str } from './extract';
 
 export function projectSpecimen(r: Record<string, unknown>, prov: Provenance): Insertable<V2SpecimensTable> {
   const type = codeable(r['type']);

@@ -1,7 +1,7 @@
 import type { Provenance } from '../provenance';
 import type { Insertable } from 'kysely';
 import type { V2DiagnosticReportsTable } from '../schema/external';
-import { provColumns, codeable, referenceId, str } from '../flatten/extract';
+import { provColumns, codeable, referenceId, str } from './extract';
 
 export function projectDiagnosticReport(r: Record<string, unknown>, prov: Provenance): Insertable<V2DiagnosticReportsTable> {
   const code = codeable(r['code']);

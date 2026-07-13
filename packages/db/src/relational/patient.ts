@@ -1,7 +1,7 @@
 import type { Provenance } from '../provenance';
 import type { Insertable } from 'kysely';
 import type { V2PatientsTable } from '../schema/external';
-import { provColumns, firstIdentifier, str, reference } from '../flatten/extract';
+import { provColumns, firstIdentifier, str, reference } from './extract';
 
 const SEX: Record<string, string> = { male: 'M', female: 'F', other: 'O', unknown: 'U' };
 

@@ -2,7 +2,7 @@ import type { Kysely } from 'kysely';
 import type { ExternalSchema } from './schema/external';
 import type { Provenance } from './provenance';
 import type { TargetEngine } from './engine';
-import { insertBatchPg, mergeBatchMssql, insertBatchMysql, type WriteResult } from './flat-writer';
+import { insertBatchPg, mergeBatchMssql, insertBatchMysql, type WriteResult } from './batch-upsert';
 import { projectResource, v2TableForResourceType } from './relational/index';
 
 export type { WriteResult };

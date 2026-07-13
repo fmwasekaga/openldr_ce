@@ -1,7 +1,7 @@
 import type { Provenance } from '../provenance';
 import type { Insertable } from 'kysely';
 import type { V2FacilitiesTable } from '../schema/external';
-import { provColumns, firstIdentifier, codeable, str } from '../flatten/extract';
+import { provColumns, firstIdentifier, codeable, str } from './extract';
 
 // Both Organization and Location project here, keyed by their own FHIR id; source_resource discriminates.
 export function projectFacility(r: Record<string, unknown>, prov: Provenance): Insertable<V2FacilitiesTable> {

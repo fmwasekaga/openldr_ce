@@ -7,7 +7,6 @@ import { selectTargetStore } from './target-store';
 import {
   createInternalDb,
   createFhirStore,
-  createFlatWriter,
   createRelationalWriter,
   createMigrator,
   migrateAllDown,
@@ -17,7 +16,6 @@ import {
   type InternalSchema,
   type ExternalSchema,
   type FhirStore,
-  type FlatWriter,
   type RelationalWriter,
   type Provenance,
   type PersistResult,
@@ -27,7 +25,6 @@ export interface DbContext {
   internalDb: Kysely<InternalSchema>;
   externalStore: TargetStorePort;
   fhirStore: FhirStore;
-  flatWriter: FlatWriter;
   relationalWriter: RelationalWriter;
   logger: Logger;
   persist(resource: unknown, prov?: Provenance): Promise<PersistResult>;
@@ -43,7 +40,6 @@ export async function createDbContext(cfg: Config): Promise<DbContext> {
   const externalDb = externalStore.db as unknown as Kysely<ExternalSchema>;
 
   const fhirStore = createFhirStore(internal.db);
-  const flatWriter = createFlatWriter(externalDb, engine);
   const relationalWriter = createRelationalWriter(externalDb, engine);
   const internalMigrator = createMigrator(internal.db, internalMigrations);
   const externalMigrator = createMigrator(externalDb, externalMigrations(engine));
@@ -52,7 +48,6 @@ export async function createDbContext(cfg: Config): Promise<DbContext> {
     internalDb: internal.db,
     externalStore,
     fhirStore,
-    flatWriter,
     relationalWriter,
     logger,
     persist: (resource, prov) => persistResource({ fhirStore, logger }, resource, prov),

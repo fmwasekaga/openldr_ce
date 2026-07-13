@@ -1,7 +1,7 @@
 import type { Provenance } from '../provenance';
 import type { Insertable } from 'kysely';
 import type { V2LabResultsTable } from '../schema/external';
-import { provColumns, codeable, referenceId, str, num } from '../flatten/extract';
+import { provColumns, codeable, referenceId, str, num } from './extract';
 
 export function projectObservation(r: Record<string, unknown>, prov: Provenance): Insertable<V2LabResultsTable> {
   const code = codeable(r['code']);
