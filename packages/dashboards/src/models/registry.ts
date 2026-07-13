@@ -23,28 +23,26 @@ const COUNT: ModelMetric = { key: 'count', label: 'Count', agg: 'count' };
 
 export const MODELS: QueryModel[] = [
   {
-    id: 'service_requests', label: 'Test Orders', table: 'service_requests',
+    id: 'service_requests', label: 'Test Orders', table: 'lab_requests',
     dimensions: [
       { key: 'status', label: 'Status', column: 'status', kind: 'string' },
-      { key: 'intent', label: 'Intent', column: 'intent', kind: 'string' },
       { key: 'priority', label: 'Priority', column: 'priority', kind: 'string' },
-      { key: 'code_text', label: 'Test', column: 'code_text', kind: 'string' },
-      { key: 'authored_on', label: 'Authored', column: 'authored_on', kind: 'date', dateGrain: DATE_GRAINS },
+      { key: 'code_text', label: 'Test', column: 'panel_desc', kind: 'string' },
+      { key: 'authored_on', label: 'Authored', column: 'authored_at', kind: 'date', dateGrain: DATE_GRAINS },
     ],
-    metrics: [COUNT, { key: 'distinct_subjects', label: 'Distinct Patients', agg: 'count_distinct', column: 'subject_ref' }],
+    metrics: [COUNT, { key: 'distinct_subjects', label: 'Distinct Patients', agg: 'count_distinct', column: 'patient_id' }],
   },
   {
-    id: 'observations', label: 'Results', table: 'observations',
-    joins: [{ table: 'patients', alias: 'jp', left: 'subject_ref', leftReplace: ['Patient/', ''], right: 'id' }],
+    id: 'observations', label: 'Results', table: 'lab_results',
+    joins: [{ table: 'patients', alias: 'jp', left: 'patient_id', right: 'id' }],
     dimensions: [
-      { key: 'status', label: 'Status', column: 'status', kind: 'string' },
-      { key: 'code_text', label: 'Analyte', column: 'code_text', kind: 'string' },
-      { key: 'interpretation_code', label: 'Interpretation', column: 'interpretation_code', kind: 'string' },
-      { key: 'value_unit', label: 'Unit', column: 'value_unit', kind: 'string' },
-      { key: 'effective_date_time', label: 'Effective', column: 'effective_date_time', kind: 'date', dateGrain: DATE_GRAINS },
+      { key: 'code_text', label: 'Analyte', column: 'observation_desc', kind: 'string' },
+      { key: 'interpretation_code', label: 'Interpretation', column: 'abnormal_flag', kind: 'string' },
+      { key: 'value_unit', label: 'Unit', column: 'numeric_units', kind: 'string' },
+      { key: 'effective_date_time', label: 'Effective', column: 'result_timestamp', kind: 'date', dateGrain: DATE_GRAINS },
       { key: 'facility', label: 'Facility', column: 'managing_organization', kind: 'string', join: 'jp' },
     ],
-    metrics: [COUNT, { key: 'avg_value', label: 'Avg Value', agg: 'avg', column: 'value_quantity' }],
+    metrics: [COUNT, { key: 'avg_value', label: 'Avg Value', agg: 'avg', column: 'numeric_value' }],
   },
   {
     id: 'diagnostic_reports', label: 'Reports', table: 'diagnostic_reports',
@@ -68,9 +66,9 @@ export const MODELS: QueryModel[] = [
   {
     id: 'patients', label: 'Patients', table: 'patients',
     dimensions: [
-      { key: 'gender', label: 'Gender', column: 'gender', kind: 'string' },
+      { key: 'gender', label: 'Gender', column: 'sex', kind: 'string' },
       { key: 'managing_organization', label: 'Facility', column: 'managing_organization', kind: 'string' },
-      { key: 'age_band', label: 'Age band', column: 'birth_date', kind: 'string',
+      { key: 'age_band', label: 'Age band', column: 'date_of_birth', kind: 'string',
         compute: { kind: 'age-band',
           bands: [{ maxAge: 4, label: '0-4' }, { maxAge: 14, label: '5-14' }, { maxAge: 24, label: '15-24' }, { maxAge: 49, label: '25-49' }],
           openEndedLabel: '50+', unknownLabel: 'unknown' } },
@@ -78,15 +76,10 @@ export const MODELS: QueryModel[] = [
     metrics: [COUNT],
   },
   {
-    id: 'organizations', label: 'Facilities', table: 'organizations',
-    dimensions: [{ key: 'type_text', label: 'Type', column: 'type_text', kind: 'string' }],
-    metrics: [COUNT],
-  },
-  {
-    id: 'locations', label: 'Locations', table: 'locations',
+    id: 'facilities', label: 'Facilities', table: 'facilities',
     dimensions: [
-      { key: 'status', label: 'Status', column: 'status', kind: 'string' },
-      { key: 'type_text', label: 'Type', column: 'type_text', kind: 'string' },
+      { key: 'facility_type', label: 'Type', column: 'facility_type', kind: 'string' },
+      { key: 'facility_name', label: 'Name', column: 'facility_name', kind: 'string' },
     ],
     metrics: [COUNT],
   },
