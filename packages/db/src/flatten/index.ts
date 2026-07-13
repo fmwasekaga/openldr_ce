@@ -43,3 +43,16 @@ export function flattenResource(resource: unknown, prov: Provenance = {}): FlatR
       return null;
   }
 }
+
+export function tableForResourceType(resourceType: string): keyof ExternalSchema | null {
+  switch (resourceType) {
+    case 'Patient': return 'patients';
+    case 'Specimen': return 'specimens';
+    case 'ServiceRequest': return 'service_requests';
+    case 'DiagnosticReport': return 'diagnostic_reports';
+    case 'Observation': return 'observations';
+    case 'Organization': return 'organizations';
+    case 'Location': return 'locations';
+    default: return null;
+  }
+}

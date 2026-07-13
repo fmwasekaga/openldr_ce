@@ -1,5 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
+import { newDb } from 'pg-mem';
+import type { Kysely } from 'kysely';
 import { createFlatWriter } from './flat-writer';
+import { tableForResourceType } from './flatten/index';
+import { externalMigrations } from './migrations/external/index';
 
 // A minimal Patient flattens to { table: 'patients', row: {...} } (see flatten/patient.ts).
 const patient = { resourceType: 'Patient', id: 'p1', gender: 'male' };
@@ -110,5 +114,35 @@ describe('createFlatWriter writeMany', () => {
     const { db } = fakeDb();
     const w = createFlatWriter(db, 'postgres');
     expect(await w.writeMany([])).toEqual([]);
+  });
+});
+
+// pg-mem-backed external DB with the real flat tables, built by running the external
+// migrations directly (same approach as migrations/internal/test-helpers.ts:makeMigratedDb).
+async function makeMigratedExternalDb(): Promise<Kysely<any>> {
+  const mem = newDb();
+  const db = mem.adapters.createKysely() as Kysely<any>;
+  for (const migration of Object.values(externalMigrations('postgres'))) {
+    await migration.up(db);
+  }
+  return db;
+}
+
+describe('flat delete path', () => {
+  it('tableForResourceType maps known types and returns null for others', () => {
+    expect(tableForResourceType('Patient')).toBe('patients');
+    expect(tableForResourceType('Observation')).toBe('observations');
+    expect(tableForResourceType('Bundle')).toBeNull();
+  });
+
+  it('deleteById removes the flat row; no-op for non-projected type', async () => {
+    const db = await makeMigratedExternalDb();
+    const writer = createFlatWriter(db as never, 'postgres');
+    await writer.write({ resourceType: 'Patient', id: 'p1' });
+    expect(await db.selectFrom('patients').selectAll().execute()).toHaveLength(1);
+    await writer.deleteById('Patient', 'p1');
+    expect(await db.selectFrom('patients').selectAll().execute()).toHaveLength(0);
+    await writer.deleteById('Bundle', 'whatever'); // non-projected → no throw
+    await db.destroy();
   });
 });

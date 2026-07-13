@@ -2,7 +2,7 @@ import { type Kysely, sql } from 'kysely';
 import type { ExternalSchema } from './schema/external';
 import type { Provenance } from './provenance';
 import type { TargetEngine } from './engine';
-import { flattenResource } from './flatten/index';
+import { flattenResource, tableForResourceType } from './flatten/index';
 
 export type WriteResult = 'written' | 'skipped';
 
@@ -11,6 +11,7 @@ export interface FlatWriteItem { resource: unknown; provenance?: Provenance; }
 export interface FlatWriter {
   write(resource: unknown, provenance?: Provenance): Promise<WriteResult>;
   writeMany(items: FlatWriteItem[]): Promise<WriteResult[]>;
+  deleteById(resourceType: string, id: string): Promise<void>;
 }
 
 // MSSQL has no ON CONFLICT; use MERGE keyed on id. Behaviour-equivalent to the PG upsert:
@@ -138,6 +139,11 @@ export function createFlatWriter(db: Kysely<ExternalSchema>, engine: TargetEngin
         else await insertBatchPg(anyDb, table, rows);
       }
       return results;
+    },
+    async deleteById(resourceType, id) {
+      const table = tableForResourceType(resourceType);
+      if (!table) return; // non-projected type — nothing to delete
+      await anyDb.deleteFrom(table).where('id', '=', id).execute();
     },
   };
 }
