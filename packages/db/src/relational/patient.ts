@@ -1,7 +1,7 @@
 import type { Provenance } from '../provenance';
 import type { Insertable } from 'kysely';
 import type { V2PatientsTable } from '../schema/external';
-import { provColumns, firstIdentifier, str } from '../flatten/extract';
+import { provColumns, firstIdentifier, str, reference } from '../flatten/extract';
 
 const SEX: Record<string, string> = { male: 'M', female: 'F', other: 'O', unknown: 'U' };
 
@@ -20,6 +20,7 @@ export function projectPatient(r: Record<string, unknown>, prov: Provenance): In
     national_id: null,
     phone: str(telecom.find((t) => t['system'] === 'phone')?.['value']),
     email: str(telecom.find((t) => t['system'] === 'email')?.['value']),
+    managing_organization: reference(r['managingOrganization']),
     ...provColumns(prov),
   };
 }
