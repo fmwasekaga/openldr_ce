@@ -24,7 +24,7 @@
 // engine, normalizes + sorts both result sets, and deep-compares them. Exits non-zero on any
 // mismatch, printing the first differing row.
 import { Kysely, sql } from 'kysely';
-import { createMigrator, externalMigrations, createFlatWriter, type ExternalSchema } from '@openldr/db';
+import { createMigrator, externalMigrations, createFlatWriter, createRelationalWriter, type ExternalSchema } from '@openldr/db';
 import { createDbStore } from '@openldr/adapter-db-store';
 import { createMssqlStore } from '@openldr/adapter-mssql-store';
 import { prepareSelect } from '@openldr/dashboards';
@@ -57,6 +57,11 @@ async function seedFixture(db: Kysely<ExternalSchema>, engine: 'postgres' | 'mss
   const results = await writer.writeMany(items);
   const skipped = results.filter((r) => r === 'skipped').length;
   if (skipped > 0) throw new Error(`${engine}: ${skipped} fixture item(s) were skipped by the flat writer`);
+
+  const relWriter = createRelationalWriter(db, engine);
+  await relWriter.writeMany(items);
+  // relWriter intentionally skips resource types it doesn't project (specimens/diagnostic_reports);
+  // don't assert its skip count — only the flat writer's completeness is asserted above.
 }
 
 async function runQuery(db: Kysely<ExternalSchema>, sqlText: string): Promise<Record<string, unknown>[]> {

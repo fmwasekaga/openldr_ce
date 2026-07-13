@@ -427,11 +427,15 @@ order by \`avgHours\` desc, test asc`,
     // calendar-exact age (Postgres `age()` performs the same year/month/day-borrow subtraction as
     // the JS algorithm) banded into the same fixed buckets, grouped by band x gender (male/female/
     // other, where 'other' folds NULL and any non-male/female value — matches the JS else-branch).
+    //  - R3b cutover: reads `v2_patients` (not the thin `patients` table) — `date_of_birth` in
+    //    place of thin `birth_date`, and `sex` ('M'/'F'/'O'/'U'/null) in place of thin `gender`
+    //    ('male'/'female'/other); the outer aggregates map sex='M'/'F' to male/female and
+    //    everything else (including null) to 'other', preserving the same male/female/other shape.
     //  - `asOf` (optional, a single reference date — NOT a range): catalog defaults to
     //    '2026-01-01T00:00:00Z' when unset/empty. Same '' = "use default" guard as facility below.
     //  - facility filter (optional): same '' = no-filter guard as q-amr-resistance; direct equality
-    //    on patients.managing_organization (no subject_ref indirection — this query reads
-    //    `patients` directly, unlike the AMR/TAT queries).
+    //    on v2_patients.managing_organization (no subject_ref indirection — this query reads
+    //    `v2_patients` directly, unlike the AMR/TAT queries).
     //  - row order: the FIXED band order ['0-4','5-14','15-24','25-49','50+','unknown'], NOT a
     //    count-based sort — matches the catalog's `ORDER.filter(b => counts.has(b)).map(...)`.
     params: [
@@ -445,24 +449,24 @@ order by \`avgHours\` desc, test asc`,
 banded as (
   select
     case
-      when p.birth_date is null then 'unknown'
-      when p.birth_date::date > pr.ref_date then 'unknown'
-      when extract(year from age(pr.ref_date, p.birth_date::date)) <= 4 then '0-4'
-      when extract(year from age(pr.ref_date, p.birth_date::date)) <= 14 then '5-14'
-      when extract(year from age(pr.ref_date, p.birth_date::date)) <= 24 then '15-24'
-      when extract(year from age(pr.ref_date, p.birth_date::date)) <= 49 then '25-49'
+      when p.date_of_birth is null then 'unknown'
+      when p.date_of_birth::date > pr.ref_date then 'unknown'
+      when extract(year from age(pr.ref_date, p.date_of_birth::date)) <= 4 then '0-4'
+      when extract(year from age(pr.ref_date, p.date_of_birth::date)) <= 14 then '5-14'
+      when extract(year from age(pr.ref_date, p.date_of_birth::date)) <= 24 then '15-24'
+      when extract(year from age(pr.ref_date, p.date_of_birth::date)) <= 49 then '25-49'
       else '50+'
     end as band,
-    p.gender
-  from patients p, params pr
+    p.sex
+  from v2_patients p, params pr
   where ({{param.facility}} = '' or p.managing_organization = {{param.facility}})
 )
 select
   band,
   count(*)::int as total,
-  sum(case when gender = 'male' then 1 else 0 end)::int as male,
-  sum(case when gender = 'female' then 1 else 0 end)::int as female,
-  sum(case when gender is null or gender not in ('male', 'female') then 1 else 0 end)::int as other
+  sum(case when sex = 'M' then 1 else 0 end)::int as male,
+  sum(case when sex = 'F' then 1 else 0 end)::int as female,
+  sum(case when sex is null or sex not in ('M', 'F') then 1 else 0 end)::int as other
 from banded
 group by band
 order by array_position(array['0-4','5-14','15-24','25-49','50+','unknown']::text[], band)`,
@@ -482,24 +486,24 @@ order by array_position(array['0-4','5-14','15-24','25-49','50+','unknown']::tex
 banded as (
   select
     case
-      when p.birth_date is null then 'unknown'
-      when cast(p.birth_date as date) > pr.ref_date then 'unknown'
-      when (datediff(year, cast(p.birth_date as date), pr.ref_date) - case when (month(cast(p.birth_date as date)) > month(pr.ref_date)) or (month(cast(p.birth_date as date)) = month(pr.ref_date) and day(cast(p.birth_date as date)) > day(pr.ref_date)) then 1 else 0 end) <= 4 then '0-4'
-      when (datediff(year, cast(p.birth_date as date), pr.ref_date) - case when (month(cast(p.birth_date as date)) > month(pr.ref_date)) or (month(cast(p.birth_date as date)) = month(pr.ref_date) and day(cast(p.birth_date as date)) > day(pr.ref_date)) then 1 else 0 end) <= 14 then '5-14'
-      when (datediff(year, cast(p.birth_date as date), pr.ref_date) - case when (month(cast(p.birth_date as date)) > month(pr.ref_date)) or (month(cast(p.birth_date as date)) = month(pr.ref_date) and day(cast(p.birth_date as date)) > day(pr.ref_date)) then 1 else 0 end) <= 24 then '15-24'
-      when (datediff(year, cast(p.birth_date as date), pr.ref_date) - case when (month(cast(p.birth_date as date)) > month(pr.ref_date)) or (month(cast(p.birth_date as date)) = month(pr.ref_date) and day(cast(p.birth_date as date)) > day(pr.ref_date)) then 1 else 0 end) <= 49 then '25-49'
+      when p.date_of_birth is null then 'unknown'
+      when cast(p.date_of_birth as date) > pr.ref_date then 'unknown'
+      when (datediff(year, cast(p.date_of_birth as date), pr.ref_date) - case when (month(cast(p.date_of_birth as date)) > month(pr.ref_date)) or (month(cast(p.date_of_birth as date)) = month(pr.ref_date) and day(cast(p.date_of_birth as date)) > day(pr.ref_date)) then 1 else 0 end) <= 4 then '0-4'
+      when (datediff(year, cast(p.date_of_birth as date), pr.ref_date) - case when (month(cast(p.date_of_birth as date)) > month(pr.ref_date)) or (month(cast(p.date_of_birth as date)) = month(pr.ref_date) and day(cast(p.date_of_birth as date)) > day(pr.ref_date)) then 1 else 0 end) <= 14 then '5-14'
+      when (datediff(year, cast(p.date_of_birth as date), pr.ref_date) - case when (month(cast(p.date_of_birth as date)) > month(pr.ref_date)) or (month(cast(p.date_of_birth as date)) = month(pr.ref_date) and day(cast(p.date_of_birth as date)) > day(pr.ref_date)) then 1 else 0 end) <= 24 then '15-24'
+      when (datediff(year, cast(p.date_of_birth as date), pr.ref_date) - case when (month(cast(p.date_of_birth as date)) > month(pr.ref_date)) or (month(cast(p.date_of_birth as date)) = month(pr.ref_date) and day(cast(p.date_of_birth as date)) > day(pr.ref_date)) then 1 else 0 end) <= 49 then '25-49'
       else '50+'
     end as band,
-    p.gender
-  from patients p cross join params pr
+    p.sex
+  from v2_patients p cross join params pr
   where ({{param.facility}} = '' or p.managing_organization = {{param.facility}})
 )
 select
   band,
   cast(count(*) as int) as total,
-  cast(sum(case when gender = 'male' then 1 else 0 end) as int) as male,
-  cast(sum(case when gender = 'female' then 1 else 0 end) as int) as female,
-  cast(sum(case when gender is null or gender not in ('male', 'female') then 1 else 0 end) as int) as other
+  cast(sum(case when sex = 'M' then 1 else 0 end) as int) as male,
+  cast(sum(case when sex = 'F' then 1 else 0 end) as int) as female,
+  cast(sum(case when sex is null or sex not in ('M', 'F') then 1 else 0 end) as int) as other
 from banded
 group by band
 order by case band when '0-4' then 1 when '5-14' then 2 when '15-24' then 3 when '25-49' then 4 when '50+' then 5 when 'unknown' then 6 end`,
@@ -516,24 +520,24 @@ order by case band when '0-4' then 1 when '5-14' then 2 when '15-24' then 3 when
 banded as (
   select
     case
-      when p.birth_date is null then 'unknown'
-      when cast(substr(p.birth_date, 1, 10) as date) > pr.ref_date then 'unknown'
-      when timestampdiff(year, cast(substr(p.birth_date, 1, 10) as date), pr.ref_date) <= 4 then '0-4'
-      when timestampdiff(year, cast(substr(p.birth_date, 1, 10) as date), pr.ref_date) <= 14 then '5-14'
-      when timestampdiff(year, cast(substr(p.birth_date, 1, 10) as date), pr.ref_date) <= 24 then '15-24'
-      when timestampdiff(year, cast(substr(p.birth_date, 1, 10) as date), pr.ref_date) <= 49 then '25-49'
+      when p.date_of_birth is null then 'unknown'
+      when cast(substr(p.date_of_birth, 1, 10) as date) > pr.ref_date then 'unknown'
+      when timestampdiff(year, cast(substr(p.date_of_birth, 1, 10) as date), pr.ref_date) <= 4 then '0-4'
+      when timestampdiff(year, cast(substr(p.date_of_birth, 1, 10) as date), pr.ref_date) <= 14 then '5-14'
+      when timestampdiff(year, cast(substr(p.date_of_birth, 1, 10) as date), pr.ref_date) <= 24 then '15-24'
+      when timestampdiff(year, cast(substr(p.date_of_birth, 1, 10) as date), pr.ref_date) <= 49 then '25-49'
       else '50+'
     end as band,
-    p.gender
-  from patients p cross join params pr
+    p.sex
+  from v2_patients p cross join params pr
   where ({{param.facility}} = '' or p.managing_organization = {{param.facility}})
 )
 select
   band,
   cast(count(*) as signed) as total,
-  cast(sum(case when gender = 'male' then 1 else 0 end) as signed) as male,
-  cast(sum(case when gender = 'female' then 1 else 0 end) as signed) as female,
-  cast(sum(case when gender is null or gender not in ('male', 'female') then 1 else 0 end) as signed) as other
+  cast(sum(case when sex = 'M' then 1 else 0 end) as signed) as male,
+  cast(sum(case when sex = 'F' then 1 else 0 end) as signed) as female,
+  cast(sum(case when sex is null or sex not in ('M', 'F') then 1 else 0 end) as signed) as other
 from banded
 group by band
 order by case band when '0-4' then 1 when '5-14' then 2 when '15-24' then 3 when '25-49' then 4 when '50+' then 5 when 'unknown' then 6 end`,

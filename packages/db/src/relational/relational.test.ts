@@ -3,9 +3,9 @@ import { projectResource, v2TableForResourceType } from './index';
 
 describe('relational projectResource', () => {
   it('maps Patient -> v2_patients (denormalized, sex code)', () => {
-    const out = projectResource({ resourceType: 'Patient', id: 'p1', identifier: [{ value: 'MRN-1' }], name: [{ family: 'Doe', given: ['Jane'] }], gender: 'female', birthDate: '1990-01-01', telecom: [{ system: 'phone', value: '123' }] });
+    const out = projectResource({ resourceType: 'Patient', id: 'p1', identifier: [{ value: 'MRN-1' }], name: [{ family: 'Doe', given: ['Jane'] }], gender: 'female', birthDate: '1990-01-01', telecom: [{ system: 'phone', value: '123' }], managingOrganization: { reference: 'Organization/org-1' } });
     expect(out?.table).toBe('v2_patients');
-    expect(out?.row).toMatchObject({ id: 'p1', patient_guid: 'MRN-1', surname: 'Doe', firstname: 'Jane', sex: 'F', date_of_birth: '1990-01-01', phone: '123' });
+    expect(out?.row).toMatchObject({ id: 'p1', patient_guid: 'MRN-1', surname: 'Doe', firstname: 'Jane', sex: 'F', date_of_birth: '1990-01-01', phone: '123', managing_organization: 'Organization/org-1' });
   });
 
   it('maps ServiceRequest -> v2_lab_requests (soft patient_id, denormalized code+system)', () => {

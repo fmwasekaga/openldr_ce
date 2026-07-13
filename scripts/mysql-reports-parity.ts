@@ -15,7 +15,7 @@
 // Config from env with the below defaults; override via TARGET_DATABASE_URL / MYSQL_HOST / MYSQL_PORT
 // / MYSQL_DATABASE / MYSQL_USER / MYSQL_PASSWORD / MYSQL_SSL.
 import { Kysely, sql } from 'kysely';
-import { createMigrator, externalMigrations, createFlatWriter, type ExternalSchema } from '@openldr/db';
+import { createMigrator, externalMigrations, createFlatWriter, createRelationalWriter, type ExternalSchema } from '@openldr/db';
 import { createDbStore } from '@openldr/adapter-db-store';
 import { createMysqlStore } from '@openldr/adapter-mysql-store';
 import { prepareSelect } from '@openldr/dashboards';
@@ -44,6 +44,11 @@ async function seedFixture(db: Kysely<ExternalSchema>, engine: 'postgres' | 'mys
   const results = await writer.writeMany(items);
   const skipped = results.filter((r) => r === 'skipped').length;
   if (skipped > 0) throw new Error(`${engine}: ${skipped} fixture item(s) skipped by the flat writer`);
+
+  const relWriter = createRelationalWriter(db, engine);
+  await relWriter.writeMany(items);
+  // relWriter intentionally skips resource types it doesn't project (specimens/diagnostic_reports);
+  // don't assert its skip count — only the flat writer's completeness is asserted above.
 }
 async function runQuery(db: Kysely<ExternalSchema>, sqlText: string): Promise<Record<string, unknown>[]> {
   const r = await sql.raw<Record<string, unknown>>(sqlText).execute(db as unknown as Kysely<unknown>);

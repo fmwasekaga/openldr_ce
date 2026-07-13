@@ -100,6 +100,7 @@ export interface V2PatientsTable extends ProvenanceColumns {
   national_id: string | null;
   phone: string | null;
   email: string | null;
+  managing_organization: string | null;
 }
 
 export interface V2LabRequestsTable extends ProvenanceColumns {
