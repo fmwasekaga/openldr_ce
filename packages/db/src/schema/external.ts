@@ -128,6 +128,8 @@ export interface V2LabResultsTable extends ProvenanceColumns {
   text_value: string | null;
   abnormal_flag: string | null;
   result_timestamp: string | null;
+  patient_id: string | null;
+  specimen_id: string | null;
 }
 
 export interface V2FacilitiesTable extends ProvenanceColumns {
@@ -146,6 +148,7 @@ export interface V2SpecimensTable extends ProvenanceColumns {
   status: string | null;
   type_code: string | null;
   type_text: string | null;
+  origin: string | null;
 }
 
 export interface V2DiagnosticReportsTable extends ProvenanceColumns {
