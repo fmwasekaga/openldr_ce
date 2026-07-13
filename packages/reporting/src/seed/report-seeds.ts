@@ -571,9 +571,9 @@ order by case band when '0-4' then 1 when '5-14' then 2 when '15-24' then 3 when
     //    q-test-volume/q-turnaround-time: substituteParams throws "unbound parameter" for any
     //    {{param.x}} token missing from values regardless of the param's own `required` flag, so
     //    it's simpler to just require the range). endOfDay applied to `to`.
-    //  - patient join: reconstructs `'Patient/' || p.id` and compares directly against
-    //    o.subject_ref (matches the catalog's literal `.replace(/^Patient\//, '')` — a plain
-    //    equality join is the safe SQL mirror rather than a generic prefix-strip).
+    //  - patient join: `o.patient_id = p.id` directly — v2 stores the bare FHIR id, so the old
+    //    thin `'Patient/' || p.id` prefix reconstruction (mirroring the catalog's
+    //    `.replace(/^Patient\//, '')`) is gone.
     //  - row order: facility ASC — matches the catalog's explicit `.sort((a,b) =>
     //    a.facility.localeCompare(b.facility))`.
     //  - R3d cutover: reads v2_lab_results join v2_patients on bare o.patient_id = p.id
@@ -596,10 +596,8 @@ where o.abnormal_flag in ('S', 'I', 'R')
   and o.result_timestamp <= ({{param.to}} || 'T23:59:59.999Z')
 group by p.managing_organization
 order by p.managing_organization`,
-      // Task 2 port: ::int -> cast(...as int); string || -> +ing (both `'Patient/' + p.id`
-      // and the `{{param.to}}` concat — `id` is `varchar(450)` on mssql per the shared external
-      // schema (packages/db/src/migrations/external/dialect.ts's keyType), so it concatenates
-      // with the nvarchar literal without an extra cast).
+      // Task 2 port: ::int -> cast(...as int); end-of-day string || -> + (the `{{param.to}}`
+      // concat).
       mssql: `select
   p.managing_organization as facility,
   cast(count(*) as int) as tested,
@@ -613,8 +611,8 @@ where o.abnormal_flag in ('S', 'I', 'R')
   and o.result_timestamp <= ({{param.to}} + 'T23:59:59.999Z')
 group by p.managing_organization
 order by p.managing_organization`,
-      // Task 5 mysql port: ::int -> cast(...as signed); join 'Patient/' || p.id -> concat(...);
-      // end-of-day string || -> concat(). Otherwise identical structure.
+      // Task 5 mysql port: ::int -> cast(...as signed); end-of-day string || -> concat().
+      // Otherwise identical structure.
       mysql: `select
   p.managing_organization as facility,
   cast(count(*) as signed) as tested,
@@ -874,7 +872,7 @@ order by "Specimen", "PathogenCode", "AntibioticCode", "Gender", "AgeGroup", "Or
       //  - age = timestampdiff(year, birth, iso_date-or-'1970-01-01'); calendar-exact, NO
       //    borrow-day CASE. substr(x,1,10) strips T..Z before casting to date; NULL birth_date ->
       //    NULL age_years (outer CASE checks `birth_date is null` first, so harmless).
-      //  - 'Specimen/' || s.id / 'Patient/' || p.id / end-of-day || -> concat().
+      //  - end-of-day || -> concat().
       //  - ::int -> cast(...as signed); coalesce(nullif({{param.year}},''),'0')::int ->
       //    cast(coalesce(nullif(...),'0') as signed).
       //  - all double-quoted result aliases -> BACKTICK aliases (MySQL "..." is a string literal);
@@ -1389,7 +1387,7 @@ from results
 group by pathogen_code
 order by pathogen_code`,
       // Task 5 mysql port: simpler CTE chain (no age/gender) — distinct on -> row_number()/rn=1;
-      // 'Specimen/' || s.id / end-of-day || -> concat(); the SELECT emits one backtick-aliased CASE
+      // end-of-day || -> concat(); the SELECT emits one backtick-aliased CASE
       // column per panel antibiotic via antibiogramCellSql(a, 'mysql'). pathogen_code as pathogen
       // (bare alias, fine); group by / order by pathogen_code unchanged.
       mysql: `with org_obs as (
