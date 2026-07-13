@@ -138,6 +138,27 @@ export interface V2FacilitiesTable extends ProvenanceColumns {
   source_resource: string | null;
 }
 
+export interface V2SpecimensTable extends ProvenanceColumns {
+  id: string;
+  patient_id: string | null;
+  received_time: string | null;
+  accession: string | null;
+  status: string | null;
+  type_code: string | null;
+  type_text: string | null;
+}
+
+export interface V2DiagnosticReportsTable extends ProvenanceColumns {
+  id: string;
+  patient_id: string | null;
+  status: string | null;
+  code_code: string | null;
+  code_text: string | null;
+  issued: string | null;
+  effective: string | null;
+  conclusion: string | null;
+}
+
 export interface ExternalSchema {
   patients: PatientsTable;
   specimens: SpecimensTable;
@@ -150,4 +171,6 @@ export interface ExternalSchema {
   v2_lab_requests: V2LabRequestsTable;
   v2_lab_results: V2LabResultsTable;
   v2_facilities: V2FacilitiesTable;
+  v2_specimens: V2SpecimensTable;
+  v2_diagnostic_reports: V2DiagnosticReportsTable;
 }

@@ -22,6 +22,8 @@ export const EXTERNAL_TABLE_COLUMNS: Record<keyof ExternalSchema, string[]> = {
   v2_lab_requests: ['id', 'request_id', 'patient_id', 'panel_code', 'panel_system', 'panel_desc', 'status', 'priority', 'authored_at', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   v2_lab_results: ['id', 'request_id', 'observation_code', 'observation_system', 'observation_desc', 'result_type', 'numeric_value', 'numeric_units', 'coded_value', 'text_value', 'abnormal_flag', 'result_timestamp', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   v2_facilities: ['id', 'facility_code', 'facility_name', 'facility_type', 'source_resource', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
+  v2_specimens: ['id', 'patient_id', 'received_time', 'accession', 'status', 'type_code', 'type_text', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
+  v2_diagnostic_reports: ['id', 'patient_id', 'status', 'code_code', 'code_text', 'issued', 'effective', 'conclusion', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
 };
 
 /** All canonical resources (the `resource` jsonb of every fhir_resources row), ordered by type+id. */

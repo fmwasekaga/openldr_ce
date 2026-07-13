@@ -27,9 +27,22 @@ describe('relational projectResource', () => {
     expect(loc).toMatchObject({ table: 'v2_facilities', row: { id: 'loc1', facility_name: 'Ward A', source_resource: 'Location' } });
   });
 
+  it('maps Specimen -> v2_specimens (bare patient_id, received_time)', () => {
+    const out = projectResource({ resourceType: 'Specimen', id: 'sp1', subject: { reference: 'Patient/p1' }, receivedTime: '2026-01-01T00:00:00Z', type: { text: 'Blood' }, status: 'available' });
+    expect(out?.table).toBe('v2_specimens');
+    expect(out?.row).toMatchObject({ id: 'sp1', patient_id: 'p1', received_time: '2026-01-01T00:00:00Z', type_text: 'Blood', status: 'available' });
+  });
+  it('maps DiagnosticReport -> v2_diagnostic_reports (bare patient_id, code, issued)', () => {
+    const out = projectResource({ resourceType: 'DiagnosticReport', id: 'dr1', subject: { reference: 'Patient/p1' }, status: 'final', code: { coding: [{ code: 'CBC' }], text: 'Complete Blood Count' }, issued: '2026-01-02T00:00:00Z', conclusion: 'ok' });
+    expect(out?.table).toBe('v2_diagnostic_reports');
+    expect(out?.row).toMatchObject({ id: 'dr1', patient_id: 'p1', status: 'final', code_code: 'CBC', code_text: 'Complete Blood Count', issued: '2026-01-02T00:00:00Z', conclusion: 'ok' });
+  });
+
   it('returns null for non-projected types', () => {
     expect(projectResource({ resourceType: 'Bundle' })).toBeNull();
     expect(v2TableForResourceType('Bundle')).toBeNull();
     expect(v2TableForResourceType('Patient')).toBe('v2_patients');
+    expect(v2TableForResourceType('Specimen')).toBe('v2_specimens');
+    expect(v2TableForResourceType('DiagnosticReport')).toBe('v2_diagnostic_reports');
   });
 });
