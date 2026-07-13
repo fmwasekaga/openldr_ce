@@ -4,6 +4,7 @@ import type { FhirResource } from '@openldr/fhir';
 export interface FhirResourcesTable {
   resource_type: string;
   id: string;
+  version: Generated<number>;
   version_id: string | null;
   resource: JSONColumnType<FhirResource>;
   source_system: string | null;
@@ -11,6 +12,32 @@ export interface FhirResourcesTable {
   plugin_version: string | null;
   batch_id: string | null;
   created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface ResourceHistoryTable {
+  resource_type: string;
+  id: string;
+  version: number;
+  op: string; // 'upsert' | 'delete'
+  resource: JSONColumnType<FhirResource> | null; // null for delete tombstones
+  recorded_at: Generated<Date>;
+}
+
+export interface ChangeLogTable {
+  seq: Generated<number>;
+  resource_type: string;
+  resource_id: string;
+  version: number;
+  op: string; // 'upsert' | 'delete'
+  content_hash: string | null;
+  site_id: string | null;
+  recorded_at: Generated<Date>;
+}
+
+export interface ChangeCursorsTable {
+  consumer: string;
+  last_seq: Generated<number>;
   updated_at: Generated<Date>;
 }
 
@@ -499,6 +526,9 @@ export interface ReportsTable {
 
 export interface InternalSchema {
   'fhir.fhir_resources': FhirResourcesTable;
+  'fhir.resource_history': ResourceHistoryTable;
+  'fhir.change_log': ChangeLogTable;
+  'fhir.change_cursors': ChangeCursorsTable;
   outbox_events: OutboxEventsTable;
   ingest_batches: IngestBatchesTable;
   plugins: PluginsTable;
