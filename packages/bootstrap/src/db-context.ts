@@ -8,6 +8,7 @@ import {
   createInternalDb,
   createFhirStore,
   createFlatWriter,
+  createRelationalWriter,
   createMigrator,
   migrateAllDown,
   persistResource,
@@ -17,6 +18,7 @@ import {
   type ExternalSchema,
   type FhirStore,
   type FlatWriter,
+  type RelationalWriter,
   type Provenance,
   type PersistResult,
 } from '@openldr/db';
@@ -26,6 +28,7 @@ export interface DbContext {
   externalStore: TargetStorePort;
   fhirStore: FhirStore;
   flatWriter: FlatWriter;
+  relationalWriter: RelationalWriter;
   logger: Logger;
   persist(resource: unknown, prov?: Provenance): Promise<PersistResult>;
   migrateAll(): Promise<{ internal: MigrationResultSet; external: MigrationResultSet }>;
@@ -41,6 +44,7 @@ export async function createDbContext(cfg: Config): Promise<DbContext> {
 
   const fhirStore = createFhirStore(internal.db);
   const flatWriter = createFlatWriter(externalDb, engine);
+  const relationalWriter = createRelationalWriter(externalDb, engine);
   const internalMigrator = createMigrator(internal.db, internalMigrations);
   const externalMigrator = createMigrator(externalDb, externalMigrations(engine));
 
@@ -49,6 +53,7 @@ export async function createDbContext(cfg: Config): Promise<DbContext> {
     externalStore,
     fhirStore,
     flatWriter,
+    relationalWriter,
     logger,
     persist: (resource, prov) => persistResource({ fhirStore, logger }, resource, prov),
     async migrateAll() {
