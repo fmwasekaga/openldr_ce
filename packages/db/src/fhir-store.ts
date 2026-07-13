@@ -89,6 +89,11 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
           .insertInto('fhir.resource_history')
           .values({ resource_type: resourceType, id, version: next, op: 'upsert', resource: serialized })
           .execute();
+        // INVARIANT (load-bearing for the projection safe-frontier): the change_log insert must NOT be
+        // this transaction's first write. The fhir_resources upsert + resource_history insert above run
+        // first, so the txn's xid is assigned before nextval(seq) is drawn here. The R2 projection worker
+        // relies on this: a gap's txn xid < the snapshot's xmax that stamps its x0. Inserting into
+        // change_log as a transaction's first statement would reopen a permanent-skip window.
         await trx
           .insertInto('fhir.change_log')
           .values({ resource_type: resourceType, resource_id: id, version: next, op: 'upsert', content_hash: contentHashHex, site_id: site })
