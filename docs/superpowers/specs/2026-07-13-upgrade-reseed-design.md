@@ -116,22 +116,22 @@ export async function seedDefaultDashboard(store: Pick<DashboardStore, 'get' | '
 }
 ```
 
-Change to create-if-absent, else replace-if-changed (widen the `Pick` to include `update`):
+Change to create-if-absent, else replace-if-changed. Keep the **`number`** return (0 or 1 = "wrote
+the sample: created or refreshed") to avoid rippling `SeedResult.dashboardsSeeded: number` and the CLI
+log; widen the `Pick` to include `update`:
 
 ```ts
-export interface SeedDashboardResult { created: number; updated: number }
-
-export async function seedDefaultDashboard(store: Pick<DashboardStore, 'get' | 'create' | 'update'>): Promise<SeedDashboardResult> {
+export async function seedDefaultDashboard(store: Pick<DashboardStore, 'get' | 'create' | 'update'>): Promise<number> {
   const existing = await store.get(SAMPLE_DASHBOARD.id);
   if (!existing) {
     await store.create(SAMPLE_DASHBOARD);
-    return { created: 1, updated: 0 };
+    return 1;
   }
   if (!dashboardContentEqual(existing, SAMPLE_DASHBOARD)) {
     await store.update(SAMPLE_DASHBOARD.id, SAMPLE_DASHBOARD);
-    return { created: 0, updated: 1 };
+    return 1;
   }
-  return { created: 0, updated: 0 };
+  return 0;
 }
 ```
 
@@ -141,23 +141,18 @@ export async function seedDefaultDashboard(store: Pick<DashboardStore, 'get' | '
   with `SAMPLE_DASHBOARD` (managed-overwrite: this also replaces any operator layout customization of
   the `default` board — the accepted tradeoff).
 - `dashboardStore.update(id, d)` already exists (`packages/dashboards/src/store.ts`).
-- The return type changes from `number` to `SeedDashboardResult`; update the two callers
-  (`seedDatabase` in `bootstrap/src/seed.ts` and the boot path in `bootstrap/src/index.ts:857`) — see §3.
+- Return type stays `number`, so `SeedResult.dashboardsSeeded` and the CLI log
+  (`packages/cli/src/db.ts`) are unchanged; the two callers (`seedDatabase` in `bootstrap/src/seed.ts`
+  and `dangerResetDashboards` in `bootstrap/src/index.ts`) need no signature change. Only the
+  `FormSeedTarget.dashboards.store` `Pick` in `seed.ts` must widen to include `update`.
 
-### 3. Thread the counts through `seedDatabase`
+### 3. Counts (minimal)
 
-`packages/bootstrap/src/seed.ts` — `seedDatabase` already surfaces per-artifact counts in
-`SeedResult`. Update:
-
-- `dashboardsSeeded` (currently the `number` from `seedDefaultDashboard`) → use the new
-  `SeedDashboardResult`; expose `dashboardsSeeded`/`dashboardsUpdated` (or keep `dashboardsSeeded` =
-  `created` and add `dashboardsUpdated` = `updated`) in `SeedResult`.
-- `dataDrivenReportsSeeded` already carries the `SeedDataDrivenReportsResult`; it now includes
-  `queriesUpdated` automatically.
-- `bootstrap/src/index.ts:857` calls `seedDefaultDashboard(ctx.dashboards.store)` on boot — update
-  its use of the return value (it likely just logs/ignores it; adjust to the new shape).
-
-These counts are for observability (logged by the seed CLI / boot); no behavior depends on them.
+`SeedDataDrivenReportsResult` gains `queriesUpdated: number` — it's carried in `SeedResult`
+(`dataDrivenReportsSeeded`) but the CLI's `db.ts` destructure does not read that field, so no CLI
+change is required. `dashboardsSeeded` stays a `number`. Optionally, the seed CLI/boot log may be
+extended to surface "refreshed N built-in queries" from `dataDrivenReportsSeeded.queriesUpdated`, but
+that is a non-essential nicety, not required. No behavior depends on these counts.
 
 ## Testing strategy
 
@@ -180,17 +175,16 @@ These counts are for observability (logged by the seed CLI / boot); no behavior 
 - **Cross-package gate:** `pnpm turbo run typecheck test --force` (ignore the known `@openldr/users`
   /`@openldr/marketplace` parallel-turbo flakes — verify in isolation).
 
-## Task breakdown (~4)
+## Task breakdown (~3)
 
 1. **Report-query refresh** — `seedDataDrivenReports` create-or-update-if-changed for the
    `customQueries` loop; `paramsEqual` helper; `queriesUpdated` on `SeedDataDrivenReportsResult`; unit
-   tests (a)–(d).
-2. **Dashboard refresh** — `seedDefaultDashboard` create-or-replace-if-changed; `dashboardContentEqual`
-   helper; `SeedDashboardResult` return type; unit tests.
-3. **Thread counts** — update `seedDatabase`'s `SeedResult` + the two `seedDefaultDashboard` callers
-   (`bootstrap/src/seed.ts`, `bootstrap/src/index.ts`); fix the seed CLI/boot logging of the new
-   fields; per-package `tsc` green.
-4. **Whole-slice review, gate, merge & push** — cross-package gate; spec-conformance + quality review;
+   tests (a)–(d). (`SeedResult` carries the struct already; no CLI change.)
+2. **Dashboard refresh** — `seedDefaultDashboard` create-or-replace-if-changed (keeps `number`
+   return); `dashboardContentEqual` helper; widen `FormSeedTarget.dashboards.store` `Pick` to include
+   `update`; unit tests. Per-package `tsc` green (`@openldr/reporting`/`@openldr/dashboards`/
+   `@openldr/bootstrap`).
+3. **Whole-slice review, gate, merge & push** — cross-package gate; spec-conformance + quality review;
    merge `--no-ff` to `main` + push; update memory (R3e upgrade-reseed deferral resolved).
 
 ## Constraints & conventions
