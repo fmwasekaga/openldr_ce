@@ -57,7 +57,7 @@ import { makeMigratedDb } from './test-helpers';
 import { createFhirStore } from '../../fhir-store';
 
 describe('045 fhir schema move', () => {
-  it('relocates fhir_resources into the fhir schema and FhirStore round-trips', async () => {
+  it('relocates fhir_resources into the fhir schema, preserves existing rows, and FhirStore round-trips', async () => {
     const db = await makeMigratedDb();
     const store = createFhirStore(db);
 
@@ -70,7 +70,11 @@ describe('045 fhir schema move', () => {
       .selectFrom('fhir.fhir_resources')
       .select(['resource_type', 'id'])
       .execute();
-    expect(rows).toEqual([{ resource_type: 'Patient', id: 'p1' }]);
+    // The resource we just saved is in the relocated table.
+    expect(rows).toContainEqual({ resource_type: 'Patient', id: 'p1' });
+    // Pre-existing rows seeded by earlier migrations (014 seeds ValueSets into
+    // fhir_resources) were carried over by the relocation — proves zero data loss.
+    expect(rows.some((r) => r.resource_type === 'ValueSet')).toBe(true);
 
     // The old public.fhir_resources no longer exists.
     await expect(
