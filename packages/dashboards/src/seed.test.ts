@@ -42,6 +42,12 @@ describe('seedDefaultDashboard', () => {
       rows,
       get: async (id: string) => rows.find((d) => d.id === id),
       create: async (d: Dashboard) => { if (!rows.some((x) => x.id === d.id)) rows.push(d); return d; },
+      update: async (id: string, d: Dashboard) => {
+        const idx = rows.findIndex((x) => x.id === id);
+        const next = { ...d, id };
+        if (idx >= 0) rows[idx] = next; else rows.push(next);
+        return next;
+      },
     };
   }
 
@@ -51,11 +57,46 @@ describe('seedDefaultDashboard', () => {
     expect(s.rows.map((d) => d.id)).toEqual(['default']);
   });
 
-  it('no-ops when a dashboard with id "default" already exists', async () => {
+  it('no-ops when the stored "default" dashboard already matches the current sample', async () => {
     const s = fakeStore();
     await seedDefaultDashboard(s);
     expect(await seedDefaultDashboard(s)).toBe(0);
     expect(s.rows).toHaveLength(1);
+  });
+
+  it('creates the sample when absent', async () => {
+    const rows = new Map<string, Dashboard>();
+    const store = {
+      get: async (id: string) => rows.get(id),
+      create: async (d: Dashboard) => { rows.set(d.id, d); return d; },
+      update: async (id: string, d: Dashboard) => { rows.set(id, { ...d, id }); return d; },
+    };
+    expect(await seedDefaultDashboard(store)).toBe(1);
+    expect(rows.get('default')).toBeTruthy();
+  });
+
+  it('refreshes the sample when the stored content differs (managed-overwrite)', async () => {
+    const stale = { ...SAMPLE_DASHBOARD, widgets: [] } as Dashboard;
+    const rows = new Map<string, Dashboard>([['default', stale]]);
+    const store = {
+      get: async (id: string) => rows.get(id),
+      create: async (d: Dashboard) => { rows.set(d.id, d); return d; },
+      update: async (id: string, d: Dashboard) => { rows.set(id, { ...d, id }); return d; },
+    };
+    expect(await seedDefaultDashboard(store)).toBe(1);
+    expect(rows.get('default')!.widgets.length).toBe(SAMPLE_DASHBOARD.widgets.length);
+  });
+
+  it('is a no-op when the stored sample already matches (idempotent)', async () => {
+    const rows = new Map<string, Dashboard>([['default', SAMPLE_DASHBOARD]]);
+    let updates = 0;
+    const store = {
+      get: async (id: string) => rows.get(id),
+      create: async (d: Dashboard) => { rows.set(d.id, d); return d; },
+      update: async (id: string, d: Dashboard) => { updates++; rows.set(id, { ...d, id }); return d; },
+    };
+    expect(await seedDefaultDashboard(store)).toBe(0);
+    expect(updates).toBe(0);
   });
 });
 

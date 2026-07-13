@@ -68,7 +68,7 @@ export interface FormSeedTarget {
   connectors: Pick<ConnectorStore, 'list' | 'create'>;
   // Dashboards store, threaded the same way so the seed can insert the vetted sample dashboard
   // through the store (bypassing the authoring gate). AppContext.dashboards satisfies this.
-  dashboards: { store: Pick<DashboardStore, 'get' | 'create'> };
+  dashboards: { store: Pick<DashboardStore, 'get' | 'create' | 'update'> };
   // Report-design store, threaded so the seed can insert the default page designs (former studio
   // MOCK_TEMPLATES). Structural subset — AppContext.reportDesigns satisfies it.
   // 'remove' is also needed so the Slice S5 one-shot cleanup can drop retired demo designs on an

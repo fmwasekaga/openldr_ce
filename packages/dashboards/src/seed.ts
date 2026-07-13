@@ -32,16 +32,34 @@ export function isSqlExecutionAllowed(sqlEnabled: boolean, submittedSql: string,
   return sqlEnabled || vetted.has(submittedSql.trim());
 }
 
+// Compare only the seed-relevant fields — id/ownerId/isDefault/timestamps are store-managed and
+// must not trigger a spurious refresh.
+function dashboardContentEqual(a: Dashboard, b: Dashboard): boolean {
+  const pick = (d: Dashboard) => JSON.stringify({ name: d.name, filters: d.filters, widgets: d.widgets, layout: d.layout });
+  return pick(a) === pick(b);
+}
+
 /**
  * Server-seed the vetted sample dashboard through the STORE (not the HTTP authoring route, so
- * its `mode:'sql'` widgets are exempt from the authoring gate). Idempotent by id `default`:
- * the store's `create` is `ON CONFLICT DO NOTHING`, so re-runs no-op. Returns the number of
- * dashboards created (0 or 1).
+ * its `mode:'sql'` widgets are exempt from the authoring gate). Create-or-refresh by id `default`:
+ * if absent, it's created; if present but its content (name/filters/widgets/layout) differs from
+ * the currently shipped SAMPLE_DASHBOARD, it's overwritten (managed-overwrite) to heal an upgraded
+ * install whose stored copy predates a widget-SQL rewrite (e.g. the R3e canonical-table cutover).
+ * This replaces any operator customization of the `default` board — the accepted tradeoff of the
+ * managed-overwrite policy. A no-op (returns 0) once the stored content already matches. Returns
+ * the number of dashboards created-or-refreshed (0 or 1).
  */
-export async function seedDefaultDashboard(store: Pick<DashboardStore, 'get' | 'create'>): Promise<number> {
-  if (await store.get(SAMPLE_DASHBOARD.id)) return 0;
-  await store.create(SAMPLE_DASHBOARD);
-  return 1;
+export async function seedDefaultDashboard(store: Pick<DashboardStore, 'get' | 'create' | 'update'>): Promise<number> {
+  const existing = await store.get(SAMPLE_DASHBOARD.id);
+  if (!existing) {
+    await store.create(SAMPLE_DASHBOARD);
+    return 1;
+  }
+  if (!dashboardContentEqual(existing, SAMPLE_DASHBOARD)) {
+    await store.update(SAMPLE_DASHBOARD.id, SAMPLE_DASHBOARD);
+    return 1;
+  }
+  return 0;
 }
 
 export const DEFAULT_DASHBOARD: Dashboard = {

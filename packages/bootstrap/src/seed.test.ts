@@ -8,7 +8,7 @@ function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
   const forms: { id: string; name: string; status: string }[] = [];
   const workflows: { id: string; name: string; definition?: unknown }[] = [];
   const connectors: { id: string; name: string; type: string | null; config: Record<string, string> }[] = [];
-  const dashboards: { id: string }[] = [];
+  const dashboards: Record<string, unknown>[] = [];
   // Terminology stores modelled just enough to exercise real idempotency: value sets deduped by
   // url (as importFhirCatalog does), UCUM concepts deduped by (system, code) (as the loader does).
   const valueSets: { url: string; publisherId: string | null }[] = [];
@@ -88,9 +88,15 @@ function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
     dashboards: {
       store: {
         get: async (id: string) => dashboards.find((d) => d.id === id) as never,
-        create: async (d: { id: string }) => {
-          if (!dashboards.some((x) => x.id === d.id)) dashboards.push({ id: d.id });
+        create: async (d: Record<string, unknown> & { id: string }) => {
+          if (!dashboards.some((x) => x.id === d.id)) dashboards.push(d);
           return d as never;
+        },
+        update: async (id: string, d: Record<string, unknown> & { id: string }) => {
+          const idx = dashboards.findIndex((x) => x.id === id);
+          const next = { ...d, id };
+          if (idx >= 0) dashboards[idx] = next; else dashboards.push(next);
+          return next as never;
         },
       },
     },
