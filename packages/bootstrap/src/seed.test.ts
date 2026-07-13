@@ -401,7 +401,7 @@ describe('seedDatabase — data-driven reports (S4)', () => {
     // even though SEED_QUERIES/SEED_DESIGNS/SEED_REPORT_DEFS are populated as of Task 4.2.
     const { app, reportDefs } = fakeApp();
     const res = await seedDatabase(fakeDb, app);
-    expect(res.dataDrivenReportsSeeded).toEqual({ queriesSeeded: 0, designsSeeded: 0, reportDefsSeeded: 0 });
+    expect(res.dataDrivenReportsSeeded).toEqual({ queriesSeeded: 0, queriesUpdated: 0, designsSeeded: 0, reportDefsSeeded: 0 });
     expect(reportDefs).toHaveLength(0);
   });
 
@@ -415,7 +415,7 @@ describe('seedDatabase — data-driven reports (S4)', () => {
     const { app } = fakeApp(cfg);
     const res = await seedDatabase(fakeDb, app);
     expect(res.connectorsSeeded).toBe(1);
-    expect(res.dataDrivenReportsSeeded).toEqual({ queriesSeeded: 0, designsSeeded: 0, reportDefsSeeded: 0 });
+    expect(res.dataDrivenReportsSeeded).toEqual({ queriesSeeded: 0, queriesUpdated: 0, designsSeeded: 0, reportDefsSeeded: 0 });
     expect(res.formsSeeded).toBeGreaterThan(0);
   });
 });

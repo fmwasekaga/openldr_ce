@@ -1726,7 +1726,7 @@ export const SEED_REPORT_DEFS: ReportRecord[] = [
 const WAREHOUSE_NAMES = ['Target Warehouse (Postgres)', 'Target Warehouse (SQL Server)', 'Target Warehouse (MySQL/MariaDB)'];
 
 export interface SeedDataDrivenReportsDeps {
-  customQueries: Pick<CustomQueryStore, 'get' | 'create'>;
+  customQueries: Pick<CustomQueryStore, 'get' | 'create' | 'update'>;
   designs: Pick<ReportDesignStore, 'get' | 'create'>;
   reportDefs: Pick<ReportStore, 'get' | 'create'>;
   /** Used to resolve the default warehouse connector (by `WAREHOUSE_NAMES`) → its server-generated
@@ -1740,15 +1740,29 @@ export interface SeedDataDrivenReportsDeps {
 
 export interface SeedDataDrivenReportsResult {
   queriesSeeded: number;
+  queriesUpdated: number;
   designsSeeded: number;
   reportDefsSeeded: number;
 }
 
-const EMPTY_RESULT: SeedDataDrivenReportsResult = { queriesSeeded: 0, designsSeeded: 0, reportDefsSeeded: 0 };
+const EMPTY_RESULT: SeedDataDrivenReportsResult = { queriesSeeded: 0, queriesUpdated: 0, designsSeeded: 0, reportDefsSeeded: 0 };
 
-/** Idempotently inserts `SEED_QUERIES`, `SEED_DESIGNS`, and `SEED_REPORT_DEFS` (skipping any id
- *  already present), mirroring `seedReportDesigns`'s `get`-then-`create` pattern. Safe to call
- *  repeatedly — a no-op while the arrays are empty. `CustomQueryStore.get` resolves `null` (not
+// Structural equality for a seed query's params vs. the stored params (order-sensitive; params are
+// authored as an ordered array). Cheap JSON compare — params are small and plain.
+function paramsEqual(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a ?? []) === JSON.stringify(b ?? []);
+}
+
+/** Idempotently inserts `SEED_DESIGNS` and `SEED_REPORT_DEFS` (skipping any id already present),
+ *  mirroring `seedReportDesigns`'s `get`-then-`create` pattern. `SEED_QUERIES` gets one step more:
+ *  create-if-absent, else REFRESH (managed-overwrite) if the stored SQL/params differ from the
+ *  current shipped definition — this heals an upgraded install whose row was seeded before a table
+ *  rename (e.g. R3e's `v2_*`→canonical rename left previously-seeded built-in queries reading
+ *  now-gone tables). Only `SEED_QUERIES` ids are ever touched (`create`/`update` keyed by the
+ *  stable built-in id) — user-authored custom queries have different ids and are never iterated
+ *  here, so they're never overwritten. `connectorId` is intentionally left untouched on refresh,
+ *  preserving whatever connector the operator has bound. Safe to call repeatedly — a no-op while
+ *  the arrays are empty and nothing has drifted. `CustomQueryStore.get` resolves `null` (not
  *  `undefined`) for a miss; both are falsy so the same guard covers all three stores.
  *
  *  Resolves the default warehouse connector by `DEFAULT_CONNECTOR_NAME` first and stamps its id
@@ -1770,10 +1784,19 @@ export async function seedDataDrivenReports(deps: SeedDataDrivenReportsDeps): Pr
     : 'postgres';
 
   let queriesSeeded = 0;
+  let queriesUpdated = 0;
   for (const q of SEED_QUERIES) {
-    if (!(await deps.customQueries.get(q.id))) {
-      await deps.customQueries.create({ ...q, sql: q.sql[dialect], connectorId: connector.id });
+    const wantSql = q.sql[dialect];
+    const existing = await deps.customQueries.get(q.id);
+    if (!existing) {
+      await deps.customQueries.create({ ...q, sql: wantSql, connectorId: connector.id });
       queriesSeeded += 1;
+    } else if (existing.sql !== wantSql || !paramsEqual(existing.params, q.params)) {
+      // Managed-overwrite: refresh the built-in's SQL/params to the current shipped definition on
+      // upgrade (R3e renamed the read-model tables, so a previously-seeded row's SQL is stale).
+      // connectorId is intentionally NOT patched — preserve the operator's connector binding.
+      await deps.customQueries.update(q.id, { sql: wantSql, params: q.params });
+      queriesUpdated += 1;
     }
   }
 
@@ -1793,5 +1816,5 @@ export async function seedDataDrivenReports(deps: SeedDataDrivenReportsDeps): Pr
     }
   }
 
-  return { queriesSeeded, designsSeeded, reportDefsSeeded };
+  return { queriesSeeded, queriesUpdated, designsSeeded, reportDefsSeeded };
 }
