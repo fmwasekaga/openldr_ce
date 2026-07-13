@@ -34,7 +34,7 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
         batch_id: provenance.batchId ?? null,
       };
       await db
-        .insertInto('fhir_resources')
+        .insertInto('fhir.fhir_resources')
         .values(values)
         .onConflict((oc) =>
           oc.columns(['resource_type', 'id']).doUpdateSet({
@@ -53,7 +53,7 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
 
     async get(resourceType, id) {
       const row = await db
-        .selectFrom('fhir_resources')
+        .selectFrom('fhir.fhir_resources')
         .select('resource')
         .where('resource_type', '=', resourceType)
         .where('id', '=', id)
@@ -63,7 +63,7 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
 
     async listByType(resourceType, limit = 500) {
       const rows = await db
-        .selectFrom('fhir_resources')
+        .selectFrom('fhir.fhir_resources')
         .select(['id', 'resource'])
         .where('resource_type', '=', resourceType)
         .orderBy('updated_at', 'desc')

@@ -22,7 +22,7 @@ export const EXTERNAL_TABLE_COLUMNS: Record<keyof ExternalSchema, string[]> = {
 
 /** All canonical resources (the `resource` jsonb of every fhir_resources row), ordered by type+id. */
 export async function exportCanonicalResources(db: Kysely<InternalSchema>): Promise<FhirResource[]> {
-  const rows = await db.selectFrom('fhir_resources').select('resource').orderBy('resource_type').orderBy('id').execute();
+  const rows = await db.selectFrom('fhir.fhir_resources').select('resource').orderBy('resource_type').orderBy('id').execute();
   return rows.map((r) => r.resource as unknown as FhirResource);
 }
 

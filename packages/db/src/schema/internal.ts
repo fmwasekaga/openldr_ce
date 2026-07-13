@@ -498,7 +498,7 @@ export interface ReportsTable {
 }
 
 export interface InternalSchema {
-  fhir_resources: FhirResourcesTable;
+  'fhir.fhir_resources': FhirResourcesTable;
   outbox_events: OutboxEventsTable;
   ingest_batches: IngestBatchesTable;
   plugins: PluginsTable;

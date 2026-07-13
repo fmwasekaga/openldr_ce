@@ -73,7 +73,7 @@ export function createBatchStore(db: Kysely<InternalSchema>): BatchStore {
     },
     async provenanceGaps() {
       return db
-        .selectFrom('fhir_resources')
+        .selectFrom('fhir.fhir_resources')
         .select(['resource_type', 'id'])
         .where((eb) => eb.or([eb('source_system', 'is', null), eb('plugin_id', 'is', null), eb('batch_id', 'is', null)]))
         .limit(500)
