@@ -40,10 +40,18 @@ their live runs remain deferred (per the established PG-first convention).
   R3b/c/d-proven SQL, unchanged) until the mechanical `v2_`→canonical identifier swap — so the risky
   write-path removal happens with the reports untouched. The rename cannot precede the drop
   (`v2_specimens`→`specimens` collides with the thin `specimens` table until thin is gone).
-- **Golden-snapshot proof.** Dropping thin removes the oracle the cutover-accept harnesses used, so
-  R3e introduces a golden-output snapshot: capture the 9 reports' output (current `v2_` SQL) and the
-  sample dashboard's widget outputs (current thin SQL) over the shared fixture into a committed
-  golden file, then assert the post-R3e canonical reports + dashboard reproduce it byte-for-byte.
+- **Golden-snapshot proof (reports) + smoke proof (dashboard).** Dropping thin removes the oracle the
+  cutover-accept harnesses used, so R3e introduces a golden-output snapshot for the **9 reports**:
+  capture their output from the current `v2_` SQL over the shared fixture (relational-seeded — no thin
+  needed) into a committed golden file, then assert the post-R3e canonical reports reproduce it
+  byte-for-byte (this is the core safety net for the rename). The **sample dashboard** was never a
+  golden-tracked artifact and — critically — one widget (`s4`, "Result Finalisation %") reads
+  `observations.status`, which has **no `v2_lab_results` equivalent** (the projection does not map
+  `Observation.status`). So the dashboard gets a proportionate **smoke proof**: every rewritten widget
+  (and the filter `optionsSql`) executes against the canonical fixture and returns its declared
+  columns. `s4` is repointed to `v2_diagnostic_reports.status` (a defensible "report finalisation"
+  mapping matching the widget's title), documented as a deliberate semantic change rather than a 1:1
+  rename.
 - **Upgrade re-seed deferred.** Reports and the sample dashboard are seeded idempotent-by-name
   (skip-if-exists), so an existing install that upgrades keeps DB rows whose SQL reads now-dropped
   tables. Consistent with R3b/R3c/R3d, the forced upgrade re-seed is deferred and documented; fresh
@@ -73,40 +81,50 @@ follow suit: the thin `PatientsTable`/`SpecimensTable`/`DiagnosticReportsTable`/
 
 ## Design
 
-### Phase 1 — Golden-snapshot capture (safety net, done first)
+### Phase 1 — Golden-snapshot capture for the 9 reports (safety net, done first)
 
-A capture step records the current (pre-R3e) output of every report and dashboard widget over the
-shared FHIR fixture, so the post-R3e canonical versions can be proven identical.
+A capture step records the current (pre-R3e) output of the 9 reports over the shared FHIR fixture, so
+the post-R3e canonical reports can be proven identical.
 
 - Reuse `scripts/lib/reports-parity-fixture.ts`'s fixture (patients/specimens/observations/etc.).
-- Seed it via `createRelationalWriter` (for the 9 reports, which already read `v2_`) and via
-  `createFlatWriter` (for the sample dashboard, which still reads thin) on real Postgres.
+- Seed it via `createRelationalWriter` (the 9 reports already read `v2_`) on real Postgres. No thin
+  seeding is needed for the reports, so this capture does not depend on the flat writer (which Phase 2
+  deletes).
 - For each of the 9 `SEED_QUERIES` run the current `.sql.postgres` with a fixed param bag (the same
   bags the R3c/R3d accept harnesses used) and record the normalized rows.
-- For each sample-dashboard widget in `openldr-general.json`, run its current thin SQL with the
-  optional `[[ … ]]` clauses stripped and `{{param}}` tokens unbound (full-fixture, no-filter — the
-  simplest deterministic execution path) and record the normalized rows.
 - Write the captured rows to `scripts/lib/reports-golden.json` (committed).
 
 This capture is a throwaway step run once against the pre-R3e state; the committed golden JSON is the
-reference the post-R3e harness (Phase 6) asserts against.
+reference the post-R3e harness (Phase 6) asserts against. (The sample dashboard is proven separately
+by smoke execution — Phase 6 — not by this golden, because its `s4` widget cannot map 1:1; see Scope
+decisions.)
 
 ### Phase 2 — Remove the thin write path
 
 The projection worker writes both sinks in parallel; the relational (v2) writer is already a complete
-peer, so removing the flat writer is subtractive.
+peer, so removing the flat writer is subtractive. **One coupling to resolve first:**
+`relational-writer.ts` imports the batch-upsert helpers (`insertBatchPg`/`mergeBatchMssql`/
+`insertBatchMysql`) and the `WriteResult` type from `flat-writer.ts`, so those shared helpers (plus
+the `chunkSize` helper and the `*_PARAM_BUDGET`/`MSSQL_MAX_VALUES_ROWS` constants) must be **extracted
+to a new `packages/db/src/batch-upsert.ts`** and `relational-writer.ts` repointed to it, before
+`flat-writer.ts` can be deleted.
 
+- **Extract** `insertBatchPg`/`mergeBatchMssql`/`insertBatchMysql` + `chunkSize` + the param-budget
+  constants + `WriteResult` into `packages/db/src/batch-upsert.ts`; repoint `relational-writer.ts`
+  imports there; export it from the db index (replacing what flat-writer exported that's still used).
 - `packages/db/src/projection/cycle.ts`: drop `flatWriter` from `ProjectionDeps`; in
   `applyProjection` remove `deps.flatWriter.write(canonical)` and `deps.flatWriter.deleteById(...)`;
   in `reprojectAll` remove `deps.flatWriter.writeMany(...)` (and drop `flatWriter` from its `Pick`).
-- `packages/bootstrap/src/db-context.ts`, `ingest-context.ts`, `index.ts`: remove every
-  `createFlatWriter(...)` call and the `flatWriter`/`workflowFlatWriter` wiring passed into the
-  projection runner and any context type.
+- `packages/bootstrap/src/db-context.ts`: remove `flatWriter` from the `DbContext` interface, the
+  `createFlatWriter` call, and the returned field (grep `.flatWriter` for external consumers first).
+  `ingest-context.ts`: delete the dead `const flatWriter = createFlatWriter(...)` (vestigial — never
+  used, an R2 deferred cleanup) + its import. `index.ts`: remove `workflowFlatWriter` and pass only
+  the relational writer into the projection runner.
 - Delete `packages/db/src/flat-writer.ts`, `packages/db/src/flatten/` (index + per-resource
   flatteners), and their tests; remove `export * from './flatten/index'` and the flat-writer export
   from `packages/db/src/index.ts`.
 - Grep the repo for remaining `FlatWriter` / `flattenResource` / `tableForResourceType` importers and
-  update them (the projection cycle test, ingest-context, etc.).
+  update them (the projection cycle test, etc.).
 
 ### Phase 3 — Migration 007 (drop thin + rename v2)
 
@@ -153,18 +171,26 @@ the canonical schema in unit tests.
 
 ### Phase 5 — Sample dashboard cutover
 
-`packages/dashboards/src/samples/openldr-general.json` — the seeded default dashboard — has ~10
-widgets whose SQL reads thin tables with thin columns. Rewrite each to the canonical read model,
-preserving output:
+`packages/dashboards/src/samples/openldr-general.json` — the seeded default dashboard — has 13
+widgets + 3 filters whose SQL reads thin tables with thin columns. Rewrite each to the canonical read
+model:
 
 - `service_requests` → `lab_requests`: `authored_on`→`authored_at`, `subject_ref`→`patient_id`,
-  `code_text`→`panel_desc`, `status`/`priority` unchanged.
+  `code_text`→`panel_desc`, `identifier_value`→`request_id`, `status`/`priority` unchanged. (Widgets
+  s1/s2/s5/s6/s7/s8/s13, the `test` filter `optionsSql`, and s9's "Ordered" count.)
 - `observations` → `lab_results`: `effective_date_time`→`result_timestamp`,
-  `interpretation_code`→`abnormal_flag`, `code_text`→`observation_desc`, `value_*` as mapped in the
-  v2 observation model.
-- `specimens`/`diagnostic_reports` → canonical equivalents (column names per `schema/external.ts`).
+  `interpretation_code`→`abnormal_flag`, `code_text`→`observation_desc`, `value_quantity`→
+  `numeric_value`. (Widgets s3/s10/s11/s12, and s9's "Result Recorded" count.)
+- `specimens`→`specimens` (canonical; s9 uses `received_time`), `diagnostic_reports`→
+  `diagnostic_reports` (canonical; s9 uses `issued`).
+- **s4 exception:** "Result Finalisation %" reads `observations.status`, which has no `v2_lab_results`
+  equivalent. Repoint it to `v2_diagnostic_reports.status` (`SUM(CASE WHEN status IN ('final',
+  'amended') …) / COUNT(*)` over `diagnostic_reports`) — a deliberate semantic remap to report
+  finalisation, matching the widget's title. Document it in a note (no `description` field exists, so
+  a repo-side comment in the plan/commit suffices).
 - Preserve the Metabase-style `[[ optional ]]` filter clauses and `{{param}}` tokens, adjusting the
-  filtered column names to canonical.
+  filtered column names to canonical. Postgres supports the existing `OFFSET n ROWS FETCH NEXT m ROWS
+  ONLY` syntax, so those clauses stay.
 
 `facilityOptions` in `packages/reporting/src/helpers.ts` needs **no change**: it reads
 `patients.managing_organization`, and after the rename `patients` is the canonical read-model table,
@@ -174,8 +200,13 @@ which carries `managing_organization`. It repoints transparently via the `Extern
 
 - **New `reports:accept`** (`scripts/reports-cutover-accept.ts` rewritten, or a new
   `scripts/reports-golden-accept.ts`): seed the fixture via `createRelationalWriter` into the
-  canonical schema on real PG, run all 9 canonical reports + the canonical dashboard widgets over it,
-  and assert each result equals `scripts/lib/reports-golden.json`. Exit non-zero on any diff.
+  canonical schema on real PG, then (a) run all 9 canonical reports and assert each equals
+  `scripts/lib/reports-golden.json` (byte-for-byte; exit non-zero on any diff), and (b) **smoke-run**
+  every rewritten dashboard widget SQL + each filter `optionsSql` (with `[[ … ]]` clauses stripped and
+  `{{param}}` tokens unbound) against the same fixture, asserting each executes without error and
+  returns rows carrying its declared `value`/`label`/column keys. The dashboard smoke check does not
+  assert row values (its `s4` deliberately changed source; the other widgets share the same v2 columns
+  the reports already prove).
 - **Retire** `scripts/demographics-cutover-accept.ts` and the thin-vs-v2 body of
   `scripts/reports-cutover-accept.ts` (their thin oracle no longer exists). Remove their `package.json`
   script entries or repoint `reports:accept`/`demographics:accept` appropriately.
