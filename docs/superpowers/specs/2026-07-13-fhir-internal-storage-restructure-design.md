@@ -61,7 +61,7 @@ This is the load-bearing decision of the whole workstream. Locked at R1 so paral
 | `seq` | `bigserial` PK | monotonic per instance; the cursor axis |
 | `resource_type` | `text` not null | e.g. `Observation` |
 | `resource_id` | `text` not null | FHIR logical id |
-| `version_id` | `bigint` not null | the resource version this row records (see §3) |
+| `version` | `bigint` not null | the resource version this row records (see §3). *(Finalized at R1 as `version` — distinct from the legacy `version_id text` column on `fhir_resources`.)* |
 | `op` | `text` not null | `upsert` \| `delete` |
 | `content_hash` | `text` null | sha-256 of the canonical serialization at capture time (no-op detection, integrity) |
 | `site_id` | `text` null | originating site; nullable now, populated from config; present so **sync never has to alter this table** |
@@ -70,7 +70,7 @@ This is the load-bearing decision of the whole workstream. Locked at R1 so paral
 **Contract guarantees consumers may rely on:**
 - `seq` is monotonic and gap-tolerant (gaps from rolled-back txns are normal). Consumers advance a high-water-mark and must tolerate gaps.
 - Every canonical write produces exactly one `change_log` row in the **same transaction** as the `fhir_resources` upsert (no lost or phantom changes).
-- `(resource_type, resource_id, version_id)` uniquely identifies a version → idempotent apply downstream (`id + versionId` dedup).
+- `(resource_type, resource_id, version)` uniquely identifies a version → idempotent apply downstream (`id + version` dedup).
 - `op = 'delete'` is a tombstone; the canonical row may be gone but its identity + version persist here and in `resource_history`.
 
 **Consumer cursors** live in a sibling table `fhir.change_cursors(consumer, last_seq, updated_at)` — one row per consumer (`projection`, later `sync:<peer>`). This generalizes the sync spec's `sync_cursors`.
@@ -79,8 +79,8 @@ This is the load-bearing decision of the whole workstream. Locked at R1 so paral
 
 ## 3. Versioning model (R1)
 
-- `fhirStore.save` assigns a **monotonic integer `versionId` per `(resource_type, id)`**: first write → `1`, each subsequent write → `previous + 1`. Written to both `fhir_resources.version_id` (promoted to `bigint`) and `resource.meta.versionId`; `meta.lastUpdated` stamped server-side.
-- **`fhir.resource_history`** — append every version: `(resource_type, id, version_id, resource jsonb, op, recorded_at)`, PK `(resource_type, id, version_id)`. This is the audit/`_history` substrate and the tombstone home.
+- `fhirStore.save` assigns a **monotonic integer `version` per `(resource_type, id)`**: first write → `1`, each subsequent write → `previous + 1`. Written to a new `fhir_resources.version` (`bigint`) column and mirrored into `resource.meta.versionId` (as `String(version)`); `meta.lastUpdated` stamped server-side. *(R1 adds a `version bigint` column rather than promoting the legacy `version_id text` column's type — avoids a fragile `ALTER COLUMN TYPE`; `version_id text` is kept in sync as the FHIR string mirror.)*
+- **`fhir.resource_history`** — append every version: `(resource_type, id, version, op, resource jsonb, recorded_at)`, PK `(resource_type, id, version)`. This is the audit/`_history` substrate and the tombstone home.
 - **Delete = tombstone**: a history row with `op='delete'` + a `change_log` row with `op='delete'`; the `fhir_resources` current row is removed (or flagged). A later read returns "gone."
 - This is the substrate the sync workstream's conflict policy ("higher `versionId` wins; tie → central-authoritative then `updatedAt`") needs, and it makes real FHIR `_history`/`vread`/optimistic-locking *possible later* — though **exposing a conformant FHIR REST API is explicitly out of scope** for this workstream.
 
