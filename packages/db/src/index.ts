@@ -9,6 +9,8 @@ export * from './migrator';
 export * from './internal-db';
 export * from './fhir-store';
 export * from './flat-writer';
+export * from './relational-writer';
+export * from './relational';
 export * from './persist';
 export * from './export-data';
 export * from './terminology-store';
