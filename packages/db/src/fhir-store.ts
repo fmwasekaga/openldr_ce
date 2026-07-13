@@ -48,7 +48,9 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
         // history (not the canonical row) keeps versions monotonic across delete→recreate, since
         // delete() removes the canonical row but history retains every version. The history PK
         // (resource_type,id,version) also serializes concurrent same-key writes: a race loser
-        // hits a duplicate-key and rolls back atomically, then succeeds on retry.
+        // hits a duplicate-key and rolls back atomically, throwing to the caller (no data
+        // corruption; a caller retry then reads the new max and advances). This means truly
+        // concurrent same-id writes can now fail where a plain upsert would have last-writer-won.
         // (bigint reads back as string on real pg, number on pg-mem — always coerce.)
         const hi = await trx
           .selectFrom('fhir.resource_history')
