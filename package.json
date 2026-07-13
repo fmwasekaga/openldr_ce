@@ -36,6 +36,7 @@
     "mssql:accept": "tsx scripts/mssql-live-acceptance.ts",
     "mssql:accept:matrix": "bash scripts/mssql-matrix-accept.sh",
     "mysql:accept": "tsx scripts/mysql-live-acceptance.ts",
+    "demographics:accept": "tsx scripts/demographics-cutover-accept.ts",
     "mysql:accept:matrix": "bash scripts/mysql-matrix-accept.sh",
     "reports:parity": "tsx scripts/mssql-reports-parity.ts",
     "reports:parity:mysql": "tsx scripts/mysql-reports-parity.ts",
