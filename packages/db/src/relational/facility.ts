@@ -1,10 +1,10 @@
 import type { Provenance } from '../provenance';
 import type { Insertable } from 'kysely';
-import type { V2FacilitiesTable } from '../schema/external';
+import type { FacilitiesTable } from '../schema/external';
 import { provColumns, firstIdentifier, codeable, str } from './extract';
 
 // Both Organization and Location project here, keyed by their own FHIR id; source_resource discriminates.
-export function projectFacility(r: Record<string, unknown>, prov: Provenance): Insertable<V2FacilitiesTable> {
+export function projectFacility(r: Record<string, unknown>, prov: Provenance): Insertable<FacilitiesTable> {
   const idn = firstIdentifier(r);
   const type = codeable((r['type'] as unknown[] | undefined)?.[0]);
   return {

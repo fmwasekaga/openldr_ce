@@ -24,7 +24,7 @@ describe('runProjectionCycle', () => {
 
     const n = await createProjectionRunner({ internalDb: internalDb as never, fhirStore, relationalWriter, logger, fetch, batchSize: 500 }).runCycle();
     expect(n).toBe(1);
-    expect(await externalDb.selectFrom('v2_patients').selectAll().execute()).toHaveLength(1);
+    expect(await externalDb.selectFrom('patients').selectAll().execute()).toHaveLength(1);
     expect(await readCursor(internalDb as never, 'projection')).toBe(1);
     await internalDb.destroy();
     await externalDb.destroy();
@@ -45,7 +45,7 @@ describe('runProjectionCycle', () => {
       xmax: 200,
     });
     await createProjectionRunner({ internalDb: internalDb as never, fhirStore, relationalWriter, logger, fetch, batchSize: 500 }).runCycle();
-    expect(await externalDb.selectFrom('v2_patients').selectAll().execute()).toHaveLength(0);
+    expect(await externalDb.selectFrom('patients').selectAll().execute()).toHaveLength(0);
     await internalDb.destroy();
     await externalDb.destroy();
   });
@@ -83,13 +83,13 @@ describe('createProjectionRunner (stateful gaps across cycles)', () => {
     const n1 = await runner.runCycle();
     expect(n1).toBe(0);
     expect(await readCursor(internalDb as never, 'projection')).toBe(0);
-    expect(await externalDb.selectFrom('v2_patients').selectAll().execute()).toHaveLength(0);
+    expect(await externalDb.selectFrom('patients').selectAll().execute()).toHaveLength(0);
 
     // Cycle #2: carried gap now confirmed rolled back → cursor advances to 2 and 'b' projects.
     const n2 = await runner.runCycle();
     expect(n2).toBe(1);
     expect(await readCursor(internalDb as never, 'projection')).toBe(2);
-    const patients = await externalDb.selectFrom('v2_patients').selectAll().execute();
+    const patients = await externalDb.selectFrom('patients').selectAll().execute();
     expect(patients).toHaveLength(1);
     expect((patients[0] as { id: string }).id).toBe('b');
 
@@ -109,8 +109,8 @@ describe('reprojectAll', () => {
 
     const n = await reprojectAll({ internalDb: internalDb as never, relationalWriter });
     expect(n).toBeGreaterThanOrEqual(2);
-    expect(await externalDb.selectFrom('v2_patients').selectAll().execute()).toHaveLength(1);
-    expect(await externalDb.selectFrom('v2_lab_results').selectAll().execute()).toHaveLength(1);
+    expect(await externalDb.selectFrom('patients').selectAll().execute()).toHaveLength(1);
+    expect(await externalDb.selectFrom('lab_results').selectAll().execute()).toHaveLength(1);
 
     // cursor set to current max change_log seq so steady-state tailing won't re-project
     const maxRow = await internalDb.selectFrom('fhir.change_log').select((eb: any) => eb.fn.max('seq').as('m')).executeTakeFirst();

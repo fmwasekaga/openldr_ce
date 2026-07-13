@@ -1,9 +1,9 @@
 import type { Provenance } from '../provenance';
 import type { Insertable } from 'kysely';
-import type { V2LabResultsTable } from '../schema/external';
+import type { LabResultsTable } from '../schema/external';
 import { provColumns, codeable, referenceId, str, num } from './extract';
 
-export function projectObservation(r: Record<string, unknown>, prov: Provenance): Insertable<V2LabResultsTable> {
+export function projectObservation(r: Record<string, unknown>, prov: Provenance): Insertable<LabResultsTable> {
   const code = codeable(r['code']);
   const valueCc = codeable(r['valueCodeableConcept']);
   const quantity = r['valueQuantity'] as Record<string, unknown> | undefined;
