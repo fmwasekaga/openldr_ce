@@ -98,6 +98,25 @@ describe('seedDefaultDashboard', () => {
     expect(await seedDefaultDashboard(store)).toBe(0);
     expect(updates).toBe(0);
   });
+
+  it('does not refresh when stored content differs only in (nested) key order', async () => {
+    // Rebuild the same content with object keys reordered (as a jsonb read-back could produce).
+    const reorderKeys = (v: unknown): unknown =>
+      Array.isArray(v) ? v.map(reorderKeys)
+      : v && typeof v === 'object'
+        ? Object.fromEntries(Object.keys(v as Record<string, unknown>).reverse().map((k) => [k, reorderKeys((v as Record<string, unknown>)[k])]))
+        : v;
+    const reordered = reorderKeys(JSON.parse(JSON.stringify(SAMPLE_DASHBOARD))) as Dashboard;
+    const rows = new Map<string, Dashboard>([['default', reordered]]);
+    let updates = 0;
+    const store = {
+      get: async (id: string) => rows.get(id),
+      create: async (d: Dashboard) => { rows.set(d.id, d); return d; },
+      update: async (id: string, d: Dashboard) => { updates++; rows.set(id, { ...d, id }); return d; },
+    };
+    expect(await seedDefaultDashboard(store)).toBe(0);
+    expect(updates).toBe(0);
+  });
 });
 
 describe('vetted SQL execution', () => {

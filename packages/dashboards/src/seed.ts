@@ -32,10 +32,23 @@ export function isSqlExecutionAllowed(sqlEnabled: boolean, submittedSql: string,
   return sqlEnabled || vetted.has(submittedSql.trim());
 }
 
+// Canonical JSON: recursively sorts object keys so equality is insensitive to key order. Needed
+// because the dashboard's layout/widgets/filters are jsonb columns — Postgres normalizes (re-sorts)
+// jsonb keys on read, and DashboardSchema.parse only re-orders its TYPED fields (freeform record
+// fields like a widget's `visual`/`variables` keep the read-side order), so a plain JSON.stringify
+// would report a spurious diff and force a re-seed on every boot.
+function canonicalJson(v: unknown): string {
+  return JSON.stringify(v, (_k, val) =>
+    val && typeof val === 'object' && !Array.isArray(val)
+      ? Object.keys(val as Record<string, unknown>).sort().reduce<Record<string, unknown>>((o, k) => { o[k] = (val as Record<string, unknown>)[k]; return o; }, {})
+      : val);
+}
+
 // Compare only the seed-relevant fields — id/ownerId/isDefault/timestamps are store-managed and
-// must not trigger a spurious refresh.
+// must not trigger a spurious refresh. Key-order-insensitive (see canonicalJson) so a jsonb
+// read-back that reorders freeform sub-object keys is not mistaken for a content change.
 function dashboardContentEqual(a: Dashboard, b: Dashboard): boolean {
-  const pick = (d: Dashboard) => JSON.stringify({ name: d.name, filters: d.filters, widgets: d.widgets, layout: d.layout });
+  const pick = (d: Dashboard) => canonicalJson({ name: d.name, filters: d.filters, widgets: d.widgets, layout: d.layout });
   return pick(a) === pick(b);
 }
 
