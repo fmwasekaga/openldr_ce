@@ -20,7 +20,9 @@
 // BEFORE the T3 rewrite that swapped each query onto the v2 tables). At cc2a1c1e these three read
 // `from patients` / `from service_requests` / `from specimens`+`from diagnostic_reports`. The 5 AMR
 // THIN reference SQLs are copied VERBATIM from git commit 7fa6b317 (origin/main, the R3d branch base,
-// BEFORE the R3d rewrite); at 7fa6b317 those read `from observations`(+`patients`/`specimens`).
+// BEFORE the R3d rewrite); at 7fa6b317 those read `from observations`(+`patients`/`specimens`) —
+// EXCEPT q-amr-antibiogram, whose SELECT/panel tail is spliced from the current v2 SQL (byte-identical
+// to 7fa6b317's tail, since the panel expansion is source-identical; see its own comment for why).
 //
 // Preconditions: a reachable dev Postgres external target on :5433 with an `openldr_target` DB.
 //   docker compose up -d postgres
@@ -348,7 +350,9 @@ interface Case {
   // Every param bag MUST carry every {{param.x}} token the SQL references — substituteParams throws
   // `unbound parameter` on any token whose key is absent from the bag (regardless of a param's own
   // `required` flag). q-facilities has no params; q-test-volume needs from/to; q-turnaround-time
-  // needs from/to/facility.
+  // needs from/to/facility. AMR: q-amr-resistance needs from/to/facility;
+  // q-amr-facility-summary/q-amr-first-isolate-summary/q-amr-antibiogram need from/to;
+  // q-amr-glass-ris needs from/to/country/year.
   paramBags: Record<string, string>[];
 }
 
