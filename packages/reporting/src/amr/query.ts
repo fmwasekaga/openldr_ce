@@ -10,12 +10,12 @@ const genderFromSex = (sex: string | null): string =>
   sex === 'M' ? 'male' : sex === 'F' ? 'female' : sex === 'O' ? 'other' : 'unknown';
 
 export async function fetchAmrData(db: Kysely<ExternalSchema>, w: AmrWindow): Promise<AmrData> {
-  const orgRows = await db.selectFrom('v2_lab_results').where('observation_code', '=', '634-6')
+  const orgRows = await db.selectFrom('lab_results').where('observation_code', '=', '634-6')
     .select(['id', 'patient_id', 'specimen_id', 'coded_value', 'text_value', 'result_timestamp']).execute();
-  const astRows = await db.selectFrom('v2_lab_results').where('abnormal_flag', 'in', ['S', 'I', 'R'])
+  const astRows = await db.selectFrom('lab_results').where('abnormal_flag', 'in', ['S', 'I', 'R'])
     .select(['id', 'patient_id', 'specimen_id', 'observation_desc', 'abnormal_flag', 'result_timestamp']).execute();
-  const specRows = await db.selectFrom('v2_specimens').select(['id', 'type_code', 'received_time', 'origin']).execute();
-  const patRows = await db.selectFrom('v2_patients').select(['id', 'sex', 'date_of_birth']).execute();
+  const specRows = await db.selectFrom('specimens').select(['id', 'type_code', 'received_time', 'origin']).execute();
+  const patRows = await db.selectFrom('patients').select(['id', 'sex', 'date_of_birth']).execute();
 
   const specById = new Map(specRows.map((s) => [s.id, s]));
   const specDate = (ref: string | null): string | null => {
