@@ -32,6 +32,7 @@
     "seed:dhis2-mapping": "tsx scripts/seed-dhis2-demo-mapping.ts",
     "make:lab-sample": "node scripts/make-lab-sample.mjs",
     "load:measure": "node scripts/load-measure.mjs",
+    "projection:accept": "tsx scripts/projection-live-acceptance.ts",
     "mssql:accept": "tsx scripts/mssql-live-acceptance.ts",
     "mssql:accept:matrix": "bash scripts/mssql-matrix-accept.sh",
     "mysql:accept": "tsx scripts/mysql-live-acceptance.ts",

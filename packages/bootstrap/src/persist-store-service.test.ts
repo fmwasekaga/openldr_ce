@@ -22,7 +22,7 @@ describe('createPersistStoreService', () => {
     );
     expect(out.meta.persisted).toBe(2);
     expect(out.meta.batchId).toBe('batch-1');
-    expect(out.meta.flattened).toEqual({ written: 1, skipped: 1, degraded: 0 });
+    expect(out.meta.flattened).toEqual({ written: 1, skipped: 1, degraded: 0, deferred: 0 });
     expect(out.meta.resourceTypes.sort()).toEqual(['Bundle', 'Observation']);
     expect(publish).toHaveBeenCalledWith({
       type: 'data.persisted',

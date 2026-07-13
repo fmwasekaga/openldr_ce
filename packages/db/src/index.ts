@@ -39,3 +39,4 @@ export {
   type NewScheduleRun,
   type ReportScheduleStore,
 } from './report-schedule-store';
+export * from './projection';

@@ -45,15 +45,17 @@ Projection worker (boot-managed, always-on)
 
 `seq` (bigserial) is assigned at insert but rows become **visible at commit**, so commits can be out of order relative to `seq` (txn T1 gets seq=5 then commits *after* T2's seq=6 → a reader between the commits sees 6, not 5). Advancing the cursor to 6 would **permanently skip 5**.
 
-**Rule (no-skip):** every `change_log` row carries Postgres's hidden **`xmin`** system column (the inserting txn id) — *no new column needed; the R1 contract stays frozen*. Each cycle:
-- `boundary = pg_snapshot_xmin(pg_current_snapshot())` — the oldest txn still running. Any row whose `xmin < boundary` is committed **and** no older txn survives that could still insert a lower `seq`.
-- A row `seq > cursor` is **safe** iff `xmin < boundary`. Let `firstUnsafeSeq = min(seq)` among fetched rows with `xmin >= boundary` (still possibly in-flight).
-- Process safe rows with `seq > cursor AND (firstUnsafeSeq is null OR seq < firstUnsafeSeq)`, in `seq` order.
-- Advance cursor to `firstUnsafeSeq - 1` if an unsafe row exists in the window, else to `max(seq)` of the processed rows. A late lower-seq commit is therefore **deferred one cycle, never skipped**. Treating `xmin >= boundary` conservatively as "not yet safe" (even if already committed) is fine — it just re-evaluates next cycle.
+> **Correction (found by the R2 real-Postgres acceptance test):** an earlier version of this rule computed the frontier from **visible** rows only (`firstUnsafeSeq - 1`). That is wrong: an **uncommitted** row is *invisible* — it's a **gap** in the seq sequence, not a fetched-unsafe row. If seq 6 is held uncommitted (invisible) and seq 7 is committed-but-unsafe, `firstUnsafeSeq = 7 → cursor = 6`, which overshoots the invisible gap at 6 and **permanently skips it** when it later commits. The corrected rule below stops the cursor at the first *gap or* unsafe row, and distinguishes an in-flight gap (must wait) from a rolled-back gap (must skip, or projection stalls on the first aborted txn) using a small stateful marker.
 
-**Testability split** (because pg-mem cannot emulate MVCC / `xmin` / snapshot functions):
-- `planProjection(rows, boundary, cursor)` is a **pure function** — given synthetic `{seq, xmin, resource_type, resource_id, op}` rows + a boundary, it returns `{ tasks, newCursor }`. **Unit-tested** (no DB).
-- The Postgres-specific fetch (`select seq, xmin, … from fhir.change_log where seq > $cursor order by seq limit N` + `select pg_snapshot_xmin(pg_current_snapshot())`) and the end-to-end projection are **real-Postgres integration-tested** (two DBs: internal PG + external PG), reusing the `mssql:accept`/`mysql:accept`-style acceptance harness (dev Postgres on `:5433`).
+**Rule (no-skip, corrected):** every `change_log` row carries Postgres's hidden **`xmin`** system column (inserting txn id) — *no new column; the R1 contract stays frozen*. Each cycle fetches, alongside the visible rows `seq > cursor` (ascending), two snapshot values: `boundary = pg_snapshot_xmin(pg_current_snapshot())` (oldest txn still running) and `xmax = pg_snapshot_xmax(pg_current_snapshot())` (first not-yet-assigned xid). Then scan the contiguous integer range `(cursor, maxFetchedSeq]`; the cursor advances up to (but not past) the **first blocking position**, where a position blocks iff:
+- it is a **visible unsafe row** (`xmin >= boundary`, still possibly in-flight) — wait; or
+- it is a **gap** (missing seq) that is **not yet confirmed rolled back**.
+
+A gap is **confirmed rolled back** (skippable) once `boundary >= x0`, where `x0` is the `xmax` recorded the first time the gap was observed. Rationale: the gap's txn grabbed that seq *before* we observed the gap, so its xid `< x0`; once the oldest running txn is `>= x0`, that txn has finished, and a still-missing seq will never commit → aborted. Gaps are stamped with `x0` on first sight and carried across cycles in a small in-memory `pendingGaps` set, so a whole rolled-back region confirms together. `tasks` = distinct `(resource_type, resource_id)` among **safe** visible rows with `seq <= newCursor`.
+
+**Testability split** (pg-mem cannot emulate MVCC / `xmin` / snapshot functions):
+- `planProjection({ rows, boundary, xmax, cursor, pendingGaps })` is a **pure function** returning `{ tasks, newCursor, pendingGaps }` — unit-tested with synthetic rows/gaps, including the invisible-gap-below-an-unsafe-row case, the confirm-rolled-back-after-boundary-advance case, and the gap-fills case. **No DB.**
+- The Postgres-specific fetch (`seq, xmin::text::bigint` rows + `pg_snapshot_xmin`/`pg_snapshot_xmax`) and the end-to-end projection (incl. the held-transaction no-skip scenario) are **real-Postgres acceptance-tested** (two DBs on `:5433`), `mssql:accept`-style. The stateful `pendingGaps` live in the worker's cycle runner across ticks (in-memory; on restart, gaps are simply re-observed and re-waited — safe).
 
 *xid wraparound:* the 32-bit system `xmin` wraps after ~2^31 txns; ignored for R2 (negligible at these deployment scales) — an `xid8` column can be added later if ever needed. Noted in open items.
 

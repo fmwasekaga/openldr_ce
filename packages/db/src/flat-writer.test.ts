@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createFlatWriter } from './flat-writer';
+import { tableForResourceType } from './flatten/index';
+import { makeMigratedExternalDb } from './test-helpers-external';
 
 // A minimal Patient flattens to { table: 'patients', row: {...} } (see flatten/patient.ts).
 const patient = { resourceType: 'Patient', id: 'p1', gender: 'male' };
@@ -110,5 +112,24 @@ describe('createFlatWriter writeMany', () => {
     const { db } = fakeDb();
     const w = createFlatWriter(db, 'postgres');
     expect(await w.writeMany([])).toEqual([]);
+  });
+});
+
+describe('flat delete path', () => {
+  it('tableForResourceType maps known types and returns null for others', () => {
+    expect(tableForResourceType('Patient')).toBe('patients');
+    expect(tableForResourceType('Observation')).toBe('observations');
+    expect(tableForResourceType('Bundle')).toBeNull();
+  });
+
+  it('deleteById removes the flat row; no-op for non-projected type', async () => {
+    const db = await makeMigratedExternalDb();
+    const writer = createFlatWriter(db as never, 'postgres');
+    await writer.write({ resourceType: 'Patient', id: 'p1' });
+    expect(await db.selectFrom('patients').selectAll().execute()).toHaveLength(1);
+    await writer.deleteById('Patient', 'p1');
+    expect(await db.selectFrom('patients').selectAll().execute()).toHaveLength(0);
+    await writer.deleteById('Bundle', 'whatever'); // non-projected → no throw
+    await db.destroy();
   });
 });
