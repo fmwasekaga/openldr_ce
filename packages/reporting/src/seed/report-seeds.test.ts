@@ -14,14 +14,24 @@ import {
 // `seedDataDrivenReports`'s own logic, in particular the Task-4.2 connector-resolution refinement
 // and (Task 2, mssql-slice2b) the dialect-variant-selection refinement).
 function fakeDeps(connectorList: { id: string; name: string; type?: string | null }[]) {
-  const queries = new Map<string, { id: string; connectorId: string; sql: string }>();
+  const queries = new Map<string, { id: string; connectorId: string; sql: string; params?: unknown }>();
   const designs = new Map<string, { id: string }>();
   const reportDefs = new Map<string, { id: string }>();
   const deps: SeedDataDrivenReportsDeps = {
     customQueries: {
       get: async (id) => (queries.has(id) ? (queries.get(id) as never) : null),
       create: async (q) => {
-        queries.set(q.id, { id: q.id, connectorId: q.connectorId, sql: q.sql });
+        queries.set(q.id, { id: q.id, connectorId: q.connectorId, sql: q.sql, params: q.params });
+      },
+      update: async (id, patch) => {
+        const cur = queries.get(id);
+        if (cur) {
+          queries.set(id, {
+            ...cur,
+            ...('sql' in patch ? { sql: patch.sql as string } : {}),
+            ...('params' in patch ? { params: patch.params } : {}),
+          });
+        }
       },
     },
     designs: {
@@ -47,7 +57,7 @@ describe('seedDataDrivenReports', () => {
   it('skips entirely (all zero) when the default connector has not been seeded', async () => {
     const { deps, queries, designs, reportDefs } = fakeDeps([]);
     const res = await seedDataDrivenReports(deps);
-    expect(res).toEqual({ queriesSeeded: 0, designsSeeded: 0, reportDefsSeeded: 0 });
+    expect(res).toEqual({ queriesSeeded: 0, queriesUpdated: 0, designsSeeded: 0, reportDefsSeeded: 0 });
     expect(queries.size).toBe(0);
     expect(designs.size).toBe(0);
     expect(reportDefs.size).toBe(0);
@@ -56,7 +66,7 @@ describe('seedDataDrivenReports', () => {
   it('only matches the connector by exact name — a differently-named connector is not enough', async () => {
     const { deps } = fakeDeps([{ id: 'c-other', name: 'Some Other Connector' }]);
     const res = await seedDataDrivenReports(deps);
-    expect(res).toEqual({ queriesSeeded: 0, designsSeeded: 0, reportDefsSeeded: 0 });
+    expect(res).toEqual({ queriesSeeded: 0, queriesUpdated: 0, designsSeeded: 0, reportDefsSeeded: 0 });
   });
 
   it('resolves the default connector by name and stamps its id onto every seed query', async () => {
@@ -64,6 +74,7 @@ describe('seedDataDrivenReports', () => {
     const res = await seedDataDrivenReports(deps);
     expect(res).toEqual({
       queriesSeeded: SEED_QUERIES.length,
+      queriesUpdated: 0,
       designsSeeded: SEED_DESIGNS.length,
       reportDefsSeeded: SEED_REPORT_DEFS.length,
     });
@@ -77,7 +88,39 @@ describe('seedDataDrivenReports', () => {
     const { deps } = fakeDeps([{ id: 'conn-123', name: DEFAULT_CONNECTOR_NAME }]);
     await seedDataDrivenReports(deps);
     const second = await seedDataDrivenReports(deps);
-    expect(second).toEqual({ queriesSeeded: 0, designsSeeded: 0, reportDefsSeeded: 0 });
+    expect(second).toEqual({ queriesSeeded: 0, queriesUpdated: 0, designsSeeded: 0, reportDefsSeeded: 0 });
+  });
+
+  it('refreshes a built-in query whose stored SQL is stale (managed-overwrite), preserving connectorId', async () => {
+    const { deps, queries } = fakeDeps([{ id: 'conn-123', name: DEFAULT_CONNECTOR_NAME, type: 'postgres' }]);
+    queries.set('q-test-volume', { id: 'q-test-volume', connectorId: 'operator-conn', sql: 'select 1 from v2_lab_requests', params: [] });
+    const res = await seedDataDrivenReports(deps);
+    const refreshed = queries.get('q-test-volume')!;
+    expect(refreshed.sql).toBe(SEED_QUERIES.find((q) => q.id === 'q-test-volume')!.sql.postgres);
+    expect(refreshed.sql).not.toContain('v2_lab_requests');
+    expect(refreshed.connectorId).toBe('operator-conn');
+    expect(res.queriesUpdated).toBeGreaterThanOrEqual(1);
+    expect(res.queriesSeeded).toBe(SEED_QUERIES.length - 1);
+  });
+
+  it('does not rewrite a built-in query whose stored SQL already equals the shipped canonical (idempotent)', async () => {
+    const { deps, queries } = fakeDeps([{ id: 'conn-123', name: DEFAULT_CONNECTOR_NAME, type: 'postgres' }]);
+    await seedDataDrivenReports(deps);
+    const before = new Map([...queries].map(([k, v]) => [k, v.sql]));
+    const res2 = await seedDataDrivenReports(deps);
+    expect(res2.queriesUpdated).toBe(0);
+    expect(res2.queriesSeeded).toBe(0);
+    for (const [id, v] of queries) expect(v.sql).toBe(before.get(id));
+  });
+
+  it('does not refresh when only the stored params key order differs (jsonb normalizes key order)', async () => {
+    const { deps, queries } = fakeDeps([{ id: 'conn-123', name: DEFAULT_CONNECTOR_NAME, type: 'postgres' }]);
+    const q = SEED_QUERIES.find((x) => x.id === 'q-amr-resistance')!;
+    // stored row: canonical sql, but params with keys in a DIFFERENT order (as jsonb read-back would produce)
+    const reordered = q.params.map((p) => ({ required: p.required, type: p.type, label: p.label, id: p.id }));
+    queries.set('q-amr-resistance', { id: 'q-amr-resistance', connectorId: 'conn-123', sql: q.sql.postgres, params: reordered as never });
+    const res = await seedDataDrivenReports(deps);
+    expect(res.queriesUpdated).toBe(0); // reorder alone must NOT trigger a refresh
   });
 
   // Task 2 (mssql-slice2b): seedDataDrivenReports must pick the SQL variant matching the

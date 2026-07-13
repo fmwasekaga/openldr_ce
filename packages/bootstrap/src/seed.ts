@@ -68,7 +68,7 @@ export interface FormSeedTarget {
   connectors: Pick<ConnectorStore, 'list' | 'create'>;
   // Dashboards store, threaded the same way so the seed can insert the vetted sample dashboard
   // through the store (bypassing the authoring gate). AppContext.dashboards satisfies this.
-  dashboards: { store: Pick<DashboardStore, 'get' | 'create'> };
+  dashboards: { store: Pick<DashboardStore, 'get' | 'create' | 'update'> };
   // Report-design store, threaded so the seed can insert the default page designs (former studio
   // MOCK_TEMPLATES). Structural subset — AppContext.reportDesigns satisfies it.
   // 'remove' is also needed so the Slice S5 one-shot cleanup can drop retired demo designs on an
@@ -234,7 +234,7 @@ export async function seedDatabase(db: DbContext, app: FormSeedTarget): Promise<
   // otherwise part of AppContext's public surface. Must run AFTER `seedDefaultConnector` above —
   // `seedDataDrivenReports` resolves each seed query's connector by the same `DEFAULT_CONNECTOR_NAME`
   // and skips entirely (no-op) if that connector doesn't exist yet.
-  let dataDrivenReportsSeeded: SeedDataDrivenReportsResult = { queriesSeeded: 0, designsSeeded: 0, reportDefsSeeded: 0 };
+  let dataDrivenReportsSeeded: SeedDataDrivenReportsResult = { queriesSeeded: 0, queriesUpdated: 0, designsSeeded: 0, reportDefsSeeded: 0 };
   try {
     dataDrivenReportsSeeded = await seedDataDrivenReports({
       customQueries: createCustomQueryStore(db.internalDb),
