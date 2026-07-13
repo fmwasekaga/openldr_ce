@@ -73,4 +73,27 @@ describe('fhir-store versioning', () => {
     expect(l3.site_id).toBeNull();
     await db3.destroy();
   });
+
+  it('keeps version monotonic across delete then recreate (no PK collision)', async () => {
+    const db = await makeMigratedDb();
+    const store = createFhirStore(db as any);
+    await store.save({ resourceType: 'Patient', id: 'p1' } as never); // v1
+    await store.delete('Patient', 'p1');                              // v2 tombstone
+    const again = await store.save({ resourceType: 'Patient', id: 'p1' } as never); // must be v3
+    expect(again.version).toBe(3);
+
+    const versions = await db.selectFrom('fhir.change_log').select('version').where('resource_id', '=', 'p1').orderBy('seq').execute();
+    expect(versions.map((v: any) => Number(v.version))).toEqual([1, 2, 3]);
+    await db.destroy();
+  });
+
+  it('content_hash is stable for identical content across saves', async () => {
+    const db = await makeMigratedDb();
+    const store = createFhirStore(db as any);
+    await store.save({ resourceType: 'Patient', id: 'p1', name: [{ family: 'A' }] } as never);
+    await store.save({ resourceType: 'Patient', id: 'p1', name: [{ family: 'A' }] } as never);
+    const hashes = await db.selectFrom('fhir.change_log').select('content_hash').where('resource_id', '=', 'p1').orderBy('seq').execute();
+    expect(hashes[0].content_hash).toBe(hashes[1].content_hash);
+    await db.destroy();
+  });
 });

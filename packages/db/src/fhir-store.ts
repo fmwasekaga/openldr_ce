@@ -32,7 +32,9 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
   async function resolveSiteId(): Promise<string | null> {
     if (siteId !== undefined) return siteId;
     const row = await db.selectFrom('app_settings').select('value').where('key', '=', 'sync.site_id').executeTakeFirst();
-    siteId = row?.value ?? process.env.OPENLDR_SITE_ID ?? null;
+    // site_id is enrollment-stable; resolved once per store instance. A value configured after
+    // process boot won't take effect until restart. `||` so an empty app_settings value falls through.
+    siteId = row?.value || process.env.OPENLDR_SITE_ID || null;
     return siteId;
   }
 
@@ -42,16 +44,23 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
       const id = (resource as { id?: string }).id ?? randomUUID();
       const site = await resolveSiteId();
       return db.transaction().execute(async (trx) => {
-        // bigint reads back as string on real pg, number on pg-mem — always coerce.
-        const cur = await trx
-          .selectFrom('fhir.fhir_resources')
-          .select('version')
+        // Next version = highest ever recorded in the append-only history + 1. Deriving from
+        // history (not the canonical row) keeps versions monotonic across delete→recreate, since
+        // delete() removes the canonical row but history retains every version. The history PK
+        // (resource_type,id,version) also serializes concurrent same-key writes: a race loser
+        // hits a duplicate-key and rolls back atomically, then succeeds on retry.
+        // (bigint reads back as string on real pg, number on pg-mem — always coerce.)
+        const hi = await trx
+          .selectFrom('fhir.resource_history')
+          .select(sql<number>`coalesce(max(version), 0)`.as('maxv'))
           .where('resource_type', '=', resourceType)
           .where('id', '=', id)
-          .forUpdate()
           .executeTakeFirst();
-        const next = (cur ? Number(cur.version) : 0) + 1;
+        const next = Number(hi?.maxv ?? 0) + 1;
         const nowIso = new Date().toISOString();
+        // Hash the pre-stamp content so identical content hashes stably (excludes the volatile
+        // server-stamped meta.versionId / meta.lastUpdated we add below).
+        const contentHashHex = contentHash(JSON.stringify({ ...resource, id }));
         const meta = { ...(resource as { meta?: Record<string, unknown> }).meta, versionId: String(next), lastUpdated: nowIso };
         const full = { ...resource, id, meta } as FhirResource;
         const serialized = JSON.stringify(full);
@@ -80,7 +89,7 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
           .execute();
         await trx
           .insertInto('fhir.change_log')
-          .values({ resource_type: resourceType, resource_id: id, version: next, op: 'upsert', content_hash: contentHash(serialized), site_id: site })
+          .values({ resource_type: resourceType, resource_id: id, version: next, op: 'upsert', content_hash: contentHashHex, site_id: site })
           .execute();
         return { resourceType, id, version: next };
       });
@@ -110,15 +119,21 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
     async delete(resourceType, id) {
       const site = await resolveSiteId();
       return db.transaction().execute(async (trx) => {
-        const cur = await trx
+        const existing = await trx
           .selectFrom('fhir.fhir_resources')
           .select('version')
           .where('resource_type', '=', resourceType)
           .where('id', '=', id)
           .forUpdate()
           .executeTakeFirst();
-        if (!cur) return { deleted: false };
-        const next = Number(cur.version) + 1;
+        if (!existing) return { deleted: false };
+        const hi = await trx
+          .selectFrom('fhir.resource_history')
+          .select(sql<number>`coalesce(max(version), 0)`.as('maxv'))
+          .where('resource_type', '=', resourceType)
+          .where('id', '=', id)
+          .executeTakeFirst();
+        const next = Number(hi?.maxv ?? 0) + 1;
         await trx
           .insertInto('fhir.resource_history')
           .values({ resource_type: resourceType, id, version: next, op: 'delete', resource: null })
