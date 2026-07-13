@@ -1,14 +1,16 @@
-// Shared fixture + normalize/diff helpers for the cross-dialect report parity harnesses
-// (scripts/mssql-reports-parity.ts, scripts/mysql-reports-parity.ts). Extracted verbatim from the
-// original mssql-only harness (mysql-target-s2 Task 9) so both scripts stay byte-identical on the
-// FHIR fixture + normalization logic — no drift between what pg-vs-mssql and pg-vs-mysql prove.
+// Shared fixture + normalize/diff helpers for the report acceptance harnesses
+// (scripts/reports-golden-accept.ts and the cross-dialect write-path harnesses). The thin external
+// schema and its thin-vs-v2 parity harnesses have been retired (restructure R3e drops thin + renames
+// the v2_* read model to the canonical names); the fixture now seeds ONLY the relational read model
+// via createRelationalWriter into the 6 canonical tables.
 //
-// The harness migrates the flat schema into BOTH engines, wipes+reseeds an IDENTICAL fixed FHIR
-// fixture into both via createFlatWriter, then for each of the 9 SEED_QUERIES substitutes a fixed
-// param bag into both dialect SQL variants and runs them directly against each engine, normalizes +
-// sorts both result sets, and deep-compares them.
+// The golden harness migrates the external schema, wipes+reseeds this fixed FHIR fixture into the
+// canonical tables via createRelationalWriter, then for each of the SEED_QUERIES runs its Postgres
+// SQL over a fixed param bag, normalizes + sorts the result set, and deep-compares it to the
+// committed golden snapshot (scripts/lib/reports-golden.json). The FHIR resource data below is
+// engine/schema-agnostic — it is unchanged from the pre-R3e parity fixture.
 
-export const TABLES = ['observations', 'diagnostic_reports', 'service_requests', 'specimens', 'patients', 'organizations', 'locations', 'v2_patients', 'v2_lab_requests', 'v2_lab_results', 'v2_facilities', 'v2_specimens', 'v2_diagnostic_reports'] as const;
+export const TABLES = ['patients', 'lab_requests', 'lab_results', 'facilities', 'specimens', 'diagnostic_reports'] as const;
 
 export const PROV = { sourceSystem: 'reports-parity-harness', batchId: 'fixture-1' };
 

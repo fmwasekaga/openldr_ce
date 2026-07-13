@@ -2,8 +2,8 @@
 //
 // Exercises the REAL code paths against a live SQL Server:
 //   1. createMssqlStore — adapter connects + healthCheck (P2-DB-1)
-//   2. externalMigrations('mssql') — dialect-aware flat-schema migrations apply (P2-DB-2/4)
-//   3. createFlatWriter(db, 'mssql') — flatten FHIR + batched MERGE upsert (P2-DB-2 bulk load)
+//   2. externalMigrations('mssql') — dialect-aware canonical read-model migrations apply (P2-DB-2/4)
+//   3. createRelationalWriter(db, 'mssql') — project FHIR → canonical tables + batched MERGE upsert
 //   4. reporting run() over ExternalSchema — reports execute against SQL Server (P2-DB-3)
 //   5-8. Edge cases against the SQL Server `db` handle: unicode round-trip (nvarchar),
 //        null handling for missing optional fields, N=500 batched-MERGE idempotency, and
@@ -22,7 +22,7 @@
 import type { Kysely } from 'kysely';
 import { sql } from 'kysely';
 import { createMssqlStore } from '@openldr/adapter-mssql-store';
-import { createMigrator, externalMigrations, createFlatWriter, type ExternalSchema } from '@openldr/db';
+import { createMigrator, externalMigrations, createRelationalWriter, type ExternalSchema } from '@openldr/db';
 import { createAppContext } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 
@@ -83,14 +83,15 @@ async function main() {
     const tables = await db.introspection.getTables();
     const names = tables.map((t) => t.name).sort();
     console.log('  tables:', names.join(', '));
-    for (const required of ['patients', 'service_requests', 'specimens', 'observations']) {
+    for (const required of ['patients', 'lab_requests', 'lab_results', 'specimens', 'diagnostic_reports', 'facilities']) {
       if (!names.includes(required)) throw new Error(`missing table ${required}`);
     }
-    ok('flat tables present');
+    ok('canonical read-model tables present');
 
-    step('3. flat writer — batched MERGE upsert (bulk load)');
-    const writer = createFlatWriter(db, 'mssql');
+    step('3. relational writer — batched MERGE upsert (bulk load)');
+    const writer = createRelationalWriter(db, 'mssql');
     const prov = { sourceSystem: 'mssql-acceptance', batchId: 'accept-1' };
+    // Patients project to `patients`; ServiceRequests project to `lab_requests`.
     const items = [...patients, ...serviceRequests].map((resource) => ({ resource, provenance: prov }));
     const results = await writer.writeMany(items);
     console.log('  writeMany results:', JSON.stringify(results));
@@ -99,10 +100,10 @@ async function main() {
     // Idempotency: re-write the same batch → MERGE updates, no duplicate rows.
     await writer.writeMany(items);
     const patientCount = await db.selectFrom('patients').select((eb) => eb.fn.countAll<number>().as('n')).executeTakeFirstOrThrow();
-    const reqCount = await db.selectFrom('service_requests').select((eb) => eb.fn.countAll<number>().as('n')).executeTakeFirstOrThrow();
-    console.log(`  row counts after 2x write: patients=${patientCount.n} service_requests=${reqCount.n}`);
+    const reqCount = await db.selectFrom('lab_requests').select((eb) => eb.fn.countAll<number>().as('n')).executeTakeFirstOrThrow();
+    console.log(`  row counts after 2x write: patients=${patientCount.n} lab_requests=${reqCount.n}`);
     if (Number(patientCount.n) !== patients.length) throw new Error(`MERGE not idempotent: patients=${patientCount.n}`);
-    if (Number(reqCount.n) !== serviceRequests.length) throw new Error(`MERGE not idempotent: service_requests=${reqCount.n}`);
+    if (Number(reqCount.n) !== serviceRequests.length) throw new Error(`MERGE not idempotent: lab_requests=${reqCount.n}`);
     ok('MERGE upsert is idempotent (no duplicate rows)');
 
     if (appCtx) {
@@ -124,9 +125,10 @@ async function main() {
       resource: { resourceType: 'Patient', id: 'u1', name: [{ family: uName, given: ['Zoë'] }], gender: 'female', birthDate: '1980-05-05' },
       provenance: prov,
     }]);
-    const uRow = await db.selectFrom('patients').select(['family_name', 'given_name']).where('id', '=', 'u1').executeTakeFirstOrThrow();
-    if (uRow.family_name !== uName) throw new Error(`unicode family_name mismatch: got ${JSON.stringify(uRow.family_name)}`);
-    if (uRow.given_name !== 'Zoë') throw new Error(`unicode given_name mismatch: got ${JSON.stringify(uRow.given_name)}`);
+    // Canonical patients columns: `surname` (family) + `firstname` (given[0]).
+    const uRow = await db.selectFrom('patients').select(['surname', 'firstname']).where('id', '=', 'u1').executeTakeFirstOrThrow();
+    if (uRow.surname !== uName) throw new Error(`unicode surname mismatch: got ${JSON.stringify(uRow.surname)}`);
+    if (uRow.firstname !== 'Zoë') throw new Error(`unicode firstname mismatch: got ${JSON.stringify(uRow.firstname)}`);
     ok('Unicode names round-trip intact (nvarchar)');
 
     step('6. Null handling (missing optional fields)');
@@ -134,9 +136,10 @@ async function main() {
       resource: { resourceType: 'Patient', id: 'n1', gender: 'unknown' },
       provenance: prov,
     }]);
-    const nRow = await db.selectFrom('patients').select(['family_name', 'birth_date']).where('id', '=', 'n1').executeTakeFirstOrThrow();
-    if (nRow.family_name !== null) throw new Error(`expected null family_name, got ${JSON.stringify(nRow.family_name)}`);
-    if (nRow.birth_date !== null) throw new Error(`expected null birth_date, got ${JSON.stringify(nRow.birth_date)}`);
+    // Canonical patients columns: `surname` (family) + `date_of_birth` (birthDate).
+    const nRow = await db.selectFrom('patients').select(['surname', 'date_of_birth']).where('id', '=', 'n1').executeTakeFirstOrThrow();
+    if (nRow.surname !== null) throw new Error(`expected null surname, got ${JSON.stringify(nRow.surname)}`);
+    if (nRow.date_of_birth !== null) throw new Error(`expected null date_of_birth, got ${JSON.stringify(nRow.date_of_birth)}`);
     ok('Missing optional fields persist as SQL NULL (not empty string)');
 
     step('7. Scale + idempotency (N=500, batched MERGE)');
@@ -148,23 +151,23 @@ async function main() {
     }));
     await writer.writeMany(bulkItems);
     await writer.writeMany(bulkItems); // second write must MERGE-update, not duplicate
-    const bulkCount = await db.selectFrom('service_requests').select((eb) => eb.fn.countAll<number>().as('n')).where('source_system', '=', 'mssql-accept-bulk').executeTakeFirstOrThrow();
+    const bulkCount = await db.selectFrom('lab_requests').select((eb) => eb.fn.countAll<number>().as('n')).where('source_system', '=', 'mssql-accept-bulk').executeTakeFirstOrThrow();
     if (Number(bulkCount.n) !== BULK) throw new Error(`expected ${BULK} bulk rows after 2x write, got ${bulkCount.n}`);
     ok(`${BULK} rows batched + idempotent across two writes`);
 
-    step('8. authored_on text ordering + created_at datetime2 round-trip');
+    step('8. authored_at text ordering + created_at datetime2 round-trip');
     await writer.writeMany([
       { resource: { resourceType: 'ServiceRequest', id: 'd-late', status: 'active', intent: 'order', code: { text: 'Date test' }, subject: { reference: 'Patient/u1' }, authoredOn: '2026-05-20T09:00:00Z' }, provenance: prov },
       { resource: { resourceType: 'ServiceRequest', id: 'd-early', status: 'active', intent: 'order', code: { text: 'Date test' }, subject: { reference: 'Patient/u1' }, authoredOn: '2026-01-05T09:00:00Z' }, provenance: prov },
     ]);
-    // authored_on is a text (nvarchar) column holding the raw ISO-8601 string — verify it
-    // round-trips and its ISO-8601 form sorts chronologically.
-    const ordered = await db.selectFrom('service_requests').select(['id', 'authored_on']).where('code_text', '=', 'Date test').orderBy('authored_on', 'asc').execute();
-    if (ordered.map((r) => r.id).join(',') !== 'd-early,d-late') throw new Error(`authored_on ISO ordering wrong: ${ordered.map((r) => r.id).join(',')}`);
-    ok('authored_on (text) preserves ISO-8601 lexicographic ordering');
+    // authored_at is a text (nvarchar) column holding the raw ISO-8601 string — verify it round-trips
+    // and its ISO-8601 form sorts chronologically. (ServiceRequest.code.text → lab_requests.panel_desc.)
+    const ordered = await db.selectFrom('lab_requests').select(['id', 'authored_at']).where('panel_desc', '=', 'Date test').orderBy('authored_at', 'asc').execute();
+    if (ordered.map((r) => r.id).join(',') !== 'd-early,d-late') throw new Error(`authored_at ISO ordering wrong: ${ordered.map((r) => r.id).join(',')}`);
+    ok('authored_at (text) preserves ISO-8601 lexicographic ordering');
     // created_at IS a real datetime2 column (server default SYSUTCDATETIME on insert) — verify it
     // round-trips from SQL Server as a valid timestamp, exercising datetime2 handling for real.
-    const stamped = await db.selectFrom('service_requests').select(['created_at']).where('id', '=', 'd-early').executeTakeFirstOrThrow();
+    const stamped = await db.selectFrom('lab_requests').select(['created_at']).where('id', '=', 'd-early').executeTakeFirstOrThrow();
     if (stamped.created_at == null) throw new Error('expected created_at to be populated (datetime2 default)');
     if (Number.isNaN(new Date(stamped.created_at as unknown as string).getTime())) throw new Error(`created_at not a valid datetime2 round-trip: ${JSON.stringify(stamped.created_at)}`);
     ok('created_at (datetime2) round-trips as a valid timestamp');
@@ -174,7 +177,7 @@ async function main() {
   } finally {
     // Clean up the synthetic rows so the script is repeatable.
     try {
-      await sql`delete from service_requests where source_system in ('mssql-acceptance', 'mssql-accept-bulk')`.execute(db);
+      await sql`delete from lab_requests where source_system in ('mssql-acceptance', 'mssql-accept-bulk')`.execute(db);
       await sql`delete from patients where source_system = 'mssql-acceptance'`.execute(db);
     } catch { /* ignore cleanup errors */ }
     await store.close();
