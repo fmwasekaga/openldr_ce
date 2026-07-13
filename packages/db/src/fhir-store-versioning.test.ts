@@ -97,3 +97,36 @@ describe('fhir-store versioning', () => {
     await db.destroy();
   });
 });
+
+describe('fhir-store delete (tombstone)', () => {
+  it('tombstones an existing resource: history + change_log delete rows, get() null, version bumped', async () => {
+    const db = await makeMigratedDb();
+    const store = createFhirStore(db as any);
+    await store.save({ resourceType: 'Patient', id: 'p1' } as never); // v1
+    const del = await store.delete('Patient', 'p1');
+    expect(del).toEqual({ deleted: true, version: 2 });
+
+    expect(await store.get('Patient', 'p1')).toBeNull();
+
+    const hist = await db.selectFrom('fhir.resource_history').select(['version', 'op', 'resource']).where('id', '=', 'p1').orderBy('version').execute();
+    expect(hist.map((h: any) => [Number(h.version), h.op])).toEqual([[1, 'upsert'], [2, 'delete']]);
+    expect(hist[1].resource).toBeNull();
+
+    const log = await db.selectFrom('fhir.change_log').select(['op', 'content_hash']).where('resource_id', '=', 'p1').orderBy('seq').execute();
+    expect(log.map((l: any) => l.op)).toEqual(['upsert', 'delete']);
+    expect(log[1].content_hash).toBeNull();
+    await db.destroy();
+  });
+
+  it('is a no-op for a missing resource', async () => {
+    const db = await makeMigratedDb();
+    const store = createFhirStore(db as any);
+    const del = await store.delete('Patient', 'does-not-exist');
+    expect(del).toEqual({ deleted: false });
+    const log = await db.selectFrom('fhir.change_log').select('seq').where('resource_id', '=', 'does-not-exist').execute();
+    expect(log).toEqual([]);
+    const hist = await db.selectFrom('fhir.resource_history').select('version').where('id', '=', 'does-not-exist').execute();
+    expect(hist).toEqual([]);
+    await db.destroy();
+  });
+});
