@@ -4,47 +4,51 @@ import { planProjection, type ChangeRow } from './plan';
 const row = (seq: number, xid: number, id: string, op = 'upsert'): ChangeRow => ({ seq, xid, resource_type: 'Patient', resource_id: id, op });
 
 describe('planProjection', () => {
-  it('all rows safe (xid < boundary): projects distinct keys, advances to max seq', () => {
-    const rows = [row(1, 10, 'p1'), row(2, 10, 'p2'), row(3, 11, 'p1')];
-    const plan = planProjection(rows, 20, 0);
-    expect(plan.newCursor).toBe(3);
-    expect(plan.tasks.map((t) => t.id).sort()).toEqual(['p1', 'p2']);
+  it('all safe, no gaps: projects distinct keys, advances to max seq', () => {
+    const out = planProjection({ rows: [row(1, 10, 'p1'), row(2, 10, 'p2'), row(3, 11, 'p1')], boundary: 100, xmax: 200, cursor: 0, pendingGaps: [] });
+    expect(out.newCursor).toBe(3);
+    expect(out.tasks.map((t) => t.id).sort()).toEqual(['p1', 'p2']);
+    expect(out.pendingGaps).toEqual([]);
   });
 
-  it('caps cursor at firstUnsafe-1 and skips unsafe rows (no permanent skip)', () => {
-    const rows = [row(1, 10, 'p1'), row(2, 25, 'p2'), row(3, 11, 'p3')];
-    const plan = planProjection(rows, 20, 0);
-    expect(plan.newCursor).toBe(1);
-    expect(plan.tasks.map((t) => t.id)).toEqual(['p1']);
+  it('a visible unsafe row blocks; safe rows below it still project', () => {
+    const out = planProjection({ rows: [row(1, 10, 'p1'), row(2, 250, 'p2'), row(3, 11, 'p3')], boundary: 200, xmax: 300, cursor: 0, pendingGaps: [] });
+    expect(out.newCursor).toBe(1);
+    expect(out.tasks.map((t) => t.id)).toEqual(['p1']);
+    expect(out.pendingGaps).toEqual([]);
   });
 
-  it('no rows: cursor unchanged', () => {
-    expect(planProjection([], 20, 5)).toEqual({ tasks: [], newCursor: 5 });
+  it('does NOT advance past an invisible in-flight gap below an unsafe row (the acceptance-test bug)', () => {
+    // seq6 held uncommitted → invisible (absent). seq7 committed but unsafe (xid >= boundary).
+    const out = planProjection({ rows: [row(5, 100, 'p5'), row(7, 250, 'p7')], boundary: 200, xmax: 300, cursor: 4, pendingGaps: [] });
+    expect(out.newCursor).toBe(5); // stops before the gap at 6 — NOT firstUnsafe-1 = 6
+    expect(out.tasks.map((t) => t.id)).toEqual(['p5']);
+    expect(out.pendingGaps).toEqual([{ seq: 6, x0: 300 }]);
   });
 
-  it('first row unsafe: nothing processed, cursor unchanged', () => {
-    const plan = planProjection([row(6, 30, 'p1')], 20, 5);
-    expect(plan).toEqual({ tasks: [], newCursor: 5 });
+  it('a freshly-observed gap blocks and records x0 (cannot be instantly confirmed)', () => {
+    const out = planProjection({ rows: [row(7, 120, 'p7')], boundary: 150, xmax: 200, cursor: 5, pendingGaps: [] });
+    expect(out.newCursor).toBe(5); // gap at 6 blocks (x0=200 > boundary 150)
+    expect(out.tasks).toEqual([]);
+    expect(out.pendingGaps).toEqual([{ seq: 6, x0: 200 }]);
   });
 
-  it('tolerates rollback gaps (missing seq) among safe rows', () => {
-    const rows = [row(1, 10, 'p1'), row(3, 10, 'p2')];
-    const plan = planProjection(rows, 20, 0);
-    expect(plan.newCursor).toBe(3);
-    expect(plan.tasks.map((t) => t.id).sort()).toEqual(['p1', 'p2']);
+  it('advances past a gap once confirmed rolled back (boundary >= recorded x0)', () => {
+    const out = planProjection({ rows: [row(7, 120, 'p7')], boundary: 150, xmax: 200, cursor: 5, pendingGaps: [{ seq: 6, x0: 100 }] });
+    expect(out.newCursor).toBe(7); // gap 6 confirmed aborted (100 <= 150) → skipped
+    expect(out.tasks.map((t) => t.id)).toEqual(['p7']);
+    expect(out.pendingGaps).toEqual([]);
   });
 
-  it('all rows unsafe: nothing processed, cursor unchanged', () => {
-    const plan = planProjection([row(1, 30, 'p1'), row(2, 31, 'p2')], 20, 0);
-    expect(plan).toEqual({ tasks: [], newCursor: 0 });
+  it('projects a gap once it becomes visible (committed) and clears it from pending', () => {
+    const out = planProjection({ rows: [row(6, 120, 'p6'), row(7, 130, 'p7')], boundary: 150, xmax: 200, cursor: 5, pendingGaps: [{ seq: 6, x0: 200 }] });
+    expect(out.newCursor).toBe(7);
+    expect(out.tasks.map((t) => t.id).sort()).toEqual(['p6', 'p7']);
+    expect(out.pendingGaps).toEqual([]);
   });
 
-  it('dedup respects the unsafe cutoff — a later safe row for the same key past firstUnsafe is excluded', () => {
-    // p1 is safe at seq1, but also appears at seq3 which is AFTER the unsafe seq2. Only seq1 counts,
-    // and the cursor stops at firstUnsafe-1 regardless of the later same-key row.
-    const rows = [row(1, 10, 'p1'), row(2, 25, 'p2'), row(3, 10, 'p1')];
-    const plan = planProjection(rows, 20, 0);
-    expect(plan.tasks.map((t) => t.id)).toEqual(['p1']);
-    expect(plan.newCursor).toBe(1);
+  it('no visible rows: cursor unchanged, pending gaps ahead of cursor retained', () => {
+    const out = planProjection({ rows: [], boundary: 100, xmax: 200, cursor: 5, pendingGaps: [{ seq: 6, x0: 200 }] });
+    expect(out).toEqual({ tasks: [], newCursor: 5, pendingGaps: [{ seq: 6, x0: 200 }] });
   });
 });

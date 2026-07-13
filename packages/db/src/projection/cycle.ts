@@ -2,7 +2,7 @@ import type { Kysely } from 'kysely';
 import type { InternalSchema } from '../schema/internal';
 import type { FhirStore } from '../fhir-store';
 import type { FlatWriter } from '../flat-writer';
-import { planProjection, type ProjectionTask } from './plan';
+import { planProjection, type ProjectionTask, type Gap } from './plan';
 import { readCursor, advanceCursor } from './cursor';
 import type { SafeFetchResult } from './fetch';
 
@@ -19,27 +19,39 @@ export interface ProjectionDeps {
   batchSize?: number;
 }
 
+export interface ProjectionRunner {
+  runCycle(): Promise<number>;
+}
+
 async function applyProjection(task: ProjectionTask, deps: ProjectionDeps): Promise<void> {
   const canonical = await deps.fhirStore.get(task.resourceType, task.id);
   if (canonical) await deps.flatWriter.write(canonical);
   else await deps.flatWriter.deleteById(task.resourceType, task.id);
 }
 
-/** One projection cycle: fetch safe rows, plan, apply each (current-state, idempotent), advance cursor.
- *  Returns the number of resources projected. A failing apply is logged and skipped (reprojectAll heals). */
-export async function runProjectionCycle(deps: ProjectionDeps): Promise<number> {
-  const cursor = await readCursor(deps.internalDb, 'projection');
-  const { rows, boundary } = await deps.fetch(deps.internalDb, cursor, deps.batchSize ?? 500);
-  const { tasks, newCursor } = planProjection(rows, boundary, cursor);
-  for (const task of tasks) {
-    try {
-      await applyProjection(task, deps);
-    } catch (err) {
-      deps.logger.error({ err, task }, 'projection apply failed; skipping (reprojectAll can heal)');
-    }
-  }
-  if (newCursor > cursor) await advanceCursor(deps.internalDb, 'projection', newCursor);
-  return tasks.length;
+/** A stateful projection runner. `pendingGaps` (seq→x0) is carried across ticks in-memory so the
+ *  safe-frontier can confirm rolled-back gaps once the xmin boundary advances. Each cycle: fetch safe
+ *  rows + snapshot bounds, plan, apply each (current-state, idempotent), advance the cursor. A failing
+ *  apply is logged and skipped (reprojectAll can heal). Returns the number of resources projected. */
+export function createProjectionRunner(deps: ProjectionDeps): ProjectionRunner {
+  let pendingGaps: Gap[] = [];
+  return {
+    async runCycle(): Promise<number> {
+      const cursor = await readCursor(deps.internalDb, 'projection');
+      const { rows, boundary, xmax } = await deps.fetch(deps.internalDb, cursor, deps.batchSize ?? 500);
+      const plan = planProjection({ rows, boundary, xmax, cursor, pendingGaps });
+      pendingGaps = plan.pendingGaps;
+      for (const task of plan.tasks) {
+        try {
+          await applyProjection(task, deps);
+        } catch (err) {
+          deps.logger.error({ err, task }, 'projection apply failed; skipping (reprojectAll can heal)');
+        }
+      }
+      if (plan.newCursor > cursor) await advanceCursor(deps.internalDb, 'projection', plan.newCursor);
+      return plan.tasks.length;
+    },
+  };
 }
 
 /** Rebuild the read-model from the canonical store, then set the cursor to the current max seq. */

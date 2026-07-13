@@ -3,7 +3,7 @@ import { makeMigratedDb } from '../migrations/internal/test-helpers';
 import { makeMigratedExternalDb } from '../test-helpers-external';
 import { createFhirStore } from '../fhir-store';
 import { createFlatWriter } from '../flat-writer';
-import { runProjectionCycle, reprojectAll, type FetchSafeRows } from './cycle';
+import { createProjectionRunner, reprojectAll, type FetchSafeRows } from './cycle';
 import { readCursor } from './cursor';
 
 const logger = { info() {}, error() {}, warn() {}, debug() {} } as never;
@@ -19,9 +19,10 @@ describe('runProjectionCycle', () => {
     const fetch: FetchSafeRows = async () => ({
       rows: [{ seq: 1, xid: 1, resource_type: 'Patient', resource_id: 'p1', op: 'upsert' }],
       boundary: 100,
+      xmax: 200,
     });
 
-    const n = await runProjectionCycle({ internalDb: internalDb as never, fhirStore, flatWriter, logger, fetch, batchSize: 500 });
+    const n = await createProjectionRunner({ internalDb: internalDb as never, fhirStore, flatWriter, logger, fetch, batchSize: 500 }).runCycle();
     expect(n).toBe(1);
     expect(await externalDb.selectFrom('patients').selectAll().execute()).toHaveLength(1);
     expect(await readCursor(internalDb as never, 'projection')).toBe(1);
@@ -39,10 +40,11 @@ describe('runProjectionCycle', () => {
     await fhirStore.delete('Patient', 'p1');
 
     const fetch: FetchSafeRows = async () => ({
-      rows: [{ seq: 2, xid: 1, resource_type: 'Patient', resource_id: 'p1', op: 'delete' }],
+      rows: [{ seq: 1, xid: 1, resource_type: 'Patient', resource_id: 'p1', op: 'delete' }],
       boundary: 100,
+      xmax: 200,
     });
-    await runProjectionCycle({ internalDb: internalDb as never, fhirStore, flatWriter, logger, fetch, batchSize: 500 });
+    await createProjectionRunner({ internalDb: internalDb as never, fhirStore, flatWriter, logger, fetch, batchSize: 500 }).runCycle();
     expect(await externalDb.selectFrom('patients').selectAll().execute()).toHaveLength(0);
     await internalDb.destroy();
     await externalDb.destroy();

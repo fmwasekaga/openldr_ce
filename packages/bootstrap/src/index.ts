@@ -7,7 +7,7 @@ import { createEventBus } from '@openldr/adapter-event-bus';
 import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import type { Config } from '@openldr/config';
 import { createLogger, HealthRegistry, redact, type Logger } from '@openldr/core';
-import { createInternalDb, createFhirStore, createFlatWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, runProjectionCycle, fetchSafeChangeRows, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore } from '@openldr/db';
+import { createInternalDb, createFhirStore, createFlatWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema, Provenance } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
@@ -643,14 +643,15 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     projectionListenConnected = false;
     logger.warn({ err: e }, 'projection worker: LISTEN client failed to connect; falling back to interval-only polling');
   }
+  const projectionRunner = createProjectionRunner({
+    internalDb: internal.db,
+    fhirStore: canonicalFhirStore,
+    flatWriter: workflowFlatWriter,
+    logger,
+    fetch: fetchSafeChangeRows,
+  });
   const projectionWorker = createProjectionWorker({
-    runCycle: () => runProjectionCycle({
-      internalDb: internal.db,
-      fhirStore: canonicalFhirStore,
-      flatWriter: workflowFlatWriter,
-      logger,
-      fetch: fetchSafeChangeRows,
-    }),
+    runCycle: () => projectionRunner.runCycle(),
     listenClient: projectionListenConnected ? projectionListenClient : undefined,
     logger,
   });
