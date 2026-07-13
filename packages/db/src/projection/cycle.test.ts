@@ -48,3 +48,26 @@ describe('runProjectionCycle', () => {
     await externalDb.destroy();
   });
 });
+
+describe('reprojectAll', () => {
+  it('rebuilds the read-model from canonical and sets the cursor to max seq', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const fhirStore = createFhirStore(internalDb as never);
+    const flatWriter = createFlatWriter(externalDb as never, 'postgres');
+    await fhirStore.save({ resourceType: 'Patient', id: 'p1' } as never);
+    await fhirStore.save({ resourceType: 'Observation', id: 'o1', status: 'final', code: { text: 'x' } } as never);
+
+    const n = await reprojectAll({ internalDb: internalDb as never, flatWriter });
+    expect(n).toBeGreaterThanOrEqual(2);
+    expect(await externalDb.selectFrom('patients').selectAll().execute()).toHaveLength(1);
+    expect(await externalDb.selectFrom('observations').selectAll().execute()).toHaveLength(1);
+
+    // cursor set to current max change_log seq so steady-state tailing won't re-project
+    const maxRow = await internalDb.selectFrom('fhir.change_log').select((eb: any) => eb.fn.max('seq').as('m')).executeTakeFirst();
+    expect(await readCursor(internalDb as never, 'projection')).toBe(Number((maxRow as any).m));
+
+    await internalDb.destroy();
+    await externalDb.destroy();
+  });
+});
