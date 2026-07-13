@@ -4,11 +4,15 @@ import { projectPatient } from './patient';
 import { projectServiceRequest } from './service-request';
 import { projectObservation } from './observation';
 import { projectFacility } from './facility';
+import { projectSpecimen } from './specimen';
+import { projectDiagnosticReport } from './diagnostic-report';
 
 export * from './patient';
 export * from './service-request';
 export * from './observation';
 export * from './facility';
+export * from './specimen';
+export * from './diagnostic-report';
 
 export interface RelationalResult {
   table: keyof ExternalSchema;
@@ -24,6 +28,8 @@ export function projectResource(resource: unknown, prov: Provenance = {}): Relat
     case 'Observation': return { table: 'v2_lab_results', row: projectObservation(r, prov) };
     case 'Organization':
     case 'Location': return { table: 'v2_facilities', row: projectFacility(r, prov) };
+    case 'Specimen': return { table: 'v2_specimens', row: projectSpecimen(r, prov) };
+    case 'DiagnosticReport': return { table: 'v2_diagnostic_reports', row: projectDiagnosticReport(r, prov) };
     default: return null;
   }
 }
@@ -35,6 +41,8 @@ export function v2TableForResourceType(resourceType: string): keyof ExternalSche
     case 'Observation': return 'v2_lab_results';
     case 'Organization':
     case 'Location': return 'v2_facilities';
+    case 'Specimen': return 'v2_specimens';
+    case 'DiagnosticReport': return 'v2_diagnostic_reports';
     default: return null;
   }
 }
