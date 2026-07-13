@@ -1,6 +1,7 @@
 import type { Provenance } from '../provenance';
 import type { Insertable } from 'kysely';
 import type { V2SpecimensTable } from '../schema/external';
+import { readSpecimenOrigin } from '@openldr/fhir';
 import { provColumns, codeable, referenceId, str } from '../flatten/extract';
 
 export function projectSpecimen(r: Record<string, unknown>, prov: Provenance): Insertable<V2SpecimensTable> {
@@ -15,6 +16,7 @@ export function projectSpecimen(r: Record<string, unknown>, prov: Provenance): I
     status: str(r['status']),
     type_code: type.code,
     type_text: type.text,
+    origin: readSpecimenOrigin(r),
     ...provColumns(prov),
   };
 }

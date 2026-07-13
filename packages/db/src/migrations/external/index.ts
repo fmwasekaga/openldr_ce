@@ -5,6 +5,7 @@ import * as m002 from './002_specimen_origin';
 import * as m003 from './003_v2_core';
 import * as m004 from './004_v2_patients_facility';
 import * as m005 from './005_v2_specimen_diagreport';
+import * as m006 from './006_v2_amr_links';
 
 export function externalMigrations(engine: TargetEngine): Record<string, Migration> {
   return {
@@ -13,5 +14,6 @@ export function externalMigrations(engine: TargetEngine): Record<string, Migrati
     '003_v2_core': { up: (db) => m003.up(db, engine), down: m003.down },
     '004_v2_patients_facility': { up: (db) => m004.up(db, engine), down: m004.down },
     '005_v2_specimen_diagreport': { up: (db) => m005.up(db, engine), down: m005.down },
+    '006_v2_amr_links': { up: (db) => m006.up(db, engine), down: m006.down },
   };
 }

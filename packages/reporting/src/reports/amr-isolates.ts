@@ -13,28 +13,24 @@ export const amrIsolates: EventSource = {
   ],
   async run(db, window) {
     const obs = await db
-      .selectFrom('observations')
-      .where('interpretation_code', 'in', ['S', 'I', 'R'])
-      .where('effective_date_time', '>=', window.from)
-      .where('effective_date_time', '<=', endOfDay(window.to))
-      .select(['id', 'code_text', 'interpretation_code', 'effective_date_time', 'subject_ref'])
+      .selectFrom('v2_lab_results')
+      .where('abnormal_flag', 'in', ['S', 'I', 'R'])
+      .where('result_timestamp', '>=', window.from)
+      .where('result_timestamp', '<=', endOfDay(window.to))
+      .select(['id', 'observation_desc', 'abnormal_flag', 'result_timestamp', 'patient_id'])
       .execute();
     if (obs.length === 0) return { rows: [] };
-    const patientIds = [
-      ...new Set(
-        obs.map((o) => o.subject_ref).filter((s): s is string => !!s).map((s) => s.replace(/^Patient\//, '')),
-      ),
-    ];
+    const patientIds = [...new Set(obs.map((o) => o.patient_id).filter((s): s is string => !!s))];
     const patients = patientIds.length
-      ? await db.selectFrom('patients').select(['id', 'managing_organization']).where('id', 'in', patientIds).execute()
+      ? await db.selectFrom('v2_patients').select(['id', 'managing_organization']).where('id', 'in', patientIds).execute()
       : [];
     const facilityById = new Map(patients.map((p) => [p.id, p.managing_organization]));
     const rows = obs.map((o) => ({
       id: o.id,
-      facility: o.subject_ref ? facilityById.get(o.subject_ref.replace(/^Patient\//, '')) ?? null : null,
-      eventDate: o.effective_date_time,
-      antibiotic: o.code_text,
-      result: o.interpretation_code,
+      facility: o.patient_id ? facilityById.get(o.patient_id) ?? null : null,
+      eventDate: o.result_timestamp,
+      antibiotic: o.observation_desc,
+      result: o.abnormal_flag,
     }));
     return { rows };
   },
