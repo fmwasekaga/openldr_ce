@@ -8,7 +8,7 @@
 // param bag into both dialect SQL variants and runs them directly against each engine, normalizes +
 // sorts both result sets, and deep-compares them.
 
-export const TABLES = ['observations', 'diagnostic_reports', 'service_requests', 'specimens', 'patients', 'organizations', 'locations', 'v2_patients', 'v2_lab_requests', 'v2_lab_results', 'v2_facilities'] as const;
+export const TABLES = ['observations', 'diagnostic_reports', 'service_requests', 'specimens', 'patients', 'organizations', 'locations', 'v2_patients', 'v2_lab_requests', 'v2_lab_results', 'v2_facilities', 'v2_specimens', 'v2_diagnostic_reports'] as const;
 
 export const PROV = { sourceSystem: 'reports-parity-harness', batchId: 'fixture-1' };
 
