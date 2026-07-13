@@ -3,10 +3,6 @@ import { makeMigratedDb } from './migrations/internal/test-helpers';
 import { createFhirStore } from './fhir-store';
 import { persistResources } from './persist';
 
-const noopFlatWriter = {
-  write: async () => 'skipped' as const,
-  writeMany: async (items: unknown[]) => items.map(() => 'skipped' as const),
-};
 const logger = { info() {}, error() {}, warn() {}, debug() {} } as never;
 
 describe('persist path emits change_log per resource', () => {
@@ -14,7 +10,7 @@ describe('persist path emits change_log per resource', () => {
     const db = await makeMigratedDb();
     const fhirStore = createFhirStore(db as any);
 
-    await persistResources({ fhirStore, flatWriter: noopFlatWriter as never, logger }, [
+    await persistResources({ fhirStore, logger }, [
       { resourceType: 'Patient', id: 'p1' },
       { resourceType: 'Observation', id: 'o1', status: 'final', code: { text: 'test observation' } },
       { resourceType: 'Patient', id: 'p1' }, // second write of p1 → version 2

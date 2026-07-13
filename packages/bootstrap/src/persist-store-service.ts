@@ -25,7 +25,7 @@ export function createPersistStoreService(
     const provenance: Provenance = source ? { batchId, sourceSystem: source } : { batchId };
     const results = await deps.persist(resources, provenance);
 
-    const flattened = { written: 0, skipped: 0, degraded: 0 };
+    const flattened = { written: 0, skipped: 0, degraded: 0, deferred: 0 };
     for (const r of results) flattened[r.flattened] += 1;
 
     const resourceTypes = Array.from(
