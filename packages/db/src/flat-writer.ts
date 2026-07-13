@@ -54,7 +54,7 @@ const MYSQL_PARAM_BUDGET = 60000;
 const chunkSize = (budget: number, cols: number, cap = Infinity): number =>
   Math.min(cap, Math.max(1, Math.floor(budget / Math.max(1, cols))));
 
-async function insertBatchPg(db: Kysely<any>, table: string, rows: Record<string, unknown>[]): Promise<void> {
+export async function insertBatchPg(db: Kysely<any>, table: string, rows: Record<string, unknown>[]): Promise<void> {
   if (rows.length === 0) return;
   const step = chunkSize(PG_PARAM_BUDGET, Object.keys(rows[0]).length);
   for (let i = 0; i < rows.length; i += step) {
@@ -66,7 +66,7 @@ async function insertBatchPg(db: Kysely<any>, table: string, rows: Record<string
   }
 }
 
-async function mergeBatchMssql(db: Kysely<any>, table: string, rows: Record<string, unknown>[]): Promise<void> {
+export async function mergeBatchMssql(db: Kysely<any>, table: string, rows: Record<string, unknown>[]): Promise<void> {
   if (rows.length === 0) return;
   const step = chunkSize(MSSQL_PARAM_BUDGET, Object.keys(rows[0]).length, MSSQL_MAX_VALUES_ROWS);
   for (let i = 0; i < rows.length; i += step) {
@@ -86,7 +86,7 @@ async function mergeBatchMssql(db: Kysely<any>, table: string, rows: Record<stri
   }
 }
 
-async function insertBatchMysql(db: Kysely<any>, table: string, rows: Record<string, unknown>[]): Promise<void> {
+export async function insertBatchMysql(db: Kysely<any>, table: string, rows: Record<string, unknown>[]): Promise<void> {
   if (rows.length === 0) return;
   const step = chunkSize(MYSQL_PARAM_BUDGET, Object.keys(rows[0]).length);
   for (let i = 0; i < rows.length; i += step) {

@@ -3,6 +3,7 @@ import { makeMigratedDb } from '../migrations/internal/test-helpers';
 import { makeMigratedExternalDb } from '../test-helpers-external';
 import { createFhirStore } from '../fhir-store';
 import { createFlatWriter } from '../flat-writer';
+import { createRelationalWriter } from '../relational-writer';
 import { createProjectionRunner, reprojectAll, type FetchSafeRows } from './cycle';
 import { readCursor } from './cursor';
 
@@ -14,6 +15,7 @@ describe('runProjectionCycle', () => {
     const externalDb = await makeMigratedExternalDb();
     const fhirStore = createFhirStore(internalDb as never);
     const flatWriter = createFlatWriter(externalDb as never, 'postgres');
+    const relationalWriter = createRelationalWriter(externalDb as never, 'postgres');
     await fhirStore.save({ resourceType: 'Patient', id: 'p1', name: [{ family: 'A' }] } as never);
 
     const fetch: FetchSafeRows = async () => ({
@@ -22,9 +24,10 @@ describe('runProjectionCycle', () => {
       xmax: 200,
     });
 
-    const n = await createProjectionRunner({ internalDb: internalDb as never, fhirStore, flatWriter, logger, fetch, batchSize: 500 }).runCycle();
+    const n = await createProjectionRunner({ internalDb: internalDb as never, fhirStore, flatWriter, relationalWriter, logger, fetch, batchSize: 500 }).runCycle();
     expect(n).toBe(1);
     expect(await externalDb.selectFrom('patients').selectAll().execute()).toHaveLength(1);
+    expect(await externalDb.selectFrom('v2_patients').selectAll().execute()).toHaveLength(1);
     expect(await readCursor(internalDb as never, 'projection')).toBe(1);
     await internalDb.destroy();
     await externalDb.destroy();
@@ -35,6 +38,7 @@ describe('runProjectionCycle', () => {
     const externalDb = await makeMigratedExternalDb();
     const fhirStore = createFhirStore(internalDb as never);
     const flatWriter = createFlatWriter(externalDb as never, 'postgres');
+    const relationalWriter = createRelationalWriter(externalDb as never, 'postgres');
     await fhirStore.save({ resourceType: 'Patient', id: 'p1' } as never);
     await flatWriter.write({ resourceType: 'Patient', id: 'p1' });
     await fhirStore.delete('Patient', 'p1');
@@ -44,7 +48,7 @@ describe('runProjectionCycle', () => {
       boundary: 100,
       xmax: 200,
     });
-    await createProjectionRunner({ internalDb: internalDb as never, fhirStore, flatWriter, logger, fetch, batchSize: 500 }).runCycle();
+    await createProjectionRunner({ internalDb: internalDb as never, fhirStore, flatWriter, relationalWriter, logger, fetch, batchSize: 500 }).runCycle();
     expect(await externalDb.selectFrom('patients').selectAll().execute()).toHaveLength(0);
     await internalDb.destroy();
     await externalDb.destroy();
@@ -57,6 +61,7 @@ describe('createProjectionRunner (stateful gaps across cycles)', () => {
     const externalDb = await makeMigratedExternalDb();
     const fhirStore = createFhirStore(internalDb as never);
     const flatWriter = createFlatWriter(externalDb as never, 'postgres');
+    const relationalWriter = createRelationalWriter(externalDb as never, 'postgres');
     // Canonical resources so applyProjection's fhirStore.get('Patient', ...) returns them.
     await fhirStore.save({ resourceType: 'Patient', id: 'a', name: [{ family: 'A' }] } as never);
     await fhirStore.save({ resourceType: 'Patient', id: 'b', name: [{ family: 'B' }] } as never);
@@ -77,7 +82,7 @@ describe('createProjectionRunner (stateful gaps across cycles)', () => {
       return { rows: [{ seq: 2, xid: 10, resource_type: 'Patient', resource_id: 'b', op: 'upsert' }], boundary: 150, xmax: 200 };
     };
 
-    const runner = createProjectionRunner({ internalDb: internalDb as never, fhirStore, flatWriter, logger, fetch, batchSize: 500 });
+    const runner = createProjectionRunner({ internalDb: internalDb as never, fhirStore, flatWriter, relationalWriter, logger, fetch, batchSize: 500 });
 
     // Cycle #1: blocked before the gap at seq 1 → cursor stays 0, nothing projected.
     const n1 = await runner.runCycle();
@@ -104,13 +109,15 @@ describe('reprojectAll', () => {
     const externalDb = await makeMigratedExternalDb();
     const fhirStore = createFhirStore(internalDb as never);
     const flatWriter = createFlatWriter(externalDb as never, 'postgres');
+    const relationalWriter = createRelationalWriter(externalDb as never, 'postgres');
     await fhirStore.save({ resourceType: 'Patient', id: 'p1' } as never);
     await fhirStore.save({ resourceType: 'Observation', id: 'o1', status: 'final', code: { text: 'x' } } as never);
 
-    const n = await reprojectAll({ internalDb: internalDb as never, flatWriter });
+    const n = await reprojectAll({ internalDb: internalDb as never, flatWriter, relationalWriter });
     expect(n).toBeGreaterThanOrEqual(2);
     expect(await externalDb.selectFrom('patients').selectAll().execute()).toHaveLength(1);
     expect(await externalDb.selectFrom('observations').selectAll().execute()).toHaveLength(1);
+    expect(await externalDb.selectFrom('v2_patients').selectAll().execute()).toHaveLength(1);
 
     // cursor set to current max change_log seq so steady-state tailing won't re-project
     const maxRow = await internalDb.selectFrom('fhir.change_log').select((eb: any) => eb.fn.max('seq').as('m')).executeTakeFirst();

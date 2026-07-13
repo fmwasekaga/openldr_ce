@@ -90,6 +90,53 @@ export interface LocationsTable extends ProvenanceColumns {
   part_of_ref: string | null;
 }
 
+export interface V2PatientsTable extends ProvenanceColumns {
+  id: string;
+  patient_guid: string | null;
+  surname: string | null;
+  firstname: string | null;
+  date_of_birth: string | null;
+  sex: string | null;
+  national_id: string | null;
+  phone: string | null;
+  email: string | null;
+}
+
+export interface V2LabRequestsTable extends ProvenanceColumns {
+  id: string;
+  request_id: string | null;
+  patient_id: string | null;
+  panel_code: string | null;
+  panel_system: string | null;
+  panel_desc: string | null;
+  status: string | null;
+  priority: string | null;
+  authored_at: string | null;
+}
+
+export interface V2LabResultsTable extends ProvenanceColumns {
+  id: string;
+  request_id: string | null;
+  observation_code: string | null;
+  observation_system: string | null;
+  observation_desc: string | null;
+  result_type: string | null;
+  numeric_value: number | null;
+  numeric_units: string | null;
+  coded_value: string | null;
+  text_value: string | null;
+  abnormal_flag: string | null;
+  result_timestamp: string | null;
+}
+
+export interface V2FacilitiesTable extends ProvenanceColumns {
+  id: string;
+  facility_code: string | null;
+  facility_name: string | null;
+  facility_type: string | null;
+  source_resource: string | null;
+}
+
 export interface ExternalSchema {
   patients: PatientsTable;
   specimens: SpecimensTable;
@@ -98,4 +145,8 @@ export interface ExternalSchema {
   observations: ObservationsTable;
   organizations: OrganizationsTable;
   locations: LocationsTable;
+  v2_patients: V2PatientsTable;
+  v2_lab_requests: V2LabRequestsTable;
+  v2_lab_results: V2LabResultsTable;
+  v2_facilities: V2FacilitiesTable;
 }

@@ -37,6 +37,7 @@ import {
   createInternalDb,
   createFhirStore,
   createFlatWriter,
+  createRelationalWriter,
   createMigrator,
   internalMigrations,
   externalMigrations,
@@ -69,6 +70,10 @@ const patientId = `${RUN_TAG}-pat`;
 const obsId = `${RUN_TAG}-obs`;
 const heldId = `${RUN_TAG}-held`;
 const laterId = `${RUN_TAG}-later`;
+const v2PatId = `${RUN_TAG}-v2pat`;
+const v2SrId = `${RUN_TAG}-v2sr`;
+const v2ObsId = `${RUN_TAG}-v2obs`;
+const v2OrgId = `${RUN_TAG}-v2org`;
 
 async function main() {
   const internal = createInternalDb(INTERNAL_URL);
@@ -77,9 +82,12 @@ async function main() {
   const externalDb = external.db as unknown as Kysely<ExternalSchema>;
   const fhirStore = createFhirStore(internalDb);
   const flatWriter = createFlatWriter(externalDb, 'postgres');
+  // Second projector: the same external handle `flatWriter` is built from, so the v2 relational
+  // tables land in the same target DB as the thin flat tables (the worker double-projects both).
+  const relationalWriter = createRelationalWriter(externalDb, 'postgres');
   // Create the stateful runner ONCE — its pendingGaps frontier state must persist across every
   // runCycle() call (this is exactly what the no-skip guarantee in Phase 3 depends on).
-  const runner = createProjectionRunner({ internalDb, fhirStore, flatWriter, logger, fetch: fetchSafeChangeRows, batchSize: 500 });
+  const runner = createProjectionRunner({ internalDb, fhirStore, flatWriter, relationalWriter, logger, fetch: fetchSafeChangeRows, batchSize: 500 });
 
   const cursor = () => readCursor(internalDb, 'projection');
   const maxSeq = async (): Promise<number> => {
@@ -207,13 +215,75 @@ async function main() {
     await externalDb.deleteFrom('patients').where('id', 'in', [heldId, laterId]).execute();
     assert(!(await observationExists(obsId)), `flat observation ${obsId} removed pre-reproject`);
     assert(!(await patientExists(heldId)), `flat patient ${heldId} removed pre-reproject`);
-    const rebuilt = await reprojectAll({ internalDb, flatWriter });
+    const rebuilt = await reprojectAll({ internalDb, flatWriter, relationalWriter });
     ok(`reprojectAll rebuilt ${rebuilt} canonical resource(s)`);
     assert(await observationExists(obsId), `Observation ${obsId} rebuilt from canonical`);
     assert(await patientExists(heldId), `Patient ${heldId} rebuilt from canonical`);
     assert(await patientExists(laterId), `Patient ${laterId} rebuilt from canonical`);
     assert((await cursor()) === (await maxSeq()), `reprojectAll set cursor to max seq (${await maxSeq()})`);
     pass('phase 4 — reprojectAll');
+
+    // ── Phase 5: v2-core relational projection ──
+    step('5. v2-core: Patient/ServiceRequest/Observation/Organization → v2_* relational tables');
+    // Save a small connected graph: Organization (facility), Patient, a ServiceRequest ordered for the
+    // Patient (soft ref subject), and an Observation based on that ServiceRequest (soft ref basedOn).
+    await fhirStore.save({
+      resourceType: 'Organization', id: v2OrgId,
+      identifier: [{ system: 'urn:facility', value: 'FAC-001' }], name: 'Central Reference Lab',
+    } as never);
+    await fhirStore.save({
+      resourceType: 'Patient', id: v2PatId,
+      identifier: [{ system: 'urn:patient', value: 'PID-9001' }],
+      name: [{ family: 'Relational', given: ['Bob'] }], gender: 'male', birthDate: '1978-02-03',
+    } as never);
+    await fhirStore.save({
+      resourceType: 'ServiceRequest', id: v2SrId, status: 'active', intent: 'order',
+      subject: { reference: `Patient/${v2PatId}` },
+      code: { coding: [{ system: 'http://loinc.org', code: '58410-2', display: 'CBC panel' }] },
+    } as never);
+    await fhirStore.save({
+      resourceType: 'Observation', id: v2ObsId, status: 'final',
+      basedOn: [{ reference: `ServiceRequest/${v2SrId}` }],
+      code: { coding: [{ system: 'http://loinc.org', code: '718-7', display: 'Hemoglobin' }] },
+      valueQuantity: { value: 13.5, unit: 'g/dL' },
+    } as never);
+    const target5 = await maxSeq();
+    const c5 = await drainUntil(target5);
+    assert(c5 >= target5, `cursor advanced to max(seq): cursor=${c5} >= ${target5}`);
+
+    const v2Pat = await externalDb.selectFrom('v2_patients')
+      .select(['id', 'surname', 'sex', 'patient_guid']).where('id', '=', v2PatId).executeTakeFirst();
+    assert(!!v2Pat, `v2_patients has row for ${v2PatId}`);
+    assert(v2Pat?.surname === 'Relational', `v2_patients.surname = 'Relational' (got ${v2Pat?.surname})`);
+    assert(v2Pat?.sex === 'M', `v2_patients.sex = 'M' (male) (got ${v2Pat?.sex})`);
+    assert(v2Pat?.patient_guid === 'PID-9001', `v2_patients.patient_guid = 'PID-9001' (got ${v2Pat?.patient_guid})`);
+
+    const v2Req = await externalDb.selectFrom('v2_lab_requests')
+      .select(['id', 'patient_id', 'panel_code', 'panel_system']).where('id', '=', v2SrId).executeTakeFirst();
+    assert(!!v2Req, `v2_lab_requests has row for ${v2SrId}`);
+    assert(v2Req?.patient_id === v2PatId, `v2_lab_requests.patient_id soft-refs Patient FHIR id ${v2PatId} (got ${v2Req?.patient_id})`);
+    assert(v2Req?.panel_code === '58410-2', `v2_lab_requests.panel_code = '58410-2' (got ${v2Req?.panel_code})`);
+    assert(v2Req?.panel_system === 'http://loinc.org', `v2_lab_requests.panel_system = 'http://loinc.org' (got ${v2Req?.panel_system})`);
+
+    const v2Res = await externalDb.selectFrom('v2_lab_results')
+      .select(['id', 'request_id', 'observation_code']).where('id', '=', v2ObsId).executeTakeFirst();
+    assert(!!v2Res, `v2_lab_results has row for ${v2ObsId}`);
+    assert(v2Res?.request_id === v2SrId, `v2_lab_results.request_id soft-refs ServiceRequest FHIR id ${v2SrId} (got ${v2Res?.request_id})`);
+    assert(v2Res?.observation_code === '718-7', `v2_lab_results.observation_code = '718-7' (got ${v2Res?.observation_code})`);
+
+    const v2Fac = await externalDb.selectFrom('v2_facilities')
+      .select(['id', 'facility_code', 'facility_name', 'source_resource']).where('id', '=', v2OrgId).executeTakeFirst();
+    assert(!!v2Fac, `v2_facilities has row for ${v2OrgId}`);
+    assert(v2Fac?.source_resource === 'Organization', `v2_facilities.source_resource = 'Organization' (got ${v2Fac?.source_resource})`);
+    assert(v2Fac?.facility_code === 'FAC-001', `v2_facilities.facility_code = 'FAC-001' (got ${v2Fac?.facility_code})`);
+
+    // v2 tombstone delete path: deleting the canonical Patient removes its v2_patients row.
+    const v2Del = await fhirStore.delete('Patient', v2PatId);
+    assert(v2Del.deleted === true, `canonical Patient ${v2PatId} deleted (v${v2Del.version})`);
+    const c5d = await drainUntil(await maxSeq());
+    const v2PatGone = await externalDb.selectFrom('v2_patients').select('id').where('id', '=', v2PatId).executeTakeFirst();
+    assert(!v2PatGone, `v2_patients row for ${v2PatId} is gone after delete (cursor=${c5d})`);
+    pass('phase 5 — v2-core projection');
   } catch (e) {
     if (failures === 0) failures++;
     console.error('\n[FAIL]', e instanceof Error ? e.stack : e);
@@ -222,6 +292,10 @@ async function main() {
     try {
       await externalDb.deleteFrom('patients').where('id', 'like', 'proj-accept-%').execute();
       await externalDb.deleteFrom('observations').where('id', 'like', 'proj-accept-%').execute();
+      await externalDb.deleteFrom('v2_patients').where('id', 'like', 'proj-accept-%').execute();
+      await externalDb.deleteFrom('v2_lab_requests').where('id', 'like', 'proj-accept-%').execute();
+      await externalDb.deleteFrom('v2_lab_results').where('id', 'like', 'proj-accept-%').execute();
+      await externalDb.deleteFrom('v2_facilities').where('id', 'like', 'proj-accept-%').execute();
     } catch { /* ignore cleanup errors */ }
     try {
       await sql`delete from fhir.change_log where resource_id like 'proj-accept-%'`.execute(internalDb);
