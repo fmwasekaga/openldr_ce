@@ -43,7 +43,7 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
       const resourceType = resource.resourceType;
       const id = (resource as { id?: string }).id ?? randomUUID();
       const site = await resolveSiteId();
-      return db.transaction().execute(async (trx) => {
+      const ref = await db.transaction().execute(async (trx) => {
         // Next version = highest ever recorded in the append-only history + 1. Deriving from
         // history (not the canonical row) keeps versions monotonic across delete→recreate, since
         // delete() removes the canonical row but history retains every version. The history PK
@@ -95,6 +95,10 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
           .execute();
         return { resourceType, id, version: next };
       });
+      // Best-effort wakeup for the projection worker; interval polling is the correctness-bearing
+      // path, so a notify failure (e.g. pg-mem in tests) must never affect the save.
+      try { await sql`select pg_notify('fhir_changes', '')`.execute(db); } catch { /* ignore */ }
+      return ref;
     },
 
     async get(resourceType, id) {

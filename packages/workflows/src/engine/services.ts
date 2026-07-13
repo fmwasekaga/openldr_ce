@@ -34,7 +34,7 @@ export interface RunPersistStoreOutput {
   meta: {
     persisted: number;
     batchId: string;
-    flattened: { written: number; skipped: number; degraded: number };
+    flattened: { written: number; skipped: number; degraded: number; deferred: number };
     resourceTypes: string[];
   };
 }

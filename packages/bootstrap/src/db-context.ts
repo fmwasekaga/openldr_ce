@@ -1,7 +1,7 @@
 import { Kysely } from 'kysely';
 import type { MigrationResultSet } from 'kysely';
 import type { Config } from '@openldr/config';
-import { createLogger, ConfigError } from '@openldr/core';
+import { createLogger, ConfigError, type Logger } from '@openldr/core';
 import type { TargetStorePort } from '@openldr/ports';
 import { selectTargetStore } from './target-store';
 import {
@@ -26,6 +26,7 @@ export interface DbContext {
   externalStore: TargetStorePort;
   fhirStore: FhirStore;
   flatWriter: FlatWriter;
+  logger: Logger;
   persist(resource: unknown, prov?: Provenance): Promise<PersistResult>;
   migrateAll(): Promise<{ internal: MigrationResultSet; external: MigrationResultSet }>;
   reset(opts?: { force?: boolean }): Promise<void>;
@@ -48,7 +49,8 @@ export async function createDbContext(cfg: Config): Promise<DbContext> {
     externalStore,
     fhirStore,
     flatWriter,
-    persist: (resource, prov) => persistResource({ fhirStore, flatWriter, logger }, resource, prov),
+    logger,
+    persist: (resource, prov) => persistResource({ fhirStore, logger }, resource, prov),
     async migrateAll() {
       const internalRes = await internalMigrator.migrateToLatest();
       const externalRes = await externalMigrator.migrateToLatest();

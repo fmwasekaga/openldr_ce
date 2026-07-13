@@ -1,12 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import * as XLSX from 'xlsx';
+import pg from 'pg';
 import { Kysely, sql } from 'kysely';
 import { createAuth } from '@openldr/adapter-auth';
 import { createEventBus } from '@openldr/adapter-event-bus';
 import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import type { Config } from '@openldr/config';
 import { createLogger, HealthRegistry, redact, type Logger } from '@openldr/core';
-import { createInternalDb, createFhirStore, createFlatWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore } from '@openldr/db';
+import { createInternalDb, createFhirStore, createFlatWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, runProjectionCycle, fetchSafeChangeRows, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema, Provenance } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
@@ -58,6 +59,7 @@ import { createEmailListenerDriver } from './listener-email';
 import { createDhis2Orchestration } from './dhis2-orchestration';
 import { selectTargetStore } from './target-store';
 import { createPluginRegistry } from './plugin-registry';
+import { createProjectionWorker } from './projection-worker';
 import { buildOntologyDistribution, createOperations, importTerminologyResource, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type LoadResult, type OntologyBuildProgress, type OntologyManifest, type Operations } from '@openldr/terminology';
 
 export class ReportNotFoundError extends Error {
@@ -325,7 +327,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   const canonicalFhirStore = createFhirStore(internal.db);
   const workflowFlatWriter = createFlatWriter(externalDb, engine);
   const workflowPersist = (resources: unknown[], prov: Provenance) =>
-    persistResources({ fhirStore: canonicalFhirStore, flatWriter: workflowFlatWriter, logger }, resources, prov);
+    persistResources({ fhirStore: canonicalFhirStore, logger }, resources, prov);
   const marketplaceForms = createFormArtifactInstaller({ forms, installStore: marketplaceInstalls, audit });
 
   // Seed a default marketplace registry from the legacy env vars the first time (table empty),
@@ -628,6 +630,31 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   });
   const workflows = { store: workflowStore, runs: workflowRuns, schedules: workflowSchedules, webhooks: workflowWebhooks, runner: workflowRunner, services: workflowServices, datasets: workflowDatasets, listeners: workflowListeners };
 
+  // Restructure R2: async projection worker keeps the flat (external) store in sync with the
+  // canonical FHIR store. A dedicated LISTEN client gives near-instant wakeups on `fhir_changes`
+  // (emitted best-effort by fhirStore.save); interval polling is the correctness-bearing fallback
+  // if the LISTEN connection can't be established (e.g. pooled/serverless PG), so a failure here
+  // must never abort boot.
+  const projectionListenClient = new pg.Client({ connectionString: cfg.INTERNAL_DATABASE_URL });
+  let projectionListenConnected = true;
+  try {
+    await projectionListenClient.connect();
+  } catch (e) {
+    projectionListenConnected = false;
+    logger.warn({ err: e }, 'projection worker: LISTEN client failed to connect; falling back to interval-only polling');
+  }
+  const projectionWorker = createProjectionWorker({
+    runCycle: () => runProjectionCycle({
+      internalDb: internal.db,
+      fhirStore: canonicalFhirStore,
+      flatWriter: workflowFlatWriter,
+      logger,
+      fetch: fetchSafeChangeRows,
+    }),
+    listenClient: projectionListenConnected ? projectionListenClient : undefined,
+    logger,
+  });
+
   const pluginData = createPluginDataStore(internal.db);
   // Generic, caller-driven DHIS2 push orchestration (mapping/orgUnitMap supplied by the
   // plugin UI through the broker). Mirrors the host dhis2-context runMapping behaviour.
@@ -792,6 +819,8 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     cfg,
     async close() {
       await workflowListeners.stopAll();
+      await projectionWorker.stop();
+      if (projectionListenConnected) await projectionListenClient.end().catch(() => undefined);
       await Promise.allSettled([eventing.close(), store.close(), internal.close()]);
     },
   };
