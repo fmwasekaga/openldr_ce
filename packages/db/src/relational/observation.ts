@@ -14,6 +14,8 @@ export function projectObservation(r: Record<string, unknown>, prov: Provenance)
   return {
     id: String(r['id']),
     request_id: referenceId((r['basedOn'] as unknown[] | undefined)?.[0]),
+    patient_id: referenceId(r['subject']),
+    specimen_id: referenceId(r['specimen']),
     observation_code: code.code,
     observation_system: code.system,
     observation_desc: code.text,

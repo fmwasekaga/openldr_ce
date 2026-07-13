@@ -15,9 +15,9 @@ describe('relational projectResource', () => {
   });
 
   it('maps Observation -> v2_lab_results (numeric result, soft request_id)', () => {
-    const out = projectResource({ resourceType: 'Observation', id: 'o1', basedOn: [{ reference: 'ServiceRequest/sr1' }], code: { coding: [{ system: 'http://loinc.org', code: '200', display: 'Glucose' }] }, valueQuantity: { value: 5.5, unit: 'mmol/L' }, interpretation: [{ coding: [{ code: 'H' }] }], effectiveDateTime: '2026-01-02' });
+    const out = projectResource({ resourceType: 'Observation', id: 'o1', basedOn: [{ reference: 'ServiceRequest/sr1' }], subject: { reference: 'Patient/pt-1' }, specimen: { reference: 'Specimen/sp-1' }, code: { coding: [{ system: 'http://loinc.org', code: '200', display: 'Glucose' }] }, valueQuantity: { value: 5.5, unit: 'mmol/L' }, interpretation: [{ coding: [{ code: 'H' }] }], effectiveDateTime: '2026-01-02' });
     expect(out?.table).toBe('v2_lab_results');
-    expect(out?.row).toMatchObject({ id: 'o1', request_id: 'sr1', observation_code: '200', observation_system: 'http://loinc.org', result_type: 'NM', numeric_value: 5.5, numeric_units: 'mmol/L', abnormal_flag: 'H', result_timestamp: '2026-01-02' });
+    expect(out?.row).toMatchObject({ id: 'o1', request_id: 'sr1', observation_code: '200', observation_system: 'http://loinc.org', result_type: 'NM', numeric_value: 5.5, numeric_units: 'mmol/L', abnormal_flag: 'H', result_timestamp: '2026-01-02', patient_id: 'pt-1', specimen_id: 'sp-1' });
   });
 
   it('maps Organization and Location -> v2_facilities with a source discriminator', () => {
@@ -32,6 +32,21 @@ describe('relational projectResource', () => {
     expect(out?.table).toBe('v2_specimens');
     expect(out?.row).toMatchObject({ id: 'sp1', patient_id: 'p1', received_time: '2026-01-01T00:00:00Z', type_text: 'Blood', status: 'available' });
   });
+
+  it('maps Specimen -> v2_specimens (origin extension)', () => {
+    const out = projectResource({
+      resourceType: 'Specimen',
+      id: 'sp2',
+      subject: { reference: 'Patient/p1' },
+      receivedTime: '2026-01-01T00:00:00Z',
+      type: { text: 'Blood' },
+      status: 'available',
+      extension: [{ url: 'https://openldr.org/fhir/StructureDefinition/specimen-origin', valueCode: 'inpatient' }],
+    });
+    expect(out?.table).toBe('v2_specimens');
+    expect(out?.row).toMatchObject({ id: 'sp2', origin: 'inpatient' });
+  });
+
   it('maps DiagnosticReport -> v2_diagnostic_reports (bare patient_id, code, issued)', () => {
     const out = projectResource({ resourceType: 'DiagnosticReport', id: 'dr1', subject: { reference: 'Patient/p1' }, status: 'final', code: { coding: [{ code: 'CBC' }], text: 'Complete Blood Count' }, issued: '2026-01-02T00:00:00Z', conclusion: 'ok' });
     expect(out?.table).toBe('v2_diagnostic_reports');
