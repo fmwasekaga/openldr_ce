@@ -106,19 +106,22 @@ export const SEED_QUERIES: SeedQuery[] = [
     name: 'Facilities (options)',
     connectorId: '',
     params: [],
-    // No postgres-isms at all — the mssql variant is byte-identical (see Task 2's porting notes).
+    // R3c cutover: reads `v2_patients` (not the thin `patients` table) — `managing_organization`
+    // is unchanged (still the full-organization-ref column) in v2, so this is a bare table-name
+    // swap. No postgres-isms at all — the mssql variant is byte-identical (see Task 2's porting
+    // notes).
     sql: {
       postgres: `select distinct managing_organization as facility
-from patients
+from v2_patients
 where managing_organization is not null
 order by 1`,
       mssql: `select distinct managing_organization as facility
-from patients
+from v2_patients
 where managing_organization is not null
 order by 1`,
       // No postgres-isms at all — byte-identical (see Task 5's mysql porting notes).
       mysql: `select distinct managing_organization as facility
-from patients
+from v2_patients
 where managing_organization is not null
 order by 1`,
     },
@@ -233,18 +236,21 @@ order by \`percentR\` desc`,
     //    endOfDay: `<= (to || 'T23:59:59.999Z')`.
     //  - row order: month ASC, then test ASC — matches the catalog's explicit
     //    `.sort((a,b) => month asc, then test.localeCompare(test))`.
+    //  - R3c cutover: reads `v2_lab_requests` (not the thin `service_requests` table) —
+    //    `authored_at`/`panel_desc` in place of thin `authored_on`/`code_text`; no other behavior
+    //    change (still no patient join, no facility filter).
     params: [
       { id: 'from', label: 'From', type: 'text', required: true },
       { id: 'to', label: 'To', type: 'text', required: true },
     ],
     sql: {
       postgres: `select
-  to_char(date_trunc('month', sr.authored_on::timestamptz), 'YYYY-MM') as month,
-  coalesce(sr.code_text, '(unknown)') as test,
+  to_char(date_trunc('month', sr.authored_at::timestamptz), 'YYYY-MM') as month,
+  coalesce(sr.panel_desc, '(unknown)') as test,
   count(*)::int as count
-from service_requests sr
-where sr.authored_on >= {{param.from}}
-  and sr.authored_on <= ({{param.to}} || 'T23:59:59.999Z')
+from v2_lab_requests sr
+where sr.authored_at >= {{param.from}}
+  and sr.authored_at <= ({{param.to}} || 'T23:59:59.999Z')
 group by 1, 2
 order by 1, 2`,
       // Task 2 port: to_char(date_trunc('month', ...), 'YYYY-MM') -> format(cast(...as
@@ -252,13 +258,13 @@ order by 1, 2`,
       // (`group by 1, 2`) are NOT supported by T-SQL (unlike ORDER BY, which does support them
       // there too) — the grouped expressions are spelled out instead.
       mssql: `select
-  format(cast(sr.authored_on as datetime2), 'yyyy-MM') as month,
-  coalesce(sr.code_text, '(unknown)') as test,
+  format(cast(sr.authored_at as datetime2), 'yyyy-MM') as month,
+  coalesce(sr.panel_desc, '(unknown)') as test,
   cast(count(*) as int) as count
-from service_requests sr
-where sr.authored_on >= {{param.from}}
-  and sr.authored_on <= ({{param.to}} + 'T23:59:59.999Z')
-group by format(cast(sr.authored_on as datetime2), 'yyyy-MM'), coalesce(sr.code_text, '(unknown)')
+from v2_lab_requests sr
+where sr.authored_at >= {{param.from}}
+  and sr.authored_at <= ({{param.to}} + 'T23:59:59.999Z')
+group by format(cast(sr.authored_at as datetime2), 'yyyy-MM'), coalesce(sr.panel_desc, '(unknown)')
 order by 1, 2`,
       // Task 5 mysql port: authored_on is an ISO 'YYYY-MM-DD...' string, so substr(...,1,7) IS
       // 'YYYY-MM' (avoids MySQL's fussy T/Z timestamp parsing); ::int -> cast(...as signed);
@@ -266,13 +272,13 @@ order by 1, 2`,
       // expressions are spelled out (ordinal `group by 1,2` is accepted by MySQL, but spelling
       // out matches the mssql variant and is unambiguous). ORDER BY ordinals are fine.
       mysql: `select
-  substr(sr.authored_on, 1, 7) as month,
-  coalesce(sr.code_text, '(unknown)') as test,
+  substr(sr.authored_at, 1, 7) as month,
+  coalesce(sr.panel_desc, '(unknown)') as test,
   cast(count(*) as signed) as count
-from service_requests sr
-where sr.authored_on >= {{param.from}}
-  and sr.authored_on <= concat({{param.to}}, 'T23:59:59.999Z')
-group by substr(sr.authored_on, 1, 7), coalesce(sr.code_text, '(unknown)')
+from v2_lab_requests sr
+where sr.authored_at >= {{param.from}}
+  and sr.authored_at <= concat({{param.to}}, 'T23:59:59.999Z')
+group by substr(sr.authored_at, 1, 7), coalesce(sr.panel_desc, '(unknown)')
 order by 1, 2`,
     },
   },
@@ -294,6 +300,13 @@ order by 1, 2`,
     // whole-hour values.
     //  - facility filter (optional): same '' = no-filter guard as q-amr-resistance, applied to
     //    diagnostic_reports.subject_ref via patients.managing_organization.
+    //  - R3c cutover: reads `v2_specimens`/`v2_diagnostic_reports`/`v2_patients` (not the thin
+    //    `specimens`/`diagnostic_reports`/`patients` tables). v2 stores the bare FHIR id directly
+    //    (`patient_id`) rather than a `Patient/`-prefixed reference string (`subject_ref`), so the
+    //    `received` CTE keys on `patient_id`, the report<->specimen join compares `patient_id` to
+    //    `patient_id`, and the facility subquery compares the bare `dr.patient_id` against bare
+    //    `v2_patients.id` (no `'Patient/' ||` prefix needed). `managing_organization` itself is
+    //    unchanged.
     //  - date range: from/to REQUIRED (see q-test-volume's note on why); endOfDay applied to `to`.
     //  - row order: avgHours DESCENDING, matching `rows.sort((a,b) => b.avgHours - a.avgHours)`.
     //    The catalog has no secondary tiebreaker (nondeterministic tie order there); `test asc` is
@@ -314,23 +327,23 @@ order by 1, 2`,
     ],
     sql: {
       postgres: `with received as (
-  select subject_ref, min(received_time) as received_time
-  from specimens
-  where subject_ref is not null and received_time is not null
-  group by subject_ref
+  select patient_id, min(received_time) as received_time
+  from v2_specimens
+  where patient_id is not null and received_time is not null
+  group by patient_id
 ),
 paired as (
   select
     coalesce(dr.code_text, '(unknown)') as test,
     round(extract(epoch from (dr.issued::timestamptz - r.received_time::timestamptz)) / 3600.0)::int as hours
-  from diagnostic_reports dr
-  join received r on r.subject_ref = dr.subject_ref
+  from v2_diagnostic_reports dr
+  join received r on r.patient_id = dr.patient_id
   where dr.issued is not null
     and dr.issued >= r.received_time
     and dr.issued >= {{param.from}}
     and dr.issued <= ({{param.to}} || 'T23:59:59.999Z')
-    and ({{param.facility}} = '' or dr.subject_ref in (
-      select 'Patient/' || p.id from patients p where p.managing_organization = {{param.facility}}
+    and ({{param.facility}} = '' or dr.patient_id in (
+      select p.id from v2_patients p where p.managing_organization = {{param.facility}}
     ))
 )
 select
@@ -352,23 +365,23 @@ order by "avgHours" desc, test asc`,
       // average; flagged for the parity harness as the most likely subtle divergence in this
       // query. string || -> +.
       mssql: `with received as (
-  select subject_ref, min(received_time) as received_time
-  from specimens
-  where subject_ref is not null and received_time is not null
-  group by subject_ref
+  select patient_id, min(received_time) as received_time
+  from v2_specimens
+  where patient_id is not null and received_time is not null
+  group by patient_id
 ),
 paired as (
   select
     coalesce(dr.code_text, '(unknown)') as test,
     cast(round(datediff(second, cast(r.received_time as datetime2), cast(dr.issued as datetime2)) / 3600.0, 0) as int) as hours
-  from diagnostic_reports dr
-  join received r on r.subject_ref = dr.subject_ref
+  from v2_diagnostic_reports dr
+  join received r on r.patient_id = dr.patient_id
   where dr.issued is not null
     and dr.issued >= r.received_time
     and dr.issued >= {{param.from}}
     and dr.issued <= ({{param.to}} + 'T23:59:59.999Z')
-    and ({{param.facility}} = '' or dr.subject_ref in (
-      select 'Patient/' + p.id from patients p where p.managing_organization = {{param.facility}}
+    and ({{param.facility}} = '' or dr.patient_id in (
+      select p.id from v2_patients p where p.managing_organization = {{param.facility}}
     ))
 )
 select
@@ -389,23 +402,23 @@ order by "avgHours" desc, test asc`,
       // cast(...as signed); string || -> concat(); backtick aliases so ORDER BY key resolves.
       // Flagged for the parity harness (same subtle avg/rounding divergence risk as mssql).
       mysql: `with received as (
-  select subject_ref, min(received_time) as received_time
-  from specimens
-  where subject_ref is not null and received_time is not null
-  group by subject_ref
+  select patient_id, min(received_time) as received_time
+  from v2_specimens
+  where patient_id is not null and received_time is not null
+  group by patient_id
 ),
 paired as (
   select
     coalesce(dr.code_text, '(unknown)') as test,
     cast(round(timestampdiff(second, str_to_date(substr(r.received_time, 1, 19), '%Y-%m-%dT%H:%i:%s'), str_to_date(substr(dr.issued, 1, 19), '%Y-%m-%dT%H:%i:%s')) / 3600.0, 0) as signed) as hours
-  from diagnostic_reports dr
-  join received r on r.subject_ref = dr.subject_ref
+  from v2_diagnostic_reports dr
+  join received r on r.patient_id = dr.patient_id
   where dr.issued is not null
     and dr.issued >= r.received_time
     and dr.issued >= {{param.from}}
     and dr.issued <= concat({{param.to}}, 'T23:59:59.999Z')
-    and ({{param.facility}} = '' or dr.subject_ref in (
-      select concat('Patient/', p.id) from patients p where p.managing_organization = {{param.facility}}
+    and ({{param.facility}} = '' or dr.patient_id in (
+      select p.id from v2_patients p where p.managing_organization = {{param.facility}}
     ))
 )
 select
