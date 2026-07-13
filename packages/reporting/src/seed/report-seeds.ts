@@ -1747,10 +1747,19 @@ export interface SeedDataDrivenReportsResult {
 
 const EMPTY_RESULT: SeedDataDrivenReportsResult = { queriesSeeded: 0, queriesUpdated: 0, designsSeeded: 0, reportDefsSeeded: 0 };
 
-// Structural equality for a seed query's params vs. the stored params (order-sensitive; params are
-// authored as an ordered array). Cheap JSON compare — params are small and plain.
+// Canonical JSON: recursively sorts object keys so equality is insensitive to key order. Needed
+// because `params` is a jsonb column — Postgres normalizes (re-sorts) jsonb keys on read, so a
+// freshly-seeded row's params compare byte-unequal to the authored order under a plain
+// JSON.stringify, which would fire a spurious refresh on every boot.
+function canonicalJson(v: unknown): string {
+  return JSON.stringify(v, (_k, val) =>
+    val && typeof val === 'object' && !Array.isArray(val)
+      ? Object.keys(val as Record<string, unknown>).sort().reduce<Record<string, unknown>>((o, k) => { o[k] = (val as Record<string, unknown>)[k]; return o; }, {})
+      : val);
+}
+// Structural, key-order-insensitive equality for seed-query params vs. stored params.
 function paramsEqual(a: unknown, b: unknown): boolean {
-  return JSON.stringify(a ?? []) === JSON.stringify(b ?? []);
+  return canonicalJson(a ?? []) === canonicalJson(b ?? []);
 }
 
 /** Idempotently inserts `SEED_DESIGNS` and `SEED_REPORT_DEFS` (skipping any id already present),

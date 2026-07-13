@@ -113,6 +113,16 @@ describe('seedDataDrivenReports', () => {
     for (const [id, v] of queries) expect(v.sql).toBe(before.get(id));
   });
 
+  it('does not refresh when only the stored params key order differs (jsonb normalizes key order)', async () => {
+    const { deps, queries } = fakeDeps([{ id: 'conn-123', name: DEFAULT_CONNECTOR_NAME, type: 'postgres' }]);
+    const q = SEED_QUERIES.find((x) => x.id === 'q-amr-resistance')!;
+    // stored row: canonical sql, but params with keys in a DIFFERENT order (as jsonb read-back would produce)
+    const reordered = q.params.map((p) => ({ required: p.required, type: p.type, label: p.label, id: p.id }));
+    queries.set('q-amr-resistance', { id: 'q-amr-resistance', connectorId: 'conn-123', sql: q.sql.postgres, params: reordered as never });
+    const res = await seedDataDrivenReports(deps);
+    expect(res.queriesUpdated).toBe(0); // reorder alone must NOT trigger a refresh
+  });
+
   // Task 2 (mssql-slice2b): seedDataDrivenReports must pick the SQL variant matching the
   // resolved warehouse connector's dialect (reversing Slice 1's "reports skip on MSSQL").
   it('resolves a postgres-typed warehouse connector and seeds the postgres SQL variant', async () => {
