@@ -2,8 +2,8 @@ import type { Kysely } from 'kysely';
 import type { ExternalSchema } from './schema/external';
 import type { Provenance } from './provenance';
 import type { TargetEngine } from './engine';
-import { insertBatchPg, mergeBatchMssql, insertBatchMysql, type WriteResult } from './flat-writer';
-import { projectResource, v2TableForResourceType } from './relational/index';
+import { insertBatchPg, mergeBatchMssql, insertBatchMysql, type WriteResult } from './batch-upsert';
+import { projectResource, tableForResourceType } from './relational/index';
 
 export type { WriteResult };
 export interface RelationalWriteItem { resource: unknown; provenance?: Provenance; }
@@ -44,7 +44,7 @@ export function createRelationalWriter(db: Kysely<ExternalSchema>, engine: Targe
       return results;
     },
     async deleteById(resourceType, id) {
-      const table = v2TableForResourceType(resourceType);
+      const table = tableForResourceType(resourceType);
       if (!table) return;
       await anyDb.deleteFrom(table).where('id', '=', id).execute();
     },

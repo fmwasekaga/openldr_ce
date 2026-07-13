@@ -13,7 +13,7 @@ export const amrIsolates: EventSource = {
   ],
   async run(db, window) {
     const obs = await db
-      .selectFrom('v2_lab_results')
+      .selectFrom('lab_results')
       .where('abnormal_flag', 'in', ['S', 'I', 'R'])
       .where('result_timestamp', '>=', window.from)
       .where('result_timestamp', '<=', endOfDay(window.to))
@@ -22,7 +22,7 @@ export const amrIsolates: EventSource = {
     if (obs.length === 0) return { rows: [] };
     const patientIds = [...new Set(obs.map((o) => o.patient_id).filter((s): s is string => !!s))];
     const patients = patientIds.length
-      ? await db.selectFrom('v2_patients').select(['id', 'managing_organization']).where('id', 'in', patientIds).execute()
+      ? await db.selectFrom('patients').select(['id', 'managing_organization']).where('id', 'in', patientIds).execute()
       : [];
     const facilityById = new Map(patients.map((p) => [p.id, p.managing_organization]));
     const rows = obs.map((o) => ({

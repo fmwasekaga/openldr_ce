@@ -1,11 +1,11 @@
 import type { Provenance } from '../provenance';
 import type { Insertable } from 'kysely';
-import type { V2PatientsTable } from '../schema/external';
-import { provColumns, firstIdentifier, str, reference } from '../flatten/extract';
+import type { PatientsTable } from '../schema/external';
+import { provColumns, firstIdentifier, str, reference } from './extract';
 
 const SEX: Record<string, string> = { male: 'M', female: 'F', other: 'O', unknown: 'U' };
 
-export function projectPatient(r: Record<string, unknown>, prov: Provenance): Insertable<V2PatientsTable> {
+export function projectPatient(r: Record<string, unknown>, prov: Provenance): Insertable<PatientsTable> {
   const idn = firstIdentifier(r);
   const name = (r['name'] as Record<string, unknown>[] | undefined)?.[0];
   const telecom = (r['telecom'] as Record<string, unknown>[] | undefined) ?? [];

@@ -6,8 +6,8 @@ import { getModel } from './models/registry';
 describe('runBuilderQuery breakdown', () => {
   it('shapes long [label, series, value] rows', async () => {
     const mem = newDb();
-    mem.public.none('create table service_requests (status text, code_text text, priority text, authored_on text, subject_ref text)');
-    mem.public.none("insert into service_requests (status, code_text) values ('active','A'),('active','B'),('done','A')");
+    mem.public.none('create table lab_requests (status text, panel_desc text, priority text, authored_at text, patient_id text)');
+    mem.public.none("insert into lab_requests (status, panel_desc) values ('active','A'),('active','B'),('done','A')");
     const db = mem.adapters.createKysely() as unknown as import('kysely').Kysely<any>;
     const model = getModel('service_requests')!;
     const res = await runBuilderQuery(db, model, {
@@ -21,8 +21,8 @@ describe('runBuilderQuery breakdown', () => {
 
   it('keeps multi-word series names intact with a date dimension + grain', async () => {
     const mem = newDb();
-    mem.public.none('create table service_requests (status text, code_text text, priority text, authored_on text, subject_ref text)');
-    mem.public.none("insert into service_requests (authored_on, code_text) values ('2024-01-05','Emergency Room'),('2024-01-12','Emergency Room'),('2024-02-03','Emergency Room')");
+    mem.public.none('create table lab_requests (status text, panel_desc text, priority text, authored_at text, patient_id text)');
+    mem.public.none("insert into lab_requests (authored_at, panel_desc) values ('2024-01-05','Emergency Room'),('2024-01-12','Emergency Room'),('2024-02-03','Emergency Room')");
     const db = mem.adapters.createKysely() as unknown as import('kysely').Kysely<any>;
     const model = getModel('service_requests')!;
     const res = await runBuilderQuery(db, model, {
@@ -38,14 +38,14 @@ describe('runBuilderQuery breakdown', () => {
 describe('runBuilderQuery wide mode (Slice A)', () => {
   function memObs() {
     const mem = newDb();
-    mem.public.none('create table observations (status text, code_text text, interpretation_code text, value_unit text, value_quantity float, effective_date_time text, subject_ref text)');
+    mem.public.none('create table lab_results (observation_desc text, abnormal_flag text, numeric_units text, numeric_value float, result_timestamp text, patient_id text)');
     return mem;
   }
 
   it('reproduces the amr-resistance R/I/S/tested pivot as columns', async () => {
     const mem = memObs();
     // Cipro: 2R 1I 1S ; Genta: 1R 0I 2S
-    mem.public.none(`insert into observations (code_text, interpretation_code) values
+    mem.public.none(`insert into lab_results (observation_desc, abnormal_flag) values
       ('Ciprofloxacin','R'),('Ciprofloxacin','R'),('Ciprofloxacin','I'),('Ciprofloxacin','S'),
       ('Gentamicin','R'),('Gentamicin','S'),('Gentamicin','S')`);
     const db = mem.adapters.createKysely() as unknown as import('kysely').Kysely<any>;
@@ -69,7 +69,7 @@ describe('runBuilderQuery wide mode (Slice A)', () => {
 
   it('returns a single summary row with each metric when there is no dimension', async () => {
     const mem = memObs();
-    mem.public.none(`insert into observations (interpretation_code) values ('R'),('R'),('S')`);
+    mem.public.none(`insert into lab_results (abnormal_flag) values ('R'),('R'),('S')`);
     const db = mem.adapters.createKysely() as unknown as import('kysely').Kysely<any>;
     const model = getModel('observations')!;
     const res = await runBuilderQuery(db, model, {
@@ -87,7 +87,7 @@ describe('runBuilderQuery wide mode (Slice A)', () => {
 
   it('sums each metric column per grain bucket for a date dimension', async () => {
     const mem = memObs();
-    mem.public.none(`insert into observations (effective_date_time, interpretation_code) values
+    mem.public.none(`insert into lab_results (result_timestamp, abnormal_flag) values
       ('2024-01-05','R'),('2024-01-20','S'),('2024-02-03','R')`);
     const db = mem.adapters.createKysely() as unknown as import('kysely').Kysely<any>;
     const model = getModel('observations')!;
@@ -109,13 +109,13 @@ describe('runBuilderQuery wide mode (Slice A)', () => {
 describe('runBuilderQuery derived ratio (Slice B)', () => {
   function memObs() {
     const mem = newDb();
-    mem.public.none('create table observations (status text, code_text text, interpretation_code text, value_unit text, value_quantity float, effective_date_time text, subject_ref text)');
+    mem.public.none('create table lab_results (observation_desc text, abnormal_flag text, numeric_units text, numeric_value float, result_timestamp text, patient_id text)');
     return mem;
   }
 
   it('computes %R as a derived ratio metric (completes amr-resistance)', async () => {
     const mem = memObs();
-    mem.public.none(`insert into observations (code_text, interpretation_code) values
+    mem.public.none(`insert into lab_results (observation_desc, abnormal_flag) values
       ('Ciprofloxacin','R'),('Ciprofloxacin','R'),('Ciprofloxacin','I'),('Ciprofloxacin','S'),
       ('Gentamicin','R'),('Gentamicin','S'),('Gentamicin','S')`);
     const db = mem.adapters.createKysely() as unknown as import('kysely').Kysely<any>;
@@ -139,7 +139,7 @@ describe('runBuilderQuery derived ratio (Slice B)', () => {
 
   it('returns 0 for a derived ratio when the denominator is 0', async () => {
     const mem = memObs();
-    mem.public.none(`insert into observations (interpretation_code) values ('S'),('S')`);
+    mem.public.none(`insert into lab_results (abnormal_flag) values ('S'),('S')`);
     const db = mem.adapters.createKysely() as unknown as import('kysely').Kysely<any>;
     const model = getModel('observations')!;
     const res = await runBuilderQuery(db, model, {
@@ -157,7 +157,7 @@ describe('runBuilderQuery derived ratio (Slice B)', () => {
 
   it('carries the derived metric decimals onto its result column', async () => {
     const mem = memObs();
-    mem.public.none(`insert into observations (interpretation_code) values ('R'),('R'),('S')`);
+    mem.public.none(`insert into lab_results (abnormal_flag) values ('R'),('R'),('S')`);
     const db = mem.adapters.createKysely() as unknown as import('kysely').Kysely<any>;
     const model = getModel('observations')!;
     const res = await runBuilderQuery(db, model, {

@@ -3,9 +3,9 @@
 // Exercises the REAL code paths against a live MySQL 8.4 or MariaDB 11.4 with an
 // `openldr_target` database:
 //   1. createMysqlStore — adapter connects + healthCheck
-//   2. externalMigrations('mysql') — dialect-aware flat-schema migrations apply; all 7 flat tables present
-//   3. createFlatWriter(db, 'mysql') — flatten FHIR + batched ON DUPLICATE KEY UPDATE upsert (bulk
-//      load), with 2x-write idempotency (no duplicate rows)
+//   2. externalMigrations('mysql') — dialect-aware canonical read-model migrations apply; all tables present
+//   3. createRelationalWriter(db, 'mysql') — project FHIR → canonical tables + batched ON DUPLICATE
+//      KEY UPDATE upsert (bulk load), with 2x-write idempotency (no duplicate rows)
 //   4. Unicode round-trip (utf8mb4 longtext — Cyrillic/CJK/emoji)
 //   5. Null handling for missing optional fields (persist as SQL NULL, not empty string)
 //   6. Scale + idempotency (N=500 rows batched, idempotent across two writes)
@@ -27,7 +27,7 @@
 import type { Kysely } from 'kysely';
 import { sql } from 'kysely';
 import { createMysqlStore } from '@openldr/adapter-mysql-store';
-import { createMigrator, externalMigrations, createFlatWriter, type ExternalSchema } from '@openldr/db';
+import { createMigrator, externalMigrations, createRelationalWriter, type ExternalSchema } from '@openldr/db';
 
 const cfg = {
   host: process.env.MYSQL_HOST ?? 'localhost',
@@ -77,13 +77,14 @@ async function main() {
     const tables = await db.introspection.getTables();
     const names = tables.map((t) => t.name).sort();
     console.log('  tables:', names.join(', '));
-    for (const required of ['patients', 'service_requests', 'specimens', 'observations', 'diagnostic_reports', 'organizations', 'locations']) {
+    for (const required of ['patients', 'lab_requests', 'lab_results', 'specimens', 'diagnostic_reports', 'facilities']) {
       if (!names.includes(required)) throw new Error(`missing table ${required}`);
     }
-    ok('all 7 flat tables present');
+    ok('canonical read-model tables present');
 
-    step('3. flat writer — batched ON DUPLICATE KEY UPDATE upsert (bulk load)');
-    const writer = createFlatWriter(db, 'mysql');
+    step('3. relational writer — batched ON DUPLICATE KEY UPDATE upsert (bulk load)');
+    const writer = createRelationalWriter(db, 'mysql');
+    // Patients project to `patients`; ServiceRequests project to `lab_requests`.
     const items = [...patients, ...serviceRequests].map((resource) => ({ resource, provenance: prov }));
     const results = await writer.writeMany(items);
     console.log('  writeMany results:', JSON.stringify(results));
@@ -92,10 +93,10 @@ async function main() {
     // Idempotency: re-write the same batch → upsert updates, no duplicate rows.
     await writer.writeMany(items);
     const patientCount = await db.selectFrom('patients').select((eb) => eb.fn.countAll<number>().as('n')).executeTakeFirstOrThrow();
-    const reqCount = await db.selectFrom('service_requests').select((eb) => eb.fn.countAll<number>().as('n')).executeTakeFirstOrThrow();
-    console.log(`  row counts after 2x write: patients=${patientCount.n} service_requests=${reqCount.n}`);
+    const reqCount = await db.selectFrom('lab_requests').select((eb) => eb.fn.countAll<number>().as('n')).executeTakeFirstOrThrow();
+    console.log(`  row counts after 2x write: patients=${patientCount.n} lab_requests=${reqCount.n}`);
     if (Number(patientCount.n) !== patients.length) throw new Error(`upsert not idempotent: patients=${patientCount.n}`);
-    if (Number(reqCount.n) !== serviceRequests.length) throw new Error(`upsert not idempotent: service_requests=${reqCount.n}`);
+    if (Number(reqCount.n) !== serviceRequests.length) throw new Error(`upsert not idempotent: lab_requests=${reqCount.n}`);
     ok('ON DUPLICATE KEY UPDATE upsert is idempotent (no duplicate rows)');
 
     step('4. Unicode round-trip (utf8mb4 longtext)');
@@ -104,9 +105,10 @@ async function main() {
       resource: { resourceType: 'Patient', id: 'u1', name: [{ family: uName, given: ['Zoë'] }], gender: 'female', birthDate: '1980-05-05' },
       provenance: prov,
     }]);
-    const uRow = await db.selectFrom('patients').select(['family_name', 'given_name']).where('id', '=', 'u1').executeTakeFirstOrThrow();
-    if (uRow.family_name !== uName) throw new Error(`unicode family_name mismatch: got ${JSON.stringify(uRow.family_name)}`);
-    if (uRow.given_name !== 'Zoë') throw new Error(`unicode given_name mismatch: got ${JSON.stringify(uRow.given_name)}`);
+    // Canonical patients columns: `surname` (family) + `firstname` (given[0]).
+    const uRow = await db.selectFrom('patients').select(['surname', 'firstname']).where('id', '=', 'u1').executeTakeFirstOrThrow();
+    if (uRow.surname !== uName) throw new Error(`unicode surname mismatch: got ${JSON.stringify(uRow.surname)}`);
+    if (uRow.firstname !== 'Zoë') throw new Error(`unicode firstname mismatch: got ${JSON.stringify(uRow.firstname)}`);
     ok('Unicode names (Cyrillic/CJK/emoji) round-trip intact via utf8mb4');
 
     step('5. Null handling (missing optional fields)');
@@ -114,9 +116,10 @@ async function main() {
       resource: { resourceType: 'Patient', id: 'n1', gender: 'unknown' },
       provenance: prov,
     }]);
-    const nRow = await db.selectFrom('patients').select(['family_name', 'birth_date']).where('id', '=', 'n1').executeTakeFirstOrThrow();
-    if (nRow.family_name !== null) throw new Error(`expected null family_name, got ${JSON.stringify(nRow.family_name)}`);
-    if (nRow.birth_date !== null) throw new Error(`expected null birth_date, got ${JSON.stringify(nRow.birth_date)}`);
+    // Canonical patients columns: `surname` (family) + `date_of_birth` (birthDate).
+    const nRow = await db.selectFrom('patients').select(['surname', 'date_of_birth']).where('id', '=', 'n1').executeTakeFirstOrThrow();
+    if (nRow.surname !== null) throw new Error(`expected null surname, got ${JSON.stringify(nRow.surname)}`);
+    if (nRow.date_of_birth !== null) throw new Error(`expected null date_of_birth, got ${JSON.stringify(nRow.date_of_birth)}`);
     ok('Missing optional fields persist as SQL NULL (not empty string)');
 
     step('6. Scale + idempotency (N=500, batched upsert)');
@@ -128,7 +131,7 @@ async function main() {
     }));
     await writer.writeMany(bulkItems);
     await writer.writeMany(bulkItems); // second write must upsert-update, not duplicate
-    const bulkCount = await db.selectFrom('service_requests').select((eb) => eb.fn.countAll<number>().as('n')).where('source_system', '=', 'mysql-accept-bulk').executeTakeFirstOrThrow();
+    const bulkCount = await db.selectFrom('lab_requests').select((eb) => eb.fn.countAll<number>().as('n')).where('source_system', '=', 'mysql-accept-bulk').executeTakeFirstOrThrow();
     if (Number(bulkCount.n) !== BULK) throw new Error(`expected ${BULK} bulk rows after 2x write, got ${bulkCount.n}`);
     ok(`${BULK} rows batched + idempotent across two writes`);
   } catch (e) {
@@ -137,7 +140,7 @@ async function main() {
   } finally {
     // Clean up the synthetic rows so the script is repeatable.
     try {
-      await sql`delete from service_requests where source_system in ('mysql-acceptance', 'mysql-accept-bulk')`.execute(db);
+      await sql`delete from lab_requests where source_system in ('mysql-acceptance', 'mysql-accept-bulk')`.execute(db);
       await sql`delete from patients where source_system = 'mysql-acceptance'`.execute(db);
     } catch { /* ignore cleanup errors */ }
     await store.close();

@@ -1,0 +1,373 @@
+[
+  {
+    "id": "q-facilities",
+    "bag": {},
+    "rows": [
+      {
+        "facility": "Facility A"
+      },
+      {
+        "facility": "Facility B"
+      },
+      {
+        "facility": "Facility C"
+      }
+    ]
+  },
+  {
+    "id": "q-test-volume",
+    "bag": {
+      "from": "2026-01-01",
+      "to": "2026-12-31"
+    },
+    "rows": [
+      {
+        "count": 1,
+        "month": "2026-04",
+        "test": "(unknown)"
+      },
+      {
+        "count": 1,
+        "month": "2026-04",
+        "test": "Malaria RDT"
+      },
+      {
+        "count": 1,
+        "month": "2026-05",
+        "test": "Blood culture"
+      },
+      {
+        "count": 2,
+        "month": "2026-02",
+        "test": "Blood culture"
+      },
+      {
+        "count": 2,
+        "month": "2026-03",
+        "test": "Urine culture"
+      }
+    ]
+  },
+  {
+    "id": "q-turnaround-time",
+    "bag": {
+      "from": "2026-01-01",
+      "to": "2026-12-31",
+      "facility": ""
+    },
+    "rows": [
+      {
+        "avgHours": 12.3,
+        "count": 3,
+        "maxHours": 14,
+        "minHours": 11,
+        "test": "CBC"
+      },
+      {
+        "avgHours": 24,
+        "count": 1,
+        "maxHours": 24,
+        "minHours": 24,
+        "test": "(unknown)"
+      }
+    ]
+  },
+  {
+    "id": "q-patient-demographics",
+    "bag": {
+      "facility": "",
+      "asOf": ""
+    },
+    "rows": [
+      {
+        "band": "0-4",
+        "female": 1,
+        "male": 0,
+        "other": 0,
+        "total": 1
+      },
+      {
+        "band": "15-24",
+        "female": 0,
+        "male": 0,
+        "other": 1,
+        "total": 1
+      },
+      {
+        "band": "25-49",
+        "female": 0,
+        "male": 2,
+        "other": 0,
+        "total": 2
+      },
+      {
+        "band": "5-14",
+        "female": 1,
+        "male": 0,
+        "other": 0,
+        "total": 1
+      },
+      {
+        "band": "50+",
+        "female": 1,
+        "male": 3,
+        "other": 0,
+        "total": 4
+      },
+      {
+        "band": "unknown",
+        "female": 1,
+        "male": 0,
+        "other": 2,
+        "total": 3
+      }
+    ]
+  },
+  {
+    "id": "q-amr-resistance",
+    "bag": {
+      "from": "2026-01-01",
+      "to": "2026-12-31",
+      "facility": ""
+    },
+    "rows": [
+      {
+        "antibiotic": "(unknown)",
+        "i": 0,
+        "percentR": 100,
+        "r": 1,
+        "s": 0,
+        "tested": 1
+      },
+      {
+        "antibiotic": "Ampicillin",
+        "i": 1,
+        "percentR": 33.3,
+        "r": 1,
+        "s": 1,
+        "tested": 3
+      },
+      {
+        "antibiotic": "Ciprofloxacin",
+        "i": 0,
+        "percentR": 100,
+        "r": 1,
+        "s": 0,
+        "tested": 1
+      },
+      {
+        "antibiotic": "Gentamicin",
+        "i": 1,
+        "percentR": 0,
+        "r": 0,
+        "s": 1,
+        "tested": 2
+      }
+    ]
+  },
+  {
+    "id": "q-amr-facility-summary",
+    "bag": {
+      "from": "2026-01-01",
+      "to": "2026-12-31"
+    },
+    "rows": [
+      {
+        "facility": "Facility A",
+        "resistant": 2,
+        "tested": 5
+      },
+      {
+        "facility": "Facility B",
+        "resistant": 1,
+        "tested": 2
+      }
+    ]
+  },
+  {
+    "id": "q-amr-glass-ris",
+    "bag": {
+      "from": "2026-01-01",
+      "to": "2026-12-31",
+      "country": "",
+      "year": ""
+    },
+    "rows": [
+      {
+        "AgeGroup": "1-4",
+        "AntibioticCode": "Ampicillin",
+        "Gender": "female",
+        "Intermediate": 1,
+        "Iso3Country": "XXX",
+        "Origin": "outpatient",
+        "PathogenCode": "KPNEU",
+        "Resistant": 0,
+        "Specimen": "urine",
+        "Susceptible": 0,
+        "Total": 1,
+        "Year": 0
+      },
+      {
+        "AgeGroup": "25-34",
+        "AntibioticCode": "Ciprofloxacin",
+        "Gender": "male",
+        "Intermediate": 0,
+        "Iso3Country": "XXX",
+        "Origin": "inpatient",
+        "PathogenCode": "ECOLI",
+        "Resistant": 1,
+        "Specimen": "blood",
+        "Susceptible": 0,
+        "Total": 1,
+        "Year": 0
+      },
+      {
+        "AgeGroup": "25-34",
+        "AntibioticCode": "Gentamicin",
+        "Gender": "male",
+        "Intermediate": 0,
+        "Iso3Country": "XXX",
+        "Origin": "inpatient",
+        "PathogenCode": "ECOLI",
+        "Resistant": 0,
+        "Specimen": "blood",
+        "Susceptible": 1,
+        "Total": 1,
+        "Year": 0
+      },
+      {
+        "AgeGroup": "65+",
+        "AntibioticCode": "Ciprofloxacin",
+        "Gender": "male",
+        "Intermediate": 0,
+        "Iso3Country": "XXX",
+        "Origin": "inpatient",
+        "PathogenCode": "ECOLI",
+        "Resistant": 1,
+        "Specimen": "blood",
+        "Susceptible": 0,
+        "Total": 1,
+        "Year": 0
+      },
+      {
+        "AgeGroup": "65+",
+        "AntibioticCode": "Gentamicin",
+        "Gender": "male",
+        "Intermediate": 0,
+        "Iso3Country": "XXX",
+        "Origin": "inpatient",
+        "PathogenCode": "ECOLI",
+        "Resistant": 0,
+        "Specimen": "blood",
+        "Susceptible": 1,
+        "Total": 1,
+        "Year": 0
+      },
+      {
+        "AgeGroup": "unknown",
+        "AntibioticCode": "Ceftriaxone",
+        "Gender": "other",
+        "Intermediate": 0,
+        "Iso3Country": "XXX",
+        "Origin": "unknown",
+        "PathogenCode": "SAUREUS",
+        "Resistant": 0,
+        "Specimen": "csf",
+        "Susceptible": 1,
+        "Total": 1,
+        "Year": 0
+      }
+    ]
+  },
+  {
+    "id": "q-amr-first-isolate-summary",
+    "bag": {
+      "from": "2026-01-01",
+      "to": "2026-12-31"
+    },
+    "rows": [
+      {
+        "antibiotic": "Ampicillin",
+        "i": 1,
+        "pathogen": "KPNEU",
+        "percentR": 0,
+        "r": 0,
+        "s": 0,
+        "specimenType": "urine",
+        "tested": 1
+      },
+      {
+        "antibiotic": "Ceftriaxone",
+        "i": 0,
+        "pathogen": "SAUREUS",
+        "percentR": 0,
+        "r": 0,
+        "s": 1,
+        "specimenType": "csf",
+        "tested": 1
+      },
+      {
+        "antibiotic": "Ciprofloxacin",
+        "i": 0,
+        "pathogen": "ECOLI",
+        "percentR": 100,
+        "r": 2,
+        "s": 0,
+        "specimenType": "blood",
+        "tested": 2
+      },
+      {
+        "antibiotic": "Gentamicin",
+        "i": 0,
+        "pathogen": "ECOLI",
+        "percentR": 0,
+        "r": 0,
+        "s": 2,
+        "specimenType": "blood",
+        "tested": 2
+      }
+    ]
+  },
+  {
+    "id": "q-amr-antibiogram",
+    "bag": {
+      "from": "2026-01-01",
+      "to": "2026-12-31"
+    },
+    "rows": [
+      {
+        "Amoxicillin/Clavulanate": "",
+        "Ampicillin": "",
+        "Cefotaxime": "",
+        "Ceftriaxone": "",
+        "Ciprofloxacin": "100% (2)",
+        "Gentamicin": "0% (2)",
+        "Meropenem": "",
+        "Trimethoprim/Sulfamethoxazole": "",
+        "pathogen": "ECOLI"
+      },
+      {
+        "Amoxicillin/Clavulanate": "",
+        "Ampicillin": "",
+        "Cefotaxime": "",
+        "Ceftriaxone": "0% (1)",
+        "Ciprofloxacin": "",
+        "Gentamicin": "",
+        "Meropenem": "",
+        "Trimethoprim/Sulfamethoxazole": "",
+        "pathogen": "SAUREUS"
+      },
+      {
+        "Amoxicillin/Clavulanate": "",
+        "Ampicillin": "0% (1)",
+        "Cefotaxime": "",
+        "Ceftriaxone": "",
+        "Ciprofloxacin": "",
+        "Gentamicin": "",
+        "Meropenem": "",
+        "Trimethoprim/Sulfamethoxazole": "",
+        "pathogen": "KPNEU"
+      }
+    ]
+  }
+]

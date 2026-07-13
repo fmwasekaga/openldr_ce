@@ -14,7 +14,7 @@ describe('compileBuilderQuery', () => {
       metric: { key: 'count', agg: 'count' },
       dimension: { key: 'status' }, filters: [],
     }).compile();
-    expect(sql).toContain('from "service_requests"');
+    expect(sql).toContain('from "lab_requests"');
     expect(sql).toContain('count(*)');
     expect(sql).toContain('group by');
   });
@@ -53,7 +53,7 @@ describe('compileBuilderQuery', () => {
       dimension: { key: 'status' }, breakdown: { key: 'code_text' }, filters: [],
     }).compile();
     expect(sql).toContain('"status"');
-    expect(sql).toContain('"code_text"');
+    expect(sql).toContain('"panel_desc"');
     expect((sql.match(/group by/gi) ?? []).length).toBe(1);
     expect(sql).toContain('"series"');
   });
@@ -76,7 +76,7 @@ describe('conditional metrics (Slice A)', () => {
     const model = getModel('observations')!;
     const mk = (agg: string) => compileBuilderQuery(db, model, {
       mode: 'builder', model: 'observations',
-      metric: { key: 'x', agg: agg as any, column: 'value_quantity', where: [{ dimension: 'status', op: 'eq', value: 'final' }] },
+      metric: { key: 'x', agg: agg as any, column: 'numeric_value', where: [{ dimension: 'interpretation_code', op: 'eq', value: 'final' }] },
       filters: [],
     }).compile().sql;
     expect(mk('sum')).toContain('sum(case when');
@@ -262,8 +262,8 @@ describe('compileBuilderQuery age_band computed dimension', () => {
   it('a plain-column dimension emits byte-identical SQL (compute absent)', () => {
     const { sql } = compileBuilderQuery(db, model, { mode: 'builder', model: 'patients', metric: { key: 'count', agg: 'count' }, dimension: { key: 'gender' }, filters: [] } as any).compile();
     expect(sql).not.toMatch(/case when/i);
-    expect(sql).toMatch(/group by "gender"/i);
-    expect(sql).toMatch(/order by "gender"/i);
+    expect(sql).toMatch(/group by "sex"/i);
+    expect(sql).toMatch(/order by "sex"/i);
   });
 });
 
@@ -271,13 +271,13 @@ describe('compileBuilderQuery age_band as breakdown', () => {
   const model = getModel('patients')!;
   it('emits a CASE bucket for a computed breakdown dimension (series)', () => {
     const { sql } = compileBuilderQuery(db, model, { mode: 'builder', model: 'patients', metric: { key: 'count', agg: 'count' }, breakdown: { key: 'age_band' }, filters: [] } as any).compile();
-    expect(sql).toMatch(/case when/i);      // series is a CASE, not raw birth_date
-    expect(sql).not.toMatch(/group by "birth_date"/i); // not grouped by the raw column
-    expect(sql).not.toMatch(/"birth_date" as "series"/i); // series is not the raw column
+    expect(sql).toMatch(/case when/i);      // series is a CASE, not raw date_of_birth
+    expect(sql).not.toMatch(/group by "date_of_birth"/i); // not grouped by the raw column
+    expect(sql).not.toMatch(/"date_of_birth" as "series"/i); // series is not the raw column
   });
   it('a plain breakdown dimension emits raw column (byte-identical)', () => {
     const { sql } = compileBuilderQuery(db, model, { mode: 'builder', model: 'patients', metric: { key: 'count', agg: 'count' }, breakdown: { key: 'gender' }, filters: [] } as any).compile();
-    expect(sql).toMatch(/group by "gender"/i);
+    expect(sql).toMatch(/group by "sex"/i);
     expect(sql).not.toMatch(/case when/i);
   });
 });
@@ -300,21 +300,22 @@ describe('collectUsedJoins', () => {
 describe('compileBuilderQuery cross-model join (facility)', () => {
   const model = getModel('observations')!;
   const base = { mode: 'builder' as const, model: 'observations', metric: { key: 'count', agg: 'count' as const } };
-  it('adds a LEFT JOIN with a replace() ON + qualified group-by when grouping by a joined dimension', () => {
+  it('adds a LEFT JOIN with a bare-id ON + qualified group-by when grouping by a joined dimension', () => {
     const { sql } = compileBuilderQuery(db, model, { ...base, dimension: { key: 'facility' }, filters: [] } as any).compile();
     expect(sql).toMatch(/left join "patients" as "jp"/i);
-    expect(sql).toMatch(/replace\("observations"\."subject_ref"/i);
+    expect(sql).not.toMatch(/replace\(/i);
+    expect(sql).toMatch(/"lab_results"\."patient_id" = "jp"\."id"/i);
     expect(sql).toMatch(/group by "jp"\."managing_organization"/i);
   });
   it('adds the join when facility is only a filter, and qualifies the base group-by', () => {
     const { sql } = compileBuilderQuery(db, model, { ...base, dimension: { key: 'code_text' }, filters: [{ dimension: 'facility', op: 'eq', value: 'Org/1' }] } as any).compile();
     expect(sql).toMatch(/left join "patients" as "jp"/i);
-    expect(sql).toMatch(/group by "observations"\."code_text"/i);
+    expect(sql).toMatch(/group by "lab_results"\."observation_desc"/i);
   });
   it('a join-free query emits byte-identical unqualified SQL (backward-compat)', () => {
     const { sql } = compileBuilderQuery(db, model, { ...base, dimension: { key: 'code_text' }, filters: [] } as any).compile();
     expect(sql).not.toMatch(/left join/i);
-    expect(sql).toMatch(/group by "code_text"/i);
-    expect(sql).not.toMatch(/"observations"\."code_text"/i);
+    expect(sql).toMatch(/group by "observation_desc"/i);
+    expect(sql).not.toMatch(/"lab_results"\."observation_desc"/i);
   });
 });

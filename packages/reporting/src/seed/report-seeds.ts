@@ -16,6 +16,9 @@ export type SqlDialect = 'postgres' | 'mssql' | 'mysql';
 // S4 seed data: the query + design + report-record triples that replace the hardcoded catalog
 // reports (`packages/reporting/src/reports/*.ts`) with data-driven ones. Task 4.2 (worked example)
 // appends `amr-resistance`'s triple below; Tasks 4.3-4.8 append one each for the remaining six.
+//
+// R3e: reports read the canonical read-model tables (v2_* renamed to
+// patients/lab_requests/lab_results/specimens/diagnostic_reports/facilities).
 
 /** Name used to dedup the default target-warehouse connector — matches
  *  `packages/bootstrap/src/seed.ts`'s `DEFAULT_CONNECTOR_NAME`. Every `SEED_QUERIES` entry is
@@ -106,22 +109,23 @@ export const SEED_QUERIES: SeedQuery[] = [
     name: 'Facilities (options)',
     connectorId: '',
     params: [],
-    // R3c cutover: reads `v2_patients` (not the thin `patients` table) — `managing_organization`
-    // is unchanged (still the full-organization-ref column) in v2, so this is a bare table-name
-    // swap. No postgres-isms at all — the mssql variant is byte-identical (see Task 2's porting
-    // notes).
+    // R3c cutover: reads the v2 `patients` table (originally `v2_patients`, renamed to canonical
+    // `patients` in R3e — replacing the old thin `patients` table it superseded) —
+    // `managing_organization` is unchanged (still the full-organization-ref column) in v2, so this
+    // was a bare table-name swap. No postgres-isms at all — the mssql variant is byte-identical
+    // (see Task 2's porting notes).
     sql: {
       postgres: `select distinct managing_organization as facility
-from v2_patients
+from patients
 where managing_organization is not null
 order by 1`,
       mssql: `select distinct managing_organization as facility
-from v2_patients
+from patients
 where managing_organization is not null
 order by 1`,
       // No postgres-isms at all — byte-identical (see Task 5's mysql porting notes).
       mysql: `select distinct managing_organization as facility
-from v2_patients
+from patients
 where managing_organization is not null
 order by 1`,
     },
@@ -159,8 +163,8 @@ order by 1`,
     //    is only truly optional if every caller always supplies `facility` (empty string for
     //    "no filter"); the seeded design's `facility` param should default to `''` for this
     //    reason. Confirmed live in the Task 4.2 parity check.
-    //  - R3d cutover: reads v2_lab_results (observation_desc/abnormal_flag/result_timestamp);
-    //    facility subquery via bare patient_id against v2_patients. No specimen, no gender.
+    //  - R3d cutover: reads lab_results (observation_desc/abnormal_flag/result_timestamp);
+    //    facility subquery via bare patient_id against patients. No specimen, no gender.
     sql: {
       postgres: `select
   coalesce(o.observation_desc, '(unknown)') as antibiotic,
@@ -169,12 +173,12 @@ order by 1`,
   sum(case when o.abnormal_flag = 'I' then 1 else 0 end)::int as i,
   sum(case when o.abnormal_flag = 'S' then 1 else 0 end)::int as s,
   round(100.0 * sum(case when o.abnormal_flag = 'R' then 1 else 0 end) / nullif(count(*), 0), 1)::float8 as "percentR"
-from v2_lab_results o
+from lab_results o
 where o.abnormal_flag in ('S', 'I', 'R')
   and o.result_timestamp >= {{param.from}}
   and o.result_timestamp <= ({{param.to}} || 'T23:59:59.999Z')
   and ({{param.facility}} = '' or o.patient_id in (
-    select p.id from v2_patients p where p.managing_organization = {{param.facility}}
+    select p.id from patients p where p.managing_organization = {{param.facility}}
   ))
 group by coalesce(o.observation_desc, '(unknown)')
 order by "percentR" desc`,
@@ -189,12 +193,12 @@ order by "percentR" desc`,
   cast(sum(case when o.abnormal_flag = 'I' then 1 else 0 end) as int) as i,
   cast(sum(case when o.abnormal_flag = 'S' then 1 else 0 end) as int) as s,
   cast(round(100.0 * sum(case when o.abnormal_flag = 'R' then 1 else 0 end) / nullif(count(*), 0), 1) as float) as "percentR"
-from v2_lab_results o
+from lab_results o
 where o.abnormal_flag in ('S', 'I', 'R')
   and o.result_timestamp >= {{param.from}}
   and o.result_timestamp <= ({{param.to}} + 'T23:59:59.999Z')
   and ({{param.facility}} = '' or o.patient_id in (
-    select p.id from v2_patients p where p.managing_organization = {{param.facility}}
+    select p.id from patients p where p.managing_organization = {{param.facility}}
   ))
 group by coalesce(o.observation_desc, '(unknown)')
 order by "percentR" desc`,
@@ -208,12 +212,12 @@ order by "percentR" desc`,
   cast(sum(case when o.abnormal_flag = 'I' then 1 else 0 end) as signed) as i,
   cast(sum(case when o.abnormal_flag = 'S' then 1 else 0 end) as signed) as s,
   cast(round(100.0 * sum(case when o.abnormal_flag = 'R' then 1 else 0 end) / nullif(count(*), 0), 1) as double) as \`percentR\`
-from v2_lab_results o
+from lab_results o
 where o.abnormal_flag in ('S', 'I', 'R')
   and o.result_timestamp >= {{param.from}}
   and o.result_timestamp <= concat({{param.to}}, 'T23:59:59.999Z')
   and ({{param.facility}} = '' or o.patient_id in (
-    select p.id from v2_patients p where p.managing_organization = {{param.facility}}
+    select p.id from patients p where p.managing_organization = {{param.facility}}
   ))
 group by coalesce(o.observation_desc, '(unknown)')
 order by \`percentR\` desc`,
@@ -238,7 +242,7 @@ order by \`percentR\` desc`,
     //    endOfDay: `<= (to || 'T23:59:59.999Z')`.
     //  - row order: month ASC, then test ASC — matches the catalog's explicit
     //    `.sort((a,b) => month asc, then test.localeCompare(test))`.
-    //  - R3c cutover: reads `v2_lab_requests` (not the thin `service_requests` table) —
+    //  - R3c cutover: reads `lab_requests` (not the thin `service_requests` table) —
     //    `authored_at`/`panel_desc` in place of thin `authored_on`/`code_text`; no other behavior
     //    change (still no patient join, no facility filter).
     params: [
@@ -250,7 +254,7 @@ order by \`percentR\` desc`,
   to_char(date_trunc('month', sr.authored_at::timestamptz), 'YYYY-MM') as month,
   coalesce(sr.panel_desc, '(unknown)') as test,
   count(*)::int as count
-from v2_lab_requests sr
+from lab_requests sr
 where sr.authored_at >= {{param.from}}
   and sr.authored_at <= ({{param.to}} || 'T23:59:59.999Z')
 group by 1, 2
@@ -263,7 +267,7 @@ order by 1, 2`,
   format(cast(sr.authored_at as datetime2), 'yyyy-MM') as month,
   coalesce(sr.panel_desc, '(unknown)') as test,
   cast(count(*) as int) as count
-from v2_lab_requests sr
+from lab_requests sr
 where sr.authored_at >= {{param.from}}
   and sr.authored_at <= ({{param.to}} + 'T23:59:59.999Z')
 group by format(cast(sr.authored_at as datetime2), 'yyyy-MM'), coalesce(sr.panel_desc, '(unknown)')
@@ -277,7 +281,7 @@ order by 1, 2`,
   substr(sr.authored_at, 1, 7) as month,
   coalesce(sr.panel_desc, '(unknown)') as test,
   cast(count(*) as signed) as count
-from v2_lab_requests sr
+from lab_requests sr
 where sr.authored_at >= {{param.from}}
   and sr.authored_at <= concat({{param.to}}, 'T23:59:59.999Z')
 group by substr(sr.authored_at, 1, 7), coalesce(sr.panel_desc, '(unknown)')
@@ -302,12 +306,14 @@ order by 1, 2`,
     // whole-hour values.
     //  - facility filter (optional): same '' = no-filter guard as q-amr-resistance, applied to
     //    diagnostic_reports.subject_ref via patients.managing_organization.
-    //  - R3c cutover: reads `v2_specimens`/`v2_diagnostic_reports`/`v2_patients` (not the thin
-    //    `specimens`/`diagnostic_reports`/`patients` tables). v2 stores the bare FHIR id directly
+    //  - R3c cutover: reads the v2 `specimens`/`diagnostic_reports`/`patients` tables (originally
+    //    `v2_specimens`/`v2_diagnostic_reports`/`v2_patients`, renamed to canonical in R3e —
+    //    replacing the old thin `specimens`/`diagnostic_reports`/`patients` tables they superseded).
+    //    v2 stores the bare FHIR id directly
     //    (`patient_id`) rather than a `Patient/`-prefixed reference string (`subject_ref`), so the
     //    `received` CTE keys on `patient_id`, the report<->specimen join compares `patient_id` to
     //    `patient_id`, and the facility subquery compares the bare `dr.patient_id` against bare
-    //    `v2_patients.id` (no `'Patient/' ||` prefix needed). `managing_organization` itself is
+    //    `patients.id` (no `'Patient/' ||` prefix needed). `managing_organization` itself is
     //    unchanged.
     //  - date range: from/to REQUIRED (see q-test-volume's note on why); endOfDay applied to `to`.
     //  - row order: avgHours DESCENDING, matching `rows.sort((a,b) => b.avgHours - a.avgHours)`.
@@ -330,7 +336,7 @@ order by 1, 2`,
     sql: {
       postgres: `with received as (
   select patient_id, min(received_time) as received_time
-  from v2_specimens
+  from specimens
   where patient_id is not null and received_time is not null
   group by patient_id
 ),
@@ -338,14 +344,14 @@ paired as (
   select
     coalesce(dr.code_text, '(unknown)') as test,
     round(extract(epoch from (dr.issued::timestamptz - r.received_time::timestamptz)) / 3600.0)::int as hours
-  from v2_diagnostic_reports dr
+  from diagnostic_reports dr
   join received r on r.patient_id = dr.patient_id
   where dr.issued is not null
     and dr.issued >= r.received_time
     and dr.issued >= {{param.from}}
     and dr.issued <= ({{param.to}} || 'T23:59:59.999Z')
     and ({{param.facility}} = '' or dr.patient_id in (
-      select p.id from v2_patients p where p.managing_organization = {{param.facility}}
+      select p.id from patients p where p.managing_organization = {{param.facility}}
     ))
 )
 select
@@ -368,7 +374,7 @@ order by "avgHours" desc, test asc`,
       // query. string || -> +.
       mssql: `with received as (
   select patient_id, min(received_time) as received_time
-  from v2_specimens
+  from specimens
   where patient_id is not null and received_time is not null
   group by patient_id
 ),
@@ -376,14 +382,14 @@ paired as (
   select
     coalesce(dr.code_text, '(unknown)') as test,
     cast(round(datediff(second, cast(r.received_time as datetime2), cast(dr.issued as datetime2)) / 3600.0, 0) as int) as hours
-  from v2_diagnostic_reports dr
+  from diagnostic_reports dr
   join received r on r.patient_id = dr.patient_id
   where dr.issued is not null
     and dr.issued >= r.received_time
     and dr.issued >= {{param.from}}
     and dr.issued <= ({{param.to}} + 'T23:59:59.999Z')
     and ({{param.facility}} = '' or dr.patient_id in (
-      select p.id from v2_patients p where p.managing_organization = {{param.facility}}
+      select p.id from patients p where p.managing_organization = {{param.facility}}
     ))
 )
 select
@@ -405,7 +411,7 @@ order by "avgHours" desc, test asc`,
       // Flagged for the parity harness (same subtle avg/rounding divergence risk as mssql).
       mysql: `with received as (
   select patient_id, min(received_time) as received_time
-  from v2_specimens
+  from specimens
   where patient_id is not null and received_time is not null
   group by patient_id
 ),
@@ -413,14 +419,14 @@ paired as (
   select
     coalesce(dr.code_text, '(unknown)') as test,
     cast(round(timestampdiff(second, str_to_date(substr(r.received_time, 1, 19), '%Y-%m-%dT%H:%i:%s'), str_to_date(substr(dr.issued, 1, 19), '%Y-%m-%dT%H:%i:%s')) / 3600.0, 0) as signed) as hours
-  from v2_diagnostic_reports dr
+  from diagnostic_reports dr
   join received r on r.patient_id = dr.patient_id
   where dr.issued is not null
     and dr.issued >= r.received_time
     and dr.issued >= {{param.from}}
     and dr.issued <= concat({{param.to}}, 'T23:59:59.999Z')
     and ({{param.facility}} = '' or dr.patient_id in (
-      select p.id from v2_patients p where p.managing_organization = {{param.facility}}
+      select p.id from patients p where p.managing_organization = {{param.facility}}
     ))
 )
 select
@@ -442,15 +448,17 @@ order by \`avgHours\` desc, test asc`,
     // calendar-exact age (Postgres `age()` performs the same year/month/day-borrow subtraction as
     // the JS algorithm) banded into the same fixed buckets, grouped by band x gender (male/female/
     // other, where 'other' folds NULL and any non-male/female value — matches the JS else-branch).
-    //  - R3b cutover: reads `v2_patients` (not the thin `patients` table) — `date_of_birth` in
-    //    place of thin `birth_date`, and `sex` ('M'/'F'/'O'/'U'/null) in place of thin `gender`
+    //  - R3b cutover: reads the v2 `patients` table (originally `v2_patients`, renamed to
+    //    canonical in R3e — replacing the old thin `patients` table it superseded) —
+    //    `date_of_birth` in place of thin `birth_date`, and `sex` ('M'/'F'/'O'/'U'/null) in place
+    //    of thin `gender`
     //    ('male'/'female'/other); the outer aggregates map sex='M'/'F' to male/female and
     //    everything else (including null) to 'other', preserving the same male/female/other shape.
     //  - `asOf` (optional, a single reference date — NOT a range): catalog defaults to
     //    '2026-01-01T00:00:00Z' when unset/empty. Same '' = "use default" guard as facility below.
     //  - facility filter (optional): same '' = no-filter guard as q-amr-resistance; direct equality
-    //    on v2_patients.managing_organization (no subject_ref indirection — this query reads
-    //    `v2_patients` directly, unlike the AMR/TAT queries).
+    //    on patients.managing_organization (no subject_ref indirection — this query reads
+    //    `patients` directly, unlike the AMR/TAT queries).
     //  - row order: the FIXED band order ['0-4','5-14','15-24','25-49','50+','unknown'], NOT a
     //    count-based sort — matches the catalog's `ORDER.filter(b => counts.has(b)).map(...)`.
     params: [
@@ -473,7 +481,7 @@ banded as (
       else '50+'
     end as band,
     p.sex
-  from v2_patients p, params pr
+  from patients p, params pr
   where ({{param.facility}} = '' or p.managing_organization = {{param.facility}})
 )
 select
@@ -510,7 +518,7 @@ banded as (
       else '50+'
     end as band,
     p.sex
-  from v2_patients p cross join params pr
+  from patients p cross join params pr
   where ({{param.facility}} = '' or p.managing_organization = {{param.facility}})
 )
 select
@@ -544,7 +552,7 @@ banded as (
       else '50+'
     end as band,
     p.sex
-  from v2_patients p cross join params pr
+  from patients p cross join params pr
   where ({{param.facility}} = '' or p.managing_organization = {{param.facility}})
 )
 select
@@ -576,7 +584,7 @@ order by case band when '0-4' then 1 when '5-14' then 2 when '15-24' then 3 when
     //    `.replace(/^Patient\//, '')`) is gone.
     //  - row order: facility ASC — matches the catalog's explicit `.sort((a,b) =>
     //    a.facility.localeCompare(b.facility))`.
-    //  - R3d cutover: reads v2_lab_results join v2_patients on bare o.patient_id = p.id
+    //  - R3d cutover: reads lab_results join patients on bare o.patient_id = p.id
     //    (abnormal_flag/result_timestamp). No specimen, no gender.
     params: [
       { id: 'from', label: 'From', type: 'text', required: true },
@@ -587,8 +595,8 @@ order by case band when '0-4' then 1 when '5-14' then 2 when '15-24' then 3 when
   p.managing_organization as facility,
   count(*)::int as tested,
   sum(case when o.abnormal_flag = 'R' then 1 else 0 end)::int as resistant
-from v2_lab_results o
-join v2_patients p on o.patient_id = p.id
+from lab_results o
+join patients p on o.patient_id = p.id
 where o.abnormal_flag in ('S', 'I', 'R')
   and o.patient_id is not null and o.patient_id <> ''
   and p.managing_organization is not null
@@ -602,8 +610,8 @@ order by p.managing_organization`,
   p.managing_organization as facility,
   cast(count(*) as int) as tested,
   cast(sum(case when o.abnormal_flag = 'R' then 1 else 0 end) as int) as resistant
-from v2_lab_results o
-join v2_patients p on o.patient_id = p.id
+from lab_results o
+join patients p on o.patient_id = p.id
 where o.abnormal_flag in ('S', 'I', 'R')
   and o.patient_id is not null and o.patient_id <> ''
   and p.managing_organization is not null
@@ -617,8 +625,8 @@ order by p.managing_organization`,
   p.managing_organization as facility,
   cast(count(*) as signed) as tested,
   cast(sum(case when o.abnormal_flag = 'R' then 1 else 0 end) as signed) as resistant
-from v2_lab_results o
-join v2_patients p on o.patient_id = p.id
+from lab_results o
+join patients p on o.patient_id = p.id
 where o.abnormal_flag in ('S', 'I', 'R')
   and o.patient_id is not null and o.patient_id <> ''
   and p.managing_organization is not null
@@ -666,10 +674,10 @@ order by p.managing_organization`,
     //    origin]`.
     //  - row order: Specimen, PathogenCode, AntibioticCode, Gender, AgeGroup, Origin all ASC —
     //    matches `toGlassRis`'s explicit chained `.localeCompare` sort.
-    //  - R3d cutover: reads v2_lab_results/v2_specimens/v2_patients; bare-id joins
+    //  - R3d cutover: reads lab_results/specimens/patients; bare-id joins
     //    (oo.specimen_id = s.id, oo.patient_id = p.id); org uses observation_code/coded_value/
     //    text_value/result_timestamp; ast uses observation_desc/abnormal_flag; gender via sex
-    //    inverse-map; birth_date from v2_patients.date_of_birth; ref columns renamed
+    //    inverse-map; birth_date from patients.date_of_birth; ref columns renamed
     //    specimen_ref->specimen_id, subject_ref->patient_id throughout.
     params: [
       { id: 'from', label: 'From', type: 'text', required: true },
@@ -680,7 +688,7 @@ order by p.managing_organization`,
     sql: {
       postgres: `with org_obs as (
   select o.id, o.specimen_id, o.patient_id, o.coded_value, o.text_value, o.result_timestamp
-  from v2_lab_results o
+  from lab_results o
   where o.observation_code = '634-6'
     and o.specimen_id is not null and o.specimen_id <> ''
     and o.patient_id is not null and o.patient_id <> ''
@@ -698,8 +706,8 @@ isolate_meta as (
     case p.sex when 'M' then 'male' when 'F' then 'female' when 'O' then 'other' else 'unknown' end as gender,
     p.date_of_birth as birth_date
   from org_obs oo
-  left join v2_specimens s on oo.specimen_id = s.id
-  left join v2_patients p on oo.patient_id = p.id
+  left join specimens s on oo.specimen_id = s.id
+  left join patients p on oo.patient_id = p.id
   where coalesce(oo.result_timestamp, s.received_time) is null
      or (coalesce(oo.result_timestamp, s.received_time) >= {{param.from}}
          and coalesce(oo.result_timestamp, s.received_time) <= ({{param.to}} || 'T23:59:59.999Z'))
@@ -731,7 +739,7 @@ first_isolates as (
 ),
 ast_obs as (
   select o.specimen_id, o.observation_desc as antibiotic, o.abnormal_flag as ris
-  from v2_lab_results o
+  from lab_results o
   where o.abnormal_flag in ('S', 'I', 'R')
     and o.observation_desc is not null
     and o.specimen_id is not null and o.specimen_id <> ''
@@ -776,7 +784,7 @@ order by "Specimen", "PathogenCode", "AntibioticCode", "Gender", "AgeGroup", "Or
       //  - string || -> +; ::int -> cast(...as int).
       mssql: `with org_obs as (
   select o.id, o.specimen_id, o.patient_id, o.coded_value, o.text_value, o.result_timestamp
-  from v2_lab_results o
+  from lab_results o
   where o.observation_code = '634-6'
     and o.specimen_id is not null and o.specimen_id <> ''
     and o.patient_id is not null and o.patient_id <> ''
@@ -794,8 +802,8 @@ isolate_meta as (
     case p.sex when 'M' then 'male' when 'F' then 'female' when 'O' then 'other' else 'unknown' end as gender,
     p.date_of_birth as birth_date
   from org_obs oo
-  left join v2_specimens s on oo.specimen_id = s.id
-  left join v2_patients p on oo.patient_id = p.id
+  left join specimens s on oo.specimen_id = s.id
+  left join patients p on oo.patient_id = p.id
   where coalesce(oo.result_timestamp, s.received_time) is null
      or (coalesce(oo.result_timestamp, s.received_time) >= {{param.from}}
          and coalesce(oo.result_timestamp, s.received_time) <= ({{param.to}} + 'T23:59:59.999Z'))
@@ -841,7 +849,7 @@ first_isolates as (
 ),
 ast_obs as (
   select o.specimen_id, o.observation_desc as antibiotic, o.abnormal_flag as ris
-  from v2_lab_results o
+  from lab_results o
   where o.abnormal_flag in ('S', 'I', 'R')
     and o.observation_desc is not null
     and o.specimen_id is not null and o.specimen_id <> ''
@@ -879,7 +887,7 @@ order by "Specimen", "PathogenCode", "AntibioticCode", "Gender", "AgeGroup", "Or
       //    ORDER BY references those backtick aliases so it sorts by column, not by a literal.
       mysql: `with org_obs as (
   select o.id, o.specimen_id, o.patient_id, o.coded_value, o.text_value, o.result_timestamp
-  from v2_lab_results o
+  from lab_results o
   where o.observation_code = '634-6'
     and o.specimen_id is not null and o.specimen_id <> ''
     and o.patient_id is not null and o.patient_id <> ''
@@ -897,8 +905,8 @@ isolate_meta as (
     case p.sex when 'M' then 'male' when 'F' then 'female' when 'O' then 'other' else 'unknown' end as gender,
     p.date_of_birth as birth_date
   from org_obs oo
-  left join v2_specimens s on oo.specimen_id = s.id
-  left join v2_patients p on oo.patient_id = p.id
+  left join specimens s on oo.specimen_id = s.id
+  left join patients p on oo.patient_id = p.id
   where coalesce(oo.result_timestamp, s.received_time) is null
      or (coalesce(oo.result_timestamp, s.received_time) >= {{param.from}}
          and coalesce(oo.result_timestamp, s.received_time) <= concat({{param.to}}, 'T23:59:59.999Z'))
@@ -938,7 +946,7 @@ first_isolates as (
 ),
 ast_obs as (
   select o.specimen_id, o.observation_desc as antibiotic, o.abnormal_flag as ris
-  from v2_lab_results o
+  from lab_results o
   where o.abnormal_flag in ('S', 'I', 'R')
     and o.observation_desc is not null
     and o.specimen_id is not null and o.specimen_id <> ''
@@ -980,7 +988,7 @@ order by \`Specimen\`, \`PathogenCode\`, \`AntibioticCode\`, \`Gender\`, \`AgeGr
     //  - row order: specimenType ASC, pathogen ASC, antibiotic ASC — matches aggregateRIS's explicit
     //    `.sort((a,b) => specimenType.localeCompare || pathogen.localeCompare || antibiotic.localeCompare)`.
     //  - R3d cutover: same v2 read-model transform as q-amr-glass-ris (see its comment) —
-    //    v2_lab_results/v2_specimens/v2_patients, bare-id joins, gender via sex inverse-map,
+    //    lab_results/specimens/patients, bare-id joins, gender via sex inverse-map,
     //    ref columns renamed specimen_ref->specimen_id/subject_ref->patient_id. gender is computed
     //    in isolate_meta but not emitted here (final grouping is specimenType x pathogen x antibiotic).
     params: [
@@ -990,7 +998,7 @@ order by \`Specimen\`, \`PathogenCode\`, \`AntibioticCode\`, \`Gender\`, \`AgeGr
     sql: {
       postgres: `with org_obs as (
   select o.id, o.specimen_id, o.patient_id, o.coded_value, o.text_value, o.result_timestamp
-  from v2_lab_results o
+  from lab_results o
   where o.observation_code = '634-6'
     and o.specimen_id is not null and o.specimen_id <> ''
     and o.patient_id is not null and o.patient_id <> ''
@@ -1008,8 +1016,8 @@ isolate_meta as (
     case p.sex when 'M' then 'male' when 'F' then 'female' when 'O' then 'other' else 'unknown' end as gender,
     p.date_of_birth as birth_date
   from org_obs oo
-  left join v2_specimens s on oo.specimen_id = s.id
-  left join v2_patients p on oo.patient_id = p.id
+  left join specimens s on oo.specimen_id = s.id
+  left join patients p on oo.patient_id = p.id
   where coalesce(oo.result_timestamp, s.received_time) is null
      or (coalesce(oo.result_timestamp, s.received_time) >= {{param.from}}
          and coalesce(oo.result_timestamp, s.received_time) <= ({{param.to}} || 'T23:59:59.999Z'))
@@ -1041,7 +1049,7 @@ first_isolates as (
 ),
 ast_obs as (
   select o.specimen_id, o.observation_desc as antibiotic, o.abnormal_flag as ris
-  from v2_lab_results o
+  from lab_results o
   where o.abnormal_flag in ('S', 'I', 'R')
     and o.observation_desc is not null
     and o.specimen_id is not null and o.specimen_id <> ''
@@ -1069,7 +1077,7 @@ order by specimen_type, pathogen_code, antibiotic`,
       // the same extra parity-harness attention.
       mssql: `with org_obs as (
   select o.id, o.specimen_id, o.patient_id, o.coded_value, o.text_value, o.result_timestamp
-  from v2_lab_results o
+  from lab_results o
   where o.observation_code = '634-6'
     and o.specimen_id is not null and o.specimen_id <> ''
     and o.patient_id is not null and o.patient_id <> ''
@@ -1087,8 +1095,8 @@ isolate_meta as (
     case p.sex when 'M' then 'male' when 'F' then 'female' when 'O' then 'other' else 'unknown' end as gender,
     p.date_of_birth as birth_date
   from org_obs oo
-  left join v2_specimens s on oo.specimen_id = s.id
-  left join v2_patients p on oo.patient_id = p.id
+  left join specimens s on oo.specimen_id = s.id
+  left join patients p on oo.patient_id = p.id
   where coalesce(oo.result_timestamp, s.received_time) is null
      or (coalesce(oo.result_timestamp, s.received_time) >= {{param.from}}
          and coalesce(oo.result_timestamp, s.received_time) <= ({{param.to}} + 'T23:59:59.999Z'))
@@ -1134,7 +1142,7 @@ first_isolates as (
 ),
 ast_obs as (
   select o.specimen_id, o.observation_desc as antibiotic, o.abnormal_flag as ris
-  from v2_lab_results o
+  from lab_results o
   where o.abnormal_flag in ('S', 'I', 'R')
     and o.observation_desc is not null
     and o.specimen_id is not null and o.specimen_id <> ''
@@ -1163,7 +1171,7 @@ order by specimen_type, pathogen_code, antibiotic`,
       // as double); ::int -> cast(...as signed). ORDER BY uses the raw grouped columns (bare, fine).
       mysql: `with org_obs as (
   select o.id, o.specimen_id, o.patient_id, o.coded_value, o.text_value, o.result_timestamp
-  from v2_lab_results o
+  from lab_results o
   where o.observation_code = '634-6'
     and o.specimen_id is not null and o.specimen_id <> ''
     and o.patient_id is not null and o.patient_id <> ''
@@ -1181,8 +1189,8 @@ isolate_meta as (
     case p.sex when 'M' then 'male' when 'F' then 'female' when 'O' then 'other' else 'unknown' end as gender,
     p.date_of_birth as birth_date
   from org_obs oo
-  left join v2_specimens s on oo.specimen_id = s.id
-  left join v2_patients p on oo.patient_id = p.id
+  left join specimens s on oo.specimen_id = s.id
+  left join patients p on oo.patient_id = p.id
   where coalesce(oo.result_timestamp, s.received_time) is null
      or (coalesce(oo.result_timestamp, s.received_time) >= {{param.from}}
          and coalesce(oo.result_timestamp, s.received_time) <= concat({{param.to}}, 'T23:59:59.999Z'))
@@ -1222,7 +1230,7 @@ first_isolates as (
 ),
 ast_obs as (
   select o.specimen_id, o.observation_desc as antibiotic, o.abnormal_flag as ris
-  from v2_lab_results o
+  from lab_results o
   where o.abnormal_flag in ('S', 'I', 'R')
     and o.observation_desc is not null
     and o.specimen_id is not null and o.specimen_id <> ''
@@ -1276,7 +1284,7 @@ order by specimen_type, pathogen_code, antibiotic`,
     //    every antibiotic the panel and the catalog's dynamic union both contain.
     //  - row order: pathogen_code ASC — matches antibiogram()'s explicit
     //    `.sort(([a],[b]) => a.localeCompare(b))`.
-    //  - R3d cutover: reads v2_lab_results/v2_specimens; bare-id join (oo.specimen_id = s.id);
+    //  - R3d cutover: reads lab_results/specimens; bare-id join (oo.specimen_id = s.id);
     //    org uses observation_code/coded_value/result_timestamp, ast uses observation_desc/
     //    abnormal_flag; ref columns renamed specimen_ref->specimen_id, subject_ref->patient_id.
     //    No gender/age/origin (antibiogram doesn't stratify by them).
@@ -1287,7 +1295,7 @@ order by specimen_type, pathogen_code, antibiotic`,
     sql: {
       postgres: `with org_obs as (
   select o.id, o.specimen_id, o.patient_id, o.coded_value, o.text_value, o.result_timestamp
-  from v2_lab_results o
+  from lab_results o
   where o.observation_code = '634-6'
     and o.specimen_id is not null and o.specimen_id <> ''
     and o.patient_id is not null and o.patient_id <> ''
@@ -1301,7 +1309,7 @@ isolate_meta as (
     coalesce(oo.coded_value, '(unknown)') as pathogen_code,
     coalesce(oo.result_timestamp, s.received_time) as iso_date
   from org_obs oo
-  left join v2_specimens s on oo.specimen_id = s.id
+  left join specimens s on oo.specimen_id = s.id
   where coalesce(oo.result_timestamp, s.received_time) is null
      or (coalesce(oo.result_timestamp, s.received_time) >= {{param.from}}
          and coalesce(oo.result_timestamp, s.received_time) <= ({{param.to}} || 'T23:59:59.999Z'))
@@ -1314,7 +1322,7 @@ first_isolates as (
 ),
 ast_obs as (
   select o.specimen_id, o.observation_desc as antibiotic, o.abnormal_flag as ris
-  from v2_lab_results o
+  from lab_results o
   where o.abnormal_flag in ('S', 'I', 'R')
     and o.observation_desc is not null
     and o.specimen_id is not null and o.specimen_id <> ''
@@ -1336,7 +1344,7 @@ order by pathogen_code`,
       // CASE column per the rules table (see its own doc comment for the float->text caveat).
       mssql: `with org_obs as (
   select o.id, o.specimen_id, o.patient_id, o.coded_value, o.text_value, o.result_timestamp
-  from v2_lab_results o
+  from lab_results o
   where o.observation_code = '634-6'
     and o.specimen_id is not null and o.specimen_id <> ''
     and o.patient_id is not null and o.patient_id <> ''
@@ -1350,7 +1358,7 @@ isolate_meta as (
     coalesce(oo.coded_value, '(unknown)') as pathogen_code,
     coalesce(oo.result_timestamp, s.received_time) as iso_date
   from org_obs oo
-  left join v2_specimens s on oo.specimen_id = s.id
+  left join specimens s on oo.specimen_id = s.id
   where coalesce(oo.result_timestamp, s.received_time) is null
      or (coalesce(oo.result_timestamp, s.received_time) >= {{param.from}}
          and coalesce(oo.result_timestamp, s.received_time) <= ({{param.to}} + 'T23:59:59.999Z'))
@@ -1370,7 +1378,7 @@ first_isolates as (
 ),
 ast_obs as (
   select o.specimen_id, o.observation_desc as antibiotic, o.abnormal_flag as ris
-  from v2_lab_results o
+  from lab_results o
   where o.abnormal_flag in ('S', 'I', 'R')
     and o.observation_desc is not null
     and o.specimen_id is not null and o.specimen_id <> ''
@@ -1392,7 +1400,7 @@ order by pathogen_code`,
       // (bare alias, fine); group by / order by pathogen_code unchanged.
       mysql: `with org_obs as (
   select o.id, o.specimen_id, o.patient_id, o.coded_value, o.text_value, o.result_timestamp
-  from v2_lab_results o
+  from lab_results o
   where o.observation_code = '634-6'
     and o.specimen_id is not null and o.specimen_id <> ''
     and o.patient_id is not null and o.patient_id <> ''
@@ -1406,7 +1414,7 @@ isolate_meta as (
     coalesce(oo.coded_value, '(unknown)') as pathogen_code,
     coalesce(oo.result_timestamp, s.received_time) as iso_date
   from org_obs oo
-  left join v2_specimens s on oo.specimen_id = s.id
+  left join specimens s on oo.specimen_id = s.id
   where coalesce(oo.result_timestamp, s.received_time) is null
      or (coalesce(oo.result_timestamp, s.received_time) >= {{param.from}}
          and coalesce(oo.result_timestamp, s.received_time) <= concat({{param.to}}, 'T23:59:59.999Z'))
@@ -1426,7 +1434,7 @@ first_isolates as (
 ),
 ast_obs as (
   select o.specimen_id, o.observation_desc as antibiotic, o.abnormal_flag as ris
-  from v2_lab_results o
+  from lab_results o
   where o.abnormal_flag in ('S', 'I', 'R')
     and o.observation_desc is not null
     and o.specimen_id is not null and o.specimen_id <> ''

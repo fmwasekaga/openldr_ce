@@ -6,7 +6,6 @@ import { createLogger } from '@openldr/core';
 import {
   createInternalDb,
   createFhirStore,
-  createFlatWriter,
   createMigrator,
   persistResources,
   internalMigrations,
@@ -60,7 +59,6 @@ export async function createIngestContext(cfg: Config): Promise<IngestContext> {
   const eventing = createEventBus({ url: cfg.INTERNAL_DATABASE_URL });
 
   const fhirStore = createFhirStore(internal.db);
-  const flatWriter = createFlatWriter(externalDb, engine);
   const persist = (resources: unknown[], provenance: Provenance) => persistResources({ fhirStore, logger }, resources, provenance);
   const converters = defaultConverters();
   const batches = createBatchStore(internal.db);

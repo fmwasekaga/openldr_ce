@@ -23,26 +23,26 @@ export function projectResource(resource: unknown, prov: Provenance = {}): Relat
   if (typeof resource !== 'object' || resource === null) return null;
   const r = resource as Record<string, unknown>;
   switch (r['resourceType']) {
-    case 'Patient': return { table: 'v2_patients', row: projectPatient(r, prov) };
-    case 'ServiceRequest': return { table: 'v2_lab_requests', row: projectServiceRequest(r, prov) };
-    case 'Observation': return { table: 'v2_lab_results', row: projectObservation(r, prov) };
+    case 'Patient': return { table: 'patients', row: projectPatient(r, prov) };
+    case 'ServiceRequest': return { table: 'lab_requests', row: projectServiceRequest(r, prov) };
+    case 'Observation': return { table: 'lab_results', row: projectObservation(r, prov) };
     case 'Organization':
-    case 'Location': return { table: 'v2_facilities', row: projectFacility(r, prov) };
-    case 'Specimen': return { table: 'v2_specimens', row: projectSpecimen(r, prov) };
-    case 'DiagnosticReport': return { table: 'v2_diagnostic_reports', row: projectDiagnosticReport(r, prov) };
+    case 'Location': return { table: 'facilities', row: projectFacility(r, prov) };
+    case 'Specimen': return { table: 'specimens', row: projectSpecimen(r, prov) };
+    case 'DiagnosticReport': return { table: 'diagnostic_reports', row: projectDiagnosticReport(r, prov) };
     default: return null;
   }
 }
 
-export function v2TableForResourceType(resourceType: string): keyof ExternalSchema | null {
+export function tableForResourceType(resourceType: string): keyof ExternalSchema | null {
   switch (resourceType) {
-    case 'Patient': return 'v2_patients';
-    case 'ServiceRequest': return 'v2_lab_requests';
-    case 'Observation': return 'v2_lab_results';
+    case 'Patient': return 'patients';
+    case 'ServiceRequest': return 'lab_requests';
+    case 'Observation': return 'lab_results';
     case 'Organization':
-    case 'Location': return 'v2_facilities';
-    case 'Specimen': return 'v2_specimens';
-    case 'DiagnosticReport': return 'v2_diagnostic_reports';
+    case 'Location': return 'facilities';
+    case 'Specimen': return 'specimens';
+    case 'DiagnosticReport': return 'diagnostic_reports';
     default: return null;
   }
 }
