@@ -5,9 +5,10 @@ import { type Kysely, sql } from 'kysely';
 // the plain DDL forms verified to run under pg-mem; down() runs only on real Postgres.
 
 export async function up(db: Kysely<any>): Promise<void> {
-  // 1. Monotonic per-resource version on the canonical table; backfill existing rows to 1.
-  await sql`alter table fhir.fhir_resources add column version bigint not null default 0`.execute(db);
-  await sql`update fhir.fhir_resources set version = 1 where version = 0`.execute(db);
+  // 1. Monotonic per-resource version on the canonical table. Default 1 means every existing
+  //    row is its own first live version, and an insert that omits `version` still lands a
+  //    valid v1 rather than a stray 0 that disagrees with resource_history/change_log.
+  await sql`alter table fhir.fhir_resources add column version bigint not null default 1`.execute(db);
 
   // 2. Append-only per-version history (upserts store the resource; deletes store null = tombstone).
   await sql`create table fhir.resource_history (

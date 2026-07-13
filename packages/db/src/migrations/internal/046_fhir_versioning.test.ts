@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { sql } from 'kysely';
 import { makeMigratedDb } from './test-helpers';
 
 describe('046 fhir versioning schema', () => {

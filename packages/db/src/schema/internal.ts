@@ -4,7 +4,7 @@ import type { FhirResource } from '@openldr/fhir';
 export interface FhirResourcesTable {
   resource_type: string;
   id: string;
-  version: Generated<number>;
+  version: Generated<number>; // monotonic integer version (distinct from version_id, the FHIR meta.versionId string mirror)
   version_id: string | null;
   resource: JSONColumnType<FhirResource>;
   source_system: string | null;
