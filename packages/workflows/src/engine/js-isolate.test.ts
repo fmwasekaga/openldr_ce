@@ -251,6 +251,18 @@ describe('runScript — behavior', () => {
     expect(logs).toEqual([['log', 'hi {"a":1}']]);
   });
 
+  it('console.log of a circular object falls back to String(x) (no throw)', async () => {
+    // The prelude __str's JSON.stringify throws on a circular ref; its catch → String(x)
+    // fallback must fire so the log still happens rather than crashing the script.
+    const { result, logs } = run(
+      'const o = {}; o.self = o; console.log(o); return [];',
+    );
+    await result;
+    expect(logs).toHaveLength(1);
+    expect(logs[0][0]).toBe('log');
+    expect(logs[0][1]).toBe('[object Object]');
+  });
+
   it('console.info/warn/error map to the right levels', async () => {
     const { result, logs } = run(
       "console.info('i'); console.warn('w'); console.error('e'); console.debug('d'); return [];",
@@ -283,6 +295,20 @@ describe('runScript — async (proves the promise-resolution path)', () => {
   it('a rejected promise surfaces as a thrown host Error', async () => {
     const { result } = run("await Promise.reject(new Error('boom')); return [];");
     await expect(result).rejects.toThrow();
+  });
+});
+
+describe('runScript — injection guard', () => {
+  it('rejects a bigint in input with the "Cannot inject" message', async () => {
+    const { result } = run('return [];', [{ json: { big: 10n } }]);
+    await expect(result).rejects.toThrow(/Cannot inject scope variable "input"/);
+  });
+
+  it('rejects a bigint in nodeOutputs with the "Cannot inject" message', async () => {
+    const { result } = run('return [];', [], {
+      x: [{ json: { big: 10n } }],
+    });
+    await expect(result).rejects.toThrow(/Cannot inject scope variable "nodeOutputs"/);
   });
 });
 
