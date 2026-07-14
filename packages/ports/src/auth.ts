@@ -39,6 +39,21 @@ export interface DirectoryPort {
   setRoles(id: string, roles: string[]): Promise<void>;
 }
 
+/**
+ * Thin Keycloak REST primitives for managing confidential sync clients.
+ * These are intentionally low-level — existence/idempotency logic lives in the
+ * enrollment orchestrator that composes them into enroll/rotate/revoke.
+ */
+export interface SyncClientPort {
+  findUuidByClientId(clientId: string): Promise<string | null>;
+  createConfidentialClient(clientId: string): Promise<string>;   // returns the new client UUID
+  addSiteIdMapper(uuid: string, siteId: string): Promise<void>;
+  addAudienceMapper(uuid: string, audience: string): Promise<void>;
+  getClientSecret(uuid: string): Promise<string>;
+  regenerateClientSecret(uuid: string): Promise<string>;
+  deleteClient(uuid: string): Promise<void>;
+}
+
 export interface AuthPort {
   healthCheck(): Promise<HealthResult>;
   verifyToken(token: string): Promise<TokenClaims>;
@@ -49,6 +64,7 @@ export interface AuthPort {
   /** Terminate all of the user's provider sessions. */
   forceLogout(userId: string): Promise<void>;
   directory: DirectoryPort;
+  clients: SyncClientPort;
 }
 
 /** Thrown by AuthPort admin methods when the provider admin client is not configured. */
