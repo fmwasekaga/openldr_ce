@@ -22,6 +22,7 @@ const H = vi.hoisted(() => ({
   changeRows: [] as { seq: number; version: number; site_id: string | null; resource_type: string; resource_id: string; op: string }[],
   boundary: 1_000_000,
   xmax: 1_000_000,
+  pageSize: 1_000_000, // how many rows the faked safe-frontier returns per page (drain paging)
   appliedRef: [] as { entityType: string; entityId: string; op: string }[],
 }));
 
@@ -38,6 +39,7 @@ vi.mock('@openldr/db', async (orig) => {
     fetchSafeChangeRows: async (_db: unknown, cursor: number) => ({
       rows: H.changeRows
         .filter((r) => r.seq > cursor)
+        .slice(0, H.pageSize) // emulate the safe-frontier's batchSize page so a drain loop is exercised
         .map((r) => ({ seq: r.seq, xid: 1, resource_type: r.resource_type, resource_id: r.resource_id, op: r.op })),
       boundary: H.boundary,
       xmax: H.xmax,
@@ -203,6 +205,7 @@ beforeEach(() => {
   H.appliedRef = [];
   H.boundary = 1_000_000;
   H.xmax = 1_000_000;
+  H.pageSize = 1_000_000;
   (writeFile as unknown as Mock).mockClear();
 });
 
@@ -247,6 +250,33 @@ describe('exportPushBundle / importPushBundle', () => {
     const { ctx } = seedPushCtx();
     await exportPushBundle(ctx, { from: 0 });
     expect(H.cursors['sync-push']).toBeUndefined(); // never touched
+  });
+
+  it('DRAINS the full frontier across multiple pages into ONE bundle; cursor advances to the end', async () => {
+    const site = hexKeys();
+    // 5 committed changes, but the faked safe-frontier only serves 2 rows per page → 3 pages to drain.
+    H.changeRows = Array.from({ length: 5 }, (_, i) => ({
+      seq: i + 1, version: i + 1, site_id: SITE, resource_type: 'Patient', resource_id: `p${i + 1}`, op: 'upsert',
+    }));
+    H.pageSize = 2;
+    const ctx = makeCtx({
+      appSettings: fakeAppSettings({ 'sync.site_id': SITE, 'sync.signing_private_key': site.priv }),
+      internalDb: fakeInternalDb({
+        'fhir.change_log': H.changeRows,
+        'fhir.resource_history': H.changeRows.map((r) => ({
+          resource_type: 'Patient', id: r.resource_id, version: r.version, resource: { resourceType: 'Patient', id: r.resource_id },
+        })),
+      }),
+    });
+    ctx.syncSites._rows.set(SITE, { siteId: SITE, status: 'active', signingPublicKey: site.pub, reportedPullCursor: 0 });
+
+    const { manifest } = await exportPushBundle(ctx, {});
+    // The bundle carries ALL 5 records (not just the first 2-row page) and spans the full range.
+    expect(manifest).toMatchObject({ fromCursor: 0, toCursor: 5, recordCount: 5 });
+    const written = unpackBundle(lastBytes());
+    expect(written.records.records.map((r) => (r as { id: string }).id)).toEqual(['p1', 'p2', 'p3', 'p4', 'p5']);
+    // Cursor advanced to the end of the drained frontier.
+    expect(H.cursors['sync-push']).toBe(5);
   });
 
   it('round-trips: import applies the records, records the piggybacked pull cursor, and is idempotent', async () => {

@@ -111,11 +111,28 @@ export async function exportPushBundle(
 
   const cursor = await readChangeCursor(ctx.internalDb, 'sync-push');
   const from = opts.from ?? cursor;
-  const { records, newCursor } = await collectPushRecords(
-    { internalDb: ctx.internalDb, fetchSafeRows: fetchSafeChangeRows, fetchContent: fetchContent(ctx), logger: ctx.logger },
-    from,
-  );
-  const toCursor = records.length > 0 ? newCursor : from;
+
+  // DRAIN the FULL safe frontier into one bundle: collectPushRecords fetches a single batchSize page,
+  // so a >1-page backlog would otherwise yield a partial bundle. Loop it — accumulate records, step
+  // the cursor to each page's newCursor, and carry pendingGaps forward (so a rolled-back gap straddling
+  // a page boundary confirms on a later page exactly as the live runner would) — until a cycle makes no
+  // progress (no cursor advance) or the safety cap trips. `toCursor` is the furthest cursor the drain
+  // reached, even if the final page produced 0 records (matches the runner advancing over a tail of
+  // confirmed-rolled-back gaps), so a gap tail is stepped over once instead of re-scanned every export.
+  const drainDeps = { internalDb: ctx.internalDb, fetchSafeRows: fetchSafeChangeRows, fetchContent: fetchContent(ctx), logger: ctx.logger };
+  const MAX_PAGES = 10_000; // safety valve against a pathological non-terminating drain
+  type Drain = Awaited<ReturnType<typeof collectPushRecords>>;
+  const records: Drain['records'] = [];
+  let drained = from;
+  let pendingGaps: Drain['pendingGaps'] = [];
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const res = await collectPushRecords(drainDeps, drained, pendingGaps);
+    pendingGaps = res.pendingGaps;
+    if (res.records.length > 0) records.push(...res.records);
+    if (res.newCursor <= drained) break; // no progress (rows exhausted / blocked at an in-flight gap)
+    drained = res.newCursor;
+  }
+  const toCursor = drained;
   const pullCursor = await readChangeCursor(ctx.internalDb, 'sync-pull');
 
   const manifest: BundleManifest = {
