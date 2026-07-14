@@ -59,18 +59,22 @@ export function createDashboardStore(db: Kysely<InternalSchema>, capture?: Refer
           .onConflict((oc) => oc.column('id').doNothing())
           .returningAll()
           .executeTakeFirst();
-        if (capture) await capture.record(trx, 'dashboard', d.id, 'upsert', hashOf(d));
-        if (inserted) return fromRow(inserted as Record<string, unknown>);
-        const row = await trx.selectFrom('dashboards').selectAll().where('id', '=', d.id).executeTakeFirst();
-        return fromRow(row as Record<string, unknown>);
+        // Hash the row that ACTUALLY persists: on a losing ON CONFLICT DO NOTHING the existing row
+        // wins, so the captured hash must reflect the stored/served body, not the rejected input.
+        const persisted = inserted
+          ? fromRow(inserted as Record<string, unknown>)
+          : fromRow((await trx.selectFrom('dashboards').selectAll().where('id', '=', d.id).executeTakeFirst()) as Record<string, unknown>);
+        if (capture) await capture.record(trx, 'dashboard', d.id, 'upsert', hashOf(persisted));
+        return persisted;
       });
     },
     async update(id, d) {
       return db.transaction().execute(async (trx) => {
         await trx.updateTable('dashboards').set({ ...toRow({ ...d, id }) } as never).where('id', '=', id).execute();
-        if (capture) await capture.record(trx, 'dashboard', id, 'upsert', hashOf({ ...d, id }));
-        const row = await trx.selectFrom('dashboards').selectAll().where('id', '=', id).executeTakeFirst();
-        return fromRow(row as Record<string, unknown>);
+        // Hash the read-back (persisted) row, not the input, so the log never diverges from storage.
+        const persisted = fromRow((await trx.selectFrom('dashboards').selectAll().where('id', '=', id).executeTakeFirst()) as Record<string, unknown>);
+        if (capture) await capture.record(trx, 'dashboard', id, 'upsert', hashOf(persisted));
+        return persisted;
       });
     },
     async remove(id) {

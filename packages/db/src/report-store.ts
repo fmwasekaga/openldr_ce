@@ -70,18 +70,22 @@ export function createReportStore(db: Kysely<InternalSchema>, capture?: Referenc
       return db.transaction().execute(async (trx) => {
         const inserted = await trx.insertInto('reports').values(toRow(r) as never)
           .onConflict((oc) => oc.column('id').doNothing()).returningAll().executeTakeFirst();
-        if (capture) await capture.record(trx, 'report', r.id, 'upsert', hashOf(r));
-        if (inserted) return fromRow(inserted as Record<string, unknown>);
-        const row = await trx.selectFrom('reports').selectAll().where('id', '=', r.id).executeTakeFirst();
-        return fromRow(row as Record<string, unknown>);
+        // Hash the row that ACTUALLY persists: on a losing ON CONFLICT DO NOTHING the existing row
+        // wins, so the captured hash must reflect the stored/served body, not the rejected input.
+        const persisted = inserted
+          ? fromRow(inserted as Record<string, unknown>)
+          : fromRow((await trx.selectFrom('reports').selectAll().where('id', '=', r.id).executeTakeFirst()) as Record<string, unknown>);
+        if (capture) await capture.record(trx, 'report', r.id, 'upsert', hashOf(persisted));
+        return persisted;
       });
     },
     async update(id, r) {
       return db.transaction().execute(async (trx) => {
         await trx.updateTable('reports').set({ ...toRow({ ...r, id }) } as never).where('id', '=', id).execute();
-        if (capture) await capture.record(trx, 'report', id, 'upsert', hashOf({ ...r, id }));
-        const row = await trx.selectFrom('reports').selectAll().where('id', '=', id).executeTakeFirst();
-        return fromRow(row as Record<string, unknown>);
+        // Hash the read-back (persisted) row, not the input, so the log never diverges from storage.
+        const persisted = fromRow((await trx.selectFrom('reports').selectAll().where('id', '=', id).executeTakeFirst()) as Record<string, unknown>);
+        if (capture) await capture.record(trx, 'report', id, 'upsert', hashOf(persisted));
+        return persisted;
       });
     },
     async remove(id) {

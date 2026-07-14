@@ -78,6 +78,13 @@ describe('DashboardStore reference capture', () => {
     await store.create(board());
     expect(await refLog(mdb, 'd1')).toHaveLength(1);
 
+    // Conflict path with DIFFERENT content: ON CONFLICT DO NOTHING keeps the existing row, so the
+    // logged hash must reflect the PERSISTED (existing) body, not the rejected input → still one row.
+    await store.create(board({ name: 'rejected different content' }));
+    expect((await store.get('d1'))?.name).toBe('Main'); // existing row unchanged
+    expect(await refLog(mdb, 'd1')).toHaveLength(1);
+    expect((await refLog(mdb, 'd1'))[0].content_hash).toBe(createHash);
+
     await store.update('d1', board({ name: 'Renamed' }));
     log = await refLog(mdb, 'd1');
     expect(log).toHaveLength(2);

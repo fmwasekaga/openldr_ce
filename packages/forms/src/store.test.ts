@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { type Kysely } from 'kysely';
 import { newDb } from 'pg-mem';
 import { internalMigrations, referenceCapture, type InternalSchema } from '@openldr/db';
-import { createFormStore } from './store';
+import { createFormStore, formSyncBody } from './store';
 import type { FormSchema } from './schema/form-schema';
 import { toQuestionnaire } from './to-questionnaire';
 
@@ -359,6 +359,19 @@ describe('createFormStore reference capture', () => {
     expect(log[1]).toMatchObject({ op: 'delete', content_hash: null });
 
     await db.destroy();
+  });
+
+  it('formSyncBody is null-safe on a missing row and parses schema on a present row', async () => {
+    // Task 7 calls this directly on a possibly-absent store.get result.
+    expect(formSyncBody(undefined)).toBeNull();
+    expect(formSyncBody(null)).toBeNull();
+    const body = formSyncBody({
+      id: 'form-1', name: 'X', version_label: null, fhir_resource_type: 'Questionnaire',
+      fhir_version: 'R4', fhir_profile_url: null, facility_id: 'fac-1', status: 'published',
+      active: true, schema: JSON.stringify({ fields: [] }), target_pages: null, created_at: null, updated_at: null,
+    });
+    expect(body).toMatchObject({ id: 'form-1', status: 'published', active: true, fhirVersion: 'R4', facilityId: 'fac-1' });
+    expect(body?.schema).toEqual({ fields: [] }); // schema string parsed to an object
   });
 
   it('delete() of a form → delete capture', async () => {

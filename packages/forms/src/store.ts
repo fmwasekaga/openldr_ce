@@ -129,7 +129,8 @@ function countFields(schema: FormSchema): number {
  * object (jsonb read-back reorders keys otherwise). NOT included: created_at/updated_at/version_label
  * (store-managed, not lab-relevant).
  */
-export function formSyncBody(row: FormRow) {
+export function formSyncBody(row: FormRow | undefined | null) {
+  if (!row) return null;
   return {
     id: row.id,
     status: row.status,

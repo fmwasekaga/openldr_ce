@@ -65,6 +65,14 @@ describe('createReportStore', () => {
     await store.create(base);
     expect(await refLog(db, 'r1')).toHaveLength(1);
 
+    // Conflict path with DIFFERENT content: ON CONFLICT DO NOTHING keeps the existing row, so the
+    // logged hash must reflect the PERSISTED (existing) body, not the rejected input. That hash
+    // equals createHash → recordReferenceChange dedups → still one row (would be 2 if it hashed input).
+    await store.create({ ...base, name: 'rejected different content' });
+    expect((await store.get('r1'))?.name).toBe('AMR Resistance'); // existing row unchanged
+    expect(await refLog(db, 'r1')).toHaveLength(1);
+    expect((await refLog(db, 'r1'))[0].content_hash).toBe(createHash);
+
     await store.update('r1', { ...base, name: 'renamed' });
     log = await refLog(db, 'r1');
     expect(log).toHaveLength(2);
