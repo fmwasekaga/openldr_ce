@@ -37,7 +37,7 @@ import { type PluginRuntime } from '@openldr/plugins';
 import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
-import { createSyncPushRunner, createSyncPullRunner, createSyncTokenProvider, readSyncConfig, type PushBatch, type PushResponse } from '@openldr/sync';
+import { createSyncPushRunner, createSyncPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, type PushBatch, type PushResponse } from '@openldr/sync';
 import { createSyncPushWorker, type SyncPushWorker } from './sync-push-worker';
 import { createSyncPullWorker, type SyncPullWorker } from './sync-pull-worker';
 import { createActivityService, type ActivityService } from './activity-service';
@@ -725,22 +725,59 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     syncPushWorker.start();
     logger.info({ centralUrl: syncCfg.centralUrl, siteId: syncCfg.siteId }, 'sync push worker started');
 
-    // Sync S2: directional pull (central -> lab reference config). A THIRD consumer of the change stream
-    // ('sync-pull' cursor), sharing the push token provider instance (so token caching is not defeated).
+    // Sync S2/S3: directional pull (central -> lab reference config + terminology). A THIRD consumer of the
+    // change stream ('sync-pull' cursor), sharing the push token provider instance (so token caching is not
+    // defeated). Shared POST helper: throws on non-2xx with the STATUS ONLY (never the bearer token).
+    const postJson = async (url: string, body: unknown, token: string): Promise<unknown> => {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(`central responded ${res.status}`); // status only — never the token
+      return res.json();
+    };
+
+    // S3 terminology bulk-sync: a signalled terminology_system/concept_map record triggers a whole-system /
+    // whole-map keyset drain + reconcile (all-or-nothing; THROWS on any failure so the runner holds the cursor).
+    const termBulk = createTerminologyBulkSync({
+      labDb: internal.db,
+      getToken: () => tokenProvider.getToken(),
+      fetchConceptsPage: async (systemUrl, afterCode, token) =>
+        (await postJson(
+          `${syncCfg.centralUrl}/api/sync/terminology/concepts`,
+          { systemUrl, afterCode: afterCode ?? undefined },
+          token,
+        )) as import('@openldr/sync').ConceptsPage,
+      fetchMapElementsPage: async (mapUrl, afterKey, token) =>
+        (await postJson(
+          `${syncCfg.centralUrl}/api/sync/terminology/map-elements`,
+          { mapUrl, afterSourceSystem: afterKey?.sourceSystem, afterSourceCode: afterKey?.sourceCode },
+          token,
+        )) as import('@openldr/sync').MapElementsPage,
+      logger,
+    });
+
     // Pull worker: mirror central's reference config down. Shares the push token provider + internal db.
+    // Dispatcher: terminology signals route to the bulk-sync (whole-system/map drain); every other kind is a
+    // per-row reference apply. The runner's default isHoldRecord already holds the two terminology kinds.
     const referenceApplier = createReferenceApplier(internal.db);
+    const applyRecord = async (rec: import('@openldr/sync').PullRecord): Promise<'applied' | 'skipped'> => {
+      if (rec.entityType === 'terminology_system') {
+        await termBulk.syncSystem(rec.entityId, rec.body);
+        return 'applied';
+      }
+      if (rec.entityType === 'concept_map') {
+        await termBulk.syncConceptMap(rec.entityId, rec.body);
+        return 'applied';
+      }
+      return referenceApplier(rec);
+    };
     const syncPullRunner = createSyncPullRunner({
       getToken: () => tokenProvider.getToken(), // SHARE the push token provider instance
-      applyRecord: (rec) => referenceApplier(rec),
-      postPull: async (body, token) => {
-        const res = await fetch(`${syncCfg.centralUrl}/api/sync/pull`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) throw new Error(`central responded ${res.status}`); // status only — never the token
-        return (await res.json()) as import('@openldr/sync').PullResponse;
-      },
+      applyRecord,
+      postPull: async (body, token) =>
+        (await postJson(`${syncCfg.centralUrl}/api/sync/pull`, body, token)) as import('@openldr/sync').PullResponse,
       readCursor: () => readChangeCursor(internal.db, 'sync-pull'),
       advanceCursor: (seq) => advanceChangeCursor(internal.db, 'sync-pull', seq),
       logger,
