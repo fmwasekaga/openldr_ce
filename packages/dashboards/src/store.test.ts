@@ -96,4 +96,17 @@ describe('DashboardStore reference capture', () => {
     expect(log).toHaveLength(3);
     expect(log[2]).toMatchObject({ op: 'delete', content_hash: null });
   });
+
+  it('capture hash covers isDefault / refreshIntervalSec: a flag-only edit is NOT deduped away', async () => {
+    const store = createDashboardStore(mdb, referenceCapture);
+    await store.create(board({ isDefault: true, refreshIntervalSec: 0 }));
+    expect(await refLog(mdb, 'd1')).toHaveLength(1);
+    // Same name/filters/widgets/layout, only isDefault flips → must capture a new row (else the change
+    // never reaches labs). A {name,filters,widgets,layout}-only hash would dedup this away.
+    await store.update('d1', board({ isDefault: false, refreshIntervalSec: 0 }));
+    expect(await refLog(mdb, 'd1')).toHaveLength(2);
+    // Only refreshIntervalSec changes → still a distinct hash, still captured.
+    await store.update('d1', board({ isDefault: false, refreshIntervalSec: 60 }));
+    expect(await refLog(mdb, 'd1')).toHaveLength(3);
+  });
 });

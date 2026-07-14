@@ -29,11 +29,17 @@ export interface DashboardStore {
   remove(id: string): Promise<void>;
 }
 
-// Hash the exact seed-relevant field set used by dashboardContentEqual (seed.ts) so the
-// reference-change content hash is stable against jsonb key reordering and never drifts from
-// the seed-equality check. canonicalHash sorts keys, so filters/widgets/layout order is fixed.
+// Capture content hash for reference-change dedup. Covers EVERY lab-visible field the applier writes
+// from the served body — name/filters/widgets/layout PLUS isDefault, refreshIntervalSec and ownerId —
+// so a central edit that flips only isDefault or refreshIntervalSec still changes the hash and
+// propagates (a narrower {name,filters,widgets,layout} set would dedup those away). canonicalHash
+// sorts keys, so jsonb key reordering never perturbs it. NOTE: this is deliberately BROADER than
+// dashboardContentEqual (seed.ts), which stays {name,filters,widgets,layout} for seed idempotence.
 function hashOf(d: Dashboard): string {
-  return canonicalHash({ name: d.name, filters: d.filters, widgets: d.widgets, layout: d.layout });
+  return canonicalHash({
+    name: d.name, filters: d.filters, widgets: d.widgets, layout: d.layout,
+    isDefault: d.isDefault, refreshIntervalSec: d.refreshIntervalSec, ownerId: d.ownerId ?? null,
+  });
 }
 
 export function createDashboardStore(db: Kysely<InternalSchema>, capture?: ReferenceCapture): DashboardStore {

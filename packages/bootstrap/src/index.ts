@@ -7,7 +7,7 @@ import { createEventBus } from '@openldr/adapter-event-bus';
 import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import type { Config } from '@openldr/config';
 import { createLogger, HealthRegistry, open, parseSecretKey, redact, type Logger } from '@openldr/core';
-import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore } from '@openldr/db';
+import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema, Provenance } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
@@ -323,7 +323,10 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   const plugins = createPluginRegistry({ blob, internalDb: internal.db, logger, audit, devAllowUnsigned: cfg.MARKETPLACE_DEV_ALLOW_UNSIGNED });
   const users = createUserStore(internal.db);
   const userProfiles = createUserProfileStore(internal.db);
-  const forms = createFormStore(internal.db);
+  // Sync S2: pass referenceCapture so central config authoring lands rows in reference_change_log
+  // (the pull endpoint's source). Safe on every node: a lab serves no pull so its log is inert, and
+  // the apply path writes tables directly (capture-free) → no re-origination loop.
+  const forms = createFormStore(internal.db, referenceCapture);
   const marketplaceInstalls = createMarketplaceInstallStore(internal.db);
 
   // Canonical persist for the Persist Store workflow node — same wiring as ingest-context.
@@ -361,7 +364,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   // `workflowServices` lazily at call time (it is declared further down this function) — mirrors
   // the same lazy-read pattern in apps/server/app.ts.
   const reportDesignStore = createReportDesignStore(internal.db);
-  const reportDefStore = createReportStore(internal.db);
+  const reportDefStore = createReportStore(internal.db, referenceCapture);
   const reportRenderDeps: RunStoredQueryDeps = {
     customQueries: createCustomQueryStore(internal.db),
     runConnectorSql: (input) => {
@@ -416,7 +419,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     logger,
   });
 
-  const dashboardStore = createDashboardStore(internal.db);
+  const dashboardStore = createDashboardStore(internal.db, referenceCapture);
   const runDashboardQuery = async (q: WidgetQuery): Promise<ReportResult> => {
     let data;
     if (q.mode === 'builder') {
@@ -524,7 +527,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   };
 
   const connectorStore = createConnectorStore(internal.db);
-  const appSettings = createAppSettingsStore(internal.db);
+  const appSettings = createAppSettingsStore(internal.db, referenceCapture);
   const featureFlags = createFeatureFlags(appSettings);
   const numberSettings = createNumberSettings(appSettings);
   const reportCategories = createReportCategoriesService(appSettings);
