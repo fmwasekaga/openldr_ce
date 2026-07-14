@@ -37,19 +37,31 @@ export async function evalExpression(
   limits: JsLimits,
 ): Promise<unknown> {
   const QuickJS = await quickjs();
-  const runtime = QuickJS.newRuntime();
-  // Limits MUST be set before any evaluation runs.
-  runtime.setMemoryLimit(limits.memoryMb * 1024 * 1024);
-  const start = Date.now();
-  runtime.setInterruptHandler(() => Date.now() - start > limits.timeoutMs);
+  let runtime: ReturnType<QuickJSWASMModule['newRuntime']> | undefined;
   try {
+    // Create+configure inside try so any throw here still hits the finally dispose.
+    runtime = QuickJS.newRuntime();
+    // Limits MUST be set before any evaluation runs.
+    runtime.setMemoryLimit(limits.memoryMb * 1024 * 1024);
+    const start = Date.now();
+    runtime.setInterruptHandler(() => Date.now() - start > limits.timeoutMs);
+    const rt = runtime;
     return Scope.withScope((arena) => {
-      const ctx = arena.manage(runtime.newContext());
+      const ctx = arena.manage(rt.newContext());
 
-      // Inject each scope var as JSON data. `undefined` is normalized to null so
-      // the injected literal is always valid; the var is still defined in-scope.
+      // Inject each scope var as JSON data. `undefined` (and any non-serializable
+      // value such as a function/symbol, which JSON.stringify drops) is normalized
+      // to null so the injected literal is always valid and the var is defined.
       for (const [key, value] of Object.entries(scope)) {
-        const json = JSON.stringify(value === undefined ? null : value);
+        let json: string;
+        try {
+          const s = JSON.stringify(value === undefined ? null : value);
+          json = s === undefined ? 'null' : s; // functions/symbols → null, matching undefined
+        } catch (e) {
+          throw new Error(
+            `Cannot inject scope variable "${key}": ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
         const handle = arena.manage(ctx.unwrapResult(ctx.evalCode(`(${json})`)));
         ctx.setProp(ctx.global, key, handle);
       }
@@ -62,6 +74,6 @@ export async function evalExpression(
   } catch (err) {
     throw err instanceof Error ? err : new Error(String(err));
   } finally {
-    runtime.dispose();
+    runtime?.dispose();
   }
 }

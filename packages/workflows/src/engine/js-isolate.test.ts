@@ -122,6 +122,29 @@ describe('evalExpression — JSON marshaling round-trip', () => {
     expect(await evalExpression('typeof $u', { $u: undefined }, L)).toBe('object'); // typeof null === 'object'
     expect(await evalExpression('$u', { $u: undefined }, L)).toBe(null);
   });
+
+  it('normalizes a non-serializable function scope value to null (no throw)', async () => {
+    // JSON.stringify drops functions/symbols; we coerce to null so the var is defined.
+    expect(await evalExpression('$fn', { $fn: () => 1 }, L)).toBe(null);
+    expect(await evalExpression('typeof $fn', { $fn: () => 1 }, L)).toBe('object');
+  });
+
+  it('reads back an undefined result via ctx.dump (distinct from injected-undefined)', async () => {
+    expect(await evalExpression('void 0', {}, L)).toBeUndefined();
+    expect(await evalExpression('undefined', {}, L)).toBeUndefined();
+  });
+});
+
+describe('evalExpression — scope serialization errors', () => {
+  it('rejects a bigint scope value with a message naming the key', async () => {
+    await expect(evalExpression('$big', { $big: 10n }, L)).rejects.toThrow(/\$big/);
+  });
+
+  it('rejects a circular scope value with a message naming the key', async () => {
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    await expect(evalExpression('$c', { $c: circular }, L)).rejects.toThrow(/\$c/);
+  });
 });
 
 describe('evalExpression — malformed source', () => {
