@@ -12,8 +12,8 @@ import { resolveNodeOptions, resolveNodeDetail } from './workflows-node-options'
 /** Sync a workflow's trigger nodes into the derived registries (webhooks + schedules). */
 async function syncWorkflowTriggers(ctx: AppContext, workflow: { id: string; definition: unknown }): Promise<void> {
   const def = WorkflowDefinitionSchema.parse(workflow.definition);
-  // webhooks (in-memory)
-  ctx.workflows.webhooks.sync(workflow.id, def.nodes);
+  // webhooks (in-memory) — async: resolves any sealed `{ secretRef }` webhook secret (SEC-06).
+  await ctx.workflows.webhooks.sync(workflow.id, def.nodes);
   // schedules (derived table) — replace this workflow's rows with current schedule nodes
   await ctx.workflows.schedules.removeForWorkflow(workflow.id);
   for (const n of def.nodes as Array<{ id: string; type?: string; data?: Record<string, unknown> }>) {

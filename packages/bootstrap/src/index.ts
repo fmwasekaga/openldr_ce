@@ -471,7 +471,17 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   const workflowStore = createWorkflowStore(internal.db);
   const workflowRuns = createWorkflowRunStore(internal.db);
   const workflowSchedules = createWorkflowScheduleStore(internal.db);
-  const workflowWebhooks = createWebhookRegistry();
+  // SEC-06: the secret store is constructed BEFORE the webhook registry + workflow
+  // services so both can resolve sealed `{ secretRef }` values at use (the registry
+  // resolves the webhook secret on sync; the HTTP node resolves a ref-valued headers
+  // blob). Injected resolvers keep `@openldr/workflows` crypto-key-free.
+  const workflowSecrets = createWorkflowSecretStore(internal.db);
+  const workflowWebhooks = createWebhookRegistry({
+    // Open the sealed webhook-secret ref → plaintext (held in memory). A failure to
+    // resolve (unknown id / key unset) registers a null secret rather than crashing
+    // reconcile — the route then fails closed (401 "no secret configured").
+    resolveRef: (ref) => workflowSecrets.resolve(ref, cfg.SECRETS_ENCRYPTION_KEY).catch(() => null),
+  });
   const workflowDatasets = createWorkflowDatasetStore(internal.db);
 
   const ingestBatches = createBatchStore(internal.db);
@@ -637,6 +647,9 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       const config = await connectorStore.getDecryptedConfig(connectorId, cfg.SECRETS_ENCRYPTION_KEY);
       return config[key];
     },
+    // SEC-06: open a sealed workflow-secret ref → plaintext (used by the HTTP node for a
+    // ref-valued config.headers blob). Throws on unknown id / unset key (fail-closed).
+    resolveWorkflowSecret: (ref) => workflowSecrets.resolve(ref, cfg.SECRETS_ENCRYPTION_KEY),
   };
   const workflowRunner = createWorkflowTriggerRunner({
     store: workflowStore, runs: workflowRuns, schedules: workflowSchedules,
@@ -661,7 +674,6 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       }),
     },
   });
-  const workflowSecrets = createWorkflowSecretStore(internal.db);
   const workflows = { store: workflowStore, runs: workflowRuns, schedules: workflowSchedules, webhooks: workflowWebhooks, runner: workflowRunner, services: workflowServices, datasets: workflowDatasets, listeners: workflowListeners, secretStore: workflowSecrets };
 
   // Restructure R2: async projection worker keeps the flat (external) store in sync with the

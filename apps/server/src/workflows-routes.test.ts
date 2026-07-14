@@ -4,6 +4,7 @@ import Fastify from 'fastify';
 import { ConfigError } from '@openldr/core';
 import { createWorkflowSecretStore } from '@openldr/db';
 import { makeMigratedDb } from '@openldr/db/testing';
+import { createWebhookRegistry } from '@openldr/workflows';
 import { registerWorkflowRoutes } from './workflows-routes';
 
 // Lightweight in-memory secret store for the legacy (non-secret) route tests. Mirrors
@@ -891,6 +892,52 @@ describe('workflow routes', () => {
     const res = await app.inject({ method: 'DELETE', url: '/api/workflows/wf-secret' });
     expect(res.statusCode).toBe(200);
     expect((await secretRows(db, 'wf-secret')).length).toBe(0);
+    await db.destroy();
+  });
+
+  it('end-to-end: a saved webhook secret (sealed → ref) verifies on the incoming hook (SEC-06 T4)', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    const { ctx, db, key } = await realSecretCtx();
+    // Swap in a REAL webhook registry that resolves sealed refs via the real secret store —
+    // exactly the bootstrap wiring. syncWorkflowTriggers (run on save) must resolve the ref
+    // and register the plaintext in memory so the constant-time verify path matches.
+    ctx.workflows.webhooks = createWebhookRegistry({
+      resolveRef: (ref: string) => ctx.workflows.secretStore.resolve(ref, key).catch(() => null),
+    });
+    registerWorkflowRoutes(app, ctx);
+
+    const save = await app.inject({
+      method: 'POST', url: '/api/workflows',
+      payload: {
+        ...SAMPLE_WORKFLOW, id: 'wf-hook-e2e',
+        definition: { nodes: [
+          { id: 't1', type: 'trigger', data: { triggerType: 'webhook', path: 'hooke2e', secret: 'live-token' } },
+        ], edges: [] },
+      },
+    });
+    expect(save.statusCode).toBe(200);
+
+    // Persisted definition is a ref (no cleartext), but the registry resolved it in memory.
+    const stored = await ctx.workflows.store.get('wf-hook-e2e');
+    expect(typeof stored.definition.nodes[0].data.secret.secretRef).toBe('string');
+    expect(ctx.workflows.webhooks.resolve('hooke2e')?.secret).toBe('live-token');
+
+    // Wrong token → 401; correct token → 200 + a recorded run.
+    const wrong = await app.inject({
+      method: 'POST', url: '/api/workflows/hooks/hooke2e',
+      headers: { 'x-webhook-token': 'nope' }, payload: {},
+    });
+    expect(wrong.statusCode).toBe(401);
+    expect(ctx.__extras.runAndRecordCalls.length).toBe(0);
+
+    const ok = await app.inject({
+      method: 'POST', url: '/api/workflows/hooks/hooke2e',
+      headers: { 'x-webhook-token': 'live-token' }, payload: { name: 'a' },
+    });
+    expect(ok.statusCode).toBe(200);
+    expect(ctx.__extras.runAndRecordCalls.length).toBe(1);
+    expect(ctx.__extras.runAndRecordCalls[0].workflowId).toBe('wf-hook-e2e');
     await db.destroy();
   });
 
