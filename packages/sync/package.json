@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "@openldr/db": "workspace:*",
-    "@openldr/fhir": "workspace:*"
+    "@openldr/fhir": "workspace:*",
+    "kysely": "^0.27.5"
   },
   "devDependencies": { "typescript": "^5.7.2", "vitest": "^2.1.8" }
 }

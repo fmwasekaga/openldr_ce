@@ -57,3 +57,28 @@ export interface PullResponse {
   records: PullRecord[];
   nextSeq: number;
 }
+
+// Sync S3: bulk terminology transfer wire shapes. Mirror the keyset-paginated bulk endpoints
+// (POST /api/sync/terminology/concepts and .../map-elements) — one page of a whole-system /
+// whole-map drain plus the resume key (null on the last, short page).
+export interface ConceptWire {
+  code: string;
+  display: string | null;
+  status: string | null;
+  properties: Record<string, unknown> | null;
+}
+export interface ConceptsPage {
+  concepts: ConceptWire[];
+  nextCode: string | null;
+}
+export interface MapElementWire {
+  sourceSystem: string;
+  sourceCode: string;
+  targetSystem: string;
+  targetCode: string;
+  equivalence: string | null;
+}
+export interface MapElementsPage {
+  elements: MapElementWire[];
+  nextKey: { sourceSystem: string; sourceCode: string } | null;
+}
