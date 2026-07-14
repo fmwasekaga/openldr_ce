@@ -189,7 +189,9 @@ export function registerSyncRoutes(app: FastifyInstance<any, any, any, any>, ctx
 // pull always serves the freshest config). The served upsert body MUST equal what the reference
 // applier (reference-apply.ts) consumes: dashboards/reports serve the store RECORD shape; a form
 // serves formSyncBody(rawRow) (the store's get() returns a camelCase FormDefinition, which
-// formSyncBody can't consume, so read the raw form_definitions row exactly like capture does); a
+// formSyncBody can't consume, so read the raw form_definitions row exactly like capture does);
+// publisher/coding_system/term_mapping read the raw internal row and serve a camelCase body (matching
+// A2's capture hash field-sets, so the pulled body round-trips through the applier's row mappers); a
 // setting serves its string value. Returns null when the entity no longer exists.
 async function fetchReferenceBody(
   ctx: AppContext,
@@ -214,6 +216,66 @@ async function fetchReferenceBody(
       // correct convergence). A missing row also returns null (formSyncBody handles undefined).
       if (!row || row.status !== 'published') return null;
       return formSyncBody(row);
+    }
+    case 'publisher': {
+      const r = await ctx.internalDb
+        .selectFrom('publishers')
+        .selectAll()
+        .where('id', '=', id)
+        .executeTakeFirst();
+      if (!r) return null;
+      const mp =
+        r.match_prefixes == null
+          ? []
+          : typeof r.match_prefixes === 'string'
+            ? JSON.parse(r.match_prefixes)
+            : r.match_prefixes;
+      return {
+        id: r.id,
+        name: r.name,
+        role: r.role,
+        icon: r.icon,
+        matchPrefixes: mp,
+        sortOrder: r.sort_order,
+      };
+    }
+    case 'coding_system': {
+      const r = await ctx.internalDb
+        .selectFrom('coding_systems')
+        .selectAll()
+        .where('id', '=', id)
+        .executeTakeFirst();
+      if (!r) return null;
+      return {
+        id: r.id,
+        systemCode: r.system_code,
+        systemName: r.system_name,
+        url: r.url,
+        systemVersion: r.system_version,
+        description: r.description,
+        active: r.active,
+        publisherId: r.publisher_id,
+      };
+    }
+    case 'term_mapping': {
+      const r = await ctx.internalDb
+        .selectFrom('term_mappings')
+        .selectAll()
+        .where('id', '=', id)
+        .executeTakeFirst();
+      if (!r) return null;
+      return {
+        id: r.id,
+        fromSystem: r.from_system,
+        fromCode: r.from_code,
+        toSystem: r.to_system,
+        toCode: r.to_code,
+        toDisplay: r.to_display,
+        mapType: r.map_type,
+        relationship: r.relationship,
+        owner: r.owner,
+        isActive: r.is_active,
+      };
     }
     case 'setting':
       return (await ctx.appSettings.get(id))?.value ?? null;

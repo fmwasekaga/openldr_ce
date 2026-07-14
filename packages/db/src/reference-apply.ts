@@ -52,6 +52,33 @@ interface FormBody {
   fhirProfileUrl?: string | null;
   facilityId?: string | null;
 }
+interface PublisherBody {
+  name: string;
+  role: string;
+  icon?: string | null;
+  matchPrefixes?: unknown[];
+  sortOrder?: number;
+}
+interface CodingSystemBody {
+  systemCode: string;
+  systemName: string;
+  url?: string | null;
+  systemVersion?: string | null;
+  description?: string | null;
+  active?: boolean;
+  publisherId?: string | null;
+}
+interface TermMappingBody {
+  fromSystem: string;
+  fromCode: string;
+  toSystem: string;
+  toCode: string;
+  toDisplay?: string | null;
+  mapType: string;
+  relationship?: string | null;
+  owner?: string | null;
+  isActive?: boolean;
+}
 
 // --- row mappers: mirror each store's toRow serialization EXACTLY (jsonb columns are TEXT holding
 // JSON, so arrays/objects are JSON.stringify'd). Each row includes managed_origin='central'. ---
@@ -108,7 +135,65 @@ function formRow(id: string, body: unknown) {
   };
 }
 
-type ManagedTable = 'dashboards' | 'reports' | 'form_definitions';
+// Maps the served publisher body → publishers columns. match_prefixes is a jsonb column (TEXT
+// holding JSON), so the array is JSON.stringify'd. NOT NULL cols (name/role) are carried by the body.
+function publisherRow(id: string, body: unknown) {
+  const p = body as PublisherBody;
+  return {
+    id,
+    name: p.name,
+    role: p.role,
+    icon: p.icon ?? null,
+    match_prefixes: JSON.stringify(p.matchPrefixes ?? []),
+    sort_order: p.sortOrder ?? 0,
+    managed_origin: MANAGED,
+  };
+}
+
+// Maps the served coding_system body → coding_systems columns. NOT NULL cols (system_code/
+// system_name) are carried by the body; active defaults to true when absent.
+function codingSystemRow(id: string, body: unknown) {
+  const c = body as CodingSystemBody;
+  return {
+    id,
+    system_code: c.systemCode,
+    system_name: c.systemName,
+    url: c.url ?? null,
+    system_version: c.systemVersion ?? null,
+    description: c.description ?? null,
+    active: c.active ?? true,
+    publisher_id: c.publisherId ?? null,
+    managed_origin: MANAGED,
+  };
+}
+
+// Maps the served term_mapping body → term_mappings columns. created_at/updated_at have DB defaults;
+// updated_at is stamped now() on every apply. `owner` is carried from central's body (preserved).
+function termMappingRow(id: string, body: unknown) {
+  const t = body as TermMappingBody;
+  return {
+    id,
+    from_system: t.fromSystem,
+    from_code: t.fromCode,
+    to_system: t.toSystem,
+    to_code: t.toCode,
+    to_display: t.toDisplay ?? null,
+    map_type: t.mapType,
+    relationship: t.relationship ?? null,
+    owner: t.owner ?? null,
+    is_active: t.isActive ?? true,
+    managed_origin: MANAGED,
+    updated_at: sql`now()`,
+  };
+}
+
+type ManagedTable =
+  | 'dashboards'
+  | 'reports'
+  | 'form_definitions'
+  | 'publishers'
+  | 'coding_systems'
+  | 'term_mappings';
 
 // Direct-write upsert/delete for a managed table. delete is guarded by managed_origin='central' so a
 // lab-local (NULL) row is never removed; upsert stamps/re-stamps managed_origin on conflict. The
@@ -169,6 +254,12 @@ export function createReferenceApplier(db: Kysely<InternalSchema>) {
         return upsertOrDelete(db, 'reports', rec.entityId, rec.op, rec.body, reportRow);
       case 'form':
         return upsertOrDelete(db, 'form_definitions', rec.entityId, rec.op, rec.body, formRow);
+      case 'publisher':
+        return upsertOrDelete(db, 'publishers', rec.entityId, rec.op, rec.body, publisherRow);
+      case 'coding_system':
+        return upsertOrDelete(db, 'coding_systems', rec.entityId, rec.op, rec.body, codingSystemRow);
+      case 'term_mapping':
+        return upsertOrDelete(db, 'term_mappings', rec.entityId, rec.op, rec.body, termMappingRow);
       case 'setting':
         return applySetting(db, rec);
       default:

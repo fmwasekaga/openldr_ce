@@ -193,6 +193,18 @@ function formDefRow(id: string, name = `form ${id}`) {
   };
 }
 
+// Raw internal rows (snake_case) for the three terminology metadata tables, as the serve branches
+// read them via ctx.internalDb. match_prefixes is jsonb (an array once parsed by the pg driver).
+function publisherRow(id: string, name = `pub ${id}`) {
+  return { id, name, role: 'external', icon: null, match_prefixes: ['http://ex/'], seeded: false, sort_order: 3, managed_origin: null };
+}
+function codingSystemRow(id: string) {
+  return { id, system_code: 'LOINC', system_name: 'LOINC', url: 'http://loinc.org', system_version: '2.7', description: 'd', active: true, publisher_id: null, seeded: false, managed_origin: null };
+}
+function termMappingRow(id: string) {
+  return { id, from_system: 'http://a', from_code: 'a1', to_system: 'http://b', to_code: 'b1', to_display: 'B one', map_type: 'equivalent', relationship: 'related-to', owner: 'central-team', is_active: true, managed_origin: null };
+}
+
 // Fake internal DB: a minimal chainable stand-in for the Kysely calls the pull handler makes —
 // selectFrom(table).selectAll().where(col,op,val)...limit(n).execute() and .executeTakeFirst().
 // Rows are supplied per table; where('seq','>',x) and where('id','=',x) are honoured.
@@ -227,6 +239,9 @@ function fakePullCtx(opts: {
   verify?: (token: string) => Promise<Record<string, unknown>>;
   log?: any[];
   forms?: any[];
+  publishers?: any[];
+  codingSystems?: any[];
+  termMappings?: any[];
   dashboards?: Record<string, unknown>;
   reports?: Record<string, unknown>;
   settings?: Record<string, { value: string }>;
@@ -234,7 +249,13 @@ function fakePullCtx(opts: {
   const ctx = {
     logger: { warn: () => {}, error: () => {} },
     auth: { verifyToken: opts.verify ?? (async () => ({ sub: 'client-1', site_id: SITE })) },
-    internalDb: fakeInternalDb({ reference_change_log: opts.log ?? [], form_definitions: opts.forms ?? [] }),
+    internalDb: fakeInternalDb({
+      reference_change_log: opts.log ?? [],
+      form_definitions: opts.forms ?? [],
+      publishers: opts.publishers ?? [],
+      coding_systems: opts.codingSystems ?? [],
+      term_mappings: opts.termMappings ?? [],
+    }),
     dashboards: { store: { get: async (id: string) => (opts.dashboards ?? {})[id] } },
     reportDefs: { get: async (id: string) => (opts.reports ?? {})[id] },
     appSettings: { get: async (id: string) => (opts.settings ?? {})[id] ?? null },
@@ -289,6 +310,46 @@ describe('sync routes — POST /api/sync/pull', () => {
     // setting body = the raw string value the applier String()s.
     expect(body.records[3].body).toBe('on');
     expect(body.records[3].contentHash).toBe('hs');
+  });
+
+  it('serves publisher/coding_system/term_mapping bodies from the internal DB (camelCase, round-trip)', async () => {
+    const ctx = fakePullCtx({
+      log: [
+        logRow(1, 'publisher', 'pub-1', 'upsert', 'hp'),
+        logRow(2, 'coding_system', 'cs-1', 'upsert', 'hc'),
+        logRow(3, 'term_mapping', 'tm-1', 'upsert', 'ht'),
+      ],
+      publishers: [publisherRow('pub-1')],
+      codingSystems: [codingSystemRow('cs-1')],
+      termMappings: [termMappingRow('tm-1')],
+    });
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/sync/pull', headers: AUTH, payload: { fromSeq: 0 } });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.nextSeq).toBe(3);
+    expect(body.records.map((r: any) => [r.seq, r.entityType, r.op])).toEqual([
+      [1, 'publisher', 'upsert'],
+      [2, 'coding_system', 'upsert'],
+      [3, 'term_mapping', 'upsert'],
+    ]);
+    // publisher: match_prefixes jsonb parsed to an array, sortOrder carried.
+    expect(body.records[0].body).toEqual({ id: 'pub-1', name: 'pub pub-1', role: 'external', icon: null, matchPrefixes: ['http://ex/'], sortOrder: 3 });
+    // coding_system: camelCased subset the applier consumes.
+    expect(body.records[1].body).toEqual({ id: 'cs-1', systemCode: 'LOINC', systemName: 'LOINC', url: 'http://loinc.org', systemVersion: '2.7', description: 'd', active: true, publisherId: null });
+    // term_mapping: owner carried (preserve central's value), isActive camelCased.
+    expect(body.records[2].body).toEqual({ id: 'tm-1', fromSystem: 'http://a', fromCode: 'a1', toSystem: 'http://b', toCode: 'b1', toDisplay: 'B one', mapType: 'equivalent', relationship: 'related-to', owner: 'central-team', isActive: true });
+  });
+
+  it('a publisher upsert whose live row is gone is downgraded to a delete record', async () => {
+    const ctx = fakePullCtx({
+      log: [logRow(8, 'publisher', 'pub-gone', 'upsert', 'h')],
+      publishers: [], // row deleted since it was logged
+    });
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/sync/pull', headers: AUTH, payload: { fromSeq: 0 } });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.records).toEqual([{ seq: 8, entityType: 'publisher', entityId: 'pub-gone', op: 'delete' }]);
+    expect(body.nextSeq).toBe(8);
   });
 
   it('collapses a create-then-delete in the window to ONE delete record; nextSeq spans the raw window', async () => {
