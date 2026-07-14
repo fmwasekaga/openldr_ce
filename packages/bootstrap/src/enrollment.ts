@@ -66,7 +66,10 @@ const CENTRAL_PRIV = 'sync.central_signing_private_key'; // encrypted at rest
 const CENTRAL_PUB = 'sync.central_signing_public_key'; // plaintext hex
 
 /** Idempotently ensure the single central signing keypair exists; return both keys as DER hex.
- *  Created once, reused thereafter. */
+ *  Created once on the first enroll/rotate, reused thereafter.
+ *  Not concurrency-safe on the first-ever enroll: two racing first-enrolls could each mint a pair
+ *  (last write wins), leaving a lab that got the losing centralPublicKey unable to verify central's
+ *  pull bundles. Acceptable — enrollment is a rare, serial admin operation. */
 export async function ensureCentralKeypair(ctx: AppContext): Promise<{ privHex: string; pubHex: string }> {
   const pub = (await ctx.appSettings.get(CENTRAL_PUB))?.value ?? '';
   const priv = (await ctx.appSettings.get(CENTRAL_PRIV))?.value ?? '';
@@ -74,8 +77,9 @@ export async function ensureCentralKeypair(ctx: AppContext): Promise<{ privHex: 
   const kp = generatePublisherKeypair();
   const privHex = Buffer.from(kp.privateKeyDer).toString('hex');
   const pubHex = Buffer.from(kp.publicKeyDer).toString('hex');
-  await ctx.appSettings.set(CENTRAL_PUB, pubHex, 'enroll');
-  await ctx.appSettings.set(CENTRAL_PRIV, ctx.encryptSecret(privHex), 'enroll');
+  // Actor 'system' (not 'enroll') — this helper is also reached from rotateSite; matches seed.ts.
+  await ctx.appSettings.set(CENTRAL_PUB, pubHex, 'system');
+  await ctx.appSettings.set(CENTRAL_PRIV, ctx.encryptSecret(privHex), 'system');
   return { privHex, pubHex };
 }
 
