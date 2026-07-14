@@ -1039,6 +1039,17 @@ export { getSyncConfig, setSyncConfig } from './sync-settings';
 export { createSyncHandle } from './sync-handle';
 export type { SyncHandle, SyncStatus, SyncDirectionStatus, SyncMode } from './sync-handle';
 export { migrateLegacySyncConfig } from './sync-settings-migrate';
+export {
+  enrollSite,
+  listSites,
+  rotateSite,
+  revokeSite,
+  AlreadyEnrolledError,
+  SiteNotFoundError,
+  InvalidSiteIdError,
+  MissingCentralUrlError,
+} from './enrollment';
+export type { EnrollResult } from './enrollment';
 export { CE_VERSION } from './plugin-registry';
 export * from './db-context';
 export { createPluginTarget } from './connector-target';
