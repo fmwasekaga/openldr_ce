@@ -87,6 +87,9 @@ importers:
       '@openldr/reporting':
         specifier: workspace:*
         version: link:../../packages/reporting
+      '@openldr/sync':
+        specifier: workspace:*
+        version: link:../../packages/sync
       '@openldr/terminology':
         specifier: workspace:*
         version: link:../../packages/terminology

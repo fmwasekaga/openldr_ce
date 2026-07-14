@@ -72,6 +72,10 @@ export function registerAuth(app: FastifyInstance<any, any, any, any>, ctx: AppC
     // bearer token. Let them through to the route's own secret check. The trailing slash keeps
     // this scoped to the hooks subtree, so workflow management routes (/api/workflows) stay gated.
     if (path.startsWith('/api/workflows/hooks/')) return;
+    // Distributed-sync push endpoints authenticate via their OWN client-credentials check in the
+    // route (a machine client has no local user record, so users.syncFromClaims must not run for
+    // it). The trailing slash scopes this to the sync subtree. Analogous to the hooks bypass above.
+    if (path.startsWith('/api/sync/')) return;
     if (path !== '/api' && !path.startsWith('/api/')) return;
 
     const token = bearer(req);
