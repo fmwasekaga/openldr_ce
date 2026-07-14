@@ -37,6 +37,7 @@
     "mssql:accept:matrix": "bash scripts/mssql-matrix-accept.sh",
     "mysql:accept": "tsx scripts/mysql-live-acceptance.ts",
     "reports:accept": "tsx scripts/reports-golden-accept.ts",
+    "sync:accept": "tsx scripts/sync-live-acceptance.ts",
     "mysql:accept:matrix": "bash scripts/mysql-matrix-accept.sh",
     "make:marketplace-bundle": "tsx scripts/make-marketplace-bundle.ts",
     "marketplace:accept": "tsx scripts/marketplace-live-acceptance.ts",
