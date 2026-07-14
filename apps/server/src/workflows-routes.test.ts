@@ -128,7 +128,7 @@ const SECRET_WORKFLOW = {
   definition: {
     nodes: [
       { id: 't1', type: 'trigger', data: { triggerType: 'webhook', path: 'hook', secret: 'sup3r-secret' } },
-      { id: 'h1', type: 'action', data: { action: 'http-request', headers: { Authorization: 'Bearer tok', 'X-Keep': 'yes' } } },
+      { id: 'h1', type: 'action', data: { action: 'http-request', config: { url: 'https://x', headers: { Authorization: 'Bearer tok', 'X-Keep': 'yes' } } } },
     ],
     edges: [],
   },
@@ -419,8 +419,11 @@ describe('workflow routes', () => {
     expect(trigger.data.secret).toBeUndefined();
     // Non-secret data is preserved.
     expect(trigger.data.path).toBe('hook');
+    // The HTTP headers blob (which holds an auth header) is masked WHOLE.
     const http = list[0].definition.nodes.find((n: any) => n.id === 'h1');
-    expect(http.data.headers['X-Keep']).toBe('yes');
+    expect(http.data.config.headers).toBe('***');
+    // Non-header config is preserved.
+    expect(http.data.config.url).toBe('https://x');
   });
 
   it('GET /api/workflows/:id as lab_manager → 200 and detail keeps FULL secrets (SEC-06)', async () => {
@@ -437,7 +440,7 @@ describe('workflow routes', () => {
     // Detail is full — the builder needs the real secret to edit.
     expect(trigger.data.secret).toBe('sup3r-secret');
     const http = w.definition.nodes.find((n: any) => n.id === 'h1');
-    expect(http.data.headers.Authorization).toBe('Bearer tok');
+    expect(http.data.config.headers.Authorization).toBe('Bearer tok');
   });
 
   // --- SEC-07: webhook fail-closed, header-only, constant-time, stripped input ---

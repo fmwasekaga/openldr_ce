@@ -6,13 +6,18 @@
  * resolution, and defense-in-depth redaction all funnel through here so the
  * field-knowledge can never drift between those call sites.
  *
- * Secret-bearing fields (mirrors the historical `redactWorkflowSecrets` logic):
+ * Secret-bearing fields:
  *  - `node.data.secret` on a webhook trigger
  *      (`node.type === 'webhook'` OR `node.type === 'trigger' && data.triggerType === 'webhook'`).
- *  - each `node.data.headers[k]` whose key matches {@link AUTH_HEADER_RE} (any node).
+ *      Surfaced per-field (the value is the secret string / ref).
+ *  - `node.data.config.headers` — the HTTP node's headers blob (this is the REAL
+ *      location the HTTP handler reads; there is no per-key `node.data.headers`).
+ *      Surfaced as ONE whole-blob field WHEN the blob contains any auth header
+ *      (see {@link AUTH_HEADER_RE}). The blob may be a JSON string, an object, or
+ *      an already-sealed `{ secretRef }`. A blob with no auth header is left alone.
  *
- * A secret VALUE is either a plaintext `string` or an opaque `{ secretRef: string }`
- * that points at the server-side secret store.
+ * A secret VALUE is either a plaintext value (string, or the whole headers blob)
+ * or an opaque `{ secretRef: string }` that points at the server-side secret store.
  */
 
 /** Header keys treated as auth/secret-bearing (case-insensitive). */
@@ -43,6 +48,27 @@ function isWebhookTrigger(node: { type?: unknown; data?: { triggerType?: unknown
 }
 
 /**
+ * Does the HTTP node's `config.headers` blob hold an auth header (and therefore
+ * count as one secret field)? Accepts an already-sealed ref, an object, or a
+ * JSON string; a non-JSON/template string or an auth-free blob is NOT secret.
+ */
+function headersBlobIsSecret(headers: unknown): boolean {
+  // Already sealed → it IS a secret field (so extraction keeps / migration skips it).
+  if (isSecretRef(headers)) return true;
+  let obj: unknown = headers;
+  if (typeof headers === 'string') {
+    try {
+      obj = JSON.parse(headers);
+    } catch {
+      // A template/non-JSON string can't be introspected — treat as not secret.
+      return false;
+    }
+  }
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return false;
+  return Object.keys(obj as Record<string, unknown>).some((k) => AUTH_HEADER_RE.test(k));
+}
+
+/**
  * Walk `definition` in place, yielding a {@link SecretFieldRef} for every
  * secret-bearing field. The refs' `set` mutates whatever object is passed in —
  * callers that must not mutate the input clone first (see {@link mapSecretFields}).
@@ -70,19 +96,18 @@ function* iterSecretFields(definition: unknown): Generator<SecretFieldRef> {
       };
     }
 
-    // Auth-bearing headers (any node with a `data.headers` object).
-    const headers = data.headers;
-    if (headers && typeof headers === 'object' && !Array.isArray(headers)) {
-      const h = headers as Record<string, unknown>;
-      // Snapshot keys up front so `set(undefined)` during iteration is safe.
-      for (const k of Object.keys(h)) {
-        if (!AUTH_HEADER_RE.test(k)) continue;
+    // HTTP node headers blob (`data.config.headers`) — surfaced whole when it
+    // carries an auth header. The value is the ENTIRE blob (string/object/ref).
+    const config = data.config;
+    if (config && typeof config === 'object' && !Array.isArray(config)) {
+      const cfg = config as Record<string, unknown>;
+      if ('headers' in cfg && headersBlobIsSecret(cfg.headers)) {
         yield {
-          value: h[k],
-          path: `${nodeId}.data.headers.${k}`,
+          value: cfg.headers,
+          path: `${nodeId}.data.config.headers`,
           set(v) {
-            if (v === undefined) delete h[k];
-            else h[k] = v;
+            if (v === undefined) delete cfg.headers;
+            else cfg.headers = v;
           },
         };
       }

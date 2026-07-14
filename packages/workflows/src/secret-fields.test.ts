@@ -18,11 +18,9 @@ function sampleDefinition() {
         type: 'action',
         data: {
           action: 'http-request',
-          headers: {
-            Authorization: 'Bearer tok',
-            'X-Custom-Token': 'ref-me',
-            'Content-Type': 'application/json',
-            'X-Keep': 'yes',
+          config: {
+            url: 'https://example.com',
+            headers: { Authorization: 'Bearer tok', 'X-Keep': 'yes' },
           },
         },
       },
@@ -31,6 +29,11 @@ function sampleDefinition() {
     ],
     edges: [],
   };
+}
+
+/** Wrap a bare `config.headers` value in a minimal HTTP-node definition. */
+function withHeaders(headers: unknown) {
+  return { nodes: [{ id: 'h', type: 'action', data: { config: { headers } } }], edges: [] };
 }
 
 describe('AUTH_HEADER_RE', () => {
@@ -60,21 +63,16 @@ describe('isSecretRef', () => {
 });
 
 describe('forEachSecretField', () => {
-  it('finds the webhook secret + auth headers, ignores everything else', () => {
-    const paths: string[] = [];
-    const values: unknown[] = [];
-    forEachSecretField(sampleDefinition(), (f) => { paths.push(f.path); values.push(f.value); });
+  it('finds the webhook secret + the HTTP headers blob, ignores everything else', () => {
+    const seen: Array<{ value: unknown; path: string }> = [];
+    forEachSecretField(sampleDefinition(), (f) => seen.push(f));
 
-    expect(paths).toEqual([
-      't1.data.secret',
-      'h1.data.headers.Authorization',
-      'h1.data.headers.X-Custom-Token',
-    ]);
-    expect(values).toEqual(['sup3r-secret', 'Bearer tok', 'ref-me']);
-    // The non-secret header and the non-webhook `secret` are absent.
-    expect(paths).not.toContain('h1.data.headers.Content-Type');
-    expect(paths).not.toContain('h1.data.headers.X-Keep');
-    expect(paths).not.toContain('n1.data.secret');
+    expect(seen.map((s) => s.path)).toEqual(['t1.data.secret', 'h1.data.config.headers']);
+    // The headers field surfaces the WHOLE blob, not per-key.
+    expect(seen[0].value).toBe('sup3r-secret');
+    expect(seen[1].value).toEqual({ Authorization: 'Bearer tok', 'X-Keep': 'yes' });
+    // The non-webhook `secret` is absent.
+    expect(seen.map((s) => s.path)).not.toContain('n1.data.secret');
   });
 
   it('does not mutate the input', () => {
@@ -91,6 +89,53 @@ describe('forEachSecretField', () => {
   });
 });
 
+describe('config.headers blob detection', () => {
+  it('surfaces an OBJECT headers blob containing an auth header (whole value)', () => {
+    const seen: Array<{ value: unknown; path: string }> = [];
+    forEachSecretField(withHeaders({ Authorization: 'Bearer x', 'X-Keep': 'y' }), (f) => seen.push(f));
+    expect(seen).toEqual([{ path: 'h.data.config.headers', value: { Authorization: 'Bearer x', 'X-Keep': 'y' } }]);
+  });
+
+  it('surfaces a JSON-STRING headers blob containing an auth header (whole string)', () => {
+    const json = JSON.stringify({ 'X-Api-Key': 'k', Accept: 'json' });
+    const seen: Array<{ value: unknown; path: string }> = [];
+    forEachSecretField(withHeaders(json), (f) => seen.push(f));
+    expect(seen).toEqual([{ path: 'h.data.config.headers', value: json }]);
+  });
+
+  it('surfaces an already-sealed {secretRef} headers blob (so it round-trips)', () => {
+    const seen: Array<{ value: unknown; path: string }> = [];
+    forEachSecretField(withHeaders({ secretRef: 'sec-9' }), (f) => seen.push(f));
+    expect(seen).toEqual([{ path: 'h.data.config.headers', value: { secretRef: 'sec-9' } }]);
+  });
+
+  it('skips a headers blob with only non-auth headers (object)', () => {
+    const seen: string[] = [];
+    forEachSecretField(withHeaders({ 'Content-Type': 'application/json', Accept: '*/*' }), (f) => seen.push(f.path));
+    expect(seen).toEqual([]);
+  });
+
+  it('skips a headers blob with only non-auth headers (JSON string)', () => {
+    const seen: string[] = [];
+    forEachSecretField(withHeaders(JSON.stringify({ 'Content-Type': 'application/json' })), (f) => seen.push(f.path));
+    expect(seen).toEqual([]);
+  });
+
+  it('skips a non-JSON / template headers string without crashing', () => {
+    const seen: string[] = [];
+    expect(() => forEachSecretField(withHeaders('{{ $node.headers }}'), (f) => seen.push(f.path))).not.toThrow();
+    expect(seen).toEqual([]);
+  });
+
+  it('set replaces the WHOLE config.headers blob (clone only)', () => {
+    const def = withHeaders({ Authorization: 'Bearer x' });
+    const out = mapSecretFields(def, (f) => f.set({ secretRef: 'sec-1' })) as typeof def;
+    expect(out.nodes[0].data.config.headers).toEqual({ secretRef: 'sec-1' });
+    // Input untouched.
+    expect(def.nodes[0].data.config.headers).toEqual({ Authorization: 'Bearer x' });
+  });
+});
+
 describe('mapSecretFields', () => {
   it('does NOT mutate the input and returns a new definition', () => {
     const def = sampleDefinition();
@@ -100,14 +145,12 @@ describe('mapSecretFields', () => {
     // Input untouched.
     expect(def).toEqual(snapshot);
     expect(out).not.toBe(def);
-    // Output has masked values.
+    // Output has masked values (headers blob replaced whole).
     expect(out.nodes[0].data.secret).toBe('***');
-    expect((out.nodes[1].data.headers as Record<string, string>).Authorization).toBe('***');
-    expect((out.nodes[1].data.headers as Record<string, string>)['X-Custom-Token']).toBe('***');
+    expect(out.nodes[1].data.config!.headers).toBe('***');
     // Non-secret fields preserved.
     expect(out.nodes[0].data.path).toBe('hook');
-    expect((out.nodes[1].data.headers as Record<string, string>)['X-Keep']).toBe('yes');
-    expect((out.nodes[1].data.headers as Record<string, string>)['Content-Type']).toBe('application/json');
+    expect(out.nodes[1].data.config!.url).toBe('https://example.com');
   });
 
   it('set(undefined) deletes the field in the clone only', () => {
@@ -115,18 +158,17 @@ describe('mapSecretFields', () => {
     const out = mapSecretFields(def, (f) => f.set(undefined)) as ReturnType<typeof sampleDefinition>;
 
     expect('secret' in out.nodes[0].data).toBe(false);
-    const headers = out.nodes[1].data.headers as Record<string, string>;
-    expect('Authorization' in headers).toBe(false);
-    expect('X-Custom-Token' in headers).toBe(false);
+    expect('headers' in out.nodes[1].data.config!).toBe(false);
     // Input still has them.
     expect(def.nodes[0].data.secret).toBe('sup3r-secret');
-    expect((def.nodes[1].data.headers as Record<string, string>).Authorization).toBe('Bearer tok');
+    expect(def.nodes[1].data.config!.headers).toBeDefined();
   });
 
   it('can write a {secretRef} value', () => {
     const def = sampleDefinition();
     const out = mapSecretFields(def, (f: SecretFieldRef) => f.set({ secretRef: 'sec-1' })) as ReturnType<typeof sampleDefinition>;
     expect(out.nodes[0].data.secret).toEqual({ secretRef: 'sec-1' });
+    expect(out.nodes[1].data.config!.headers).toEqual({ secretRef: 'sec-1' });
     expect(isSecretRef(out.nodes[0].data.secret)).toBe(true);
   });
 
@@ -158,10 +200,10 @@ describe('mapSecretFieldsAsync', () => {
       f.set({ secretRef: `sec-${seen.length}` });
     }) as ReturnType<typeof sampleDefinition>;
 
-    expect(seen).toEqual(['t1.data.secret', 'h1.data.headers.Authorization', 'h1.data.headers.X-Custom-Token']);
+    expect(seen).toEqual(['t1.data.secret', 'h1.data.config.headers']);
     expect(def).toEqual(snapshot); // input untouched
     expect(out.nodes[0].data.secret).toEqual({ secretRef: 'sec-1' });
-    expect((out.nodes[1].data.headers as Record<string, unknown>).Authorization).toEqual({ secretRef: 'sec-2' });
+    expect(out.nodes[1].data.config!.headers).toEqual({ secretRef: 'sec-2' });
   });
 });
 

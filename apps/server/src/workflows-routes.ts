@@ -67,8 +67,9 @@ function redactWorkflowSecrets(definition: unknown): unknown {
   // `{secretRef}` value is already an opaque store id — safe to expose.
   return mapSecretFields(definition, (f) => {
     if (isSecretRef(f.value)) return;
-    // Plaintext: webhook `secret` is removed entirely; auth headers are masked.
-    if (f.path.includes('.data.headers.')) f.set('***');
+    // Plaintext: webhook `secret` is removed entirely; the HTTP headers blob (which
+    // holds an auth header) is masked whole — the whole blob is treated as secret.
+    if (f.path.endsWith('.data.config.headers')) f.set('***');
     else f.set(undefined);
   });
 }
