@@ -975,6 +975,7 @@ export type { ReportCategoriesService } from './report-categories';
 export { createActivityService } from './activity-service';
 export type { ActivityService, RecentPayload } from './activity-service';
 export { getSyncConfig, setSyncConfig } from './sync-settings';
+export { migrateLegacySyncConfig } from './sync-settings-migrate';
 export { CE_VERSION } from './plugin-registry';
 export * from './db-context';
 export { createPluginTarget } from './connector-target';
