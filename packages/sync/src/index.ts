@@ -11,3 +11,5 @@ export { createSyncTokenProvider, SyncTokenError } from './token';
 export type { SyncTokenProviderOptions, SyncTokenProvider } from './token';
 export { readSyncConfig } from './config';
 export type { SyncConfig, SyncConfigLogger } from './config';
+export { packBundle, unpackBundle, BundleFormatError, BUNDLE_FORMAT_VERSION } from './bundle';
+export type { BundleManifest, BundleKind, BundleRecords } from './bundle';
