@@ -1035,7 +1035,7 @@ export { createReportCategoriesService, REPORT_CATEGORIES_SETTING_KEY } from './
 export type { ReportCategoriesService } from './report-categories';
 export { createActivityService } from './activity-service';
 export type { ActivityService, RecentPayload } from './activity-service';
-export { getSyncConfig, setSyncConfig } from './sync-settings';
+export { getSyncConfig, setSyncConfig, readSigningKeys } from './sync-settings';
 export { createSyncHandle } from './sync-handle';
 export type { SyncHandle, SyncStatus, SyncDirectionStatus, SyncMode } from './sync-handle';
 export { migrateLegacySyncConfig } from './sync-settings-migrate';

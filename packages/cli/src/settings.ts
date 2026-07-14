@@ -69,7 +69,9 @@ export async function runSettingsNumbersSet(key: string, value: string, opts: Js
   }
 }
 
-const SYNC_FIELDS = ['enabled', 'mode', 'centralUrl', 'siteId', 'oidcIssuer', 'clientId', 'clientSecret', 'intervalMinutes'] as const;
+// `clientSecret` + `signingPrivateKey` are WRITE-ONLY: the view exposes only a *Set boolean, so
+// `set` masks them and `viewToInput` drops them (preserving the stored encrypted value on patch).
+const SYNC_FIELDS = ['enabled', 'mode', 'centralUrl', 'siteId', 'oidcIssuer', 'clientId', 'clientSecret', 'intervalMinutes', 'signingPrivateKey', 'centralPublicKey'] as const;
 type SyncField = (typeof SYNC_FIELDS)[number];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -79,9 +81,9 @@ function coerceSyncField(field: SyncField, value: string): any {
   return value; // string passthrough, incl. clientSecret
 }
 
-/** Map a secret-free view back to a setSyncConfig input. Deliberately DROPS the secret: no
- *  `clientSecret` key means setSyncConfig preserves the stored encrypted secret when a non-secret
- *  field is patched. */
+/** Map a secret-free view back to a setSyncConfig input. Deliberately DROPS the write-only secrets
+ *  (`clientSecret`, `signingPrivateKey`): omitting them means setSyncConfig preserves the stored
+ *  encrypted values when a non-secret field is patched. `centralPublicKey` is readable and carried. */
 function viewToInput(v: SyncConfigView): SyncConfigInput {
   return {
     enabled: v.enabled,
@@ -91,6 +93,7 @@ function viewToInput(v: SyncConfigView): SyncConfigInput {
     oidcIssuer: v.oidcIssuer,
     clientId: v.clientId,
     intervalMinutes: v.intervalMinutes,
+    centralPublicKey: v.centralPublicKey,
   };
 }
 
@@ -107,6 +110,8 @@ export async function runSettingsSyncShow(opts: JsonOpt): Promise<number> {
       `clientId = ${cfg.clientId}`,
       `clientSecret = ${cfg.clientSecretSet ? '<set>' : '<unset>'}`,
       `intervalMinutes = ${cfg.intervalMinutes}`,
+      `signingPrivateKey = ${cfg.signingKeySet ? '<set>' : '<unset>'}`,
+      `centralPublicKey = ${cfg.centralPublicKey}`,
     ];
     emit(opts.json, cfg, lines.join('\n'));
     return 0;
@@ -136,7 +141,11 @@ export async function runSettingsSyncSet(field: string, value: string, opts: Jso
       return 1;
     }
     await ctx.audit.record({ actorType: 'system', actorName: 'cli', action: 'settings.sync.update', entityType: 'app_setting', entityId: 'sync.*', metadata: { field: f, before: current, after: saved } });
-    const shown = f === 'clientSecret' ? (saved.clientSecretSet ? '<set>' : '<unset>') : String((saved as unknown as Record<string, unknown>)[f]);
+    const shown = f === 'clientSecret'
+      ? (saved.clientSecretSet ? '<set>' : '<unset>')
+      : f === 'signingPrivateKey'
+        ? (saved.signingKeySet ? '<set>' : '<unset>')
+        : String((saved as unknown as Record<string, unknown>)[f]);
     emit(opts.json, saved, `set ${f} = ${shown}`);
     return 0;
   } finally {
