@@ -1,8 +1,15 @@
 import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
-import { dangerResetDashboards, dangerFactoryReset, dangerClearAudit, getSyncConfig, setSyncConfig } from '@openldr/bootstrap';
+import { dangerResetDashboards, dangerFactoryReset, dangerClearAudit, getSyncConfig, setSyncConfig, enrollSite, listSites, rotateSite, revokeSite } from '@openldr/bootstrap';
 import { requireRole } from './rbac';
 import { recordAudit } from './audit-helper';
+
+// Duck-type by error name — robust across module/bundle boundaries and consistent with the
+// `IdentityAdminNotConfiguredError` handling in users-routes (that class lives in @openldr/ports,
+// which apps/server intentionally does not depend on, so name-based detection is the shared idiom).
+function errName(e: unknown): string | null {
+  return e instanceof Error ? e.name : null;
+}
 
 export interface DangerDeps {
   resetDashboards: (ctx: AppContext) => Promise<void>;
@@ -55,6 +62,71 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
     ctx.sync.triggerNow();
     await recordAudit(ctx, req, { action: 'settings.sync.now', entityType: 'app_settings', entityId: 'sync', metadata: {} });
     return { triggered: true };
+  });
+
+  // ------------------------------------------------------------------
+  // Sync S4d enrollment (central mints lab clients). Admin-only + audited, under /api/settings/*
+  // (user-authed) — deliberately NOT under /api/sync/* (that surface is machine-cred + skips the
+  // user auth gate). The client secret is returned ONCE in the enroll/rotate response body (over
+  // HTTPS); no GET ever returns it and it is never written to the audit log.
+  // ------------------------------------------------------------------
+  app.post('/api/settings/sync/enroll', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const body = (req.body ?? {}) as { siteId?: string; name?: string | null; centralUrl?: string };
+    if (!body.siteId) { reply.code(400); return { error: 'siteId required' }; }
+    if (!body.centralUrl) { reply.code(400); return { error: 'centralUrl required' }; }
+    try {
+      const r = await enrollSite(ctx, {
+        siteId: body.siteId,
+        name: body.name ?? null,
+        centralUrl: body.centralUrl,
+        actor: req.user?.id ?? null,
+      });
+      await recordAudit(ctx, req, {
+        action: 'settings.sync.enroll', entityType: 'sync_site', entityId: body.siteId,
+        metadata: { clientId: r.clientId },
+      });
+      return r;
+    } catch (e) {
+      switch (errName(e)) {
+        case 'AlreadyEnrolledError': reply.code(409); return { error: e instanceof Error ? e.message : 'already enrolled' };
+        case 'InvalidSiteIdError': reply.code(400); return { error: e instanceof Error ? e.message : 'invalid site id' };
+        case 'MissingCentralUrlError': reply.code(400); return { error: 'centralUrl required' };
+        case 'IdentityAdminNotConfiguredError': reply.code(503); return { error: 'identity provider admin client is not configured' };
+        default: throw e;
+      }
+    }
+  });
+
+  app.get('/api/settings/sync/sites', { preHandler: requireRole('lab_admin') }, async () => listSites(ctx));
+
+  app.post('/api/settings/sync/sites/:siteId/rotate', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const { siteId } = req.params as { siteId: string };
+    try {
+      const r = await rotateSite(ctx, siteId);
+      await recordAudit(ctx, req, {
+        action: 'settings.sync.rotate', entityType: 'sync_site', entityId: siteId,
+        metadata: { clientId: r.clientId },
+      });
+      return r;
+    } catch (e) {
+      switch (errName(e)) {
+        case 'SiteNotFoundError': reply.code(404); return { error: e instanceof Error ? e.message : 'site not found' };
+        case 'IdentityAdminNotConfiguredError': reply.code(503); return { error: 'identity provider admin client is not configured' };
+        default: throw e;
+      }
+    }
+  });
+
+  app.post('/api/settings/sync/sites/:siteId/revoke', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const { siteId } = req.params as { siteId: string };
+    try {
+      await revokeSite(ctx, siteId);
+    } catch (e) {
+      if (errName(e) === 'IdentityAdminNotConfiguredError') { reply.code(503); return { error: 'identity provider admin client is not configured' }; }
+      throw e;
+    }
+    await recordAudit(ctx, req, { action: 'settings.sync.revoke', entityType: 'sync_site', entityId: siteId, metadata: {} });
+    return { revoked: true };
   });
 
   app.put('/api/settings/flags/:key', { preHandler: requireRole('lab_admin') }, async (req, reply) => {

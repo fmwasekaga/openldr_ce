@@ -394,6 +394,7 @@ function ctxWith(status: 'up' | 'down'): AppContext {
         async deleteClient() { const e = new Error('admin not configured'); e.name = 'IdentityAdminNotConfiguredError'; throw e; },
       },
     } as never,
+    syncSites: {} as never,
     blob: {} as never,
     eventing: {} as never,
     store: {} as never,
