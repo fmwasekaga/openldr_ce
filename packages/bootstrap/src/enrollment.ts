@@ -57,6 +57,9 @@ export interface EnrollResult {
 // clientId suffix and the sync_sites primary key.
 const SITE_ID_RE = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
+/** The Keycloak clientId minted for a site — the single source of the `sync-<siteId>` convention. */
+const syncClientId = (siteId: string): string => `sync-${siteId}`;
+
 /** Central mints a confidential Keycloak client + registry row for a lab. Idempotent-ish: an
  *  already-active site throws; re-enrolling a previously-revoked site flips it back to active and
  *  returns a secret, reusing the existing client (mappers are NOT re-added — see below). */
@@ -66,20 +69,33 @@ export async function enrollSite(
 ): Promise<EnrollResult> {
   const { siteId } = args;
   if (!SITE_ID_RE.test(siteId)) throw new InvalidSiteIdError(siteId);
-  if (!args.centralUrl || args.centralUrl.trim() === '') throw new MissingCentralUrlError();
+  const centralUrl = (args.centralUrl ?? '').trim();
+  if (!centralUrl) throw new MissingCentralUrlError();
 
   const existing = await ctx.syncSites.get(siteId);
   if (existing && existing.status === 'active') throw new AlreadyEnrolledError(siteId);
 
-  const clientId = `sync-${siteId}`;
+  const clientId = syncClientId(siteId);
   let uuid = await ctx.auth.clients.findUuidByClientId(clientId);
   if (uuid === null) {
     // Fresh client — add the site_id mapper (+ audience mapper when configured) exactly once. On a
     // revoked-site re-enroll whose client was never deleted, `uuid` is non-null and we skip mapper
     // creation to avoid duplicate-mapper 409s from Keycloak.
-    uuid = await ctx.auth.clients.createConfidentialClient(clientId);
-    await ctx.auth.clients.addSiteIdMapper(uuid, siteId);
-    if (ctx.cfg.OIDC_AUDIENCE) await ctx.auth.clients.addAudienceMapper(uuid, ctx.cfg.OIDC_AUDIENCE);
+    //
+    // Atomic-ish: if mapper creation throws AFTER the client was created, the client would persist
+    // WITHOUT its site_id mapper — a later re-enroll would find the uuid, skip mapper creation, and
+    // adopt a mapper-less client whose tokens carry no site claim (silently breaking sync auth). So
+    // best-effort delete the just-created client before rethrowing, leaving no half-configured
+    // orphan for a later enroll to adopt.
+    const createdUuid = await ctx.auth.clients.createConfidentialClient(clientId);
+    try {
+      await ctx.auth.clients.addSiteIdMapper(createdUuid, siteId);
+      if (ctx.cfg.OIDC_AUDIENCE) await ctx.auth.clients.addAudienceMapper(createdUuid, ctx.cfg.OIDC_AUDIENCE);
+    } catch (err) {
+      await ctx.auth.clients.deleteClient(createdUuid).catch(() => undefined); // best-effort cleanup
+      throw err;
+    }
+    uuid = createdUuid;
   }
 
   const clientSecret = await ctx.auth.clients.getClientSecret(uuid);
@@ -91,7 +107,7 @@ export async function enrollSite(
     await ctx.syncSites.insert({ siteId, name: args.name ?? null, clientId, enrolledBy: args.actor });
   }
 
-  return { clientId, clientSecret, siteId, centralUrl: args.centralUrl, oidcIssuer: ctx.cfg.OIDC_ISSUER_URL };
+  return { clientId, clientSecret, siteId, centralUrl, oidcIssuer: ctx.cfg.OIDC_ISSUER_URL };
 }
 
 /** All enrolled sites, newest first. Never includes secrets (the registry never stores them). */
@@ -104,7 +120,7 @@ export async function rotateSite(
   ctx: AppContext,
   siteId: string,
 ): Promise<{ clientId: string; clientSecret: string }> {
-  const clientId = `sync-${siteId}`;
+  const clientId = syncClientId(siteId);
   const uuid = await ctx.auth.clients.findUuidByClientId(clientId);
   if (uuid === null) throw new SiteNotFoundError(siteId);
   const clientSecret = await ctx.auth.clients.regenerateClientSecret(uuid);
@@ -115,7 +131,7 @@ export async function rotateSite(
  *  present). Idempotent — revoking an unknown site (no client, no row) is a silent no-op, never a
  *  throw, so operators can safely re-run it. */
 export async function revokeSite(ctx: AppContext, siteId: string): Promise<void> {
-  const uuid = await ctx.auth.clients.findUuidByClientId(`sync-${siteId}`);
+  const uuid = await ctx.auth.clients.findUuidByClientId(syncClientId(siteId));
   if (uuid !== null) await ctx.auth.clients.deleteClient(uuid);
   if (await ctx.syncSites.get(siteId)) await ctx.syncSites.setStatus(siteId, 'revoked');
 }

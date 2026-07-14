@@ -91,6 +91,27 @@ describe('enrollment orchestrator', () => {
     expect(clients2.addAudienceMapper).not.toHaveBeenCalled();
   });
 
+  it('mapper failure after client create → deletes the just-created client, inserts no row, rethrows', async () => {
+    const boom = new Error('mapper 500');
+    clients.addSiteIdMapper.mockRejectedValueOnce(boom);
+    const ctx = makeCtx(clients, store);
+
+    await expect(
+      enrollSite(ctx, { siteId: 'lab-orphan', name: null, centralUrl: 'https://central', actor: null }),
+    ).rejects.toBe(boom);
+
+    // The half-configured client was cleaned up so a later enroll can't adopt a mapper-less client.
+    expect(clients.deleteClient).toHaveBeenCalledWith('uuid-new');
+    // No registry row was inserted for the failed enroll.
+    expect(await store.get('lab-orphan')).toBeUndefined();
+  });
+
+  it('trims centralUrl and echoes the trimmed value', async () => {
+    const ctx = makeCtx(clients, store);
+    const res = await enrollSite(ctx, { siteId: 'lab-trim', name: null, centralUrl: '  https://central  ', actor: null });
+    expect(res.centralUrl).toBe('https://central');
+  });
+
   it('enroll twice (active) → AlreadyEnrolledError', async () => {
     const ctx = makeCtx(clients, store);
     await enrollSite(ctx, { siteId: 'lab-b', name: null, centralUrl: 'https://central', actor: null });
