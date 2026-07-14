@@ -8,6 +8,12 @@ export interface JsLimits {
   memoryMb: number;
 }
 
+/**
+ * Shared limits for branching-condition evaluation (if/filter/switch). Conditions
+ * are short boolean expressions, so a tight 1s / 16MB budget is ample.
+ */
+export const COND_LIMITS: JsLimits = { timeoutMs: 1000, memoryMb: 16 };
+
 // Module-level singleton of the QuickJS WASM module. getQuickJS() itself returns
 // a shared singleton, but we memoize the promise so concurrent callers await one load.
 let modPromise: Promise<QuickJSWASMModule> | null = null;

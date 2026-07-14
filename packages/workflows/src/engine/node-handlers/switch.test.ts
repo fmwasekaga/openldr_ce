@@ -40,4 +40,26 @@ describe('switchHandler', () => {
       switchHandler(node([{ name: 'bad', condition: 'this is not js (' }]), ctx, [{ json: {} }]),
     ).rejects.toThrow(/Switch rule "bad"/);
   });
+
+  it('cannot reach host process — the isolate has no Node globals', async () => {
+    const ctx = createContext(undefined, () => {});
+    // `process` is undefined inside the isolate, so this rule matches.
+    await switchHandler(
+      node([{ name: 'noHost', condition: "typeof process === 'undefined'" }]),
+      ctx,
+      [{ json: {} }],
+    );
+    expect(ctx.branches['sw1']).toBe('noHost');
+  });
+
+  it('blocks the constructor.constructor host-escape gadget', async () => {
+    const ctx = createContext(undefined, () => {});
+    await expect(
+      switchHandler(
+        node([{ name: 'escape', condition: "this.constructor.constructor('return process')().pid > 0" }]),
+        ctx,
+        [{ json: {} }],
+      ),
+    ).rejects.toThrow(/Switch rule "escape"/);
+  });
 });

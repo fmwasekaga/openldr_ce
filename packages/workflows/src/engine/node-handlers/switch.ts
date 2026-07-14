@@ -1,6 +1,6 @@
-import vm from 'node:vm';
 import type { NodeHandler } from './types';
 import { resolveTemplate } from '../template';
+import { evalExpression, COND_LIMITS } from '../js-isolate';
 
 interface SwitchRule { name: string; condition: string }
 
@@ -18,8 +18,8 @@ export const switchHandler: NodeHandler = async (node, ctx, input) => {
     const resolved = resolveTemplate(rule.condition ?? '', ctx, input);
     if (!resolved.trim()) continue;
     try {
-      const sandbox = { $input: input, $json: input[0]?.json, $items: input.map((i) => i.json), input };
-      if (vm.runInNewContext(resolved, sandbox, { timeout: 1000 })) {
+      const scope = { $input: input, $json: input[0]?.json, $items: input.map((i) => i.json), input };
+      if (await evalExpression(resolved, scope, COND_LIMITS)) {
         branch = rule.name;
         break;
       }
