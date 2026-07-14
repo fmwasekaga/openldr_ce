@@ -42,6 +42,7 @@ import { createSyncPushWorker, type SyncPushWorker } from './sync-push-worker';
 import { createSyncPullWorker, type SyncPullWorker } from './sync-pull-worker';
 import { createSyncHandle, type SyncHandle } from './sync-handle';
 import { migrateLegacySyncConfig } from './sync-settings-migrate';
+import { migrateWorkflowSecrets } from './workflow-secret-migrate';
 
 // Which directions run for a given mode. Push runs for 'push' + 'bidirectional'; pull runs for
 // 'pull' + 'bidirectional'. The if (syncCfg) worker gates below use these so the wiring is unit-testable.
@@ -680,6 +681,18 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     },
   });
   const workflows = { store: workflowStore, runs: workflowRuns, schedules: workflowSchedules, webhooks: workflowWebhooks, runner: workflowRunner, services: workflowServices, datasets: workflowDatasets, listeners: workflowListeners, secretStore: workflowSecrets };
+
+  // SEC-06: proactively seal any PLAINTEXT secrets left inline in existing workflow definitions
+  // (saved before SEC-06). Runs here — after the workflow store + secret store exist but BEFORE the
+  // webhook registry's initial reconcile (apps/server boot loop's `webhooks.sync`) — so the registry
+  // sees `{ secretRef }` values the injected resolver opens. Idempotent, key-guarded, and best-effort
+  // per-workflow; like migrateLegacySyncConfig it must never abort boot.
+  await migrateWorkflowSecrets({
+    store: workflowStore,
+    secretStore: workflowSecrets,
+    key: cfg.SECRETS_ENCRYPTION_KEY,
+    logger,
+  }).catch((err) => logger.warn({ err }, 'SEC-06 workflow-secret migration failed'));
 
   // Restructure R2: async projection worker keeps the flat (external) store in sync with the
   // canonical FHIR store. A dedicated LISTEN client gives near-instant wakeups on `fhir_changes`
