@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { type Kysely, sql } from 'kysely';
-import type { InternalSchema } from '@openldr/db';
+import { canonicalHash } from '@openldr/core';
+import type { InternalSchema, ReferenceCapture } from '@openldr/db';
 import type { FormSchema } from './schema/form-schema';
 import { computeNextFormVersion, formContentChanged, makeDuplicateName } from './lifecycle';
 import { toQuestionnaire } from './to-questionnaire';
@@ -74,7 +75,7 @@ export interface FormInput {
   targetPages?: string[] | null;
 }
 
-type FormRow = {
+export type FormRow = {
   id: string;
   name: string;
   version_label: string | null;
@@ -119,7 +120,28 @@ function countFields(schema: FormSchema): number {
   return schema.fields.length;
 }
 
-export function createFormStore(db: Kysely<InternalSchema>) {
+/**
+ * The exact form body a lab consumes when it pulls a published form (Distributed sync S2). Task 7's
+ * pull endpoint serves this SAME shape and the reference-change content hash is
+ * `canonicalHash(formSyncBody(row))`, so the hash and the served body can never drift. The field
+ * set is the `form_definitions` columns a lab needs to render/extract: the published schema plus the
+ * FHIR binding metadata. The `schema` string is parsed so canonicalHash sees a key-order-stable
+ * object (jsonb read-back reorders keys otherwise). NOT included: created_at/updated_at/version_label
+ * (store-managed, not lab-relevant).
+ */
+export function formSyncBody(row: FormRow) {
+  return {
+    id: row.id,
+    status: row.status,
+    active: row.active,
+    schema: parseJson(row.schema),
+    fhirVersion: row.fhir_version,
+    fhirProfileUrl: row.fhir_profile_url,
+    facilityId: row.facility_id,
+  };
+}
+
+export function createFormStore(db: Kysely<InternalSchema>, capture?: ReferenceCapture) {
   const toDefinition = (r: FormRow): FormDefinition => {
     const schema = parseJson(r.schema) as FormSchema;
     return {
@@ -217,22 +239,31 @@ export function createFormStore(db: Kysely<InternalSchema>) {
 
   async function create(input: FormInput): Promise<FormDefinition> {
     const id = `form-${randomUUID()}`;
-    await db
-      .insertInto('form_definitions')
-      .values({
-        id,
-        name: input.name,
-        version_label: input.versionLabel ?? null,
-        fhir_resource_type: input.fhirResourceType ?? null,
-        fhir_version: input.fhirVersion ?? null,
-        fhir_profile_url: input.fhirProfileUrl ?? null,
-        facility_id: input.facilityId ?? null,
-        status: input.status ?? 'draft',
-        active: input.active ?? true,
-        schema: JSON.stringify(input.schema) as never,
-        target_pages: input.targetPages ? (JSON.stringify(input.targetPages) as never) : null,
-      } as never)
-      .execute();
+    const status = input.status ?? 'draft';
+    const values = {
+      id,
+      name: input.name,
+      version_label: input.versionLabel ?? null,
+      fhir_resource_type: input.fhirResourceType ?? null,
+      fhir_version: input.fhirVersion ?? null,
+      fhir_profile_url: input.fhirProfileUrl ?? null,
+      facility_id: input.facilityId ?? null,
+      status,
+      active: input.active ?? true,
+      schema: JSON.stringify(input.schema) as never,
+      target_pages: input.targetPages ? (JSON.stringify(input.targetPages) as never) : null,
+    } as never;
+    // Drafts aren't synced — capture an 'upsert' only when the created form is already published
+    // (the eventual publish() captures the final state for the normal draft→publish flow).
+    if (capture && status === 'published') {
+      await db.transaction().execute(async (trx) => {
+        await trx.insertInto('form_definitions').values(values).execute();
+        const row = await trx.selectFrom('form_definitions').selectAll().where('id', '=', id).executeTakeFirst();
+        await capture.record(trx, 'form', id, 'upsert', canonicalHash(formSyncBody(row as FormRow)));
+      });
+    } else {
+      await db.insertInto('form_definitions').values(values).execute();
+    }
     return (await get(id))!;
   }
 
@@ -254,22 +285,29 @@ export function createFormStore(db: Kysely<InternalSchema>) {
       },
     );
     const nextStatus = existing.status === 'published' && contentChanged ? 'draft' : existing.status;
-    await db
-      .updateTable('form_definitions')
-      .set({
-        name: input.name,
-        version_label: input.versionLabel ?? null,
-        fhir_resource_type: input.fhirResourceType ?? null,
-        fhir_version: input.fhirVersion ?? null,
-        fhir_profile_url: input.fhirProfileUrl ?? null,
-        facility_id: input.facilityId ?? null,
-        status: nextStatus,
-        schema: JSON.stringify(input.schema) as never,
-        target_pages: input.targetPages ? (JSON.stringify(input.targetPages) as never) : null,
-        updated_at: sql`now()`,
-      })
-      .where('id', '=', id)
-      .execute();
+    const patch = {
+      name: input.name,
+      version_label: input.versionLabel ?? null,
+      fhir_resource_type: input.fhirResourceType ?? null,
+      fhir_version: input.fhirVersion ?? null,
+      fhir_profile_url: input.fhirProfileUrl ?? null,
+      facility_id: input.facilityId ?? null,
+      status: nextStatus,
+      schema: JSON.stringify(input.schema) as never,
+      target_pages: input.targetPages ? (JSON.stringify(input.targetPages) as never) : null,
+      updated_at: sql`now()`,
+    } as never;
+    // Capture only when the resulting form stays published (labs mirror the published form). An
+    // edit that drops a published form back to draft is not synced; the eventual re-publish captures.
+    if (capture && nextStatus === 'published') {
+      await db.transaction().execute(async (trx) => {
+        await trx.updateTable('form_definitions').set(patch).where('id', '=', id).execute();
+        const row = await trx.selectFrom('form_definitions').selectAll().where('id', '=', id).executeTakeFirst();
+        await capture.record(trx, 'form', id, 'upsert', canonicalHash(formSyncBody(row as FormRow)));
+      });
+    } else {
+      await db.updateTable('form_definitions').set(patch).where('id', '=', id).execute();
+    }
     return (await get(id))!;
   }
 
@@ -277,12 +315,24 @@ export function createFormStore(db: Kysely<InternalSchema>) {
     const existing = await get(id);
     if (!existing) throw new Error('form not found');
     if (status === 'published') return publish(id);
-    await db.updateTable('form_definitions').set({ status, updated_at: sql`now()` }).where('id', '=', id).execute();
+    // Archiving removes a published form from lab consumption → tombstone. A draft transition is
+    // not synced (labs never consumed a draft, and a published→draft edit is handled in update()).
+    if (capture && status === 'archived') {
+      await db.transaction().execute(async (trx) => {
+        await trx.updateTable('form_definitions').set({ status, updated_at: sql`now()` }).where('id', '=', id).execute();
+        await capture.record(trx, 'form', id, 'delete', null);
+      });
+    } else {
+      await db.updateTable('form_definitions').set({ status, updated_at: sql`now()` }).where('id', '=', id).execute();
+    }
     return (await get(id))!;
   }
 
   async function deleteForm(id: string): Promise<void> {
-    await db.deleteFrom('form_definitions').where('id', '=', id).execute();
+    await db.transaction().execute(async (trx) => {
+      await trx.deleteFrom('form_definitions').where('id', '=', id).execute();
+      if (capture) await capture.record(trx, 'form', id, 'delete', null);
+    });
   }
 
   async function publish(id: string, input: PublishInput = {}): Promise<FormDefinition> {
@@ -315,6 +365,11 @@ export function createFormStore(db: Kysely<InternalSchema>) {
         .set({ status: 'published', version_label: input.versionLabel ?? form.versionLabel, updated_at: sql`now()` })
         .where('id', '=', id)
         .execute();
+      // Labs mirror the published form — capture the consumed body atomically with the publish.
+      if (capture) {
+        const updated = await trx.selectFrom('form_definitions').selectAll().where('id', '=', id).executeTakeFirst();
+        await capture.record(trx, 'form', id, 'upsert', canonicalHash(formSyncBody(updated as FormRow)));
+      }
     });
     return (await get(id))!;
   }
