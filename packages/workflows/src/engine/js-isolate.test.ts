@@ -1,7 +1,29 @@
 import { describe, it, expect } from 'vitest';
-import { evalExpression, type JsLimits } from './js-isolate';
+import { evalExpression, runScript, type JsLimits } from './js-isolate';
+import type { WorkflowItem } from './items';
+import type { LogLevel } from '../types';
 
 const L: JsLimits = { timeoutMs: 1000, memoryMb: 16 };
+
+// Generous-ish Code-node budget for the runScript suite (kept modest so limit tests are quick).
+const CL: JsLimits = { timeoutMs: 2000, memoryMb: 64 };
+
+/** Run a Code-node script with a captured onLog. */
+function run(
+  source: string,
+  input: WorkflowItem[] = [],
+  nodeOutputs: Record<string, WorkflowItem[]> = {},
+  limits: JsLimits = CL,
+): { result: Promise<WorkflowItem[]>; logs: [LogLevel, string][] } {
+  const logs: [LogLevel, string][] = [];
+  const result = runScript(source, {
+    input,
+    nodeOutputs,
+    limits,
+    onLog: (level, message) => logs.push([level, message]),
+  });
+  return { result, logs };
+}
 
 describe('evalExpression — host escape is blocked (the whole point)', () => {
   it('constructor.constructor("return process") does not yield a usable host process', async () => {
@@ -154,5 +176,158 @@ describe('evalExpression — malformed source', () => {
 
   it('throws on a reference to an undefined identifier', async () => {
     await expect(evalExpression('someUndefinedThing.foo', {}, L)).rejects.toThrow();
+  });
+});
+
+describe('runScript — host escape is blocked (the whole point)', () => {
+  it('process/require are undefined inside a Code node', async () => {
+    const { result } = run('return [{ json: { p: typeof process, r: typeof require } }]');
+    expect(await result).toEqual([{ json: { p: 'undefined', r: 'undefined' } }]);
+  });
+
+  it('constructor.constructor("return process")() yields no usable host process', async () => {
+    let items: WorkflowItem[] | undefined;
+    let threw = false;
+    try {
+      const { result } = run(
+        "const p = this.constructor.constructor('return process')(); return [{ json: { hasEnv: !!(p && p.env) } }]",
+      );
+      items = await result;
+    } catch {
+      threw = true;
+    }
+    if (!threw) {
+      // If it evaluated, there must be no reachable host process.env.
+      expect(items).toEqual([{ json: { hasEnv: false } }]);
+    } else {
+      expect(threw).toBe(true);
+    }
+  });
+
+  it('no fs/net globals are reachable', async () => {
+    const { result } = run(
+      "return [{ json: { globalThisProcess: typeof globalThis.process } }]",
+    );
+    expect(await result).toEqual([{ json: { globalThisProcess: 'undefined' } }]);
+  });
+});
+
+describe('runScript — behavior', () => {
+  it('maps over input items', async () => {
+    const { result } = run('return input.map(i => ({ json: { doubled: i.json.n * 2 } }))', [
+      { json: { n: 2 } },
+    ]);
+    expect(await result).toEqual([{ json: { doubled: 4 } }]);
+  });
+
+  it('$json resolves to the first item json', async () => {
+    const { result } = run('return [{ json: { got: $json.n } }]', [{ json: { n: 7 } }]);
+    expect(await result).toEqual([{ json: { got: 7 } }]);
+  });
+
+  it('$items resolves to the json of every input item', async () => {
+    const { result } = run('return [{ json: { items: $items } }]', [
+      { json: { a: 1 } },
+      { json: { a: 2 } },
+    ]);
+    expect(await result).toEqual([{ json: { items: [{ a: 1 }, { a: 2 }] } }]);
+  });
+
+  it("$node('x') resolves the named node's output", async () => {
+    const { result } = run("return [{ json: { fromX: $node('x') } }]", [], {
+      x: [{ json: { v: 99 } }],
+    });
+    expect(await result).toEqual([{ json: { fromX: [{ json: { v: 99 } }] } }]);
+  });
+
+  it("$node returns undefined for an unknown node id", async () => {
+    const { result } = run("return [{ json: { missing: $node('nope') === undefined } }]");
+    expect(await result).toEqual([{ json: { missing: true } }]);
+  });
+
+  it("console.log('hi', {a:1}) triggers onLog('log', 'hi {\"a\":1}')", async () => {
+    const { result, logs } = run("console.log('hi', {a:1}); return [];");
+    await result;
+    expect(logs).toEqual([['log', 'hi {"a":1}']]);
+  });
+
+  it('console.info/warn/error map to the right levels', async () => {
+    const { result, logs } = run(
+      "console.info('i'); console.warn('w'); console.error('e'); console.debug('d'); return [];",
+    );
+    await result;
+    expect(logs).toEqual([
+      ['info', 'i'],
+      ['warn', 'w'],
+      ['error', 'e'],
+      ['log', 'd'],
+    ]);
+  });
+});
+
+describe('runScript — async (proves the promise-resolution path)', () => {
+  it('awaits a resolved promise then returns', async () => {
+    const { result } = run(
+      'const v = await Promise.resolve(21); return [{ json: { v: v * 2 } }];',
+    );
+    expect(await result).toEqual([{ json: { v: 42 } }]);
+  });
+
+  it('supports multiple awaits in sequence', async () => {
+    const { result } = run(
+      'const a = await Promise.resolve(1); const b = await Promise.resolve(a + 1); return [{ json: { b } }];',
+    );
+    expect(await result).toEqual([{ json: { b: 2 } }]);
+  });
+
+  it('a rejected promise surfaces as a thrown host Error', async () => {
+    const { result } = run("await Promise.reject(new Error('boom')); return [];");
+    await expect(result).rejects.toThrow();
+  });
+});
+
+describe('runScript — resource limits', () => {
+  it('rejects an infinite loop on the wall-time limit (does not hang)', async () => {
+    const started = Date.now();
+    const { result } = run('while(true){}', [], {}, { timeoutMs: 200, memoryMb: 32 });
+    await expect(result).rejects.toThrow();
+    expect(Date.now() - started).toBeLessThan(2000);
+  }, 5000);
+
+  it('rejects a large allocation on the memory limit', async () => {
+    const { result } = run(
+      "const s = 'x'.repeat(256 * 1024 * 1024); return [{ json: { len: s.length } }];",
+      [],
+      {},
+      { timeoutMs: 2000, memoryMb: 16 },
+    );
+    await expect(result).rejects.toThrow();
+  }, 5000);
+});
+
+describe('runScript — return normalization (toItems semantics)', () => {
+  it('a bare object → a single wrapped item', async () => {
+    const { result } = run('return { a: 1 };');
+    expect(await result).toEqual([{ json: { a: 1 } }]);
+  });
+
+  it('an array of plain objects → one item per object', async () => {
+    const { result } = run('return [{ a: 1 }, { b: 2 }];');
+    expect(await result).toEqual([{ json: { a: 1 } }, { json: { b: 2 } }]);
+  });
+
+  it('an array of WorkflowItems passes through', async () => {
+    const { result } = run('return [{ json: { a: 1 } }];');
+    expect(await result).toEqual([{ json: { a: 1 } }]);
+  });
+
+  it('no return / undefined → []', async () => {
+    const { result } = run('const x = 1;');
+    expect(await result).toEqual([]);
+  });
+
+  it('a rows envelope → one item per row', async () => {
+    const { result } = run('return { rows: [{ a: 1 }, { a: 2 }] };');
+    expect(await result).toEqual([{ json: { a: 1 } }, { json: { a: 2 } }]);
   });
 });
