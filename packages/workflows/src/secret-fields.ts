@@ -34,7 +34,7 @@ export function isSecretRef(v: unknown): v is { secretRef: string } {
 /** A located secret field: its current value, a dotted path, and a writer into the (cloned) definition. */
 export interface SecretFieldRef {
   value: unknown;
-  /** `${nodeId}.data.secret` or `${nodeId}.data.headers.${headerKey}`. */
+  /** `${nodeId}.data.secret` (webhook secret) or `${nodeId}.data.config.headers` (whole HTTP headers blob). */
   path: string;
   /** Write the field in place. `set(undefined)` deletes the field. */
   set(v: SecretValue | undefined): void;

@@ -51,15 +51,15 @@ async function listEventWorkflowIds(ctx: AppContext): Promise<string[]> {
  * definitions can embed secrets; the list surface only needs id/name/enabled +
  * non-secret node info, so we strip/mask secret-bearing fields before returning.
  *
- * Redacts, for every node's `data`:
- *  - `secret`            → removed (webhook trigger shared secret)
- *  - `data.headers`      → any auth header key (authorization / proxy-authorization /
- *                          x-*-token / x-api-key / cookie) masked to '***'
+ * Redacts, via the shared secret-field locator:
+ *  - webhook trigger `data.secret`      → removed
+ *  - `data.config.headers` (whole blob) → masked to '***' when it holds an auth header
+ *                                         (authorization / proxy-authorization / x-*-token / x-api-key / cookie)
+ *  - any `{secretRef}` value            → left as-is (already opaque, no cleartext)
  *
- * NOTE (out-of-scope follow-up): the deeper fix is to move secrets out of the
- * definition into a server-side secret store referenced by opaque IDs. The detail
- * endpoint deliberately stays FULL (it is manager-gated and the builder needs the
- * real values to edit).
+ * As of SEC-06 secrets are sealed into the workflow_secrets store on save (refs in the
+ * definition), so this redaction is belt-and-suspenders against any stray plaintext.
+ * The detail endpoint stays FULL (manager-gated; returns refs the builder round-trips).
  */
 function redactWorkflowSecrets(definition: unknown): unknown {
   // Belt-and-suspenders: the SINGLE secret-field locator decides WHICH fields
