@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
-import type { PushBatch, PushResponse, SyncRecord } from '@openldr/sync';
+import type { PushBatch, PushResponse, SyncRecord, PullRecord, PullResponse } from '@openldr/sync';
+import { formSyncBody, type FormRow } from '@openldr/forms';
 
 // Site principal derived from a machine client's bearer token. The user-auth onRequest hook
 // in auth-plugin.ts is bypassed for /api/sync/* (a machine client has no user record), so the
@@ -118,4 +119,85 @@ export function registerSyncRoutes(app: FastifyInstance<any, any, any, any>, ctx
     const response: PushResponse = { ackSeq, applied, skipped, rejects };
     reply.code(200).send(response);
   });
+
+  // POST /api/sync/pull — global reference-data delta since the lab's cursor. Auth-only (NOT
+  // site-scoped: every enrolled lab pulls the same global reference config; sitePrincipal only
+  // gates access to a valid enrolled token, it does not filter the response by site).
+  app.post('/api/sync/pull', async (req, reply) => {
+    const principal = await sitePrincipal(req, reply, ctx);
+    if (!principal) return; // reply already sent (401/403)
+
+    // fromSeq crosses a trust boundary — a non-finite value must not seed the cursor.
+    const rawFrom = (req.body as { fromSeq?: unknown } | undefined)?.fromSeq;
+    const fromSeq = typeof rawFrom === 'number' && Number.isFinite(rawFrom) ? rawFrom : 0;
+    const BATCH = 500;
+
+    // Raw window ordered by seq, then DEDUP to the LATEST row per (entity_type, entity_id) so a
+    // create-then-delete (or several edits) inside the window collapses to one record — avoids a
+    // null-body upsert and cuts payload. nextSeq = max seq in the RAW window (before dedup) so the
+    // cursor still advances past collapsed rows.
+    const rows = await ctx.internalDb
+      .selectFrom('reference_change_log')
+      .selectAll()
+      .where('seq', '>', fromSeq)
+      .orderBy('seq', 'asc')
+      .limit(BATCH)
+      .execute();
+    const nextSeq = rows.reduce((m, r) => Math.max(m, Number(r.seq)), fromSeq);
+
+    const latest = new Map<string, (typeof rows)[number]>();
+    for (const r of rows) latest.set(`${r.entity_type} ${r.entity_id}`, r); // later seq overwrites (asc)
+
+    const records: PullRecord[] = [];
+    for (const r of latest.values()) {
+      const entityType = r.entity_type as PullRecord['entityType'];
+      const seq = Number(r.seq);
+      if (r.op === 'delete') {
+        records.push({ seq, entityType, entityId: r.entity_id, op: 'delete' });
+        continue;
+      }
+      const body = await fetchReferenceBody(ctx, entityType, r.entity_id);
+      if (body == null) {
+        // The entity was deleted since it was logged (its live body is gone) → serve a delete so the
+        // lab converges rather than upserting a null body.
+        records.push({ seq, entityType, entityId: r.entity_id, op: 'delete' });
+        continue;
+      }
+      records.push({ seq, entityType, entityId: r.entity_id, op: 'upsert', contentHash: r.content_hash, body });
+    }
+    records.sort((a, b) => a.seq - b.seq);
+
+    reply.code(200).send({ records, nextSeq } satisfies PullResponse);
+  });
+}
+
+// Live current body for a reference entity, read from its read store (NOT from the capture log, so a
+// pull always serves the freshest config). The served upsert body MUST equal what the reference
+// applier (reference-apply.ts) consumes: dashboards/reports serve the store RECORD shape; a form
+// serves formSyncBody(rawRow) (the store's get() returns a camelCase FormDefinition, which
+// formSyncBody can't consume, so read the raw form_definitions row exactly like capture does); a
+// setting serves its string value. Returns null when the entity no longer exists.
+async function fetchReferenceBody(
+  ctx: AppContext,
+  entityType: PullRecord['entityType'],
+  id: string,
+): Promise<unknown | null> {
+  switch (entityType) {
+    case 'dashboard':
+      return (await ctx.dashboards.store.get(id)) ?? null;
+    case 'report':
+      return (await ctx.reportDefs.get(id)) ?? null;
+    case 'form': {
+      const row = await ctx.internalDb
+        .selectFrom('form_definitions')
+        .selectAll()
+        .where('id', '=', id)
+        .executeTakeFirst();
+      return formSyncBody((row ?? null) as FormRow | null); // null for a missing row
+    }
+    case 'setting':
+      return (await ctx.appSettings.get(id))?.value ?? null;
+    default:
+      return null;
+  }
 }
