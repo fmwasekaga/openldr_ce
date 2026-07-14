@@ -555,6 +555,17 @@ export interface ReportsTable {
   updated_at: Generated<Date>;
 }
 
+// Distributed sync S4d: central-side registry of enrolled labs (one row per site). Never stores the
+// client secret — the secret is minted once and returned, never persisted. `status` is 'active'|'revoked'.
+export interface SyncSitesTable {
+  site_id: string;
+  name: string | null;
+  client_id: string;
+  enrolled_at: Generated<Date>;
+  enrolled_by: string | null;
+  status: Generated<string>;
+}
+
 export interface InternalSchema {
   'fhir.fhir_resources': FhirResourcesTable;
   'fhir.resource_history': ResourceHistoryTable;
@@ -605,4 +616,5 @@ export interface InternalSchema {
   app_settings: AppSettingsTable;
   report_designs: ReportDesignsTable;
   reports: ReportsTable;
+  sync_sites: SyncSitesTable;
 }
