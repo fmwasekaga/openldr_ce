@@ -44,6 +44,19 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
     return after;
   });
 
+  // Live sync status + manual trigger (T6). User-authed under /api/settings/* (admin-only) — NOT under
+  // /api/sync/* (that surface is machine-cred and skips the user auth gate). status() is always present
+  // on ctx.sync even when sync is disabled; `now` refuses (409) when disabled so it never no-ops silently.
+  app.get('/api/settings/sync/status', { preHandler: requireRole('lab_admin') }, async () => ctx.sync.status());
+
+  app.post('/api/settings/sync/now', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const s = await ctx.sync.status();
+    if (!s.enabled) { reply.code(409); return { triggered: false, reason: 'disabled' }; }
+    ctx.sync.triggerNow();
+    await recordAudit(ctx, req, { action: 'settings.sync.now', entityType: 'app_settings', entityId: 'sync', metadata: {} });
+    return { triggered: true };
+  });
+
   app.put('/api/settings/flags/:key', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
     const { key } = req.params as { key: string };
     const { value } = req.body as { value: boolean };

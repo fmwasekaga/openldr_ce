@@ -19,6 +19,7 @@ import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, run
 import { runMarketVerify, runMarketInstall, runMarketList, runMarketRollback, runMarketEnable, runMarketDisable, runMarketRemove } from './market';
 import { runArtifactKeygen, runArtifactNew, runArtifactBuild, runArtifactPack, runArtifactSign, runArtifactTest, runArtifactPublish } from './artifact';
 import { runSettingsFlagsList, runSettingsFlagsSet, runSettingsDanger, runSettingsSyncShow, runSettingsSyncSet, runSettingsNumbersList, runSettingsNumbersSet } from './settings';
+import { runSyncStatus, runSyncNow } from './sync';
 import { runErrorsList } from './errors';
 
 const program = new Command();
@@ -153,6 +154,16 @@ settings.command('danger <action>')
   .option('--json', 'emit JSON', false)
   .action(async (action: string, opts: { force: boolean; json: boolean }) => {
     try { process.exitCode = await runSettingsDanger(action, opts); } catch (err) { process.stderr.write(`settings danger failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+
+const syncGroup = program.command('sync').description('lab⇄central sync status + control');
+syncGroup.command('status').description('Show live sync status (workers, cursors, pending backlog)').option('--json', 'emit JSON', false)
+  .action(async (opts: { json: boolean }) => {
+    try { process.exitCode = await runSyncStatus(opts); } catch (err) { process.stderr.write(`sync status failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+syncGroup.command('now').description('Trigger a sync pass now (fails if sync is disabled)').option('--json', 'emit JSON', false)
+  .action(async (opts: { json: boolean }) => {
+    try { process.exitCode = await runSyncNow(opts); } catch (err) { process.stderr.write(`sync now failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
 
 const targetStore = program.command('target-store').description('Target warehouse (Postgres/SQL Server/MySQL/MariaDB) tools');

@@ -413,6 +413,7 @@ function ctxWith(status: 'up' | 'down'): AppContext {
     featureFlags: { get: async () => false } as never,
     numberSettings: { get: async () => 0, all: async () => [], set: async () => 0, invalidate: () => {} } as never,
     activity: { getLifecycle: async () => null, listRecent: async () => [] } as never,
+    sync: { status: async () => ({ enabled: false, mode: 'push', centralUrl: '', siteId: '', push: null, pull: null, pendingPush: 0 }), triggerNow: () => {} } as never,
     encryptSecret: (p: string) => p,
     decryptSecret: (b: string) => b,
     marketplaceForms: {} as never,
