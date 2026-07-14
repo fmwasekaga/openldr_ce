@@ -486,7 +486,9 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       await termDb.deleteFrom('terminology_systems').where('url', '=', url).execute();
     },
   };
-  const termAdmin = createTerminologyAdminStore(termDb, termProjection);
+  // Sync S3: pass referenceCapture so central terminology-metadata authoring (publishers /
+  // coding_systems / term_mappings) lands rows in reference_change_log for labs to pull.
+  const termAdmin = createTerminologyAdminStore(termDb, termProjection, referenceCapture);
   const termOntology = createOntologyApi(createOntologyStore(termDb));
   const loaderStore: LoaderStore = {
     upsertConcepts: (r) => termStore.upsertConcepts(r),

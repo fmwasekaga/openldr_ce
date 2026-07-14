@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { type Kysely, sql } from 'kysely';
+import { canonicalHash } from '@openldr/core';
 import type { InternalSchema } from './schema/internal';
+import type { ReferenceCapture } from './reference-capture';
 import { fhirValueSetCatalogToInputs, fhirValueSetToInput, valueSetToFhirResource } from './fhir-value-set';
 import { expandCompose, type ExpandedConcept, type ExpandDeps, type VsCompose } from './value-set-expander';
 
@@ -94,6 +96,26 @@ function newId(prefix: string): string {
 
 const LOCAL_MAP_URL = 'urn:openldr:terminology:local-map';
 
+// Reference-change content hashes (distributed sync S3): computed over the PERSISTED row's
+// content fields (NOT id/seeded), stable against jsonb key reordering (canonicalHash sorts keys)
+// so a lab pulling the change consumes exactly what the center serves.
+function pubContentHash(r: { name: string; role: string; icon: string | null; match_prefixes: unknown; sort_order: number }): string {
+  const mp = typeof r.match_prefixes === 'string' ? JSON.parse(r.match_prefixes) : (r.match_prefixes ?? []);
+  return canonicalHash({ name: r.name, role: r.role, icon: r.icon, matchPrefixes: mp, sortOrder: r.sort_order });
+}
+function csContentHash(r: { system_code: string; system_name: string; url: string | null; system_version: string | null; description: string | null; active: boolean; publisher_id: string | null }): string {
+  return canonicalHash({
+    systemCode: r.system_code, systemName: r.system_name, url: r.url, systemVersion: r.system_version,
+    description: r.description, active: r.active, publisherId: r.publisher_id,
+  });
+}
+function tmContentHash(r: { from_system: string; from_code: string; to_system: string; to_code: string; to_display: string | null; map_type: string; relationship: string | null; is_active: boolean }): string {
+  return canonicalHash({
+    fromSystem: r.from_system, fromCode: r.from_code, toSystem: r.to_system, toCode: r.to_code,
+    toDisplay: r.to_display, mapType: r.map_type, relationship: r.relationship, isActive: r.is_active,
+  });
+}
+
 export interface TerminologyAdminStore {
   publishers: {
     list(): Promise<Publisher[]>;
@@ -138,7 +160,7 @@ export interface TerminologyAdminStore {
   };
 }
 
-export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projection?: ValueSetProjection): TerminologyAdminStore {
+export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projection?: ValueSetProjection, capture?: ReferenceCapture): TerminologyAdminStore {
   const pubRow = (r: { id: string; name: string; role: string; icon: string | null; seeded: boolean; sort_order: number }): Publisher => ({
     id: r.id, name: r.name, role: r.role as PublisherRole, icon: r.icon, seeded: r.seeded, sortOrder: r.sort_order,
   });
@@ -307,26 +329,37 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
       },
       async create(input) {
         const id = newId('pub');
-        await db.insertInto('publishers').values({
-          id, name: input.name, role: input.role, icon: input.icon ?? null,
-          // pg-mem needs a JSON string for jsonb; real PG accepts the sql`` fragment.
-          // Use JSON.stringify so pg-mem in tests accepts the value.
-          match_prefixes: JSON.stringify([]) as never,
-          seeded: false, sort_order: 100,
-        }).execute();
-        return pubRow(await db.selectFrom('publishers').selectAll().where('id', '=', id).executeTakeFirstOrThrow());
+        return db.transaction().execute(async (trx) => {
+          await trx.insertInto('publishers').values({
+            id, name: input.name, role: input.role, icon: input.icon ?? null,
+            // pg-mem needs a JSON string for jsonb; real PG accepts the sql`` fragment.
+            // Use JSON.stringify so pg-mem in tests accepts the value.
+            match_prefixes: JSON.stringify([]) as never,
+            seeded: false, sort_order: 100,
+          }).execute();
+          const row = await trx.selectFrom('publishers').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
+          if (capture) await capture.record(trx, 'publisher', id, 'upsert', pubContentHash(row));
+          return pubRow(row);
+        });
       },
       async update(id, input) {
         const existing = await db.selectFrom('publishers').select(['seeded']).where('id', '=', id).executeTakeFirst();
         if (!existing) throw new TerminologyAdminError(`publisher not found: ${id}`, 'not-found');
-        await db.updateTable('publishers').set({ name: input.name, role: input.role, icon: input.icon ?? null }).where('id', '=', id).execute();
-        return pubRow(await db.selectFrom('publishers').selectAll().where('id', '=', id).executeTakeFirstOrThrow());
+        return db.transaction().execute(async (trx) => {
+          await trx.updateTable('publishers').set({ name: input.name, role: input.role, icon: input.icon ?? null }).where('id', '=', id).execute();
+          const row = await trx.selectFrom('publishers').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
+          if (capture) await capture.record(trx, 'publisher', id, 'upsert', pubContentHash(row));
+          return pubRow(row);
+        });
       },
       async delete(id) {
         const row = await db.selectFrom('publishers').select(['seeded']).where('id', '=', id).executeTakeFirst();
         if (!row) throw new TerminologyAdminError(`publisher not found: ${id}`, 'not-found');
         if (row.seeded) throw new TerminologyAdminError('cannot delete a seeded publisher', 'conflict');
-        await db.deleteFrom('publishers').where('id', '=', id).execute();
+        await db.transaction().execute(async (trx) => {
+          await trx.deleteFrom('publishers').where('id', '=', id).execute();
+          if (capture) await capture.record(trx, 'publisher', id, 'delete', null);
+        });
       },
       async deletionImpact(id) {
         const systems = await db.selectFrom('coding_systems').select(['url']).where('publisher_id', '=', id).execute();
@@ -347,35 +380,46 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
       },
       async create(input) {
         const id = newId('cs');
-        try {
-          await db.insertInto('coding_systems').values({
-            id, system_code: input.systemCode, system_name: input.systemName, url: input.url ?? null,
-            system_version: input.systemVersion ?? null, description: input.description ?? null,
-            active: input.active, publisher_id: input.publisherId ?? null, seeded: false,
-          }).execute();
-        } catch (err) {
-          const e = err as { code?: string; message?: string };
-          const isUnique = e.code === '23505' || /unique|duplicate/i.test(e.message ?? '');
-          if (isUnique) throw new TerminologyAdminError(`duplicate code system url: ${input.url}`, 'conflict');
-          throw err;
-        }
-        return csRow(await db.selectFrom('coding_systems').selectAll().where('id', '=', id).executeTakeFirstOrThrow());
+        return db.transaction().execute(async (trx) => {
+          try {
+            await trx.insertInto('coding_systems').values({
+              id, system_code: input.systemCode, system_name: input.systemName, url: input.url ?? null,
+              system_version: input.systemVersion ?? null, description: input.description ?? null,
+              active: input.active, publisher_id: input.publisherId ?? null, seeded: false,
+            }).execute();
+          } catch (err) {
+            const e = err as { code?: string; message?: string };
+            const isUnique = e.code === '23505' || /unique|duplicate/i.test(e.message ?? '');
+            if (isUnique) throw new TerminologyAdminError(`duplicate code system url: ${input.url}`, 'conflict');
+            throw err;
+          }
+          const row = await trx.selectFrom('coding_systems').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
+          if (capture) await capture.record(trx, 'coding_system', id, 'upsert', csContentHash(row));
+          return csRow(row);
+        });
       },
       async update(id, input) {
         const existing = await db.selectFrom('coding_systems').select(['id']).where('id', '=', id).executeTakeFirst();
         if (!existing) throw new TerminologyAdminError(`coding system not found: ${id}`, 'not-found');
-        // system_code is immutable on update (the UI disables it).
-        await db.updateTable('coding_systems').set({
-          system_name: input.systemName, url: input.url ?? null, system_version: input.systemVersion ?? null,
-          description: input.description ?? null, active: input.active, publisher_id: input.publisherId ?? null,
-        }).where('id', '=', id).execute();
-        return csRow(await db.selectFrom('coding_systems').selectAll().where('id', '=', id).executeTakeFirstOrThrow());
+        return db.transaction().execute(async (trx) => {
+          // system_code is immutable on update (the UI disables it).
+          await trx.updateTable('coding_systems').set({
+            system_name: input.systemName, url: input.url ?? null, system_version: input.systemVersion ?? null,
+            description: input.description ?? null, active: input.active, publisher_id: input.publisherId ?? null,
+          }).where('id', '=', id).execute();
+          const row = await trx.selectFrom('coding_systems').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
+          if (capture) await capture.record(trx, 'coding_system', id, 'upsert', csContentHash(row));
+          return csRow(row);
+        });
       },
       async delete(id) {
         const row = await db.selectFrom('coding_systems').select(['seeded']).where('id', '=', id).executeTakeFirst();
         if (!row) throw new TerminologyAdminError(`coding system not found: ${id}`, 'not-found');
         if (row.seeded) throw new TerminologyAdminError('cannot delete a seeded code system', 'conflict');
-        await db.deleteFrom('coding_systems').where('id', '=', id).execute();
+        await db.transaction().execute(async (trx) => {
+          await trx.deleteFrom('coding_systems').where('id', '=', id).execute();
+          if (capture) await capture.record(trx, 'coding_system', id, 'delete', null);
+        });
       },
       async deletionImpact(id) {
         const sys = await db.selectFrom('coding_systems').select(['url']).where('id', '=', id).executeTakeFirst();
@@ -391,12 +435,18 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
         // Idempotency key is `url` (ON CONFLICT), not id: a row seeded by the migration
         // backfill (id `cs-<CODE>-<pub>`) is updated in place here; only when upsertByUrl
         // inserts first does the `cs-url-<code>` id appear. Either way one row per url.
-        await db.insertInto('coding_systems').values({
-          id: `cs-url-${input.systemCode}`, system_code: input.systemCode, system_name: input.systemName,
-          url: input.url, system_version: input.systemVersion ?? null, active: true, publisher_id: input.publisherId, seeded: true,
-        }).onConflict((oc) => oc.column('url').doUpdateSet({
-          system_name: input.systemName, system_version: input.systemVersion ?? null, publisher_id: input.publisherId,
-        })).execute();
+        await db.transaction().execute(async (trx) => {
+          await trx.insertInto('coding_systems').values({
+            id: `cs-url-${input.systemCode}`, system_code: input.systemCode, system_name: input.systemName,
+            url: input.url, system_version: input.systemVersion ?? null, active: true, publisher_id: input.publisherId, seeded: true,
+          }).onConflict((oc) => oc.column('url').doUpdateSet({
+            system_name: input.systemName, system_version: input.systemVersion ?? null, publisher_id: input.publisherId,
+          })).execute();
+          // Idempotency key is `url`; read the resulting row to key the capture by its real id
+          // (an ON CONFLICT update keeps the pre-existing id, so hash the persisted row).
+          const row = await trx.selectFrom('coding_systems').selectAll().where('url', '=', input.url).executeTakeFirstOrThrow();
+          if (capture) await capture.record(trx, 'coding_system', row.id, 'upsert', csContentHash(row));
+        });
       },
     },
     terms: {
@@ -487,6 +537,8 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
             await trx.insertInto('terminology_concepts').values({ system: input.toSystem, code: input.toCode, display: input.toDisplay, status: 'DRAFT', properties: null }).execute();
             draftCreated = true;
           }
+          const persisted = await trx.selectFrom('term_mappings').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
+          if (capture) await capture.record(trx, 'term_mapping', id, 'upsert', tmContentHash(persisted));
         });
         const row = await db.selectFrom('term_mappings').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
         return { mapping: tmRow(row), draftCreated };
@@ -507,6 +559,8 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
             map_url: LOCAL_MAP_URL, source_system: input.fromSystem, source_code: input.fromCode,
             target_system: input.toSystem, target_code: input.toCode, equivalence: input.mapType,
           }).execute();
+          const persisted = await trx.selectFrom('term_mappings').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
+          if (capture) await capture.record(trx, 'term_mapping', id, 'upsert', tmContentHash(persisted));
         });
         const row = await db.selectFrom('term_mappings').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
         return tmRow(row);
@@ -519,6 +573,7 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
             .where('source_system', '=', existing.from_system).where('source_code', '=', existing.from_code)
             .where('target_system', '=', existing.to_system).where('target_code', '=', existing.to_code).execute();
           await trx.deleteFrom('term_mappings').where('id', '=', id).execute();
+          if (capture) await capture.record(trx, 'term_mapping', id, 'delete', null);
         });
       },
     },

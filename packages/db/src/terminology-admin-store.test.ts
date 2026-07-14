@@ -3,6 +3,7 @@ import { Kysely } from 'kysely';
 import { newDb } from 'pg-mem';
 import { internalMigrations } from './migrations/internal/index';
 import { createTerminologyAdminStore, TerminologyAdminError } from './terminology-admin-store';
+import { referenceCapture } from './reference-capture';
 import type { InternalSchema } from './schema/internal';
 
 // Same pg-mem migrated-db construction as 012_terminology_admin.test.ts.
@@ -287,6 +288,98 @@ describe('terminology admin store', () => {
         valueSets: [{ url: 'http://hl7.org/fhir/ValueSet/administrative-gender', compose: { include: [] } }],
         codeSystems: [],
       })).resolves.toMatchObject({ imported: 0, skipped: 1 });
+    });
+  });
+
+  // Distributed sync S3: terminology-metadata writes emit reference_change_log rows when the
+  // store is constructed WITH a capture (mirrors the S2 config-store capture pattern).
+  describe('reference-change capture', () => {
+    async function capturingStore() {
+      const db = await makeMigratedDb();
+      return { db, s: createTerminologyAdminStore(db, undefined, referenceCapture) };
+    }
+    const logRows = (db: Kysely<InternalSchema>, entityType: string) =>
+      db.selectFrom('reference_change_log').selectAll().where('entity_type', '=', entityType).orderBy('seq').execute();
+
+    it('captures publisher create (upsert), update (upsert), and delete', async () => {
+      const { db, s } = await capturingStore();
+      const p = await s.publishers.create({ name: 'My Lab', role: 'local', icon: '🧪' });
+      let rows = await logRows(db, 'publisher');
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ entity_id: p.id, op: 'upsert' });
+      expect(rows[0].content_hash).toMatch(/^[0-9a-f]{64}$/);
+      const createHash = rows[0].content_hash;
+
+      await s.publishers.update(p.id, { name: 'My Lab 2', role: 'external', icon: null });
+      rows = await logRows(db, 'publisher');
+      expect(rows).toHaveLength(2);
+      expect(rows[1]).toMatchObject({ entity_id: p.id, op: 'upsert' });
+      expect(rows[1].content_hash).not.toBe(createHash); // content changed → new hash
+
+      await s.publishers.delete(p.id);
+      rows = await logRows(db, 'publisher');
+      expect(rows).toHaveLength(3);
+      expect(rows[2]).toMatchObject({ entity_id: p.id, op: 'delete', content_hash: null });
+    });
+
+    it('is idempotent: re-writing identical publisher content does not append a row', async () => {
+      const { db, s } = await capturingStore();
+      const p = await s.publishers.create({ name: 'Lab', role: 'local', icon: 'x' });
+      await s.publishers.update(p.id, { name: 'Lab', role: 'local', icon: 'x' }); // same content
+      expect(await logRows(db, 'publisher')).toHaveLength(1);
+    });
+
+    it('captures coding-system create/upsertByUrl (upsert) and delete', async () => {
+      const { db, s } = await capturingStore();
+      const cs = await s.codingSystems.create({ systemCode: 'X', systemName: 'X system', url: 'http://x.org', active: true, publisherId: null });
+      let rows = await logRows(db, 'coding_system');
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ entity_id: cs.id, op: 'upsert' });
+      expect(rows[0].content_hash).toMatch(/^[0-9a-f]{64}$/);
+
+      await s.codingSystems.upsertByUrl({ url: 'http://loinc.org', systemCode: 'LOINC', systemName: 'LOINC v1', publisherId: 'pub-loinc' });
+      rows = await logRows(db, 'coding_system');
+      expect(rows).toHaveLength(2);
+      expect(rows[1]).toMatchObject({ op: 'upsert' });
+      expect(rows[1].entity_id).toMatch(/^cs-/);
+
+      await s.codingSystems.delete(cs.id);
+      rows = await logRows(db, 'coding_system');
+      expect(rows).toHaveLength(3);
+      expect(rows[2]).toMatchObject({ entity_id: cs.id, op: 'delete', content_hash: null });
+    });
+
+    it('captures term-mapping create (upsert) and delete', async () => {
+      const { db, s } = await capturingStore();
+      const res = await s.termMappings.create({ fromSystem: 'http://x', fromCode: 'AMP', toSystem: 'http://y', toCode: 'Z', toDisplay: 'Zed', mapType: 'SAME-AS', relationship: null, owner: null, isActive: true });
+      let rows = await logRows(db, 'term_mapping');
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ entity_id: res.mapping.id, op: 'upsert' });
+      expect(rows[0].content_hash).toMatch(/^[0-9a-f]{64}$/);
+
+      await s.termMappings.delete(res.mapping.id);
+      rows = await logRows(db, 'term_mapping');
+      expect(rows).toHaveLength(2);
+      expect(rows[1]).toMatchObject({ entity_id: res.mapping.id, op: 'delete', content_hash: null });
+    });
+
+    it('captures term-mapping regardless of owner (not gated on ownership)', async () => {
+      const { db, s } = await capturingStore();
+      const res = await s.termMappings.create({ fromSystem: 'http://x', fromCode: 'AMP', toSystem: 'http://y', toCode: 'Z', toDisplay: 'Zed', mapType: 'SAME-AS', relationship: null, owner: 'some-lab', isActive: true });
+      expect(await logRows(db, 'term_mapping')).toHaveLength(1);
+      expect((await logRows(db, 'term_mapping'))[0]).toMatchObject({ entity_id: res.mapping.id, op: 'upsert' });
+    });
+
+    it('no-capture path: a store built without a capture writes NO reference_change_log rows', async () => {
+      const db = await makeMigratedDb();
+      const s = createTerminologyAdminStore(db); // no capture
+      const p = await s.publishers.create({ name: 'Lab', role: 'local', icon: null });
+      await s.publishers.update(p.id, { name: 'Lab2', role: 'local', icon: null });
+      await s.codingSystems.create({ systemCode: 'X', systemName: 'X', url: 'http://x.org', active: true, publisherId: null });
+      const res = await s.termMappings.create({ fromSystem: 'http://x', fromCode: 'AMP', toSystem: 'http://y', toCode: 'Z', toDisplay: null, mapType: 'SAME-AS', relationship: null, owner: null, isActive: true });
+      await s.termMappings.delete(res.mapping.id);
+      await s.publishers.delete(p.id);
+      expect(await db.selectFrom('reference_change_log').selectAll().execute()).toHaveLength(0);
     });
   });
 });
