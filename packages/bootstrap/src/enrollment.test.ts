@@ -29,12 +29,37 @@ function makeClients() {
 
 const ISSUER = 'https://kc.example/realms/openldr';
 
+// Sync S5: app_settings keys for the single central signing keypair (mirror enrollment.ts).
+const CENTRAL_PRIV = 'sync.central_signing_private_key';
+const CENTRAL_PUB = 'sync.central_signing_public_key';
+
+// Map-backed appSettings fake with spied get/set — records calls so tests can assert the central
+// keypair is created once. get() returns the AppSettingStore shape ({ value } | null).
+function makeAppSettings() {
+  const map = new Map<string, string>();
+  return {
+    map,
+    get: vi.fn(async (key: string) => {
+      const value = map.get(key);
+      return value === undefined ? null : { key, value, updatedBy: null, updatedAt: '' };
+    }),
+    set: vi.fn(async (key: string, value: string, _actor: string | null) => {
+      map.set(key, value);
+    }),
+  };
+}
+
+// Reversible stand-ins for the real AES helpers — prove the private key is sealed before storage.
+const encryptSecret = (s: string) => `enc:${s}`;
+const decryptSecret = (b: string) => b.replace(/^enc:/, '');
+
 function makeCtx(
   clients: ReturnType<typeof makeClients>,
   syncSites: SyncSiteStore,
   cfg: { OIDC_ISSUER_URL: string; OIDC_AUDIENCE?: string } = { OIDC_ISSUER_URL: ISSUER },
+  appSettings: ReturnType<typeof makeAppSettings> = makeAppSettings(),
 ): AppContext {
-  return { auth: { clients }, syncSites, cfg } as unknown as AppContext;
+  return { auth: { clients }, syncSites, cfg, appSettings, encryptSecret, decryptSecret } as unknown as AppContext;
 }
 
 describe('enrollment orchestrator', () => {
@@ -57,14 +82,16 @@ describe('enrollment orchestrator', () => {
     expect(clients.addAudienceMapper).not.toHaveBeenCalled();
     expect(clients.getClientSecret).toHaveBeenCalledWith('uuid-new');
 
-    // Result echoes secret + centralUrl + oidcIssuer.
-    expect(res).toEqual({
+    // Result echoes secret + centralUrl + oidcIssuer (+ S5 key-exchange material).
+    expect(res).toMatchObject({
       clientId: 'sync-lab-a',
       clientSecret: 'secret-created',
       siteId: 'lab-a',
       centralUrl: 'https://central',
       oidcIssuer: ISSUER,
     });
+    expect(res.signingPrivateKey).toMatch(/^[0-9a-f]+$/);
+    expect(res.centralPublicKey).toMatch(/^[0-9a-f]+$/);
 
     // Registry row exists and carries NO secret field.
     const row = await store.get('lab-a');
@@ -74,6 +101,50 @@ describe('enrollment orchestrator', () => {
     expect(row!.enrolledBy).toBe('admin');
     expect(Object.keys(row!)).not.toContain('secret');
     expect(Object.keys(row!)).not.toContain('clientSecret');
+  });
+
+  it('S5: enroll exchanges keys — returns site priv + central pub, persists ONLY the public key', async () => {
+    const appSettings = makeAppSettings();
+    const ctx = makeCtx(clients, store, { OIDC_ISSUER_URL: ISSUER }, appSettings);
+    const res = await enrollSite(ctx, { siteId: 'lab-k', name: null, centralUrl: 'https://central', actor: 'admin' });
+
+    expect(res.signingPrivateKey).toMatch(/^[0-9a-f]+$/);
+    expect(res.centralPublicKey).toMatch(/^[0-9a-f]+$/);
+
+    // The registry row carries the site's PUBLIC signing key.
+    const row = await store.get('lab-k');
+    expect(row!.signingPublicKey).toMatch(/^[0-9a-f]+$/);
+    // The site's PRIVATE key is nowhere at rest: not on the row, not in any appSettings value.
+    expect(JSON.stringify(row)).not.toContain(res.signingPrivateKey);
+    for (const value of appSettings.map.values()) {
+      expect(value).not.toContain(res.signingPrivateKey);
+    }
+  });
+
+  it('S5: central keypair is created ONCE and reused across enrolls', async () => {
+    const appSettings = makeAppSettings();
+    const ctx = makeCtx(clients, store, { OIDC_ISSUER_URL: ISSUER }, appSettings);
+
+    const a = await enrollSite(ctx, { siteId: 'lab-one', name: null, centralUrl: 'https://central', actor: null });
+    const b = await enrollSite(ctx, { siteId: 'lab-two', name: null, centralUrl: 'https://central', actor: null });
+
+    // Both enrolls return the SAME central public key (the second read the existing pair).
+    expect(a.centralPublicKey).toBe(b.centralPublicKey);
+    // The central private key was written exactly once (the reuse path never re-writes it).
+    const privWrites = appSettings.set.mock.calls.filter(([key]) => key === CENTRAL_PRIV);
+    expect(privWrites).toHaveLength(1);
+  });
+
+  it('S5: the stored central private key is ENCRYPTED, not raw hex', async () => {
+    const appSettings = makeAppSettings();
+    const ctx = makeCtx(clients, store, { OIDC_ISSUER_URL: ISSUER }, appSettings);
+    await enrollSite(ctx, { siteId: 'lab-enc', name: null, centralUrl: 'https://central', actor: null });
+
+    const stored = appSettings.map.get(CENTRAL_PRIV)!;
+    expect(stored.startsWith('enc:')).toBe(true);           // passed through encryptSecret
+    expect(decryptSecret(stored)).toMatch(/^[0-9a-f]+$/);   // and decrypts back to a hex private key
+    // The plaintext public key is NOT encrypted.
+    expect(appSettings.map.get(CENTRAL_PUB)!.startsWith('enc:')).toBe(false);
   });
 
   it('audience mapper added ONLY when OIDC_AUDIENCE is set', async () => {
@@ -170,7 +241,7 @@ describe('enrollment orchestrator', () => {
     expect(list[0].status).toBe('active');
   });
 
-  it('rotate → returns a new secret, no registry row change', async () => {
+  it('rotate → new secret + re-minted signing key, identity/status untouched', async () => {
     const ctx = makeCtx(clients, store);
     await enrollSite(ctx, { siteId: 'lab-f', name: null, centralUrl: 'https://central', actor: null });
     const before = await store.get('lab-f');
@@ -178,10 +249,17 @@ describe('enrollment orchestrator', () => {
     clients.findUuidByClientId.mockResolvedValue('uuid-existing');
     const res = await rotateSite(ctx, 'lab-f');
 
-    expect(res).toEqual({ clientId: 'sync-lab-f', clientSecret: 'secret-rotated' });
+    expect(res).toMatchObject({ clientId: 'sync-lab-f', clientSecret: 'secret-rotated' });
+    expect(res.signingPrivateKey).toMatch(/^[0-9a-f]+$/);
+    expect(res.centralPublicKey).toMatch(/^[0-9a-f]+$/);
     expect(clients.regenerateClientSecret).toHaveBeenCalledWith('uuid-existing');
-    // Registry untouched.
-    expect(await store.get('lab-f')).toEqual(before);
+
+    // Only the signing public key rotates; identity/status untouched.
+    const after = await store.get('lab-f');
+    expect(after!.clientId).toBe(before!.clientId);
+    expect(after!.status).toBe(before!.status);
+    expect(after!.signingPublicKey).not.toBe(before!.signingPublicKey);
+    expect(after!.signingPublicKey).toMatch(/^[0-9a-f]+$/);
   });
 
   it('rotate unknown site → SiteNotFoundError', async () => {

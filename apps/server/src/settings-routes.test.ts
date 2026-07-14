@@ -154,6 +154,31 @@ describe('settings routes', () => {
     expect(JSON.stringify(view)).not.toContain('shh');
   });
 
+  it('PUT then GET /api/settings/sync round-trips the lab keys: private key write-only, public key readable', async () => {
+    const { ctx, deps } = fakeCtx();
+    const app = appWithUser(['lab_admin'], (a) => registerSettingsRoutes(a, ctx, deps));
+    const put = await app.inject({
+      method: 'PUT', url: '/api/settings/sync',
+      payload: {
+        enabled: false, centralUrl: '', siteId: '', oidcIssuer: '', clientId: '', intervalMinutes: 15,
+        signingPrivateKey: 'deadbeef-priv', centralPublicKey: 'cafef00d-pub',
+      },
+    });
+    expect(put.statusCode).toBe(200);
+    // The private key is sealed (ENCRYPTED), never stored/returned in plaintext.
+    expect((ctx as any).__settings.get('sync.signing_private_key')).toBe('enc:deadbeef-priv');
+    expect((ctx as any).__settings.get('sync.central_public_key')).toBe('cafef00d-pub');
+
+    const res = await app.inject({ method: 'GET', url: '/api/settings/sync' });
+    expect(res.statusCode).toBe(200);
+    const view = res.json();
+    expect(view.signingKeySet).toBe(true);
+    expect(view.centralPublicKey).toBe('cafef00d-pub');
+    // Private key is write-only: neither the field nor its value ever appears in the view.
+    expect('signingPrivateKey' in view).toBe(false);
+    expect(JSON.stringify(view)).not.toContain('deadbeef-priv');
+  });
+
   it('GET /api/settings/sync/status returns the live status', async () => {
     const { ctx, deps } = fakeCtx();
     const app = appWithUser(['lab_admin'], (a) => registerSettingsRoutes(a, ctx, deps));

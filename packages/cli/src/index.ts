@@ -19,7 +19,7 @@ import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, run
 import { runMarketVerify, runMarketInstall, runMarketList, runMarketRollback, runMarketEnable, runMarketDisable, runMarketRemove } from './market';
 import { runArtifactKeygen, runArtifactNew, runArtifactBuild, runArtifactPack, runArtifactSign, runArtifactTest, runArtifactPublish } from './artifact';
 import { runSettingsFlagsList, runSettingsFlagsSet, runSettingsDanger, runSettingsSyncShow, runSettingsSyncSet, runSettingsNumbersList, runSettingsNumbersSet } from './settings';
-import { runSyncStatus, runSyncNow, runSyncEnroll, runSyncList, runSyncRotate, runSyncRevoke } from './sync';
+import { runSyncStatus, runSyncNow, runSyncEnroll, runSyncList, runSyncRotate, runSyncRevoke, runSyncExport, runSyncImport } from './sync';
 import { runErrorsList } from './errors';
 
 const program = new Command();
@@ -181,6 +181,15 @@ syncGroup.command('rotate <siteId>').description('Rotate a site client secret (p
 syncGroup.command('revoke <siteId>').description('Revoke a site (delete its client + mark the row revoked; idempotent)').option('--json', 'emit JSON', false)
   .action(async (siteId: string, opts: { json: boolean }) => {
     try { process.exitCode = await runSyncRevoke(siteId, opts); } catch (err) { process.stderr.write(`sync revoke failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+syncGroup.command('export').description('Write a signed offline sync bundle to a file (lab→push, central→pull with --site)')
+  .option('--kind <kind>', 'push|pull (default: pull if --site is given, else push)').option('--site <id>', 'site id (required for a pull export)').option('--from <seq>', 'push: start cursor (default: safe frontier)').option('--out <file>', 'output bundle path').option('--json', 'emit the bundle manifest as JSON', false)
+  .action(async (opts: { kind?: 'push' | 'pull'; site?: string; from?: string; out?: string; json: boolean }) => {
+    try { process.exitCode = await runSyncExport(opts); } catch (err) { process.stderr.write(`sync export failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+syncGroup.command('import <file>').description('Apply a signed offline sync bundle (dispatches on the bundle kind)').option('--json', 'emit JSON', false)
+  .action(async (file: string, opts: { json: boolean }) => {
+    try { process.exitCode = await runSyncImport(file, opts); } catch (err) { process.stderr.write(`sync import failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
 
 const targetStore = program.command('target-store').description('Target warehouse (Postgres/SQL Server/MySQL/MariaDB) tools');

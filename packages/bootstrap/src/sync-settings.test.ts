@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AppSettingRecord, AppSettingStore } from '@openldr/db';
-import { getSyncConfig, setSyncConfig } from './sync-settings';
+import { getSyncConfig, setSyncConfig, readSigningKeys } from './sync-settings';
 
 function fakeStore(initial: Record<string, string> = {}): AppSettingStore & { data: Map<string, string> } {
   const data = new Map(Object.entries(initial));
@@ -43,6 +43,8 @@ describe('sync settings (discrete keys)', () => {
       clientId: '',
       clientSecretSet: false,
       intervalMinutes: 15,
+      signingKeySet: false,
+      centralPublicKey: '',
     });
   });
 
@@ -103,6 +105,8 @@ describe('sync settings (discrete keys)', () => {
       clientId: 'lab-client',
       clientSecretSet: true,
       intervalMinutes: 30,
+      signingKeySet: false,
+      centralPublicKey: '',
     });
   });
 
@@ -122,5 +126,59 @@ describe('sync settings (discrete keys)', () => {
     await expect(
       setSyncConfig(fakeStore(), { oidcIssuer: 'ftp://nope' }, 'tester', encrypt),
     ).rejects.toThrow();
+  });
+
+  it('encrypts the signing private key + write-only in the view, and round-trips the public key', async () => {
+    const store = fakeStore();
+    const view = await setSyncConfig(
+      store,
+      { ...fullInput, signingPrivateKey: 'priv-der-hex', centralPublicKey: 'pub-der-hex' },
+      'tester',
+      encrypt,
+    );
+    // Private key sealed (passed through the injected encrypt), never stored raw.
+    expect(store.data.get('sync.signing_private_key')).toBe('enc:priv-der-hex');
+    // Public key stored plaintext (it is not a secret).
+    expect(store.data.get('sync.central_public_key')).toBe('pub-der-hex');
+    // View: boolean only for the private key, readable value for the public key.
+    expect(view.signingKeySet).toBe(true);
+    expect(view.centralPublicKey).toBe('pub-der-hex');
+    expect(view).not.toHaveProperty('signingPrivateKey');
+    expect(JSON.stringify(view)).not.toContain('priv-der-hex');
+    expect(JSON.stringify(view)).not.toContain('enc:priv-der-hex');
+  });
+
+  it('preserves an existing signing private key when signingPrivateKey is absent or blank', async () => {
+    const store = fakeStore({ 'sync.signing_private_key': 'enc:old-priv' });
+    // Absent.
+    await setSyncConfig(store, fullInput, 'tester', encrypt);
+    expect(store.data.get('sync.signing_private_key')).toBe('enc:old-priv');
+    // Blank.
+    const view = await setSyncConfig(store, { ...fullInput, signingPrivateKey: '' }, 'tester', encrypt);
+    expect(store.data.get('sync.signing_private_key')).toBe('enc:old-priv');
+    expect(view.signingKeySet).toBe(true);
+  });
+
+  it('readSigningKeys decrypts the private key + returns public key/site id', async () => {
+    const decrypt = (blob: string) => blob.replace(/^enc:/, '');
+    const store = fakeStore({
+      'sync.signing_private_key': 'enc:priv-der-hex',
+      'sync.central_public_key': 'pub-der-hex',
+      'sync.site_id': 'lab-01',
+    });
+    expect(await readSigningKeys(store, decrypt)).toEqual({
+      signingPrivateKey: 'priv-der-hex',
+      centralPublicKey: 'pub-der-hex',
+      siteId: 'lab-01',
+    });
+  });
+
+  it('readSigningKeys returns nulls when the keys are unset', async () => {
+    const decrypt = (blob: string) => blob.replace(/^enc:/, '');
+    expect(await readSigningKeys(fakeStore(), decrypt)).toEqual({
+      signingPrivateKey: null,
+      centralPublicKey: null,
+      siteId: null,
+    });
   });
 });

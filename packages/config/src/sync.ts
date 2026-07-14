@@ -72,6 +72,12 @@ export const SyncConfigInputSchema = z
     clientId: z.string().default(''),
     clientSecret: z.string().optional(),
     intervalMinutes: z.number().int().positive().max(1440).default(15),
+    // Lab-side enrollment keys (S5). `signingPrivateKey` is the lab's OWN signing key (DER hex),
+    // handled like clientSecret: optional & WRITE-ONLY — a blank/absent value leaves the stored
+    // (encrypted) key unchanged. `centralPublicKey` is central's public key (DER hex): plaintext,
+    // readable (a public key is not a secret).
+    signingPrivateKey: z.string().optional(),
+    centralPublicKey: z.string().default(''),
   })
   .superRefine((c, ctx) => {
     if (c.centralUrl && !/^https?:\/\//i.test(c.centralUrl))
@@ -102,4 +108,8 @@ export interface SyncConfigView {
   clientId: string;
   clientSecretSet: boolean;
   intervalMinutes: number;
+  /** Whether a lab signing private key is stored (S5). Write-only: the value is never returned. */
+  signingKeySet: boolean;
+  /** Central's public key (DER hex), readable — a public key is not a secret (S5). */
+  centralPublicKey: string;
 }

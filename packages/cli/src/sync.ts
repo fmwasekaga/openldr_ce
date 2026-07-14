@@ -1,4 +1,16 @@
-import { createAppContext, enrollSite, listSites, rotateSite, revokeSite } from '@openldr/bootstrap';
+import { readFile } from 'node:fs/promises';
+import {
+  createAppContext,
+  enrollSite,
+  listSites,
+  rotateSite,
+  revokeSite,
+  exportPushBundle,
+  importPushBundle,
+  exportPullBundle,
+  importPullBundle,
+} from '@openldr/bootstrap';
+import { unpackBundle } from '@openldr/sync';
 import { loadConfig } from '@openldr/config';
 import { redactError } from './redact-error';
 
@@ -59,7 +71,7 @@ export async function runSyncNow(opts: JsonOpt): Promise<number> {
   }
 }
 
-const SECRET_WARNING = '⚠ Store the client secret now — it will not be shown again.';
+const SECRET_WARNING = '⚠ Store the client secret AND signing private key now — they will not be shown again.';
 
 export async function runSyncEnroll(
   siteId: string,
@@ -75,11 +87,13 @@ export async function runSyncEnroll(
     emit(json, result, [
       SECRET_WARNING,
       '',
-      `clientId     = ${result.clientId}`,
-      `clientSecret = ${result.clientSecret}`,
-      `siteId       = ${result.siteId}`,
-      `centralUrl   = ${result.centralUrl}`,
-      `oidcIssuer   = ${result.oidcIssuer}`,
+      `clientId          = ${result.clientId}`,
+      `clientSecret      = ${result.clientSecret}`,
+      `siteId            = ${result.siteId}`,
+      `centralUrl        = ${result.centralUrl}`,
+      `oidcIssuer        = ${result.oidcIssuer}`,
+      `signingPrivateKey = ${result.signingPrivateKey}`,
+      `centralPublicKey  = ${result.centralPublicKey}`,
     ].join('\n'));
     return 0;
   } catch (err) {
@@ -130,8 +144,10 @@ export async function runSyncRotate(siteId: string, opts: JsonOpt): Promise<numb
     emit(opts.json, result, [
       SECRET_WARNING,
       '',
-      `clientId     = ${result.clientId}`,
-      `clientSecret = ${result.clientSecret}`,
+      `clientId          = ${result.clientId}`,
+      `clientSecret      = ${result.clientSecret}`,
+      `signingPrivateKey = ${result.signingPrivateKey}`,
+      `centralPublicKey  = ${result.centralPublicKey}`,
     ].join('\n'));
     return 0;
   } catch (err) {
@@ -140,6 +156,74 @@ export async function runSyncRotate(siteId: string, opts: JsonOpt): Promise<numb
       return fail(opts.json, 'Keycloak admin not configured — enrollment runs on the central instance');
     }
     return fail(opts.json, `sync rotate failed: ${redactError(err)}`);
+  } finally {
+    await ctx.close();
+  }
+}
+
+// `openldr sync export|import` — offline bundle transfer for air-gapped sites (Sync S5). A lab exports
+// its operational data as a signed PUSH bundle; central imports it. Reverse for reference/terminology
+// config (a signed PULL bundle central exports per site). No secret is ever written or printed here —
+// bundles carry no private key, and the signing key lives in config.
+
+export async function runSyncExport(
+  opts: { kind?: 'push' | 'pull'; site?: string; from?: string; out?: string; json?: boolean },
+): Promise<number> {
+  const json = opts.json ?? false;
+  // A lab exports a push bundle; a central pull export targets one site — so an explicit --kind wins,
+  // else infer from whether a --site was named.
+  const kind: 'push' | 'pull' = opts.kind ?? (opts.site ? 'pull' : 'push');
+  if (kind === 'pull' && !opts.site) return fail(json, '--site required for a pull export');
+
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const { path, manifest } =
+      kind === 'pull'
+        ? await exportPullBundle(ctx, { siteId: opts.site as string, out: opts.out })
+        : await exportPushBundle(ctx, { from: opts.from ? Number(opts.from) : undefined, out: opts.out });
+    emit(json, manifest, [
+      `kind        = ${manifest.kind}`,
+      `siteId      = ${manifest.siteId}`,
+      `cursor      = ${manifest.fromCursor} → ${manifest.toCursor}`,
+      `recordCount = ${manifest.recordCount}`,
+      `path        = ${path}`,
+    ].join('\n'));
+    return 0;
+  } catch (err) {
+    return fail(json, `sync export failed: ${redactError(err)}`);
+  } finally {
+    await ctx.close();
+  }
+}
+
+export async function runSyncImport(file: string, opts: JsonOpt): Promise<number> {
+  const json = opts.json ?? false;
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const bytes = await readFile(file);
+    // Read the (unverified) manifest kind to dispatch; each importer verifies before applying.
+    const kind = unpackBundle(bytes).manifest.kind;
+    if (kind === 'pull') {
+      const { applied, toCursor } = await importPullBundle(ctx, bytes);
+      emit(json, { applied, toCursor }, `imported pull bundle — applied ${applied}, cursor → ${toCursor}`);
+    } else {
+      const { applied, ackSeq, siteId } = await importPushBundle(ctx, bytes);
+      emit(json, { applied, ackSeq, siteId }, `imported push bundle from ${siteId} — applied ${applied}, ack seq ${ackSeq}`);
+    }
+    return 0;
+  } catch (err) {
+    switch (err instanceof Error ? err.name : '') {
+      case 'BundleSignatureError':
+        return fail(json, 'bundle signature invalid — wrong key or tampered');
+      case 'BundleGapError':
+        return fail(json, 'bundle is out of order (missing an earlier bundle) — import the earlier bundle first');
+      case 'BundleFormatError':
+        return fail(json, 'not a valid bundle file');
+      case 'SiteNotFoundError':
+        return fail(json, 'unknown or revoked site');
+      default:
+        return fail(json, `sync import failed: ${redactError(err)}`);
+    }
   } finally {
     await ctx.close();
   }

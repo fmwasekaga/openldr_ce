@@ -21,11 +21,16 @@ const K = {
   clientId: 'sync.client_id',
   clientSecret: 'sync.client_secret',
   interval: 'sync.interval_minutes',
+  // Lab-side enrollment keys (S5): own signing private key (encrypted, write-only, like the client
+  // secret) + central's public key (plaintext, readable).
+  signingPrivateKey: 'sync.signing_private_key',
+  centralPublicKey: 'sync.central_public_key',
 } as const;
 
 export async function getSyncConfig(store: AppSettingStore): Promise<SyncConfigView> {
   const g = async (k: string) => (await store.get(k))?.value ?? '';
   const secret = await g(K.clientSecret);
+  const signingKey = await g(K.signingPrivateKey);
   const intervalRaw = Number(await g(K.interval));
   const modeRaw = (await g(K.mode)).trim().toLowerCase();
   return {
@@ -37,6 +42,8 @@ export async function getSyncConfig(store: AppSettingStore): Promise<SyncConfigV
     clientId: await g(K.clientId),
     clientSecretSet: secret.length > 0,
     intervalMinutes: Number.isFinite(intervalRaw) && intervalRaw >= 1 && intervalRaw <= 1440 ? Math.floor(intervalRaw) : 15,
+    signingKeySet: signingKey.length > 0,
+    centralPublicKey: await g(K.centralPublicKey),
   };
 }
 
@@ -57,10 +64,36 @@ export async function setSyncConfig(
   await store.set(K.oidcIssuer, c.oidcIssuer, actor);
   await store.set(K.clientId, c.clientId, actor);
   await store.set(K.interval, String(c.intervalMinutes), actor);
+  // Central's public key is not a secret — always persisted (plaintext), like oidcIssuer.
+  await store.set(K.centralPublicKey, c.centralPublicKey, actor);
   // Write-only: only persist the secret when one is actually supplied so a blank submit / a
   // single-field patch preserves the existing encrypted value.
   if (typeof c.clientSecret === 'string' && c.clientSecret.length > 0) {
     await store.set(K.clientSecret, encrypt(c.clientSecret), actor);
   }
+  // Same write-only treatment for the lab's own signing private key: encrypted at rest, and a
+  // blank/absent value preserves the stored key.
+  if (typeof c.signingPrivateKey === 'string' && c.signingPrivateKey.length > 0) {
+    await store.set(K.signingPrivateKey, encrypt(c.signingPrivateKey), actor);
+  }
   return getSyncConfig(store);
+}
+
+/**
+ * Read + DECRYPT the lab's stored signing keys for the sync bundle orchestrator (Task 4). Returns
+ * the decrypted signing private key (null when unset), central's public key (null when empty), and
+ * the site id (null when empty). Like {@link readSyncConfig} in @openldr/sync, `decrypt` is INJECTED
+ * so this module stays free of the SECRETS_ENCRYPTION_KEY / @openldr/core crypto; it may be sync or
+ * async.
+ */
+export async function readSigningKeys(
+  store: AppSettingStore,
+  decrypt: (ciphertext: string) => string | Promise<string>,
+): Promise<{ signingPrivateKey: string | null; centralPublicKey: string | null; siteId: string | null }> {
+  const g = async (k: string) => (await store.get(k))?.value ?? '';
+  const cipher = await g(K.signingPrivateKey);
+  const signingPrivateKey = cipher ? (await decrypt(cipher)) || null : null;
+  const centralPublicKey = (await g(K.centralPublicKey)) || null;
+  const siteId = (await g(K.siteId)) || null;
+  return { signingPrivateKey, centralPublicKey, siteId };
 }

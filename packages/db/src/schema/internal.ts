@@ -564,6 +564,11 @@ export interface SyncSitesTable {
   enrolled_at: Generated<Date>;
   enrolled_by: string | null;
   status: Generated<string>;
+  // Sync S5: the site's ed25519 SPKI DER public key (hex) — central verifies the lab's push
+  // bundles with it. The site's PRIVATE key is never persisted centrally.
+  signing_public_key: string | null;
+  // Sync S5: last-applied lab 'sync-pull' position, piggybacked on pull requests (bigint → string).
+  reported_pull_cursor: string | null;
 }
 
 export interface InternalSchema {

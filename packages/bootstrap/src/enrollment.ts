@@ -1,4 +1,5 @@
 import type { SyncSiteRow } from '@openldr/db';
+import { generatePublisherKeypair } from '@openldr/marketplace';
 // `import type` (not a value import): index.ts re-exports this module, so a runtime import of
 // AppContext from './index' would create a require cycle. A type-only import is erased at compile
 // time and carries no runtime edge.
@@ -51,6 +52,44 @@ export interface EnrollResult {
   siteId: string;
   centralUrl: string;
   oidcIssuer: string;
+  // Sync S5: the site's ed25519 PRIVATE signing key (SPKI/PKCS8 DER, hex), handed to the lab ONCE
+  // at enroll time (same one-time-secret model as clientSecret) — never persisted centrally.
+  signingPrivateKey: string;
+  // Sync S5: central's PUBLIC signing key (DER hex) — the lab verifies central's pull bundles with it.
+  centralPublicKey: string;
+}
+
+// Sync S5: the single central signing keypair, stored in app_settings. The private key is encrypted
+// at rest (AES under SECRETS_ENCRYPTION_KEY); the public key is plaintext hex. Neither key is a
+// reference-captured `sync.*` value (S2 excludes the sync.* namespace from capture).
+const CENTRAL_PRIV = 'sync.central_signing_private_key'; // encrypted at rest
+const CENTRAL_PUB = 'sync.central_signing_public_key'; // plaintext hex
+
+/** Idempotently ensure the single central signing keypair exists; return both keys as DER hex.
+ *  Created once on the first enroll/rotate, reused thereafter.
+ *  Not concurrency-safe on the first-ever enroll: two racing first-enrolls could each mint a pair
+ *  (last write wins), leaving a lab that got the losing centralPublicKey unable to verify central's
+ *  pull bundles. Acceptable — enrollment is a rare, serial admin operation. */
+export async function ensureCentralKeypair(ctx: AppContext): Promise<{ privHex: string; pubHex: string }> {
+  const pub = (await ctx.appSettings.get(CENTRAL_PUB))?.value ?? '';
+  const priv = (await ctx.appSettings.get(CENTRAL_PRIV))?.value ?? '';
+  if (pub && priv) return { privHex: ctx.decryptSecret(priv), pubHex: pub };
+  const kp = generatePublisherKeypair();
+  const privHex = Buffer.from(kp.privateKeyDer).toString('hex');
+  const pubHex = Buffer.from(kp.publicKeyDer).toString('hex');
+  // Actor 'system' (not 'enroll') — this helper is also reached from rotateSite; matches seed.ts.
+  await ctx.appSettings.set(CENTRAL_PUB, pubHex, 'system');
+  await ctx.appSettings.set(CENTRAL_PRIV, ctx.encryptSecret(privHex), 'system');
+  return { privHex, pubHex };
+}
+
+/** Mint a fresh ed25519 site signing keypair as DER hex (public + private). */
+function mintSiteKeypair(): { signingPublicKey: string; signingPrivateKey: string } {
+  const kp = generatePublisherKeypair();
+  return {
+    signingPublicKey: Buffer.from(kp.publicKeyDer).toString('hex'),
+    signingPrivateKey: Buffer.from(kp.privateKeyDer).toString('hex'),
+  };
 }
 
 // lowercase alnum, may contain hyphens (not leading), 1..63 chars. Reused verbatim as the Keycloak
@@ -107,7 +146,23 @@ export async function enrollSite(
     await ctx.syncSites.insert({ siteId, name: args.name ?? null, clientId, enrolledBy: args.actor });
   }
 
-  return { clientId, clientSecret, siteId, centralUrl, oidcIssuer: ctx.cfg.OIDC_ISSUER_URL };
+  // Sync S5 key exchange: hand the lab its own private signing key + central's public key ONCE.
+  // Central persists ONLY the site's public key (to verify the lab's push bundles); the site's
+  // private key is returned and never stored here. A fresh site keypair is minted on every enroll
+  // (including revoked-re-enroll) so a re-enrolled lab always gets working, current material.
+  const { pubHex: centralPublicKey } = await ensureCentralKeypair(ctx);
+  const { signingPublicKey, signingPrivateKey } = mintSiteKeypair();
+  await ctx.syncSites.setSigningPublicKey(siteId, signingPublicKey); // ONLY the public key persisted
+
+  return {
+    clientId,
+    clientSecret,
+    siteId,
+    centralUrl,
+    oidcIssuer: ctx.cfg.OIDC_ISSUER_URL,
+    signingPrivateKey,
+    centralPublicKey,
+  };
 }
 
 /** All enrolled sites, newest first. Never includes secrets (the registry never stores them). */
@@ -115,16 +170,24 @@ export async function listSites(ctx: AppContext): Promise<SyncSiteRow[]> {
   return ctx.syncSites.list();
 }
 
-/** Regenerate the client secret for an enrolled site. No registry change. Throws if no client. */
+/** Regenerate the client secret AND re-mint the site signing keypair for an enrolled site. Persists
+ *  only the new public key; returns the new client secret + the new site private key + central's
+ *  public key (same one-time-secret model as enroll). Throws if no client. */
 export async function rotateSite(
   ctx: AppContext,
   siteId: string,
-): Promise<{ clientId: string; clientSecret: string }> {
+): Promise<{ clientId: string; clientSecret: string; signingPrivateKey: string; centralPublicKey: string }> {
   const clientId = syncClientId(siteId);
   const uuid = await ctx.auth.clients.findUuidByClientId(clientId);
   if (uuid === null) throw new SiteNotFoundError(siteId);
   const clientSecret = await ctx.auth.clients.regenerateClientSecret(uuid);
-  return { clientId, clientSecret };
+
+  // Re-mint the SITE keypair (central pub is stable — created once by ensureCentralKeypair).
+  const { pubHex: centralPublicKey } = await ensureCentralKeypair(ctx);
+  const { signingPublicKey, signingPrivateKey } = mintSiteKeypair();
+  await ctx.syncSites.setSigningPublicKey(siteId, signingPublicKey); // ONLY the public key persisted
+
+  return { clientId, clientSecret, signingPrivateKey, centralPublicKey };
 }
 
 /** Revoke a site: delete its Keycloak client (if present) and mark the registry row revoked (if

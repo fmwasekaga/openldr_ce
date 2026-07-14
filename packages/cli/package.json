@@ -19,6 +19,7 @@
     "@openldr/dhis2": "workspace:*",
     "@openldr/terminology": "workspace:*",
     "@openldr/config": "workspace:*",
+    "@openldr/sync": "workspace:*",
     "@openldr/core": "workspace:*",
     "@openldr/db": "workspace:*",
     "@openldr/dashboards": "workspace:*",
