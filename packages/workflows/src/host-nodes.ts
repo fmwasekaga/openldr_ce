@@ -33,7 +33,7 @@ export const HOST_NODE_DESCRIPTORS: WorkflowNodeDescriptor[] = [
   { id: 'http-request', source: 'host', label: 'HTTP Request', kind: 'source', description: 'Fetch from an allow-listed host.', ports: { inputs: [], outputs: [port('out')] }, capabilities: [], config: [] },
   { id: 'load-dataset', source: 'host', label: 'Load Dataset', kind: 'source', description: 'Load a materialized workflow dataset.', ports: { inputs: [], outputs: [port('out')] }, capabilities: [], config: [] },
   // Transforms
-  { id: 'code', source: 'host', label: 'Code', kind: 'transform', description: 'Run sandboxed JavaScript.', ports: { inputs: [port('in')], outputs: [port('out')] }, capabilities: [], config: [] },
+  { id: 'code', source: 'host', label: 'Code', kind: 'transform', description: 'Run sandboxed JavaScript for pure transforms (no filesystem/network/environment access).', ports: { inputs: [port('in')], outputs: [port('out')] }, capabilities: [], config: [] },
   { id: 'set', source: 'host', label: 'Set', kind: 'transform', description: 'Set or map fields.', ports: { inputs: [port('in')], outputs: [port('out')] }, capabilities: [], config: [] },
   { id: 'merge', source: 'host', label: 'Merge', kind: 'transform', description: 'Merge inputs.', ports: { inputs: [port('in')], outputs: [port('out')] }, capabilities: [], config: [] },
   { id: 'log', source: 'host', label: 'Log', kind: 'transform', description: 'Log items.', ports: { inputs: [port('in')], outputs: [port('out')] }, capabilities: [], config: [] },

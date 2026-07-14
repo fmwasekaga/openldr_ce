@@ -8,7 +8,7 @@ export const DEFAULT_LOOP_MAX_ITEMS = 100_000;
 export interface CodeLimits {
   timeoutMs: number;
   memoryMb: number;
-  /** When false, Code nodes refuse to run (host-level privilege risk — see SEC-01). */
+  /** When false, Code nodes refuse to run (defense-in-depth even though sandboxed — see SEC-01). */
   enabled: boolean;
 }
 
@@ -28,12 +28,13 @@ export interface ExecutionContext {
   /** All edges — used by the merge handler. */
   edges: Array<{ id: string; source: string; target: string; sourceHandle?: string | null }>;
   /**
-   * Limits for the Code node sandbox + the master enable flag.
-   * `enabled` gates SEC-01: Code nodes run user JS via `vm`, which is NOT a security
-   * boundary (host fs/net/env reachable). Default false; only true in trusted deployments.
+   * Limits for the Code node isolate + the master enable flag.
+   * `enabled` gates SEC-01: Code nodes run user JS in a hardened QuickJS-WASM isolate
+   * (no host fs/net/env). Still default false — arbitrary compute is a bigger surface
+   * than a boolean condition, so the flag stays as defense-in-depth.
    */
   codeLimits: CodeLimits;
-  /** Optional logger so an enabled Code node can warn about host-level execution. */
+  /** Optional logger so an enabled Code node can emit a sandboxed-execution notice. */
   logger?: { warn: (msg: string) => void };
   /** Server-provided data capabilities for source nodes (undefined in pure-engine tests). */
   services?: WorkflowServices;

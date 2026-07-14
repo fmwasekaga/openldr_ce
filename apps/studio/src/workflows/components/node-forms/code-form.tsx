@@ -33,7 +33,7 @@ export function CodeForm({ node, update }: NodeFormProps) {
 
       <FormField
         label="Code"
-        hint="Use `$json` (first item's fields), `$items` (all items' fields), or `$input` (raw WorkflowItem[]). Use `console.log(...)` — output streams to the Logs tab. Last expression or explicit `return` becomes this node's output."
+        hint="Runs sandboxed for PURE transforms — no filesystem, network, or environment access (use dedicated HTTP / DB / File nodes for I/O). Use `$json` (first item's fields), `$items` (all items' fields), or `$input` (raw WorkflowItem[]). Use `console.log(...)` — output streams to the Logs tab. Last expression or explicit `return` becomes this node's output."
       >
         <CodeEditor
           language="javascript"
