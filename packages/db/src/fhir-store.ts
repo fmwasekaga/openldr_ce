@@ -177,6 +177,11 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
 
     async applyRemote(record) {
       const { resourceType, id, version, op, siteId } = record;
+      // Validate BEFORE opening the transaction: an upsert must carry a resource. Guarding here means
+      // the upsert branch's content is genuinely non-null (the `content!` below is sound) and we never
+      // write a self-contradictory history row (op='upsert', resource=null) or hit an opaque NOT NULL
+      // violation deep inside the tx.
+      if (op === 'upsert' && !record.resource) throw new Error('applyRemote: upsert requires resource');
       const result = await db.transaction().execute(async (trx): Promise<ApplyResult> => {
         // Idempotency: the history PK is (resource_type,id,version). A matching row means this exact
         // origin version was already applied → no-op (no fhir_resources / change_log writes). We use an
@@ -205,29 +210,28 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
           .execute();
 
         if (op === 'upsert') {
-          const cur = await trx
-            .selectFrom('fhir.fhir_resources')
-            .select('version')
-            .where('resource_type', '=', resourceType)
-            .where('id', '=', id)
-            .executeTakeFirst();
-          // Guard: a late/out-of-order OLDER version must not clobber a newer already-mirrored canonical row.
-          // History still records every version above; only the canonical read-model row is protected.
-          // (bigint reads back as string on real pg — coerce before comparing.)
-          if (!cur || version >= Number(cur.version)) {
-            await trx
-              .insertInto('fhir.fhir_resources')
-              .values({ resource_type: resourceType, id, version, version_id: String(version), resource: content! })
-              .onConflict((oc) =>
-                oc.columns(['resource_type', 'id']).doUpdateSet({
+          // Atomic monotonic guard: on a first apply the plain INSERT lands; on conflict we advance the
+          // canonical row ONLY when the stored version is strictly less than the incoming version. The
+          // WHERE qualifies the EXISTING (target) row — Postgres exposes it under the unqualified relation
+          // name in ON CONFLICT DO UPDATE, so `sql.ref('fhir_resources.version')` renders that reference.
+          // This replaces a read-then-branch (which could regress the row under concurrent same-id applies)
+          // with a single race-free statement. History above stays unconditional (append-only); an
+          // out-of-order OLDER version is recorded there but its WHERE fails, leaving the newer row intact.
+          await trx
+            .insertInto('fhir.fhir_resources')
+            .values({ resource_type: resourceType, id, version, version_id: String(version), resource: content! })
+            .onConflict((oc) =>
+              oc
+                .columns(['resource_type', 'id'])
+                .doUpdateSet({
                   version,
                   version_id: String(version),
                   resource: content!,
                   updated_at: sql`now()`,
-                }),
-              )
-              .execute();
-          }
+                })
+                .where(sql.ref('fhir_resources.version'), '<', version),
+            )
+            .execute();
         } else {
           await trx.deleteFrom('fhir.fhir_resources').where('resource_type', '=', resourceType).where('id', '=', id).execute();
         }

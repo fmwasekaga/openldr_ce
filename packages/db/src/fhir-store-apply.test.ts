@@ -130,6 +130,23 @@ describe('fhir-store applyRemote', () => {
     await db.destroy();
   });
 
+  it('op:upsert with no resource → rejects (and writes nothing)', async () => {
+    const db = await makeMigratedDb();
+    const store = createFhirStore(db as any);
+
+    await expect(
+      store.applyRemote({ resourceType: 'Patient', id: 'p1', version: 1, op: 'upsert', siteId: 'lab-A' }),
+    ).rejects.toThrow(/upsert requires resource/);
+
+    // The guard runs before the transaction, so no partial rows leak.
+    const hist = await db.selectFrom('fhir.resource_history').select('version').where('id', '=', 'p1').execute();
+    expect(hist).toHaveLength(0);
+    const log = await db.selectFrom('fhir.change_log').select('seq').where('resource_id', '=', 'p1').execute();
+    expect(log).toHaveLength(0);
+
+    await db.destroy();
+  });
+
   it('a newer version DOES advance the canonical row (upsert path)', async () => {
     const db = await makeMigratedDb();
     const store = createFhirStore(db as any);
