@@ -804,6 +804,9 @@ importers:
 
   packages/dashboards:
     dependencies:
+      '@openldr/core':
+        specifier: workspace:*
+        version: link:../core
       '@openldr/db':
         specifier: workspace:*
         version: link:../db
@@ -892,6 +895,9 @@ importers:
 
   packages/forms:
     dependencies:
+      '@openldr/core':
+        specifier: workspace:*
+        version: link:../core
       '@openldr/db':
         specifier: workspace:*
         version: link:../db

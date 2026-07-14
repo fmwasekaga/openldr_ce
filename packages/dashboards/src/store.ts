@@ -1,5 +1,6 @@
 import type { Kysely } from 'kysely';
-import type { InternalSchema } from '@openldr/db';
+import { canonicalHash } from '@openldr/core';
+import type { InternalSchema, ReferenceCapture } from '@openldr/db';
 import { type Dashboard, DashboardSchema } from './types';
 
 function toRow(d: Dashboard) {
@@ -28,7 +29,20 @@ export interface DashboardStore {
   remove(id: string): Promise<void>;
 }
 
-export function createDashboardStore(db: Kysely<InternalSchema>): DashboardStore {
+// Capture content hash for reference-change dedup. Covers EVERY lab-visible field the applier writes
+// from the served body — name/filters/widgets/layout PLUS isDefault, refreshIntervalSec and ownerId —
+// so a central edit that flips only isDefault or refreshIntervalSec still changes the hash and
+// propagates (a narrower {name,filters,widgets,layout} set would dedup those away). canonicalHash
+// sorts keys, so jsonb key reordering never perturbs it. NOTE: this is deliberately BROADER than
+// dashboardContentEqual (seed.ts), which stays {name,filters,widgets,layout} for seed idempotence.
+function hashOf(d: Dashboard): string {
+  return canonicalHash({
+    name: d.name, filters: d.filters, widgets: d.widgets, layout: d.layout,
+    isDefault: d.isDefault, refreshIntervalSec: d.refreshIntervalSec, ownerId: d.ownerId ?? null,
+  });
+}
+
+export function createDashboardStore(db: Kysely<InternalSchema>, capture?: ReferenceCapture): DashboardStore {
   const t = () => db.selectFrom('dashboards');
   const store: DashboardStore = {
     async list() {
@@ -44,20 +58,37 @@ export function createDashboardStore(db: Kysely<InternalSchema>): DashboardStore
       // concurrent POSTs of the same id race on the PK. ON CONFLICT DO NOTHING lets the loser
       // no-op instead of hitting a unique-violation (which mapError surfaced as a 500). If no
       // row comes back (a concurrent insert won), read the existing row and return it.
-      const inserted = await db
-        .insertInto('dashboards')
-        .values(toRow(d) as never)
-        .onConflict((oc) => oc.column('id').doNothing())
-        .returningAll()
-        .executeTakeFirst();
-      if (inserted) return fromRow(inserted as Record<string, unknown>);
-      return (await store.get(d.id))!;
+      return db.transaction().execute(async (trx) => {
+        const inserted = await trx
+          .insertInto('dashboards')
+          .values(toRow(d) as never)
+          .onConflict((oc) => oc.column('id').doNothing())
+          .returningAll()
+          .executeTakeFirst();
+        // Hash the row that ACTUALLY persists: on a losing ON CONFLICT DO NOTHING the existing row
+        // wins, so the captured hash must reflect the stored/served body, not the rejected input.
+        const persisted = inserted
+          ? fromRow(inserted as Record<string, unknown>)
+          : fromRow((await trx.selectFrom('dashboards').selectAll().where('id', '=', d.id).executeTakeFirst()) as Record<string, unknown>);
+        if (capture) await capture.record(trx, 'dashboard', d.id, 'upsert', hashOf(persisted));
+        return persisted;
+      });
     },
     async update(id, d) {
-      await db.updateTable('dashboards').set({ ...toRow({ ...d, id }) } as never).where('id', '=', id).execute();
-      return (await store.get(id))!;
+      return db.transaction().execute(async (trx) => {
+        await trx.updateTable('dashboards').set({ ...toRow({ ...d, id }) } as never).where('id', '=', id).execute();
+        // Hash the read-back (persisted) row, not the input, so the log never diverges from storage.
+        const persisted = fromRow((await trx.selectFrom('dashboards').selectAll().where('id', '=', id).executeTakeFirst()) as Record<string, unknown>);
+        if (capture) await capture.record(trx, 'dashboard', id, 'upsert', hashOf(persisted));
+        return persisted;
+      });
     },
-    async remove(id) { await db.deleteFrom('dashboards').where('id', '=', id).execute(); },
+    async remove(id) {
+      await db.transaction().execute(async (trx) => {
+        await trx.deleteFrom('dashboards').where('id', '=', id).execute();
+        if (capture) await capture.record(trx, 'dashboard', id, 'delete', null);
+      });
+    },
   };
   return store;
 }

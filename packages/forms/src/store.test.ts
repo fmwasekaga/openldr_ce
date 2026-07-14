@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { type Kysely } from 'kysely';
 import { newDb } from 'pg-mem';
-import { internalMigrations, type InternalSchema } from '@openldr/db';
-import { createFormStore } from './store';
+import { internalMigrations, referenceCapture, type InternalSchema } from '@openldr/db';
+import { createFormStore, formSyncBody } from './store';
 import type { FormSchema } from './schema/form-schema';
 import { toQuestionnaire } from './to-questionnaire';
 
@@ -324,6 +324,74 @@ describe('createFormStore', () => {
     expect(fetched?.fhirProfileUrl).toBe('http://example.org/StructureDefinition/test');
     expect(fetched?.facilityId).toBe('fac-001');
 
+    await db.destroy();
+  });
+});
+
+describe('createFormStore reference capture', () => {
+  async function refLog(db: Kysely<InternalSchema>, entityId: string) {
+    return db.selectFrom('reference_change_log').selectAll().where('entity_id', '=', entityId).orderBy('seq').execute();
+  }
+
+  it('draft create/update capture nothing; publish → upsert; archive → delete', async () => {
+    const db = await makeMigratedDb();
+    const store = createFormStore(db, referenceCapture);
+
+    // Draft create → no capture (drafts are not synced).
+    const created = await store.create({ name: 'Intake', schema: schema(), targetPages: ['forms'] });
+    expect(await refLog(db, created.id)).toHaveLength(0);
+
+    // Draft update → still no capture.
+    await store.update(created.id, { name: 'Intake edited', schema: schema('Intake edited'), targetPages: ['forms'] });
+    expect(await refLog(db, created.id)).toHaveLength(0);
+
+    // Publish → upsert capture with a content hash.
+    await store.publish(created.id, { versionLabel: 'v1' });
+    let log = await refLog(db, created.id);
+    expect(log).toHaveLength(1);
+    expect(log[0]).toMatchObject({ entity_type: 'form', op: 'upsert' });
+    expect(log[0].content_hash).toBeTruthy();
+
+    // Archive → delete tombstone.
+    await store.setStatus(created.id, 'archived');
+    log = await refLog(db, created.id);
+    expect(log).toHaveLength(2);
+    expect(log[1]).toMatchObject({ op: 'delete', content_hash: null });
+
+    await db.destroy();
+  });
+
+  it('formSyncBody is null-safe on a missing row and parses schema on a present row', async () => {
+    // Task 7 calls this directly on a possibly-absent store.get result.
+    expect(formSyncBody(undefined)).toBeNull();
+    expect(formSyncBody(null)).toBeNull();
+    const body = formSyncBody({
+      id: 'form-1', name: 'X', version_label: null, fhir_resource_type: 'Questionnaire',
+      fhir_version: 'R4', fhir_profile_url: null, facility_id: 'fac-1', status: 'published',
+      active: true, schema: JSON.stringify({ fields: [] }), target_pages: null, created_at: null, updated_at: null,
+    });
+    expect(body).toMatchObject({ id: 'form-1', status: 'published', active: true, fhirVersion: 'R4', facilityId: 'fac-1' });
+    expect(body?.schema).toEqual({ fields: [] }); // schema string parsed to an object
+  });
+
+  it('delete() of a form → delete capture', async () => {
+    const db = await makeMigratedDb();
+    const store = createFormStore(db, referenceCapture);
+    const created = await store.create({ name: 'Intake', schema: schema(), targetPages: ['forms'] });
+    await store.publish(created.id, { versionLabel: 'v1' });
+    await store.delete(created.id);
+    const log = await refLog(db, created.id);
+    expect(log[log.length - 1]).toMatchObject({ op: 'delete', content_hash: null });
+    await db.destroy();
+  });
+
+  it('without capture: publish/delete write no reference_change_log rows', async () => {
+    const db = await makeMigratedDb();
+    const store = createFormStore(db);
+    const created = await store.create({ name: 'Intake', schema: schema(), targetPages: ['forms'] });
+    await store.publish(created.id, { versionLabel: 'v1' });
+    await store.delete(created.id);
+    expect(await refLog(db, created.id)).toHaveLength(0);
     await db.destroy();
   });
 });

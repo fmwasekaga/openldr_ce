@@ -7,7 +7,7 @@ import { createEventBus } from '@openldr/adapter-event-bus';
 import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import type { Config } from '@openldr/config';
 import { createLogger, HealthRegistry, open, parseSecretKey, redact, type Logger } from '@openldr/core';
-import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore } from '@openldr/db';
+import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema, Provenance } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
@@ -37,8 +37,9 @@ import { type PluginRuntime } from '@openldr/plugins';
 import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
-import { createSyncPushRunner, createSyncTokenProvider, readSyncConfig, type PushBatch, type PushResponse } from '@openldr/sync';
+import { createSyncPushRunner, createSyncPullRunner, createSyncTokenProvider, readSyncConfig, type PushBatch, type PushResponse } from '@openldr/sync';
 import { createSyncPushWorker, type SyncPushWorker } from './sync-push-worker';
+import { createSyncPullWorker, type SyncPullWorker } from './sync-pull-worker';
 import { createActivityService, type ActivityService } from './activity-service';
 import { createFeatureFlags, type FeatureFlags } from './feature-flags';
 import { createNumberSettings, type NumberSettings } from './number-settings';
@@ -322,7 +323,10 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   const plugins = createPluginRegistry({ blob, internalDb: internal.db, logger, audit, devAllowUnsigned: cfg.MARKETPLACE_DEV_ALLOW_UNSIGNED });
   const users = createUserStore(internal.db);
   const userProfiles = createUserProfileStore(internal.db);
-  const forms = createFormStore(internal.db);
+  // Sync S2: pass referenceCapture so central config authoring lands rows in reference_change_log
+  // (the pull endpoint's source). Safe on every node: a lab serves no pull so its log is inert, and
+  // the apply path writes tables directly (capture-free) → no re-origination loop.
+  const forms = createFormStore(internal.db, referenceCapture);
   const marketplaceInstalls = createMarketplaceInstallStore(internal.db);
 
   // Canonical persist for the Persist Store workflow node — same wiring as ingest-context.
@@ -360,7 +364,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   // `workflowServices` lazily at call time (it is declared further down this function) — mirrors
   // the same lazy-read pattern in apps/server/app.ts.
   const reportDesignStore = createReportDesignStore(internal.db);
-  const reportDefStore = createReportStore(internal.db);
+  const reportDefStore = createReportStore(internal.db, referenceCapture);
   const reportRenderDeps: RunStoredQueryDeps = {
     customQueries: createCustomQueryStore(internal.db),
     runConnectorSql: (input) => {
@@ -415,7 +419,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     logger,
   });
 
-  const dashboardStore = createDashboardStore(internal.db);
+  const dashboardStore = createDashboardStore(internal.db, referenceCapture);
   const runDashboardQuery = async (q: WidgetQuery): Promise<ReportResult> => {
     let data;
     if (q.mode === 'builder') {
@@ -523,7 +527,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   };
 
   const connectorStore = createConnectorStore(internal.db);
-  const appSettings = createAppSettingsStore(internal.db);
+  const appSettings = createAppSettingsStore(internal.db, referenceCapture);
   const featureFlags = createFeatureFlags(appSettings);
   const numberSettings = createNumberSettings(appSettings);
   const reportCategories = createReportCategoriesService(appSettings);
@@ -663,6 +667,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   // sync (the default), in which case NOTHING here starts and boot is unaffected. The client secret is
   // decrypted with the same SECRETS_ENCRYPTION_KEY / open() scheme the connector store uses.
   let syncPushWorker: SyncPushWorker | undefined;
+  let syncPullWorker: SyncPullWorker | undefined;
   const syncDecrypt = (blob: string): string => open(blob, parseSecretKey(cfg.SECRETS_ENCRYPTION_KEY ?? ''));
   // Reading the sync config touches app_settings; a transient DB read failure here must degrade to
   // "sync disabled" rather than abort boot (mirrors the projection LISTEN fallback's boot-safety).
@@ -715,6 +720,34 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     });
     syncPushWorker.start();
     logger.info({ centralUrl: syncCfg.centralUrl, siteId: syncCfg.siteId }, 'sync push worker started');
+
+    // Sync S2: directional pull (central -> lab reference config). A THIRD consumer of the change stream
+    // ('sync-pull' cursor), sharing the push token provider instance (so token caching is not defeated).
+    // Pull worker: mirror central's reference config down. Shares the push token provider + internal db.
+    const referenceApplier = createReferenceApplier(internal.db);
+    const syncPullRunner = createSyncPullRunner({
+      getToken: () => tokenProvider.getToken(), // SHARE the push token provider instance
+      applyRecord: (rec) => referenceApplier(rec),
+      postPull: async (body, token) => {
+        const res = await fetch(`${syncCfg.centralUrl}/api/sync/pull`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error(`central responded ${res.status}`); // status only — never the token
+        return (await res.json()) as import('@openldr/sync').PullResponse;
+      },
+      readCursor: () => readChangeCursor(internal.db, 'sync-pull'),
+      advanceCursor: (seq) => advanceChangeCursor(internal.db, 'sync-pull', seq),
+      logger,
+    });
+    syncPullWorker = createSyncPullWorker({
+      runner: { runCycle: () => syncPullRunner.runCycle() },
+      intervalMs: 5000,
+      logger,
+    });
+    syncPullWorker.start();
+    logger.info({ centralUrl: syncCfg.centralUrl, siteId: syncCfg.siteId }, 'sync pull worker started');
   } else {
     logger.info('sync push worker disabled (not configured)');
   }
@@ -884,6 +917,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     async close() {
       await workflowListeners.stopAll();
       syncPushWorker?.stop();
+      syncPullWorker?.stop();
       await projectionWorker.stop();
       if (projectionListenConnected) await projectionListenClient.end().catch(() => undefined);
       await Promise.allSettled([eventing.close(), store.close(), internal.close()]);

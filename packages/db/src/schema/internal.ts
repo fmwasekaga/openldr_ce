@@ -41,6 +41,17 @@ export interface ChangeCursorsTable {
   updated_at: Generated<Date>;
 }
 
+// Distributed sync S2: append-only reference-data change-capture log (public schema).
+// Mirrors ChangeLogTable's cursor shape for config entities (form/dashboard/report/setting).
+export interface ReferenceChangeLogTable {
+  seq: Generated<number>;
+  entity_type: string;
+  entity_id: string;
+  op: string; // 'upsert' | 'delete'
+  content_hash: string | null;
+  recorded_at: Generated<Date>;
+}
+
 export interface OutboxEventsTable {
   id: string;
   type: string;
@@ -119,6 +130,7 @@ export interface DashboardsTable {
   filters: JSONColumnType<unknown[]>;
   refresh_interval_sec: Generated<number>;
   is_default: Generated<boolean>;
+  managed_origin: string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -310,6 +322,7 @@ export interface FormDefinitionsTable {
   active: boolean;
   schema: unknown;
   target_pages: unknown | null;
+  managed_origin: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -520,6 +533,7 @@ export interface ReportsTable {
   chart: unknown | null;
   param_options: unknown | null;
   status: string;
+  managed_origin: string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -529,6 +543,7 @@ export interface InternalSchema {
   'fhir.resource_history': ResourceHistoryTable;
   'fhir.change_log': ChangeLogTable;
   'fhir.change_cursors': ChangeCursorsTable;
+  reference_change_log: ReferenceChangeLogTable;
   outbox_events: OutboxEventsTable;
   ingest_batches: IngestBatchesTable;
   plugins: PluginsTable;

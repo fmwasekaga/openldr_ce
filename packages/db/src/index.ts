@@ -29,6 +29,9 @@ export * from './custom-query-store';
 export * from './registry-store';
 export * from './plugin-data-store';
 export * from './app-settings-store';
+export * from './reference-change-log';
+export * from './reference-capture';
+export * from './reference-apply';
 export {
   createReportScheduleStore,
   type ScheduleFrequency,

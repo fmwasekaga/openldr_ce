@@ -14,6 +14,7 @@
     "lint": "echo \"no lint\""
   },
   "dependencies": {
+    "@openldr/core": "workspace:*",
     "@openldr/db": "workspace:*",
     "@openldr/fhir": "workspace:*",
     "@types/fhir": "^0.0.44",

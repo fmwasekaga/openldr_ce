@@ -1,5 +1,7 @@
 import type { Kysely } from 'kysely';
+import { canonicalHash } from '@openldr/core';
 import type { InternalSchema } from './schema/internal';
+import type { ReferenceCapture } from './reference-capture';
 
 // Structural mirror of @openldr/reporting ReportDef (db must not depend on reporting; custom-query-store precedent).
 export interface ReportRecord {
@@ -43,7 +45,18 @@ export interface ReportStore {
   remove(id: string): Promise<void>;
 }
 
-export function createReportStore(db: Kysely<InternalSchema>): ReportStore {
+// Hash over the seed-relevant fields (NOT id) so the reference-change content hash is stable
+// against jsonb key reordering (canonicalHash sorts keys) and matches what a lab consumes.
+function hashOf(r: ReportRecord): string {
+  return canonicalHash({
+    name: r.name, description: r.description, category: r.category,
+    designId: r.designId, primaryQueryId: r.primaryQueryId,
+    summaryMetrics: r.summaryMetrics, chart: r.chart, paramOptions: r.paramOptions,
+    status: r.status,
+  });
+}
+
+export function createReportStore(db: Kysely<InternalSchema>, capture?: ReferenceCapture): ReportStore {
   const store: ReportStore = {
     async list() {
       const rows = await db.selectFrom('reports').selectAll().orderBy('name').execute();
@@ -54,16 +67,33 @@ export function createReportStore(db: Kysely<InternalSchema>): ReportStore {
       return r ? fromRow(r as Record<string, unknown>) : undefined;
     },
     async create(r) {
-      const inserted = await db.insertInto('reports').values(toRow(r) as never)
-        .onConflict((oc) => oc.column('id').doNothing()).returningAll().executeTakeFirst();
-      if (inserted) return fromRow(inserted as Record<string, unknown>);
-      return (await store.get(r.id))!;
+      return db.transaction().execute(async (trx) => {
+        const inserted = await trx.insertInto('reports').values(toRow(r) as never)
+          .onConflict((oc) => oc.column('id').doNothing()).returningAll().executeTakeFirst();
+        // Hash the row that ACTUALLY persists: on a losing ON CONFLICT DO NOTHING the existing row
+        // wins, so the captured hash must reflect the stored/served body, not the rejected input.
+        const persisted = inserted
+          ? fromRow(inserted as Record<string, unknown>)
+          : fromRow((await trx.selectFrom('reports').selectAll().where('id', '=', r.id).executeTakeFirst()) as Record<string, unknown>);
+        if (capture) await capture.record(trx, 'report', r.id, 'upsert', hashOf(persisted));
+        return persisted;
+      });
     },
     async update(id, r) {
-      await db.updateTable('reports').set({ ...toRow({ ...r, id }) } as never).where('id', '=', id).execute();
-      return (await store.get(id))!;
+      return db.transaction().execute(async (trx) => {
+        await trx.updateTable('reports').set({ ...toRow({ ...r, id }) } as never).where('id', '=', id).execute();
+        // Hash the read-back (persisted) row, not the input, so the log never diverges from storage.
+        const persisted = fromRow((await trx.selectFrom('reports').selectAll().where('id', '=', id).executeTakeFirst()) as Record<string, unknown>);
+        if (capture) await capture.record(trx, 'report', id, 'upsert', hashOf(persisted));
+        return persisted;
+      });
     },
-    async remove(id) { await db.deleteFrom('reports').where('id', '=', id).execute(); },
+    async remove(id) {
+      await db.transaction().execute(async (trx) => {
+        await trx.deleteFrom('reports').where('id', '=', id).execute();
+        if (capture) await capture.record(trx, 'report', id, 'delete', null);
+      });
+    },
   };
   return store;
 }
