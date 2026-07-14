@@ -681,4 +681,11 @@ export const pt: EnShape = {
     empty: 'Ainda não há parâmetros. Adicione um abaixo.',
     invalid: 'Os identificadores de parâmetro devem ser únicos e não vazios',
   },
+  workflows: {
+    secretSet: '•••••• (segredo definido)',
+    replaceSecret: 'Substituir segredo',
+    headersSecretHidden: 'Os cabeçalhos contêm um segredo e estão ocultos — substitua todos os cabeçalhos para editar.',
+    replaceHeaders: 'Substituir cabeçalhos',
+    secretWriteOnlyHelp: 'Por segurança, um segredo guardado não pode ser visualizado, apenas substituído.',
+  },
 };

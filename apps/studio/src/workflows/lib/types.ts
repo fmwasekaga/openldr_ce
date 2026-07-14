@@ -1,4 +1,5 @@
 import type { Node, Edge } from '@xyflow/react';
+import type { SecretRef } from '@/api';
 
 /** Shared visual metadata present on every node's `data`. */
 export interface NodeVisualMeta {
@@ -18,8 +19,12 @@ export interface TriggerNodeData extends NodeVisualMeta {
   tz?: string;
   /** For webhook triggers — path segment under /api/workflows/hooks/ that routes here. */
   path?: string;
-  /** For webhook triggers — generated shared secret, sent back as X-Webhook-Token. */
-  secret?: string;
+  /**
+   * For webhook triggers — generated shared secret, sent back as X-Webhook-Token.
+   * The detail fetch returns a write-only `{ secretRef }` for a saved secret (SEC-06);
+   * a freshly typed/generated value is the plaintext string.
+   */
+  secret?: string | SecretRef;
   /** For webhook triggers — HTTP method to accept. */
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
   [key: string]: unknown;
@@ -58,8 +63,12 @@ export interface WebhookNodeData extends NodeVisualMeta {
   label: string;
   /** Path segment under /api/workflows/hooks/ that triggers this workflow (e.g. "hello"). */
   path?: string;
-  /** Generated shared secret; callers must send it as the X-Webhook-Token header. */
-  secret?: string;
+  /**
+   * Generated shared secret; callers must send it as the X-Webhook-Token header.
+   * A saved secret comes back as a write-only `{ secretRef }` (SEC-06); a freshly
+   * typed/generated value is the plaintext string.
+   */
+  secret?: string | SecretRef;
   url: string;
   method: 'GET' | 'POST' | 'PUT' | 'DELETE';
   [key: string]: unknown;
