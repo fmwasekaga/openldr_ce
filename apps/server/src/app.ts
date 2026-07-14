@@ -25,6 +25,7 @@ import { registerSettingsRoutes } from './settings-routes';
 import { registerActivityRoutes } from './activity-routes';
 import { registerPluginUiRoutes } from './plugin-ui-routes';
 import { registerQueryRoutes } from './query-routes';
+import { registerSyncRoutes } from './sync-routes';
 import { createConnectorStore, createCustomQueryStore } from '@openldr/db';
 import { registerAuth } from './auth-plugin';
 import { readAppVersion } from './version';
@@ -121,6 +122,7 @@ export function buildApp(ctx: AppContext) {
   });
   registerSettingsRoutes(app, ctx);
   registerActivityRoutes(app, ctx);
+  registerSyncRoutes(app, ctx);
 
   // Serve the built SPA under /studio/* — the landing site owns /.
   // API + health routes are registered above and always win.

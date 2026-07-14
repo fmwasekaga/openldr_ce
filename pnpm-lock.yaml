@@ -87,6 +87,9 @@ importers:
       '@openldr/reporting':
         specifier: workspace:*
         version: link:../../packages/reporting
+      '@openldr/sync':
+        specifier: workspace:*
+        version: link:../../packages/sync
       '@openldr/terminology':
         specifier: workspace:*
         version: link:../../packages/terminology
@@ -644,6 +647,9 @@ importers:
       '@openldr/reporting':
         specifier: workspace:*
         version: link:../reporting
+      '@openldr/sync':
+        specifier: workspace:*
+        version: link:../sync
       '@openldr/terminology':
         specifier: workspace:*
         version: link:../terminology
@@ -1092,6 +1098,22 @@ importers:
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
+      vitest:
+        specifier: 2.1.8
+        version: 2.1.8(@types/node@25.9.3)(jsdom@25.0.1)(lightningcss@1.32.0)
+
+  packages/sync:
+    dependencies:
+      '@openldr/db':
+        specifier: workspace:*
+        version: link:../db
+      '@openldr/fhir':
+        specifier: workspace:*
+        version: link:../fhir
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.7.2
       vitest:
         specifier: 2.1.8
         version: 2.1.8(@types/node@25.9.3)(jsdom@25.0.1)(lightningcss@1.32.0)

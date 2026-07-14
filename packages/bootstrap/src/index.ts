@@ -6,8 +6,8 @@ import { createAuth } from '@openldr/adapter-auth';
 import { createEventBus } from '@openldr/adapter-event-bus';
 import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import type { Config } from '@openldr/config';
-import { createLogger, HealthRegistry, redact, type Logger } from '@openldr/core';
-import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore } from '@openldr/db';
+import { createLogger, HealthRegistry, open, parseSecretKey, redact, type Logger } from '@openldr/core';
+import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema, Provenance } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
@@ -37,6 +37,8 @@ import { type PluginRuntime } from '@openldr/plugins';
 import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
+import { createSyncPushRunner, createSyncTokenProvider, readSyncConfig, type PushBatch, type PushResponse } from '@openldr/sync';
+import { createSyncPushWorker, type SyncPushWorker } from './sync-push-worker';
 import { createActivityService, type ActivityService } from './activity-service';
 import { createFeatureFlags, type FeatureFlags } from './feature-flags';
 import { createNumberSettings, type NumberSettings } from './number-settings';
@@ -656,6 +658,67 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     logger,
   });
 
+  // Sync S1: directional push (lab -> central). A SECOND consumer of fhir.change_log ('sync-push'),
+  // config-gated. readSyncConfig returns null for any install that hasn't enabled + fully configured
+  // sync (the default), in which case NOTHING here starts and boot is unaffected. The client secret is
+  // decrypted with the same SECRETS_ENCRYPTION_KEY / open() scheme the connector store uses.
+  let syncPushWorker: SyncPushWorker | undefined;
+  const syncDecrypt = (blob: string): string => open(blob, parseSecretKey(cfg.SECRETS_ENCRYPTION_KEY ?? ''));
+  // Reading the sync config touches app_settings; a transient DB read failure here must degrade to
+  // "sync disabled" rather than abort boot (mirrors the projection LISTEN fallback's boot-safety).
+  let syncCfg: Awaited<ReturnType<typeof readSyncConfig>> = null;
+  try {
+    syncCfg = await readSyncConfig(appSettings, syncDecrypt, logger);
+  } catch (err) {
+    logger.warn({ err }, 'sync push worker: could not read sync config; sync disabled this boot');
+  }
+  if (syncCfg) {
+    const tokenProvider = createSyncTokenProvider({
+      issuerUrl: syncCfg.oidcIssuer,
+      clientId: syncCfg.clientId,
+      clientSecret: syncCfg.clientSecret,
+    });
+    const syncPushRunner = createSyncPushRunner({
+      internalDb: internal.db,
+      fetchSafeRows: fetchSafeChangeRows,
+      // Upsert body for a specific origin version, read from the append-only history (the projection
+      // safe-frontier has already confirmed this (type,id,version) committed + final before we push it).
+      fetchContent: async (resourceType, id, version) => {
+        const row = await internal.db
+          .selectFrom('fhir.resource_history')
+          .select('resource')
+          .where('resource_type', '=', resourceType)
+          .where('id', '=', id)
+          .where('version', '=', version)
+          .executeTakeFirst();
+        return row?.resource ?? null;
+      },
+      postPush: async (batch: PushBatch, token: string): Promise<PushResponse> => {
+        const res = await fetch(`${syncCfg.centralUrl}/api/sync/push`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(batch),
+        });
+        // Throw (never leaking the token) so the runner leaves the cursor put and retries next cycle.
+        if (!res.ok) throw new Error(`sync push POST /api/sync/push failed: central responded ${res.status}`);
+        return (await res.json()) as PushResponse;
+      },
+      getToken: () => tokenProvider.getToken(),
+      readCursor: () => readChangeCursor(internal.db, 'sync-push'),
+      advanceCursor: (seq) => advanceChangeCursor(internal.db, 'sync-push', seq),
+      logger,
+    });
+    syncPushWorker = createSyncPushWorker({
+      runner: { runCycle: () => syncPushRunner.runCycle() },
+      intervalMs: 5000,
+      logger,
+    });
+    syncPushWorker.start();
+    logger.info({ centralUrl: syncCfg.centralUrl, siteId: syncCfg.siteId }, 'sync push worker started');
+  } else {
+    logger.info('sync push worker disabled (not configured)');
+  }
+
   const pluginData = createPluginDataStore(internal.db);
   // Generic, caller-driven DHIS2 push orchestration (mapping/orgUnitMap supplied by the
   // plugin UI through the broker). Mirrors the host dhis2-context runMapping behaviour.
@@ -820,6 +883,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     cfg,
     async close() {
       await workflowListeners.stopAll();
+      syncPushWorker?.stop();
       await projectionWorker.stop();
       if (projectionListenConnected) await projectionListenClient.end().catch(() => undefined);
       await Promise.allSettled([eventing.close(), store.close(), internal.close()]);
