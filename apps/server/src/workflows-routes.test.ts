@@ -855,6 +855,30 @@ describe('workflow routes', () => {
     await db.destroy();
   });
 
+  it('seals a webhook secret whose literal value is the string "null" (emptiness is value-shaped)', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    const { ctx, db, store, key } = await realSecretCtx();
+    registerWorkflowRoutes(app, ctx);
+
+    const wf = {
+      ...SAMPLE_WORKFLOW, id: 'wf-nullsecret',
+      definition: { nodes: [
+        { id: 't1', type: 'trigger', data: { triggerType: 'webhook', path: 'hook', secret: 'null' } },
+      ], edges: [] },
+    };
+    const res = await app.inject({ method: 'POST', url: '/api/workflows', payload: wf });
+    expect(res.statusCode).toBe(200);
+
+    const stored = await ctx.workflows.store.get('wf-nullsecret');
+    const trigger = stored.definition.nodes.find((n: any) => n.id === 't1');
+    // NOT dropped — sealed into a ref that resolves back to the literal 'null'.
+    expect(typeof trigger.data.secret.secretRef).toBe('string');
+    expect(await store.resolve(trigger.data.secret.secretRef, key)).toBe('null');
+    expect((await secretRows(db, 'wf-nullsecret')).length).toBe(1);
+    await db.destroy();
+  });
+
   it('DELETE cascades — the workflow_secrets rows are removed', async () => {
     const app = Fastify();
     app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
@@ -878,7 +902,8 @@ describe('workflow routes', () => {
     registerWorkflowRoutes(app, ctx);
 
     const res = await app.inject({ method: 'POST', url: '/api/workflows', payload: SECRET_WORKFLOW });
-    expect(res.statusCode).toBe(400);
+    // A missing server key is a server-config fault (valid payload) → 503, not 4xx.
+    expect(res.statusCode).toBe(503);
     expect(res.json().error).toMatch(/SECRETS_ENCRYPTION_KEY/);
     // No partial persist: neither the workflow nor any secret row exists.
     expect(await ctx.workflows.store.get('wf-secret')).toBeUndefined();

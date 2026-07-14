@@ -93,17 +93,22 @@ async function extractWorkflowSecrets(ctx: AppContext, workflowId: string, defin
   const out = await mapSecretFieldsAsync(definition, async (f) => {
     // Unchanged, already-sealed ref → keep the row, touch nothing.
     if (isSecretRef(f.value)) { kept.push(f.value.secretRef); return; }
+    // Emptiness is decided on the RAW value shape, NOT the serialized string, so a
+    // legitimate secret whose literal value is the string 'null' or '{}' is still
+    // sealed (for a string, JSON serialization would falsely match those sentinels).
+    const v = f.value;
+    const isEmpty =
+      v == null ||
+      (typeof v === 'string' && v.length === 0) ||
+      (typeof v === 'object' && !Array.isArray(v) && Object.keys(v as object).length === 0);
+    if (isEmpty) { f.set(undefined); return; } // empty → drop the field entirely
     // Plaintext: webhook `secret` is a string; the HTTP `config.headers` blob may be
-    // a string OR an object — JSON.stringify the object form before sealing (the
+    // a string OR an object — JSON.stringify the non-string form before sealing (the
     // resolver returns the string, which the HTTP node parses).
-    const plaintext = typeof f.value === 'string' ? f.value : JSON.stringify(f.value);
-    if (plaintext && plaintext.length > 0 && plaintext !== 'null' && plaintext !== '{}') {
-      const id = await ctx.workflows.secretStore.put(workflowId, plaintext, key);
-      kept.push(id);
-      f.set({ secretRef: id });
-    } else {
-      f.set(undefined); // empty → drop the field entirely
-    }
+    const plaintext = typeof v === 'string' ? v : JSON.stringify(v);
+    const id = await ctx.workflows.secretStore.put(workflowId, plaintext, key);
+    kept.push(id);
+    f.set({ secretRef: id });
   });
   // GC any secrets no longer referenced by the saved definition (empty kept → drop all).
   await ctx.workflows.secretStore.deleteExcept(workflowId, kept);
@@ -451,9 +456,12 @@ export function registerWorkflowRoutes(
 function mapError(err: unknown, reply: FastifyReply): { error: string } {
   if (err instanceof ZodError) { reply.code(400); return { error: 'invalid payload' }; }
   // SEC-06 fail-closed: saving a workflow that carries a secret without
-  // SECRETS_ENCRYPTION_KEY set throws ConfigError from the secret store. Surface the
-  // clear message; nothing was persisted (extraction aborts before create/update).
-  if (err instanceof ConfigError) { reply.code(400); return { error: err.message }; }
+  // SECRETS_ENCRYPTION_KEY set throws ConfigError from the secret store. This is a
+  // SERVER-config fault (the client's payload was valid), so map to 503 — consistent
+  // with the isConn branch below, kept out of 4xx/user-error accounting, and retryable
+  // once an operator sets the key. The route is manager-gated so surfacing the message
+  // is safe. Nothing was persisted (extraction aborts before create/update).
+  if (err instanceof ConfigError) { reply.code(503); return { error: err.message }; }
   const msg = err instanceof Error ? err.message : String(err);
   const isConn = /ECONNREFUSED|ETIMEDOUT|connection|connect/i.test(msg);
   reply.code(isConn ? 503 : 500);
