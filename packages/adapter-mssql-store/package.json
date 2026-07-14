@@ -8,7 +8,7 @@
   "dependencies": {
     "@openldr/core": "workspace:*",
     "@openldr/ports": "workspace:*",
-    "kysely": "^0.27.5",
+    "kysely": "^0.28.17",
     "tarn": "^3.0.2",
     "tedious": "^18.6.1"
   },

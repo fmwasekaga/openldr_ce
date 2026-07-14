@@ -8,7 +8,7 @@
   "dependencies": {
     "@openldr/core": "workspace:*",
     "@openldr/ports": "workspace:*",
-    "kysely": "^0.27.5",
+    "kysely": "^0.28.17",
     "pg": "^8.13.1"
   },
   "devDependencies": { "@types/pg": "^8.11.10", "typescript": "^5.7.2", "vitest": "^2.1.8" }

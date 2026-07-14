@@ -456,8 +456,8 @@ importers:
         specifier: workspace:*
         version: link:../ports
       kysely:
-        specifier: ^0.27.5
-        version: 0.27.6
+        specifier: ^0.28.17
+        version: 0.28.17
       pg:
         specifier: ^8.13.1
         version: 8.21.0
@@ -503,8 +503,8 @@ importers:
         specifier: workspace:*
         version: link:../ports
       kysely:
-        specifier: ^0.27.5
-        version: 0.27.6
+        specifier: ^0.28.17
+        version: 0.28.17
       tarn:
         specifier: ^3.0.2
         version: 3.0.2
@@ -528,8 +528,8 @@ importers:
         specifier: workspace:*
         version: link:../ports
       kysely:
-        specifier: ^0.27.5
-        version: 0.27.6
+        specifier: ^0.28.17
+        version: 0.28.17
       mysql2:
         specifier: ^3.11.0
         version: 3.22.5(@types/node@22.19.21)
@@ -572,12 +572,12 @@ importers:
         specifier: workspace:*
         version: link:../db
       kysely:
-        specifier: ^0.27.5
-        version: 0.27.6
+        specifier: ^0.28.17
+        version: 0.28.17
     devDependencies:
       pg-mem:
         specifier: ^3.0.14
-        version: 3.0.14(kysely@0.27.6)
+        version: 3.0.14(kysely@0.28.17)
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
@@ -666,8 +666,8 @@ importers:
         specifier: ^5.4.1
         version: 5.11.1
       kysely:
-        specifier: ^0.27.5
-        version: 0.27.6
+        specifier: ^0.28.17
+        version: 0.28.17
       mailparser:
         specifier: ^3.9.12
         version: 3.9.12
@@ -678,8 +678,8 @@ importers:
         specifier: ^3.11.0
         version: 3.22.5(@types/node@22.19.21)
       nodemailer:
-        specifier: ^6.9.15
-        version: 6.10.1
+        specifier: ^9.0.1
+        version: 9.0.1
       pg:
         specifier: ^8.21.0
         version: 8.21.0
@@ -694,8 +694,8 @@ importers:
         version: 3.25.76
     devDependencies:
       '@types/nodemailer':
-        specifier: ^6.4.16
-        version: 6.4.24
+        specifier: ^8.0.1
+        version: 8.0.1
       '@types/pg':
         specifier: ^8.20.0
         version: 8.20.0
@@ -752,8 +752,8 @@ importers:
         version: 12.1.0
     devDependencies:
       kysely:
-        specifier: ^0.27.5
-        version: 0.27.6
+        specifier: ^0.28.17
+        version: 0.28.17
       tsup:
         specifier: ^8.3.5
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.4)(typescript@5.9.3)
@@ -814,15 +814,15 @@ importers:
         specifier: workspace:*
         version: link:../reporting
       kysely:
-        specifier: ^0.27.5
-        version: 0.27.6
+        specifier: ^0.28.17
+        version: 0.28.17
       zod:
         specifier: 3.24.0
         version: 3.24.0
     devDependencies:
       pg-mem:
         specifier: ^3.0.14
-        version: 3.0.14(kysely@0.27.6)
+        version: 3.0.14(kysely@0.28.17)
       typescript:
         specifier: 5.7.2
         version: 5.7.2
@@ -842,8 +842,8 @@ importers:
         specifier: workspace:*
         version: link:../ports
       kysely:
-        specifier: ^0.27.5
-        version: 0.27.6
+        specifier: ^0.28.17
+        version: 0.28.17
       pg:
         specifier: ^8.13.1
         version: 8.21.0
@@ -853,7 +853,7 @@ importers:
         version: 8.20.0
       pg-mem:
         specifier: ^3.0.14
-        version: 3.0.14(kysely@0.27.6)
+        version: 3.0.14(kysely@0.28.17)
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
@@ -908,15 +908,15 @@ importers:
         specifier: ^0.0.44
         version: 0.0.44
       kysely:
-        specifier: ^0.27.5
-        version: 0.27.6
+        specifier: ^0.28.17
+        version: 0.28.17
       zod:
         specifier: ^3.24.1
         version: 3.25.76
     devDependencies:
       pg-mem:
         specifier: ^3.0.14
-        version: 3.0.14(kysely@0.27.6)
+        version: 3.0.14(kysely@0.28.17)
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
@@ -942,8 +942,8 @@ importers:
         specifier: workspace:*
         version: link:../ports
       kysely:
-        specifier: ^0.27.5
-        version: 0.27.6
+        specifier: ^0.28.17
+        version: 0.28.17
     devDependencies:
       typescript:
         specifier: ^5.7.2
@@ -958,15 +958,15 @@ importers:
         specifier: workspace:*
         version: link:../db
       kysely:
-        specifier: ^0.27.5
-        version: 0.27.6
+        specifier: ^0.28.17
+        version: 0.28.17
       zod:
         specifier: ^3.24.1
         version: 3.25.76
     devDependencies:
       pg-mem:
         specifier: ^3.0.14
-        version: 3.0.14(kysely@0.27.6)
+        version: 3.0.14(kysely@0.28.17)
       typescript:
         specifier: ^5.7.2
         version: 5.7.2
@@ -1007,15 +1007,15 @@ importers:
         specifier: workspace:*
         version: link:../ports
       kysely:
-        specifier: ^0.27.5
-        version: 0.27.6
+        specifier: ^0.28.17
+        version: 0.28.17
       zod:
         specifier: ^3.24.1
         version: 3.25.76
     devDependencies:
       pg-mem:
         specifier: ^3.0.14
-        version: 3.0.14(kysely@0.27.6)
+        version: 3.0.14(kysely@0.28.17)
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
@@ -1026,8 +1026,8 @@ importers:
   packages/ports:
     dependencies:
       kysely:
-        specifier: ^0.27.5
-        version: 0.27.6
+        specifier: ^0.28.17
+        version: 0.28.17
     devDependencies:
       typescript:
         specifier: ^5.7.2
@@ -1042,8 +1042,8 @@ importers:
         specifier: workspace:*
         version: link:../db
       kysely:
-        specifier: ^0.27.5
-        version: 0.27.6
+        specifier: ^0.28.17
+        version: 0.28.17
       pdfkit:
         specifier: ^0.15.0
         version: 0.15.2
@@ -1056,7 +1056,7 @@ importers:
         version: 0.13.9
       pg-mem:
         specifier: ^3.0.14
-        version: 3.0.14(kysely@0.27.6)
+        version: 3.0.14(kysely@0.28.17)
       typescript:
         specifier: 5.7.2
         version: 5.7.2
@@ -1095,8 +1095,8 @@ importers:
         specifier: workspace:*
         version: link:../report-designer
       kysely:
-        specifier: ^0.27.5
-        version: 0.27.6
+        specifier: ^0.28.17
+        version: 0.28.17
       zod:
         specifier: ^3.24.1
         version: 3.25.76
@@ -1117,8 +1117,8 @@ importers:
         specifier: workspace:*
         version: link:../fhir
       kysely:
-        specifier: ^0.27.5
-        version: 0.27.6
+        specifier: ^0.28.17
+        version: 0.28.17
     devDependencies:
       typescript:
         specifier: ^5.7.2
@@ -1164,12 +1164,12 @@ importers:
         specifier: workspace:*
         version: link:../ports
       kysely:
-        specifier: ^0.27.5
-        version: 0.27.6
+        specifier: ^0.28.17
+        version: 0.28.17
     devDependencies:
       pg-mem:
         specifier: ^3.0.14
-        version: 3.0.14(kysely@0.27.6)
+        version: 3.0.14(kysely@0.28.17)
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
@@ -1204,8 +1204,8 @@ importers:
         specifier: ^3.10.1
         version: 3.10.1
       kysely:
-        specifier: ^0.27.5
-        version: 0.27.6
+        specifier: ^0.28.17
+        version: 0.28.17
       marked:
         specifier: ^14.1.0
         version: 14.1.4
@@ -1233,7 +1233,7 @@ importers:
         version: 5.0.6
       pg-mem:
         specifier: ^3.0.14
-        version: 3.0.14(kysely@0.27.6)
+        version: 3.0.14(kysely@0.28.17)
       typescript:
         specifier: 5.7.2
         version: 5.7.2
@@ -3621,8 +3621,8 @@ packages:
   '@types/node@25.9.3':
     resolution: {integrity: sha512-603BddQMv3pUcr4U2dhujk83N2tTDVr/34wII2B6bJy6g+8WD6yUb11jszNs0gdi4PesVWl7ABt8nYMVpnLUcg==}
 
-  '@types/nodemailer@6.4.24':
-    resolution: {integrity: sha512-Ww4u0rT9wQNXh4JiQaIwx3QWdcOFXzOjQA2zc+jtFYNmQiT4mIUqcDin51bDFdkzKubFnQCZNK7FIHlPKQ/q9w==}
+  '@types/nodemailer@8.0.1':
+    resolution: {integrity: sha512-PxpaInm8V1JQDd4j0ds5HfvWQk8JupS1C0Picb96QJsrrRDjBH+DlK7L4ZdNSqNULhiZRQHc40nLVShaGxXAMw==}
 
   '@types/pako@2.0.4':
     resolution: {integrity: sha512-VWDCbrLeVXJM9fihYodcLiIv0ku+AlOa/TQ1SvYOaBuyrSKgEcro95LJyIsJ4vSo6BXIxOKxiJAat04CmST9Fw==}
@@ -4941,9 +4941,9 @@ packages:
     resolution: {integrity: sha512-eTIzlVOSUR+JxdDFepEYcBMtZ9Qqdef+rnzWdRZuMbOywu5tO2w2N7rqjoANZ5k9vywhL6Br1VRjUIgTQx4E8w==}
     engines: {node: '>=6'}
 
-  kysely@0.27.6:
-    resolution: {integrity: sha512-FIyV/64EkKhJmjgC0g2hygpBv5RNWVPyNCqSAD7eTCv6eFWNIi4PN1UvdSJGicN/o35bnevgis4Y0UDC0qi8jQ==}
-    engines: {node: '>=14.0.0'}
+  kysely@0.28.17:
+    resolution: {integrity: sha512-nbD8lB9EB3wNdMhOCdx5Li8DxnLbvKByylRLcJ1h+4SkrowVeECAyZlyiKMThF7xFdRz0jSQ2MoJr+wXux2y0Q==}
+    engines: {node: '>=20.0.0'}
 
   leac@0.7.0:
     resolution: {integrity: sha512-qMrZeyEekgdRQ9o6a4NAB2EQZrv827GJdn1vnapwSJ90hWRB4TzUSunvacPkxQ2TnNqHNI1/zSt0hlo0crG8Jw==}
@@ -5404,10 +5404,6 @@ packages:
   node-releases@2.0.47:
     resolution: {integrity: sha512-Uzmd6LXpouKo8EUK68IjH4+E01w/hXyV3R3g/geCJo+rXLNfh1xucB+LOzYEOQPSiUK3h/xZf0cQGcSsmyL2Og==}
     engines: {node: '>=18'}
-
-  nodemailer@6.10.1:
-    resolution: {integrity: sha512-Z+iLaBGVaSjbIzQ4pX6XV41HrooLsQ10ZWPUehGmuantvzWoDVBnmsdUcOIDM1t+yPor5pDhVlDESgOMEGxhHA==}
-    engines: {node: '>=6.0.0'}
 
   nodemailer@9.0.1:
     resolution: {integrity: sha512-Gwv8SQewT616ZM/URn0H54b8PWo/Wum7md3EW2aWy1lO27+WZCX+Xyak3J+NlmHUjDh5ME+uesJUDRbR3Ye8Bw==}
@@ -8952,7 +8948,7 @@ snapshots:
     dependencies:
       undici-types: 7.24.6
 
-  '@types/nodemailer@6.4.24':
+  '@types/nodemailer@8.0.1':
     dependencies:
       '@types/node': 22.19.21
 
@@ -9045,14 +9041,6 @@ snapshots:
       magic-string: 0.30.21
     optionalDependencies:
       vite: 5.4.21(@types/node@22.19.21)(lightningcss@1.32.0)
-
-  '@vitest/mocker@2.1.8(vite@5.4.21(@types/node@25.9.3)(lightningcss@1.32.0))':
-    dependencies:
-      '@vitest/spy': 2.1.8
-      estree-walker: 3.0.3
-      magic-string: 0.30.21
-    optionalDependencies:
-      vite: 5.4.21(@types/node@25.9.3)(lightningcss@1.32.0)
 
   '@vitest/pretty-format@2.1.8':
     dependencies:
@@ -10509,7 +10497,7 @@ snapshots:
 
   kleur@3.0.3: {}
 
-  kysely@0.27.6: {}
+  kysely@0.28.17: {}
 
   leac@0.7.0: {}
 
@@ -11118,8 +11106,6 @@ snapshots:
 
   node-releases@2.0.47: {}
 
-  nodemailer@6.10.1: {}
-
   nodemailer@9.0.1: {}
 
   nth-check@2.1.1:
@@ -11254,7 +11240,7 @@ snapshots:
 
   pg-int8@1.0.1: {}
 
-  pg-mem@3.0.14(kysely@0.27.6):
+  pg-mem@3.0.14(kysely@0.28.17):
     dependencies:
       functional-red-black-tree: 1.0.1
       immutable: 4.3.8
@@ -11264,7 +11250,7 @@ snapshots:
       object-hash: 2.2.0
       pgsql-ast-parser: 12.0.2
     optionalDependencies:
-      kysely: 0.27.6
+      kysely: 0.28.17
 
   pg-pool@3.14.0(pg@8.21.0):
     dependencies:
@@ -12378,7 +12364,7 @@ snapshots:
   vitest@2.1.8(@types/node@25.9.3)(jsdom@25.0.1)(lightningcss@1.32.0):
     dependencies:
       '@vitest/expect': 2.1.8
-      '@vitest/mocker': 2.1.8(vite@5.4.21(@types/node@25.9.3)(lightningcss@1.32.0))
+      '@vitest/mocker': 2.1.8(vite@5.4.21(@types/node@22.19.21)(lightningcss@1.32.0))
       '@vitest/pretty-format': 2.1.8
       '@vitest/runner': 2.1.8
       '@vitest/snapshot': 2.1.8

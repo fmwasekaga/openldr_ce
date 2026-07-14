@@ -16,7 +16,7 @@
     "@openldr/core": "workspace:*",
     "@openldr/fhir": "workspace:*",
     "@openldr/ports": "workspace:*",
-    "kysely": "^0.27.5",
+    "kysely": "^0.28.17",
     "pg": "^8.13.1"
   },
   "devDependencies": {
