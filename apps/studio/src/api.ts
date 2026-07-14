@@ -344,20 +344,59 @@ export const setNumberSetting = (key: string, value: number): Promise<{ key: str
   authFetch(`/api/settings/numbers/${encodeURIComponent(key)}`, jbody({ value }, 'PUT'))
     .then((r) => okJson<{ key: string; value: number }>(r, 'set number setting'));
 
+// ── Lab ⇄ central sync (S4) ────────────────────────────────────────────────────
+// Studio MIRRORS the server shapes: SyncConfigView/SyncConfigInput (@openldr/config)
+// + SyncStatus/SyncDirectionStatus (@openldr/bootstrap sync-handle).
 export type SyncMode = 'push' | 'pull' | 'bidirectional';
-export interface SyncConfig {
+/** GET /api/settings/sync — never carries the secret value, only `clientSecretSet`. */
+export interface SyncConfigView {
   enabled: boolean;
   mode: SyncMode;
   centralUrl: string;
   siteId: string;
+  oidcIssuer: string;
+  clientId: string;
+  clientSecretSet: boolean;
   intervalMinutes: number;
 }
+/** PUT /api/settings/sync — `clientSecret` is WRITE-ONLY: omit it to preserve the stored value. */
+export interface SyncConfigInput {
+  enabled: boolean;
+  mode: SyncMode;
+  centralUrl: string;
+  siteId: string;
+  oidcIssuer: string;
+  clientId: string;
+  clientSecret?: string;
+  intervalMinutes: number;
+}
+export interface SyncDirectionStatus { running: boolean; lastSeq: number; lastSyncedAt: string | null }
+export interface SyncStatus {
+  enabled: boolean;
+  mode: SyncMode;
+  centralUrl: string;
+  siteId: string;
+  push: SyncDirectionStatus | null;
+  pull: SyncDirectionStatus | null;
+  pendingPush: number;
+}
 
-export const fetchSyncConfig = (): Promise<SyncConfig> =>
-  authFetch('/api/settings/sync').then((r) => okJson<SyncConfig>(r, 'load sync config'));
+export const fetchSyncConfig = (): Promise<SyncConfigView> =>
+  authFetch('/api/settings/sync').then((r) => okJson<SyncConfigView>(r, 'load sync config'));
 
-export const saveSyncConfig = (cfg: SyncConfig): Promise<SyncConfig> =>
-  authFetch('/api/settings/sync', jbody(cfg, 'PUT')).then((r) => okJson<SyncConfig>(r, 'save sync config'));
+export const saveSyncConfig = (cfg: SyncConfigInput): Promise<SyncConfigView> =>
+  authFetch('/api/settings/sync', jbody(cfg, 'PUT')).then((r) => okJson<SyncConfigView>(r, 'save sync config'));
+
+export const fetchSyncStatus = (): Promise<SyncStatus> =>
+  authFetch('/api/settings/sync/status').then((r) => okJson<SyncStatus>(r, 'sync status'));
+
+/** POST /api/settings/sync/now. Returns 409 `{triggered:false,reason:'disabled'}` when sync is off —
+ *  surface that as a result rather than an error so the caller can show an info toast. */
+export async function triggerSyncNow(): Promise<{ triggered: boolean; reason?: string }> {
+  const r = await authFetch('/api/settings/sync/now', jbody({}, 'POST'));
+  if (r.status === 409) return r.json() as Promise<{ triggered: boolean; reason?: string }>;
+  return okJson<{ triggered: boolean; reason?: string }>(r, 'sync now');
+}
 
 export type DangerAction = 'reset-dashboards' | 'factory-reset' | 'clear-audit';
 
