@@ -18,6 +18,19 @@ export type RunEvent =
   | { type: 'node:error'; nodeId: string; nodeType: string; error: string; durationMs: number }
   | { type: 'workflow:done'; status: 'completed' | 'failed' };
 
+/**
+ * An opaque reference to a secret held in the server-side secret store (SEC-06).
+ * A secret field accepts a plaintext `string` (a new/edited value) OR this ref
+ * (an unchanged, already-extracted secret).
+ *
+ * NOTE: `node.data` below is `z.record(z.unknown())` (fully permissive), so the
+ * `secret`/`headers` union is already accepted at the schema level without a
+ * field-specific change. This schema is exported for the extraction/migration/
+ * resolution tasks (and the studio write-only fields) to validate refs.
+ */
+export const secretRefSchema = z.object({ secretRef: z.string() }).strict();
+export type SecretRef = z.infer<typeof secretRefSchema>;
+
 /** A ReactFlow node, persisted as JSON. `data` is intentionally open (per-type shape lives in the web layer). */
 export const WorkflowNodeSchema = z.object({
   id: z.string(),

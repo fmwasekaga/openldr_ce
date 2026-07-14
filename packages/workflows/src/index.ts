@@ -33,3 +33,12 @@ export {
 } from './engine/services';
 export * from './lifecycle';
 export { extractCorrelationId } from './correlation';
+export {
+  AUTH_HEADER_RE,
+  isSecretRef,
+  mapSecretFields,
+  mapSecretFieldsAsync,
+  forEachSecretField,
+  type SecretValue,
+  type SecretFieldRef,
+} from './secret-fields';

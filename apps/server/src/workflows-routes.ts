@@ -2,7 +2,7 @@ import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { ZodError } from 'zod';
 import type { AppContext } from '@openldr/bootstrap';
-import { WorkflowSchema, WorkflowDefinitionSchema, runWorkflow, type RunEvent, createWorkflowNodeRegistry, HOST_NODE_DESCRIPTORS } from '@openldr/workflows';
+import { WorkflowSchema, WorkflowDefinitionSchema, runWorkflow, type RunEvent, createWorkflowNodeRegistry, HOST_NODE_DESCRIPTORS, mapSecretFields, isSecretRef } from '@openldr/workflows';
 import { toCsv } from '@openldr/reporting';
 import { recordAudit } from './audit-helper';
 import { requireRole } from './rbac';
@@ -61,30 +61,16 @@ async function listEventWorkflowIds(ctx: AppContext): Promise<string[]> {
  * endpoint deliberately stays FULL (it is manager-gated and the builder needs the
  * real values to edit).
  */
-const AUTH_HEADER_RE = /^(authorization|proxy-authorization|cookie|x-api-key|x-.*-token)$/i;
-
 function redactWorkflowSecrets(definition: unknown): unknown {
-  if (!definition || typeof definition !== 'object') return definition;
-  const def = definition as { nodes?: unknown };
-  if (!Array.isArray(def.nodes)) return definition;
-  const nodes = def.nodes.map((raw) => {
-    if (!raw || typeof raw !== 'object') return raw;
-    const node = raw as { data?: Record<string, unknown> };
-    if (!node.data || typeof node.data !== 'object') return node;
-    const data: Record<string, unknown> = { ...node.data };
-    // Strip webhook trigger secret entirely.
-    if ('secret' in data) delete data.secret;
-    // Mask auth-bearing headers when stored as an object.
-    if (data.headers && typeof data.headers === 'object' && !Array.isArray(data.headers)) {
-      const headers: Record<string, unknown> = { ...(data.headers as Record<string, unknown>) };
-      for (const k of Object.keys(headers)) {
-        if (AUTH_HEADER_RE.test(k)) headers[k] = '***';
-      }
-      data.headers = headers;
-    }
-    return { ...node, data };
+  // Belt-and-suspenders: the SINGLE secret-field locator decides WHICH fields
+  // are secret (kept in sync with extraction/migration/resolution). A
+  // `{secretRef}` value is already an opaque store id — safe to expose.
+  return mapSecretFields(definition, (f) => {
+    if (isSecretRef(f.value)) return;
+    // Plaintext: webhook `secret` is removed entirely; auth headers are masked.
+    if (f.path.includes('.data.headers.')) f.set('***');
+    else f.set(undefined);
   });
-  return { ...def, nodes };
 }
 
 /** Reads the request body (Buffer or async-iterable stream) into a Buffer, enforcing the byte cap. */
