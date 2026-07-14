@@ -93,6 +93,18 @@ describe('createSyncPushWorker', () => {
     worker.stop();
   });
 
+  it('isRunning() reflects started-and-not-stopped state', async () => {
+    vi.useFakeTimers();
+    const runCycle = vi.fn().mockResolvedValue(0);
+    const worker = createSyncPushWorker({ runner: { runCycle }, intervalMs: 1000, logger: silentLogger });
+
+    expect(worker.isRunning()).toBe(false); // not started yet
+    worker.start();
+    expect(worker.isRunning()).toBe(true); // running after start()
+    worker.stop();
+    expect(worker.isRunning()).toBe(false); // halted after stop()
+  });
+
   it('start() is idempotent and start() after stop() is a no-op', async () => {
     vi.useFakeTimers();
     const runCycle = vi.fn().mockResolvedValue(0);
