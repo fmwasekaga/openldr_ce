@@ -34,7 +34,7 @@ describe('triggerHandler', () => {
 
   it('seeds the binary lane when ctx.files is non-empty', async () => {
     const files = { file: { objectKey: 'uploads/k', contentType: 'application/octet-stream', byteSize: 3 } };
-    const ctx = createContext({ hello: 'world' }, () => {}, [], undefined, undefined, undefined, undefined, files);
+    const ctx = createContext({ hello: 'world' }, () => {}, [], undefined, undefined, undefined, files);
     const out = await triggerHandler(node(), ctx, []);
     expect(out).toHaveLength(1);
     expect(out[0].json).toEqual({ hello: 'world' });
@@ -43,7 +43,7 @@ describe('triggerHandler', () => {
 
   it('seeds binary lane with empty json when ctx.input is not a plain object', async () => {
     const files = { file: { objectKey: 'uploads/k', contentType: 'application/octet-stream', byteSize: 3 } };
-    const ctx = createContext([{ a: 1 }], () => {}, [], undefined, undefined, undefined, undefined, files);
+    const ctx = createContext([{ a: 1 }], () => {}, [], undefined, undefined, undefined, files);
     const out = await triggerHandler(node(), ctx, []);
     expect(out).toHaveLength(1);
     expect(out[0].json).toEqual({});

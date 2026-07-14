@@ -901,7 +901,6 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       codeLimits: { timeoutMs: cfg.WORKFLOW_CODE_TIMEOUT_MS, memoryMb: cfg.WORKFLOW_CODE_MEMORY_MB, enabled: cfg.WORKFLOW_CODE_ENABLED },
       loopMaxItems: cfg.WORKFLOW_LOOP_MAX_ITEMS,
       workflowId,
-      logger: { warn: (msg: string) => logger.warn(msg) },
       callStack: [...callStack, workflowId],
     });
     if (result.status === 'failed') {

@@ -107,8 +107,6 @@ export interface RunWorkflowOptions {
   services?: WorkflowServices;
   /** ID of the persisted workflow record — forwarded to the execution context. */
   workflowId?: string;
-  /** Optional logger so an enabled Code node can warn about host-level execution. */
-  logger?: ExecutionContext['logger'];
   /** Per-run file attachments seeded onto the trigger item. */
   files?: Record<string, import('./items').BinaryRef>;
   /** Workflow-id recursion chain forwarded to the execution context (execute-workflow guard). Defaults to []. */
@@ -125,7 +123,7 @@ export async function runWorkflow(
   opts: RunWorkflowOptions = {},
 ): Promise<WorkflowRunResult> {
   const startedAt = new Date().toISOString();
-  const ctx = createContext(opts.input, opts.onEvent ?? (() => {}), edges, opts.codeLimits, opts.services, opts.workflowId, opts.logger, opts.files, opts.callStack ?? []);
+  const ctx = createContext(opts.input, opts.onEvent ?? (() => {}), edges, opts.codeLimits, opts.services, opts.workflowId, opts.files, opts.callStack ?? []);
   if (opts.loopVars) ctx.loopVars = opts.loopVars;
   if (opts.loopMaxItems != null) ctx.loopMaxItems = opts.loopMaxItems;
   const sorted = topologicalSort(nodes, edges);
@@ -282,7 +280,6 @@ async function executeLoopNode(
       callStack: ctx.callStack,
       loopVars: [...ctx.loopVars, { index, item }],
       workflowId: ctx.workflowId,
-      logger: ctx.logger,
       // Stream body node events to the same sink, but swallow the per-iteration
       // workflow:done so the UI sees one terminal event for the whole run.
       onEvent: (e) => {

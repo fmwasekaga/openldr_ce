@@ -1,6 +1,6 @@
-import vm from 'node:vm';
 import type { NodeHandler } from './types';
 import { resolveTemplate } from '../template';
+import { evalExpression, COND_LIMITS } from '../js-isolate';
 import type { WorkflowItem } from '../items';
 
 /**
@@ -10,17 +10,17 @@ import type { WorkflowItem } from '../items';
  */
 export const filterHandler: NodeHandler = async (node, ctx, input) => {
   const raw = (node.data.condition as string | undefined) ?? '';
-  const passes = (item: WorkflowItem): boolean => {
+  const kept: WorkflowItem[] = [];
+  for (const item of input) {
     const resolved = resolveTemplate(raw, ctx, [item]);
-    if (!resolved.trim()) return false;
+    if (!resolved.trim()) continue;
     try {
-      const sandbox = { $input: [item], $json: item.json, $items: [item.json], input: [item] };
-      return Boolean(vm.runInNewContext(resolved, sandbox, { timeout: 1000 }));
+      const scope = { $input: [item], $json: item.json, $items: [item.json], input: [item] };
+      if (await evalExpression(resolved, scope, COND_LIMITS)) kept.push(item);
     } catch (err) {
       throw new Error(`Filter condition failed: ${err instanceof Error ? err.message : String(err)}`);
     }
-  };
-  const kept = input.filter(passes);
+  }
   ctx.branches[node.id] = kept.length > 0 ? 'true' : 'false';
   return kept;
 };

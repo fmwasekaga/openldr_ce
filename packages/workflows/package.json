@@ -22,6 +22,7 @@
     "kysely": "^0.28.17",
     "marked": "^14.1.0",
     "pdf-parse": "^1.1.1",
+    "quickjs-emscripten": "0.32.0",
     "turndown": "^7.2.0",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "xlsx-populate": "^1.21.0",

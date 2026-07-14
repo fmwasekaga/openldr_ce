@@ -1,6 +1,6 @@
-import vm from 'node:vm';
 import type { NodeHandler } from './types';
 import { resolveTemplate } from '../template';
+import { evalExpression, COND_LIMITS } from '../js-isolate';
 
 /**
  * Whole-input boolean: evaluates the condition, records the branch in ctx.branches[id],
@@ -12,8 +12,8 @@ export const ifHandler: NodeHandler = async (node, ctx, input) => {
   let branch: 'true' | 'false' = 'false';
   if (resolved.trim()) {
     try {
-      const sandbox = { $input: input, $json: input[0]?.json, $items: input.map((i) => i.json), input };
-      branch = vm.runInNewContext(resolved, sandbox, { timeout: 1000 }) ? 'true' : 'false';
+      const scope = { $input: input, $json: input[0]?.json, $items: input.map((i) => i.json), input };
+      branch = (await evalExpression(resolved, scope, COND_LIMITS)) ? 'true' : 'false';
     } catch (err) {
       throw new Error(`Condition failed: ${err instanceof Error ? err.message : String(err)}`);
     }

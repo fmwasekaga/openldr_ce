@@ -60,4 +60,21 @@ describe('ifHandler', () => {
     expect(c.branches['if1']).toBe('true');
     expect(result).toEqual([]);
   });
+
+  it('cannot reach host process — the isolate has no Node globals', async () => {
+    const c = ctx();
+    // Inside the QuickJS isolate there is no host `process`, so this is truthy.
+    await ifHandler(node("typeof process === 'undefined'"), c, [{ json: {} }]);
+    expect(c.branches['if1']).toBe('true');
+  });
+
+  it('blocks the constructor.constructor host-escape gadget', async () => {
+    const c = ctx();
+    // `this.constructor.constructor('return process')()` classically escapes a
+    // Node vm sandbox. In the isolate it either throws (wrapped) or yields a
+    // process-less global — never the host process.
+    await expect(
+      ifHandler(node("this.constructor.constructor('return process')().pid > 0"), c, [{ json: {} }]),
+    ).rejects.toThrow(/Condition failed/);
+  });
 });

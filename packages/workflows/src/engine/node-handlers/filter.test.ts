@@ -60,4 +60,29 @@ describe('filterHandler', () => {
     expect(result).toEqual([{ json: { n: 1 } }, { json: { n: 3 } }]);
     expect(c.branches['f1']).toBe('true');
   });
+
+  it('does NOT keep every item — the async predicate is awaited, not a truthy Promise', async () => {
+    // Regression guard for the input.filter(async …) trap: a Promise is always
+    // truthy, so a naive rewrite would keep both. The awaited loop must drop one.
+    const c = ctx();
+    const input = [{ json: { keep: true } }, { json: { keep: false } }];
+    const result = await filterHandler(node('$json.keep === true'), c, input);
+    expect(result).toEqual([{ json: { keep: true } }]);
+  });
+
+  it('cannot reach host process — the isolate has no Node globals', async () => {
+    const c = ctx();
+    // `process` is undefined inside the isolate, so this keeps the item.
+    const input = [{ json: {} }];
+    const result = await filterHandler(node("typeof process === 'undefined'"), c, input);
+    expect(result).toEqual(input);
+    expect(c.branches['f1']).toBe('true');
+  });
+
+  it('blocks the constructor.constructor host-escape gadget', async () => {
+    const c = ctx();
+    await expect(
+      filterHandler(node("this.constructor.constructor('return process')().pid > 0"), c, [{ json: {} }]),
+    ).rejects.toThrow(/Filter condition failed/);
+  });
 });

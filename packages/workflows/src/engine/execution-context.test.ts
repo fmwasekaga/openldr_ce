@@ -9,7 +9,7 @@ describe('createContext callStack', () => {
 
   it('stores a provided callStack', () => {
     const ctx = createContext(
-      undefined, () => {}, [], undefined, undefined, undefined, undefined, undefined, ['wf-a', 'wf-b'],
+      undefined, () => {}, [], undefined, undefined, undefined, undefined, ['wf-a', 'wf-b'],
     );
     expect(ctx.callStack).toEqual(['wf-a', 'wf-b']);
   });
