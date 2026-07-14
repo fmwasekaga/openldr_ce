@@ -25,3 +25,26 @@ export interface PushResponse {
   skipped: number;
   rejects: { id: string; version: number; seq: number; reason: string }[];
 }
+
+// One reference change served by central to a lab, in wire form. Mirrors the reference_change_log's
+// entity coordinates + op; `body` carries the config content for an upsert (absent for a delete).
+export interface PullRecord {
+  seq: number;
+  entityType: 'form' | 'dashboard' | 'report' | 'setting';
+  entityId: string;
+  op: 'upsert' | 'delete';
+  contentHash?: string | null;
+  body?: unknown; // present for op:'upsert'
+}
+
+// A lab's pull request: give me reference changes after `fromSeq` (the lab's 'sync-pull' cursor).
+export interface PullRequest {
+  fromSeq: number;
+}
+
+// Central's response to a pull: an ordered window of reference changes and the next cursor to resume
+// from (the max seq in the served window; advancing to it starts the next pull after it).
+export interface PullResponse {
+  records: PullRecord[];
+  nextSeq: number;
+}
