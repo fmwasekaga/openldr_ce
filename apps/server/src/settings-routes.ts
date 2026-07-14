@@ -74,18 +74,17 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
     const body = (req.body ?? {}) as { siteId?: string; name?: string | null; centralUrl?: string };
     if (!body.siteId) { reply.code(400); return { error: 'siteId required' }; }
     if (!body.centralUrl) { reply.code(400); return { error: 'centralUrl required' }; }
+    // Wrap ONLY the orchestrator + error→status mapping in the try. Audit runs after the try
+    // succeeds so an audit failure can never turn a completed enrollment into a 500 — that would
+    // lose the one-time client secret to the caller and a retry would hit AlreadyEnrolledError.
+    let r;
     try {
-      const r = await enrollSite(ctx, {
+      r = await enrollSite(ctx, {
         siteId: body.siteId,
-        name: body.name ?? null,
+        name: body.name || null,
         centralUrl: body.centralUrl,
         actor: req.user?.id ?? null,
       });
-      await recordAudit(ctx, req, {
-        action: 'settings.sync.enroll', entityType: 'sync_site', entityId: body.siteId,
-        metadata: { clientId: r.clientId },
-      });
-      return r;
     } catch (e) {
       switch (errName(e)) {
         case 'AlreadyEnrolledError': reply.code(409); return { error: e instanceof Error ? e.message : 'already enrolled' };
@@ -95,19 +94,22 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
         default: throw e;
       }
     }
+    await recordAudit(ctx, req, {
+      action: 'settings.sync.enroll', entityType: 'sync_site', entityId: body.siteId,
+      metadata: { clientId: r.clientId },
+    });
+    return r;
   });
 
   app.get('/api/settings/sync/sites', { preHandler: requireRole('lab_admin') }, async () => listSites(ctx));
 
   app.post('/api/settings/sync/sites/:siteId/rotate', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
     const { siteId } = req.params as { siteId: string };
+    // Audit after the try (see enroll) so an audit failure never masks a successful rotation and
+    // loses the one-time regenerated secret.
+    let r;
     try {
-      const r = await rotateSite(ctx, siteId);
-      await recordAudit(ctx, req, {
-        action: 'settings.sync.rotate', entityType: 'sync_site', entityId: siteId,
-        metadata: { clientId: r.clientId },
-      });
-      return r;
+      r = await rotateSite(ctx, siteId);
     } catch (e) {
       switch (errName(e)) {
         case 'SiteNotFoundError': reply.code(404); return { error: e instanceof Error ? e.message : 'site not found' };
@@ -115,6 +117,11 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
         default: throw e;
       }
     }
+    await recordAudit(ctx, req, {
+      action: 'settings.sync.rotate', entityType: 'sync_site', entityId: siteId,
+      metadata: { clientId: r.clientId },
+    });
+    return r;
   });
 
   app.post('/api/settings/sync/sites/:siteId/revoke', { preHandler: requireRole('lab_admin') }, async (req, reply) => {

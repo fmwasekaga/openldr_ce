@@ -228,6 +228,25 @@ describe('settings sync enrollment routes', () => {
     expect(res.statusCode).toBe(404);
   });
 
+  it('POST /sites/:siteId/rotate → 503 when ctx.auth.clients is not configured', async () => {
+    const ctx = fakeCtx();
+    const app = adminApp(ctx);
+    await app.inject({ method: 'POST', url: '/api/settings/sync/enroll', payload: { siteId: 'lab-a', centralUrl: 'https://c.example' } });
+    (ctx as unknown as { __setClientsUnconfigured: (v: boolean) => void }).__setClientsUnconfigured(true);
+    const res = await app.inject({ method: 'POST', url: '/api/settings/sync/sites/lab-a/rotate' });
+    expect(res.statusCode).toBe(503);
+  });
+
+  it('POST /enroll → 400 on a whitespace-only centralUrl (passes the pre-check, enrollSite trims → MissingCentralUrlError)', async () => {
+    const ctx = fakeCtx();
+    const app = adminApp(ctx);
+    const res = await app.inject({
+      method: 'POST', url: '/api/settings/sync/enroll',
+      payload: { siteId: 'lab-a', centralUrl: '   ' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
   it('POST /sites/:siteId/revoke → 200 { revoked: true }; row marked revoked; audit recorded', async () => {
     const ctx = fakeCtx();
     const app = adminApp(ctx);
@@ -242,6 +261,14 @@ describe('settings sync enrollment routes', () => {
 
     const events = (ctx as unknown as { __auditEvents: unknown[] }).__auditEvents;
     expect(events.some((e) => (e as { action: string }).action === 'settings.sync.revoke')).toBe(true);
+  });
+
+  it('POST /sites/:siteId/revoke → 200 { revoked: true } for an unknown site (idempotent no-op)', async () => {
+    const ctx = fakeCtx();
+    const app = adminApp(ctx);
+    const res = await app.inject({ method: 'POST', url: '/api/settings/sync/sites/never-enrolled/revoke' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ revoked: true });
   });
 
   it('rejects unauthenticated (no actor) → 401', async () => {
