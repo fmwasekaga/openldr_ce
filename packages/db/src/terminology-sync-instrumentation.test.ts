@@ -28,23 +28,25 @@ function mapSignals(db: Awaited<ReturnType<typeof makeMigratedDb>>, entityId: st
 }
 
 describe('terminology change instrumentation (Sync S3 / B2)', () => {
+  // Explicit 30s timeout: inserting >1000 rows through pg-mem is slow and contends for CPU under the
+  // parallel merge-gate suite; the default 5s is too tight for this data-heavy case.
   it('terms.importRows spanning >1 internal batch emits exactly ONE terminology_system signal', async () => {
     const db = await makeMigratedDb();
     const admin = createTerminologyAdminStore(db as never);
     const system = 'http://example.org/big-cs';
-    // 2500 rows > the 1000-row internal batch size: proves the signal is per-operation, not per-batch.
-    const rows = Array.from({ length: 2500 }, (_, i) => ({
+    // 1500 rows > the 1000-row internal batch size: proves the signal is per-operation, not per-batch.
+    const rows = Array.from({ length: 1500 }, (_, i) => ({
       system, code: `C${i}`, display: `Concept ${i}`, status: 'ACTIVE', properties: null,
     }));
 
     const res = await admin.terms.importRows(rows);
-    expect(res.imported).toBe(2500);
+    expect(res.imported).toBe(1500);
 
     const signals = await systemSignals(db, system);
     expect(signals).toHaveLength(1);
     expect(signals[0]).toMatchObject({ op: 'upsert', content_hash: '1' });
     await db.destroy();
-  });
+  }, 30_000);
 
   it('terms.importRows marks each DISTINCT system once (not one signal for two systems)', async () => {
     const db = await makeMigratedDb();
