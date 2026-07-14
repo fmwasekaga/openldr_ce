@@ -130,6 +130,7 @@ export interface DashboardsTable {
   filters: JSONColumnType<unknown[]>;
   refresh_interval_sec: Generated<number>;
   is_default: Generated<boolean>;
+  managed_origin: string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -321,6 +322,7 @@ export interface FormDefinitionsTable {
   active: boolean;
   schema: unknown;
   target_pages: unknown | null;
+  managed_origin: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -531,6 +533,7 @@ export interface ReportsTable {
   chart: unknown | null;
   param_options: unknown | null;
   status: string;
+  managed_origin: string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
