@@ -11,6 +11,7 @@
     "lint": "echo \"no lint\""
   },
   "dependencies": {
+    "@openldr/core": "workspace:*",
     "@openldr/db": "workspace:*",
     "@openldr/reporting": "workspace:*",
     "kysely": "^0.27.5",
