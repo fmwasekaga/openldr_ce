@@ -48,6 +48,7 @@ import * as m046 from './046_fhir_versioning';
 import * as m047 from './047_reference_change_log';
 import * as m048 from './048_managed_origin';
 import * as m049 from './049_terminology_managed_origin';
+import * as m050 from './050_terminology_generation';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -99,4 +100,5 @@ export const internalMigrations: Record<string, Migration> = {
   '047_reference_change_log': { up: m047.up, down: m047.down },
   '048_managed_origin': { up: m048.up, down: m048.down },
   '049_terminology_managed_origin': { up: m049.up, down: m049.down },
+  '050_terminology_generation': { up: m050.up, down: m050.down },
 };

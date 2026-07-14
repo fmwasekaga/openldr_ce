@@ -148,6 +148,11 @@ export interface TerminologySystemsTable {
   version: string | null;
   kind: string;
   resource_id: string;
+  // Sync S3: bump-once-per-import bulk change signal. `bigint DEFAULT 0` reads back as a string on
+  // real PG (number under pg-mem); Generated<> keeps it optional on insert so saveSystem (which does
+  // not set it) still typechecks. The mark* helpers set it explicitly and Number()-coerce on read.
+  generation: Generated<number | string>;
+  managed_origin: string | null;
 }
 
 export interface ConceptMapElementsTable {
@@ -157,6 +162,15 @@ export interface ConceptMapElementsTable {
   target_system: string;
   target_code: string;
   equivalence: string | null;
+}
+
+// Sync S3: per-concept-map generation registry (concept_map_elements has no PK/metadata row of its
+// own, so the bulk change signal for maps lives here, keyed by map_url). Mirrors the terminology_systems
+// generation/managed_origin columns.
+export interface ConceptMapStateTable {
+  map_url: string;
+  generation: Generated<number | string>;
+  managed_origin: string | null;
 }
 
 export interface PublishersTable {
@@ -555,6 +569,7 @@ export interface InternalSchema {
   terminology_concepts: TerminologyConceptsTable;
   terminology_systems: TerminologySystemsTable;
   concept_map_elements: ConceptMapElementsTable;
+  concept_map_state: ConceptMapStateTable;
   publishers: PublishersTable;
   coding_systems: CodingSystemsTable;
   term_mappings: TermMappingsTable;
