@@ -15,11 +15,28 @@ export interface DeleteResult {
   version?: number;
 }
 
+// A change replayed from a remote origin (e.g. a lab's change_log) to be mirror-applied here.
+// Unlike save()/delete(), version and siteId are taken verbatim from the origin — NOT derived
+// from local history (no max+1) and NOT stamped with the local site.
+export interface RemoteRecord {
+  resourceType: string;
+  id: string;
+  version: number; // origin version (from the lab's change_log)
+  op: 'upsert' | 'delete';
+  siteId: string; // origin site-id (ownership stamp)
+  resource?: FhirResource; // present for op:'upsert'
+}
+
+export type ApplyResult = 'applied' | 'skipped';
+
 export interface FhirStore {
   save(resource: FhirResource, provenance?: Provenance): Promise<SavedRef>;
   get(resourceType: string, id: string): Promise<FhirResource | null>;
   listByType(resourceType: string, limit?: number): Promise<{ id: string; resource: FhirResource }[]>;
   delete(resourceType: string, id: string): Promise<DeleteResult>;
+  // Mirror-apply a remote change at its ORIGIN version/site. Idempotent on (resourceType,id,version):
+  // a re-applied version is a no-op ('skipped'). Returns 'applied' when it wrote history/change_log.
+  applyRemote(record: RemoteRecord): Promise<ApplyResult>;
 }
 
 function contentHash(serialized: string): string {
@@ -156,6 +173,77 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
         await trx.deleteFrom('fhir.fhir_resources').where('resource_type', '=', resourceType).where('id', '=', id).execute();
         return { deleted: true, version: next };
       });
+    },
+
+    async applyRemote(record) {
+      const { resourceType, id, version, op, siteId } = record;
+      const result = await db.transaction().execute(async (trx): Promise<ApplyResult> => {
+        // Idempotency: the history PK is (resource_type,id,version). A matching row means this exact
+        // origin version was already applied → no-op (no fhir_resources / change_log writes). We use an
+        // explicit existence SELECT rather than ON CONFLICT DO NOTHING + numInsertedOrUpdatedRows because
+        // that row-count is engine-dependent (pg-mem reports 1 even on a conflict no-op), so it can't
+        // discriminate a real insert from a skip. This SELECT is deterministic on real pg and pg-mem alike.
+        const already = await trx
+          .selectFrom('fhir.resource_history')
+          .select('version')
+          .where('resource_type', '=', resourceType)
+          .where('id', '=', id)
+          .where('version', '=', version)
+          .executeTakeFirst();
+        if (already) return 'skipped';
+
+        // Mirror-store the origin content verbatim (id normalized). Null for a tombstone.
+        const content = op === 'upsert' && record.resource ? JSON.stringify({ ...record.resource, id }) : null;
+
+        // INVARIANT (projection safe-frontier): the change_log insert must NOT be this transaction's first
+        // write — the resource_history insert here (and the fhir_resources write below) precede it, so the
+        // txn's xid is assigned before nextval(seq) is drawn for change_log. Do not reorder. The existence
+        // SELECT above is read-only and does not assign an xid, so it does not affect this ordering.
+        await trx
+          .insertInto('fhir.resource_history')
+          .values({ resource_type: resourceType, id, version, op, resource: content })
+          .execute();
+
+        if (op === 'upsert') {
+          const cur = await trx
+            .selectFrom('fhir.fhir_resources')
+            .select('version')
+            .where('resource_type', '=', resourceType)
+            .where('id', '=', id)
+            .executeTakeFirst();
+          // Guard: a late/out-of-order OLDER version must not clobber a newer already-mirrored canonical row.
+          // History still records every version above; only the canonical read-model row is protected.
+          // (bigint reads back as string on real pg — coerce before comparing.)
+          if (!cur || version >= Number(cur.version)) {
+            await trx
+              .insertInto('fhir.fhir_resources')
+              .values({ resource_type: resourceType, id, version, version_id: String(version), resource: content! })
+              .onConflict((oc) =>
+                oc.columns(['resource_type', 'id']).doUpdateSet({
+                  version,
+                  version_id: String(version),
+                  resource: content!,
+                  updated_at: sql`now()`,
+                }),
+              )
+              .execute();
+          }
+        } else {
+          await trx.deleteFrom('fhir.fhir_resources').where('resource_type', '=', resourceType).where('id', '=', id).execute();
+        }
+
+        // change_log stamped with the ORIGIN site_id (ownership stamp) — NOT resolveSiteId(), which is the
+        // local site. Hash mirrors save(): sha256 of the stored content; null for a tombstone.
+        const contentHashHex = content ? contentHash(content) : null;
+        await trx
+          .insertInto('fhir.change_log')
+          .values({ resource_type: resourceType, resource_id: id, version, op, content_hash: contentHashHex, site_id: siteId })
+          .execute();
+        return 'applied';
+      });
+      // Best-effort projection-worker wakeup; interval polling is the correctness path (matches save()).
+      try { await sql`select pg_notify('fhir_changes', '')`.execute(db); } catch { /* ignore */ }
+      return result;
     },
   };
 }
