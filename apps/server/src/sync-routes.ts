@@ -156,10 +156,24 @@ export function registerSyncRoutes(app: FastifyInstance<any, any, any, any>, ctx
         records.push({ seq, entityType, entityId: r.entity_id, op: 'delete' });
         continue;
       }
-      const body = await fetchReferenceBody(ctx, entityType, r.entity_id);
+      let body: unknown | null;
+      try {
+        body = await fetchReferenceBody(ctx, entityType, r.entity_id);
+      } catch (e) {
+        // Poison-pill isolation (mirrors the push route's "one bad record must not 500 the whole
+        // batch"): a store.get DB error or a malformed body (e.g. formSyncBody→JSON.parse on a corrupt
+        // schema) must not 500 the pull and wedge the lab retrying this window forever. Skip this
+        // entity — emit no record for it. nextSeq still advances past it (it's from the RAW window), so
+        // a persistently-bad entity is quarantined, not a permanent wedge.
+        ctx.logger.warn(
+          { error: e instanceof Error ? e.message : String(e), entityType, entityId: r.entity_id, seq },
+          'sync pull: fetchReferenceBody failed for entity, skipping',
+        );
+        continue;
+      }
       if (body == null) {
-        // The entity was deleted since it was logged (its live body is gone) → serve a delete so the
-        // lab converges rather than upserting a null body.
+        // The entity was deleted (or unpublished — see the form gate) since it was logged, so its live
+        // body is gone → serve a delete so the lab converges rather than upserting a null body.
         records.push({ seq, entityType, entityId: r.entity_id, op: 'delete' });
         continue;
       }
@@ -188,12 +202,18 @@ async function fetchReferenceBody(
     case 'report':
       return (await ctx.reportDefs.get(id)) ?? null;
     case 'form': {
-      const row = await ctx.internalDb
+      const row = (await ctx.internalDb
         .selectFrom('form_definitions')
         .selectAll()
         .where('id', '=', id)
-        .executeTakeFirst();
-      return formSyncBody((row ?? null) as FormRow | null); // null for a missing row
+        .executeTakeFirst()) as FormRow | undefined;
+      // Labs may ONLY consume PUBLISHED forms. T4's forms capture does NOT log a published→draft
+      // demotion, so the log's latest row can still be 'upsert' while the live row is now a draft;
+      // serving that would leak a draft to labs. Gate on status: a non-published (draft/archived)
+      // live row returns null → the handler downgrades it to a `delete`, removing it from labs (the
+      // correct convergence). A missing row also returns null (formSyncBody handles undefined).
+      if (!row || row.status !== 'published') return null;
+      return formSyncBody(row);
     }
     case 'setting':
       return (await ctx.appSettings.get(id))?.value ?? null;

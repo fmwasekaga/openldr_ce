@@ -211,9 +211,11 @@ function fakeInternalDb(tables: Record<string, any[]>) {
           });
           return b;
         },
-        orderBy: () => b,
+        // Model the REAL query order: orderBy sorts, THEN limit slices — so "orderBy seq asc then
+        // limit BATCH" yields the lowest-seq window (a slice-before-sort fake would mask that).
+        orderBy() { rows = [...rows].sort((a, c) => Number(a.seq ?? 0) - Number(c.seq ?? 0)); return b; },
         limit(n: number) { rows = rows.slice(0, n); return b; },
-        async execute() { return [...rows].sort((a, c) => Number(a.seq ?? 0) - Number(c.seq ?? 0)); },
+        async execute() { return rows; },
         async executeTakeFirst() { return rows[0]; },
       };
       return b;
@@ -351,5 +353,73 @@ describe('sync routes — POST /api/sync/pull', () => {
     const body = res.json();
     expect(body.records[0].seq).toBe(3);
     expect(body.nextSeq).toBe(3);
+  });
+
+  it('a demoted (published→draft) form serves as a delete, not a draft upsert', async () => {
+    // T4 does not capture a demotion, so the log's latest row stays 'upsert' while the live row is a
+    // draft. The status gate must return null → the handler downgrades it to a delete (labs only
+    // consume published forms; a demoted form is removed from labs).
+    const draft = { ...formDefRow('form-d'), status: 'draft' };
+    const ctx = fakePullCtx({ log: [logRow(2, 'form', 'form-d', 'upsert', 'h')], forms: [draft] });
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/sync/pull', headers: AUTH, payload: { fromSeq: 0 } });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.records).toEqual([{ seq: 2, entityType: 'form', entityId: 'form-d', op: 'delete' }]);
+    expect(body.nextSeq).toBe(2);
+  });
+
+  it('a throwing fetch (poison pill) skips the entity, no 500, cursor still advances via nextSeq', async () => {
+    // A store.get that throws (DB error / malformed body) must NOT 500 the whole pull and wedge the
+    // lab retrying this window forever. The bad entity is quarantined (no record emitted); nextSeq is
+    // from the RAW window so the cursor advances past it, and healthy siblings still ship.
+    const ctx = fakePullCtx({
+      log: [
+        logRow(1, 'setting', 'ok-1', 'upsert', 'h'),
+        logRow(2, 'dashboard', 'boom', 'upsert', 'h'),
+        logRow(3, 'setting', 'ok-2', 'upsert', 'h'),
+      ],
+      settings: { 'ok-1': { value: 'a' }, 'ok-2': { value: 'b' } },
+    });
+    // Make the dashboard get throw.
+    ctx.dashboards.store.get = async () => { throw new Error('db down'); };
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/sync/pull', headers: AUTH, payload: { fromSeq: 0 } });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    // 'boom' is quarantined — only the two healthy settings ship.
+    expect(body.records.map((r: any) => r.entityId)).toEqual(['ok-1', 'ok-2']);
+    // Cursor still advances past the poison pill (raw-window max seq = 3).
+    expect(body.nextSeq).toBe(3);
+  });
+
+  it('caps the window at BATCH=500 by lowest seq (orderBy then limit), then resumes from nextSeq', async () => {
+    const N = 600;
+    const log: any[] = [];
+    const settings: Record<string, { value: string }> = {};
+    // Insert in DESCENDING seq order so insertion order != seq order — only a real "orderBy seq asc
+    // THEN limit" yields the lowest-500 window (a slice-before-sort fake would return the wrong slice).
+    for (let seq = N; seq >= 1; seq--) {
+      log.push(logRow(seq, 'setting', `s${seq}`, 'upsert', 'h'));
+      settings[`s${seq}`] = { value: `v${seq}` };
+    }
+
+    // First pull: the lowest-seq 500 (seq 1..500), nextSeq = 500.
+    let res = await appWith(fakePullCtx({ log, settings }))
+      .inject({ method: 'POST', url: '/api/sync/pull', headers: AUTH, payload: { fromSeq: 0 } });
+    expect(res.statusCode).toBe(200);
+    let body = res.json();
+    expect(body.records).toHaveLength(500);
+    expect(body.records[0].seq).toBe(1);
+    expect(body.records[499].seq).toBe(500);
+    expect(body.nextSeq).toBe(500);
+
+    // Follow-up pull from nextSeq returns the remaining 100 (seq 501..600).
+    res = await appWith(fakePullCtx({ log, settings }))
+      .inject({ method: 'POST', url: '/api/sync/pull', headers: AUTH, payload: { fromSeq: 500 } });
+    expect(res.statusCode).toBe(200);
+    body = res.json();
+    expect(body.records).toHaveLength(100);
+    expect(body.records[0].seq).toBe(501);
+    expect(body.records[99].seq).toBe(600);
+    expect(body.nextSeq).toBe(600);
   });
 });
