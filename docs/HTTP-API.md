@@ -151,3 +151,20 @@ Source of truth: `apps/server/src/*.ts`. Routes marked "admin" use `requireRole(
 | `POST` | `/api/users/:id/force-logout` | Force logout through the IdP/admin adapter when configured. |
 | `GET` | `/api/audit` | List audit events with filters. |
 | `GET` | `/api/audit/:id` | Get one audit event. |
+
+## Distributed Sync
+
+Admin routes under `/api/settings/sync/*` are user-authed and `lab_admin`-gated. The client secret is write-only on config and returned only once (never in a `GET`) on enroll/rotate.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/settings/sync` | Read the sync configuration (no secret value, only whether one is set). |
+| `PUT` | `/api/settings/sync` | Update the sync configuration; `clientSecret` is write-only (blank keeps the stored value). |
+| `GET` | `/api/settings/sync/status` | Live sync status: per-direction workers, cursors, and pending backlog. |
+| `POST` | `/api/settings/sync/now` | Trigger a sync pass immediately. Returns `409` when sync is disabled. |
+| `POST` | `/api/settings/sync/enroll` | Enroll a lab (central): mint its Keycloak client + registry row; returns the client id and secret once. |
+| `GET` | `/api/settings/sync/sites` | List enrolled sites (never returns secrets). |
+| `POST` | `/api/settings/sync/sites/:siteId/rotate` | Rotate a site's client secret; returns the new secret once. |
+| `POST` | `/api/settings/sync/sites/:siteId/revoke` | Revoke a site: delete its client and mark the registry row revoked. |
+
+The machine endpoints `POST /api/sync/push` (a lab pushes operational change-log records up) and `POST /api/sync/pull` (a lab pulls the reference-data delta down) are authenticated by lab **client credentials**, not user sessions, and scope by the token's `site_id`.

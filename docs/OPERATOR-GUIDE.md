@@ -185,6 +185,31 @@ Troubleshooting:
 - Admin-only user mutations require the `lab_admin` role in the web app.
 - Reset-email, force-logout, and password reset actions need Keycloak admin credentials.
 
+## Distributed sync
+
+Use distributed sync to link many labs to one central OpenLDR server over intermittent, low-bandwidth links. Each lab runs a full instance and works offline; operational data (patients, requests, results, specimens, reports) pushes **up** to central's read-only mirror, while reference configuration (forms, dashboards, reports, allowlisted settings) and terminology pull **down** to labs. Every record is stamped with its originating `site_id`. Labs authenticate with a per-lab Keycloak client-credentials client whose token carries a `site_id` claim; central validates the token and scopes writes by site.
+
+Realm prerequisite: enrollment mints Keycloak clients, so the central realm must grant the admin service account `manage-clients` and `view-clients`. These are in the shipped realm export; a Keycloak container first started before distributed sync existed needs its realm re-imported (or the two client roles added by hand).
+
+Flow:
+
+1. **On central**, enroll each lab. This mints a confidential `sync-<siteId>` client with a `site_id` mapper, generates a secret shown once, and records a registry row. Use **Sites** in the app (admin-only) or the CLI:
+
+   ```bash
+   pnpm openldr sync enroll lab-ndola-01 --name "Ndola Central Hospital" --central-url https://central.example.org
+   pnpm openldr sync list
+   ```
+
+   Hand the printed client id, client secret, site id, central URL, and OIDC issuer to the lab operator. Lost secrets are unrecoverable — `pnpm openldr sync rotate <siteId>` issues a new one; `pnpm openldr sync revoke <siteId>` deletes the client.
+
+2. **On each lab**, enter those values under **Settings → General → Distributed Sync** (or `pnpm openldr settings sync set …`), choose a **mode** — `push`, `pull`, or `bidirectional` — set the interval, and enable. Monitor with the card's live status panel or `pnpm openldr sync status`, and force a pass with **Sync now** / `pnpm openldr sync now`.
+
+Troubleshooting:
+
+- Sync does nothing: confirm it is enabled and the mode is what you expect; re-check the central URL, site id, OIDC issuer, client id, and (if blanked) the secret.
+- `403`/`503` when enrolling on central: the admin service account lacks `manage-clients`/`view-clients` or Keycloak admin is not configured — re-import the realm and retry.
+- Machine endpoints `POST /api/sync/push` and `POST /api/sync/pull` are client-credentials-authed (lab → central); the `/api/settings/sync/*` admin endpoints are `lab_admin` user-authed.
+
 ## i18n
 
 The app ships English, French, and Portuguese UI/doc bundles. In-app docs currently have a fixed page order: overview, getting-started, dashboard, reports, ingestion, terminology, DHIS2, external database, and CLI. Adding new in-app doc pages requires a source-code registry change, so broader monorepo docs live under `docs/**`.
