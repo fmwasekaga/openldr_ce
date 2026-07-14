@@ -32,6 +32,7 @@
     "@openldr/report-designer": "workspace:*",
     "@openldr/report-pdf": "workspace:*",
     "@openldr/reporting": "workspace:*",
+    "@openldr/sync": "workspace:*",
     "@openldr/terminology": "workspace:*",
     "@openldr/users": "workspace:*",
     "@openldr/workflows": "workspace:*",
