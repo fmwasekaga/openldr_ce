@@ -1044,6 +1044,7 @@ export {
   listSites,
   rotateSite,
   revokeSite,
+  ensureCentralKeypair,
   AlreadyEnrolledError,
   SiteNotFoundError,
   InvalidSiteIdError,

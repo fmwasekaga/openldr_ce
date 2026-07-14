@@ -41,6 +41,24 @@ describe('createSyncSiteStore', () => {
     expect((await store.get('lab-c'))!.status).toBe('revoked');
   });
 
+  it('setSigningPublicKey round-trips (null until set)', async () => {
+    const store = createSyncSiteStore(db);
+    await store.insert({ siteId: 'lab-k', name: null, clientId: 'sync-lab-k', enrolledBy: null });
+    expect((await store.get('lab-k'))!.signingPublicKey).toBeNull(); // no key exchanged yet
+
+    await store.setSigningPublicKey('lab-k', 'deadbeef');
+    expect((await store.get('lab-k'))!.signingPublicKey).toBe('deadbeef');
+  });
+
+  it('reported pull cursor defaults to 0 and round-trips via get/set', async () => {
+    const store = createSyncSiteStore(db);
+    await store.insert({ siteId: 'lab-cur', name: null, clientId: 'sync-lab-cur', enrolledBy: null });
+    expect(await store.getReportedPullCursor('lab-cur')).toBe(0); // null column reads as 0
+
+    await store.setReportedPullCursor('lab-cur', 42);
+    expect(await store.getReportedPullCursor('lab-cur')).toBe(42);
+  });
+
   it('get returns undefined for an unknown site', async () => {
     const store = createSyncSiteStore(db);
     expect(await store.get('nope')).toBeUndefined();
