@@ -67,6 +67,43 @@ async function buildRecords(
   return records;
 }
 
+/** Compute the SAFE-frontier push records for one window, WITHOUT any transport or cursor side effects.
+ *  Runs the exact safe-frontier cycle the push runner uses — fetch safe rows + snapshot bounds, plan
+ *  (carrying `pendingGaps` in, out), re-filter to the committed safe prefix, batch-read the change_log
+ *  meta, and map each row to a wire `SyncRecord` via the same `buildRecords` — so an offline push
+ *  bundle (S5) carries byte-identical records to what an HTTP push would send for the same cursor.
+ *  Returns the records, the advanced `newCursor` (plan.newCursor), and the carried-forward gaps. */
+export async function collectPushRecords(
+  deps: Pick<PushDeps, 'internalDb' | 'fetchSafeRows' | 'fetchContent' | 'logger' | 'batchSize'>,
+  cursor: number,
+  pendingGaps: Gap[] = [],
+): Promise<{ records: (SyncRecord & { seq: number })[]; newCursor: number; pendingGaps: Gap[] }> {
+  const { rows, boundary, xmax } = await deps.fetchSafeRows(deps.internalDb, cursor, deps.batchSize ?? 500);
+  const plan = planProjection({ rows, boundary, xmax, cursor, pendingGaps });
+
+  // The planner's `tasks` are deduped current-state keys — unusable for a faithful change replay.
+  // Re-filter the raw rows to the SAFE prefix using the SAME predicate the planner uses to build its
+  // tasks (seq within the advanced frontier AND committed: xid < boundary). This yields one record
+  // per safe change, in seq order, un-deduped.
+  const safeRows = rows.filter((r) => r.seq <= plan.newCursor && r.xid < boundary);
+  if (safeRows.length === 0) return { records: [], newCursor: plan.newCursor, pendingGaps: plan.pendingGaps };
+
+  // ChangeRow carries neither `version` nor `site_id`; both are immutable append-only facts of the
+  // change_log row and the planner has already confirmed these seqs committed + final, so a plain
+  // read (outside the frontier snapshot) is safe. Fetch them keyed by seq for the safe range.
+  const metaRows = await deps.internalDb
+    .selectFrom('fhir.change_log')
+    .select(['seq', 'version', 'site_id'])
+    .where('seq', '>', cursor)
+    .where('seq', '<=', plan.newCursor)
+    .execute();
+  const metaBySeq = new Map<number, { version: number; siteId: string }>();
+  for (const m of metaRows) metaBySeq.set(Number(m.seq), { version: Number(m.version), siteId: m.site_id ?? '' });
+
+  const records = await buildRecords(safeRows, metaBySeq, deps);
+  return { records, newCursor: plan.newCursor, pendingGaps: plan.pendingGaps };
+}
+
 /** A stateful push runner. Mirrors createProjectionRunner's safe-frontier handling exactly: each cycle
  *  reads the 'sync-push' cursor, fetches the safe change rows + snapshot bounds, plans (carrying
  *  `pendingGaps` across cycles in this closure so rolled-back gaps confirm once the xmin boundary
@@ -80,42 +117,18 @@ export function createSyncPushRunner(deps: PushDeps): SyncPushRunner {
   return {
     async runCycle(): Promise<number> {
       const cursor = await deps.readCursor();
-      const { rows, boundary, xmax } = await deps.fetchSafeRows(deps.internalDb, cursor, deps.batchSize ?? 500);
-      const plan = planProjection({ rows, boundary, xmax, cursor, pendingGaps });
-      pendingGaps = plan.pendingGaps;
-
-      // The planner's `tasks` are deduped current-state keys — unusable for a faithful change replay.
-      // Re-filter the raw rows to the SAFE prefix using the SAME predicate the planner uses to build its
-      // tasks (seq within the advanced frontier AND committed: xid < boundary). This yields one record
-      // per safe change, in seq order, un-deduped.
-      const safeRows = rows.filter((r) => r.seq <= plan.newCursor && r.xid < boundary);
-
-      if (safeRows.length === 0) {
-        // No records to push this cycle. Still advance past any confirmed-rolled-back gaps the planner
-        // cleared, exactly like projection moves its frontier over a pure-gap cycle.
-        if (plan.newCursor > cursor) await deps.advanceCursor(plan.newCursor);
-        return 0;
-      }
-
-      // ChangeRow carries neither `version` nor `site_id`; both are immutable append-only facts of the
-      // change_log row and the planner has already confirmed these seqs committed + final, so a plain
-      // read (outside the frontier snapshot) is safe. Fetch them keyed by seq for the safe range.
-      const metaRows = await deps.internalDb
-        .selectFrom('fhir.change_log')
-        .select(['seq', 'version', 'site_id'])
-        .where('seq', '>', cursor)
-        .where('seq', '<=', plan.newCursor)
-        .execute();
-      const metaBySeq = new Map<number, { version: number; siteId: string }>();
-      for (const m of metaRows) metaBySeq.set(Number(m.seq), { version: Number(m.version), siteId: m.site_id ?? '' });
-
-      const records = await buildRecords(safeRows, metaBySeq, deps);
+      // Compute the window's records via the shared safe-frontier collector (byte-identical to what an
+      // S5 offline push bundle carries). It threads `pendingGaps` in + out of this stateful closure.
+      const collected = await collectPushRecords(deps, cursor, pendingGaps);
+      pendingGaps = collected.pendingGaps;
+      const { records } = collected;
+      const newCursor = collected.newCursor;
 
       if (records.length === 0) {
-        // Every safe row was skipped by a defensive guard (missing meta / site_id / upsert body). Those
-        // are logged local errors; still advance the frontier so the same rows are not re-scanned (and
-        // re-warned) forever. Nothing to push.
-        if (plan.newCursor > cursor) await deps.advanceCursor(plan.newCursor);
+        // No records to push this cycle (empty safe prefix OR every safe row skipped by a defensive
+        // guard). Still advance past any confirmed-rolled-back gaps the planner cleared, exactly like
+        // projection moves its frontier over a pure-gap cycle.
+        if (newCursor > cursor) await deps.advanceCursor(newCursor);
         return 0;
       }
 
@@ -141,10 +154,10 @@ export function createSyncPushRunner(deps: PushDeps): SyncPushRunner {
       }
 
       // Advance only as far as BOTH central acked AND the local safe frontier we actually pushed.
-      // Central is a separate trust domain: clamping to plan.newCursor stops a buggy/hostile ackSeq from
+      // Central is a separate trust domain: clamping to newCursor stops a buggy/hostile ackSeq from
       // jumping the cursor past records the lab never sent (which would permanently, silently skip
       // committed changes). The `> cursor` guard additionally prevents backwards regression.
-      const target = Math.min(resp.ackSeq, plan.newCursor);
+      const target = Math.min(resp.ackSeq, newCursor);
       if (target > cursor) await deps.advanceCursor(target);
 
       // Report the count central durably applied (not records.length), so a partially-rejected batch

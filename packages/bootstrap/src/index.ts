@@ -1036,6 +1036,15 @@ export type { ReportCategoriesService } from './report-categories';
 export { createActivityService } from './activity-service';
 export type { ActivityService, RecentPayload } from './activity-service';
 export { getSyncConfig, setSyncConfig, readSigningKeys } from './sync-settings';
+export { servePull } from './sync-serve';
+export {
+  exportPushBundle,
+  importPushBundle,
+  exportPullBundle,
+  importPullBundle,
+  BundleSignatureError,
+  BundleGapError,
+} from './sync-bundle';
 export { createSyncHandle } from './sync-handle';
 export type { SyncHandle, SyncStatus, SyncDirectionStatus, SyncMode } from './sync-handle';
 export { migrateLegacySyncConfig } from './sync-settings-migrate';
