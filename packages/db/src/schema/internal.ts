@@ -167,6 +167,7 @@ export interface PublishersTable {
   match_prefixes: JSONColumnType<string[]>;
   seeded: Generated<boolean>;
   sort_order: Generated<number>;
+  managed_origin: string | null;
 }
 
 export interface CodingSystemsTable {
@@ -179,6 +180,7 @@ export interface CodingSystemsTable {
   active: Generated<boolean>;
   publisher_id: string | null;
   seeded: Generated<boolean>;
+  managed_origin: string | null;
 }
 
 export interface TermMappingsTable {
@@ -194,6 +196,7 @@ export interface TermMappingsTable {
   is_active: Generated<boolean>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
+  managed_origin: string | null;
 }
 
 export interface ValueSetsTable {

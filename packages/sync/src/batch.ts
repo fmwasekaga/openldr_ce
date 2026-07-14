@@ -30,7 +30,16 @@ export interface PushResponse {
 // entity coordinates + op; `body` carries the config content for an upsert (absent for a delete).
 export interface PullRecord {
   seq: number;
-  entityType: 'form' | 'dashboard' | 'report' | 'setting';
+  entityType:
+    | 'form'
+    | 'dashboard'
+    | 'report'
+    | 'setting'
+    | 'publisher'
+    | 'coding_system'
+    | 'term_mapping'
+    | 'terminology_system'
+    | 'concept_map';
   entityId: string;
   op: 'upsert' | 'delete';
   contentHash?: string | null;
