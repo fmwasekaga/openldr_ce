@@ -4,6 +4,7 @@ import { registerSettingsRoutes } from './settings-routes';
 
 function fakeCtx() {
   const store = new Map<string, boolean>();
+  const settings = new Map<string, string>();
   const audit: any[] = [];
   const ops = { resetDashboards: 0, factoryReset: 0, clearAudit: 0 };
   return {
@@ -14,12 +15,21 @@ function fakeCtx() {
         set: async (id: string, v: boolean) => { store.set(id, v); },
         invalidate: () => {},
       },
+      // Minimal AppSettingStore for the sync config route.
+      appSettings: {
+        get: async (k: string) => (settings.has(k) ? { value: settings.get(k)! } : undefined),
+        set: async (k: string, v: string) => { settings.set(k, v); },
+      },
+      // Fake seal: prefix so a test can assert the stored value is the ENCRYPTED form, never plaintext.
+      encryptSecret: (plain: string) => `enc:${plain}`,
+      decryptSecret: (blob: string) => blob.replace(/^enc:/, ''),
       audit: { record: async (e: any) => { audit.push(e); return e; } },
       logger: { error() {}, warn() {}, info() {} },
       dashboards: { store: { list: async () => [], remove: async () => {}, create: async () => ({}) } },
       internalDb: {} as any,
       cfg: {},
       __audit: audit,
+      __settings: settings,
       __ops: ops,
     } as any,
     deps: {
@@ -76,6 +86,60 @@ describe('settings routes', () => {
     const app = appWithUser(['lab_admin'], (a) => registerSettingsRoutes(a, ctx, deps));
     const res = await app.inject({ method: 'POST', url: '/api/settings/danger/nuke-everything' });
     expect(res.statusCode).toBe(404);
+  });
+
+  it('PUT /api/settings/sync persists discrete keys, encrypts the secret, returns a secret-free view', async () => {
+    const { ctx, deps } = fakeCtx();
+    const app = appWithUser(['lab_admin'], (a) => registerSettingsRoutes(a, ctx, deps));
+    const res = await app.inject({
+      method: 'PUT', url: '/api/settings/sync',
+      payload: {
+        enabled: true, mode: 'push', centralUrl: 'https://central.example',
+        siteId: 'lab-1', oidcIssuer: 'https://kc.example', clientId: 'sync-client',
+        clientSecret: 'super-secret', intervalMinutes: 30,
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const view = res.json();
+    // Secret-free view.
+    expect(view.clientSecretSet).toBe(true);
+    expect('clientSecret' in view).toBe(false);
+    expect(JSON.stringify(view)).not.toContain('super-secret');
+    expect(view).toMatchObject({ enabled: true, mode: 'push', centralUrl: 'https://central.example', siteId: 'lab-1', oidcIssuer: 'https://kc.example', clientId: 'sync-client', intervalMinutes: 30 });
+    // Discrete keys landed; the secret is stored ENCRYPTED (never plaintext).
+    const s = (ctx as any).__settings as Map<string, string>;
+    expect(s.get('sync.enabled')).toBe('true');
+    expect(s.get('sync.site_id')).toBe('lab-1');
+    expect(s.get('sync.client_secret')).toBe('enc:super-secret');
+    // Audit metadata carries only secret-free views.
+    const row = (ctx as any).__audit.find((e: any) => e.action === 'settings.sync.update');
+    expect(row).toBeTruthy();
+    expect(JSON.stringify(row.metadata)).not.toContain('super-secret');
+  });
+
+  it('PUT /api/settings/sync with enabled but missing oidcIssuer is 400', async () => {
+    const { ctx, deps } = fakeCtx();
+    const app = appWithUser(['lab_admin'], (a) => registerSettingsRoutes(a, ctx, deps));
+    const res = await app.inject({
+      method: 'PUT', url: '/api/settings/sync',
+      payload: { enabled: true, centralUrl: 'https://central.example', siteId: 'lab-1', clientId: 'c' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('GET /api/settings/sync returns the secret-free view', async () => {
+    const { ctx, deps } = fakeCtx();
+    const app = appWithUser(['lab_admin'], (a) => registerSettingsRoutes(a, ctx, deps));
+    await app.inject({
+      method: 'PUT', url: '/api/settings/sync',
+      payload: { enabled: false, centralUrl: '', siteId: '', oidcIssuer: '', clientId: '', clientSecret: 'shh', intervalMinutes: 15 },
+    });
+    const res = await app.inject({ method: 'GET', url: '/api/settings/sync' });
+    expect(res.statusCode).toBe(200);
+    const view = res.json();
+    expect(view.clientSecretSet).toBe(true);
+    expect('clientSecret' in view).toBe(false);
+    expect(JSON.stringify(view)).not.toContain('shh');
   });
 
   it('failed danger op still audits the attempt (ok: false) and returns 500', async () => {

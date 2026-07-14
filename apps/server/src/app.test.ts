@@ -413,6 +413,8 @@ function ctxWith(status: 'up' | 'down'): AppContext {
     featureFlags: { get: async () => false } as never,
     numberSettings: { get: async () => 0, all: async () => [], set: async () => 0, invalidate: () => {} } as never,
     activity: { getLifecycle: async () => null, listRecent: async () => [] } as never,
+    encryptSecret: (p: string) => p,
+    decryptSecret: (b: string) => b,
     marketplaceForms: {} as never,
     terminology: { ops: {} as never, admin: buildFakeAdmin(), ontology: buildFakeOntology(), loaders: buildFakeLoaders() },
     dashboards: {} as never,

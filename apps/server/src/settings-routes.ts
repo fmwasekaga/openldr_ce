@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { dangerResetDashboards, dangerFactoryReset, dangerClearAudit, getSyncConfig, setSyncConfig } from '@openldr/bootstrap';
-import { SYNC_CONFIG_KEY } from '@openldr/config';
 import { requireRole } from './rbac';
 import { recordAudit } from './audit-helper';
 
@@ -33,13 +32,13 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
     const before = await getSyncConfig(ctx.appSettings);
     let after;
     try {
-      after = await setSyncConfig(ctx.appSettings, req.body, req.user?.id ?? null);
+      after = await setSyncConfig(ctx.appSettings, req.body, req.user?.id ?? null, ctx.encryptSecret);
     } catch (e) {
       reply.code(400);
       return { error: e instanceof Error ? e.message : 'invalid sync config' };
     }
     await recordAudit(ctx, req, {
-      action: 'settings.sync.update', entityType: 'app_setting', entityId: SYNC_CONFIG_KEY,
+      action: 'settings.sync.update', entityType: 'app_setting', entityId: 'sync.*',
       metadata: { before, after },
     });
     return after;

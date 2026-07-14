@@ -1,5 +1,5 @@
 import { createAppContext, dangerResetDashboards, dangerFactoryReset, dangerClearAudit, getSyncConfig, setSyncConfig } from '@openldr/bootstrap';
-import { loadConfig, type SyncConfig } from '@openldr/config';
+import { loadConfig, type SyncConfigView, type SyncConfigInput } from '@openldr/config';
 
 interface JsonOpt { json: boolean }
 
@@ -69,24 +69,46 @@ export async function runSettingsNumbersSet(key: string, value: string, opts: Js
   }
 }
 
-const SYNC_FIELDS = ['enabled', 'mode', 'centralUrl', 'siteId', 'intervalMinutes'] as const;
+const SYNC_FIELDS = ['enabled', 'mode', 'centralUrl', 'siteId', 'oidcIssuer', 'clientId', 'clientSecret', 'intervalMinutes'] as const;
 type SyncField = (typeof SYNC_FIELDS)[number];
 
-function coerceSyncField(field: SyncField, value: string): SyncConfig[SyncField] {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function coerceSyncField(field: SyncField, value: string): any {
   if (field === 'enabled') return value === 'true' || value === '1';
   if (field === 'intervalMinutes') return Number(value);
-  return value;
+  return value; // string passthrough, incl. clientSecret
+}
+
+/** Map a secret-free view back to a setSyncConfig input. Deliberately DROPS the secret: no
+ *  `clientSecret` key means setSyncConfig preserves the stored encrypted secret when a non-secret
+ *  field is patched. */
+function viewToInput(v: SyncConfigView): SyncConfigInput {
+  return {
+    enabled: v.enabled,
+    mode: v.mode,
+    centralUrl: v.centralUrl,
+    siteId: v.siteId,
+    oidcIssuer: v.oidcIssuer,
+    clientId: v.clientId,
+    intervalMinutes: v.intervalMinutes,
+  };
 }
 
 export async function runSettingsSyncShow(opts: JsonOpt): Promise<number> {
   const ctx = await createAppContext(loadConfig());
   try {
     const cfg = await getSyncConfig(ctx.appSettings);
-    emit(
-      opts.json,
-      cfg,
-      SYNC_FIELDS.map((f) => `${f} = ${String(cfg[f])}`).join('\n'),
-    );
+    const lines = [
+      `enabled = ${cfg.enabled}`,
+      `mode = ${cfg.mode}`,
+      `centralUrl = ${cfg.centralUrl}`,
+      `siteId = ${cfg.siteId}`,
+      `oidcIssuer = ${cfg.oidcIssuer}`,
+      `clientId = ${cfg.clientId}`,
+      `clientSecret = ${cfg.clientSecretSet ? '<set>' : '<unset>'}`,
+      `intervalMinutes = ${cfg.intervalMinutes}`,
+    ];
+    emit(opts.json, cfg, lines.join('\n'));
     return 0;
   } finally {
     await ctx.close();
@@ -98,19 +120,24 @@ export async function runSettingsSyncSet(field: string, value: string, opts: Jso
     process.stderr.write(`unknown field "${field}" (expected: ${SYNC_FIELDS.join(' | ')})\n`);
     return 1;
   }
+  const f = field as SyncField;
   const ctx = await createAppContext(loadConfig());
   try {
     const current = await getSyncConfig(ctx.appSettings);
-    const next = { ...current, [field]: coerceSyncField(field as SyncField, value) };
-    let saved: SyncConfig;
+    // Build the input from the current view (secret dropped), then apply the single-field patch.
+    // Only when the patched field IS clientSecret do we add it to the input — so patching any other
+    // field leaves the stored encrypted secret untouched.
+    const input: SyncConfigInput = { ...viewToInput(current), [f]: coerceSyncField(f, value) };
+    let saved: SyncConfigView;
     try {
-      saved = await setSyncConfig(ctx.appSettings, next, 'cli');
+      saved = await setSyncConfig(ctx.appSettings, input, 'cli', ctx.encryptSecret);
     } catch (e) {
       process.stderr.write(`invalid value: ${e instanceof Error ? e.message : String(e)}\n`);
       return 1;
     }
-    await ctx.audit.record({ actorType: 'system', actorName: 'cli', action: 'settings.sync.update', entityType: 'app_setting', entityId: 'sync.config', metadata: { field, before: current, after: saved } });
-    emit(opts.json, saved, `set ${field} = ${String(saved[field as SyncField])}`);
+    await ctx.audit.record({ actorType: 'system', actorName: 'cli', action: 'settings.sync.update', entityType: 'app_setting', entityId: 'sync.*', metadata: { field: f, before: current, after: saved } });
+    const shown = f === 'clientSecret' ? (saved.clientSecretSet ? '<set>' : '<unset>') : String((saved as unknown as Record<string, unknown>)[f]);
+    emit(opts.json, saved, `set ${f} = ${shown}`);
     return 0;
   } finally {
     await ctx.close();

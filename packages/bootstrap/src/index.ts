@@ -6,7 +6,7 @@ import { createAuth } from '@openldr/adapter-auth';
 import { createEventBus } from '@openldr/adapter-event-bus';
 import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import type { Config } from '@openldr/config';
-import { createLogger, HealthRegistry, open, parseSecretKey, redact, type Logger } from '@openldr/core';
+import { createLogger, HealthRegistry, open, seal, parseSecretKey, redact, type Logger } from '@openldr/core';
 import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema, Provenance } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
@@ -291,6 +291,12 @@ export interface AppContext {
   featureFlags: FeatureFlags;
   numberSettings: NumberSettings;
   activity: ActivityService;
+  /** Seal a plaintext secret for at-rest storage (AES-256-GCM under SECRETS_ENCRYPTION_KEY).
+   *  Symmetric with {@link decryptSecret}; used by the sync settings route/CLI to write-encrypt
+   *  the client secret. */
+  encryptSecret(plain: string): string;
+  /** Inverse of {@link encryptSecret}. Mirrors the internal `syncDecrypt`. */
+  decryptSecret(blob: string): string;
   cfg: Config;
   close(): Promise<void>;
 }
@@ -673,6 +679,9 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   let syncPushWorker: SyncPushWorker | undefined;
   let syncPullWorker: SyncPullWorker | undefined;
   const syncDecrypt = (blob: string): string => open(blob, parseSecretKey(cfg.SECRETS_ENCRYPTION_KEY ?? ''));
+  // Symmetric seal/open pair exposed on AppContext so the sync settings route + CLI can write-encrypt
+  // the client secret with the SAME key scheme syncDecrypt reads (open(seal(x,key),key) === x).
+  const encryptSecret = (plain: string): string => seal(plain, parseSecretKey(cfg.SECRETS_ENCRYPTION_KEY ?? ''));
   // Reading the sync config touches app_settings; a transient DB read failure here must degrade to
   // "sync disabled" rather than abort boot (mirrors the projection LISTEN fallback's boot-safety).
   let syncCfg: Awaited<ReturnType<typeof readSyncConfig>> = null;
@@ -954,6 +963,8 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     featureFlags,
     numberSettings,
     activity,
+    encryptSecret,
+    decryptSecret: syncDecrypt,
     cfg,
     async close() {
       await workflowListeners.stopAll();
