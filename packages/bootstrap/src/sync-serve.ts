@@ -19,8 +19,8 @@ const BATCH = 500;
 
 /** Serve the global reference-config delta after `fromSeq`: the ordered, deduped window of reference
  *  changes plus the `nextSeq` cursor to resume from. Returns ALL reference records (incl. terminology
- *  signals) — the HTTP route serves this verbatim; only the S5 pull-bundle exporter filters
- *  terminology out (it needs concept embedding, done in Task 4b). */
+ *  signals) — the HTTP route serves this verbatim; the S5 pull-bundle exporter EMBEDS each terminology
+ *  signal's drained concepts/elements into the record body so an offline lab can apply them. */
 export async function servePull(ctx: AppContext, fromSeq: number): Promise<PullResponse> {
   // Raw window ordered by seq, then DEDUP to the LATEST row per (entity_type, entity_id) so a
   // create-then-delete (or several edits) inside the window collapses to one record — avoids a
