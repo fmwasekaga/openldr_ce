@@ -24,6 +24,8 @@ interface SyncSiteRow {
 function fakeCtx() {
   const sites = new Map<string, SyncSiteRow>();
   const clients = new Map<string, string>(); // clientId -> uuid
+  const signingKeys = new Map<string, string>(); // siteId -> public signing key
+  const settings = new Map<string, string>(); // app_settings (incl. central signing keypair — S5)
   let uuidSeq = 0;
   let secretSeq = 0;
   const auditEvents: unknown[] = [];
@@ -60,7 +62,26 @@ function fakeCtx() {
         const r = sites.get(siteId);
         if (r) r.status = status;
       },
+      // Sync S5 key exchange: central persists ONLY the site's public signing key.
+      async setSigningPublicKey(siteId: string, publicKey: string) {
+        signingKeys.set(siteId, publicKey);
+      },
+      async getReportedPullCursor() { return 0; },
+      async setReportedPullCursor() {},
     },
+
+    // Sync S5: in-memory app_settings backing ensureCentralKeypair (get→{value}|undefined, set(k,v,actor)).
+    appSettings: {
+      async get(key: string) {
+        return settings.has(key) ? { value: settings.get(key)! } : undefined;
+      },
+      async set(key: string, value: string) {
+        settings.set(key, value);
+      },
+    },
+    // Identity encrypt/decrypt — sufficient for the round-trip ensureCentralKeypair performs.
+    encryptSecret: (s: string) => s,
+    decryptSecret: (s: string) => s,
 
     auth: {
       verifyToken: async () => ({ sub: 's' }),
@@ -120,6 +141,11 @@ describe('settings sync enrollment routes', () => {
     expect(body.siteId).toBe('lab-a');
     expect(body.centralUrl).toBe('https://central.example');
     expect(body.oidcIssuer).toBe('https://kc.example/realms/openldr');
+    // Sync S5 key exchange: enroll hands back the site's private signing key + central's public key.
+    expect(typeof body.signingPrivateKey).toBe('string');
+    expect((body.signingPrivateKey as string).length).toBeGreaterThan(0);
+    expect(typeof body.centralPublicKey).toBe('string');
+    expect((body.centralPublicKey as string).length).toBeGreaterThan(0);
 
     // Registry row exists
     const sites = (ctx as unknown as { __sites: Map<string, SyncSiteRow> }).__sites;
@@ -215,6 +241,10 @@ describe('settings sync enrollment routes', () => {
     const body = res.json() as Record<string, unknown>;
     expect(body.clientId).toBe('sync-lab-a');
     expect(typeof body.clientSecret).toBe('string');
+    // Sync S5: rotate re-mints the site keypair and returns the new material.
+    expect(typeof body.signingPrivateKey).toBe('string');
+    expect((body.signingPrivateKey as string).length).toBeGreaterThan(0);
+    expect(typeof body.centralPublicKey).toBe('string');
 
     const events = (ctx as unknown as { __auditEvents: unknown[] }).__auditEvents;
     expect(events.some((e) => (e as { action: string }).action === 'settings.sync.rotate')).toBe(true);
