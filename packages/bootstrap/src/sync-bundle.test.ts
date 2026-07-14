@@ -400,6 +400,33 @@ describe('exportPullBundle / importPullBundle', () => {
     expect(term.body.version).toBe('2.77'); // servePull descriptor still present
   });
 
+  it('exports a signed pull bundle EMBEDDING a concept_map\'s elements in the record body (drainMapElements)', async () => {
+    const ctx = makeCtx({
+      appSettings: fakeAppSettings(),
+      internalDb: fakeInternalDb({
+        reference_change_log: [{ seq: 1, entity_type: 'concept_map', entity_id: MAP, op: 'upsert', content_hash: 'hm' }],
+        concept_map_state: [{ map_url: MAP, generation: '2' }],
+        concept_map_elements: [
+          { map_url: MAP, source_system: 'http://a', source_code: 'a1', target_system: 'http://b', target_code: 'b1', equivalence: 'equivalent' },
+          { map_url: MAP, source_system: 'http://a', source_code: 'a2', target_system: 'http://b', target_code: 'b2', equivalence: 'related-to' },
+        ],
+      }),
+    });
+    ctx.syncSites._rows.set(SITE, { siteId: SITE, status: 'active', signingPublicKey: null, reportedPullCursor: 0 });
+
+    const { manifest } = await exportPullBundle(ctx, { siteId: SITE });
+    expect(manifest).toMatchObject({ kind: 'pull', siteId: SITE, fromCursor: 0, toCursor: 1, recordCount: 1, signerKeyId: 'central' });
+
+    const { records } = unpackBundle(lastBytes());
+    expect(records.records.map((r) => (r as { entityType: string }).entityType)).toEqual(['concept_map']);
+    const map = records.records[0] as { body: { elements: { sourceCode: string; targetCode: string }[]; mapUrl?: string; generation?: number } };
+    // Elements DRAINED via serveMapElementsPage/drainMapElements, with the servePull descriptor preserved.
+    expect(map.body.elements.map((e) => e.sourceCode)).toEqual(['a1', 'a2']);
+    expect(map.body.elements.map((e) => e.targetCode)).toEqual(['b1', 'b2']);
+    expect(map.body.mapUrl).toBe(MAP);
+    expect(map.body.generation).toBe(2);
+  });
+
   it('round-trips: lab verifies with the pinned central key, applies the setting AND reconciles the embedded terminology system, advances sync-pull', async () => {
     const labDb = await makeMigratedDb();
     const kp = hexKeys();
