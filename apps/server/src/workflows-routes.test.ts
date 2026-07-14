@@ -1,6 +1,37 @@
 import { describe, it, expect, vi } from 'vitest';
+import { randomBytes } from 'node:crypto';
 import Fastify from 'fastify';
+import { ConfigError } from '@openldr/core';
+import { createWorkflowSecretStore } from '@openldr/db';
+import { makeMigratedDb } from '@openldr/db/testing';
 import { registerWorkflowRoutes } from './workflows-routes';
+
+// Lightweight in-memory secret store for the legacy (non-secret) route tests. Mirrors
+// createWorkflowSecretStore semantics incl. the fail-closed ConfigError when no key is set.
+// The SEC-06 extraction tests below swap this for a REAL pg-mem-backed store.
+function fakeSecretStore() {
+  const rows = new Map<string, { workflowId: string; value: string }>();
+  let n = 0;
+  return {
+    rows,
+    put: async (workflowId: string, plaintext: string, key: string | undefined) => {
+      if (!key) throw new ConfigError('SECRETS_ENCRYPTION_KEY is required to store workflow secrets but is not set');
+      const id = `wsec_fake_${n++}`;
+      rows.set(id, { workflowId, value: plaintext });
+      return id;
+    },
+    resolve: async (id: string, key: string | undefined) => {
+      if (!key) throw new ConfigError('SECRETS_ENCRYPTION_KEY is required');
+      const r = rows.get(id);
+      if (!r) throw new Error(`workflow secret not found: ${id}`);
+      return r.value;
+    },
+    deleteForWorkflow: async (workflowId: string) => { for (const [k, v] of rows) if (v.workflowId === workflowId) rows.delete(k); },
+    deleteExcept: async (workflowId: string, keepIds: string[]) => {
+      for (const [k, v] of rows) if (v.workflowId === workflowId && !keepIds.includes(k)) rows.delete(k);
+    },
+  };
+}
 
 // In-memory fakes for the trigger registries widened onto ctx.workflows (runs/schedules/webhooks/runner).
 function fakeWorkflowExtras() {
@@ -73,6 +104,7 @@ function fakeCtx() {
   const data: any[] = [];
   const auditEvents: any[] = [];
   const extras = fakeWorkflowExtras();
+  const secretStore = fakeSecretStore();
   return {
     workflows: {
       store: {
@@ -83,7 +115,7 @@ function fakeCtx() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         create: async (w: any) => { data.push(w); return w; },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        update: async (_id: string, w: any) => w,
+        update: async (id: string, w: any) => { const i = data.findIndex((x) => x.id === id); if (i >= 0) data[i] = w; return w; },
         remove: async (id: string) => { const i = data.findIndex((x) => x.id === id); if (i >= 0) data.splice(i, 1); },
       },
       runs: extras.runs,
@@ -93,17 +125,19 @@ function fakeCtx() {
       services: undefined,
       datasets: extras.datasets,
       listeners: extras.listeners,
+      secretStore,
     },
     blob: { put: vi.fn().mockResolvedValue(undefined), get: async () => Buffer.from('artifact-bytes') },
     // dhis2-sink mappings for the workflow dhis2-push picker. Empty by default; tests override.
     pluginData: { list: async () => [] },
     plugins: { list: async () => [] as any[] },
     forms: { listPublished: async () => [] as any[] },
-    cfg: { WORKFLOW_CODE_TIMEOUT_MS: 5000, WORKFLOW_CODE_MEMORY_MB: 128, WORKFLOW_CODE_ENABLED: true, WORKFLOW_FILE_MAX_BYTES: 52_428_800 },
+    cfg: { WORKFLOW_CODE_TIMEOUT_MS: 5000, WORKFLOW_CODE_MEMORY_MB: 128, WORKFLOW_CODE_ENABLED: true, WORKFLOW_FILE_MAX_BYTES: 52_428_800, SECRETS_ENCRYPTION_KEY: randomBytes(32).toString('base64') },
     audit: { record: async (e: unknown) => { auditEvents.push(e); return e; } },
     logger: { error() {}, warn() {}, info() {} },
     __auditEvents: auditEvents,
     __extras: extras,
+    __secretStore: secretStore,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any;
 }
@@ -404,7 +438,9 @@ describe('workflow routes', () => {
     const ctx = fakeCtx();
     registerWorkflowRoutes(app, ctx);
 
-    await app.inject({ method: 'POST', url: '/api/workflows', payload: SECRET_WORKFLOW });
+    // Seed a PLAINTEXT definition directly (bypass the sealing POST path) so this test
+    // exercises the read-surface redaction against stray plaintext (defense in depth).
+    await ctx.workflows.store.create(SECRET_WORKFLOW);
     const res = await app.inject({ method: 'GET', url: '/api/workflows' });
     expect(res.statusCode).toBe(200);
     const list = res.json();
@@ -432,12 +468,14 @@ describe('workflow routes', () => {
     const ctx = fakeCtx();
     registerWorkflowRoutes(app, ctx);
 
-    await app.inject({ method: 'POST', url: '/api/workflows', payload: SECRET_WORKFLOW });
+    // Seed plaintext directly: the detail endpoint returns the stored definition
+    // verbatim (manager-gated, no read-time redaction).
+    await ctx.workflows.store.create(SECRET_WORKFLOW);
     const res = await app.inject({ method: 'GET', url: '/api/workflows/wf-secret' });
     expect(res.statusCode).toBe(200);
     const w = res.json();
     const trigger = w.definition.nodes.find((n: any) => n.id === 't1');
-    // Detail is full — the builder needs the real secret to edit.
+    // Detail returns the stored definition verbatim (no redaction on the detail route).
     expect(trigger.data.secret).toBe('sup3r-secret');
     const http = w.definition.nodes.find((n: any) => n.id === 'h1');
     expect(http.data.config.headers.Authorization).toBe('Bearer tok');
@@ -690,5 +728,161 @@ describe('workflow routes', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(ctx.__extras.getEventIds()).toContain('wf-evt');
+  });
+
+  // --- SEC-06 T3: save-time extraction seals plaintext secrets into the store (refs only) ---
+
+  // Builds a fakeCtx whose secretStore is a REAL pg-mem-backed WorkflowSecretStore so we can
+  // assert the sealed rows + resolve back the originals.
+  async function realSecretCtx() {
+    const key = randomBytes(32).toString('base64');
+    const db = await makeMigratedDb();
+    const store = createWorkflowSecretStore(db);
+    const ctx = fakeCtx();
+    ctx.workflows.secretStore = store;
+    ctx.cfg.SECRETS_ENCRYPTION_KEY = key;
+    return { ctx, db, store, key };
+  }
+  const secretRows = (db: any, workflowId: string) =>
+    db.selectFrom('workflow_secrets').selectAll().where('workflow_id', '=', workflowId).execute();
+
+  it('POST seals the webhook secret + HTTP headers blob into the store (persisted def = refs only)', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    const { ctx, db, store, key } = await realSecretCtx();
+    registerWorkflowRoutes(app, ctx);
+
+    const res = await app.inject({ method: 'POST', url: '/api/workflows', payload: SECRET_WORKFLOW });
+    expect(res.statusCode).toBe(200);
+
+    const stored = await ctx.workflows.store.get('wf-secret');
+    const raw = JSON.stringify(stored);
+    // ZERO cleartext in the persisted definition.
+    expect(raw).not.toContain('sup3r-secret');
+    expect(raw).not.toContain('Bearer tok');
+
+    const trigger = stored.definition.nodes.find((n: any) => n.id === 't1');
+    const http = stored.definition.nodes.find((n: any) => n.id === 'h1');
+    // Both secret fields are now opaque refs.
+    expect(typeof trigger.data.secret.secretRef).toBe('string');
+    expect(typeof http.data.config.headers.secretRef).toBe('string');
+
+    // The store holds the sealed values; resolve returns the originals.
+    expect(await store.resolve(trigger.data.secret.secretRef, key)).toBe('sup3r-secret');
+    const headersJson = await store.resolve(http.data.config.headers.secretRef, key);
+    expect(JSON.parse(headersJson)).toEqual({ Authorization: 'Bearer tok', 'X-Keep': 'yes' });
+
+    // Exactly two sealed rows for the workflow.
+    expect((await secretRows(db, 'wf-secret')).length).toBe(2);
+    await db.destroy();
+  });
+
+  it('POST leaves a headers blob with NO auth header as plaintext (not extracted)', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    const { ctx, db } = await realSecretCtx();
+    registerWorkflowRoutes(app, ctx);
+
+    const wf = {
+      ...SAMPLE_WORKFLOW, id: 'wf-plain',
+      definition: { nodes: [
+        { id: 'h1', type: 'action', data: { action: 'http-request', config: { url: 'https://x', headers: { 'content-type': 'application/json' } } } },
+      ], edges: [] },
+    };
+    const res = await app.inject({ method: 'POST', url: '/api/workflows', payload: wf });
+    expect(res.statusCode).toBe(200);
+
+    const stored = await ctx.workflows.store.get('wf-plain');
+    const http = stored.definition.nodes.find((n: any) => n.id === 'h1');
+    // Untouched — still the plaintext object, no secretRef.
+    expect(http.data.config.headers).toEqual({ 'content-type': 'application/json' });
+    expect((await secretRows(db, 'wf-plain')).length).toBe(0);
+    await db.destroy();
+  });
+
+  it('resaving with the SAME refs keeps them — no new rows (idempotent GC)', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    const { ctx, db } = await realSecretCtx();
+    registerWorkflowRoutes(app, ctx);
+
+    await app.inject({ method: 'POST', url: '/api/workflows', payload: SECRET_WORKFLOW });
+    const firstIds = (await secretRows(db, 'wf-secret')).map((r: any) => r.id).sort();
+    expect(firstIds.length).toBe(2);
+
+    // Round-trip the sealed (ref) definition back — exactly what the builder resubmits.
+    const sealedDef = (await ctx.workflows.store.get('wf-secret')).definition;
+    const res = await app.inject({ method: 'PUT', url: '/api/workflows/wf-secret', payload: { ...SECRET_WORKFLOW, definition: sealedDef } });
+    expect(res.statusCode).toBe(200);
+
+    const afterIds = (await secretRows(db, 'wf-secret')).map((r: any) => r.id).sort();
+    expect(afterIds).toEqual(firstIds); // same rows, none added
+    await db.destroy();
+  });
+
+  it('changing one secret mints a new ref and GCs the old row; the unchanged ref is kept', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    const { ctx, db, store, key } = await realSecretCtx();
+    registerWorkflowRoutes(app, ctx);
+
+    await app.inject({ method: 'POST', url: '/api/workflows', payload: SECRET_WORKFLOW });
+    const sealed = (await ctx.workflows.store.get('wf-secret')).definition;
+    const oldSecretRef = sealed.nodes.find((n: any) => n.id === 't1').data.secret.secretRef;
+    const headersRef = sealed.nodes.find((n: any) => n.id === 'h1').data.config.headers.secretRef;
+
+    // PUT: change the webhook secret (new PLAINTEXT), keep the headers as its unchanged ref.
+    const nextDef = {
+      nodes: [
+        { id: 't1', type: 'trigger', data: { triggerType: 'webhook', path: 'hook', secret: 'rotated-secret' } },
+        { id: 'h1', type: 'action', data: { action: 'http-request', config: { url: 'https://x', headers: { secretRef: headersRef } } } },
+      ],
+      edges: [],
+    };
+    const res = await app.inject({ method: 'PUT', url: '/api/workflows/wf-secret', payload: { ...SECRET_WORKFLOW, definition: nextDef } });
+    expect(res.statusCode).toBe(200);
+
+    const stored = (await ctx.workflows.store.get('wf-secret')).definition;
+    const newSecretRef = stored.nodes.find((n: any) => n.id === 't1').data.secret.secretRef;
+    // A fresh ref for the changed value; the unchanged headers ref is preserved.
+    expect(newSecretRef).not.toBe(oldSecretRef);
+    expect(stored.nodes.find((n: any) => n.id === 'h1').data.config.headers.secretRef).toBe(headersRef);
+    // The old secret row is GC'd; the new + kept rows resolve.
+    expect((await secretRows(db, 'wf-secret')).length).toBe(2);
+    await expect(store.resolve(oldSecretRef, key)).rejects.toThrow(/not found/i);
+    expect(await store.resolve(newSecretRef, key)).toBe('rotated-secret');
+    expect(await store.resolve(headersRef, key)).toBe(JSON.stringify({ Authorization: 'Bearer tok', 'X-Keep': 'yes' }));
+    await db.destroy();
+  });
+
+  it('DELETE cascades — the workflow_secrets rows are removed', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    const { ctx, db } = await realSecretCtx();
+    registerWorkflowRoutes(app, ctx);
+
+    await app.inject({ method: 'POST', url: '/api/workflows', payload: SECRET_WORKFLOW });
+    expect((await secretRows(db, 'wf-secret')).length).toBe(2);
+
+    const res = await app.inject({ method: 'DELETE', url: '/api/workflows/wf-secret' });
+    expect(res.statusCode).toBe(200);
+    expect((await secretRows(db, 'wf-secret')).length).toBe(0);
+    await db.destroy();
+  });
+
+  it('saving a secret-bearing workflow with SECRETS_ENCRYPTION_KEY unset fails closed — nothing persisted', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    const { ctx, db } = await realSecretCtx();
+    ctx.cfg.SECRETS_ENCRYPTION_KEY = undefined; // no key → put throws ConfigError
+    registerWorkflowRoutes(app, ctx);
+
+    const res = await app.inject({ method: 'POST', url: '/api/workflows', payload: SECRET_WORKFLOW });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/SECRETS_ENCRYPTION_KEY/);
+    // No partial persist: neither the workflow nor any secret row exists.
+    expect(await ctx.workflows.store.get('wf-secret')).toBeUndefined();
+    expect((await secretRows(db, 'wf-secret')).length).toBe(0);
+    await db.destroy();
   });
 });

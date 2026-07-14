@@ -2,7 +2,8 @@ import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { ZodError } from 'zod';
 import type { AppContext } from '@openldr/bootstrap';
-import { WorkflowSchema, WorkflowDefinitionSchema, runWorkflow, type RunEvent, createWorkflowNodeRegistry, HOST_NODE_DESCRIPTORS, mapSecretFields, isSecretRef } from '@openldr/workflows';
+import { WorkflowSchema, WorkflowDefinitionSchema, runWorkflow, type RunEvent, createWorkflowNodeRegistry, HOST_NODE_DESCRIPTORS, mapSecretFields, mapSecretFieldsAsync, isSecretRef } from '@openldr/workflows';
+import { ConfigError } from '@openldr/core';
 import { toCsv } from '@openldr/reporting';
 import { recordAudit } from './audit-helper';
 import { requireRole } from './rbac';
@@ -72,6 +73,41 @@ function redactWorkflowSecrets(definition: unknown): unknown {
     if (f.path.endsWith('.data.config.headers')) f.set('***');
     else f.set(undefined);
   });
+}
+
+/**
+ * Save-time secret extraction (SEC-06). Walk the workflow definition through the
+ * shared secret-field locator, seal every PLAINTEXT secret into the
+ * workflow_secrets store, and replace it in the (cloned) definition with an opaque
+ * `{ secretRef }`. Unchanged `{ secretRef }` values are kept as-is (no re-seal, no
+ * new row). Empty values are dropped. After the walk, orphaned rows (refs no longer
+ * present) are GC'd via `deleteExcept`.
+ *
+ * The new ref-only definition (`out`) is built FULLY before the caller persists the
+ * workflow, so a fail-closed `ConfigError` (SECRETS_ENCRYPTION_KEY unset) thrown by
+ * `put` aborts the save with NOTHING persisted — no partial/plaintext definition.
+ */
+async function extractWorkflowSecrets(ctx: AppContext, workflowId: string, definition: unknown): Promise<unknown> {
+  const key = ctx.cfg.SECRETS_ENCRYPTION_KEY;
+  const kept: string[] = [];
+  const out = await mapSecretFieldsAsync(definition, async (f) => {
+    // Unchanged, already-sealed ref → keep the row, touch nothing.
+    if (isSecretRef(f.value)) { kept.push(f.value.secretRef); return; }
+    // Plaintext: webhook `secret` is a string; the HTTP `config.headers` blob may be
+    // a string OR an object — JSON.stringify the object form before sealing (the
+    // resolver returns the string, which the HTTP node parses).
+    const plaintext = typeof f.value === 'string' ? f.value : JSON.stringify(f.value);
+    if (plaintext && plaintext.length > 0 && plaintext !== 'null' && plaintext !== '{}') {
+      const id = await ctx.workflows.secretStore.put(workflowId, plaintext, key);
+      kept.push(id);
+      f.set({ secretRef: id });
+    } else {
+      f.set(undefined); // empty → drop the field entirely
+    }
+  });
+  // GC any secrets no longer referenced by the saved definition (empty kept → drop all).
+  await ctx.workflows.secretStore.deleteExcept(workflowId, kept);
+  return out;
 }
 
 /** Reads the request body (Buffer or async-iterable stream) into a Buffer, enforcing the byte cap. */
@@ -163,7 +199,11 @@ export function registerWorkflowRoutes(
 
   app.post('/api/workflows', MANAGE, async (req, reply) => {
     try {
-      const created = await ctx.workflows.store.create(WorkflowSchema.parse(req.body));
+      const parsed = WorkflowSchema.parse(req.body);
+      // SEC-06: seal plaintext secrets into the store; persist refs only. Built fully
+      // before create → a fail-closed ConfigError leaves nothing persisted.
+      const definition = (await extractWorkflowSecrets(ctx, parsed.id, parsed.definition)) as typeof parsed.definition;
+      const created = await ctx.workflows.store.create({ ...parsed, definition });
       await syncWorkflowTriggers(ctx, created);
       ctx.workflows.runner.setIngestWorkflowIds(await listIngestWorkflowIds(ctx));
       ctx.workflows.runner.setEventWorkflowIds(await listEventWorkflowIds(ctx));
@@ -177,7 +217,11 @@ export function registerWorkflowRoutes(
     const { id } = req.params as { id: string };
     try {
       const before = await ctx.workflows.store.get(id);
-      const updated = await ctx.workflows.store.update(id, WorkflowSchema.parse(req.body));
+      const parsed = WorkflowSchema.parse(req.body);
+      // SEC-06: the workflow's OWN id (the :id param, which store.update forces onto
+      // the row) owns its secrets. Seal plaintext → refs before persisting.
+      const definition = (await extractWorkflowSecrets(ctx, id, parsed.definition)) as typeof parsed.definition;
+      const updated = await ctx.workflows.store.update(id, { ...parsed, definition });
       await syncWorkflowTriggers(ctx, updated);
       ctx.workflows.runner.setIngestWorkflowIds(await listIngestWorkflowIds(ctx));
       ctx.workflows.runner.setEventWorkflowIds(await listEventWorkflowIds(ctx));
@@ -191,6 +235,8 @@ export function registerWorkflowRoutes(
     const { id } = req.params as { id: string };
     const before = await ctx.workflows.store.get(id);
     await ctx.workflows.store.remove(id);
+    // SEC-06: cascade-delete this workflow's sealed secrets.
+    await ctx.workflows.secretStore.deleteForWorkflow(id);
     ctx.workflows.webhooks.clear(id);
     await ctx.workflows.schedules.removeForWorkflow(id);
     ctx.workflows.runner.setIngestWorkflowIds(await listIngestWorkflowIds(ctx));
@@ -404,6 +450,10 @@ export function registerWorkflowRoutes(
 
 function mapError(err: unknown, reply: FastifyReply): { error: string } {
   if (err instanceof ZodError) { reply.code(400); return { error: 'invalid payload' }; }
+  // SEC-06 fail-closed: saving a workflow that carries a secret without
+  // SECRETS_ENCRYPTION_KEY set throws ConfigError from the secret store. Surface the
+  // clear message; nothing was persisted (extraction aborts before create/update).
+  if (err instanceof ConfigError) { reply.code(400); return { error: err.message }; }
   const msg = err instanceof Error ? err.message : String(err);
   const isConn = /ECONNREFUSED|ETIMEDOUT|connection|connect/i.test(msg);
   reply.code(isConn ? 503 : 500);
