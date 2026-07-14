@@ -1,6 +1,6 @@
 import type { Kysely } from 'kysely';
 import { randomUUID } from 'node:crypto';
-import { seal, open, parseSecretKey, ConfigError } from '@openldr/core';
+import { seal, open, parseSecretKey, ConfigError, OpenLdrError } from '@openldr/core';
 import type { InternalSchema } from './schema/internal';
 
 // Fail-closed: a workflow secret can only be sealed/opened with the AES-256 key. Without it we
@@ -40,7 +40,7 @@ export function createWorkflowSecretStore(db: Kysely<InternalSchema>): WorkflowS
         .select('sealed_value')
         .where('id', '=', id)
         .executeTakeFirst();
-      if (!r) throw new ConfigError(`workflow secret not found: ${id}`);
+      if (!r) throw new OpenLdrError(`workflow secret not found: ${id}`);
       return open(r.sealed_value, keyOf(key));
     },
 
