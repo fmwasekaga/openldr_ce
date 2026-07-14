@@ -43,6 +43,49 @@ describe('httpHandler', () => {
     expect(httpFetch).toHaveBeenCalledWith(expect.objectContaining({ headers: { 'X-Token': 'abc' } }));
   });
 
+  it('resolves a sealed {secretRef} headers blob via resolveWorkflowSecret (SEC-06)', async () => {
+    const httpFetch = vi.fn(async () => mockResponse);
+    const resolveWorkflowSecret = vi.fn(async () => '{"Authorization":"Bearer live","X-Keep":"yes"}');
+    const ctx = createContext(undefined, () => {}, [], undefined, { httpFetch, resolveWorkflowSecret } as unknown as WorkflowServices);
+    await httpHandler(
+      {
+        id: 'n1', type: 'action',
+        data: { config: { url: 'https://example.com', method: 'GET', headers: { secretRef: 'wsec_1' } } },
+      },
+      ctx,
+      [],
+    );
+    expect(resolveWorkflowSecret).toHaveBeenCalledWith('wsec_1');
+    expect(httpFetch).toHaveBeenCalledWith(expect.objectContaining({ headers: { Authorization: 'Bearer live', 'X-Keep': 'yes' } }));
+  });
+
+  it('throws when a sealed {secretRef} headers blob has no resolver configured', async () => {
+    const httpFetch = vi.fn(async () => mockResponse);
+    const ctx = createContext(undefined, () => {}, [], undefined, { httpFetch } as unknown as WorkflowServices);
+    await expect(
+      httpHandler(
+        { id: 'n1', type: 'action', data: { config: { url: 'https://example.com', headers: { secretRef: 'wsec_1' } } } },
+        ctx,
+        [],
+      ),
+    ).rejects.toThrow(/no workflow secret resolver/);
+    expect(httpFetch).not.toHaveBeenCalled();
+  });
+
+  it('throws when a sealed {secretRef} headers blob cannot be resolved', async () => {
+    const httpFetch = vi.fn(async () => mockResponse);
+    const resolveWorkflowSecret = vi.fn(async () => undefined);
+    const ctx = createContext(undefined, () => {}, [], undefined, { httpFetch, resolveWorkflowSecret } as unknown as WorkflowServices);
+    await expect(
+      httpHandler(
+        { id: 'n1', type: 'action', data: { config: { url: 'https://example.com', headers: { secretRef: 'wsec_1' } } } },
+        ctx,
+        [],
+      ),
+    ).rejects.toThrow(/could not be resolved/);
+    expect(httpFetch).not.toHaveBeenCalled();
+  });
+
   it('throws when services are absent', async () => {
     const ctx = createContext(undefined, () => {});
     await expect(

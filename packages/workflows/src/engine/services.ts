@@ -99,6 +99,10 @@ export interface WorkflowServices {
   writeBinary?(input: { bytes: Uint8Array; fileName: string; contentType: string }): Promise<BinaryRef>;
   /** Resolve a named secret from a connector's decrypted config (report passwords etc.). Host-injected. */
   resolveSecret?(input: { connectorId: string; key: string }): Promise<string | undefined>;
+  /** Resolve a sealed workflow-secret ref (`{ secretRef }`) → plaintext (SEC-06). Host-injected;
+   *  keeps `@openldr/workflows` crypto-key-free. Used by the HTTP node to open a ref-valued
+   *  `config.headers` blob before the fetch. */
+  resolveWorkflowSecret?(ref: string): Promise<string | undefined>;
   /** Send an email via a host connector (smtp/gmail/outlook). Host-injected. */
   runConnectorEmail?(input: { connectorId: string; to: string; subject: string; body: string; html?: boolean; cc?: string; attachments?: Array<{ filename: string; content: Uint8Array; contentType?: string }> }): Promise<{ messageId: string; accepted: string[]; rejected: string[] }>;
   /** Run an SFTP operation against a host connector. Host-injected. */

@@ -43,6 +43,7 @@
     "sync:enroll:accept": "tsx scripts/sync-enroll-live-acceptance.ts",
     "sync:bundle:accept": "tsx scripts/sync-bundle-live-acceptance.ts",
     "sync:e2e": "tsx scripts/sync-two-instance-harness.ts",
+    "workflow:secret:accept": "tsx scripts/workflow-secret-smoke.ts",
     "mysql:accept:matrix": "bash scripts/mysql-matrix-accept.sh",
     "make:marketplace-bundle": "tsx scripts/make-marketplace-bundle.ts",
     "marketplace:accept": "tsx scripts/marketplace-live-acceptance.ts",

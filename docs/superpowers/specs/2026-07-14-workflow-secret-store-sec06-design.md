@@ -36,7 +36,11 @@ SEC-06 implements exactly that, for ALL secret-bearing fields (decided: webhook 
   - The sealed value NEVER leaves the store except via `resolve`.
 
 ### 2. Shared secret-field locator
-Factor the field knowledge currently inside `redactWorkflowSecrets` into ONE exported helper (e.g. `packages/workflows/src/secret-fields.ts` `forEachSecretField(definition, visit)` / `mapSecretFields(definition, fn)`), yielding each secret-bearing location: `node.data.secret` (webhook triggers) and each `AUTH_HEADER_RE`-matching key in `node.data.headers`. Both the redaction (belt) and the new extraction/injection use this locator, so they cannot drift. A field's value is either a **plaintext string** (incoming from the builder) or a **`{ secretRef: string }`** (at rest).
+Factor the field knowledge currently inside `redactWorkflowSecrets` into ONE exported helper (`packages/workflows/src/secret-fields.ts` — `mapSecretFields`/`mapSecretFieldsAsync`/`forEachSecretField`). Both redaction (belt) and the new extraction/migration use it, so they cannot drift. Secret-bearing locations (**revised during implementation** after finding the real HTTP header shape):
+- **`node.data.secret`** on webhook triggers (`type==='webhook'` or `type==='trigger' && data.triggerType==='webhook'`) — a single structured field; per-field ref.
+- **`node.data.config.headers`** (the HTTP node's REAL header location — the studio stores it as a free-text JSON-string blob; `data.headers` was a phantom the old redaction masked but the HTTP node never read). Because it's a free-text blob, the secret unit is the **WHOLE `config.headers` value**, sealed as ONE ref **when it contains any `AUTH_HEADER_RE` key** (parse the JSON string / inspect the object; a non-JSON string or an auth-header-free blob is NOT surfaced). Runtime resolves the ref back to the full headers value before parsing. (Per-key header refs were rejected — they'd require a structured header editor; the whole-blob approach protects the auth header at rest now, at the cost of non-secret headers in the same blob also being opaque in the builder.)
+
+A field's value is either a **plaintext string/object** (incoming from the builder) or a **`{ secretRef: string }`** (at rest).
 
 ### 3. Save-time extraction (string → ref) — in the create/update path
 Wrap `ctx.workflows.store.create`/`update` (in `workflows-routes.ts`, or a thin `extractWorkflowSecrets(ctx, definition, workflowId)` helper called there). Using the locator, for each secret field:

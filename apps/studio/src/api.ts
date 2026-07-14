@@ -1163,6 +1163,24 @@ export interface Workflow {
   updatedAt?: string;
 }
 
+/**
+ * An opaque reference to a server-side workflow secret (SEC-06). The detail
+ * fetch (`GET /api/workflows/:id`) returns these in place of plaintext secrets
+ * (webhook `data.secret`, HTTP node `data.config.headers`) — the value is
+ * write-only, so the builder shows a masked "secret is set" state and round-trips
+ * an untouched ref back unchanged on save. Mirrors `SecretValue` in
+ * `@openldr/workflows` (secret-fields.ts).
+ */
+export type SecretRef = { secretRef: string };
+
+/** A secret field value: plaintext (new/edited) or an opaque store reference (unchanged). */
+export type SecretValue = string | SecretRef;
+
+/** Type guard: is this value an opaque secret-store reference (vs. plaintext)? */
+export function isSecretRef(v: unknown): v is SecretRef {
+  return !!v && typeof v === 'object' && typeof (v as { secretRef?: unknown }).secretRef === 'string';
+}
+
 // Per-node execution event protocol (mirrors @openldr/workflows RunEvent on the server).
 export type LogLevel = 'log' | 'info' | 'warn' | 'error';
 

@@ -571,6 +571,16 @@ export interface SyncSitesTable {
   reported_pull_cursor: string | null;
 }
 
+// Workflow secret store (SEC-06): encrypted at-rest store for secrets extracted from workflow
+// definitions. `sealed_value` is the AES-256-GCM blob (never plaintext); rows are grouped by
+// `workflow_id` for GC / cascade-delete.
+export interface WorkflowSecretsTable {
+  id: string;
+  workflow_id: string;
+  sealed_value: string;
+  created_at: Generated<Date>;
+}
+
 export interface InternalSchema {
   'fhir.fhir_resources': FhirResourcesTable;
   'fhir.resource_history': ResourceHistoryTable;
@@ -622,4 +632,5 @@ export interface InternalSchema {
   report_designs: ReportDesignsTable;
   reports: ReportsTable;
   sync_sites: SyncSitesTable;
+  workflow_secrets: WorkflowSecretsTable;
 }

@@ -689,6 +689,15 @@ export const en = {
     empty: 'No parameters yet. Add one below.',
     invalid: 'Parameter ids must be unique and non-empty',
   },
+  // Workflow builder — write-only secret fields (SEC-06): the webhook trigger secret
+  // and the HTTP node's headers blob are masked once saved and can only be replaced.
+  workflows: {
+    secretSet: '•••••• (secret is set)',
+    replaceSecret: 'Replace secret',
+    headersSecretHidden: 'Headers contain a secret and are hidden — replace all headers to edit.',
+    replaceHeaders: 'Replace headers',
+    secretWriteOnlyHelp: "For security, a saved secret can't be viewed — only replaced.",
+  },
 } as const;
 
 export type Resources = typeof en;

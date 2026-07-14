@@ -34,7 +34,7 @@ import { createReportScheduler, type ReportScheduler } from './report-scheduler'
 import { createPluginScheduleApi, createPluginScheduleRunner, type PluginScheduleRunner } from './plugin-schedule';
 import { createFormArtifactInstaller, type FormArtifactInstaller } from './form-artifact-install';
 import { type PluginRuntime } from '@openldr/plugins';
-import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createSyncSiteStore, type SyncSiteStore } from '@openldr/db';
+import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
 import { createSyncPushRunner, createSyncPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, type PushBatch, type PushResponse, type SyncConfig } from '@openldr/sync';
@@ -42,6 +42,7 @@ import { createSyncPushWorker, type SyncPushWorker } from './sync-push-worker';
 import { createSyncPullWorker, type SyncPullWorker } from './sync-pull-worker';
 import { createSyncHandle, type SyncHandle } from './sync-handle';
 import { migrateLegacySyncConfig } from './sync-settings-migrate';
+import { migrateWorkflowSecrets } from './workflow-secret-migrate';
 
 // Which directions run for a given mode. Push runs for 'push' + 'bidirectional'; pull runs for
 // 'pull' + 'bidirectional'. The if (syncCfg) worker gates below use these so the wiring is unit-testable.
@@ -293,6 +294,8 @@ export interface AppContext {
     services: WorkflowServices;
     datasets: WorkflowDatasetStore;
     listeners: { reconcile(): Promise<void>; stopAll(): Promise<void> };
+    /** SEC-06: encrypted store for secrets extracted from workflow definitions. */
+    secretStore: WorkflowSecretStore;
   };
   plugins: PluginRuntime;
   pluginData: PluginDataStore;
@@ -469,7 +472,22 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   const workflowStore = createWorkflowStore(internal.db);
   const workflowRuns = createWorkflowRunStore(internal.db);
   const workflowSchedules = createWorkflowScheduleStore(internal.db);
-  const workflowWebhooks = createWebhookRegistry();
+  // SEC-06: the secret store is constructed BEFORE the webhook registry + workflow
+  // services so both can resolve sealed `{ secretRef }` values at use (the registry
+  // resolves the webhook secret on sync; the HTTP node resolves a ref-valued headers
+  // blob). Injected resolvers keep `@openldr/workflows` crypto-key-free.
+  const workflowSecrets = createWorkflowSecretStore(internal.db);
+  const workflowWebhooks = createWebhookRegistry({
+    // Open the sealed webhook-secret ref → plaintext (held in memory). A failure to
+    // resolve (unknown id / key unset / rotated key) registers a null secret rather
+    // than crashing reconcile — the route then fails closed (401 "no secret configured").
+    // Log a warning so a silently-bricked hook has an operator signal (SEC-06).
+    resolveRef: (ref) =>
+      workflowSecrets.resolve(ref, cfg.SECRETS_ENCRYPTION_KEY).catch((err) => {
+        logger.warn({ ref, err }, 'SEC-06: webhook secret ref failed to resolve — hook will 401');
+        return null;
+      }),
+  });
   const workflowDatasets = createWorkflowDatasetStore(internal.db);
 
   const ingestBatches = createBatchStore(internal.db);
@@ -635,6 +653,9 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       const config = await connectorStore.getDecryptedConfig(connectorId, cfg.SECRETS_ENCRYPTION_KEY);
       return config[key];
     },
+    // SEC-06: open a sealed workflow-secret ref → plaintext (used by the HTTP node for a
+    // ref-valued config.headers blob). Throws on unknown id / unset key (fail-closed).
+    resolveWorkflowSecret: (ref) => workflowSecrets.resolve(ref, cfg.SECRETS_ENCRYPTION_KEY),
   };
   const workflowRunner = createWorkflowTriggerRunner({
     store: workflowStore, runs: workflowRuns, schedules: workflowSchedules,
@@ -659,7 +680,19 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       }),
     },
   });
-  const workflows = { store: workflowStore, runs: workflowRuns, schedules: workflowSchedules, webhooks: workflowWebhooks, runner: workflowRunner, services: workflowServices, datasets: workflowDatasets, listeners: workflowListeners };
+  const workflows = { store: workflowStore, runs: workflowRuns, schedules: workflowSchedules, webhooks: workflowWebhooks, runner: workflowRunner, services: workflowServices, datasets: workflowDatasets, listeners: workflowListeners, secretStore: workflowSecrets };
+
+  // SEC-06: proactively seal any PLAINTEXT secrets left inline in existing workflow definitions
+  // (saved before SEC-06). Runs here — after the workflow store + secret store exist but BEFORE the
+  // webhook registry's initial reconcile (apps/server boot loop's `webhooks.sync`) — so the registry
+  // sees `{ secretRef }` values the injected resolver opens. Idempotent, key-guarded, and best-effort
+  // per-workflow; like migrateLegacySyncConfig it must never abort boot.
+  await migrateWorkflowSecrets({
+    store: workflowStore,
+    secretStore: workflowSecrets,
+    key: cfg.SECRETS_ENCRYPTION_KEY,
+    logger,
+  }).catch((err) => logger.warn({ err }, 'SEC-06 workflow-secret migration failed'));
 
   // Restructure R2: async projection worker keeps the flat (external) store in sync with the
   // canonical FHIR store. A dedicated LISTEN client gives near-instant wakeups on `fhir_changes`
@@ -1053,6 +1086,8 @@ export {
 export { createSyncHandle } from './sync-handle';
 export type { SyncHandle, SyncStatus, SyncDirectionStatus, SyncMode } from './sync-handle';
 export { migrateLegacySyncConfig } from './sync-settings-migrate';
+export { sealDefinitionSecrets } from './workflow-secret-seal';
+export { migrateWorkflowSecrets } from './workflow-secret-migrate';
 export {
   enrollSite,
   listSites,
