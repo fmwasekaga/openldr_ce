@@ -128,11 +128,17 @@ function countFields(schema: FormSchema): number {
  * FHIR binding metadata. The `schema` string is parsed so canonicalHash sees a key-order-stable
  * object (jsonb read-back reorders keys otherwise). NOT included: created_at/updated_at/version_label
  * (store-managed, not lab-relevant).
+ *
+ * `name` IS included: form_definitions.name is NOT NULL with no DB default, so a lab mirroring a
+ * pulled form (reference-apply, Task 5) cannot insert the row without it (and the name is needed to
+ * render/identify the form). Because capture and serve both go through formSyncBody, adding it keeps
+ * the content hash and the served body consistent.
  */
 export function formSyncBody(row: FormRow | undefined | null) {
   if (!row) return null;
   return {
     id: row.id,
+    name: row.name,
     status: row.status,
     active: row.active,
     schema: parseJson(row.schema),
