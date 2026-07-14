@@ -1036,7 +1036,13 @@ export type { ReportCategoriesService } from './report-categories';
 export { createActivityService } from './activity-service';
 export type { ActivityService, RecentPayload } from './activity-service';
 export { getSyncConfig, setSyncConfig, readSigningKeys } from './sync-settings';
-export { servePull } from './sync-serve';
+export {
+  servePull,
+  serveConceptsPage,
+  serveMapElementsPage,
+  drainConcepts,
+  drainMapElements,
+} from './sync-serve';
 export {
   exportPushBundle,
   importPushBundle,

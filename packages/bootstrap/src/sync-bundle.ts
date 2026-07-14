@@ -10,24 +10,29 @@ import {
   packBundle,
   unpackBundle,
   collectPushRecords,
+  createTerminologyBulkSync,
   type BundleManifest,
   type BundleRecords,
   type PullRecord,
   type PushDeps,
+  type ConceptWire,
+  type MapElementWire,
   BUNDLE_FORMAT_VERSION,
 } from '@openldr/sync';
 import { readSigningKeys } from './sync-settings';
 import { ensureCentralKeypair, SiteNotFoundError } from './enrollment';
-import { servePull } from './sync-serve';
+import { servePull, drainConcepts, drainMapElements } from './sync-serve';
 import type { AppContext } from './index';
 
 // Sync S5 — the offline store-and-forward orchestrations: the bundle equivalents of the S1 push +
 // S2 reference-config pull HTTP paths. A push bundle is a signed, gzipped window of a lab's change_log
 // (verified with the site's public key on central, then applyRemote'd exactly like /api/sync/push). A
 // pull bundle is central's signed reference-config window (verified with central's pinned public key
-// on the lab, then reference-applied exactly like /api/sync/pull). SCOPE: this module handles push +
-// NON-terminology reference config only; terminology (terminology_system / concept_map) records need
-// concept/element embedding and are Task 4b — exportPullBundle FILTERS them out.
+// on the lab, then reference-applied exactly like /api/sync/pull). The pull bundle is symmetric: it
+// carries NON-terminology reference config AND terminology (terminology_system / concept_map) — the
+// exporter DRAINS + EMBEDS each system's concepts / map's elements into the record body, and the lab
+// importer feeds that embedded set into the exact S3 whole-system reconcile (createTerminologyBulkSync)
+// via its injectable fetch seam — no HTTP, no reconcile reimplementation.
 //
 // Security invariants (both directions): the signature is verified BEFORE any apply; push is cross-
 // site-guarded + idempotent with NO gap guard (applyRemote is monotonic + order-independent); pull is
@@ -206,9 +211,11 @@ export async function importPushBundle(
 
 /**
  * Export a signed reference-config PULL bundle on central (central → lab): serve the reference-config
- * window from the site's reported pull cursor via the shared {@link servePull}, FILTER OUT terminology
- * signals (Task 4b embeds those), and sign with central's private key. Does NOT advance any central
- * cursor (central is stateless per pull; the lab tracks its own consumed position).
+ * window from the site's reported pull cursor via the shared {@link servePull}, EMBED each terminology
+ * signal's full content (a terminology_system upsert carries its drained `concepts`; a concept_map
+ * upsert carries its drained `elements`) into the record body so an offline lab can apply them without
+ * a follow-up HTTP drain, then sign with central's private key. Does NOT advance any central cursor
+ * (central is stateless per pull; the lab tracks its own consumed position).
  */
 export async function exportPullBundle(
   ctx: AppContext,
@@ -217,10 +224,20 @@ export async function exportPullBundle(
   const { privHex } = await ensureCentralKeypair(ctx);
   const from = await ctx.syncSites.getReportedPullCursor(opts.siteId); // 0 → full snapshot
   const resp = await servePull(ctx, from);
-  // Terminology signals need concept/element embedding (Task 4b) — exclude them from THIS bundle.
-  const records = resp.records.filter(
-    (r) => r.entityType !== 'terminology_system' && r.entityType !== 'concept_map',
-  );
+  const records = resp.records;
+  // Embed terminology content in the record body so the lab reconciles it offline. Only an UPSERT
+  // carries content — a `delete` record has no body (the lab's reconcile empties the system/map from an
+  // absent embedded set, mirroring the HTTP worker draining an emptied system). The descriptor fields
+  // servePull already put in the body (version/kind/generation/…) are preserved; the reconcile reads
+  // those and ignores the extra concepts/elements array.
+  for (const rec of records) {
+    if (rec.op !== 'upsert') continue;
+    if (rec.entityType === 'terminology_system') {
+      rec.body = { ...((rec.body as object | null) ?? {}), concepts: await drainConcepts(ctx, rec.entityId) };
+    } else if (rec.entityType === 'concept_map') {
+      rec.body = { ...((rec.body as object | null) ?? {}), elements: await drainMapElements(ctx, rec.entityId) };
+    }
+  }
 
   const manifest: BundleManifest = {
     formatVersion: BUNDLE_FORMAT_VERSION,
@@ -239,12 +256,35 @@ export async function exportPullBundle(
   return { path, manifest };
 }
 
+/** Build a bundle-backed terminology bulk sync for ONE pull record: the S3 reconcile
+ *  (createTerminologyBulkSync) driven by the concepts/elements EMBEDDED in the record body instead of
+ *  central's HTTP bulk endpoints. The injected fetch seam returns the whole embedded set on the first
+ *  (afterCursor===null) page and an empty page thereafter — a whole-system / whole-map single-page
+ *  drain — so the reconcile runs its exact offline. A `delete` record has no embedded content, so the
+ *  fetch returns an empty set and the reconcile empties that system/map (matching the HTTP worker
+ *  draining an emptied system). No token needed (no HTTP). */
+function bundleTerminologyBulk(ctx: AppContext, rec: PullRecord) {
+  const body = rec.body as { concepts?: ConceptWire[]; elements?: MapElementWire[] } | null | undefined;
+  return createTerminologyBulkSync({
+    labDb: ctx.internalDb,
+    getToken: async () => '',
+    logger: ctx.logger,
+    fetchConceptsPage: async (_systemUrl, afterCode) =>
+      afterCode === null ? { concepts: body?.concepts ?? [], nextCode: null } : { concepts: [], nextCode: null },
+    fetchMapElementsPage: async (_mapUrl, afterKey) =>
+      afterKey === null ? { elements: body?.elements ?? [], nextKey: null } : { elements: [], nextKey: null },
+  });
+}
+
 /**
  * Import a reference-config PULL bundle on the lab (central → lab): verify with the lab's pinned
  * central public key, enforce contiguity (a bundle starting AHEAD of the consumed 'sync-pull' cursor
- * is a {@link BundleGapError}), then reference-apply each record (skipping terminology defensively —
- * this task filters them on export). Advances 'sync-pull' to the bundle's toCursor. Idempotent: a
- * re-import (fromCursor <= cursor) re-applies harmlessly and never regresses the cursor.
+ * is a {@link BundleGapError}), then apply each record. Non-terminology records go through the
+ * reference applier; a terminology_system / concept_map record is reconciled offline through the exact
+ * S3 whole-system bulk sync fed by the concepts/elements EMBEDDED in the bundle (see
+ * {@link bundleTerminologyBulk}) — mirroring the pull worker's applyRecord in index.ts, but with no
+ * HTTP. Advances 'sync-pull' to the bundle's toCursor. Idempotent: a re-import (fromCursor <= cursor)
+ * re-applies harmlessly and never regresses the cursor.
  */
 export async function importPullBundle(
   ctx: AppContext,
@@ -265,12 +305,19 @@ export async function importPullBundle(
   const applyReferenceChange = createReferenceApplier(ctx.internalDb);
   let applied = 0;
   for (const rec of records.records) {
-    // Terminology is out of scope here (filtered on export); guard defensively so a stray signal is a
-    // skip, not a mis-apply of a descriptor body.
-    if (rec.entityType === 'terminology_system' || rec.entityType === 'concept_map') continue;
     try {
-      const result = await applyReferenceChange(rec as PullRecord);
-      if (result === 'applied') applied++;
+      // Terminology reconciles offline via the embedded concepts/elements; everything else is a
+      // per-row reference apply. Mirrors index.ts's applyRecord (terminology → bulk, else → applier).
+      if (rec.entityType === 'terminology_system') {
+        await bundleTerminologyBulk(ctx, rec).syncSystem(rec.entityId, rec.body);
+        applied++;
+      } else if (rec.entityType === 'concept_map') {
+        await bundleTerminologyBulk(ctx, rec).syncConceptMap(rec.entityId, rec.body);
+        applied++;
+      } else {
+        const result = await applyReferenceChange(rec as PullRecord);
+        if (result === 'applied') applied++;
+      }
     } catch (e) {
       ctx.logger.warn(
         { error: e instanceof Error ? e.message : String(e), entityType: rec.entityType, entityId: rec.entityId, seq: rec.seq },

@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { servePull, type AppContext } from '@openldr/bootstrap';
+import { servePull, serveConceptsPage, serveMapElementsPage, type AppContext } from '@openldr/bootstrap';
 import type { PushBatch, PushResponse, SyncRecord } from '@openldr/sync';
 
 // Site principal derived from a machine client's bearer token. The user-auth onRequest hook
@@ -152,20 +152,10 @@ export function registerSyncRoutes(app: FastifyInstance<any, any, any, any>, ctx
     }
     const limit = Number.isFinite(b.limit) && (b.limit as number) > 0 ? Math.min(b.limit as number, 5000) : 1000;
 
-    let q = ctx.internalDb.selectFrom('terminology_concepts').selectAll().where('system', '=', b.systemUrl);
-    if (typeof b.afterCode === 'string' && b.afterCode) q = q.where('code', '>', b.afterCode);
-    const rows = await q.orderBy('code', 'asc').limit(limit).execute();
-
-    const concepts = rows.map((r) => ({
-      code: r.code,
-      display: r.display,
-      status: r.status,
-      // properties is jsonb — parse to an object on the wire (string under some drivers, object under pg).
-      properties: r.properties == null ? null : typeof r.properties === 'string' ? JSON.parse(r.properties) : r.properties,
-    }));
-    // A full page ⇒ there may be more; carry the last code as the resume key. A short page ⇒ done.
-    const nextCode = rows.length === limit ? rows[rows.length - 1].code : null;
-    reply.send({ concepts, nextCode });
+    // The keyset query lives in @openldr/bootstrap (serveConceptsPage) so the offline pull-bundle
+    // exporter (Sync S5) drains the same code. Behaviour unchanged from the inline route.
+    const page = await serveConceptsPage(ctx, b.systemUrl, typeof b.afterCode === 'string' && b.afterCode ? b.afterCode : null, limit);
+    reply.send(page);
   });
 
   // POST /api/sync/terminology/map-elements — keyset-paginated bulk drain of ONE concept map's
@@ -187,31 +177,13 @@ export function registerSyncRoutes(app: FastifyInstance<any, any, any, any>, ctx
     }
     const limit = Number.isFinite(b.limit) && (b.limit as number) > 0 ? Math.min(b.limit as number, 5000) : 1000;
 
-    let q = ctx.internalDb.selectFrom('concept_map_elements').selectAll().where('map_url', '=', b.mapUrl);
-    if (typeof b.afterSourceSystem === 'string' && b.afterSourceSystem) {
-      // Row-value keyset: (source_system, source_code) > (afterSourceSystem, afterSourceCode).
-      const ass = b.afterSourceSystem;
-      const asc = typeof b.afterSourceCode === 'string' ? b.afterSourceCode : '';
-      q = q.where((eb) =>
-        eb.or([
-          eb('source_system', '>', ass),
-          eb.and([eb('source_system', '=', ass), eb('source_code', '>', asc)]),
-        ]),
-      );
-    }
-    const rows = await q.orderBy('source_system', 'asc').orderBy('source_code', 'asc').limit(limit).execute();
-
-    const elements = rows.map((r) => ({
-      sourceSystem: r.source_system,
-      sourceCode: r.source_code,
-      targetSystem: r.target_system,
-      targetCode: r.target_code,
-      equivalence: r.equivalence,
-    }));
-    const nextKey =
-      rows.length === limit
-        ? { sourceSystem: rows[rows.length - 1].source_system, sourceCode: rows[rows.length - 1].source_code }
+    // The row-value keyset query lives in @openldr/bootstrap (serveMapElementsPage) so the offline
+    // pull-bundle exporter (Sync S5) drains the same code. Behaviour unchanged from the inline route.
+    const afterKey =
+      typeof b.afterSourceSystem === 'string' && b.afterSourceSystem
+        ? { sourceSystem: b.afterSourceSystem, sourceCode: typeof b.afterSourceCode === 'string' ? b.afterSourceCode : '' }
         : null;
-    reply.send({ elements, nextKey });
+    const page = await serveMapElementsPage(ctx, b.mapUrl, afterKey, limit);
+    reply.send(page);
   });
 }

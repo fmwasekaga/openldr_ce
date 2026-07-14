@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { generatePublisherKeypair, signManifest } from '@openldr/marketplace';
 import { packBundle, unpackBundle, type BundleManifest, type BundleRecords } from '@openldr/sync';
+// A real migrated pg-mem internal DB — imported from a DIFFERENT subpath than the mocked '@openldr/db'
+// below, so the terminology reconcile (createTerminologyBulkSync, NOT mocked) runs its real SQL.
+import { makeMigratedDb } from '@openldr/db/testing';
 
 // The orchestrations write the bundle to disk via node:fs/promises writeFile. Mock the module so the
 // test captures the bytes without touching the filesystem (ESM namespace exports can't be re-spied).
@@ -356,16 +359,21 @@ describe('exportPushBundle / importPushBundle', () => {
 
 describe('exportPullBundle / importPullBundle', () => {
   const SITE = 'lab-a';
+  // A non-migration-seeded system/map URL so no pre-seeded terminology collides with our assertions.
+  const SYS = 'http://example.org/CodeSystem/central';
+  const MAP = 'http://example.org/ConceptMap/central';
 
-  function seedPullCtx(reportedCursor = 0) {
+  // Fake-DB ctx for the pure export / signature / gap paths (no terminology reconcile is exercised).
+  function seedPullCtx(reportedCursor = 0, concepts: { code: string; display: string | null; status: string | null; properties: unknown }[] = []) {
     const ctx = makeCtx({
       appSettings: fakeAppSettings(),
       internalDb: fakeInternalDb({
         reference_change_log: [
           { seq: 1, entity_type: 'setting', entity_id: 's1', op: 'upsert', content_hash: 'h' },
-          { seq: 2, entity_type: 'terminology_system', entity_id: 'http://loinc.org', op: 'upsert', content_hash: 'hg' },
+          { seq: 2, entity_type: 'terminology_system', entity_id: SYS, op: 'upsert', content_hash: 'hg' },
         ],
-        terminology_systems: [{ url: 'http://loinc.org', version: '2.77', kind: 'code-system', resource_id: 'cs', generation: '4' }],
+        terminology_systems: [{ url: SYS, version: '2.77', kind: 'CodeSystem', resource_id: 'cs', generation: '4' }],
+        terminology_concepts: concepts.map((c) => ({ system: SYS, ...c })),
       }),
     });
     // setting body is served from appSettings.get
@@ -374,31 +382,107 @@ describe('exportPullBundle / importPullBundle', () => {
     return ctx;
   }
 
-  it('exports a signed pull bundle from cursor 0, FILTERING OUT terminology records', async () => {
-    const ctx = seedPullCtx(0);
+  it('exports a signed pull bundle from cursor 0, EMBEDDING the terminology system\'s concepts in the record body', async () => {
+    const ctx = seedPullCtx(0, [
+      { code: 'A', display: 'Alpha', status: 'active', properties: { a: 1 } },
+      { code: 'B', display: 'Bravo', status: 'active', properties: null },
+    ]);
     const { manifest } = await exportPullBundle(ctx, { siteId: SITE });
-    // servePull returns setting(1) + terminology_system(2); the exporter drops terminology.
-    expect(manifest).toMatchObject({ kind: 'pull', siteId: SITE, fromCursor: 0, toCursor: 2, recordCount: 1, signerKeyId: 'central' });
-    // Prove the terminology record is genuinely absent from the signed payload.
-    await exportPullBundle(ctx, { siteId: SITE });
-    const bytes = lastBytes();
-    const { records } = unpackBundle(bytes);
-    expect(records.records.map((r) => (r as { entityType: string }).entityType)).toEqual(['setting']);
+    // servePull returns setting(1) + terminology_system(2); BOTH are now carried (terminology no longer filtered).
+    expect(manifest).toMatchObject({ kind: 'pull', siteId: SITE, fromCursor: 0, toCursor: 2, recordCount: 2, signerKeyId: 'central' });
+
+    const { records } = unpackBundle(lastBytes());
+    const types = records.records.map((r) => (r as { entityType: string }).entityType);
+    expect(types).toEqual(['setting', 'terminology_system']);
+    // The terminology record's body carries the DRAINED concepts (descriptor fields preserved alongside).
+    const term = records.records.find((r) => (r as { entityType: string }).entityType === 'terminology_system') as { body: { concepts: { code: string }[]; version?: string } };
+    expect(term.body.concepts.map((c) => c.code)).toEqual(['A', 'B']);
+    expect(term.body.version).toBe('2.77'); // servePull descriptor still present
   });
 
-  it('round-trips: lab verifies with the pinned central key, applies reference records, advances sync-pull', async () => {
-    const ctx = seedPullCtx(0);
-    await exportPullBundle(ctx, { siteId: SITE });
-    const bytes = lastBytes();
+  it('round-trips: lab verifies with the pinned central key, applies the setting AND reconciles the embedded terminology system, advances sync-pull', async () => {
+    const labDb = await makeMigratedDb();
+    const kp = hexKeys();
+    const ctx = makeCtx({
+      appSettings: fakeAppSettings({ 'sync.central_public_key': kp.pub }),
+      internalDb: labDb,
+    });
 
-    // Pin central's public key on the lab side (in a real deployment these are separate nodes).
-    const centralPub = (await ctx.appSettings.get('sync.central_signing_public_key'))!.value;
-    (ctx.appSettings as ReturnType<typeof fakeAppSettings>)._map.set('sync.central_public_key', centralPub);
+    // A signed pull bundle carrying a reference (setting) record + a terminology_system upsert whose
+    // body embeds the concepts (exactly what exportPullBundle produces).
+    const manifest: BundleManifest = {
+      formatVersion: 1, kind: 'pull', siteId: SITE, fromCursor: 0, toCursor: 2, recordCount: 2,
+      signerKeyId: 'central', producedAt: new Date().toISOString(),
+    };
+    const records: BundleRecords = {
+      kind: 'pull',
+      records: [
+        { seq: 1, entityType: 'setting', entityId: 's1', op: 'upsert', contentHash: 'h', body: 'on' },
+        {
+          seq: 2, entityType: 'terminology_system', entityId: SYS, op: 'upsert', contentHash: 'hg',
+          body: {
+            version: '2.77', kind: 'CodeSystem', resourceId: 'cs', generation: 5,
+            concepts: [
+              { code: 'A', display: 'Alpha', status: 'active', properties: { a: 1 } },
+              { code: 'B', display: 'Bravo', status: 'active', properties: null },
+            ],
+          },
+        },
+      ],
+    };
+    const bytes = signBundle(manifest, records, kp.priv);
 
     const res = await importPullBundle(ctx, bytes);
-    expect(res).toEqual({ applied: 1, toCursor: 2 });
+    expect(res).toEqual({ applied: 2, toCursor: 2 }); // setting (mocked applier) + terminology (real reconcile)
+    // The setting went through the reference applier (mocked); terminology did NOT.
     expect(H.appliedRef.map((r) => r.entityType)).toEqual(['setting']);
     expect(H.cursors['sync-pull']).toBe(2);
+
+    // The concepts landed in the lab's terminology tables via the S3 reconcile, system stamped central.
+    const conceptRows = await labDb.selectFrom('terminology_concepts').selectAll().where('system', '=', SYS).orderBy('code').execute();
+    expect(conceptRows.map((r) => r.code)).toEqual(['A', 'B']);
+    const sysRow = await labDb.selectFrom('terminology_systems').selectAll().where('url', '=', SYS).executeTakeFirst();
+    expect(sysRow?.managed_origin).toBe('central');
+    expect(Number(sysRow?.generation)).toBe(5);
+  });
+
+  it('applies an embedded concept_map: elements land in the lab via the reconcile, state stamped central', async () => {
+    const labDb = await makeMigratedDb();
+    const kp = hexKeys();
+    const ctx = makeCtx({
+      appSettings: fakeAppSettings({ 'sync.central_public_key': kp.pub }),
+      internalDb: labDb,
+    });
+
+    const manifest: BundleManifest = {
+      formatVersion: 1, kind: 'pull', siteId: SITE, fromCursor: 0, toCursor: 3, recordCount: 1,
+      signerKeyId: 'central', producedAt: new Date().toISOString(),
+    };
+    const records: BundleRecords = {
+      kind: 'pull',
+      records: [
+        {
+          seq: 3, entityType: 'concept_map', entityId: MAP, op: 'upsert', contentHash: 'hm',
+          body: {
+            generation: 2,
+            elements: [
+              { sourceSystem: 'http://a', sourceCode: 'a1', targetSystem: 'http://b', targetCode: 'b1', equivalence: 'equivalent' },
+              { sourceSystem: 'http://a', sourceCode: 'a2', targetSystem: 'http://b', targetCode: 'b2', equivalence: 'related-to' },
+            ],
+          },
+        },
+      ],
+    };
+    const bytes = signBundle(manifest, records, kp.priv);
+
+    const res = await importPullBundle(ctx, bytes);
+    expect(res).toEqual({ applied: 1, toCursor: 3 });
+
+    const elemRows = await labDb.selectFrom('concept_map_elements').selectAll().where('map_url', '=', MAP).orderBy('source_code').execute();
+    expect(elemRows.map((r) => r.source_code)).toEqual(['a1', 'a2']);
+    const stateRow = await labDb.selectFrom('concept_map_state').selectAll().where('map_url', '=', MAP).executeTakeFirst();
+    expect(stateRow?.managed_origin).toBe('central');
+    expect(Number(stateRow?.generation)).toBe(2);
   });
 
   it('rejects a pull bundle that starts ahead of the consumed cursor (BundleGapError)', async () => {

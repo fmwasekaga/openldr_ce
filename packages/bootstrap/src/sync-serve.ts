@@ -1,5 +1,12 @@
 import { formSyncBody, type FormRow } from '@openldr/forms';
-import type { PullRecord, PullResponse } from '@openldr/sync';
+import type {
+  PullRecord,
+  PullResponse,
+  ConceptsPage,
+  ConceptWire,
+  MapElementsPage,
+  MapElementWire,
+} from '@openldr/sync';
 import type { AppContext } from './index';
 
 // Sync S5: the /api/sync/pull serve logic, EXTRACTED from apps/server's sync route so both the HTTP
@@ -186,4 +193,103 @@ async function fetchReferenceBody(
     default:
       return null;
   }
+}
+
+// --- Terminology bulk serve (Sync S5) ------------------------------------------------------------
+// The keyset-paginated concept / map-element serve logic, EXTRACTED verbatim from apps/server's two
+// bulk terminology routes so BOTH the HTTP endpoints AND the offline pull-bundle exporter drain the
+// same code. The routes keep their auth + request validation and call these; the exporter loops the
+// DRAIN helpers to embed a whole system / map into a signed pull bundle (Task 4b).
+
+const TERM_PAGE = 1000; // default page size for a bulk serve / drain step
+// Defensive cap on a drain loop so an endless (buggy) never-null cursor cannot spin forever. At
+// TERM_PAGE-sized pages this covers tens of millions of rows. Mirrors terminology-sync's MAX_PAGES.
+const DRAIN_MAX_PAGES = 100_000;
+
+/** One keyset page of a terminology system's concepts (WHERE code > afterCode ORDER BY code LIMIT n).
+ *  `nextCode` is the last code on a FULL page (more to come) or null on a short (final) page. Pure move
+ *  of the POST /api/sync/terminology/concepts query body. */
+export async function serveConceptsPage(
+  ctx: AppContext,
+  systemUrl: string,
+  afterCode: string | null,
+  limit: number = TERM_PAGE,
+): Promise<ConceptsPage> {
+  let q = ctx.internalDb.selectFrom('terminology_concepts').selectAll().where('system', '=', systemUrl);
+  if (afterCode) q = q.where('code', '>', afterCode);
+  const rows = await q.orderBy('code', 'asc').limit(limit).execute();
+  const concepts: ConceptWire[] = rows.map((r) => ({
+    code: r.code,
+    display: r.display,
+    status: r.status,
+    // properties is jsonb — parse to an object on the wire (string under some drivers, object under pg).
+    properties:
+      r.properties == null
+        ? null
+        : ((typeof r.properties === 'string' ? JSON.parse(r.properties) : r.properties) as Record<string, unknown>),
+  }));
+  const nextCode = rows.length === limit ? rows[rows.length - 1].code : null;
+  return { concepts, nextCode };
+}
+
+/** One keyset page of a concept map's elements, row-value keyset by (source_system, source_code). Pure
+ *  move of the POST /api/sync/terminology/map-elements query body. */
+export async function serveMapElementsPage(
+  ctx: AppContext,
+  mapUrl: string,
+  afterKey: { sourceSystem: string; sourceCode: string } | null,
+  limit: number = TERM_PAGE,
+): Promise<MapElementsPage> {
+  let q = ctx.internalDb.selectFrom('concept_map_elements').selectAll().where('map_url', '=', mapUrl);
+  if (afterKey) {
+    // Row-value keyset: (source_system, source_code) > (afterSourceSystem, afterSourceCode).
+    const ass = afterKey.sourceSystem;
+    const asc = afterKey.sourceCode ?? '';
+    q = q.where((eb) =>
+      eb.or([
+        eb('source_system', '>', ass),
+        eb.and([eb('source_system', '=', ass), eb('source_code', '>', asc)]),
+      ]),
+    );
+  }
+  const rows = await q.orderBy('source_system', 'asc').orderBy('source_code', 'asc').limit(limit).execute();
+  const elements: MapElementWire[] = rows.map((r) => ({
+    sourceSystem: r.source_system,
+    sourceCode: r.source_code,
+    targetSystem: r.target_system,
+    targetCode: r.target_code,
+    equivalence: r.equivalence,
+  }));
+  const nextKey =
+    rows.length === limit
+      ? { sourceSystem: rows[rows.length - 1].source_system, sourceCode: rows[rows.length - 1].source_code }
+      : null;
+  return { elements, nextKey };
+}
+
+/** Drain ALL of a terminology system's concepts by looping {@link serveConceptsPage} to the null
+ *  cursor. Used by the pull-bundle exporter to embed a whole system in one signed bundle. */
+export async function drainConcepts(ctx: AppContext, systemUrl: string): Promise<ConceptWire[]> {
+  const out: ConceptWire[] = [];
+  let after: string | null = null;
+  for (let page = 0; page < DRAIN_MAX_PAGES; page++) {
+    const p = await serveConceptsPage(ctx, systemUrl, after);
+    out.push(...p.concepts);
+    after = p.nextCode;
+    if (after === null) return out;
+  }
+  throw new Error(`drainConcepts exceeded ${DRAIN_MAX_PAGES} pages for ${systemUrl}`);
+}
+
+/** Drain ALL of a concept map's elements by looping {@link serveMapElementsPage} to the null cursor. */
+export async function drainMapElements(ctx: AppContext, mapUrl: string): Promise<MapElementWire[]> {
+  const out: MapElementWire[] = [];
+  let after: { sourceSystem: string; sourceCode: string } | null = null;
+  for (let page = 0; page < DRAIN_MAX_PAGES; page++) {
+    const p = await serveMapElementsPage(ctx, mapUrl, after);
+    out.push(...p.elements);
+    after = p.nextKey;
+    if (after === null) return out;
+  }
+  throw new Error(`drainMapElements exceeded ${DRAIN_MAX_PAGES} pages for ${mapUrl}`);
 }
