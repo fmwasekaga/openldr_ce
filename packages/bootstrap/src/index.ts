@@ -34,7 +34,7 @@ import { createReportScheduler, type ReportScheduler } from './report-scheduler'
 import { createPluginScheduleApi, createPluginScheduleRunner, type PluginScheduleRunner } from './plugin-schedule';
 import { createFormArtifactInstaller, type FormArtifactInstaller } from './form-artifact-install';
 import { type PluginRuntime } from '@openldr/plugins';
-import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createSyncSiteStore, type SyncSiteStore } from '@openldr/db';
+import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
 import { createSyncPushRunner, createSyncPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, type PushBatch, type PushResponse, type SyncConfig } from '@openldr/sync';
@@ -293,6 +293,8 @@ export interface AppContext {
     services: WorkflowServices;
     datasets: WorkflowDatasetStore;
     listeners: { reconcile(): Promise<void>; stopAll(): Promise<void> };
+    /** SEC-06: encrypted store for secrets extracted from workflow definitions. */
+    secretStore: WorkflowSecretStore;
   };
   plugins: PluginRuntime;
   pluginData: PluginDataStore;
@@ -659,7 +661,8 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       }),
     },
   });
-  const workflows = { store: workflowStore, runs: workflowRuns, schedules: workflowSchedules, webhooks: workflowWebhooks, runner: workflowRunner, services: workflowServices, datasets: workflowDatasets, listeners: workflowListeners };
+  const workflowSecrets = createWorkflowSecretStore(internal.db);
+  const workflows = { store: workflowStore, runs: workflowRuns, schedules: workflowSchedules, webhooks: workflowWebhooks, runner: workflowRunner, services: workflowServices, datasets: workflowDatasets, listeners: workflowListeners, secretStore: workflowSecrets };
 
   // Restructure R2: async projection worker keeps the flat (external) store in sync with the
   // canonical FHIR store. A dedicated LISTEN client gives near-instant wakeups on `fhir_changes`

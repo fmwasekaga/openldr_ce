@@ -51,6 +51,7 @@ import * as m049 from './049_terminology_managed_origin';
 import * as m050 from './050_terminology_generation';
 import * as m051 from './051_sync_sites';
 import * as m052 from './052_sync_site_keys';
+import * as m053 from './053_workflow_secrets';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -105,4 +106,5 @@ export const internalMigrations: Record<string, Migration> = {
   '050_terminology_generation': { up: m050.up, down: m050.down },
   '051_sync_sites': { up: m051.up, down: m051.down },
   '052_sync_site_keys': { up: m052.up, down: m052.down },
+  '053_workflow_secrets': { up: m053.up, down: m053.down },
 };

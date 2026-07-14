@@ -26,6 +26,7 @@ export * from './report-store';
 export * from './sync-site-store';
 export * from './marketplace-install-store';
 export * from './connector-store';
+export * from './workflow-secret-store';
 export * from './custom-query-store';
 export * from './registry-store';
 export * from './plugin-data-store';
