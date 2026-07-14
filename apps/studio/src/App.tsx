@@ -7,6 +7,7 @@ import { DashboardPage } from './dashboard/DashboardPage';
 import { Audit } from './pages/Audit';
 import { Activity } from './pages/Activity';
 import { Users } from './pages/Users';
+import { Sites } from './pages/Sites';
 import { SettingsShell } from '@/pages/settings/SettingsShell';
 import { General } from '@/pages/settings/General';
 import { Marketplace } from '@/pages/settings/Marketplace';
@@ -36,6 +37,7 @@ export function App() {
       <Route path="/query" element={<RequireRole roles={['lab_admin', 'lab_manager', 'data_analyst']}><QueryPage /></RequireRole>} />
       <Route path="/terminology" element={<Terminology />} />
       <Route path="/users" element={<RequireRole role="lab_admin"><Users /></RequireRole>} />
+      <Route path="/sites" element={<RequireRole role="lab_admin"><Sites /></RequireRole>} />
       <Route path="/settings" element={<RequireRole><SettingsShell /></RequireRole>}>
         <Route index element={<Navigate to="general" replace />} />
         <Route path="general" element={<RequireRole><General /></RequireRole>} />
