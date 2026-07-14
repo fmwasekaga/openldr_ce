@@ -49,6 +49,9 @@ describe('openldr realm export', () => {
     const raw = JSON.stringify(realm);
     expect(raw).toContain('manage-users');
     expect(raw).toContain('view-users');
+    // client-management roles required so central can mint each lab's sync client (sync S4d)
+    expect(raw).toContain('manage-clients');
+    expect(raw).toContain('view-clients');
   });
 
   it('seeds a labadmin user holding lab_admin with a password credential', () => {

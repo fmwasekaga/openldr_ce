@@ -201,5 +201,48 @@ export function createAuth(cfg: AuthConfig, deps: AuthDeps = {}): AuthPort {
         if (toRemove.length) await adminVoid(`/users/${encodeURIComponent(id)}/role-mappings/realm`, { method: 'DELETE', body: JSON.stringify(toRemove.map((r) => ({ id: r.id, name: r.name }))) });
       },
     },
+    clients: {
+      async findUuidByClientId(clientId) {
+        const arr = await adminJson<{ id: string }[]>(`/clients?clientId=${encodeURIComponent(clientId)}`);
+        return arr.length > 0 ? arr[0].id : null;
+      },
+      async createConfidentialClient(clientId) {
+        const res = await adminFetchRaw(`/clients`, { method: 'POST', body: JSON.stringify({
+          clientId, protocol: 'openid-connect', publicClient: false, serviceAccountsEnabled: true,
+          standardFlowEnabled: false, implicitFlowEnabled: false, directAccessGrantsEnabled: false, enabled: true,
+        }) });
+        if (!res.ok) { const d = await res.text().catch(() => ''); throw new KcError(res.status, d.slice(0, 500)); }
+        const loc = res.headers.get('Location');
+        const uuid = loc ? (loc.split('/').filter(Boolean).pop() ?? '') : '';
+        if (!uuid) throw new KcError(500, 'provider did not return a client id');
+        return uuid;
+      },
+      async addSiteIdMapper(uuid, siteId) {
+        await adminVoid(`/clients/${encodeURIComponent(uuid)}/protocol-mappers/models`, { method: 'POST', body: JSON.stringify({
+          name: 'sync-site-id', protocol: 'openid-connect', protocolMapper: 'oidc-hardcoded-claim-mapper',
+          config: { 'claim.name': 'site_id', 'claim.value': siteId, 'claim.value.type': 'String',
+            'access.token.claim': 'true', 'id.token.claim': 'false', 'userinfo.token.claim': 'false' },
+        }) });
+      },
+      async addAudienceMapper(uuid, audience) {
+        await adminVoid(`/clients/${encodeURIComponent(uuid)}/protocol-mappers/models`, { method: 'POST', body: JSON.stringify({
+          name: 'sync-audience', protocol: 'openid-connect', protocolMapper: 'oidc-audience-mapper',
+          config: { 'included.client.audience': audience, 'access.token.claim': 'true', 'id.token.claim': 'false' },
+        }) });
+      },
+      async getClientSecret(uuid) {
+        const body = (await adminJson<{ value?: string } | undefined>(`/clients/${encodeURIComponent(uuid)}/client-secret`)) ?? {};
+        if (!body.value) throw new KcError(500, 'provider did not return a client secret');
+        return body.value;
+      },
+      async regenerateClientSecret(uuid) {
+        const body = (await adminJson<{ value?: string } | undefined>(`/clients/${encodeURIComponent(uuid)}/client-secret`, { method: 'POST' })) ?? {};
+        if (!body.value) throw new KcError(500, 'provider did not return a client secret');
+        return body.value;
+      },
+      async deleteClient(uuid) {
+        await adminVoid(`/clients/${encodeURIComponent(uuid)}`, { method: 'DELETE' });
+      },
+    },
   };
 }

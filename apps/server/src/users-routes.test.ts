@@ -139,6 +139,15 @@ function fakeCtx() {
           if (u) u.roles = roles;
         },
       },
+      clients: {
+        async findUuidByClientId() { return null; },
+        async createConfidentialClient() { return 'client-uuid'; },
+        async addSiteIdMapper() {},
+        async addAudienceMapper() {},
+        async getClientSecret() { return 'secret'; },
+        async regenerateClientSecret() { return 'secret'; },
+        async deleteClient() {},
+      },
     },
 
     userProfiles: {

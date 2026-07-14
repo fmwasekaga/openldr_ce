@@ -19,7 +19,7 @@ import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, run
 import { runMarketVerify, runMarketInstall, runMarketList, runMarketRollback, runMarketEnable, runMarketDisable, runMarketRemove } from './market';
 import { runArtifactKeygen, runArtifactNew, runArtifactBuild, runArtifactPack, runArtifactSign, runArtifactTest, runArtifactPublish } from './artifact';
 import { runSettingsFlagsList, runSettingsFlagsSet, runSettingsDanger, runSettingsSyncShow, runSettingsSyncSet, runSettingsNumbersList, runSettingsNumbersSet } from './settings';
-import { runSyncStatus, runSyncNow } from './sync';
+import { runSyncStatus, runSyncNow, runSyncEnroll, runSyncList, runSyncRotate, runSyncRevoke } from './sync';
 import { runErrorsList } from './errors';
 
 const program = new Command();
@@ -164,6 +164,23 @@ syncGroup.command('status').description('Show live sync status (workers, cursors
 syncGroup.command('now').description('Trigger a sync pass now (fails if sync is disabled)').option('--json', 'emit JSON', false)
   .action(async (opts: { json: boolean }) => {
     try { process.exitCode = await runSyncNow(opts); } catch (err) { process.stderr.write(`sync now failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+syncGroup.command('enroll <siteId>').description('Enroll a lab (central): mint a Keycloak client + registry row, print the secret once')
+  .option('--name <name>', 'human-readable site name').option('--central-url <url>', 'central public base URL the lab will sync to (required)').option('--json', 'emit JSON', false)
+  .action(async (siteId: string, opts: { name?: string; centralUrl?: string; json: boolean }) => {
+    try { process.exitCode = await runSyncEnroll(siteId, opts); } catch (err) { process.stderr.write(`sync enroll failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+syncGroup.command('list').description('List enrolled sites (never shows secrets)').option('--json', 'emit JSON', false)
+  .action(async (opts: { json: boolean }) => {
+    try { process.exitCode = await runSyncList(opts); } catch (err) { process.stderr.write(`sync list failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+syncGroup.command('rotate <siteId>').description('Rotate a site client secret (prints the new secret once)').option('--json', 'emit JSON', false)
+  .action(async (siteId: string, opts: { json: boolean }) => {
+    try { process.exitCode = await runSyncRotate(siteId, opts); } catch (err) { process.stderr.write(`sync rotate failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+syncGroup.command('revoke <siteId>').description('Revoke a site (delete its client + mark the row revoked; idempotent)').option('--json', 'emit JSON', false)
+  .action(async (siteId: string, opts: { json: boolean }) => {
+    try { process.exitCode = await runSyncRevoke(siteId, opts); } catch (err) { process.stderr.write(`sync revoke failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
 
 const targetStore = program.command('target-store').description('Target warehouse (Postgres/SQL Server/MySQL/MariaDB) tools');

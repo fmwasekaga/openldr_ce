@@ -34,7 +34,7 @@ import { createReportScheduler, type ReportScheduler } from './report-scheduler'
 import { createPluginScheduleApi, createPluginScheduleRunner, type PluginScheduleRunner } from './plugin-schedule';
 import { createFormArtifactInstaller, type FormArtifactInstaller } from './form-artifact-install';
 import { type PluginRuntime } from '@openldr/plugins';
-import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore } from '@openldr/db';
+import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createSyncSiteStore, type SyncSiteStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
 import { createSyncPushRunner, createSyncPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, type PushBatch, type PushResponse, type SyncConfig } from '@openldr/sync';
@@ -281,6 +281,9 @@ export interface AppContext {
   reportDesigns: ReportDesignStore;
   reportDefs: ReportStore;
   reportCategories: ReportCategoriesService;
+  /** Sync S4d: central-side registry of enrolled labs (site_id → client_id, status, who/when).
+   *  Never stores the client secret. The enrollment orchestrator writes here + ctx.auth.clients. */
+  syncSites: SyncSiteStore;
   workflows: {
     store: WorkflowStore;
     runs: WorkflowRunStore;
@@ -382,6 +385,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   // the same lazy-read pattern in apps/server/app.ts.
   const reportDesignStore = createReportDesignStore(internal.db);
   const reportDefStore = createReportStore(internal.db, referenceCapture);
+  const syncSites = createSyncSiteStore(internal.db);
   const reportRenderDeps: RunStoredQueryDeps = {
     customQueries: createCustomQueryStore(internal.db),
     runConnectorSql: (input) => {
@@ -998,6 +1002,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     reportDesigns: reportDesignStore,
     reportDefs: reportDefStore,
     reportCategories,
+    syncSites,
     workflows,
     plugins,
     pluginData,
@@ -1034,6 +1039,17 @@ export { getSyncConfig, setSyncConfig } from './sync-settings';
 export { createSyncHandle } from './sync-handle';
 export type { SyncHandle, SyncStatus, SyncDirectionStatus, SyncMode } from './sync-handle';
 export { migrateLegacySyncConfig } from './sync-settings-migrate';
+export {
+  enrollSite,
+  listSites,
+  rotateSite,
+  revokeSite,
+  AlreadyEnrolledError,
+  SiteNotFoundError,
+  InvalidSiteIdError,
+  MissingCentralUrlError,
+} from './enrollment';
+export type { EnrollResult } from './enrollment';
 export { CE_VERSION } from './plugin-registry';
 export * from './db-context';
 export { createPluginTarget } from './connector-target';

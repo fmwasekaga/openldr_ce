@@ -398,6 +398,53 @@ export async function triggerSyncNow(): Promise<{ triggered: boolean; reason?: s
   return okJson<{ triggered: boolean; reason?: string }>(r, 'sync now');
 }
 
+// ── Central enrollment (sync S4d) ──────────────────────────────────────────────
+// Studio MIRRORS the server shapes: EnrollResult (@openldr/bootstrap enrollment) +
+// SyncSiteRow (@openldr/db sync-site-store). The clientSecret is returned ONLY by
+// enroll/rotate and is NEVER re-fetchable — GET /sites carries no secret.
+export interface SyncSiteRow {
+  siteId: string;
+  name: string | null;
+  clientId: string;
+  enrolledAt: string;
+  enrolledBy: string | null;
+  status: 'active' | 'revoked';
+}
+export interface EnrollResult {
+  clientId: string;
+  clientSecret: string;
+  siteId: string;
+  centralUrl: string;
+  oidcIssuer: string;
+}
+
+/** Build an Error that carries the HTTP status so the caller can map 400/404/409/503 to a
+ *  precise toast instead of the raw server message. */
+async function statusError(res: Response, what: string): Promise<Error & { status: number }> {
+  return Object.assign(new Error(formatApiError(what, await errorDetail(res))), { status: res.status });
+}
+
+export const fetchSites = (): Promise<SyncSiteRow[]> =>
+  authFetch('/api/settings/sync/sites').then((r) => okJson<SyncSiteRow[]>(r, 'list sites'));
+
+export async function enrollSite(body: { siteId: string; name?: string; centralUrl: string }): Promise<EnrollResult> {
+  const res = await authFetch('/api/settings/sync/enroll', jbody(body, 'POST'));
+  if (!res.ok) throw await statusError(res, 'enroll site');
+  return res.json() as Promise<EnrollResult>;
+}
+
+export async function rotateSite(siteId: string): Promise<{ clientId: string; clientSecret: string }> {
+  const res = await authFetch(`/api/settings/sync/sites/${encodeURIComponent(siteId)}/rotate`, jbody({}, 'POST'));
+  if (!res.ok) throw await statusError(res, 'rotate site');
+  return res.json() as Promise<{ clientId: string; clientSecret: string }>;
+}
+
+export async function revokeSite(siteId: string): Promise<{ revoked: boolean }> {
+  const res = await authFetch(`/api/settings/sync/sites/${encodeURIComponent(siteId)}/revoke`, jbody({}, 'POST'));
+  if (!res.ok) throw await statusError(res, 'revoke site');
+  return res.json() as Promise<{ revoked: boolean }>;
+}
+
 export type DangerAction = 'reset-dashboards' | 'factory-reset' | 'clear-audit';
 
 export const runDangerAction = (action: DangerAction): Promise<{ ok: boolean; action: string }> =>

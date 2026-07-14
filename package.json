@@ -40,6 +40,7 @@
     "sync:accept": "tsx scripts/sync-live-acceptance.ts",
     "sync:pull:accept": "tsx scripts/sync-pull-live-acceptance.ts",
     "sync:terminology:accept": "tsx scripts/sync-terminology-live-acceptance.ts",
+    "sync:enroll:accept": "tsx scripts/sync-enroll-live-acceptance.ts",
     "mysql:accept:matrix": "bash scripts/mysql-matrix-accept.sh",
     "make:marketplace-bundle": "tsx scripts/make-marketplace-bundle.ts",
     "marketplace:accept": "tsx scripts/marketplace-live-acceptance.ts",

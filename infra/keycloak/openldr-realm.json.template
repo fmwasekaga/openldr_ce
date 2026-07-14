@@ -73,7 +73,7 @@
       "enabled": true,
       "serviceAccountClientId": "openldr-admin",
       "clientRoles": {
-        "realm-management": ["manage-users", "view-users", "query-users", "view-realm"]
+        "realm-management": ["manage-users", "view-users", "query-users", "view-realm", "manage-clients", "view-clients"]
       }
     }
   ]
