@@ -38,15 +38,11 @@ describe('codeHandler — WORKFLOW_CODE_ENABLED gating (SEC-01)', () => {
     spy.mockRestore();
   });
 
-  it('emits a sandboxed-isolate notice (not a host-privilege warning) when an enabled Code node runs', async () => {
-    const warn = vi.fn();
+  it('wraps a thrown error with the "Code node error:" prefix', async () => {
     const ctx = createContext(undefined, () => {}, [], { timeoutMs: 2000, memoryMb: 64, enabled: true });
-    await codeHandler(node('return 1;'), { ...ctx, logger: { warn } } as never, []);
-    expect(warn).toHaveBeenCalledTimes(1);
-    const msg = String(warn.mock.calls[0]?.[0]);
-    expect(msg).toMatch(/sandboxed QuickJS isolate/i);
-    // It must NOT claim host-level privileges anymore — the isolate has no host I/O.
-    expect(msg).not.toMatch(/host-level/i);
+    await expect(codeHandler(node('throw new Error("boom");'), ctx, [])).rejects.toThrow(
+      /Code node error: .*boom/,
+    );
   });
 
   it('exposes $json from the first input item in the isolate', async () => {

@@ -24,19 +24,6 @@ export const codeHandler: NodeHandler = async (node, ctx, input) => {
     );
   }
 
-  // One-line NOTICE whenever an enabled Code node actually runs. It records that a
-  // sandboxed isolate executed — not a host-privilege warning (there is no host I/O).
-  if (ctx.logger?.warn) {
-    ctx.logger.warn(
-      `Workflow Code node ${node.id} is executing in a sandboxed QuickJS isolate (no host filesystem/network/environment access).`,
-    );
-  } else {
-    process.emitWarning(
-      'Workflow Code node executing in a sandboxed QuickJS isolate (no host filesystem/network/environment access).',
-      'WorkflowCodeNodeNotice',
-    );
-  }
-
   try {
     // runScript ALREADY returns WorkflowItem[] (normalized via toItems); return it directly.
     return await runScript(code, {
