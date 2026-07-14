@@ -348,6 +348,12 @@ describe('clients (sync client management)', () => {
     await expect(auth.clients.createConfidentialClient('x')).rejects.toBeInstanceOf(KcError);
   });
 
+  it('createConfidentialClient throws KcError when a 201 has no Location header', async () => {
+    const { fetchFn } = clientsMock((u, m) => (/\/clients$/.test(u) && m === 'POST') ? new Response(null, { status: 201 }) : undefined);
+    const auth = createAuth(ccfg, { fetchFn });
+    await expect(auth.clients.createConfidentialClient('x')).rejects.toBeInstanceOf(KcError);
+  });
+
   it('addSiteIdMapper POSTs a hardcoded-claim mapper with site_id', async () => {
     const { calls, fetchFn } = clientsMock();
     const auth = createAuth(ccfg, { fetchFn });

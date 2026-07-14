@@ -231,12 +231,12 @@ export function createAuth(cfg: AuthConfig, deps: AuthDeps = {}): AuthPort {
         }) });
       },
       async getClientSecret(uuid) {
-        const body = await adminJson<{ value?: string }>(`/clients/${encodeURIComponent(uuid)}/client-secret`);
+        const body = (await adminJson<{ value?: string } | undefined>(`/clients/${encodeURIComponent(uuid)}/client-secret`)) ?? {};
         if (!body.value) throw new KcError(500, 'provider did not return a client secret');
         return body.value;
       },
       async regenerateClientSecret(uuid) {
-        const body = await adminJson<{ value?: string }>(`/clients/${encodeURIComponent(uuid)}/client-secret`, { method: 'POST' });
+        const body = (await adminJson<{ value?: string } | undefined>(`/clients/${encodeURIComponent(uuid)}/client-secret`, { method: 'POST' })) ?? {};
         if (!body.value) throw new KcError(500, 'provider did not return a client secret');
         return body.value;
       },
