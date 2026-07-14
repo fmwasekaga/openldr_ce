@@ -1,7 +1,7 @@
 import { Kysely } from 'kysely';
 import type { Config } from '@openldr/config';
 import { redact } from '@openldr/core';
-import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, referenceCapture, type TerminologyAdminStore, type InternalSchema, type OntologyStore, resolveSeedPublisherId, deriveSystemCode } from '@openldr/db';
+import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, referenceCapture, markTerminologyChanged, type TerminologyAdminStore, type InternalSchema, type OntologyStore, resolveSeedPublisherId, deriveSystemCode } from '@openldr/db';
 import { buildOntologyDistribution, createOperations, type Operations, type LoaderStore, loadLoinc, loadWhonetAmr, importTerminologyResource, stalenessReason, type LoadResult, type OntologyBuildProgress, type OntologyManifest } from '@openldr/terminology';
 
 function createOntologyApi(ontologyStore: OntologyStore) {
@@ -67,6 +67,8 @@ export async function createTerminologyContext(cfg: Config): Promise<Terminology
   const loaderStore: LoaderStore = {
     upsertConcepts: (r) => store.upsertConcepts(r),
     upsertMapElements: (r) => store.upsertMapElements(r),
+    // Sync S3: loaders call this once at import completion; wire it to the bulk change signal.
+    markSystemChanged: (url) => markTerminologyChanged(db, url),
     saveResource: (res) => fhirStore.save(res as never),
     saveSystem: async (url, version, kind, id) => {
       await store.saveSystem(url, version, kind, id);

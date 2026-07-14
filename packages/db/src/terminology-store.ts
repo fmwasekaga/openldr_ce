@@ -2,6 +2,8 @@ import { type Kysely, sql } from 'kysely';
 import type { FhirResource } from '@openldr/fhir';
 import type { InternalSchema } from './schema/internal';
 import type { FhirStore } from './fhir-store';
+import { markConceptMapChanged } from './terminology-sync';
+import { LOCAL_MAP_URL } from './terminology-admin-store';
 
 export interface ConceptRecord {
   system: string;
@@ -166,6 +168,12 @@ export function createTerminologyStore(db: Kysely<InternalSchema>, fhirStore: Fh
         .insertInto('concept_map_elements')
         .values(rows.map((r) => ({ map_url: r.mapUrl, source_system: r.sourceSystem, source_code: r.sourceCode, target_system: r.targetSystem, target_code: r.targetCode, equivalence: r.equivalence })))
         .execute();
+      // Sync S3: this is the single choke point for ALL concept-map writes. Emit one concept_map signal
+      // per distinct map_url AFTER the rewrite (each mark opens its own txn), EXCEPT the lab's curated
+      // LOCAL_MAP_URL, which is lab-local and must never be pulled.
+      for (const mapUrl of mapUrls) {
+        if (mapUrl !== LOCAL_MAP_URL) await markConceptMapChanged(db, mapUrl);
+      }
     },
     async translate(q) {
       let qb = db.selectFrom('concept_map_elements').selectAll().where('source_system', '=', q.system).where('source_code', '=', q.code);

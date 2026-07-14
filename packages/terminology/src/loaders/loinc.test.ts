@@ -20,11 +20,15 @@ function memoryStore() {
   const concepts: unknown[][] = [];
   const systems: unknown[][] = [];
   const resources: unknown[] = [];
+  const marks: string[] = [];
   const store: LoaderStore = {
     async upsertConcepts(rows) {
       concepts.push(rows);
     },
     async upsertMapElements() {},
+    async markSystemChanged(url) {
+      marks.push(url);
+    },
     async saveResource(resource): Promise<SavedRef> {
       resources.push(resource);
       return { resourceType: 'CodeSystem', id: 'res-loinc' };
@@ -33,7 +37,7 @@ function memoryStore() {
       systems.push(args);
     },
   };
-  return { store, concepts, systems, resources };
+  return { store, concepts, systems, resources, marks };
 }
 
 afterEach(async () => {
@@ -74,5 +78,22 @@ describe('loincRowToConcept', () => {
       { code: '2160-0', display: 'Creatinine [Mass/volume] in Serum or Plasma' },
     ]);
     expect(s.systems).toEqual([['http://loinc.org', null, 'CodeSystem', 'res-loinc']]);
+    // Sync S3: exactly one bulk-change signal for the whole import.
+    expect(s.marks).toEqual(['http://loinc.org']);
+  });
+
+  it('signals the system exactly ONCE even when concepts span multiple upsert batches', async () => {
+    // >1000 rows forces loadLoinc to flush multiple upsertConcepts batches; the mark must still fire once.
+    const header = 'LOINC_NUM,LONG_COMMON_NAME,STATUS,COMPONENT,PROPERTY,SYSTEM,SCALE_TYP,METHOD_TYP,CLASS';
+    const lines = [header];
+    for (let i = 0; i < 2500; i++) lines.push(`${i}-0,Concept ${i},ACTIVE,C,MCnc,Ser,Qn,,CHEM`);
+    const root = await makeLoincDistributionRoot(lines.join('\n'));
+    const s = memoryStore();
+
+    const result = await loadLoinc(root, { acceptLicense: true }, s.store);
+
+    expect(result.conceptsLoaded).toBe(2500);
+    expect(s.concepts.length).toBeGreaterThan(1); // proves >1 batch flushed
+    expect(s.marks).toEqual(['http://loinc.org']); // one signal, not one-per-batch
   });
 });

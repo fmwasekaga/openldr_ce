@@ -5,6 +5,7 @@ import type { InternalSchema } from './schema/internal';
 import type { ReferenceCapture } from './reference-capture';
 import { fhirValueSetCatalogToInputs, fhirValueSetToInput, valueSetToFhirResource } from './fhir-value-set';
 import { expandCompose, type ExpandedConcept, type ExpandDeps, type VsCompose } from './value-set-expander';
+import { markTerminologyChanged } from './terminology-sync';
 
 export type PublisherRole = 'local' | 'standard' | 'external';
 
@@ -94,7 +95,10 @@ function newId(prefix: string): string {
   return `${prefix}-${randomUUID()}`;
 }
 
-const LOCAL_MAP_URL = 'urn:openldr:terminology:local-map';
+// The lab's own curated concept map. Sync S3: this map is lab-LOCAL curation and must NEVER be
+// signalled as a pullable concept_map change — upsertMapElements guards on this exact url, and the
+// termMappings.* writers (which write LOCAL_MAP_URL rows directly) intentionally emit no map signal.
+export const LOCAL_MAP_URL = 'urn:openldr:terminology:local-map';
 
 // Reference-change content hashes (distributed sync S3): computed over the PERSISTED row's
 // content fields (NOT id/seeded), stable against jsonb key reordering (canonicalHash sorts keys)
@@ -476,6 +480,8 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
         }))).execute();
         const row = await db.selectFrom('terminology_concepts').selectAll()
           .where('system', '=', input.system).where('code', '=', input.code).executeTakeFirstOrThrow();
+        // Sync S3: one terminology_system signal per concept edit (post-write, own txn).
+        await markTerminologyChanged(db, input.system);
         return termRow(row, await mappingCountFor(input.system, input.code));
       },
       async update(system, code, input) {
@@ -489,6 +495,8 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
         }).where('system', '=', system).where('code', '=', code).execute();
         const row = await db.selectFrom('terminology_concepts').selectAll()
           .where('system', '=', system).where('code', '=', code).executeTakeFirstOrThrow();
+        // Sync S3: one terminology_system signal per concept edit (post-write, own txn).
+        await markTerminologyChanged(db, system);
         return termRow(row, await mappingCountFor(system, code));
       },
       async delete(system, code) {
@@ -496,15 +504,29 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
           .where('system', '=', system).where('code', '=', code).executeTakeFirst();
         if (!existing) throw new TerminologyAdminError(`term not found: ${system}|${code}`, 'not-found');
         await db.deleteFrom('terminology_concepts').where('system', '=', system).where('code', '=', code).execute();
+        // Sync S3: one terminology_system signal per concept edit (post-delete, own txn).
+        await markTerminologyChanged(db, system);
       },
       async importRows(rows) {
         if (!rows.length) return { imported: 0 };
-        await db.insertInto('terminology_concepts').values(rows.map((r) => ({
-          system: r.system, code: r.code, display: r.display, status: r.status,
-          properties: r.properties === null ? null : (JSON.stringify(r.properties) as never),
-        }))).onConflict((oc) => oc.columns(['system', 'code']).doUpdateSet((eb) => ({
-          display: eb.ref('excluded.display'), status: eb.ref('excluded.status'), properties: eb.ref('excluded.properties'),
-        }))).execute();
+        // Batch the insert INTERNALLY (large imports can exceed statement/parameter limits) so this
+        // method is the single import-OPERATION choke point. Sync S3: the per-system signal is emitted
+        // ONCE here after all rows land — NOT per batch — so a multi-batch import produces one signal
+        // per distinct system, not N. (Callers must pass the whole import in one call, not per-batch.)
+        const batchSize = 1000;
+        for (let i = 0; i < rows.length; i += batchSize) {
+          const batch = rows.slice(i, i + batchSize);
+          await db.insertInto('terminology_concepts').values(batch.map((r) => ({
+            system: r.system, code: r.code, display: r.display, status: r.status,
+            properties: r.properties === null ? null : (JSON.stringify(r.properties) as never),
+          }))).onConflict((oc) => oc.columns(['system', 'code']).doUpdateSet((eb) => ({
+            display: eb.ref('excluded.display'), status: eb.ref('excluded.status'), properties: eb.ref('excluded.properties'),
+          }))).execute();
+        }
+        // One signal per DISTINCT system, after the whole import commits (each mark opens its own txn).
+        for (const system of new Set(rows.map((r) => r.system))) {
+          await markTerminologyChanged(db, system);
+        }
         return { imported: rows.length };
       },
     },
