@@ -1,8 +1,8 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { ZodError } from 'zod';
-import type { AppContext } from '@openldr/bootstrap';
-import { WorkflowSchema, WorkflowDefinitionSchema, runWorkflow, type RunEvent, createWorkflowNodeRegistry, HOST_NODE_DESCRIPTORS, mapSecretFields, mapSecretFieldsAsync, isSecretRef } from '@openldr/workflows';
+import { sealDefinitionSecrets, type AppContext } from '@openldr/bootstrap';
+import { WorkflowSchema, WorkflowDefinitionSchema, runWorkflow, type RunEvent, createWorkflowNodeRegistry, HOST_NODE_DESCRIPTORS, mapSecretFields, isSecretRef } from '@openldr/workflows';
 import { ConfigError } from '@openldr/core';
 import { toCsv } from '@openldr/reporting';
 import { recordAudit } from './audit-helper';
@@ -88,31 +88,9 @@ function redactWorkflowSecrets(definition: unknown): unknown {
  * `put` aborts the save with NOTHING persisted — no partial/plaintext definition.
  */
 async function extractWorkflowSecrets(ctx: AppContext, workflowId: string, definition: unknown): Promise<unknown> {
-  const key = ctx.cfg.SECRETS_ENCRYPTION_KEY;
-  const kept: string[] = [];
-  const out = await mapSecretFieldsAsync(definition, async (f) => {
-    // Unchanged, already-sealed ref → keep the row, touch nothing.
-    if (isSecretRef(f.value)) { kept.push(f.value.secretRef); return; }
-    // Emptiness is decided on the RAW value shape, NOT the serialized string, so a
-    // legitimate secret whose literal value is the string 'null' or '{}' is still
-    // sealed (for a string, JSON serialization would falsely match those sentinels).
-    const v = f.value;
-    const isEmpty =
-      v == null ||
-      (typeof v === 'string' && v.length === 0) ||
-      (typeof v === 'object' && !Array.isArray(v) && Object.keys(v as object).length === 0);
-    if (isEmpty) { f.set(undefined); return; } // empty → drop the field entirely
-    // Plaintext: webhook `secret` is a string; the HTTP `config.headers` blob may be
-    // a string OR an object — JSON.stringify the non-string form before sealing (the
-    // resolver returns the string, which the HTTP node parses).
-    const plaintext = typeof v === 'string' ? v : JSON.stringify(v);
-    const id = await ctx.workflows.secretStore.put(workflowId, plaintext, key);
-    kept.push(id);
-    f.set({ secretRef: id });
-  });
-  // GC any secrets no longer referenced by the saved definition (empty kept → drop all).
-  await ctx.workflows.secretStore.deleteExcept(workflowId, kept);
-  return out;
+  // Thin wrapper over the shared seal (also used by the boot migration): one impl means a
+  // saved `{ secretRef }` is byte-identical to a migrated one — the two can never drift.
+  return sealDefinitionSecrets(definition, workflowId, ctx.workflows.secretStore, ctx.cfg.SECRETS_ENCRYPTION_KEY);
 }
 
 /** Reads the request body (Buffer or async-iterable stream) into a Buffer, enforcing the byte cap. */
