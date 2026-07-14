@@ -6,7 +6,7 @@ interface SwitchRule { name: string; condition: string }
 
 /**
  * Multi-branch router. Evaluates each rule's condition (after `{{ }}` template
- * resolution) in a vm sandbox; the first truthy rule sets the chosen output
+ * resolution) in the QuickJS isolate; the first truthy rule sets the chosen output
  * handle in `ctx.branches[node.id]`. No match → `fallbackOutput`. Items pass
  * through unchanged; the runner prunes the non-chosen outgoing edges.
  */
