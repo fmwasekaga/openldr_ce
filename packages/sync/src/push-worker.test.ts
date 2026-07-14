@@ -12,14 +12,20 @@ const row = (seq: number, xid: number, id: string, op = 'upsert'): ChangeRow => 
   op,
 });
 
-// Minimal fake Kysely that answers only the runner's change_log version/site_id read. The chain
-// ignores its args and returns the configured meta rows (the runner keys them by seq, so a superset
-// is fine).
+// Minimal fake Kysely answering only the runner's change_log version/site_id read. It HONORS the
+// `where('seq','>',lo).where('seq','<=',hi)` bounds the runner applies, so a seq deliberately left out
+// of `metaRows` (or filtered out of range) is genuinely absent — exercising the missing-meta skip path.
 function fakeDb(metaRows: { seq: number; version: number; site_id: string | null }[]): PushDeps['internalDb'] {
+  let lo = Number.NEGATIVE_INFINITY;
+  let hi = Number.POSITIVE_INFINITY;
   const chain: Record<string, unknown> = {};
   chain.select = () => chain;
-  chain.where = () => chain;
-  chain.execute = async () => metaRows;
+  chain.where = (col: string, op: string, val: number) => {
+    if (col === 'seq' && op === '>') lo = val;
+    if (col === 'seq' && op === '<=') hi = val;
+    return chain;
+  };
+  chain.execute = async () => metaRows.filter((m) => m.seq > lo && m.seq <= hi);
   return { selectFrom: () => chain } as unknown as PushDeps['internalDb'];
 }
 
@@ -211,5 +217,140 @@ describe('createSyncPushRunner', () => {
     expect(pushes[1].records.map((r) => r.id)).toEqual(['p7']); // gap6 confirmed via CARRIED pendingGaps
     expect(pushes[1].records[0].seq).toBe(7);
     expect(cursorVal).toBe(7);
+  });
+
+  it('getToken failure behaves like a transport outage: logged, no advance, returns 0', async () => {
+    const readCursor = vi.fn(async () => 0);
+    const advanceCursor = vi.fn(async () => {});
+    const postPush = vi.fn(async () => ({ ackSeq: 1, applied: 1, skipped: 0, rejects: [] }));
+    const logger = fakeLogger();
+    const deps: PushDeps = {
+      internalDb: fakeDb([{ seq: 1, version: 1, site_id: 's' }]),
+      fetchSafeRows: fetchQueue([{ rows: [row(1, 10, 'p1')], boundary: 100, xmax: 200 }]),
+      fetchContent: okContent,
+      postPush,
+      getToken: async () => {
+        throw new Error('token endpoint 503');
+      },
+      readCursor,
+      advanceCursor,
+      logger,
+    };
+
+    const applied = await createSyncPushRunner(deps).runCycle();
+    expect(applied).toBe(0);
+    expect(postPush).not.toHaveBeenCalled(); // failed before transport
+    expect(advanceCursor).not.toHaveBeenCalled();
+    expect(logger.errors).toHaveLength(1);
+  });
+
+  it('skips a bodiless upsert (fetchContent null): record excluded, warn logged, others still sent', async () => {
+    const pushes: PushBatch[] = [];
+    let advancedTo: number | undefined;
+    const logger = fakeLogger();
+    const deps: PushDeps = {
+      internalDb: fakeDb([
+        { seq: 1, version: 1, site_id: 's' },
+        { seq: 2, version: 2, site_id: 's' },
+      ]),
+      fetchSafeRows: fetchQueue([{ rows: [row(1, 10, 'p1', 'upsert'), row(2, 10, 'p2', 'upsert')], boundary: 100, xmax: 200 }]),
+      // p1's content has vanished → null; p2 resolves normally
+      fetchContent: async (resourceType, id, version) =>
+        id === 'p1' ? null : (({ resourceType, id, meta: { versionId: String(version) } }) as unknown as FhirResource),
+      postPush: async (batch) => {
+        pushes.push(batch);
+        return { ackSeq: 2, applied: 1, skipped: 0, rejects: [] };
+      },
+      getToken: async () => 't',
+      readCursor: async () => 0,
+      advanceCursor: async (s) => {
+        advancedTo = s;
+      },
+      logger,
+    };
+
+    const applied = await createSyncPushRunner(deps).runCycle();
+    expect(pushes).toHaveLength(1);
+    expect(pushes[0].records.map((r) => r.id)).toEqual(['p2']); // p1 skipped, not a bodiless upsert
+    expect(logger.warns.some((w) => (w as { id?: string }).id === 'p1')).toBe(true);
+    expect(advancedTo).toBe(2); // cursor still advances past the skipped record (quarantine)
+    expect(applied).toBe(1);
+  });
+
+  it('skips records with null site_id (M1) or missing meta (M2); an all-skipped cycle advances without pushing', async () => {
+    let pushed = false;
+    let advancedTo: number | undefined;
+    const logger = fakeLogger();
+    const deps: PushDeps = {
+      internalDb: fakeDb([
+        { seq: 1, version: 1, site_id: null }, // M1: null site_id
+        // seq 2 intentionally omitted → M2: missing meta
+      ]),
+      fetchSafeRows: fetchQueue([{ rows: [row(1, 10, 'p1', 'upsert'), row(2, 10, 'p2', 'upsert')], boundary: 100, xmax: 200 }]),
+      fetchContent: okContent,
+      postPush: async () => {
+        pushed = true;
+        return { ackSeq: 2, applied: 0, skipped: 0, rejects: [] };
+      },
+      getToken: async () => 't',
+      readCursor: async () => 0,
+      advanceCursor: async (s) => {
+        advancedTo = s;
+      },
+      logger,
+    };
+
+    const applied = await createSyncPushRunner(deps).runCycle();
+    expect(applied).toBe(0);
+    expect(pushed).toBe(false); // nothing pushed — every record was a defensive skip
+    expect(logger.warns).toHaveLength(2); // one for null site_id, one for missing meta
+    expect(advancedTo).toBe(2); // frontier still advances so the bad rows are not re-scanned forever
+  });
+
+  it('clamps a central ackSeq beyond the local frontier to newCursor (I2)', async () => {
+    let advancedTo: number | undefined;
+    const deps: PushDeps = {
+      internalDb: fakeDb([
+        { seq: 1, version: 1, site_id: 's' },
+        { seq: 2, version: 1, site_id: 's' },
+      ]),
+      fetchSafeRows: fetchQueue([{ rows: [row(1, 10, 'p1'), row(2, 10, 'p2')], boundary: 100, xmax: 200 }]),
+      fetchContent: okContent,
+      // buggy/hostile central acks far past what the lab pushed (frontier is 2)
+      postPush: async () => ({ ackSeq: 999, applied: 2, skipped: 0, rejects: [] }),
+      getToken: async () => 't',
+      readCursor: async () => 0,
+      advanceCursor: async (s) => {
+        advancedTo = s;
+      },
+      logger: fakeLogger(),
+    };
+
+    await createSyncPushRunner(deps).runCycle();
+    expect(advancedTo).toBe(2); // clamped to newCursor — NOT 999 (no silent skip past unsent records)
+  });
+
+  it('pure-gap cycle (no safe rows): returns 0, pushes nothing, and does not advance the frontier', async () => {
+    let pushed = false;
+    const advanceCursor = vi.fn(async () => {});
+    const deps: PushDeps = {
+      internalDb: fakeDb([{ seq: 7, version: 1, site_id: 's' }]),
+      // seq6 is a freshly-observed in-flight gap (x0 = xmax 100 > boundary 60) → blocks; seq7 sits above it
+      fetchSafeRows: fetchQueue([{ rows: [row(7, 50, 'p7')], boundary: 60, xmax: 100 }]),
+      fetchContent: okContent,
+      postPush: async (batch) => {
+        pushed = true;
+        return { ackSeq: batch.records.length, applied: 0, skipped: 0, rejects: [] };
+      },
+      getToken: async () => 't',
+      readCursor: async () => 5,
+      advanceCursor,
+      logger: fakeLogger(),
+    };
+
+    const applied = await createSyncPushRunner(deps).runCycle();
+    expect(applied).toBe(0);
+    expect(pushed).toBe(false);
+    expect(advanceCursor).not.toHaveBeenCalled(); // frontier held before the in-flight gap (newCursor === cursor)
   });
 });

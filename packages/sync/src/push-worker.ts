@@ -1,5 +1,5 @@
 import type { FhirResource } from '@openldr/fhir';
-import { planProjection, type FetchSafeRows, type Gap, type Logger } from '@openldr/db';
+import { planProjection, type ChangeRow, type FetchSafeRows, type Gap, type Logger } from '@openldr/db';
 import type { PushBatch, PushResponse, SyncRecord } from './batch';
 
 // The internal Kysely handle, derived from FetchSafeRows' first parameter (Kysely<InternalSchema>) so
@@ -24,6 +24,47 @@ export interface PushDeps {
 
 export interface SyncPushRunner {
   runCycle(): Promise<number>;
+}
+
+// Map each SAFE change row to a wire `SyncRecord`, resolving version/siteId from the batched change_log
+// meta read and the upsert body from `fetchContent`. Every defensive guard SKIPS the offending record
+// (excludes it from the batch) with a warn rather than emitting a corrupt one: a bodiless upsert, a
+// missing site_id (central always cross-site-rejects), or missing meta (a corrupting version:0) would
+// all be silently mishandled downstream. These cases should not occur for fhir-store-stamped rows, so a
+// skip-with-signal is a defensive backstop, not an expected path.
+async function buildRecords(
+  safeRows: ChangeRow[],
+  metaBySeq: Map<number, { version: number; siteId: string }>,
+  deps: Pick<PushDeps, 'fetchContent' | 'logger'>,
+): Promise<(SyncRecord & { seq: number })[]> {
+  const records: (SyncRecord & { seq: number })[] = [];
+  for (const r of safeRows) {
+    const md = metaBySeq.get(r.seq);
+    if (!md) {
+      // M2: safe seq absent from the meta read — building with version:0 would corrupt idempotency.
+      deps.logger.warn({ resourceType: r.resource_type, id: r.resource_id, seq: r.seq }, 'sync push: no change_log meta for safe seq; skipping record');
+      continue;
+    }
+    const { version, siteId } = md;
+    if (!siteId) {
+      // M1: null/empty origin site_id → central always cross-site-rejects. Skip with signal.
+      deps.logger.warn({ resourceType: r.resource_type, id: r.resource_id, version, seq: r.seq }, 'sync push: missing site_id on safe record; skipping record');
+      continue;
+    }
+    const op: 'upsert' | 'delete' = r.op === 'delete' ? 'delete' : 'upsert';
+    if (op === 'upsert') {
+      const resource = await deps.fetchContent(r.resource_type, r.resource_id, version);
+      if (!resource) {
+        // I1: never emit a bodiless upsert — central's applyRemote requires a body. Skip with signal.
+        deps.logger.warn({ resourceType: r.resource_type, id: r.resource_id, version, seq: r.seq }, 'sync push: upsert content missing for safe record; skipping record');
+        continue;
+      }
+      records.push({ resourceType: r.resource_type, id: r.resource_id, version, op, siteId, seq: r.seq, resource });
+    } else {
+      records.push({ resourceType: r.resource_type, id: r.resource_id, version, op, siteId, seq: r.seq });
+    }
+  }
+  return records;
 }
 
 /** A stateful push runner. Mirrors createProjectionRunner's safe-frontier handling exactly: each cycle
@@ -68,40 +109,30 @@ export function createSyncPushRunner(deps: PushDeps): SyncPushRunner {
       const metaBySeq = new Map<number, { version: number; siteId: string }>();
       for (const m of metaRows) metaBySeq.set(Number(m.seq), { version: Number(m.version), siteId: m.site_id ?? '' });
 
-      const records: (SyncRecord & { seq: number })[] = [];
-      for (const r of safeRows) {
-        const md = metaBySeq.get(r.seq);
-        const version = md?.version ?? 0;
-        const siteId = md?.siteId ?? '';
-        const op: 'upsert' | 'delete' = r.op === 'delete' ? 'delete' : 'upsert';
-        const rec: SyncRecord & { seq: number } = {
-          resourceType: r.resource_type,
-          id: r.resource_id,
-          version,
-          op,
-          siteId,
-          seq: r.seq,
-        };
-        if (op === 'upsert') {
-          const resource = await deps.fetchContent(r.resource_type, r.resource_id, version);
-          if (resource) rec.resource = resource;
-        }
-        records.push(rec);
+      const records = await buildRecords(safeRows, metaBySeq, deps);
+
+      if (records.length === 0) {
+        // Every safe row was skipped by a defensive guard (missing meta / site_id / upsert body). Those
+        // are logged local errors; still advance the frontier so the same rows are not re-scanned (and
+        // re-warned) forever. Nothing to push.
+        if (plan.newCursor > cursor) await deps.advanceCursor(plan.newCursor);
+        return 0;
       }
 
-      const token = await deps.getToken();
       let resp: PushResponse;
       try {
+        // getToken() lives INSIDE the try so a token-endpoint outage behaves exactly like a transport
+        // outage below (logged, no cursor advance, retry next cycle) rather than escaping runCycle.
+        const token = await deps.getToken();
         resp = await deps.postPush({ fromSeq: cursor, records }, token);
       } catch (err) {
-        // Transport/HTTP failure: leave the cursor put so the same window retries next cycle.
+        // Transport/HTTP/token failure: leave the cursor put so the same window retries next cycle.
         deps.logger.error({ err, fromSeq: cursor, count: records.length }, 'sync push failed; cursor not advanced (will retry)');
         return 0;
       }
 
       // A persistently-rejected record never blocks the stream: it's logged, and because the cursor
-      // advances to central's ackSeq (which acks handled-and-rejected records for S1) it is skipped
-      // permanently rather than replayed forever.
+      // advances past it (see the clamp below) it is skipped permanently rather than replayed forever.
       for (const rej of resp.rejects) {
         deps.logger.warn(
           { id: rej.id, version: rej.version, seq: rej.seq, reason: rej.reason },
@@ -109,8 +140,12 @@ export function createSyncPushRunner(deps: PushDeps): SyncPushRunner {
         );
       }
 
-      // Advance to what central acked. Guard against a backwards ack (never regress the cursor).
-      if (resp.ackSeq > cursor) await deps.advanceCursor(resp.ackSeq);
+      // Advance only as far as BOTH central acked AND the local safe frontier we actually pushed.
+      // Central is a separate trust domain: clamping to plan.newCursor stops a buggy/hostile ackSeq from
+      // jumping the cursor past records the lab never sent (which would permanently, silently skip
+      // committed changes). The `> cursor` guard additionally prevents backwards regression.
+      const target = Math.min(resp.ackSeq, plan.newCursor);
+      if (target > cursor) await deps.advanceCursor(target);
 
       // Report the count central durably applied (not records.length), so a partially-rejected batch
       // reflects real work done.
