@@ -40,6 +40,7 @@ import { createBatchStore } from '@openldr/ingest';
 import { createSyncPushRunner, createSyncPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, type PushBatch, type PushResponse, type SyncConfig } from '@openldr/sync';
 import { createSyncPushWorker, type SyncPushWorker } from './sync-push-worker';
 import { createSyncPullWorker, type SyncPullWorker } from './sync-pull-worker';
+import { createSyncHandle, type SyncHandle } from './sync-handle';
 import { migrateLegacySyncConfig } from './sync-settings-migrate';
 
 // Which directions run for a given mode. Push runs for 'push' + 'bidirectional'; pull runs for
@@ -304,6 +305,9 @@ export interface AppContext {
   encryptSecret(plain: string): string;
   /** Inverse of {@link encryptSecret}. Mirrors the internal `syncDecrypt`. */
   decryptSecret(blob: string): string;
+  /** Sync status + trigger surface (Task 5). ALWAYS present: when sync is disabled, status()
+   *  reports `enabled:false` with null directions and triggerNow() is a no-op. */
+  sync: SyncHandle;
   cfg: Config;
   close(): Promise<void>;
 }
@@ -829,6 +833,19 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     logger.info('sync disabled (not configured)');
   }
 
+  // Sync S4: expose a status/trigger handle over the (possibly undefined) workers. Constructed
+  // AFTER the mode gate so syncPushWorker/syncPullWorker are in their final state. Always present —
+  // a disabled node reports enabled:false + null directions and triggerNow() is a no-op.
+  const sync = createSyncHandle({
+    db: internal.db,
+    enabled: !!syncCfg,
+    mode: syncCfg?.mode ?? 'bidirectional',
+    centralUrl: syncCfg?.centralUrl ?? '',
+    siteId: syncCfg?.siteId ?? '',
+    pushWorker: syncPushWorker,
+    pullWorker: syncPullWorker,
+  });
+
   const pluginData = createPluginDataStore(internal.db);
   // Generic, caller-driven DHIS2 push orchestration (mapping/orgUnitMap supplied by the
   // plugin UI through the broker). Mirrors the host dhis2-context runMapping behaviour.
@@ -992,6 +1009,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     activity,
     encryptSecret,
     decryptSecret: syncDecrypt,
+    sync,
     cfg,
     async close() {
       await workflowListeners.stopAll();
@@ -1013,6 +1031,8 @@ export type { ReportCategoriesService } from './report-categories';
 export { createActivityService } from './activity-service';
 export type { ActivityService, RecentPayload } from './activity-service';
 export { getSyncConfig, setSyncConfig } from './sync-settings';
+export { createSyncHandle } from './sync-handle';
+export type { SyncHandle, SyncStatus, SyncDirectionStatus, SyncMode } from './sync-handle';
 export { migrateLegacySyncConfig } from './sync-settings-migrate';
 export { CE_VERSION } from './plugin-registry';
 export * from './db-context';
