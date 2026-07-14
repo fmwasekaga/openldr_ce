@@ -13,6 +13,8 @@ export interface SyncPushWorker {
   stop(): void;
   /** Run one cycle now (no-overlap guarded). Used by tests and an optional "sync now". */
   trigger(): void;
+  /** True once start() has scheduled the loop and stop() has not been called. Read by the sync status surface. */
+  isRunning(): boolean;
 }
 
 export interface SyncPushWorkerDeps {
@@ -50,6 +52,9 @@ export function createSyncPushWorker(opts: SyncPushWorkerDeps): SyncPushWorker {
     },
     trigger() {
       if (!stopped) void tickOnce();
+    },
+    isRunning() {
+      return timer !== undefined && !stopped;
     },
   };
 }

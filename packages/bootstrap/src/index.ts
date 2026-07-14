@@ -6,7 +6,7 @@ import { createAuth } from '@openldr/adapter-auth';
 import { createEventBus } from '@openldr/adapter-event-bus';
 import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import type { Config } from '@openldr/config';
-import { createLogger, HealthRegistry, open, parseSecretKey, redact, type Logger } from '@openldr/core';
+import { createLogger, HealthRegistry, open, seal, parseSecretKey, redact, type Logger } from '@openldr/core';
 import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema, Provenance } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
@@ -37,9 +37,17 @@ import { type PluginRuntime } from '@openldr/plugins';
 import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
-import { createSyncPushRunner, createSyncPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, type PushBatch, type PushResponse } from '@openldr/sync';
+import { createSyncPushRunner, createSyncPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, type PushBatch, type PushResponse, type SyncConfig } from '@openldr/sync';
 import { createSyncPushWorker, type SyncPushWorker } from './sync-push-worker';
 import { createSyncPullWorker, type SyncPullWorker } from './sync-pull-worker';
+import { createSyncHandle, type SyncHandle } from './sync-handle';
+import { migrateLegacySyncConfig } from './sync-settings-migrate';
+
+// Which directions run for a given mode. Push runs for 'push' + 'bidirectional'; pull runs for
+// 'pull' + 'bidirectional'. The if (syncCfg) worker gates below use these so the wiring is unit-testable.
+type SyncMode = SyncConfig['mode'];
+export const shouldStartPush = (mode: SyncMode): boolean => mode !== 'pull';
+export const shouldStartPull = (mode: SyncMode): boolean => mode !== 'push';
 import { createActivityService, type ActivityService } from './activity-service';
 import { createFeatureFlags, type FeatureFlags } from './feature-flags';
 import { createNumberSettings, type NumberSettings } from './number-settings';
@@ -291,6 +299,15 @@ export interface AppContext {
   featureFlags: FeatureFlags;
   numberSettings: NumberSettings;
   activity: ActivityService;
+  /** Seal a plaintext secret for at-rest storage (AES-256-GCM under SECRETS_ENCRYPTION_KEY).
+   *  Symmetric with {@link decryptSecret}; used by the sync settings route/CLI to write-encrypt
+   *  the client secret. */
+  encryptSecret(plain: string): string;
+  /** Inverse of {@link encryptSecret}. Mirrors the internal `syncDecrypt`. */
+  decryptSecret(blob: string): string;
+  /** Sync status + trigger surface (Task 5). ALWAYS present: when sync is disabled, status()
+   *  reports `enabled:false` with null directions and triggerNow() is a no-op. */
+  sync: SyncHandle;
   cfg: Config;
   close(): Promise<void>;
 }
@@ -673,8 +690,18 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   let syncPushWorker: SyncPushWorker | undefined;
   let syncPullWorker: SyncPullWorker | undefined;
   const syncDecrypt = (blob: string): string => open(blob, parseSecretKey(cfg.SECRETS_ENCRYPTION_KEY ?? ''));
+  // Symmetric seal/open pair exposed on AppContext so the sync settings route + CLI can write-encrypt
+  // the client secret with the SAME key scheme syncDecrypt reads (open(seal(x,key),key) === x).
+  const encryptSecret = (plain: string): string => seal(plain, parseSecretKey(cfg.SECRETS_ENCRYPTION_KEY ?? ''));
   // Reading the sync config touches app_settings; a transient DB read failure here must degrade to
   // "sync disabled" rather than abort boot (mirrors the projection LISTEN fallback's boot-safety).
+  // One-time upgrade shim: pre-S4 installs kept sync config as a single JSON blob the workers never read.
+  // Migrate it into the discrete sync.* keys BEFORE readSyncConfig runs so the reader sees the populated
+  // keys. Best-effort — a failure here (transient DB) must warn, never abort boot.
+  await migrateLegacySyncConfig(appSettings).catch((err) => {
+    logger.warn({ err: (err as Error).message }, 'legacy sync config migration failed');
+    return false;
+  });
   let syncCfg: Awaited<ReturnType<typeof readSyncConfig>> = null;
   try {
     syncCfg = await readSyncConfig(appSettings, syncDecrypt, logger);
@@ -682,52 +709,17 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     logger.warn({ err }, 'sync push worker: could not read sync config; sync disabled this boot');
   }
   if (syncCfg) {
+    // Cadence is operator-configured (sync.interval_minutes); both directions share it.
+    const intervalMs = syncCfg.intervalMinutes * 60_000;
+    // SHARED deps — built unconditionally so a pull-only OR push-only lab still has what it needs (both
+    // directions authenticate to central, so the token provider is never gated). Only the worker
+    // construct+start below is mode-gated.
     const tokenProvider = createSyncTokenProvider({
       issuerUrl: syncCfg.oidcIssuer,
       clientId: syncCfg.clientId,
       clientSecret: syncCfg.clientSecret,
     });
-    const syncPushRunner = createSyncPushRunner({
-      internalDb: internal.db,
-      fetchSafeRows: fetchSafeChangeRows,
-      // Upsert body for a specific origin version, read from the append-only history (the projection
-      // safe-frontier has already confirmed this (type,id,version) committed + final before we push it).
-      fetchContent: async (resourceType, id, version) => {
-        const row = await internal.db
-          .selectFrom('fhir.resource_history')
-          .select('resource')
-          .where('resource_type', '=', resourceType)
-          .where('id', '=', id)
-          .where('version', '=', version)
-          .executeTakeFirst();
-        return row?.resource ?? null;
-      },
-      postPush: async (batch: PushBatch, token: string): Promise<PushResponse> => {
-        const res = await fetch(`${syncCfg.centralUrl}/api/sync/push`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify(batch),
-        });
-        // Throw (never leaking the token) so the runner leaves the cursor put and retries next cycle.
-        if (!res.ok) throw new Error(`sync push POST /api/sync/push failed: central responded ${res.status}`);
-        return (await res.json()) as PushResponse;
-      },
-      getToken: () => tokenProvider.getToken(),
-      readCursor: () => readChangeCursor(internal.db, 'sync-push'),
-      advanceCursor: (seq) => advanceChangeCursor(internal.db, 'sync-push', seq),
-      logger,
-    });
-    syncPushWorker = createSyncPushWorker({
-      runner: { runCycle: () => syncPushRunner.runCycle() },
-      intervalMs: 5000,
-      logger,
-    });
-    syncPushWorker.start();
-    logger.info({ centralUrl: syncCfg.centralUrl, siteId: syncCfg.siteId }, 'sync push worker started');
-
-    // Sync S2/S3: directional pull (central -> lab reference config + terminology). A THIRD consumer of the
-    // change stream ('sync-pull' cursor), sharing the push token provider instance (so token caching is not
-    // defeated). Shared POST helper: throws on non-2xx with the STATUS ONLY (never the bearer token).
+    // Shared POST helper: throws on non-2xx with the STATUS ONLY (never the bearer token).
     const postJson = async (url: string, body: unknown, token: string): Promise<unknown> => {
       const res = await fetch(url, {
         method: 'POST',
@@ -738,60 +730,121 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       return res.json();
     };
 
-    // S3 terminology bulk-sync: a signalled terminology_system/concept_map record triggers a whole-system /
-    // whole-map keyset drain + reconcile (all-or-nothing; THROWS on any failure so the runner holds the cursor).
-    const termBulk = createTerminologyBulkSync({
-      labDb: internal.db,
-      getToken: () => tokenProvider.getToken(),
-      fetchConceptsPage: async (systemUrl, afterCode, token) =>
-        (await postJson(
-          `${syncCfg.centralUrl}/api/sync/terminology/concepts`,
-          { systemUrl, afterCode: afterCode ?? undefined },
-          token,
-        )) as import('@openldr/sync').ConceptsPage,
-      fetchMapElementsPage: async (mapUrl, afterKey, token) =>
-        (await postJson(
-          `${syncCfg.centralUrl}/api/sync/terminology/map-elements`,
-          { mapUrl, afterSourceSystem: afterKey?.sourceSystem, afterSourceCode: afterKey?.sourceCode },
-          token,
-        )) as import('@openldr/sync').MapElementsPage,
-      logger,
-    });
+    // PUSH direction (lab -> central). Runs for mode 'push' and 'bidirectional'.
+    if (shouldStartPush(syncCfg.mode)) {
+      const syncPushRunner = createSyncPushRunner({
+        internalDb: internal.db,
+        fetchSafeRows: fetchSafeChangeRows,
+        // Upsert body for a specific origin version, read from the append-only history (the projection
+        // safe-frontier has already confirmed this (type,id,version) committed + final before we push it).
+        fetchContent: async (resourceType, id, version) => {
+          const row = await internal.db
+            .selectFrom('fhir.resource_history')
+            .select('resource')
+            .where('resource_type', '=', resourceType)
+            .where('id', '=', id)
+            .where('version', '=', version)
+            .executeTakeFirst();
+          return row?.resource ?? null;
+        },
+        postPush: async (batch: PushBatch, token: string): Promise<PushResponse> => {
+          const res = await fetch(`${syncCfg.centralUrl}/api/sync/push`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify(batch),
+          });
+          // Throw (never leaking the token) so the runner leaves the cursor put and retries next cycle.
+          if (!res.ok) throw new Error(`sync push POST /api/sync/push failed: central responded ${res.status}`);
+          return (await res.json()) as PushResponse;
+        },
+        getToken: () => tokenProvider.getToken(),
+        readCursor: () => readChangeCursor(internal.db, 'sync-push'),
+        advanceCursor: (seq) => advanceChangeCursor(internal.db, 'sync-push', seq),
+        logger,
+      });
+      syncPushWorker = createSyncPushWorker({
+        runner: { runCycle: () => syncPushRunner.runCycle() },
+        intervalMs,
+        logger,
+      });
+      syncPushWorker.start();
+    }
 
-    // Pull worker: mirror central's reference config down. Shares the push token provider + internal db.
-    // Dispatcher: terminology signals route to the bulk-sync (whole-system/map drain); every other kind is a
-    // per-row reference apply. The runner's default isHoldRecord already holds the two terminology kinds.
-    const referenceApplier = createReferenceApplier(internal.db);
-    const applyRecord = async (rec: import('@openldr/sync').PullRecord): Promise<'applied' | 'skipped'> => {
-      if (rec.entityType === 'terminology_system') {
-        await termBulk.syncSystem(rec.entityId, rec.body);
-        return 'applied';
-      }
-      if (rec.entityType === 'concept_map') {
-        await termBulk.syncConceptMap(rec.entityId, rec.body);
-        return 'applied';
-      }
-      return referenceApplier(rec);
-    };
-    const syncPullRunner = createSyncPullRunner({
-      getToken: () => tokenProvider.getToken(), // SHARE the push token provider instance
-      applyRecord,
-      postPull: async (body, token) =>
-        (await postJson(`${syncCfg.centralUrl}/api/sync/pull`, body, token)) as import('@openldr/sync').PullResponse,
-      readCursor: () => readChangeCursor(internal.db, 'sync-pull'),
-      advanceCursor: (seq) => advanceChangeCursor(internal.db, 'sync-pull', seq),
-      logger,
-    });
-    syncPullWorker = createSyncPullWorker({
-      runner: { runCycle: () => syncPullRunner.runCycle() },
-      intervalMs: 5000,
-      logger,
-    });
-    syncPullWorker.start();
-    logger.info({ centralUrl: syncCfg.centralUrl, siteId: syncCfg.siteId }, 'sync pull worker started');
+    // PULL direction (central -> lab reference config + terminology). Runs for mode 'pull' and
+    // 'bidirectional'. A consumer of the change stream via its own 'sync-pull' cursor.
+    if (shouldStartPull(syncCfg.mode)) {
+      // S3 terminology bulk-sync: a signalled terminology_system/concept_map record triggers a whole-system /
+      // whole-map keyset drain + reconcile (all-or-nothing; THROWS on any failure so the runner holds the cursor).
+      const termBulk = createTerminologyBulkSync({
+        labDb: internal.db,
+        getToken: () => tokenProvider.getToken(),
+        fetchConceptsPage: async (systemUrl, afterCode, token) =>
+          (await postJson(
+            `${syncCfg.centralUrl}/api/sync/terminology/concepts`,
+            { systemUrl, afterCode: afterCode ?? undefined },
+            token,
+          )) as import('@openldr/sync').ConceptsPage,
+        fetchMapElementsPage: async (mapUrl, afterKey, token) =>
+          (await postJson(
+            `${syncCfg.centralUrl}/api/sync/terminology/map-elements`,
+            { mapUrl, afterSourceSystem: afterKey?.sourceSystem, afterSourceCode: afterKey?.sourceCode },
+            token,
+          )) as import('@openldr/sync').MapElementsPage,
+        logger,
+      });
+
+      // Pull worker: mirror central's reference config down. Shares the token provider + internal db.
+      // Dispatcher: terminology signals route to the bulk-sync (whole-system/map drain); every other kind is a
+      // per-row reference apply. The runner's default isHoldRecord already holds the two terminology kinds.
+      const referenceApplier = createReferenceApplier(internal.db);
+      const applyRecord = async (rec: import('@openldr/sync').PullRecord): Promise<'applied' | 'skipped'> => {
+        if (rec.entityType === 'terminology_system') {
+          await termBulk.syncSystem(rec.entityId, rec.body);
+          return 'applied';
+        }
+        if (rec.entityType === 'concept_map') {
+          await termBulk.syncConceptMap(rec.entityId, rec.body);
+          return 'applied';
+        }
+        return referenceApplier(rec);
+      };
+      const syncPullRunner = createSyncPullRunner({
+        getToken: () => tokenProvider.getToken(), // SHARE the token provider instance
+        applyRecord,
+        postPull: async (body, token) =>
+          (await postJson(`${syncCfg.centralUrl}/api/sync/pull`, body, token)) as import('@openldr/sync').PullResponse,
+        readCursor: () => readChangeCursor(internal.db, 'sync-pull'),
+        advanceCursor: (seq) => advanceChangeCursor(internal.db, 'sync-pull', seq),
+        logger,
+      });
+      syncPullWorker = createSyncPullWorker({
+        runner: { runCycle: () => syncPullRunner.runCycle() },
+        intervalMs,
+        logger,
+      });
+      syncPullWorker.start();
+    }
+
+    logger.info(
+      { mode: syncCfg.mode, intervalMinutes: syncCfg.intervalMinutes, centralUrl: syncCfg.centralUrl, siteId: syncCfg.siteId },
+      'sync workers started',
+    );
   } else {
-    logger.info('sync push worker disabled (not configured)');
+    logger.info('sync disabled (not configured)');
   }
+
+  // Sync S4: expose a status/trigger handle over the (possibly undefined) workers. Constructed
+  // AFTER the mode gate so syncPushWorker/syncPullWorker are in their final state. Always present —
+  // a disabled node reports enabled:false + null directions and triggerNow() is a no-op.
+  const sync = createSyncHandle({
+    db: internal.db,
+    enabled: !!syncCfg,
+    mode: syncCfg?.mode ?? 'bidirectional',
+    centralUrl: syncCfg?.centralUrl ?? '',
+    siteId: syncCfg?.siteId ?? '',
+    pushWorker: syncPushWorker,
+    pullWorker: syncPullWorker,
+  });
 
   const pluginData = createPluginDataStore(internal.db);
   // Generic, caller-driven DHIS2 push orchestration (mapping/orgUnitMap supplied by the
@@ -954,6 +1007,9 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     featureFlags,
     numberSettings,
     activity,
+    encryptSecret,
+    decryptSecret: syncDecrypt,
+    sync,
     cfg,
     async close() {
       await workflowListeners.stopAll();
@@ -975,6 +1031,9 @@ export type { ReportCategoriesService } from './report-categories';
 export { createActivityService } from './activity-service';
 export type { ActivityService, RecentPayload } from './activity-service';
 export { getSyncConfig, setSyncConfig } from './sync-settings';
+export { createSyncHandle } from './sync-handle';
+export type { SyncHandle, SyncStatus, SyncDirectionStatus, SyncMode } from './sync-handle';
+export { migrateLegacySyncConfig } from './sync-settings-migrate';
 export { CE_VERSION } from './plugin-registry';
 export * from './db-context';
 export { createPluginTarget } from './connector-target';

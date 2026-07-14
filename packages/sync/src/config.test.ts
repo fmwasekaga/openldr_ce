@@ -46,6 +46,8 @@ describe('readSyncConfig', () => {
       clientId: 'lab-nairobi',
       clientSecret: 's3cr3t', // decrypted, not the ciphertext
       siteId: 'site-nairobi-01',
+      mode: 'bidirectional', // default when sync.mode absent
+      intervalMinutes: 15, // default when sync.interval_minutes absent
     });
   });
 
@@ -116,6 +118,60 @@ describe('readSyncConfig', () => {
     const asyncDecrypt = async (blob: string) => fakeDecrypt(blob);
     const cfg = await readSyncConfig(fakeStore(FULL), asyncDecrypt);
     expect(cfg?.clientSecret).toBe('s3cr3t');
+  });
+
+  describe('sync.mode', () => {
+    it("reads mode:'push' from sync.mode='push'", async () => {
+      const cfg = await readSyncConfig(fakeStore({ ...FULL, 'sync.mode': 'push' }), fakeDecrypt);
+      expect(cfg?.mode).toBe('push');
+    });
+
+    it("reads mode:'pull' from sync.mode='pull'", async () => {
+      const cfg = await readSyncConfig(fakeStore({ ...FULL, 'sync.mode': 'pull' }), fakeDecrypt);
+      expect(cfg?.mode).toBe('pull');
+    });
+
+    it("defaults to 'bidirectional' when sync.mode is absent", async () => {
+      const cfg = await readSyncConfig(fakeStore(FULL), fakeDecrypt);
+      expect(cfg?.mode).toBe('bidirectional');
+    });
+
+    it("lowercases so 'PULL' → 'pull'", async () => {
+      const cfg = await readSyncConfig(fakeStore({ ...FULL, 'sync.mode': 'PULL' }), fakeDecrypt);
+      expect(cfg?.mode).toBe('pull');
+    });
+
+    it("falls back to 'bidirectional' on a garbage value", async () => {
+      const cfg = await readSyncConfig(fakeStore({ ...FULL, 'sync.mode': 'sideways' }), fakeDecrypt);
+      expect(cfg?.mode).toBe('bidirectional');
+    });
+  });
+
+  describe('sync.interval_minutes', () => {
+    it('reads intervalMinutes:30 from sync.interval_minutes=30', async () => {
+      const cfg = await readSyncConfig(fakeStore({ ...FULL, 'sync.interval_minutes': '30' }), fakeDecrypt);
+      expect(cfg?.intervalMinutes).toBe(30);
+    });
+
+    it('defaults to 15 when sync.interval_minutes is absent', async () => {
+      const cfg = await readSyncConfig(fakeStore(FULL), fakeDecrypt);
+      expect(cfg?.intervalMinutes).toBe(15);
+    });
+
+    it('rejects 0 (below the [1,1440] floor) → 15', async () => {
+      const cfg = await readSyncConfig(fakeStore({ ...FULL, 'sync.interval_minutes': '0' }), fakeDecrypt);
+      expect(cfg?.intervalMinutes).toBe(15);
+    });
+
+    it('rejects 5000 (above the 1440 ceiling) → 15', async () => {
+      const cfg = await readSyncConfig(fakeStore({ ...FULL, 'sync.interval_minutes': '5000' }), fakeDecrypt);
+      expect(cfg?.intervalMinutes).toBe(15);
+    });
+
+    it('floors a fractional value: 12.9 → 12', async () => {
+      const cfg = await readSyncConfig(fakeStore({ ...FULL, 'sync.interval_minutes': '12.9' }), fakeDecrypt);
+      expect(cfg?.intervalMinutes).toBe(12);
+    });
   });
 
   describe('boolean parsing of sync.enabled', () => {

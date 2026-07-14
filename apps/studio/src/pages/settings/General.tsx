@@ -12,8 +12,10 @@ import {
 import { DangerConfirmDialog } from '@/terminology/DangerConfirmDialog';
 import {
   fetchClientConfig, fetchFeatureFlags, setFeatureFlag, runDangerAction,
-  fetchSyncConfig, saveSyncConfig, fetchNumberSettings, setNumberSetting,
-  type ClientConfig, type FeatureFlag, type DangerAction, type SyncConfig, type SyncMode,
+  fetchSyncConfig, saveSyncConfig, fetchSyncStatus, triggerSyncNow,
+  fetchNumberSettings, setNumberSetting,
+  type ClientConfig, type FeatureFlag, type DangerAction,
+  type SyncConfigView, type SyncConfigInput, type SyncMode, type SyncStatus, type SyncDirectionStatus,
   type NumberSetting,
 } from '@/api';
 
@@ -28,8 +30,12 @@ export function General() {
   const [busyFlag, setBusyFlag] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingDanger>(null);
   const [dangerBusy, setDangerBusy] = useState(false);
-  const [sync, setSync] = useState<SyncConfig | null>(null);
+  const [sync, setSync] = useState<SyncConfigView | null>(null);
+  // Write-only secret field: blank ⇒ leave the stored secret unchanged (omit from the PUT payload).
+  const [secretInput, setSecretInput] = useState('');
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [syncSaving, setSyncSaving] = useState(false);
+  const [syncNowBusy, setSyncNowBusy] = useState(false);
   const [numbers, setNumbers] = useState<NumberSetting[]>([]);
   const [busyNumber, setBusyNumber] = useState<string | null>(null);
 
@@ -40,6 +46,7 @@ export function General() {
       if (isAdmin) {
         setFlags(await fetchFeatureFlags());
         setSync(await fetchSyncConfig());
+        setSyncStatus(await fetchSyncStatus());
         setNumbers(await fetchNumberSettings());
       }
     } catch (e) {
@@ -62,19 +69,62 @@ export function General() {
     }
   }, [t]);
 
+  const refreshSyncStatus = useCallback(async () => {
+    try {
+      setSyncStatus(await fetchSyncStatus());
+    } catch {
+      // Status is best-effort telemetry; a transient failure shouldn't surface a toast.
+    }
+  }, []);
+
   const saveSync = useCallback(async () => {
     if (!sync) return;
     setSyncSaving(true);
     try {
-      setSync(await saveSyncConfig(sync));
+      const input: SyncConfigInput = {
+        enabled: sync.enabled,
+        mode: sync.mode,
+        centralUrl: sync.centralUrl,
+        siteId: sync.siteId,
+        oidcIssuer: sync.oidcIssuer,
+        clientId: sync.clientId,
+        intervalMinutes: sync.intervalMinutes,
+        // Only send the secret when the operator typed a new one; blank ⇒ preserve the stored value.
+        ...(secretInput ? { clientSecret: secretInput } : {}),
+      };
+      setSync(await saveSyncConfig(input));
+      setSecretInput('');
       toast.success(t('settings.general.sync.saved'));
+      await refreshSyncStatus();
     } catch (e) {
       toast.error(t('settings.general.sync.saveFailed', { error: e instanceof Error ? e.message : String(e) }));
     } finally {
       setSyncSaving(false);
     }
-  }, [sync, t]);
+  }, [sync, secretInput, t, refreshSyncStatus]);
+
+  const doSyncNow = useCallback(async () => {
+    setSyncNowBusy(true);
+    try {
+      const res = await triggerSyncNow();
+      if (res.triggered) toast.success(t('settings.general.sync.triggered'));
+      else toast.info(t('settings.general.sync.disabledToast'));
+      await refreshSyncStatus();
+    } catch (e) {
+      toast.error(t('settings.general.sync.saveFailed', { error: e instanceof Error ? e.message : String(e) }));
+    } finally {
+      setSyncNowBusy(false);
+    }
+  }, [t, refreshSyncStatus]);
+
   useEffect(() => { void load(); }, [load]);
+
+  // Poll live sync status while the card is mounted (admin + config loaded). Cleared on unmount.
+  useEffect(() => {
+    if (!isAdmin || !sync) return;
+    const id = setInterval(() => { void refreshSyncStatus(); }, 10_000);
+    return () => clearInterval(id);
+  }, [isAdmin, sync, refreshSyncStatus]);
 
   const onToggle = useCallback(async (flag: FeatureFlag, value: boolean) => {
     setBusyFlag(flag.id);
@@ -109,6 +159,15 @@ export function General() {
     'reset-dashboards': { key: 'resetDashboards' },
     'clear-audit': { key: 'clearAudit' },
     'factory-reset': { key: 'factoryReset' },
+  };
+
+  // One-line summary of a sync direction: "not started", or "running/idle · seq N · <time>".
+  const directionLine = (dir: SyncDirectionStatus | null): string => {
+    if (!dir) return t('settings.general.sync.notStarted');
+    const state = dir.running ? t('settings.general.sync.running') : t('settings.general.sync.idle');
+    const parts = [state, `seq ${dir.lastSeq}`];
+    if (dir.lastSyncedAt) parts.push(new Date(dir.lastSyncedAt).toLocaleString());
+    return parts.join(' · ');
   };
 
   return (
@@ -181,14 +240,11 @@ export function General() {
       </Card>
       )}
 
-      {/* Lab ⇄ central sync — admin only. Scaffold: the engine is not implemented yet. */}
+      {/* Lab ⇄ central sync — admin only. Config form + live status + manual trigger. */}
       {isAdmin && sync && (
       <Card>
         <CardHeader><CardTitle>{t('settings.general.sync.title')}</CardTitle></CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <p className="rounded-md border border-border bg-muted/40 p-2 text-xs text-muted-foreground">
-            {t('settings.general.sync.preview')}
-          </p>
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="text-sm font-medium">{t('settings.general.sync.enabled.label')}</div>
@@ -230,6 +286,31 @@ export function General() {
             />
           </label>
           <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium">{t('settings.general.sync.oidcIssuer.label')}</span>
+            <Input
+              value={sync.oidcIssuer}
+              placeholder="https://central.example.org/auth/realms/openldr"
+              onChange={(e) => setSync({ ...sync, oidcIssuer: e.target.value })}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium">{t('settings.general.sync.clientId.label')}</span>
+            <Input
+              value={sync.clientId}
+              placeholder="sync-lab-ndola-01"
+              onChange={(e) => setSync({ ...sync, clientId: e.target.value })}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium">{t('settings.general.sync.clientSecret.label')}</span>
+            <Input
+              type="password"
+              value={secretInput}
+              placeholder={sync.clientSecretSet ? t('settings.general.sync.clientSecretSet') : ''}
+              onChange={(e) => setSecretInput(e.target.value)}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
             <span className="font-medium">{t('settings.general.sync.intervalMinutes.label')}</span>
             <Input
               type="number"
@@ -243,6 +324,29 @@ export function General() {
             <Button onClick={() => void saveSync()} disabled={syncSaving}>
               {t('settings.general.sync.save')}
             </Button>
+          </div>
+
+          {/* Live status panel */}
+          <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/40 p-3 text-sm">
+            <div className="flex items-center justify-between gap-4">
+              <span className="font-medium">{t('settings.general.sync.status')}</span>
+              <span className={`rounded px-2 py-0.5 text-xs ${syncStatus?.enabled ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-muted text-muted-foreground'}`}>
+                {syncStatus?.enabled ? t('settings.general.sync.on') : t('settings.general.sync.off')}
+              </span>
+            </div>
+            <dl className="grid grid-cols-[6rem_1fr] gap-x-3 gap-y-1 text-xs">
+              <dt className="text-muted-foreground">{t('settings.general.sync.mode.push')}</dt>
+              <dd className="font-mono">{directionLine(syncStatus?.push ?? null)}</dd>
+              <dt className="text-muted-foreground">{t('settings.general.sync.mode.pull')}</dt>
+              <dd className="font-mono">{directionLine(syncStatus?.pull ?? null)}</dd>
+              <dt className="text-muted-foreground">{t('settings.general.sync.pending')}</dt>
+              <dd className="font-mono">{syncStatus?.pendingPush ?? 0}</dd>
+            </dl>
+            <div>
+              <Button variant="secondary" onClick={() => void doSyncNow()} disabled={syncNowBusy}>
+                {t('settings.general.sync.syncNow')}
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

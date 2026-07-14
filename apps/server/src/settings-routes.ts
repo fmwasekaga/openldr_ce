@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { dangerResetDashboards, dangerFactoryReset, dangerClearAudit, getSyncConfig, setSyncConfig } from '@openldr/bootstrap';
-import { SYNC_CONFIG_KEY } from '@openldr/config';
 import { requireRole } from './rbac';
 import { recordAudit } from './audit-helper';
 
@@ -23,8 +22,8 @@ const defaultDeps: DangerDeps = {
 export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext, deps: DangerDeps = defaultDeps): void {
   app.get('/api/settings/flags', { preHandler: requireRole('lab_admin') }, async () => ctx.featureFlags.all());
 
-  // Lab⇄central sync config (scaffolding; the engine is not implemented yet). Non-secret,
-  // stored in app_settings. Admin-only + audited, mirrored by `openldr settings sync …`.
+  // Lab⇄central sync config — writes the discrete `sync.*` app_settings keys the sync workers read
+  // (client secret encrypted + write-only). Admin-only + audited, mirrored by `openldr settings sync …`.
   app.get('/api/settings/sync', { preHandler: requireRole('lab_admin') }, async () =>
     getSyncConfig(ctx.appSettings),
   );
@@ -33,16 +32,29 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
     const before = await getSyncConfig(ctx.appSettings);
     let after;
     try {
-      after = await setSyncConfig(ctx.appSettings, req.body, req.user?.id ?? null);
+      after = await setSyncConfig(ctx.appSettings, req.body, req.user?.id ?? null, ctx.encryptSecret);
     } catch (e) {
       reply.code(400);
       return { error: e instanceof Error ? e.message : 'invalid sync config' };
     }
     await recordAudit(ctx, req, {
-      action: 'settings.sync.update', entityType: 'app_setting', entityId: SYNC_CONFIG_KEY,
+      action: 'settings.sync.update', entityType: 'app_setting', entityId: 'sync.*',
       metadata: { before, after },
     });
     return after;
+  });
+
+  // Live sync status + manual trigger (T6). User-authed under /api/settings/* (admin-only) — NOT under
+  // /api/sync/* (that surface is machine-cred and skips the user auth gate). status() is always present
+  // on ctx.sync even when sync is disabled; `now` refuses (409) when disabled so it never no-ops silently.
+  app.get('/api/settings/sync/status', { preHandler: requireRole('lab_admin') }, async () => ctx.sync.status());
+
+  app.post('/api/settings/sync/now', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const s = await ctx.sync.status();
+    if (!s.enabled) { reply.code(409); return { triggered: false, reason: 'disabled' }; }
+    ctx.sync.triggerNow();
+    await recordAudit(ctx, req, { action: 'settings.sync.now', entityType: 'app_settings', entityId: 'sync', metadata: {} });
+    return { triggered: true };
   });
 
   app.put('/api/settings/flags/:key', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
