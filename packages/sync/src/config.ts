@@ -9,6 +9,9 @@
 
 import type { AppSettingStore } from '@openldr/db';
 
+/** Sync direction. `bidirectional` is the safe default when the key is absent/garbage. */
+export type SyncMode = 'push' | 'pull' | 'bidirectional';
+
 /** Fully-resolved, ready-to-use lab sync configuration. `clientSecret` is decrypted in memory. */
 export interface SyncConfig {
   enabled: boolean;
@@ -17,6 +20,8 @@ export interface SyncConfig {
   clientId: string;
   clientSecret: string; // decrypted in memory
   siteId: string;
+  mode: SyncMode;
+  intervalMinutes: number;
 }
 
 /** Minimal logger surface so an enabled-but-incomplete config can be surfaced clearly at boot. */
@@ -32,6 +37,8 @@ const KEY_OIDC_ISSUER = 'sync.oidc_issuer';
 const KEY_CLIENT_ID = 'sync.client_id';
 const KEY_CLIENT_SECRET = 'sync.client_secret'; // stored encrypted
 const KEY_SITE_ID = 'sync.site_id';
+const KEY_MODE = 'sync.mode';
+const KEY_INTERVAL = 'sync.interval_minutes';
 
 /** Boolean-flag parse convention (mirrors @openldr/config's parseFlagValue), extended to be
  *  case-insensitive so 'TRUE'/'True' also enable. Absent/anything-else = disabled. */
@@ -47,7 +54,7 @@ async function readValue(appSettings: AppSettingStore, key: string): Promise<str
 }
 
 /**
- * Reads the six `sync.*` keys from `app_settings` and returns a ready-to-use {@link SyncConfig}, or
+ * Reads the `sync.*` keys from `app_settings` and returns a ready-to-use {@link SyncConfig}, or
  * `null` when sync should not run. `null` means one of:
  *   - `sync.enabled` is absent/false → sync is off (normal; no warning),
  *   - enabled but a required field is missing/empty → misconfigured (warns via `logger`),
@@ -95,5 +102,13 @@ export async function readSyncConfig(
     return null;
   }
 
-  return { enabled: true, centralUrl, oidcIssuer, clientId, clientSecret, siteId };
+  // Optional tuning keys — only meaningful once we know the config is valid. Absent/garbage → safe
+  // defaults (bidirectional, every 15 min). Interval is clamped to [1, 1440] minutes and floored.
+  const modeRaw = (await readValue(appSettings, KEY_MODE)).trim().toLowerCase();
+  const mode: SyncMode = modeRaw === 'push' || modeRaw === 'pull' ? modeRaw : 'bidirectional';
+  const intervalRaw = Number(await readValue(appSettings, KEY_INTERVAL));
+  const intervalMinutes =
+    Number.isFinite(intervalRaw) && intervalRaw >= 1 && intervalRaw <= 1440 ? Math.floor(intervalRaw) : 15;
+
+  return { enabled: true, centralUrl, oidcIssuer, clientId, clientSecret, siteId, mode, intervalMinutes };
 }
