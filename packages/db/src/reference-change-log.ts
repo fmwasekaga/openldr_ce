@@ -15,7 +15,10 @@ export type ReferenceEntityType =
   | 'term_mapping'
   | 'terminology_system'
   | 'concept_map';
-export const ENTITY_TYPES: ReferenceEntityType[] = ['form', 'dashboard', 'report', 'setting'];
+export const ENTITY_TYPES: ReferenceEntityType[] = [
+  'form', 'dashboard', 'report', 'setting',
+  'publisher', 'coding_system', 'term_mapping', 'terminology_system', 'concept_map',
+];
 export type ReferenceOp = 'upsert' | 'delete';
 
 /** Append a reference-data change to the log — but only if it differs from the entity's latest logged
