@@ -34,8 +34,6 @@ export interface ExecutionContext {
    * than a boolean condition, so the flag stays as defense-in-depth.
    */
   codeLimits: CodeLimits;
-  /** Optional logger so an enabled Code node can emit a sandboxed-execution notice. */
-  logger?: { warn: (msg: string) => void };
   /** Server-provided data capabilities for source nodes (undefined in pure-engine tests). */
   services?: WorkflowServices;
   /** ID of the persisted workflow record — threaded through so sink nodes can stamp datasets. */
@@ -57,9 +55,8 @@ export function createContext(
   codeLimits: CodeLimits = { timeoutMs: 5000, memoryMb: 128, enabled: false },
   services?: WorkflowServices,
   workflowId?: string,
-  logger?: ExecutionContext['logger'],
   files?: Record<string, BinaryRef>,
   callStack: string[] = [],
 ): ExecutionContext {
-  return { input, nodeOutputs: {}, nodeMeta: {}, branches: {}, logs: {}, emit, edges, codeLimits, services, workflowId, logger, files, callStack, loopVars: [], loopMaxItems: DEFAULT_LOOP_MAX_ITEMS };
+  return { input, nodeOutputs: {}, nodeMeta: {}, branches: {}, logs: {}, emit, edges, codeLimits, services, workflowId, files, callStack, loopVars: [], loopMaxItems: DEFAULT_LOOP_MAX_ITEMS };
 }

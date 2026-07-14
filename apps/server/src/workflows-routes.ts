@@ -241,7 +241,6 @@ export function registerWorkflowRoutes(
         loopMaxItems: ctx.cfg.WORKFLOW_LOOP_MAX_ITEMS,
         services: ctx.workflows.services,
         workflowId: id,
-        logger: { warn: (msg: string) => ctx.logger.warn(msg) },
       });
       reply.raw.write(`event: done\ndata: ${JSON.stringify(result)}\n\n`);
       await ctx.workflows.runs.record({

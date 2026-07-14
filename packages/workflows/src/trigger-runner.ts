@@ -54,7 +54,6 @@ export function createWorkflowTriggerRunner(deps: RunnerDeps): WorkflowTriggerRu
         loopMaxItems: deps.loopMaxItems,
         services: deps.services,
         workflowId,
-        logger: { warn: (msg: string) => deps.logger.warn(msg) },
       });
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);

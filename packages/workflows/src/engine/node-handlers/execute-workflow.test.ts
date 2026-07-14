@@ -25,7 +25,7 @@ describe('executeWorkflowHandler', () => {
     const runSubWorkflow = vi.fn(async () => ({ items: [], status: 'completed' as const }));
     const ctx = createContext(
       undefined, () => {}, [], undefined, { runSubWorkflow } as unknown as WorkflowServices,
-      undefined, undefined, undefined, ['parent-wf'],
+      undefined, undefined, ['parent-wf'],
     );
     await executeWorkflowHandler(node({ workflowId: 'wf-2' }), ctx, []);
     expect(runSubWorkflow).toHaveBeenCalledWith({ workflowId: 'wf-2', input: [], callStack: ['parent-wf'] });
