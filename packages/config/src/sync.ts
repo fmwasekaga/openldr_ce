@@ -1,11 +1,10 @@
 import { z } from 'zod';
 
 /**
- * Lab⇄central sync configuration. This is CONFIG SCAFFOLDING — the sync engine itself is
- * not implemented yet (see docs/superpowers/specs/2026-07-02-distributed-sync-architecture-design.md).
- * The settings are persisted (app_settings key `sync.config`, non-secret) so an operator
- * can configure the feature ahead of it shipping. Per-lab credentials are NOT stored here —
- * they belong in the secret/connector store when the engine lands.
+ * LEGACY lab⇄central sync configuration blob (app_settings key `sync.config`). SUPERSEDED by the
+ * discrete `sync.*` keys (see SyncConfigInputSchema/SyncConfigView below + @openldr/sync readSyncConfig).
+ * Retained ONLY so `migrateLegacySyncConfig` can fold a pre-S4 blob into the discrete keys once.
+ * @deprecated use SyncConfigInputSchema/SyncConfigView; do not write new `sync.config` blobs.
  */
 export const SYNC_CONFIG_KEY = 'sync.config';
 

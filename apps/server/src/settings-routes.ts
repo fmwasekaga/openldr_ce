@@ -22,8 +22,8 @@ const defaultDeps: DangerDeps = {
 export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext, deps: DangerDeps = defaultDeps): void {
   app.get('/api/settings/flags', { preHandler: requireRole('lab_admin') }, async () => ctx.featureFlags.all());
 
-  // Lab⇄central sync config (scaffolding; the engine is not implemented yet). Non-secret,
-  // stored in app_settings. Admin-only + audited, mirrored by `openldr settings sync …`.
+  // Lab⇄central sync config — writes the discrete `sync.*` app_settings keys the sync workers read
+  // (client secret encrypted + write-only). Admin-only + audited, mirrored by `openldr settings sync …`.
   app.get('/api/settings/sync', { preHandler: requireRole('lab_admin') }, async () =>
     getSyncConfig(ctx.appSettings),
   );

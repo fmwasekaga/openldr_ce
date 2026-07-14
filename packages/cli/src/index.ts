@@ -139,12 +139,12 @@ numbers.command('set <key> <value>').description('Set a number setting (clamped 
   .action(async (key: string, value: string, opts: { json: boolean }) => {
     try { process.exitCode = await runSettingsNumbersSet(key, value, opts); } catch (err) { process.stderr.write(`settings numbers set failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
-const sync = settings.command('sync').description('Lab⇄central sync config (scaffold — engine not yet implemented)');
+const sync = settings.command('sync').description('Lab⇄central sync config (writes the discrete sync.* keys the workers read)');
 sync.command('show').description('Show the current sync configuration').option('--json', 'emit JSON', false)
   .action(async (opts: { json: boolean }) => {
     try { process.exitCode = await runSettingsSyncShow(opts); } catch (err) { process.stderr.write(`settings sync show failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
-sync.command('set <field> <value>').description('Set a sync field: enabled|mode|centralUrl|siteId|intervalMinutes').option('--json', 'emit JSON', false)
+sync.command('set <field> <value>').description('Set a sync field: enabled|mode|centralUrl|siteId|oidcIssuer|clientId|clientSecret|intervalMinutes').option('--json', 'emit JSON', false)
   .action(async (field: string, value: string, opts: { json: boolean }) => {
     try { process.exitCode = await runSettingsSyncSet(field, value, opts); } catch (err) { process.stderr.write(`settings sync set failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
