@@ -478,9 +478,14 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   const workflowSecrets = createWorkflowSecretStore(internal.db);
   const workflowWebhooks = createWebhookRegistry({
     // Open the sealed webhook-secret ref → plaintext (held in memory). A failure to
-    // resolve (unknown id / key unset) registers a null secret rather than crashing
-    // reconcile — the route then fails closed (401 "no secret configured").
-    resolveRef: (ref) => workflowSecrets.resolve(ref, cfg.SECRETS_ENCRYPTION_KEY).catch(() => null),
+    // resolve (unknown id / key unset / rotated key) registers a null secret rather
+    // than crashing reconcile — the route then fails closed (401 "no secret configured").
+    // Log a warning so a silently-bricked hook has an operator signal (SEC-06).
+    resolveRef: (ref) =>
+      workflowSecrets.resolve(ref, cfg.SECRETS_ENCRYPTION_KEY).catch((err) => {
+        logger.warn({ ref, err }, 'SEC-06: webhook secret ref failed to resolve — hook will 401');
+        return null;
+      }),
   });
   const workflowDatasets = createWorkflowDatasetStore(internal.db);
 

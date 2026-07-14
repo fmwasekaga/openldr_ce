@@ -941,6 +941,38 @@ describe('workflow routes', () => {
     await db.destroy();
   });
 
+  it('end-to-end: an unresolvable webhook secret ref fails closed — 401, no run (SEC-06 T4)', async () => {
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
+    const { ctx, db } = await realSecretCtx();
+    // A resolver that always returns null simulates a deleted / mis-keyed / rotated secret.
+    // The registry then registers secret:null and the hook route fails closed (401).
+    ctx.workflows.webhooks = createWebhookRegistry({ resolveRef: async () => null });
+    registerWorkflowRoutes(app, ctx);
+
+    const save = await app.inject({
+      method: 'POST', url: '/api/workflows',
+      payload: {
+        ...SAMPLE_WORKFLOW, id: 'wf-hook-unresolvable',
+        definition: { nodes: [
+          { id: 't1', type: 'trigger', data: { triggerType: 'webhook', path: 'hookbrick', secret: 'live-token' } },
+        ], edges: [] },
+      },
+    });
+    expect(save.statusCode).toBe(200);
+    // Registry resolved the ref to null → fail-closed, indistinguishable from no-secret.
+    expect(ctx.workflows.webhooks.resolve('hookbrick')?.secret).toBeNull();
+
+    // Even the (formerly-correct) token is rejected — the plaintext was never registered.
+    const res = await app.inject({
+      method: 'POST', url: '/api/workflows/hooks/hookbrick',
+      headers: { 'x-webhook-token': 'live-token' }, payload: {},
+    });
+    expect(res.statusCode).toBe(401);
+    expect(ctx.__extras.runAndRecordCalls.length).toBe(0);
+    await db.destroy();
+  });
+
   it('saving a secret-bearing workflow with SECRETS_ENCRYPTION_KEY unset fails closed — nothing persisted', async () => {
     const app = Fastify();
     app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
