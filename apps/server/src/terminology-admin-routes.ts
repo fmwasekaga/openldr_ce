@@ -149,14 +149,12 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
   }
 
   async function importTermRowsInBatches(rows: ReturnType<typeof parseTerminologyTerms>): Promise<{ imported: number }> {
-    const batchSize = 1000;
-    let imported = 0;
-    for (let i = 0; i < rows.length; i += batchSize) {
-      const batch = rows.slice(i, i + batchSize).map((r) => ({ ...r, status: r.status ?? 'ACTIVE' }));
-      const result = await admin.terms.importRows(batch);
-      imported += result.imported;
-    }
-    return { imported };
+    // Pass the whole import to importRows in ONE call: the store batches the insert internally and
+    // emits exactly one terminology_system sync signal per distinct system (Sync S3). Splitting the
+    // import into multiple importRows calls here would emit one signal per chunk — the per-batch spam
+    // we must avoid.
+    const shaped = rows.map((r) => ({ ...r, status: r.status ?? 'ACTIVE' }));
+    return admin.terms.importRows(shaped);
   }
 
   app.get('/api/terminology/systems/:id/terms', async (req, reply) => {

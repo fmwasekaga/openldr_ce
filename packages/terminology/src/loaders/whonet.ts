@@ -43,6 +43,9 @@ export async function loadWhonetAmr(sqlitePath: string, store: LoaderStore): Pro
     await store.upsertConcepts(rows);
     const csRef = await store.saveResource({ resourceType: 'CodeSystem', url: system, name, status: 'active', content: 'complete', concept: pairs.map((p) => ({ code: p.code, display: p.display })) });
     await store.saveSystem(system, null, 'CodeSystem', csRef.id);
+    // Sync S3: one signal per CodeSystem imported here (the derived ValueSet below is NOT a concept
+    // source — its codes come from `system` — so only the CodeSystem is signalled).
+    await store.markSystemChanged(system);
     const vsRef = await store.saveResource({ resourceType: 'ValueSet', url: vsUrl, name: `${name} (all)`, status: 'active', compose: { include: [{ system }] } });
     await store.saveSystem(vsUrl, null, 'ValueSet', vsRef.id);
     results.push({ system, conceptsLoaded: rows.length, resourceUrl: system });

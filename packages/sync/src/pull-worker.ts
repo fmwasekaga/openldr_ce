@@ -11,6 +11,11 @@ export interface PullDeps {
   applyRecord: (rec: PullRecord) => Promise<'applied' | 'skipped'>;
   readCursor: () => Promise<number>; // change_cursors consumer 'sync-pull'
   advanceCursor: (seq: number) => Promise<void>;
+  // Records for which an apply failure is all-or-nothing: on failure the cursor must NOT advance past
+  // the record (retry the whole thing next cycle) rather than quarantine-and-skip. Defaults to the
+  // terminology bulk kinds ('terminology_system'/'concept_map'), whose apply drains + reconciles a whole
+  // system/map — a partial transfer is never "done", so a failed one must replay.
+  isHoldRecord?: (rec: PullRecord) => boolean;
   logger: Logger;
 }
 
@@ -18,14 +23,25 @@ export interface SyncPullRunner {
   runCycle(): Promise<number>;
 }
 
+// Default hold policy: the two terminology bulk kinds are all-or-nothing (their apply drains + reconciles
+// a whole system/map inside one transaction). Every other kind (S2/Layer-A per-row reference config) is
+// quarantine-on-failure.
+const defaultIsHoldRecord = (rec: PullRecord): boolean =>
+  rec.entityType === 'terminology_system' || rec.entityType === 'concept_map';
+
 /** A stateful pull runner. Each cycle reads the 'sync-pull' cursor, asks central for the ordered window
  *  of reference changes after it, and applies each in seq order. Mirrors the push runner's failure model:
  *  a transport/token failure (getToken lives INSIDE the try) leaves the cursor put so the whole window
- *  retries next cycle; a per-record apply failure is logged and SKIPPED (quarantine) but does NOT stop
- *  the cursor advancing — one bad record can never wedge the stream. On success the cursor advances to
- *  central's `nextSeq` (guarded `> cursor` so a stale/hostile response cannot regress it). Returns the
- *  count of records applied. */
+ *  retries next cycle. Per-record apply failures split by policy (`isHoldRecord`):
+ *    - quarantine (default for S2/Layer-A per-row records): the failure is logged + SKIPPED and the cursor
+ *      advances PAST it — one bad record can never wedge the stream.
+ *    - hold (default for terminology bulk records): the failure STOPS the loop and caps the cursor advance
+ *      at the last safely-processed seq BEFORE it, so the failed record + everything after it replays next
+ *      cycle (an all-or-nothing bulk transfer is never "done" until it fully applies).
+ *  On a fully-processed window the cursor advances to central's `nextSeq` (guarded `> cursor` so a
+ *  stale/hostile response cannot regress it). Returns the count of records applied. */
 export function createSyncPullRunner(deps: PullDeps): SyncPullRunner {
+  const isHold = deps.isHoldRecord ?? defaultIsHoldRecord;
   return {
     async runCycle(): Promise<number> {
       const cursor = await deps.readCursor();
@@ -43,24 +59,43 @@ export function createSyncPullRunner(deps: PullDeps): SyncPullRunner {
 
       if (resp.records.length === 0) return 0;
 
+      // Records arrive in seq order. Track the highest seq it is SAFE to advance to: it advances to a
+      // record's seq once that record is "handled" (applied OR quarantined), but a HELD failure stops the
+      // loop before updating it, so the held record + everything after it is left for the next cycle.
+      let safeSeq = cursor;
       let applied = 0;
+      let held = false;
       for (const rec of resp.records) {
         try {
           await deps.applyRecord(rec);
           applied++;
+          safeSeq = rec.seq; // fully applied → safe up to and including its seq
         } catch (err) {
-          // A per-record apply failure never blocks the stream: it's logged and skipped, and because the
-          // cursor advances past it below it is not replayed forever (quarantine).
+          if (isHold(rec)) {
+            // All-or-nothing bulk record failed: STOP here. Do not advance past it; retry the whole thing
+            // next cycle (a partial bulk transfer is never done). safeSeq stays at the last handled record.
+            deps.logger.warn(
+              { err: (err as Error).message, entityType: rec.entityType, entityId: rec.entityId, seq: rec.seq },
+              'sync pull: bulk apply failed; holding cursor (will retry)',
+            );
+            held = true;
+            break;
+          }
+          // Quarantine kind (S2/Layer-A per-row): log, skip, keep going — and it is safe to advance PAST it
+          // so it is not replayed forever.
           deps.logger.warn(
             { err: (err as Error).message, entityType: rec.entityType, entityId: rec.entityId, seq: rec.seq },
             'sync pull: apply failed; skipping (quarantine)',
           );
+          safeSeq = rec.seq; // a quarantined record is "handled" — safe to advance past it
         }
       }
 
-      // Advance to central's nextSeq (max seq in the served window). The `> cursor` guard prevents a
-      // stale/hostile response from regressing the cursor backward.
-      if (resp.nextSeq > cursor) await deps.advanceCursor(resp.nextSeq);
+      // Nothing held → the whole window was processed, so advance to central's nextSeq (== max served seq,
+      // so Math.max(safeSeq, nextSeq) === nextSeq). A hold caps the advance at the last safe seq BEFORE the
+      // held record. The `> cursor` guard prevents a stale/hostile response from regressing the cursor.
+      const target = held ? safeSeq : Math.max(safeSeq, resp.nextSeq);
+      if (target > cursor) await deps.advanceCursor(target);
       return applied;
     },
   };

@@ -5,8 +5,20 @@ import type { InternalSchema } from './schema/internal';
 // inside their own write transaction so the append to reference_change_log is atomic with the
 // store write (Task 4 instruments the stores; this is the capture primitive).
 
-export type ReferenceEntityType = 'form' | 'dashboard' | 'report' | 'setting';
-export const ENTITY_TYPES: ReferenceEntityType[] = ['form', 'dashboard', 'report', 'setting'];
+export type ReferenceEntityType =
+  | 'form'
+  | 'dashboard'
+  | 'report'
+  | 'setting'
+  | 'publisher'
+  | 'coding_system'
+  | 'term_mapping'
+  | 'terminology_system'
+  | 'concept_map';
+export const ENTITY_TYPES: ReferenceEntityType[] = [
+  'form', 'dashboard', 'report', 'setting',
+  'publisher', 'coding_system', 'term_mapping', 'terminology_system', 'concept_map',
+];
 export type ReferenceOp = 'upsert' | 'delete';
 
 /** Append a reference-data change to the log — but only if it differs from the entity's latest logged

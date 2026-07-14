@@ -9,6 +9,11 @@ export interface LoaderStore {
   upsertMapElements(rows: MapElement[]): Promise<void>;
   saveResource(resource: unknown): Promise<SavedRef>;
   saveSystem(url: string, version: string | null, kind: string, resourceId: string): Promise<void>;
+  /** Sync S3: signal that a code system's concepts finished importing. Loaders live outside @openldr/db
+   *  and hold only a LoaderStore (no db handle), so they cannot call markTerminologyChanged directly;
+   *  the bootstrap-built store wires this to markTerminologyChanged(db, systemUrl). Call ONCE per system
+   *  at loader completion (after all concept batches land) — NOT per upsertConcepts batch. */
+  markSystemChanged(systemUrl: string): Promise<void>;
 }
 
 export interface LoadResult { system: string; conceptsLoaded: number; resourceUrl: string }
@@ -36,6 +41,9 @@ export async function importTerminologyResource(json: unknown, store: LoaderStor
     }));
     await store.upsertConcepts(rows);
     conceptsLoaded = rows.length;
+    // Sync S3: one signal for this CodeSystem import (after all concepts land). The ConceptMap branch
+    // below does NOT mark here — upsertMapElements emits the concept_map signal itself.
+    await store.markSystemChanged(res.url);
   }
   if (res.resourceType === 'ConceptMap' && res.group) {
     const els: MapElement[] = [];

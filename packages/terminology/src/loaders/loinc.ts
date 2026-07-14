@@ -63,5 +63,7 @@ export async function loadLoinc(
   };
   const ref = await store.saveResource(cs);
   await store.saveSystem(LOINC_SYSTEM, null, 'CodeSystem', ref.id);
+  // Sync S3: one signal for the whole import (all concept batches have landed above).
+  await store.markSystemChanged(LOINC_SYSTEM);
   return { system: LOINC_SYSTEM, conceptsLoaded: count, resourceUrl: LOINC_SYSTEM };
 }

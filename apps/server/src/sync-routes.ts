@@ -183,13 +183,93 @@ export function registerSyncRoutes(app: FastifyInstance<any, any, any, any>, ctx
 
     reply.code(200).send({ records, nextSeq } satisfies PullResponse);
   });
+
+  // POST /api/sync/terminology/concepts — keyset-paginated bulk drain of ONE terminology system's
+  // concepts. Auth-only (global terminology, not site-scoped). Keyset by `code` (WHERE code > afterCode
+  // ORDER BY code LIMIT n) so paging is stable + resumable under concurrent writes. nextCode=null on a
+  // short (last) page.
+  app.post('/api/sync/terminology/concepts', async (req, reply) => {
+    const principal = await sitePrincipal(req, reply, ctx);
+    if (!principal) return; // reply already sent (401/403)
+
+    const b = (req.body ?? {}) as { systemUrl?: string; afterCode?: string; limit?: number };
+    if (typeof b.systemUrl !== 'string' || !b.systemUrl) {
+      reply.code(400).send({ error: 'systemUrl required' });
+      return;
+    }
+    const limit = Number.isFinite(b.limit) && (b.limit as number) > 0 ? Math.min(b.limit as number, 5000) : 1000;
+
+    let q = ctx.internalDb.selectFrom('terminology_concepts').selectAll().where('system', '=', b.systemUrl);
+    if (typeof b.afterCode === 'string' && b.afterCode) q = q.where('code', '>', b.afterCode);
+    const rows = await q.orderBy('code', 'asc').limit(limit).execute();
+
+    const concepts = rows.map((r) => ({
+      code: r.code,
+      display: r.display,
+      status: r.status,
+      // properties is jsonb — parse to an object on the wire (string under some drivers, object under pg).
+      properties: r.properties == null ? null : typeof r.properties === 'string' ? JSON.parse(r.properties) : r.properties,
+    }));
+    // A full page ⇒ there may be more; carry the last code as the resume key. A short page ⇒ done.
+    const nextCode = rows.length === limit ? rows[rows.length - 1].code : null;
+    reply.send({ concepts, nextCode });
+  });
+
+  // POST /api/sync/terminology/map-elements — keyset-paginated bulk drain of ONE concept map's
+  // elements. Auth-only. Row-value keyset by (source_system, source_code) so the compound sort key is
+  // stable + resumable. nextKey=null on a short (last) page.
+  app.post('/api/sync/terminology/map-elements', async (req, reply) => {
+    const principal = await sitePrincipal(req, reply, ctx);
+    if (!principal) return; // reply already sent (401/403)
+
+    const b = (req.body ?? {}) as {
+      mapUrl?: string;
+      afterSourceSystem?: string;
+      afterSourceCode?: string;
+      limit?: number;
+    };
+    if (typeof b.mapUrl !== 'string' || !b.mapUrl) {
+      reply.code(400).send({ error: 'mapUrl required' });
+      return;
+    }
+    const limit = Number.isFinite(b.limit) && (b.limit as number) > 0 ? Math.min(b.limit as number, 5000) : 1000;
+
+    let q = ctx.internalDb.selectFrom('concept_map_elements').selectAll().where('map_url', '=', b.mapUrl);
+    if (typeof b.afterSourceSystem === 'string' && b.afterSourceSystem) {
+      // Row-value keyset: (source_system, source_code) > (afterSourceSystem, afterSourceCode).
+      const ass = b.afterSourceSystem;
+      const asc = typeof b.afterSourceCode === 'string' ? b.afterSourceCode : '';
+      q = q.where((eb) =>
+        eb.or([
+          eb('source_system', '>', ass),
+          eb.and([eb('source_system', '=', ass), eb('source_code', '>', asc)]),
+        ]),
+      );
+    }
+    const rows = await q.orderBy('source_system', 'asc').orderBy('source_code', 'asc').limit(limit).execute();
+
+    const elements = rows.map((r) => ({
+      sourceSystem: r.source_system,
+      sourceCode: r.source_code,
+      targetSystem: r.target_system,
+      targetCode: r.target_code,
+      equivalence: r.equivalence,
+    }));
+    const nextKey =
+      rows.length === limit
+        ? { sourceSystem: rows[rows.length - 1].source_system, sourceCode: rows[rows.length - 1].source_code }
+        : null;
+    reply.send({ elements, nextKey });
+  });
 }
 
 // Live current body for a reference entity, read from its read store (NOT from the capture log, so a
 // pull always serves the freshest config). The served upsert body MUST equal what the reference
 // applier (reference-apply.ts) consumes: dashboards/reports serve the store RECORD shape; a form
 // serves formSyncBody(rawRow) (the store's get() returns a camelCase FormDefinition, which
-// formSyncBody can't consume, so read the raw form_definitions row exactly like capture does); a
+// formSyncBody can't consume, so read the raw form_definitions row exactly like capture does);
+// publisher/coding_system/term_mapping read the raw internal row and serve a camelCase body (matching
+// A2's capture hash field-sets, so the pulled body round-trips through the applier's row mappers); a
 // setting serves its string value. Returns null when the entity no longer exists.
 async function fetchReferenceBody(
   ctx: AppContext,
@@ -214,6 +294,88 @@ async function fetchReferenceBody(
       // correct convergence). A missing row also returns null (formSyncBody handles undefined).
       if (!row || row.status !== 'published') return null;
       return formSyncBody(row);
+    }
+    case 'publisher': {
+      const r = await ctx.internalDb
+        .selectFrom('publishers')
+        .selectAll()
+        .where('id', '=', id)
+        .executeTakeFirst();
+      if (!r) return null;
+      const mp =
+        r.match_prefixes == null
+          ? []
+          : typeof r.match_prefixes === 'string'
+            ? JSON.parse(r.match_prefixes)
+            : r.match_prefixes;
+      return {
+        id: r.id,
+        name: r.name,
+        role: r.role,
+        icon: r.icon,
+        matchPrefixes: mp,
+        sortOrder: r.sort_order,
+      };
+    }
+    case 'coding_system': {
+      const r = await ctx.internalDb
+        .selectFrom('coding_systems')
+        .selectAll()
+        .where('id', '=', id)
+        .executeTakeFirst();
+      if (!r) return null;
+      return {
+        id: r.id,
+        systemCode: r.system_code,
+        systemName: r.system_name,
+        url: r.url,
+        systemVersion: r.system_version,
+        description: r.description,
+        active: r.active,
+        publisherId: r.publisher_id,
+      };
+    }
+    case 'term_mapping': {
+      const r = await ctx.internalDb
+        .selectFrom('term_mappings')
+        .selectAll()
+        .where('id', '=', id)
+        .executeTakeFirst();
+      if (!r) return null;
+      return {
+        id: r.id,
+        fromSystem: r.from_system,
+        fromCode: r.from_code,
+        toSystem: r.to_system,
+        toCode: r.to_code,
+        toDisplay: r.to_display,
+        mapType: r.map_type,
+        relationship: r.relationship,
+        owner: r.owner,
+        isActive: r.is_active,
+      };
+    }
+    case 'terminology_system': {
+      // The signal body is a small DESCRIPTOR (url/version/kind/resourceId/generation), NOT the
+      // system's concepts — the lab drains those via POST /api/sync/terminology/concepts. A missing
+      // row → null (the handler downgrades to a delete = "system removed", acceptable convergence).
+      const r = await ctx.internalDb
+        .selectFrom('terminology_systems')
+        .selectAll()
+        .where('url', '=', id)
+        .executeTakeFirst();
+      return r
+        ? { url: r.url, version: r.version, kind: r.kind, resourceId: r.resource_id, generation: Number(r.generation) }
+        : null;
+    }
+    case 'concept_map': {
+      // Descriptor only ({ mapUrl, generation }); elements drain via /api/sync/terminology/map-elements.
+      const r = await ctx.internalDb
+        .selectFrom('concept_map_state')
+        .selectAll()
+        .where('map_url', '=', id)
+        .executeTakeFirst();
+      return r ? { mapUrl: r.map_url, generation: Number(r.generation) } : null;
     }
     case 'setting':
       return (await ctx.appSettings.get(id))?.value ?? null;
