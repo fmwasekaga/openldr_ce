@@ -208,6 +208,8 @@ Result amendments (co-edit): a central operator can correct a lab-owned result w
 
 Troubleshooting:
 
+- One bad record blocks the pull: the pull stream is ordered, so a terminology system/concept map (or other bulk record) that keeps failing to apply used to silently wedge **all** config and terminology sync behind it. Such a record is now quarantined after 3 failed attempts and the stream moves on. Inspect the held/quarantined records with `pnpm openldr sync quarantine list` or `GET /api/settings/sync/quarantine` (admin, `lab_admin`); once the cause is fixed, re-apply it with `pnpm openldr sync quarantine retry <entityType> <entityId>` or `POST /api/settings/sync/quarantine/retry`.
+
 - Sync does nothing: confirm it is enabled and the mode is what you expect; re-check the central URL, site id, OIDC issuer, client id, and (if blanked) the secret.
 - `403`/`503` when enrolling on central: the admin service account lacks `manage-clients`/`view-clients` or Keycloak admin is not configured — re-import the realm and retry.
 - Machine endpoints `POST /api/sync/push`, `POST /api/sync/pull`, and `POST /api/sync/pull-amendments` are client-credentials-authed (lab → central); the `/api/settings/sync/*` admin endpoints (including `sync/amend`) are `lab_admin` user-authed.
