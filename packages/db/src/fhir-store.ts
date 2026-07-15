@@ -93,6 +93,10 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
       .executeTakeFirst();
     return Number(hi?.maxv ?? 0) + 1;
   }
+  // PRECONDITION: the fhir_resources ON CONFLICT doUpdateSet below is UNCONDITIONAL (no monotonic
+  // guard, unlike applyRemote's `WHERE version < incoming`). It is therefore only safe for callers that
+  // pass a version guaranteed >= the canonical row's — amend passes nextVersion() (max+1) for the
+  // amended resource and a fresh randomUUID id at v1 for the Provenance, so it can never regress a row.
   async function writeVersion(
     trx: Kysely<InternalSchema>,
     v: { resourceType: string; id: string; version: number; body: Record<string, unknown>; siteId: string },
@@ -349,9 +353,13 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
         const base = cur.resource as Record<string, unknown>;
 
         const amendedVersion = await nextVersion(trx, resourceType, id);
+        // Strip resourceType/id from the caller's patch before merging: those identify WHICH row this
+        // is (the resource_type column + PK), so a patch must never change them or the stored JSON would
+        // desync from the row it's filed under. id/status/meta are pinned after the merge regardless.
+        const { resourceType: _pRt, id: _pId, ...safePatch } = (patch ?? {}) as Record<string, unknown>;
         const amendedBody: Record<string, unknown> = {
           ...base,
-          ...(patch ?? {}),
+          ...safePatch,
           id,
           status,
           meta: { ...(base.meta as Record<string, unknown> | undefined), versionId: String(amendedVersion), lastUpdated: nowIso },

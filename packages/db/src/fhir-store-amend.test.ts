@@ -71,6 +71,37 @@ describe('FhirStore.amend', () => {
     expect(Number(outbox[1].version)).toBe(1);
   });
 
+  it('ignores a patch that tries to override resourceType/id (envelope stays intact)', async () => {
+    const store = createFhirStore(db);
+    await store.applyRemote({
+      resourceType: 'Observation',
+      id: 'obs-2',
+      version: 1,
+      op: 'upsert',
+      siteId: 'lab-a',
+      resource: { resourceType: 'Observation', id: 'obs-2', status: 'preliminary' } as any,
+    });
+
+    await store.amend({
+      resourceType: 'Observation',
+      id: 'obs-2',
+      status: 'amended',
+      patch: { resourceType: 'Patient', id: 'evil', valueString: 'x' } as any,
+      agent: 'central-reviewer',
+    });
+
+    // Still filed and readable as an Observation with its original id; only the safe field applied.
+    const obs = (await store.get('Observation', 'obs-2')) as any;
+    expect(obs).not.toBeNull();
+    expect(obs.resourceType).toBe('Observation');
+    expect(obs.id).toBe('obs-2');
+    expect(obs.status).toBe('amended');
+    expect(obs.valueString).toBe('x');
+    // The malicious resourceType did not spawn a Patient row.
+    expect(await store.get('Patient', 'evil')).toBeNull();
+    expect(await store.get('Patient', 'obs-2')).toBeNull();
+  });
+
   it('rejects amending a resource that does not exist', async () => {
     const store = createFhirStore(db);
     await expect(
