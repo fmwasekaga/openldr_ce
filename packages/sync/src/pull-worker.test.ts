@@ -351,4 +351,118 @@ describe('createSyncPullRunner', () => {
     expect(advanceCursor).toHaveBeenCalledWith(1); // capped at seq1
     expect(logger.warns[0]).toMatchObject({ entityId: 'f2', seq: 2 });
   });
+
+  // Sync S7-A: optional hold->quarantine hooks
+  it('holds while holdFailure returns hold, then advances past once it returns quarantine', async () => {
+    let cursor = 0;
+    const decisions = ['hold', 'hold', 'quarantine'] as const;
+    let call = 0;
+    const resp = {
+      records: [
+        { seq: 5, entityType: 'terminology_system', entityId: 'http://x', op: 'upsert', body: {} },
+        { seq: 6, entityType: 'setting', entityId: 's1', op: 'upsert', body: 'v' },
+      ],
+      nextSeq: 6,
+    } as any;
+    const runner = createSyncPullRunner({
+      getToken: async () => 't',
+      postPull: async () => resp,
+      applyRecord: async (r: any) => {
+        if (r.entityType === 'terminology_system') throw new Error('poison');
+        return 'applied';
+      },
+      readCursor: async () => cursor,
+      advanceCursor: async (s: number) => {
+        cursor = s;
+      },
+      holdFailure: async () => decisions[Math.min(call++, decisions.length - 1)],
+      holdSuccess: async () => {},
+      logger: fakeLogger(),
+    });
+    await runner.runCycle();
+    expect(cursor).toBe(0); // held (attempt 1)
+    await runner.runCycle();
+    expect(cursor).toBe(0); // held (attempt 2)
+    await runner.runCycle();
+    expect(cursor).toBe(6); // quarantined -> advanced past poison; setting seq 6 applied
+  });
+
+  it('calls holdSuccess after a hold-record applies successfully', async () => {
+    let cursor = 0;
+    let cleared = false;
+    const resp = {
+      records: [{ seq: 5, entityType: 'terminology_system', entityId: 'http://x', op: 'upsert', body: {} }],
+      nextSeq: 5,
+    } as any;
+    const runner = createSyncPullRunner({
+      getToken: async () => 't',
+      postPull: async () => resp,
+      applyRecord: async () => 'applied',
+      readCursor: async () => cursor,
+      advanceCursor: async (s: number) => {
+        cursor = s;
+      },
+      holdFailure: async () => 'hold',
+      holdSuccess: async () => {
+        cleared = true;
+      },
+      logger: fakeLogger(),
+    });
+    await runner.runCycle();
+    expect(cleared).toBe(true);
+    expect(cursor).toBe(5);
+  });
+
+  it('a throwing holdSuccess is non-fatal: the apply still counts, no holdFailure, cursor still advances', async () => {
+    // Regression: holdSuccess used to run inside the apply try, so a DB blip while CLEARING the counter
+    // was misread as an apply failure → holdFailure incremented `attempts` for a HEALTHY entity, which
+    // repeated could quarantine it. A clear failure must only warn.
+    let cursor = 0;
+    const holdFailure = vi.fn(async () => 'hold' as const);
+    const logger = fakeLogger();
+    const runner = createSyncPullRunner({
+      getToken: async () => 't',
+      postPull: async () =>
+        ({
+          records: [{ seq: 5, entityType: 'terminology_system', entityId: 'http://x', op: 'upsert', body: {} }],
+          nextSeq: 5,
+        }) as any,
+      applyRecord: async () => 'applied',
+      readCursor: async () => cursor,
+      advanceCursor: async (s: number) => {
+        cursor = s;
+      },
+      holdFailure,
+      holdSuccess: async () => {
+        throw new Error('db blip');
+      },
+      logger,
+    });
+    const applied = await runner.runCycle();
+    expect(applied).toBe(1); // the apply DID succeed
+    expect(holdFailure).not.toHaveBeenCalled(); // and must never be counted as a failure
+    expect(cursor).toBe(5); // the clear failure must not wedge the stream
+    expect(logger.warns).toHaveLength(1); // just a warn
+  });
+
+  it('never calls holdFailure on a transport failure (outer catch)', async () => {
+    let called = false;
+    const runner = createSyncPullRunner({
+      getToken: async () => {
+        throw new Error('down');
+      },
+      postPull: async () => ({ records: [], nextSeq: 0 }) as any,
+      applyRecord: async () => 'applied',
+      readCursor: async () => 3,
+      advanceCursor: async () => {},
+      holdFailure: async () => {
+        called = true;
+        return 'hold';
+      },
+      holdSuccess: async () => {},
+      logger: fakeLogger(),
+    });
+    await runner.runCycle();
+    expect(called).toBe(false);
+  });
 });

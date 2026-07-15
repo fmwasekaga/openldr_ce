@@ -1,5 +1,5 @@
 import type { Kysely } from 'kysely';
-import type { InternalSchema } from '@openldr/db';
+import type { InternalSchema, SyncQuarantineRow, SyncQuarantineStore } from '@openldr/db';
 
 // Sync S4 (Task 5): a read/trigger handle over the two sync directions, always present on AppContext
 // (even when sync is disabled). status() reflects each worker's live isRunning() plus its cursor
@@ -34,6 +34,8 @@ export interface SyncStatus {
 export interface SyncHandle {
   status(): Promise<SyncStatus>;
   triggerNow(): void;
+  listQuarantine(): Promise<SyncQuarantineRow[]>;
+  retryQuarantine(entityType: string, entityId: string): Promise<{ ok: boolean; error?: string }>;
 }
 
 interface WorkerRef {
@@ -49,6 +51,8 @@ export function createSyncHandle(opts: {
   siteId: string;
   pushWorker?: WorkerRef;
   pullWorker?: WorkerRef;
+  quarantine?: SyncQuarantineStore;
+  retryQuarantine?: (entityType: string, entityId: string) => Promise<{ ok: boolean; error?: string }>;
 }): SyncHandle {
   const cursorRow = (consumer: string) =>
     opts.db
@@ -95,6 +99,13 @@ export function createSyncHandle(opts: {
     triggerNow(): void {
       opts.pushWorker?.trigger();
       opts.pullWorker?.trigger();
+    },
+    async listQuarantine(): Promise<SyncQuarantineRow[]> {
+      return opts.quarantine ? opts.quarantine.list() : [];
+    },
+    async retryQuarantine(entityType: string, entityId: string): Promise<{ ok: boolean; error?: string }> {
+      if (!opts.retryQuarantine) return { ok: false, error: 'sync pull is not enabled on this node' };
+      return opts.retryQuarantine(entityType, entityId);
     },
   };
 }

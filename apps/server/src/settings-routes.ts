@@ -64,6 +64,22 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
     return { triggered: true };
   });
 
+  // Sync S7-A: list quarantined poison-bulk records (lab_admin, user-authed).
+  app.get('/api/settings/sync/quarantine', { preHandler: requireRole('lab_admin') }, async () => ctx.sync.listQuarantine());
+
+  // Sync S7-A: manually retry a quarantined bulk entity — clears + re-syncs it by url.
+  app.post('/api/settings/sync/quarantine/retry', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const b = (req.body ?? {}) as { entityType?: unknown; entityId?: unknown };
+    if (typeof b.entityType !== 'string' || !b.entityType || typeof b.entityId !== 'string' || !b.entityId) {
+      reply.code(400).send({ error: 'entityType and entityId are required' });
+      return;
+    }
+    const result = await ctx.sync.retryQuarantine(b.entityType, b.entityId);
+    await recordAudit(ctx, req, { action: 'settings.sync.quarantine.retry', entityType: b.entityType, entityId: b.entityId, metadata: { ok: result.ok } });
+    if (!result.ok && (result.error ?? '').includes('not enabled')) { reply.code(409).send(result); return; }
+    reply.code(200).send(result);
+  });
+
   // POST /api/settings/sync/amend — a central operator amends a lab-owned result (Sync S6a). User-authed
   // + lab_admin (this is a central-side authoring action), deliberately NOT under /api/sync/* (that
   // surface is machine-cred). fhirStore.amend does the transactional version-bump + Provenance + outbox

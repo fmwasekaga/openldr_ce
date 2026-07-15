@@ -34,13 +34,14 @@ import { createReportScheduler, type ReportScheduler } from './report-scheduler'
 import { createPluginScheduleApi, createPluginScheduleRunner, type PluginScheduleRunner } from './plugin-schedule';
 import { createFormArtifactInstaller, type FormArtifactInstaller } from './form-artifact-install';
 import { type PluginRuntime } from '@openldr/plugins';
-import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore } from '@openldr/db';
+import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
 import { createSyncPushRunner, createSyncPullRunner, createAmendmentPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, type PushBatch, type PushResponse, type SyncConfig } from '@openldr/sync';
 import { createSyncPushWorker, type SyncPushWorker } from './sync-push-worker';
 import { createSyncPullWorker, type SyncPullWorker } from './sync-pull-worker';
 import { createSyncHandle, type SyncHandle } from './sync-handle';
+import { createRetryQuarantine } from './sync-retry-quarantine';
 import { migrateLegacySyncConfig } from './sync-settings-migrate';
 import { migrateWorkflowSecrets } from './workflow-secret-migrate';
 
@@ -726,6 +727,14 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   // decrypted with the same SECRETS_ENCRYPTION_KEY / open() scheme the connector store uses.
   let syncPushWorker: SyncPushWorker | undefined;
   let syncPullWorker: SyncPullWorker | undefined;
+  // Sync S7-A: the quarantine store is built UNCONDITIONALLY — it only needs internal.db, and listing is
+  // "just reads the table". A push-only node, a sync-disabled node, or a boot where readSyncConfig
+  // degraded to disabled all still have durable quarantine rows from earlier boots, and an operator
+  // looking for them must not be shown an empty list. Only the RETRY closure below is pull-gated (it
+  // genuinely needs the terminology bulk-sync + a token provider).
+  const syncQuarantine = createSyncQuarantineStore(internal.db);
+  let syncRetryQuarantine: ((entityType: string, entityId: string) => Promise<{ ok: boolean; error?: string }>) | undefined;
+  const QUARANTINE_THRESHOLD = 3; // Sync S7-A: consecutive bulk-apply failures before quarantine
   const syncDecrypt = (blob: string): string => open(blob, parseSecretKey(cfg.SECRETS_ENCRYPTION_KEY ?? ''));
   // Symmetric seal/open pair exposed on AppContext so the sync settings route + CLI can write-encrypt
   // the client secret with the SAME key scheme syncDecrypt reads (open(seal(x,key),key) === x).
@@ -845,6 +854,11 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
         }
         return referenceApplier(rec);
       };
+      const quarantine = syncQuarantine;
+      // Sync S7-A: targeted re-sync of a quarantined bulk entity, independent of the advanced cursor.
+      // See sync-retry-quarantine.ts for the (test-pinned) refuse-untracked / replay-descriptor /
+      // clear-only-on-success contract.
+      syncRetryQuarantine = createRetryQuarantine({ quarantine, termBulk, threshold: QUARANTINE_THRESHOLD });
       const syncPullRunner = createSyncPullRunner({
         getToken: () => tokenProvider.getToken(), // SHARE the token provider instance
         applyRecord,
@@ -852,6 +866,17 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
           (await postJson(`${syncCfg.centralUrl}/api/sync/pull`, body, token)) as import('@openldr/sync').PullResponse,
         readCursor: () => readChangeCursor(internal.db, 'sync-pull'),
         advanceCursor: (seq) => advanceChangeCursor(internal.db, 'sync-pull', seq),
+        holdFailure: (rec, err) =>
+          quarantine
+            .recordFailure(rec.entityType, rec.entityId, {
+              seq: rec.seq,
+              error: err.message,
+              // Persist central's descriptor so a manual retry replays the REAL identity/generation.
+              body: rec.body,
+              threshold: QUARANTINE_THRESHOLD,
+            })
+            .then((r) => (r.status === 'quarantined' ? 'quarantine' : 'hold')),
+        holdSuccess: (rec) => quarantine.clear(rec.entityType, rec.entityId),
         logger,
       });
       // Sync S6a: the amendment pull runner — a SECOND stream drained in the same host loop, over its own
@@ -901,6 +926,8 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     siteId: syncCfg?.siteId ?? '',
     pushWorker: syncPushWorker,
     pullWorker: syncPullWorker,
+    quarantine: syncQuarantine,
+    retryQuarantine: syncRetryQuarantine,
   });
 
   const pluginData = createPluginDataStore(internal.db);

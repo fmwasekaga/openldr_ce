@@ -75,6 +75,10 @@ Distributed sync links labs to a central OpenLDR server. Two command groups cove
 |---|---|
 | `openldr sync status` | Show live sync status: workers, cursors, and the pending push backlog. |
 | `openldr sync now` | Trigger a sync pass immediately. Fails (exit `1`) if sync is disabled. |
+| `openldr sync quarantine list` | List bulk records the pull stream is holding or has quarantined, with attempt counts and the last error. |
+| `openldr sync quarantine retry <entityType> <entityId>` | Clear a quarantined bulk entity and re-sync it by id (url). Fails (exit `1`) if the retry does not apply. |
+
+A pull record that fails repeatedly is quarantined rather than left to block the stream — see [Operator Guide → Distributed sync](OPERATOR-GUIDE.md#distributed-sync).
 
 **Result amendment — `openldr sync`** (run on the central server)
 

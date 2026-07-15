@@ -64,6 +64,22 @@ export interface SyncAmendmentsTable {
   recorded_at: Generated<Date>;
 }
 
+// Distributed sync S7-A: lab-side poison-bulk quarantine (public schema). One row per failing bulk entity
+// (terminology system / concept map). `status` is 'holding' (below threshold, cursor still holds) or
+// 'quarantined' (crossed → runner advances past). PK (entity_type, entity_id).
+export interface SyncQuarantineTable {
+  entity_type: string;
+  entity_id: string;
+  attempts: Generated<number>;
+  status: string;
+  last_error: string | null;
+  last_seq: number | null;
+  last_body: unknown | null;
+  first_failed_at: Generated<Date>;
+  updated_at: Generated<Date>;
+  quarantined_at: Date | null;
+}
+
 export interface OutboxEventsTable {
   id: string;
   type: string;
@@ -600,6 +616,7 @@ export interface InternalSchema {
   'fhir.change_cursors': ChangeCursorsTable;
   reference_change_log: ReferenceChangeLogTable;
   sync_amendments: SyncAmendmentsTable;
+  sync_quarantine: SyncQuarantineTable;
   outbox_events: OutboxEventsTable;
   ingest_batches: IngestBatchesTable;
   plugins: PluginsTable;

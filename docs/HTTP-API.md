@@ -162,6 +162,8 @@ Admin routes under `/api/settings/sync/*` are user-authed and `lab_admin`-gated.
 | `PUT` | `/api/settings/sync` | Update the sync configuration; `clientSecret` is write-only (blank keeps the stored value). |
 | `GET` | `/api/settings/sync/status` | Live sync status: per-direction workers, cursors, and pending backlog. |
 | `POST` | `/api/settings/sync/now` | Trigger a sync pass immediately. Returns `409` when sync is disabled. |
+| `GET` | `/api/settings/sync/quarantine` | List bulk records the pull stream is holding or has quarantined, with attempt counts and the last error. |
+| `POST` | `/api/settings/sync/quarantine/retry` | Clear a quarantined bulk entity and re-sync it by id (url). Body: `{ entityType, entityId }`. `400` missing/blank input, `409` when sync pull is not enabled. |
 | `POST` | `/api/settings/sync/enroll` | Enroll a lab (central): mint its Keycloak client + registry row; returns the client id and secret once. |
 | `GET` | `/api/settings/sync/sites` | List enrolled sites (never returns secrets). |
 | `POST` | `/api/settings/sync/sites/:siteId/rotate` | Rotate a site's client secret; returns the new secret once. |

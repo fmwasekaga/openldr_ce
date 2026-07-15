@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { makeMigratedDb } from '@openldr/db/testing';
+import { createSyncQuarantineStore } from '@openldr/db';
 import { createSyncHandle } from './sync-handle';
 
 type Db = Awaited<ReturnType<typeof makeMigratedDb>>;
@@ -172,5 +173,57 @@ describe('createSyncHandle.triggerNow', () => {
     });
 
     expect(() => handle.triggerNow()).not.toThrow();
+  });
+});
+
+describe('createSyncHandle quarantine', () => {
+  it('listQuarantine returns [] when no store; delegates when present', async () => {
+    const db = await makeMigratedDb();
+    const rows = [{ entityType: 'terminology_system', entityId: 'http://x', attempts: 3, status: 'quarantined' }] as any;
+    const base = { enabled: true, mode: 'pull' as const, centralUrl: '', siteId: '' };
+    const h1 = createSyncHandle({ db, ...base });
+    expect(await h1.listQuarantine()).toEqual([]);
+    const h2 = createSyncHandle({ db, ...base, quarantine: { list: async () => rows } as any });
+    expect(await h2.listQuarantine()).toEqual(rows);
+  });
+
+  it('listQuarantine reads durable rows on a sync-DISABLED / push-only node (no pull worker)', async () => {
+    // Regression: the store used to be built only inside the pull gate, so a push-only or sync-disabled
+    // node reported [] even though durable rows from earlier boots were sitting in the table — hiding
+    // them exactly where an operator goes looking. Listing only reads the table; it is never gated.
+    const db = await makeMigratedDb();
+    const store = createSyncQuarantineStore(db);
+    await store.recordFailure('terminology_system', 'http://x', { seq: 9, error: 'boom', threshold: 3 });
+
+    const handle = createSyncHandle({
+      db,
+      enabled: false, // sync off this boot
+      mode: 'push',
+      centralUrl: '',
+      siteId: '',
+      quarantine: store, // ...but the store is still wired
+    });
+    const rows = await handle.listQuarantine();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.entityId).toBe('http://x');
+    // Retry, by contrast, legitimately needs the pull-side bulk sync and stays unavailable here.
+    expect(await handle.retryQuarantine('terminology_system', 'http://x')).toEqual({
+      ok: false,
+      error: expect.stringContaining('not enabled'),
+    });
+  });
+
+  it('retryQuarantine errors when pull not enabled; delegates when wired', async () => {
+    const db = await makeMigratedDb();
+    const base = { enabled: true, mode: 'pull' as const, centralUrl: '', siteId: '' };
+    const h1 = createSyncHandle({ db, ...base });
+    expect(await h1.retryQuarantine('terminology_system', 'http://x')).toEqual({
+      ok: false,
+      error: expect.stringContaining('not enabled'),
+    });
+    const retry = vi.fn(async () => ({ ok: true }));
+    const h2 = createSyncHandle({ db, ...base, retryQuarantine: retry });
+    expect(await h2.retryQuarantine('terminology_system', 'http://x')).toEqual({ ok: true });
+    expect(retry).toHaveBeenCalledWith('terminology_system', 'http://x');
   });
 });
