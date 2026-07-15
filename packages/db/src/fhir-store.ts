@@ -34,11 +34,11 @@ export interface RemoteRecord {
 // incoming content is NOT applied (the local copy is kept); it is recorded in sync_divergences for an
 // operator. Detect-and-surface only: there is no auto-heal, by design.
 //
-// TODO(S7 Task 6): delete this NOTE once the two call sites branch on 'diverged'.
-// Widening this union produces NO compile error at either call site, and neither branches on the new
-// variant today: sync-routes.ts folds it into `skipped` via `else`, and sync-bundle.ts has no branch
-// for it at all (a bare `if (result === 'applied') applied++`), so a divergence there is counted as
-// nothing. Correctness does not depend on either: the row is written in applyRemote's OWN transaction.
+// Neither applyRemote call site checks this union exhaustively — both `sync-routes.ts` and
+// `sync-bundle.ts` tally with if/else-if chains, not a switch — so WIDENING IT AGAIN WILL NOT PRODUCE
+// A COMPILE ERROR at either one. A new variant will be silently absorbed by an existing branch (or by
+// no branch at all) until you update both by hand. Correctness itself never depends on the callers:
+// the row is written in applyRemote's OWN transaction, so a missed branch costs observability, not data.
 export type ApplyResult = 'applied' | 'skipped' | 'diverged';
 
 export interface AmendInput {

@@ -170,6 +170,10 @@ export async function exportPushBundle(
  * (applyRemote in try/catch). Idempotent (applyRemote is monotonic). No gap guard (order-independent).
  * Records the piggybacked lab pull cursor. Throws {@link SiteNotFoundError} for an unknown/revoked/
  * keyless site and {@link BundleSignatureError} on a bad signature — both BEFORE any apply.
+ *
+ * A same-version divergence ('diverged') is HANDLED, not applied: it advances ackSeq like any other
+ * handled record but is deliberately absent from this return shape — same no-wire-change reasoning as
+ * /api/sync/push (see sync-routes.ts). It is surfaced via ctx.logger.warn only.
  */
 export async function importPushBundle(
   ctx: AppContext,
@@ -208,12 +212,15 @@ export async function importPushBundle(
   // Same-version divergence (S7) — the record was handled and recorded in sync_divergences by
   // applyRemote itself; surfaced here so a bundle import is not silent about it.
   if (diverged > 0) {
-    ctx.logger.warn({ diverged, siteId: manifest.siteId }, 'sync import: same-version divergence(s) detected — see sync_divergences');
+    ctx.logger.warn({ siteId: manifest.siteId, diverged }, 'sync import: same-version divergence(s) detected — see sync_divergences');
   }
 
   // Piggybacked lab pull position (how current the lab's reference config is). Best-effort tracking.
   if (manifest.pullCursor != null) await ctx.syncSites.setReportedPullCursor(manifest.siteId, manifest.pullCursor);
 
+  // No 'diverged' field here either — same no-wire-change reasoning as /api/sync/push (see the
+  // comment above the PushResponse construction in apps/server/src/sync-routes.ts). It is logged, not
+  // returned; callers destructure this shape.
   return { applied, ackSeq, siteId: manifest.siteId };
 }
 
