@@ -114,6 +114,60 @@ export async function runSyncEnroll(
   }
 }
 
+// `openldr sync amend` — central-side result amendment (Sync S6a). Writes a new version of a lab-owned
+// resource + a Provenance + the amendment outbox rows; the owning lab pulls it down. Runs on central.
+export async function runSyncAmend(opts: {
+  resourceType?: string;
+  id?: string;
+  status?: string;
+  reason?: string;
+  patch?: string;
+  agent?: string;
+  json?: boolean;
+}): Promise<number> {
+  const json = opts.json ?? false;
+  if (!opts.resourceType || !opts.id || !opts.status) {
+    return fail(json, '--resource-type, --id and --status are required');
+  }
+  let patch: Record<string, unknown> | undefined;
+  if (opts.patch) {
+    try {
+      patch = JSON.parse(opts.patch) as Record<string, unknown>;
+    } catch {
+      return fail(json, '--patch must be valid JSON');
+    }
+  }
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const result = await ctx.fhirStore.amend({
+      resourceType: opts.resourceType,
+      id: opts.id,
+      status: opts.status,
+      reason: opts.reason,
+      patch,
+      agent: opts.agent ?? 'central',
+    });
+    emit(json, result, [
+      `resource    = ${opts.resourceType}/${opts.id}`,
+      `version     = ${result.version}`,
+      `provenance  = ${result.provenanceId}`,
+      `owningSite  = ${result.siteId}`,
+    ].join('\n'));
+    return 0;
+  } catch (err) {
+    switch (err instanceof Error ? err.name : '') {
+      case 'ResourceNotFoundError':
+        return fail(json, 'resource not found');
+      case 'NotLabOwnedError':
+        return fail(json, 'resource is not lab-owned (central can only amend synced-up results)');
+      default:
+        return fail(json, `sync amend failed: ${redactError(err)}`);
+    }
+  } finally {
+    await ctx.close();
+  }
+}
+
 export async function runSyncList(opts: JsonOpt): Promise<number> {
   const ctx = await createAppContext(loadConfig());
   try {
