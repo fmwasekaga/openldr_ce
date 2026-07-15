@@ -100,5 +100,11 @@ Contributions are welcome. For now: fork the repo, create a feature branch, keep
 and type-checks green (`pnpm test`, `pnpm typecheck`), and open a pull request against
 `main` describing the change.
 
+**Server route convention:** response compression is registered globally, so every async
+route handler must `return reply.send(...)` — a bare `reply.send(payload)` silently
+returns an **empty** body once the payload crosses ~1KB and the send goes async. The
+`return` is load-bearing, not style; the mechanism is explained in the comment block at
+the top of `apps/server/src/sync-routes.ts`.
+
 > A fuller contribution guide (coding conventions, review process, and a PR checklist)
 > is still being written — check back, or open an issue to start a discussion.
