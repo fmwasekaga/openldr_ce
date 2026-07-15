@@ -6,6 +6,7 @@ import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
 import { registerErrorHandler } from './error-handler';
 import fastifyStatic from '@fastify/static';
+import compress from '@fastify/compress';
 import type { AppContext } from '@openldr/bootstrap';
 import { registerReportRoutes } from './reports-routes';
 import { registerTerminologyRoutes } from './terminology-routes';
@@ -59,6 +60,37 @@ export function buildApp(ctx: AppContext) {
     genReqId: () => randomUUID().replace(/-/g, '').slice(0, 8),
   });
   registerErrorHandler(app);
+
+  // Sync S7-B: compress the wire in both directions. Labs reconcile over bandwidth-constrained,
+  // often asymmetric links, so this is the cheapest available win — it shrinks the big terminology
+  // bulk pages / pull responses AND (via globalDecompression) accepts gzipped push bodies.
+  // Content negotiation is transparent: a client that doesn't ask simply doesn't get compressed bytes,
+  // so nothing existing breaks. `compressible`/mime-db skips already-compressed types (PDF/xlsx exports).
+  void app.register(compress, {
+    globalCompression: true,
+    globalDecompression: true,
+    threshold: 1024,
+    encodings: ['gzip'],
+    requestEncodings: ['gzip'],
+    // @fastify/compress v9 calls this as (encoding, request); it must return an actual Error (not
+    // a plain object) — TS enforces this. The statusCode/code pair is honoured verbatim by
+    // registerErrorHandler's toErrorResponse (see error-handler.ts), so this genuinely reaches the
+    // client as 415, not the generic SY0500 fallback a plain unclassified Error would get.
+    onUnsupportedRequestEncoding: (encoding) => {
+      const err = new Error(`unsupported content-encoding: ${encoding}`) as Error & { statusCode: number; code: string };
+      err.statusCode = 415;
+      err.code = 'UNSUPPORTED_MEDIA_TYPE';
+      return err;
+    },
+  });
+
+  // RFC 7694: advertise to clients that this server ACCEPTS gzipped request bodies. The sync push
+  // client reads this off the response and only then starts gzipping its batches — an older central
+  // never sends it, so an upgraded lab safely keeps pushing plain JSON. Truthful globally, since
+  // globalDecompression accepts gzip on every route.
+  app.addHook('onSend', async (_req, reply) => {
+    if (!reply.getHeader('accept-encoding')) reply.header('Accept-Encoding', 'gzip');
+  });
 
   app.get('/health', async (_req, reply) => {
     const result = await ctx.health.runAll();

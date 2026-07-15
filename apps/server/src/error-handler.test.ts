@@ -32,4 +32,12 @@ describe('toErrorResponse', () => {
     expect(r.status).toBe(500);
     expect(r.message).toBe('kaboom');
   });
+
+  it('honours a self-declared statusCode + code on a plain Error (e.g. @fastify/compress)', () => {
+    const err = new Error('unsupported content-encoding: br') as Error & { statusCode: number; code: string };
+    err.statusCode = 415;
+    err.code = 'UNSUPPORTED_MEDIA_TYPE';
+    const r = toErrorResponse(err);
+    expect(r).toEqual({ status: 415, code: 'UNSUPPORTED_MEDIA_TYPE', message: 'unsupported content-encoding: br' });
+  });
 });

@@ -16,6 +16,16 @@ export function toErrorResponse(err: unknown): ErrorResponse {
   if (err instanceof AppError) {
     return { status: err.httpStatus, code: err.code, message: err.message };
   }
+  // A plain Error that already self-declares a numeric statusCode + string code (e.g. the
+  // @fastify/compress onUnsupportedRequestEncoding hook, or any library using the common
+  // node-style error-with-statusCode idiom) is honoured as-is instead of flattening to SY0500 —
+  // the caller already did the classification work; don't discard it.
+  if (err instanceof Error) {
+    const { statusCode, code: selfCode } = err as Error & { statusCode?: unknown; code?: unknown };
+    if (typeof statusCode === 'number' && typeof selfCode === 'string') {
+      return { status: statusCode, code: selfCode, message: err.message };
+    }
+  }
   const code = codeForUnknown(err);
   const entry = CATALOG[code];
   // Prefer the real error message; fall back to the catalog default only when empty.
