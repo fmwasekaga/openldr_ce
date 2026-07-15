@@ -19,7 +19,7 @@ import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, run
 import { runMarketVerify, runMarketInstall, runMarketList, runMarketRollback, runMarketEnable, runMarketDisable, runMarketRemove } from './market';
 import { runArtifactKeygen, runArtifactNew, runArtifactBuild, runArtifactPack, runArtifactSign, runArtifactTest, runArtifactPublish } from './artifact';
 import { runSettingsFlagsList, runSettingsFlagsSet, runSettingsDanger, runSettingsSyncShow, runSettingsSyncSet, runSettingsNumbersList, runSettingsNumbersSet } from './settings';
-import { runSyncStatus, runSyncNow, runSyncEnroll, runSyncList, runSyncRotate, runSyncRevoke, runSyncAmend, runSyncMergePatient, runSyncExport, runSyncImport } from './sync';
+import { runSyncStatus, runSyncNow, runSyncEnroll, runSyncList, runSyncRotate, runSyncRevoke, runSyncAmend, runSyncMergePatient, runSyncExport, runSyncImport, runSyncQuarantineList, runSyncQuarantineRetry } from './sync';
 import { runErrorsList } from './errors';
 
 const program = new Command();
@@ -213,6 +213,15 @@ syncGroup.command('export').description('Write a signed offline sync bundle to a
 syncGroup.command('import <file>').description('Apply a signed offline sync bundle (dispatches on the bundle kind)').option('--json', 'emit JSON', false)
   .action(async (file: string, opts: { json: boolean }) => {
     try { process.exitCode = await runSyncImport(file, opts); } catch (err) { process.stderr.write(`sync import failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+const quarantine = syncGroup.command('quarantine').description('Inspect + retry poison-bulk quarantine (sync S7-A)');
+quarantine.command('list').description('List quarantined / holding bulk records').option('--json', 'emit JSON', false)
+  .action(async (opts: { json: boolean }) => {
+    try { process.exitCode = await runSyncQuarantineList(opts); } catch (err) { process.stderr.write(`sync quarantine list failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+quarantine.command('retry <entityType> <entityId>').description('Clear + re-sync a quarantined bulk entity by id (url)').option('--json', 'emit JSON', false)
+  .action(async (entityType: string, entityId: string, opts: { json: boolean }) => {
+    try { process.exitCode = await runSyncQuarantineRetry(entityType, entityId, opts); } catch (err) { process.stderr.write(`sync quarantine retry failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
 
 const targetStore = program.command('target-store').description('Target warehouse (Postgres/SQL Server/MySQL/MariaDB) tools');

@@ -72,6 +72,39 @@ export async function runSyncNow(opts: JsonOpt): Promise<number> {
   }
 }
 
+// `openldr sync quarantine list|retry` — inspect + retry poison-bulk quarantine (Sync S7-A). Runs on the lab.
+export async function runSyncQuarantineList(opts: JsonOpt): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const rows = await ctx.sync.listQuarantine();
+    if (opts.json) {
+      emit(true, rows, '');
+      return 0;
+    }
+    if (rows.length === 0) {
+      process.stdout.write('no quarantined records\n');
+      return 0;
+    }
+    for (const r of rows) {
+      process.stdout.write(`${r.status.padEnd(11)} ${r.entityType}  ${r.entityId}  attempts=${r.attempts}  ${r.lastError ?? ''}\n`);
+    }
+    return 0;
+  } finally {
+    await ctx.close();
+  }
+}
+
+export async function runSyncQuarantineRetry(entityType: string, entityId: string, opts: JsonOpt): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const result = await ctx.sync.retryQuarantine(entityType, entityId);
+    emit(opts.json, result, result.ok ? `retried ${entityType} ${entityId}` : `retry failed: ${result.error ?? 'unknown'}`);
+    return result.ok ? 0 : 1;
+  } finally {
+    await ctx.close();
+  }
+}
+
 const SECRET_WARNING = '⚠ Store the client secret AND signing private key now — they will not be shown again.';
 
 export async function runSyncEnroll(
