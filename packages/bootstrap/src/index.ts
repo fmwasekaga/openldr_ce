@@ -37,7 +37,7 @@ import { type PluginRuntime } from '@openldr/plugins';
 import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
-import { createSyncPushRunner, createSyncPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, type PushBatch, type PushResponse, type SyncConfig } from '@openldr/sync';
+import { createSyncPushRunner, createSyncPullRunner, createAmendmentPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, type PushBatch, type PushResponse, type SyncConfig } from '@openldr/sync';
 import { createSyncPushWorker, type SyncPushWorker } from './sync-push-worker';
 import { createSyncPullWorker, type SyncPullWorker } from './sync-pull-worker';
 import { createSyncHandle, type SyncHandle } from './sync-handle';
@@ -854,8 +854,28 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
         advanceCursor: (seq) => advanceChangeCursor(internal.db, 'sync-pull', seq),
         logger,
       });
+      // Sync S6a: the amendment pull runner — a SECOND stream drained in the same host loop, over its own
+      // 'sync-amend-pull' cursor. Wire = SyncRecord (same as push), applied via applyRemote (higher
+      // version wins, idempotent). canonicalFhirStore is the same store the server exposes as ctx.fhirStore.
+      const amendmentPullRunner = createAmendmentPullRunner({
+        getToken: () => tokenProvider.getToken(), // SHARE the token provider instance
+        postPull: async (body, token) =>
+          (await postJson(`${syncCfg.centralUrl}/api/sync/pull-amendments`, body, token)) as import('@openldr/sync').AmendmentPullResponse,
+        applyRecord: (rec) => canonicalFhirStore.applyRemote(rec),
+        readCursor: () => readChangeCursor(internal.db, 'sync-amend-pull'),
+        advanceCursor: (seq) => advanceChangeCursor(internal.db, 'sync-amend-pull', seq),
+        logger,
+      });
       syncPullWorker = createSyncPullWorker({
-        runner: { runCycle: () => syncPullRunner.runCycle() },
+        runner: {
+          // One host loop drains BOTH downward streams per cycle: reference config first, then amendments.
+          // Each runner owns its cursor + failure model; the sum of applied counts is returned.
+          runCycle: async () => {
+            const ref = await syncPullRunner.runCycle();
+            const amend = await amendmentPullRunner.runCycle();
+            return ref + amend;
+          },
+        },
         intervalMs,
         logger,
       });
