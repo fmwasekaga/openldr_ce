@@ -1,5 +1,6 @@
 import { createDbContext, createAppContext, seedDatabase } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
+import { redactError } from './redact-error';
 
 interface JsonOpt {
   json: boolean;
@@ -15,8 +16,24 @@ export async function runDbMigrate(opts: JsonOpt): Promise<number> {
     const res = await ctx.migrateAll();
     const internalNames = (res.internal.results ?? []).map((r) => r.migrationName);
     const externalNames = (res.external.results ?? []).map((r) => r.migrationName);
-    if (res.internal.error || res.external.error) {
-      emit(opts.json, { ok: false, internalNames, externalNames }, 'migration error');
+    // Surface the underlying message rather than a bare 'migration error'. Kysely's own text
+    // (e.g. "corrupted migrations: previously executed migration 055_x is missing") names both
+    // the problem and its fix; swallowing it left `db migrate` — the command the docs point at
+    // when a schema is behind — impossible to diagnose. Redacted: a driver error can echo the DSN.
+    const internalError = res.internal.error ? redactError(res.internal.error) : undefined;
+    const externalError = res.external.error ? redactError(res.external.error) : undefined;
+    if (internalError || externalError) {
+      const detail = [
+        internalError ? `  internal: ${internalError}` : null,
+        externalError ? `  external: ${externalError}` : null,
+      ]
+        .filter(Boolean)
+        .join('\n');
+      emit(
+        opts.json,
+        { ok: false, error: 'migration_failed', internalError, externalError, internalNames, externalNames },
+        `migration error\n${detail}`,
+      );
       return 1;
     }
     emit(
