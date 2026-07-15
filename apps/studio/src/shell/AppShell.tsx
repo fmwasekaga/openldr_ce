@@ -2,7 +2,7 @@ import { type ReactNode, useEffect, useState } from 'react';
 import { NavLink, useNavigate, useMatch } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, BookOpen, Library, FileInput, Users, ShieldCheck, Settings,
-  Workflow, Activity, Database, Server, PanelLeftClose, PanelLeftOpen, Sun, Moon, LogOut, PencilRuler, ShieldAlert, type LucideIcon,
+  Workflow, Activity, Database, PanelLeftClose, PanelLeftOpen, Sun, Moon, LogOut, PencilRuler, ShieldAlert, type LucideIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { SUPPORTED_LANGUAGES, setLanguage } from '@/i18n/language';
@@ -29,7 +29,8 @@ const NAV: { to: string; labelKey: string; end: boolean; icon: LucideIcon; roles
   { to: '/terminology', labelKey: 'nav.terminology', end: false, icon: Library },
   { to: '/forms', labelKey: 'nav.forms', end: false, icon: FileInput },
   { to: '/users', labelKey: 'nav.users', end: false, icon: Users },
-  { to: '/sites', labelKey: 'nav.sites', end: false, icon: Server, roles: ['lab_admin'] },
+  // Sites lives under Settings → Sites (not a top-level nav item) so it isn't mistaken for a
+  // Facilities / master facility list.
   { to: '/audit', labelKey: 'nav.audit', end: false, icon: ShieldCheck },
   { to: '/activity', labelKey: 'nav.activity', end: false, icon: Activity, roles: ['lab_admin', 'lab_manager', 'data_analyst', 'system_auditor'] },
   { to: '/docs', labelKey: 'nav.docs', end: false, icon: BookOpen },
