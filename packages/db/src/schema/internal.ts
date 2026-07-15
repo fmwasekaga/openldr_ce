@@ -52,6 +52,18 @@ export interface ReferenceChangeLogTable {
   recorded_at: Generated<Date>;
 }
 
+// Distributed sync S6a: central-side amendment outbox (public schema). One row per central-authored
+// resource version routed to the owning lab (site_id). Pointer only — the serve reads the live body
+// from fhir.resource_history at `version`. `seq` (bigserial) is this stream's pull-cursor axis.
+export interface SyncAmendmentsTable {
+  seq: Generated<number>;
+  site_id: string;
+  resource_type: string;
+  resource_id: string;
+  version: number;
+  recorded_at: Generated<Date>;
+}
+
 export interface OutboxEventsTable {
   id: string;
   type: string;
@@ -587,6 +599,7 @@ export interface InternalSchema {
   'fhir.change_log': ChangeLogTable;
   'fhir.change_cursors': ChangeCursorsTable;
   reference_change_log: ReferenceChangeLogTable;
+  sync_amendments: SyncAmendmentsTable;
   outbox_events: OutboxEventsTable;
   ingest_batches: IngestBatchesTable;
   plugins: PluginsTable;
