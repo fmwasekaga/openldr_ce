@@ -63,6 +63,30 @@ export class UnsupportedResourceTypeError extends Error {
     this.name = 'UnsupportedResourceTypeError';
   }
 }
+export class PatientNotFoundError extends Error {
+  constructor(message: string) { super(message); this.name = 'PatientNotFoundError'; }
+}
+export class CrossSiteMergeError extends Error {
+  constructor(message: string) { super(message); this.name = 'CrossSiteMergeError'; }
+}
+export class SamePatientError extends Error {
+  constructor(message: string) { super(message); this.name = 'SamePatientError'; }
+}
+
+export interface MergeInput {
+  survivorId: string;
+  duplicateId: string;
+  agent: string; // Provenance agent.who.display
+  reason?: string;
+  referencingRefs: { resourceType: string; id: string }[]; // enumerated by the caller (read-model reverse index)
+}
+export interface MergeResult {
+  survivorId: string;
+  duplicateId: string;
+  repointed: number; // count of referencing resources actually re-pointed (stale ones skipped)
+  provenanceId: string;
+  siteId: string; // owning lab
+}
 
 // Sync S6c: the resource types a central operator may amend/co-edit. Results (Observation /
 // DiagnosticReport) + lab orders (ServiceRequest). Anything else is rejected — amend must not inject a
@@ -80,6 +104,10 @@ export interface FhirStore {
   // Sync S6a: author a central amendment of a lab-owned resource — new version (keeping the owning
   // lab's site_id) + a Provenance resource + two sync_amendments outbox rows, all in one transaction.
   amend(input: AmendInput): Promise<AmendResult>;
+  // Sync S6b: atomically author an intra-lab patient merge — mark the duplicate Patient replaced
+  // (active:false + link replaced-by survivor), re-point each referencing resource's subject to the
+  // survivor, write one merge Provenance, and emit sync_amendments outbox rows. One transaction.
+  mergePatients(input: MergeInput): Promise<MergeResult>;
 }
 
 function contentHash(serialized: string): string {
@@ -140,6 +168,20 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
       .insertInto('fhir.change_log')
       .values({ resource_type: v.resourceType, resource_id: v.id, version: v.version, op: 'upsert', content_hash: contentHashHex, site_id: v.siteId })
       .execute();
+  }
+
+  // Sync S6b: the owning-lab site_id = the site on a resource's latest change_log row (same lookup amend
+  // does inline). Empty string when unstamped (central-owned / unsynced).
+  async function latestSite(trx: Kysely<InternalSchema>, resourceType: string, id: string): Promise<string> {
+    const owner = await trx
+      .selectFrom('fhir.change_log')
+      .select('site_id')
+      .where('resource_type', '=', resourceType)
+      .where('resource_id', '=', id)
+      .orderBy('version', 'desc')
+      .limit(1)
+      .executeTakeFirst();
+    return owner?.site_id ?? '';
   }
 
   return {
@@ -407,6 +449,70 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
         return { version: amendedVersion, provenanceId, siteId };
       });
       // Best-effort projection-worker wakeup; interval polling is the correctness path (matches save()).
+      try { await sql`select pg_notify('fhir_changes', '')`.execute(db); } catch { /* ignore */ }
+      return result;
+    },
+
+    async mergePatients(input) {
+      const { survivorId, duplicateId, agent, reason, referencingRefs } = input;
+      if (survivorId === duplicateId) throw new SamePatientError('survivor and duplicate are the same patient');
+      const provenanceId = randomUUID();
+      const result = await db.transaction().execute(async (trx): Promise<MergeResult> => {
+        const dupRow = await trx.selectFrom('fhir.fhir_resources').select('resource').where('resource_type', '=', 'Patient').where('id', '=', duplicateId).executeTakeFirst();
+        if (!dupRow) throw new PatientNotFoundError(`Patient/${duplicateId} not found`);
+        const survRow = await trx.selectFrom('fhir.fhir_resources').select('resource').where('resource_type', '=', 'Patient').where('id', '=', survivorId).executeTakeFirst();
+        if (!survRow) throw new PatientNotFoundError(`Patient/${survivorId} not found`);
+
+        const site = await latestSite(trx, 'Patient', duplicateId);
+        const survSite = await latestSite(trx, 'Patient', survivorId);
+        if (!site || !survSite || site !== survSite) throw new CrossSiteMergeError('patients are not owned by the same site');
+
+        const nowIso = new Date().toISOString();
+        const targets: { reference: string }[] = [];
+        const outboxRows: { site_id: string; resource_type: string; resource_id: string; version: number }[] = [];
+
+        const dupBody = dupRow.resource as Record<string, unknown>;
+        const existingLinks = Array.isArray(dupBody['link']) ? (dupBody['link'] as unknown[]) : [];
+        const dupVersion = await nextVersion(trx, 'Patient', duplicateId);
+        const dupNew: Record<string, unknown> = {
+          ...dupBody, id: duplicateId, active: false,
+          link: [...existingLinks, { type: 'replaced-by', other: { reference: `Patient/${survivorId}` } }],
+          meta: { ...(dupBody['meta'] as Record<string, unknown> | undefined), versionId: String(dupVersion), lastUpdated: nowIso },
+        };
+        await writeVersion(trx, { resourceType: 'Patient', id: duplicateId, version: dupVersion, body: dupNew, siteId: site });
+        targets.push({ reference: `Patient/${duplicateId}` });
+        outboxRows.push({ site_id: site, resource_type: 'Patient', resource_id: duplicateId, version: dupVersion });
+
+        let repointed = 0;
+        for (const ref of referencingRefs) {
+          const row = await trx.selectFrom('fhir.fhir_resources').select('resource').where('resource_type', '=', ref.resourceType).where('id', '=', ref.id).executeTakeFirst();
+          if (!row) continue;
+          const body = row.resource as Record<string, unknown>;
+          const v = await nextVersion(trx, ref.resourceType, ref.id);
+          const newBody: Record<string, unknown> = {
+            ...body, id: ref.id, subject: { reference: `Patient/${survivorId}` },
+            meta: { ...(body['meta'] as Record<string, unknown> | undefined), versionId: String(v), lastUpdated: nowIso },
+          };
+          await writeVersion(trx, { resourceType: ref.resourceType, id: ref.id, version: v, body: newBody, siteId: site });
+          targets.push({ reference: `${ref.resourceType}/${ref.id}` });
+          outboxRows.push({ site_id: site, resource_type: ref.resourceType, resource_id: ref.id, version: v });
+          repointed++;
+        }
+
+        const provBody: Record<string, unknown> = {
+          resourceType: 'Provenance', id: provenanceId, target: targets, recorded: nowIso,
+          activity: { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v3-DataOperation', code: 'MERGE', display: 'merge' }] },
+          agent: [{ who: { display: agent } }],
+          ...(reason ? { reason: [{ text: reason }] } : {}),
+          meta: { versionId: '1', lastUpdated: nowIso },
+        };
+        await writeVersion(trx, { resourceType: 'Provenance', id: provenanceId, version: 1, body: provBody, siteId: site });
+        outboxRows.push({ site_id: site, resource_type: 'Provenance', resource_id: provenanceId, version: 1 });
+
+        await trx.insertInto('sync_amendments').values(outboxRows).execute();
+
+        return { survivorId, duplicateId, repointed, provenanceId, siteId: site };
+      });
       try { await sql`select pg_notify('fhir_changes', '')`.execute(db); } catch { /* ignore */ }
       return result;
     },
