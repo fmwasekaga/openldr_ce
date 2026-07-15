@@ -726,7 +726,12 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   // decrypted with the same SECRETS_ENCRYPTION_KEY / open() scheme the connector store uses.
   let syncPushWorker: SyncPushWorker | undefined;
   let syncPullWorker: SyncPullWorker | undefined;
-  let syncQuarantine: import('@openldr/db').SyncQuarantineStore | undefined;
+  // Sync S7-A: the quarantine store is built UNCONDITIONALLY — it only needs internal.db, and listing is
+  // "just reads the table". A push-only node, a sync-disabled node, or a boot where readSyncConfig
+  // degraded to disabled all still have durable quarantine rows from earlier boots, and an operator
+  // looking for them must not be shown an empty list. Only the RETRY closure below is pull-gated (it
+  // genuinely needs the terminology bulk-sync + a token provider).
+  const syncQuarantine = createSyncQuarantineStore(internal.db);
   let syncRetryQuarantine: ((entityType: string, entityId: string) => Promise<{ ok: boolean; error?: string }>) | undefined;
   const QUARANTINE_THRESHOLD = 3; // Sync S7-A: consecutive bulk-apply failures before quarantine
   const syncDecrypt = (blob: string): string => open(blob, parseSecretKey(cfg.SECRETS_ENCRYPTION_KEY ?? ''));
@@ -848,19 +853,31 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
         }
         return referenceApplier(rec);
       };
-      const quarantine = createSyncQuarantineStore(internal.db);
-      syncQuarantine = quarantine;
+      const quarantine = syncQuarantine;
       // Sync S7-A: targeted re-sync of a quarantined bulk entity, independent of the advanced cursor.
+      // Re-sync FIRST and clear ONLY on success: clearing up front would lose all operator visibility if
+      // the process died mid-retry, and a failed retry would re-record from scratch (attempts:1, seq:0),
+      // discarding first_failed_at / quarantined_at history. The stored body is central's REAL descriptor
+      // for the entity — replaying it keeps the reconcile's terminology_systems stamp faithful (passing
+      // undefined would stamp version:null / resource_id:'' / generation:0 and corrupt the metadata).
       syncRetryQuarantine = async (entityType: string, entityId: string) => {
-        await quarantine.clear(entityType, entityId);
+        const row = await quarantine.get(entityType, entityId);
         try {
-          if (entityType === 'terminology_system') await termBulk.syncSystem(entityId, undefined);
-          else if (entityType === 'concept_map') await termBulk.syncConceptMap(entityId, undefined);
+          if (entityType === 'terminology_system') await termBulk.syncSystem(entityId, row?.lastBody);
+          else if (entityType === 'concept_map') await termBulk.syncConceptMap(entityId, row?.lastBody);
           else return { ok: false, error: `not a retriable bulk entity type: ${entityType}` };
+          await quarantine.clear(entityType, entityId); // healed → the row goes away
           return { ok: true };
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
-          await quarantine.recordFailure(entityType, entityId, { seq: 0, error: msg, threshold: QUARANTINE_THRESHOLD });
+          // Leave the existing row intact; just re-record the error so attempts keeps climbing from its
+          // real history rather than resetting.
+          await quarantine.recordFailure(entityType, entityId, {
+            seq: row?.lastSeq ?? 0,
+            error: msg,
+            body: row?.lastBody,
+            threshold: QUARANTINE_THRESHOLD,
+          });
           return { ok: false, error: msg };
         }
       };
@@ -872,7 +889,14 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
         readCursor: () => readChangeCursor(internal.db, 'sync-pull'),
         advanceCursor: (seq) => advanceChangeCursor(internal.db, 'sync-pull', seq),
         holdFailure: (rec, err) =>
-          quarantine.recordFailure(rec.entityType, rec.entityId, { seq: rec.seq, error: err.message, threshold: QUARANTINE_THRESHOLD })
+          quarantine
+            .recordFailure(rec.entityType, rec.entityId, {
+              seq: rec.seq,
+              error: err.message,
+              // Persist central's descriptor so a manual retry replays the REAL identity/generation.
+              body: rec.body,
+              threshold: QUARANTINE_THRESHOLD,
+            })
             .then((r) => (r.status === 'quarantined' ? 'quarantine' : 'hold')),
         holdSuccess: (rec) => quarantine.clear(rec.entityType, rec.entityId),
         logger,
