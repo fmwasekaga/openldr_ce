@@ -1070,6 +1070,7 @@ export type { ActivityService, RecentPayload } from './activity-service';
 export { getSyncConfig, setSyncConfig, readSigningKeys } from './sync-settings';
 export {
   servePull,
+  serveAmendments,
   serveConceptsPage,
   serveMapElementsPage,
   drainConcepts,

@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { servePull, serveConceptsPage, serveMapElementsPage, type AppContext } from '@openldr/bootstrap';
+import { servePull, serveAmendments, serveConceptsPage, serveMapElementsPage, type AppContext } from '@openldr/bootstrap';
 import type { PushBatch, PushResponse, SyncRecord } from '@openldr/sync';
 
 // Site principal derived from a machine client's bearer token. The user-auth onRequest hook
@@ -134,6 +134,21 @@ export function registerSyncRoutes(app: FastifyInstance<any, any, any, any>, ctx
     // (Sync S5) reuses it verbatim. The HTTP route serves everything servePull returns (S3 behaviour
     // unchanged); only the bundle exporter filters terminology signals out.
     const { records, nextSeq } = await servePull(ctx, fromSeq);
+    reply.code(200).send({ records, nextSeq });
+  });
+
+  // POST /api/sync/pull-amendments — the owning lab's amendment delta since its 'sync-amend-pull'
+  // cursor (Sync S6a). Machine-authed AND site-scoped: sitePrincipal derives site_id from the token and
+  // serveAmendments filters to it — a lab can only ever pull its OWN amendments (mirror of push's
+  // cross-site write rejection). Records use the SyncRecord wire shape; the lab applies via applyRemote.
+  app.post('/api/sync/pull-amendments', async (req, reply) => {
+    const principal = await sitePrincipal(req, reply, ctx);
+    if (!principal) return; // reply already sent (401/403)
+
+    const rawFrom = (req.body as { fromSeq?: unknown } | undefined)?.fromSeq;
+    const fromSeq = typeof rawFrom === 'number' && Number.isFinite(rawFrom) ? rawFrom : 0;
+
+    const { records, nextSeq } = await serveAmendments(ctx, principal.siteId, fromSeq);
     reply.code(200).send({ records, nextSeq });
   });
 
