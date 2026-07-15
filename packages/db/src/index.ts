@@ -25,6 +25,8 @@ export * from './report-run-store';
 export * from './report-store';
 export * from './sync-site-store';
 export * from './sync-quarantine-store';
+export * from './sync-divergence-store';
+export * from './divergence-hash';
 export * from './marketplace-install-store';
 export * from './connector-store';
 export * from './workflow-secret-store';
