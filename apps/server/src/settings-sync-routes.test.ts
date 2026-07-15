@@ -1,8 +1,17 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import Fastify from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
+import { mergePatients } from '@openldr/bootstrap';
 import { registerSettingsRoutes } from './settings-routes';
 import './auth-plugin';
+
+// Sync S6b: the merge-patient endpoint calls the module-level `mergePatients` orchestrator IMPORT
+// (not ctx.*). Mock ONLY that export, preserving every other bootstrap export the settings routes use
+// (enrollSite/rotateSite/revokeSite/getSyncConfig/…) so the enroll/amend/danger tests still run for real.
+vi.mock('@openldr/bootstrap', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@openldr/bootstrap')>();
+  return { ...actual, mergePatients: vi.fn() };
+});
 
 // ---------------------------------------------------------------------------
 // Minimal types mirrored so we don't add a dep
@@ -490,5 +499,108 @@ describe('settings sync amend route', () => {
       | { metadata: { activity: string } }
       | undefined;
     expect(ev?.metadata.activity).toBe('amend');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sync S6b: central patient-merge endpoint (POST /api/settings/sync/merge-patient)
+// mergePatients is the module-level bootstrap orchestrator IMPORT — mocked above.
+// ---------------------------------------------------------------------------
+describe('settings sync merge-patient route', () => {
+  const merge = vi.mocked(mergePatients);
+
+  beforeEach(() => {
+    merge.mockReset();
+    merge.mockResolvedValue({ survivorId: 'p-surv', duplicateId: 'p-dup', repointed: 3, provenanceId: 'prov-9', siteId: 'lab-a' });
+  });
+
+  it('POST /merge-patient → 200: delegates to mergePatients and returns the MergeResult; PHI-free audit', async () => {
+    const ctx = fakeCtx();
+    const app = adminApp(ctx);
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/settings/sync/merge-patient',
+      payload: { survivorId: 'p-surv', duplicateId: 'p-dup', reason: 'dup MPI' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ survivorId: 'p-surv', duplicateId: 'p-dup', repointed: 3, provenanceId: 'prov-9', siteId: 'lab-a' });
+
+    expect(merge).toHaveBeenCalledTimes(1);
+    expect(merge).toHaveBeenCalledWith(ctx, expect.objectContaining({
+      survivorId: 'p-surv', duplicateId: 'p-dup', reason: 'dup MPI', agent: 'central',
+    }));
+
+    // Audit: action + duplicate reference + counts/ids only; PHI-free.
+    const events = (ctx as unknown as { __auditEvents: unknown[] }).__auditEvents;
+    const ev = events.find((e) => (e as { action: string }).action === 'settings.sync.merge') as
+      | { entityType: string; entityId: string; metadata: { survivorId: string; duplicateId: string; repointed: number; provenanceId: string } }
+      | undefined;
+    expect(ev).toBeTruthy();
+    expect(ev!.entityType).toBe('Patient');
+    expect(ev!.entityId).toBe('p-dup');
+    expect(ev!.metadata).toEqual({ survivorId: 'p-surv', duplicateId: 'p-dup', repointed: 3, provenanceId: 'prov-9' });
+  });
+
+  it('POST /merge-patient → 400 when mergePatients throws SamePatientError', async () => {
+    merge.mockRejectedValueOnce(Object.assign(new Error('same'), { name: 'SamePatientError' }));
+    const ctx = fakeCtx();
+    const app = adminApp(ctx);
+    const res = await app.inject({
+      method: 'POST', url: '/api/settings/sync/merge-patient',
+      payload: { survivorId: 'p-x', duplicateId: 'p-x' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('POST /merge-patient → 404 when mergePatients throws PatientNotFoundError', async () => {
+    merge.mockRejectedValueOnce(Object.assign(new Error('missing'), { name: 'PatientNotFoundError' }));
+    const ctx = fakeCtx();
+    const app = adminApp(ctx);
+    const res = await app.inject({
+      method: 'POST', url: '/api/settings/sync/merge-patient',
+      payload: { survivorId: 'p-surv', duplicateId: 'nope' },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('POST /merge-patient → 409 when mergePatients throws CrossSiteMergeError', async () => {
+    merge.mockRejectedValueOnce(Object.assign(new Error('cross'), { name: 'CrossSiteMergeError' }));
+    const ctx = fakeCtx();
+    const app = adminApp(ctx);
+    const res = await app.inject({
+      method: 'POST', url: '/api/settings/sync/merge-patient',
+      payload: { survivorId: 'p-a', duplicateId: 'p-b' },
+    });
+    expect(res.statusCode).toBe(409);
+  });
+
+  it('POST /merge-patient → 400 when survivorId/duplicateId missing (mergePatients NOT called)', async () => {
+    const ctx = fakeCtx();
+    const app = adminApp(ctx);
+    for (const payload of [
+      { duplicateId: 'p-dup' },              // no survivorId
+      { survivorId: 'p-surv' },              // no duplicateId
+      { survivorId: '', duplicateId: 'p-dup' }, // empty survivorId
+      {},
+    ]) {
+      const res = await app.inject({ method: 'POST', url: '/api/settings/sync/merge-patient', payload });
+      expect(res.statusCode).toBe(400);
+    }
+    expect(merge).not.toHaveBeenCalled();
+  });
+
+  it('rejects non-admin actor → 403', async () => {
+    const ctx = fakeCtx();
+    const app = Fastify();
+    app.addHook('onRequest', async (req) => {
+      req.user = { id: 'tech', username: 'tech', displayName: null, roles: ['lab_technician'] };
+    });
+    registerSettingsRoutes(app, ctx);
+    const res = await app.inject({
+      method: 'POST', url: '/api/settings/sync/merge-patient',
+      payload: { survivorId: 'p-surv', duplicateId: 'p-dup' },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(merge).not.toHaveBeenCalled();
   });
 });

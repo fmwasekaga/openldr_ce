@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
-import { dangerResetDashboards, dangerFactoryReset, dangerClearAudit, getSyncConfig, setSyncConfig, enrollSite, listSites, rotateSite, revokeSite } from '@openldr/bootstrap';
+import { dangerResetDashboards, dangerFactoryReset, dangerClearAudit, getSyncConfig, setSyncConfig, enrollSite, listSites, rotateSite, revokeSite, mergePatients } from '@openldr/bootstrap';
 import { requireRole } from './rbac';
 import { recordAudit } from './audit-helper';
 
@@ -97,6 +97,35 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
       if (name === 'ResourceNotFoundError') { reply.code(404).send({ error: 'resource not found' }); return; }
       if (name === 'NotLabOwnedError') { reply.code(409).send({ error: 'resource is not lab-owned' }); return; }
       if (name === 'UnsupportedResourceTypeError') { reply.code(400).send({ error: 'resource type is not amendable' }); return; }
+      throw e; // unknown → 500 via the global handler
+    }
+  });
+
+  // POST /api/settings/sync/merge-patient — intra-lab patient merge (Sync S6b). lab_admin, user-authed.
+  // Delegates to the bootstrap orchestrator (enumerate refs + atomic cascade); the merge then flows down
+  // the owning lab's amendment stream. Audited PHI-free: patient ids + counts only.
+  app.post('/api/settings/sync/merge-patient', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const b = (req.body ?? {}) as { survivorId?: unknown; duplicateId?: unknown; reason?: unknown; agent?: unknown };
+    if (typeof b.survivorId !== 'string' || !b.survivorId || typeof b.duplicateId !== 'string' || !b.duplicateId) {
+      reply.code(400).send({ error: 'survivorId and duplicateId are required' });
+      return;
+    }
+    try {
+      const result = await mergePatients(ctx, {
+        survivorId: b.survivorId, duplicateId: b.duplicateId,
+        reason: typeof b.reason === 'string' ? b.reason : undefined,
+        agent: typeof b.agent === 'string' && b.agent ? b.agent : 'central',
+      });
+      await recordAudit(ctx, req, {
+        action: 'settings.sync.merge', entityType: 'Patient', entityId: b.duplicateId,
+        metadata: { survivorId: result.survivorId, duplicateId: result.duplicateId, repointed: result.repointed, provenanceId: result.provenanceId },
+      });
+      reply.code(200).send(result);
+    } catch (e) {
+      const name = e instanceof Error ? e.name : '';
+      if (name === 'SamePatientError') { reply.code(400).send({ error: 'survivor and duplicate are the same patient' }); return; }
+      if (name === 'PatientNotFoundError') { reply.code(404).send({ error: 'patient not found' }); return; }
+      if (name === 'CrossSiteMergeError') { reply.code(409).send({ error: 'patients are not owned by the same site' }); return; }
       throw e; // unknown → 500 via the global handler
     }
   });
