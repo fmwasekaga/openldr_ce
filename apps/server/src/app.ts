@@ -7,6 +7,7 @@ import type { FastifyInstance } from 'fastify';
 import { registerErrorHandler } from './error-handler';
 import fastifyStatic from '@fastify/static';
 import compress from '@fastify/compress';
+import { appError } from '@openldr/core';
 import type { AppContext } from '@openldr/bootstrap';
 import { registerReportRoutes } from './reports-routes';
 import { registerTerminologyRoutes } from './terminology-routes';
@@ -53,7 +54,7 @@ export function registerConfigRoute(
   }));
 }
 
-export function buildApp(ctx: AppContext) {
+export async function buildApp(ctx: AppContext) {
   const app = Fastify({
     loggerInstance: ctx.logger,
     // Short 8-char correlation id per request; surfaces in every error body + one log line.
@@ -66,22 +67,25 @@ export function buildApp(ctx: AppContext) {
   // bulk pages / pull responses AND (via globalDecompression) accepts gzipped push bodies.
   // Content negotiation is transparent: a client that doesn't ask simply doesn't get compressed bytes,
   // so nothing existing breaks. `compressible`/mime-db skips already-compressed types (PDF/xlsx exports).
-  void app.register(compress, {
+  //
+  // This MUST be `await`ed here, before any route is added — which is why buildApp is async. The
+  // plugin works by installing an `onRoute` listener that rewrites each route's hooks as it is
+  // registered; a fire-and-forget `void app.register(...)` (the @fastify/static idiom below) defers
+  // the plugin to ready(), by which point every route has already been added and the listener sees
+  // NONE of them — leaving the plugin silently inert. @fastify/static is safe that way because it
+  // registers its OWN routes; compress decorates pre-existing ones.
+  await app.register(compress, {
     globalCompression: true,
     globalDecompression: true,
     threshold: 1024,
     encodings: ['gzip'],
     requestEncodings: ['gzip'],
-    // @fastify/compress v9 calls this as (encoding, request); it must return an actual Error (not
-    // a plain object) — TS enforces this. The statusCode/code pair is honoured verbatim by
-    // registerErrorHandler's toErrorResponse (see error-handler.ts), so this genuinely reaches the
-    // client as 415, not the generic SY0500 fallback a plain unclassified Error would get.
-    onUnsupportedRequestEncoding: (encoding) => {
-      const err = new Error(`unsupported content-encoding: ${encoding}`) as Error & { statusCode: number; code: string };
-      err.statusCode = 415;
-      err.code = 'UNSUPPORTED_MEDIA_TYPE';
-      return err;
-    },
+    // v9 calls this as (encoding, request) and requires a real Error back. Returning an AppError
+    // keeps the 415 inside the error-code catalog: registerErrorHandler's existing AppError branch
+    // maps it to status 415 + code SY0415 + a correlationId, with no cross-cutting change to how
+    // any other error is classified.
+    onUnsupportedRequestEncoding: (encoding) =>
+      appError('SY0415', { message: `unsupported content-encoding: ${encoding}` }),
   });
 
   // RFC 7694: advertise to clients that this server ACCEPTS gzipped request bodies. The sync push

@@ -56,6 +56,7 @@ const ENTRIES: readonly CatalogEntry[] = [
   { code: 'DB0003', domain: 'dashboards', httpStatus: 404, message: 'dashboard model not found' },
   // System / fallback (SY)
   { code: 'SY0400', domain: 'system', httpStatus: 400, message: 'bad request' },
+  { code: 'SY0415', domain: 'system', httpStatus: 415, message: 'unsupported content-encoding' },
   { code: 'SY0500', domain: 'system', httpStatus: 500, message: 'unexpected server error' },
   { code: 'SY0503', domain: 'system', httpStatus: 503, message: 'a backing service is unavailable', retryable: true },
 ];

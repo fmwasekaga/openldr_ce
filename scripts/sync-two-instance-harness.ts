@@ -219,7 +219,7 @@ async function main(): Promise<void> {
     // ── 1. Bring up the CENTRAL instance: a real AppContext + a real Fastify app on an ephemeral port. ──
     step('1. start CENTRAL AppContext + Fastify app on an ephemeral localhost port');
     centralCtx = await createAppContext(centralCfg);
-    app = buildApp(centralCtx);
+    app = await buildApp(centralCtx);
     await app.listen({ port: 0, host: '127.0.0.1' });
     const addr = app.server.address() as AddressInfo;
     const centralUrl = `http://127.0.0.1:${addr.port}`;
