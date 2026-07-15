@@ -1,5 +1,5 @@
 export type { SyncRecord, PushBatch, PushResponse } from './batch';
-export type { PullRecord, PullRequest, PullResponse } from './batch';
+export type { PullRecord, PullRequest, PullResponse, AmendmentPullResponse } from './batch';
 export type { ConceptWire, ConceptsPage, MapElementWire, MapElementsPage } from './batch';
 export { createTerminologyBulkSync } from './terminology-sync';
 export type { TerminologyBulkDeps, TerminologyBulkSync } from './terminology-sync';
