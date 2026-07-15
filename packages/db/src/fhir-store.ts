@@ -34,10 +34,11 @@ export interface RemoteRecord {
 // incoming content is NOT applied (the local copy is kept); it is recorded in sync_divergences for an
 // operator. Detect-and-surface only: there is no auto-heal, by design.
 //
-// NOTE: widening this union does NOT produce a compile error at every call site — sync-routes.ts and
-// sync-bundle.ts both use `if (result === 'applied') ... else skipped++`, so `else` silently absorbs
-// the new variant. Those sites are updated explicitly (see the S7 plan, Task 6). Correctness does not
-// depend on them: the row is written in applyRemote's OWN transaction.
+// TODO(S7 Task 6): delete this NOTE once the two call sites branch on 'diverged'.
+// Widening this union produces NO compile error at either call site, and neither branches on the new
+// variant today: sync-routes.ts folds it into `skipped` via `else`, and sync-bundle.ts has no branch
+// for it at all (a bare `if (result === 'applied') applied++`), so a divergence there is counted as
+// nothing. Correctness does not depend on either: the row is written in applyRemote's OWN transaction.
 export type ApplyResult = 'applied' | 'skipped' | 'diverged';
 
 export interface AmendInput {
@@ -330,23 +331,23 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
       // before the transaction, because it is BOTH what we would store AND (sync S7) what we hash to
       // compare against the stored copy — deriving them from one expression is what keeps the incoming
       // hash apples-to-apples with the local one. Pure JS: no DB access, so no write ordering is affected.
-      const normalized: Record<string, unknown> | null =
+      const normalizedBody: Record<string, unknown> | null =
         op === 'upsert' && record.resource ? { ...record.resource, id } : null;
-      const content = normalized ? JSON.stringify(normalized) : null;
+      const content = normalizedBody ? JSON.stringify(normalizedBody) : null;
 
       const result = await db.transaction().execute(async (trx): Promise<ApplyResult> => {
-        // Idempotency + divergence detection (sync S7). This SELECT is unchanged in ROLE — it still
-        // decides "have we already applied this exact origin version?" — but it now also reads the
-        // stored body so we can tell a genuine re-drain (identical content → skip, as always) from a
-        // same-version DIVERGENCE (different content → the incoming edit is being dropped, and that
-        // must not be silent). We use an explicit existence SELECT rather than ON CONFLICT DO NOTHING +
+        // Idempotency + divergence detection (sync S7). The history PK is (resource_type,id,version):
+        // a matching row answers "have we already applied this exact origin version?", and its body
+        // tells a genuine re-drain (identical content → skip) from a same-version DIVERGENCE (different
+        // content → the incoming edit is being dropped, which must not be silent).
+        //
+        // We use an explicit existence SELECT rather than ON CONFLICT DO NOTHING +
         // numInsertedOrUpdatedRows because that row-count is engine-dependent (pg-mem reports 1 even on
         // a conflict no-op), so it can't discriminate a real insert from a skip. This SELECT is
-        // deterministic on real pg and pg-mem alike. Still read-only: it assigns no xid, so the
-        // safe-frontier invariant (change_log must not be the txn's first write) is unaffected. Do not
-        // reorder. `op` is deliberately NOT selected: `resource IS NULL` already IS the tombstone
-        // marker (a delete writes resource:null, an upsert is guarded to always carry a body), so
-        // reading op would add a second, redundant source of truth for the same fact.
+        // deterministic on real pg and pg-mem alike. (It is read-only — see the safe-frontier INVARIANT
+        // on the writes below.) `op` is deliberately NOT selected: `resource IS NULL` already IS the
+        // tombstone marker (a delete writes resource:null, an upsert is guarded to always carry a body),
+        // so reading op would add a second, redundant source of truth for the same fact.
         const already = await trx
           .selectFrom('fhir.resource_history')
           .select(['version', 'resource'])
@@ -357,12 +358,12 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
         if (already) {
           // NULL-aware: null == null means two tombstones, which AGREE (nothing was lost).
           // `already.resource` arrives as a parsed object on pg/pg-mem but as text on some drivers;
-          // divergenceHash normalizes both. The incoming side is hashed from `normalized` — the SAME
-          // id-normalized shape the store path writes — so a wire body that merely omits the redundant
-          // `id` cannot manufacture a phantom divergence.
+          // divergenceHash normalizes both. The incoming side is hashed from `normalizedBody` — the
+          // SAME id-normalized shape the store path writes — so a wire body that merely omits the
+          // redundant `id` cannot manufacture a phantom divergence.
           const localHash = divergenceHash(already.resource);
-          const incomingHash = divergenceHash(normalized);
-          if (localHash === incomingHash) return 'skipped'; // byte-identical to pre-S7 behavior
+          const incomingHash = divergenceHash(normalizedBody);
+          if (localHash === incomingHash) return 'skipped';
 
           // Same version, different content. Keep the local copy (no fhir_resources / change_log
           // writes on this path) and durably record what we dropped, in THIS transaction — the skip
@@ -374,7 +375,7 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
             version,
             localHash,
             incomingHash,
-            incomingBody: normalized,
+            incomingBody: normalizedBody,
             incomingSiteId: siteId,
           });
           return 'diverged';
