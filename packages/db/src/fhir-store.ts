@@ -475,17 +475,27 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
         const targets: { reference: string }[] = [];
         const outboxRows: { site_id: string; resource_type: string; resource_id: string; version: number }[] = [];
 
+        // Idempotency: a re-run (to pick up late-projected refs) must not append another identical
+        // replaced-by link or re-bump the already-merged duplicate. Skip the Patient re-write when it's
+        // already inactive AND already links replaced-by → this survivor.
         const dupBody = dupRow.resource as Record<string, unknown>;
         const existingLinks = Array.isArray(dupBody['link']) ? (dupBody['link'] as unknown[]) : [];
-        const dupVersion = await nextVersion(trx, 'Patient', duplicateId);
-        const dupNew: Record<string, unknown> = {
-          ...dupBody, id: duplicateId, active: false,
-          link: [...existingLinks, { type: 'replaced-by', other: { reference: `Patient/${survivorId}` } }],
-          meta: { ...(dupBody['meta'] as Record<string, unknown> | undefined), versionId: String(dupVersion), lastUpdated: nowIso },
-        };
-        await writeVersion(trx, { resourceType: 'Patient', id: duplicateId, version: dupVersion, body: dupNew, siteId: site });
-        targets.push({ reference: `Patient/${duplicateId}` });
-        outboxRows.push({ site_id: site, resource_type: 'Patient', resource_id: duplicateId, version: dupVersion });
+        const alreadyReplaced = dupBody['active'] === false && existingLinks.some(
+          (l) => (l as Record<string, unknown> | null)?.['type'] === 'replaced-by'
+            && ((l as Record<string, unknown>)?.['other'] as Record<string, unknown> | undefined)?.['reference'] === `Patient/${survivorId}`,
+        );
+        let patientChanged = !alreadyReplaced;
+        if (!alreadyReplaced) {
+          const dupVersion = await nextVersion(trx, 'Patient', duplicateId);
+          const dupNew: Record<string, unknown> = {
+            ...dupBody, id: duplicateId, active: false,
+            link: [...existingLinks, { type: 'replaced-by', other: { reference: `Patient/${survivorId}` } }],
+            meta: { ...(dupBody['meta'] as Record<string, unknown> | undefined), versionId: String(dupVersion), lastUpdated: nowIso },
+          };
+          await writeVersion(trx, { resourceType: 'Patient', id: duplicateId, version: dupVersion, body: dupNew, siteId: site });
+          targets.push({ reference: `Patient/${duplicateId}` });
+          outboxRows.push({ site_id: site, resource_type: 'Patient', resource_id: duplicateId, version: dupVersion });
+        }
 
         let repointed = 0;
         // Two guards enforce the intra-lab + subject-based invariant the primitive trusts the caller for:
@@ -498,6 +508,10 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
           const refSite = await latestSite(trx, ref.resourceType, ref.id);
           if (refSite !== site) continue; // defense: never re-stamp a cross-site resource (intra-lab only)
           const body = row.resource as Record<string, unknown>;
+          // Idempotency: a ref already pointing at the survivor was re-pointed on a prior run — don't
+          // re-bump it (uncounted).
+          const curSubjectRef = (body['subject'] as Record<string, unknown> | undefined)?.['reference'];
+          if (curSubjectRef === `Patient/${survivorId}`) continue;
           const v = await nextVersion(trx, ref.resourceType, ref.id);
           const newBody: Record<string, unknown> = {
             ...body, id: ref.id, subject: { reference: `Patient/${survivorId}` },
@@ -509,19 +523,25 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
           repointed++;
         }
 
-        const provBody: Record<string, unknown> = {
-          resourceType: 'Provenance', id: provenanceId, target: targets, recorded: nowIso,
-          activity: { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v3-DataOperation', code: 'MERGE', display: 'merge' }] },
-          agent: [{ who: { display: agent } }],
-          ...(reason ? { reason: [{ text: reason }] } : {}),
-          meta: { versionId: '1', lastUpdated: nowIso },
-        };
-        await writeVersion(trx, { resourceType: 'Provenance', id: provenanceId, version: 1, body: provBody, siteId: site });
-        outboxRows.push({ site_id: site, resource_type: 'Provenance', resource_id: provenanceId, version: 1 });
+        // Only author the merge Provenance (and its outbox row) when the run actually changed something.
+        // A full no-op re-run writes nothing and returns an empty provenanceId.
+        let writtenProvenanceId = '';
+        if (patientChanged || repointed > 0) {
+          const provBody: Record<string, unknown> = {
+            resourceType: 'Provenance', id: provenanceId, target: targets, recorded: nowIso,
+            activity: { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v3-DataOperation', code: 'MERGE', display: 'merge' }] },
+            agent: [{ who: { display: agent } }],
+            ...(reason ? { reason: [{ text: reason }] } : {}),
+            meta: { versionId: '1', lastUpdated: nowIso },
+          };
+          await writeVersion(trx, { resourceType: 'Provenance', id: provenanceId, version: 1, body: provBody, siteId: site });
+          outboxRows.push({ site_id: site, resource_type: 'Provenance', resource_id: provenanceId, version: 1 });
+          writtenProvenanceId = provenanceId;
+        }
 
-        await trx.insertInto('sync_amendments').values(outboxRows).execute();
+        if (outboxRows.length > 0) await trx.insertInto('sync_amendments').values(outboxRows).execute();
 
-        return { survivorId, duplicateId, repointed, provenanceId, siteId: site };
+        return { survivorId, duplicateId, repointed, provenanceId: writtenProvenanceId, siteId: site };
       });
       try { await sql`select pg_notify('fhir_changes', '')`.execute(db); } catch { /* ignore */ }
       return result;

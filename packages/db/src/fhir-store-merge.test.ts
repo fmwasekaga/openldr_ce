@@ -102,4 +102,33 @@ describe('FhirStore.mergePatients', () => {
     const obsLog = await db.selectFrom('fhir.change_log').select('version').where('resource_type', '=', 'Observation').where('resource_id', '=', 'obs-x').execute();
     expect(obsLog.map((r) => Number(r.version))).toEqual([1]); // no version bump
   });
+
+  it('is idempotent on re-run: a second identical merge writes nothing', async () => {
+    const store = createFhirStore(db);
+    await seedPatient(store, 'p-surv', 'lab-a');
+    await seedPatient(store, 'p-dup', 'lab-a');
+    await seedRef(store, 'Observation', 'obs-1', 'p-dup', 'lab-a');
+    const refs = [{ resourceType: 'Observation', id: 'obs-1' }];
+
+    const first = await store.mergePatients({ survivorId: 'p-surv', duplicateId: 'p-dup', agent: 'mpi', referencingRefs: refs });
+    expect(first.repointed).toBe(1); // the one seeded ref re-pointed
+    const dup1 = (await store.get('Patient', 'p-dup')) as any;
+    expect(dup1.meta.versionId).toBe('2');
+    expect(dup1.link.filter((l: any) => l.type === 'replaced-by')).toHaveLength(1);
+
+    const beforeCount = (await db.selectFrom('sync_amendments').selectAll().where('site_id', '=', 'lab-a').execute()).length;
+
+    const second = await store.mergePatients({ survivorId: 'p-surv', duplicateId: 'p-dup', agent: 'mpi', referencingRefs: refs });
+    expect(second.repointed).toBe(0);
+    expect(second.provenanceId).toBe('');
+
+    // Duplicate Patient NOT re-bumped and link NOT duplicated.
+    const dup2 = (await store.get('Patient', 'p-dup')) as any;
+    expect(dup2.meta.versionId).toBe('2');
+    expect(dup2.link.filter((l: any) => l.type === 'replaced-by')).toHaveLength(1);
+
+    // The second (no-op) call added no outbox rows.
+    const afterCount = (await db.selectFrom('sync_amendments').selectAll().where('site_id', '=', 'lab-a').execute()).length;
+    expect(afterCount).toBe(beforeCount);
+  });
 });
