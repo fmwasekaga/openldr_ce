@@ -127,7 +127,7 @@ S5's bundles carry push + pull records. Extending them to a *third, site-scoped*
 | `sync_amendments` outbox (migration 054) | `@openldr/db` migrations |
 | `authorAmendment` transactional primitive (+ Provenance) | `@openldr/db` fhir-store + `@openldr/bootstrap` |
 | `openldr sync amend` CLI | `@openldr/cli` (`sync.ts`) |
-| `POST /api/sync/amend` (lab_admin) | `@openldr/server` (settings-routes) |
+| `POST /api/settings/sync/amend` (lab_admin) | `@openldr/server` (settings-routes) |
 | `serveAmendments` | `packages/bootstrap/src/sync-serve.ts` |
 | `POST /api/sync/pull-amendments` (site-scoped) | `@openldr/server` (sync-routes) |
 | `'sync-amend-pull'` cursor + pull-worker drain step | `@openldr/sync` + `@openldr/bootstrap` |
