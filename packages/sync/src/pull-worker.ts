@@ -76,7 +76,20 @@ export function createSyncPullRunner(deps: PullDeps): SyncPullRunner {
           await deps.applyRecord(rec);
           applied++;
           safeSeq = rec.seq; // fully applied → safe up to and including its seq
-          if (isHold(rec)) await deps.holdSuccess?.(rec); // S7-A: clear any quarantine counter for this entity
+          // S7-A: clear any quarantine counter for this entity. The apply ALREADY succeeded, so a failure
+          // to clear the counter must never fall through to the catch below — that would call holdFailure
+          // and increment `attempts` for a healthy entity, eventually quarantining it. Non-fatal: warn and
+          // move on (the stale counter is cleared by the next successful cycle).
+          if (isHold(rec)) {
+            try {
+              await deps.holdSuccess?.(rec);
+            } catch (e) {
+              deps.logger.warn(
+                { err: (e as Error).message, entityType: rec.entityType, entityId: rec.entityId },
+                'sync pull: clearing quarantine counter failed (non-fatal)',
+              );
+            }
+          }
         } catch (err) {
           if (isHold(rec)) {
             const decision = (await deps.holdFailure?.(rec, err as Error)) ?? 'hold';

@@ -413,6 +413,38 @@ describe('createSyncPullRunner', () => {
     expect(cursor).toBe(5);
   });
 
+  it('a throwing holdSuccess is non-fatal: the apply still counts, no holdFailure, cursor still advances', async () => {
+    // Regression: holdSuccess used to run inside the apply try, so a DB blip while CLEARING the counter
+    // was misread as an apply failure → holdFailure incremented `attempts` for a HEALTHY entity, which
+    // repeated could quarantine it. A clear failure must only warn.
+    let cursor = 0;
+    const holdFailure = vi.fn(async () => 'hold' as const);
+    const logger = fakeLogger();
+    const runner = createSyncPullRunner({
+      getToken: async () => 't',
+      postPull: async () =>
+        ({
+          records: [{ seq: 5, entityType: 'terminology_system', entityId: 'http://x', op: 'upsert', body: {} }],
+          nextSeq: 5,
+        }) as any,
+      applyRecord: async () => 'applied',
+      readCursor: async () => cursor,
+      advanceCursor: async (s: number) => {
+        cursor = s;
+      },
+      holdFailure,
+      holdSuccess: async () => {
+        throw new Error('db blip');
+      },
+      logger,
+    });
+    const applied = await runner.runCycle();
+    expect(applied).toBe(1); // the apply DID succeed
+    expect(holdFailure).not.toHaveBeenCalled(); // and must never be counted as a failure
+    expect(cursor).toBe(5); // the clear failure must not wedge the stream
+    expect(logger.warns).toHaveLength(1); // just a warn
+  });
+
   it('never calls holdFailure on a transport failure (outer catch)', async () => {
     let called = false;
     const runner = createSyncPullRunner({
