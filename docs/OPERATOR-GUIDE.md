@@ -204,11 +204,13 @@ Flow:
 
 2. **On each lab**, enter those values under **Settings → General → Distributed Sync** (or `pnpm openldr settings sync set …`), choose a **mode** — `push`, `pull`, or `bidirectional` — set the interval, and enable. Monitor with the card's live status panel or `pnpm openldr sync status`, and force a pass with **Sync now** / `pnpm openldr sync now`.
 
+Result amendments (co-edit): a central operator can correct a lab-owned result without breaking ownership. `POST /api/settings/sync/amend` (admin, `lab_admin`) or `pnpm openldr sync amend --resource-type <t> --id <id> --status <s> [--reason …] [--patch <json>]` writes a new FHIR version on central and queues it. The owning lab drains those amendments on its next `pull`/`bidirectional` pass through the `'sync-amend-pull'` cursor, applying the higher versionId back into its own store.
+
 Troubleshooting:
 
 - Sync does nothing: confirm it is enabled and the mode is what you expect; re-check the central URL, site id, OIDC issuer, client id, and (if blanked) the secret.
 - `403`/`503` when enrolling on central: the admin service account lacks `manage-clients`/`view-clients` or Keycloak admin is not configured — re-import the realm and retry.
-- Machine endpoints `POST /api/sync/push` and `POST /api/sync/pull` are client-credentials-authed (lab → central); the `/api/settings/sync/*` admin endpoints are `lab_admin` user-authed.
+- Machine endpoints `POST /api/sync/push`, `POST /api/sync/pull`, and `POST /api/sync/pull-amendments` are client-credentials-authed (lab → central); the `/api/settings/sync/*` admin endpoints (including `sync/amend`) are `lab_admin` user-authed.
 
 ## i18n
 

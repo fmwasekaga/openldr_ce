@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import Fastify from 'fastify';
+import { createFhirStore } from '@openldr/db';
+import { makeMigratedDb } from '@openldr/db/testing';
 import { registerSyncRoutes } from './sync-routes';
 
 const SITE = 'lab-A';
@@ -750,5 +752,85 @@ describe('sync routes — POST /api/sync/terminology/map-elements', () => {
     body = res.json();
     expect(body.elements.map((e: any) => [e.sourceSystem, e.sourceCode])).toEqual([['sys-b', 's02']]);
     expect(body.nextKey).toBeNull();
+  });
+});
+
+// --- POST /api/sync/pull-amendments --------------------------------------------------------------
+
+// serveAmendments is a REAL @openldr/bootstrap import (not stubbable), so this suite backs ctx with a
+// migrated pg-mem internalDb + a real FhirStore, seeds amendments per site, and asserts the route
+// passes the token's site through — proving the endpoint is genuinely site-scoped.
+function fakeAmendCtx(db: any, opts: { verify?: (token: string) => Promise<Record<string, unknown>> } = {}) {
+  return {
+    logger: { warn: () => {}, error: () => {}, info: () => {} },
+    auth: { verifyToken: opts.verify ?? (async () => ({ sub: 'client-1', site_id: 'lab-a' })) },
+    internalDb: db,
+  } as any;
+}
+
+// Seed one amended Observation for `siteId` (applyRemote to create, then amend to enqueue an outbox row).
+async function seedAmendment(db: any, siteId: string, id: string) {
+  const store = createFhirStore(db);
+  await store.applyRemote({
+    resourceType: 'Observation',
+    id,
+    version: 1,
+    op: 'upsert',
+    siteId,
+    resource: { resourceType: 'Observation', id, status: 'preliminary' } as any,
+  });
+  await store.amend({ resourceType: 'Observation', id, status: 'amended', agent: 'c' });
+}
+
+describe('sync routes — POST /api/sync/pull-amendments', () => {
+  it('401 when no Authorization header', async () => {
+    const db = await makeMigratedDb();
+    const res = await appWith(fakeAmendCtx(db)).inject({ method: 'POST', url: '/api/sync/pull-amendments', payload: { fromSeq: 0 } });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('403 when token has no site_id claim', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeAmendCtx(db, { verify: async () => ({ sub: 'client-1' }) });
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/sync/pull-amendments', headers: AUTH, payload: { fromSeq: 0 } });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('200 with the token-site amendments as SyncRecords scoped to that site', async () => {
+    const db = await makeMigratedDb();
+    await seedAmendment(db, 'lab-a', 'obs-a');
+    await seedAmendment(db, 'lab-b', 'obs-b'); // a foreign-site amendment that must NOT leak
+    // verifyToken resolves lab-a → the route must pass 'lab-a' through to serveAmendments.
+    const ctx = fakeAmendCtx(db, { verify: async () => ({ sub: 'client-1', site_id: 'lab-a' }) });
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/sync/pull-amendments', headers: AUTH, payload: { fromSeq: 0 } });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.records.length).toBeGreaterThanOrEqual(1);
+    expect(typeof body.nextSeq).toBe('number');
+    // Every record belongs to lab-a — lab-b's amendment never appears.
+    expect(body.records.every((r: any) => r.siteId === 'lab-a')).toBe(true);
+    expect(body.records.some((r: any) => r.id === 'obs-b')).toBe(false);
+  });
+
+  it('a token for a DIFFERENT site sees 0 records (site-scoping proven)', async () => {
+    const db = await makeMigratedDb();
+    await seedAmendment(db, 'lab-a', 'obs-a'); // only lab-a has amendments
+    // A lab-b token must drain ONLY lab-b's (empty) stream — not lab-a's.
+    const ctx = fakeAmendCtx(db, { verify: async () => ({ sub: 'client-2', site_id: 'lab-b' }) });
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/sync/pull-amendments', headers: AUTH, payload: { fromSeq: 0 } });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.records).toHaveLength(0);
+    // Empty window → nextSeq stays at fromSeq (never moves backward).
+    expect(body.nextSeq).toBe(0);
+  });
+
+  it('non-numeric fromSeq is sanitized to 0', async () => {
+    const db = await makeMigratedDb();
+    await seedAmendment(db, 'lab-a', 'obs-a');
+    const ctx = fakeAmendCtx(db, { verify: async () => ({ sub: 'client-1', site_id: 'lab-a' }) });
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/sync/pull-amendments', headers: AUTH, payload: { fromSeq: 'oops' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().records.length).toBeGreaterThanOrEqual(1);
   });
 });

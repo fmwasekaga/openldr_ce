@@ -166,5 +166,6 @@ Admin routes under `/api/settings/sync/*` are user-authed and `lab_admin`-gated.
 | `GET` | `/api/settings/sync/sites` | List enrolled sites (never returns secrets). |
 | `POST` | `/api/settings/sync/sites/:siteId/rotate` | Rotate a site's client secret; returns the new secret once. |
 | `POST` | `/api/settings/sync/sites/:siteId/revoke` | Revoke a site: delete its client and mark the registry row revoked. |
+| `POST` | `/api/settings/sync/amend` | Amend a lab-owned result (central operator): writes a new FHIR version and queues it for the owning lab to pull back. Body: `{ resourceType, id, status, reason?, patch?, agent? }`. |
 
-The machine endpoints `POST /api/sync/push` (a lab pushes operational change-log records up) and `POST /api/sync/pull` (a lab pulls the reference-data delta down) are authenticated by lab **client credentials**, not user sessions, and scope by the token's `site_id`.
+The machine endpoints `POST /api/sync/push` (a lab pushes operational change-log records up) and `POST /api/sync/pull` (a lab pulls the reference-data delta down) are authenticated by lab **client credentials**, not user sessions, and scope by the token's `site_id`. `POST /api/sync/pull-amendments` (also client-credentials-authed and site-scoped) lets the owning lab drain the central-authored amendment stream for its own resources.

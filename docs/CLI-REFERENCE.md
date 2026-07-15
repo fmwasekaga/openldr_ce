@@ -76,6 +76,14 @@ Distributed sync links labs to a central OpenLDR server. Two command groups cove
 | `openldr sync status` | Show live sync status: workers, cursors, and the pending push backlog. |
 | `openldr sync now` | Trigger a sync pass immediately. Fails (exit `1`) if sync is disabled. |
 
+**Result amendment — `openldr sync`** (run on the central server)
+
+| Command | Purpose |
+|---|---|
+| `openldr sync amend --resource-type <t> --id <id> --status <s> [--reason <text>] [--patch <json>] [--agent <who>]` | Amend a lab-owned result on central: writes a new FHIR version and queues it for the owning lab to pull back. `--patch` is a JSON fragment merged into the resource. |
+
+The owning lab drains these central-authored amendments on its pull pass via the `'sync-amend-pull'` cursor (a distinct `change_cursors` consumer alongside `'sync-push'`, `'sync-pull'`, and the terminology cursor).
+
 **Central-side enrollment — `openldr sync`** (run on the central server)
 
 | Command | Purpose |

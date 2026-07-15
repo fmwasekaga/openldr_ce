@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import Fastify from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { registerSettingsRoutes } from './settings-routes';
@@ -94,6 +94,13 @@ function fakeCtx() {
         async regenerateClientSecret() { guard(); return `secret-${++secretSeq}`; },
         async deleteClient(uuid: string) { guard(); for (const [k, v] of clients) if (v === uuid) clients.delete(k); },
       },
+    },
+
+    // Sync S6a: the central amend endpoint delegates the transactional version-bump to fhirStore.amend.
+    // Default returns a canned AmendResult; individual tests override the mock (mockResolvedValue /
+    // mockRejectedValue) to exercise the 200/404/409 paths.
+    fhirStore: {
+      amend: vi.fn(async () => ({ version: 2, provenanceId: 'prov-1', siteId: 'lab-a' })),
     },
 
     audit: { record: async (e: unknown) => { auditEvents.push(e); return e; } },
@@ -324,5 +331,94 @@ describe('settings sync enrollment routes', () => {
     expect((await app.inject({ method: 'GET', url: '/api/settings/sync/sites' })).statusCode).toBe(403);
     expect((await app.inject({ method: 'POST', url: '/api/settings/sync/sites/lab-a/rotate' })).statusCode).toBe(403);
     expect((await app.inject({ method: 'POST', url: '/api/settings/sync/sites/lab-a/revoke' })).statusCode).toBe(403);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sync S6a: central amend endpoint (POST /api/settings/sync/amend)
+// ---------------------------------------------------------------------------
+describe('settings sync amend route', () => {
+  function amendMock(ctx: AppContext) {
+    return (ctx as unknown as { fhirStore: { amend: ReturnType<typeof vi.fn> } }).fhirStore.amend;
+  }
+
+  it('POST /amend → 200: delegates to fhirStore.amend and returns {version, provenanceId, siteId}', async () => {
+    const ctx = fakeCtx();
+    const app = adminApp(ctx);
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/settings/sync/amend',
+      payload: { resourceType: 'Observation', id: 'obs-1', status: 'amended', reason: 'x' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ version: 2, provenanceId: 'prov-1', siteId: 'lab-a' });
+
+    const amend = amendMock(ctx);
+    expect(amend).toHaveBeenCalledTimes(1);
+    expect(amend).toHaveBeenCalledWith(expect.objectContaining({
+      resourceType: 'Observation', id: 'obs-1', status: 'amended', reason: 'x', agent: 'central',
+    }));
+
+    // Audit: action + resource reference + new version; PHI/secret-free.
+    const events = (ctx as unknown as { __auditEvents: unknown[] }).__auditEvents;
+    const ev = events.find((e) => (e as { action: string }).action === 'settings.sync.amend') as
+      | { entityType: string; entityId: string; metadata: { version: number; provenanceId: string; siteId: string } }
+      | undefined;
+    expect(ev).toBeTruthy();
+    expect(ev!.entityType).toBe('Observation');
+    expect(ev!.entityId).toBe('obs-1');
+    expect(ev!.metadata).toEqual({ version: 2, provenanceId: 'prov-1', siteId: 'lab-a' });
+  });
+
+  it('POST /amend → 404 when fhirStore.amend throws ResourceNotFoundError', async () => {
+    const ctx = fakeCtx();
+    amendMock(ctx).mockRejectedValueOnce(Object.assign(new Error('missing'), { name: 'ResourceNotFoundError' }));
+    const app = adminApp(ctx);
+    const res = await app.inject({
+      method: 'POST', url: '/api/settings/sync/amend',
+      payload: { resourceType: 'Observation', id: 'nope', status: 'amended' },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('POST /amend → 409 when fhirStore.amend throws NotLabOwnedError', async () => {
+    const ctx = fakeCtx();
+    amendMock(ctx).mockRejectedValueOnce(Object.assign(new Error('not owned'), { name: 'NotLabOwnedError' }));
+    const app = adminApp(ctx);
+    const res = await app.inject({
+      method: 'POST', url: '/api/settings/sync/amend',
+      payload: { resourceType: 'Observation', id: 'local-1', status: 'amended' },
+    });
+    expect(res.statusCode).toBe(409);
+  });
+
+  it('POST /amend → 400 when resourceType/id/status missing (amend NOT called)', async () => {
+    const ctx = fakeCtx();
+    const app = adminApp(ctx);
+    for (const payload of [
+      { id: 'obs-1', status: 'amended' },              // no resourceType
+      { resourceType: 'Observation', status: 'amended' }, // no id
+      { resourceType: 'Observation', id: 'obs-1' },       // no status
+      {},
+    ]) {
+      const res = await app.inject({ method: 'POST', url: '/api/settings/sync/amend', payload });
+      expect(res.statusCode).toBe(400);
+    }
+    expect(amendMock(ctx)).not.toHaveBeenCalled();
+  });
+
+  it('rejects non-admin actor → 403', async () => {
+    const ctx = fakeCtx();
+    const app = Fastify();
+    app.addHook('onRequest', async (req) => {
+      req.user = { id: 'tech', username: 'tech', displayName: null, roles: ['lab_technician'] };
+    });
+    registerSettingsRoutes(app, ctx);
+    const res = await app.inject({
+      method: 'POST', url: '/api/settings/sync/amend',
+      payload: { resourceType: 'Observation', id: 'obs-1', status: 'amended' },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(amendMock(ctx)).not.toHaveBeenCalled();
   });
 });

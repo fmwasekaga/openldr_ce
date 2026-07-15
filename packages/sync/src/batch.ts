@@ -58,6 +58,15 @@ export interface PullResponse {
   nextSeq: number;
 }
 
+// Sync S6a: central serves amendment records DOWN to the owning lab — the SAME SyncRecord shape S1
+// push carries UP (version + siteId verbatim from the origin), plus the sync_amendments seq. The lab
+// applies each via fhirStore.applyRemote (higher version wins, idempotent). The request reuses
+// PullRequest ({ fromSeq }); the cursor axis is the lab's 'sync-amend-pull' high-water-mark.
+export interface AmendmentPullResponse {
+  records: (SyncRecord & { seq: number })[];
+  nextSeq: number;
+}
+
 // Sync S3: bulk terminology transfer wire shapes. Mirror the keyset-paginated bulk endpoints
 // (POST /api/sync/terminology/concepts and .../map-elements) — one page of a whole-system /
 // whole-map drain plus the resume key (null on the last, short page).

@@ -1,5 +1,5 @@
 export type { SyncRecord, PushBatch, PushResponse } from './batch';
-export type { PullRecord, PullRequest, PullResponse } from './batch';
+export type { PullRecord, PullRequest, PullResponse, AmendmentPullResponse } from './batch';
 export type { ConceptWire, ConceptsPage, MapElementWire, MapElementsPage } from './batch';
 export { createTerminologyBulkSync } from './terminology-sync';
 export type { TerminologyBulkDeps, TerminologyBulkSync } from './terminology-sync';
@@ -7,6 +7,8 @@ export { createSyncPushRunner, collectPushRecords } from './push-worker';
 export type { PushDeps, SyncPushRunner } from './push-worker';
 export { createSyncPullRunner } from './pull-worker';
 export type { PullDeps, SyncPullRunner } from './pull-worker';
+export { createAmendmentPullRunner } from './amend-pull-worker';
+export type { AmendPullDeps, AmendmentPullRunner } from './amend-pull-worker';
 export { createSyncTokenProvider, SyncTokenError } from './token';
 export type { SyncTokenProviderOptions, SyncTokenProvider } from './token';
 export { readSyncConfig } from './config';
