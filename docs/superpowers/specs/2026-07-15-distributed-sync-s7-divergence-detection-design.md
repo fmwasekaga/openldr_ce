@@ -115,9 +115,21 @@ The last two are real: a lab may delete a resource at `v2` while central amends 
 export type ApplyResult = 'applied' | 'skipped' | 'diverged';
 ```
 
-This is a **deliberately breaking** union widening. Every existing caller's `switch`/tally gets a compile error until it decides what to do, which is how we guarantee no path silently ignores the signal. Callers **log and tally only** — the row is already durably recorded in-transaction — and must **not** treat `'diverged'` as an error.
+Callers **log and tally only** — the row is already durably recorded in-transaction — and must **not** treat `'diverged'` as an error.
 
-Callers: central's `POST /api/sync/push` (`sync-routes.ts`), the amendment pull runner's `applyRecord`, and both S5 bundle-import directions.
+**The compiler does NOT find all the call sites — verified, not assumed.** Of the three:
+
+| Call site | Current shape | Does widening error? |
+|---|---|---|
+| `apps/server/src/sync-routes.ts:135` | `if (result === 'applied') applied++; else skipped++;` | **No** — `else` silently absorbs `'diverged'` into `skipped` |
+| `packages/bootstrap/src/sync-bundle.ts:199` | same if/else shape | **No** — same silent absorption |
+| `packages/sync/src/amend-pull-worker.ts:10` | `applyRecord: (rec) => Promise<'applied' \| 'skipped'>` — a **hardcoded literal union**, not `ApplyResult` | **Yes** — errors at the bootstrap wiring where `applyRemote` is assigned |
+
+So the type system catches **one of three**. The `else`-absorbs-the-new-variant pattern is the same class of hazard as S7-B's bare `reply.send` — a green gate that cannot see the failure mode.
+
+**This is a tally/observability concern, not a correctness one:** decision 6 puts the row write inside `applyRemote`'s transaction precisely so that no caller's behavior can cause a divergence to go unrecorded. A missed call site under-reports `'diverged'` in logs and counts; it never loses the row.
+
+Mitigation, since the compiler won't do it: the plan **enumerates all three sites explicitly** and each gets a test pinning that `'diverged'` is counted as its own thing rather than folded into `skipped`. `AmendPullDeps.applyRecord` is retyped to `ApplyResult` so it stops drifting from the store it wraps.
 
 ## 6. The both-sides symmetry (why detect-only is sufficient)
 
@@ -234,3 +246,5 @@ Per the S7-A/S7-B lesson (three separate times a green unit gate could not see t
 - **Resolving a divergence by amending at `max+1` does not auto-clear its row** — decision 3, not an oversight.
 - **`lab_admin` can read result content** through the detail endpoint. Accepted deliberately (decision 4) and mitigated by the list/detail split + the view audit.
 - **Reference/terminology data is out of scope** — single-writer by design, and not an `applyRemote` path.
+- **`PushResponse` deliberately gains no `diverged` count.** Keeping it byte-identical preserves the no-wire-change property of §6 (no peer can break on this slice). The push route still tallies `'diverged'` separately for its **log line**; it just isn't reported back over the wire, because §6's symmetry means the lab discovers its own side independently. Note that `applied + skipped` therefore no longer sums to the handled-record count — `rejects` already broke that property, so no consumer relies on it.
+- **Push-only mode is the one asymmetric case.** A lab in `mode: 'push'` runs no amendment pull runner, so central's amendment never reaches it: central records the divergence (holding the lab's dropped content) and the lab's operator sees nothing. Accepted — a central operator amending a lab that can never receive amendments is a misconfiguration, and central's operator is the one positioned to act. Not worth a wire change to fix.
