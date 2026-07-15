@@ -60,6 +60,14 @@ describe('toErrorResponse', () => {
     expect(toErrorResponse(Object.assign(new Error('odd'), { statusCode: 0 })).status).toBe(500);
   });
 
+  // A non-integer status would reach reply.code() and throw ERR_HTTP_INVALID_STATUS_CODE — from
+  // INSIDE the error handler, i.e. while already handling a failure. Reject it up front instead.
+  it('ignores a non-integer statusCode rather than passing it to reply.code', () => {
+    expect(toErrorResponse(Object.assign(new Error('odd'), { statusCode: 404.5 })).status).toBe(500);
+    expect(toErrorResponse(Object.assign(new Error('odd'), { statusCode: NaN })).status).toBe(500);
+    expect(toErrorResponse(Object.assign(new Error('odd'), { statusCode: Infinity })).status).toBe(500);
+  });
+
   it('falls back to the catalog message when the error carries none', () => {
     const r = toErrorResponse(Object.assign(new Error(''), { statusCode: 415 }));
     expect(r).toEqual({ status: 415, code: 'SY0415', message: 'unsupported media type' });
