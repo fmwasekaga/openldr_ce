@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { makeMigratedDb } from '@openldr/db/testing';
-import { createSyncQuarantineStore } from '@openldr/db';
+import { createSyncQuarantineStore, createSyncDivergenceStore, recordDivergence } from '@openldr/db';
 import { createSyncHandle } from './sync-handle';
 
 type Db = Awaited<ReturnType<typeof makeMigratedDb>>;
@@ -225,5 +225,52 @@ describe('createSyncHandle quarantine', () => {
     const h2 = createSyncHandle({ db, ...base, retryQuarantine: retry });
     expect(await h2.retryQuarantine('terminology_system', 'http://x')).toEqual({ ok: true });
     expect(retry).toHaveBeenCalledWith('terminology_system', 'http://x');
+  });
+});
+
+describe('createSyncHandle divergences', () => {
+  it('exposes divergences even when sync is disabled and no workers exist', async () => {
+    // Regression, mirroring the S7-A quarantine lesson: a store built and populated on some EARLIER
+    // boot must still be listable/gettable/clearable on a push-only or sync-disabled boot. Seed via
+    // the REAL store (not a hand-rolled row) so this pins the actual column mapping too.
+    const db = await makeMigratedDb();
+    const store = createSyncDivergenceStore(db);
+    await recordDivergence(db, {
+      resourceType: 'Observation',
+      resourceId: 'o1',
+      version: 2,
+      localHash: 'a',
+      incomingHash: 'b',
+      incomingBody: { status: 'amended' },
+      incomingSiteId: 'lab-a',
+    });
+
+    const handle = createSyncHandle({
+      db,
+      enabled: false, // sync off this boot
+      mode: 'push',
+      centralUrl: '',
+      siteId: 'lab-a',
+      divergences: store, // ...but the store is still wired
+    });
+
+    const rows = await handle.listDivergences();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ resourceType: 'Observation', resourceId: 'o1', version: 2 });
+    expect((rows[0] as any).incomingBody).toBeUndefined(); // list() stays PHI-free
+
+    const full = await handle.getDivergence('Observation', 'o1', 2);
+    expect(full?.incomingBody).toEqual({ status: 'amended' });
+
+    await handle.clearDivergence('Observation', 'o1', 2);
+    expect(await handle.getDivergence('Observation', 'o1', 2)).toBeUndefined();
+  });
+
+  it('degrades to empty/undefined/no-op when no divergence store was provided', async () => {
+    const db = await makeMigratedDb();
+    const handle = createSyncHandle({ db, enabled: false, mode: 'push', centralUrl: '', siteId: 'lab-a' });
+    expect(await handle.listDivergences()).toEqual([]);
+    expect(await handle.getDivergence('Observation', 'o1', 2)).toBeUndefined();
+    await expect(handle.clearDivergence('Observation', 'o1', 2)).resolves.toBeUndefined();
   });
 });

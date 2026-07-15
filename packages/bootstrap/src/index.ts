@@ -34,7 +34,7 @@ import { createReportScheduler, type ReportScheduler } from './report-scheduler'
 import { createPluginScheduleApi, createPluginScheduleRunner, type PluginScheduleRunner } from './plugin-schedule';
 import { createFormArtifactInstaller, type FormArtifactInstaller } from './form-artifact-install';
 import { type PluginRuntime } from '@openldr/plugins';
-import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore } from '@openldr/db';
+import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
 import { createSyncPushRunner, createSyncPullRunner, createAmendmentPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, type PushBatch, type PushResponse, type SyncConfig } from '@openldr/sync';
@@ -734,6 +734,11 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   // looking for them must not be shown an empty list. Only the RETRY closure below is pull-gated (it
   // genuinely needs the terminology bulk-sync + a token provider).
   const syncQuarantine = createSyncQuarantineStore(internal.db);
+  // Sync S7 (divergence detection): built UNCONDITIONALLY, like the quarantine store above.
+  // applyRemote records a divergence row regardless of which workers started this boot, and an
+  // operator on a push-only or sync-disabled node must still be able to list/clear them. (S7-A shipped
+  // exactly this bug first: listQuarantine was hidden on non-pull nodes until the final review caught it.)
+  const syncDivergences = createSyncDivergenceStore(internal.db);
   let syncRetryQuarantine: ((entityType: string, entityId: string) => Promise<{ ok: boolean; error?: string }>) | undefined;
   const QUARANTINE_THRESHOLD = 3; // Sync S7-A: consecutive bulk-apply failures before quarantine
   const syncDecrypt = (blob: string): string => open(blob, parseSecretKey(cfg.SECRETS_ENCRYPTION_KEY ?? ''));
@@ -937,6 +942,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     pullWorker: syncPullWorker,
     quarantine: syncQuarantine,
     retryQuarantine: syncRetryQuarantine,
+    divergences: syncDivergences,
   });
 
   const pluginData = createPluginDataStore(internal.db);
