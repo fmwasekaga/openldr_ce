@@ -19,7 +19,7 @@ import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, run
 import { runMarketVerify, runMarketInstall, runMarketList, runMarketRollback, runMarketEnable, runMarketDisable, runMarketRemove } from './market';
 import { runArtifactKeygen, runArtifactNew, runArtifactBuild, runArtifactPack, runArtifactSign, runArtifactTest, runArtifactPublish } from './artifact';
 import { runSettingsFlagsList, runSettingsFlagsSet, runSettingsDanger, runSettingsSyncShow, runSettingsSyncSet, runSettingsNumbersList, runSettingsNumbersSet } from './settings';
-import { runSyncStatus, runSyncNow, runSyncEnroll, runSyncList, runSyncRotate, runSyncRevoke, runSyncAmend, runSyncMergePatient, runSyncExport, runSyncImport, runSyncQuarantineList, runSyncQuarantineRetry } from './sync';
+import { runSyncStatus, runSyncNow, runSyncEnroll, runSyncList, runSyncRotate, runSyncRevoke, runSyncAmend, runSyncMergePatient, runSyncExport, runSyncImport, runSyncQuarantineList, runSyncQuarantineRetry, runSyncDivergenceList, runSyncDivergenceShow, runSyncDivergenceClear } from './sync';
 import { runErrorsList } from './errors';
 
 const program = new Command();
@@ -222,6 +222,19 @@ quarantine.command('list').description('List quarantined / holding bulk records'
 quarantine.command('retry <entityType> <entityId>').description('Clear + re-sync a quarantined bulk entity by id (url)').option('--json', 'emit JSON', false)
   .action(async (entityType: string, entityId: string, opts: { json: boolean }) => {
     try { process.exitCode = await runSyncQuarantineRetry(entityType, entityId, opts); } catch (err) { process.stderr.write(`sync quarantine retry failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+const divergence = syncGroup.command('divergence').description('Inspect + clear same-version divergences (sync S7)');
+divergence.command('list').description('List open same-version divergences (PHI-free)').option('--json', 'emit JSON', false)
+  .action(async (opts: { json: boolean }) => {
+    try { process.exitCode = await runSyncDivergenceList(opts); } catch (err) { process.stderr.write(`sync divergence list failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+divergence.command('show <resourceType> <resourceId> <version>').description('Show one divergence INCLUDING the dropped content').option('--json', 'emit JSON', false)
+  .action(async (resourceType: string, resourceId: string, version: string, opts: { json: boolean }) => {
+    try { process.exitCode = await runSyncDivergenceShow(resourceType, resourceId, Number(version), opts); } catch (err) { process.stderr.write(`sync divergence show failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+divergence.command('clear <resourceType> <resourceId> <version>').description('Close a divergence after resolving it').option('--json', 'emit JSON', false)
+  .action(async (resourceType: string, resourceId: string, version: string, opts: { json: boolean }) => {
+    try { process.exitCode = await runSyncDivergenceClear(resourceType, resourceId, Number(version), opts); } catch (err) { process.stderr.write(`sync divergence clear failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
 
 const targetStore = program.command('target-store').description('Target warehouse (Postgres/SQL Server/MySQL/MariaDB) tools');

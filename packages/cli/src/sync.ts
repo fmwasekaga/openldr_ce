@@ -105,6 +105,75 @@ export async function runSyncQuarantineRetry(entityType: string, entityId: strin
   }
 }
 
+// `openldr sync divergence list|show|clear` — inspect + close same-version divergences (Sync S7).
+// Runs on BOTH central and a lab: each side records what IT dropped, so each has its own rows.
+//
+// `list` is PHI-FREE (no bodies). `show` prints the dropped content — that is the point of it: on
+// these links the peer holding the other copy may be unreachable for days, so the divergence must be
+// diffable locally and offline.
+export async function runSyncDivergenceList(opts: JsonOpt): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const rows = await ctx.sync.listDivergences();
+    if (opts.json) {
+      emit(true, rows, '');
+      return 0;
+    }
+    if (rows.length === 0) {
+      process.stdout.write('no divergences\n');
+      return 0;
+    }
+    for (const r of rows) {
+      process.stdout.write(
+        `${r.resourceType}/${r.resourceId}  v${r.version}  site=${r.incomingSiteId}  local=${(r.localHash ?? 'tombstone').slice(0, 12)}  incoming=${(r.incomingHash ?? 'tombstone').slice(0, 12)}  ${r.detectedAt.toISOString()}\n`,
+      );
+    }
+    return 0;
+  } finally {
+    await ctx.close();
+  }
+}
+
+export async function runSyncDivergenceShow(resourceType: string, resourceId: string, version: number, opts: JsonOpt): Promise<number> {
+  if (!Number.isInteger(version) || version < 1) {
+    process.stderr.write('version must be a positive integer\n');
+    return 1;
+  }
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const row = await ctx.sync.getDivergence(resourceType, resourceId, version);
+    if (!row) {
+      emit(opts.json, { ok: false, error: 'not found' }, `no divergence for ${resourceType}/${resourceId} v${version}`);
+      return 1;
+    }
+    emit(opts.json, row, JSON.stringify(row, null, 2));
+    return 0;
+  } finally {
+    await ctx.close();
+  }
+}
+
+export async function runSyncDivergenceClear(resourceType: string, resourceId: string, version: number, opts: JsonOpt): Promise<number> {
+  if (!Number.isInteger(version) || version < 1) {
+    process.stderr.write('version must be a positive integer\n');
+    return 1;
+  }
+  const ctx = await createAppContext(loadConfig());
+  try {
+    // Mirror the endpoint: a double-clear reports honestly instead of silently succeeding.
+    const row = await ctx.sync.getDivergence(resourceType, resourceId, version);
+    if (!row) {
+      emit(opts.json, { ok: false, error: 'not found' }, `no divergence for ${resourceType}/${resourceId} v${version}`);
+      return 1;
+    }
+    await ctx.sync.clearDivergence(resourceType, resourceId, version);
+    emit(opts.json, { ok: true }, `cleared ${resourceType}/${resourceId} v${version}`);
+    return 0;
+  } finally {
+    await ctx.close();
+  }
+}
+
 const SECRET_WARNING = '⚠ Store the client secret AND signing private key now — they will not be shown again.';
 
 export async function runSyncEnroll(
