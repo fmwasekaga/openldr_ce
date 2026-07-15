@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { StripedEmpty } from '@/components/ui/striped-empty';
+import { LoadingState } from '@/components/ui/spinner';
 import { TablePagination } from '@/components/ui/table-pagination';
 import {
   ActiveFilterChips, DataTableToolbar, applyTableState, useTableState, type ColumnDef,
@@ -187,9 +189,9 @@ export function Users() {
             </TableHeader>
             <TableBody className="[&_tr:last-child]:border-b">
               {loading ? (
-                <TableRow><TableCell colSpan={table.visibleColumns.length} className="py-8 text-center text-muted-foreground">{t('common.loading')}</TableCell></TableRow>
+                <TableRow className="hover:bg-transparent"><TableCell colSpan={table.visibleColumns.length} className="p-0"><LoadingState className="min-h-[16rem]" label={t('common.loading')} /></TableCell></TableRow>
               ) : view.rows.length === 0 ? (
-                <TableRow><TableCell colSpan={table.visibleColumns.length} className="py-8 text-center text-muted-foreground">{rows.length === 0 ? t('users.noUsers') : t('users.noMatch')}</TableCell></TableRow>
+                <TableRow className="hover:bg-transparent"><TableCell colSpan={table.visibleColumns.length} className="p-0"><StripedEmpty className="min-h-[16rem]">{rows.length === 0 ? t('users.noUsers') : t('users.noMatch')}</StripedEmpty></TableCell></TableRow>
               ) : (
                 view.rows.map((u) => (
                   <TableRow key={u.id} className="cursor-pointer transition-colors hover:bg-[rgba(70,130,180,0.08)]" onClick={() => setEditing(u)}>

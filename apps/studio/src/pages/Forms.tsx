@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { FileInput, MoreHorizontal, RefreshCw } from 'lucide-react';
 import { AppShell } from '@/shell/AppShell';
 import { Badge } from '@/components/ui/badge';
+import { StripedEmpty } from '@/components/ui/striped-empty';
+import { LoadingState } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -246,9 +248,9 @@ export function Forms() {
             </TableHeader>
             <TableBody className="[&_tr:last-child]:border-b">
               {loading ? (
-                <TableRow><TableCell colSpan={8} className="py-8 text-center text-muted-foreground">Loading...</TableCell></TableRow>
+                <TableRow className="hover:bg-transparent"><TableCell colSpan={8} className="p-0"><LoadingState className="min-h-[16rem]" label="Loading…" /></TableCell></TableRow>
               ) : pageRows.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="py-8 text-center text-muted-foreground">{search ? 'No forms match.' : 'No forms yet.'}</TableCell></TableRow>
+                <TableRow className="hover:bg-transparent"><TableCell colSpan={8} className="p-0"><StripedEmpty className="min-h-[16rem]">{search ? 'No forms match.' : 'No forms yet.'}</StripedEmpty></TableCell></TableRow>
               ) : (
                 pageRows.map((form) => (
                   <TableRow key={form.id} className="cursor-pointer transition-colors hover:bg-[rgba(70,130,180,0.08)]" onClick={() => navigate(rowHref(form))}>

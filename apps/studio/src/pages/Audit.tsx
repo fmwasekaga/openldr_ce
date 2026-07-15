@@ -3,6 +3,8 @@ import { Copy, Filter, RefreshCw, RotateCcw, X } from 'lucide-react';
 import { AppShell } from '@/shell/AppShell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { StripedEmpty } from '@/components/ui/striped-empty';
+import { LoadingState } from '@/components/ui/spinner';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -374,11 +376,11 @@ export function Audit() {
             </TableHeader>
             <TableBody className="[&_tr:last-child]:border-b">
               {loading ? (
-                <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">Loading...</TableCell></TableRow>
+                <TableRow className="hover:bg-transparent"><TableCell colSpan={5} className="p-0"><LoadingState className="min-h-[16rem]" label="Loading…" /></TableCell></TableRow>
               ) : error ? (
-                <TableRow><TableCell colSpan={5} className="py-8 text-center text-destructive">{error}</TableCell></TableRow>
+                <TableRow className="hover:bg-transparent"><TableCell colSpan={5} className="p-0"><div className="flex min-h-[16rem] items-center justify-center px-6 text-center text-sm text-destructive">{error}</div></TableCell></TableRow>
               ) : events.length === 0 ? (
-                <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">No audit events.</TableCell></TableRow>
+                <TableRow className="hover:bg-transparent"><TableCell colSpan={5} className="p-0"><StripedEmpty className="min-h-[16rem]">No audit events.</StripedEmpty></TableCell></TableRow>
               ) : (
                 events.map((event) => (
                   <TableRow key={event.id} className="cursor-pointer transition-colors hover:bg-[rgba(70,130,180,0.08)]" onClick={() => { void openEvent(event); }} title="Open audit event details">

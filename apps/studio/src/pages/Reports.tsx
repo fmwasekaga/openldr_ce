@@ -8,6 +8,7 @@ import {
 } from '../api';
 import { ReportLibrary } from '../reports/ReportLibrary';
 import { TruncatedText } from '@/components/ui/truncated-text';
+import { StripedEmpty } from '@/components/ui/striped-empty';
 import { listReportCategories, type ReportCategory } from '../reports/reportCategoriesApi';
 import { ReportHistoryDrawer } from '../reports/ReportHistoryDrawer';
 import { ReportSchedulesDrawer } from '../reports/ReportSchedulesDrawer';
@@ -46,7 +47,6 @@ export function Reports() {
   const [running, setRunning] = useState(false);
   const [ranAt, setRanAt] = useState('');
   const [activeTab, setActiveTab] = useState<Tab>('document');
-  const [error, setError] = useState<string>();
   const [historyOpen, setHistoryOpen] = useState(false);
 
   const selected = reports.find((r) => r.id === selectedId) ?? null;
@@ -56,7 +56,7 @@ export function Reports() {
   }, []);
 
   useEffect(() => {
-    fetchReports().then(setReports).catch((e) => setError(String(e)));
+    fetchReports().then(setReports).catch((e) => toast.error(String(e)));
     setPinnedIds(loadPinned());
     refreshCategories();
   }, [refreshCategories]);
@@ -67,7 +67,6 @@ export function Reports() {
     setActiveTab('document');
     const seeded = loadLastParams()[id] ?? {};
     setParams(seeded);
-    setError(undefined);
     setOptions({});
     fetchReportOptions(id).then(setOptions).catch(() => setOptions({}));
   }, []);
@@ -90,7 +89,6 @@ export function Reports() {
   const handleRun = useCallback(async () => {
     if (!selectedId) return;
     setRunning(true);
-    setError(undefined);
     try {
       const res = await fetchReport(selectedId, params);
       setResult(res);
@@ -100,7 +98,7 @@ export function Reports() {
       const next = { ...loadLastParams(), [selectedId]: params };
       saveLastParams(next);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      toast.error(e instanceof Error ? e.message : String(e));
     } finally {
       setRunning(false);
     }
@@ -112,7 +110,7 @@ export function Reports() {
   );
 
   const refreshReports = useCallback(() => {
-    fetchReports().then(setReports).catch((e) => setError(String(e)));
+    fetchReports().then(setReports).catch((e) => toast.error(String(e)));
   }, []);
 
   const handleUnpublish = useCallback(() => {
@@ -159,9 +157,7 @@ export function Reports() {
 
         <div className="flex min-w-0 flex-1 flex-col">
           {!selected ? (
-            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              {t('reports.selectReport')}
-            </div>
+            <StripedEmpty>{t('reports.selectReport')}</StripedEmpty>
           ) : (
             <>
               <div className="flex items-start justify-between border-b border-border px-4 py-3">
@@ -194,12 +190,8 @@ export function Reports() {
 
               <ReportSummaryStrip metrics={metrics} />
 
-              {error && <div className="border-b border-border px-4 py-3 text-sm text-destructive">{error}</div>}
-
               {!result ? (
-                <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-                  {running ? t('reports.running') : t('reports.runReport')}
-                </div>
+                <StripedEmpty className="flex-1">{running ? t('reports.running') : t('reports.runReport')}</StripedEmpty>
               ) : (
                 <>
                   <div className="flex items-center border-b border-border px-4">

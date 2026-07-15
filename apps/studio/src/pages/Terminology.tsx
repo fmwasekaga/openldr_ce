@@ -36,6 +36,7 @@ import { OntologyDistributionDialog } from '../terminology/ontology/OntologyDist
 import { OntologyPickerDialog } from '../terminology/ontology/OntologyPickerDialog';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
+import { StripedEmpty } from '../components/ui/striped-empty';
 import { Checkbox } from '../components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
@@ -403,9 +404,9 @@ export function Terminology(): JSX.Element {
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
             {!activeSection ? (
               /* No publisher selected */
-              <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+              <StripedEmpty className="flex-1">
                 Select a publisher to browse its code systems and value sets.
-              </div>
+              </StripedEmpty>
             ) : (
               <>
                 {/* Breadcrumb */}
@@ -620,9 +621,9 @@ export function Terminology(): JSX.Element {
 
                 {/* Empty publisher hint */}
                 {!selectedSystemId && activeSection.systems.length === 0 && activeSection.valueSets.length === 0 && (
-                  <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-muted-foreground">
+                  <StripedEmpty className="flex-1 px-6">
                     No code systems or value sets yet. Use the ⋯ menu to add one.
-                  </div>
+                  </StripedEmpty>
                 )}
 
                 {/* Code-systems table */}

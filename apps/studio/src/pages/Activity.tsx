@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { RefreshCw } from 'lucide-react';
 import { AppShell } from '@/shell/AppShell';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
+import { StripedEmpty } from '@/components/ui/striped-empty';
+import { LoadingState } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -217,11 +219,11 @@ export function Activity() {
             </TableHeader>
             <TableBody className="[&_tr:last-child]:border-b">
               {loading ? (
-                <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">{t('common.loading')}</TableCell></TableRow>
+                <TableRow className="hover:bg-transparent"><TableCell colSpan={5} className="p-0"><LoadingState className="min-h-[16rem]" label={t('common.loading')} /></TableCell></TableRow>
               ) : error ? (
                 <TableRow><TableCell colSpan={5} className="py-8 text-center text-destructive">{error}</TableCell></TableRow>
               ) : filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">{t('activity.empty')}</TableCell></TableRow>
+                <TableRow className="hover:bg-transparent"><TableCell colSpan={5} className="p-0"><StripedEmpty className="min-h-[16rem]">{t('activity.empty')}</StripedEmpty></TableCell></TableRow>
               ) : (
                 pageRows.map((p) => (
                   <TableRow

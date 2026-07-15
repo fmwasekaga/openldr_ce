@@ -16,6 +16,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Bleed } from '@/components/ui/bleed';
+import { StripedEmpty } from '@/components/ui/striped-empty';
 import {
   listConnectors, listSinkPlugins, createConnector, updateConnector, deleteConnector, testConnector,
   type Connector, type SinkPluginRef,
@@ -270,7 +271,9 @@ export function Connectors() {
       </div>
 
       {rows.length === 0 ? (
-        <div className="text-sm text-muted-foreground">{t('settings.connectors.empty')}</div>
+        <Bleed>
+          <StripedEmpty className="min-h-[14rem]">{t('settings.connectors.empty')}</StripedEmpty>
+        </Bleed>
       ) : (
         <Bleed>
         <Table>

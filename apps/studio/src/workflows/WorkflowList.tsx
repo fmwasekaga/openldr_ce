@@ -10,6 +10,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TablePagination } from '@/components/ui/table-pagination';
+import { StripedEmpty } from '@/components/ui/striped-empty';
+import { LoadingState } from '@/components/ui/spinner';
 import { fetchWorkflows, createWorkflow, deleteWorkflow, type Workflow } from '@/api';
 
 function newWorkflowId(): string {
@@ -164,9 +166,9 @@ export function WorkflowList() {
             </TableHeader>
             <TableBody className="[&_tr:last-child]:border-b">
               {loading ? (
-                <TableRow><TableCell colSpan={4} className="py-8 text-center text-muted-foreground">Loading...</TableCell></TableRow>
+                <TableRow className="hover:bg-transparent"><TableCell colSpan={4} className="p-0"><LoadingState className="min-h-[16rem]" label="Loading…" /></TableCell></TableRow>
               ) : pageRows.length === 0 ? (
-                <TableRow><TableCell colSpan={4} className="py-8 text-center text-muted-foreground">{search ? 'No workflows match.' : 'No workflows yet.'}</TableCell></TableRow>
+                <TableRow className="hover:bg-transparent"><TableCell colSpan={4} className="p-0"><StripedEmpty className="min-h-[16rem]">{search ? 'No workflows match.' : 'No workflows yet.'}</StripedEmpty></TableCell></TableRow>
               ) : (
                 pageRows.map((w) => (
                   <TableRow key={w.id} className="cursor-pointer transition-colors hover:bg-[rgba(70,130,180,0.08)]" onClick={() => navigate(`/workflows/${w.id}`)}>

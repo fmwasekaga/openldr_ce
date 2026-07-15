@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { fetchClientConfig } from '@/api';
 import { getOidc } from './oidc';
 import { Button } from '@/components/ui/button';
+import { StripedEmpty } from '@/components/ui/striped-empty';
 
 export function CallbackPage() {
   const { t } = useTranslation();
@@ -28,15 +29,19 @@ export function CallbackPage() {
     } catch { setError(true); }
   };
   return (
-    <div className="flex min-h-screen items-center justify-center">
+    <StripedEmpty className="min-h-screen">
       {error
         ? (
-          <div className="space-y-3 text-center">
+          <div className="flex flex-col items-center gap-4 rounded-lg border border-border bg-card p-8 text-center shadow-sm">
             <p className="text-sm text-destructive">{t('common.callbackError')}</p>
             <Button onClick={() => void retry()}>{t('common.signIn')}</Button>
           </div>
         )
-        : <p className="text-sm text-muted-foreground">{t('common.signingIn')}</p>}
-    </div>
+        : (
+          <div className="flex flex-col items-center gap-4 rounded-lg border border-border bg-card p-8 text-center shadow-sm">
+            <p className="text-sm text-muted-foreground">{t('common.signingIn')}</p>
+          </div>
+        )}
+    </StripedEmpty>
   );
 }

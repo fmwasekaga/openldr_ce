@@ -10,6 +10,8 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { StripedEmpty } from '@/components/ui/striped-empty';
+import { LoadingState } from '@/components/ui/spinner';
 import { fetchSites, enrollSite, rotateSite, revokeSite, type SyncSiteRow, type EnrollResult } from '@/api';
 
 function formatDate(iso: string | null): string {
@@ -134,11 +136,11 @@ export function Sites() {
             </TableHeader>
             <TableBody className="[&_tr:last-child]:border-b">
               {loading ? (
-                <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">{t('sites.loading')}</TableCell></TableRow>
+                <TableRow className="hover:bg-transparent"><TableCell colSpan={6} className="p-0"><LoadingState className="min-h-[16rem]" label={t('sites.loading')} /></TableCell></TableRow>
               ) : errored ? (
-                <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">{t('sites.errorState')}</TableCell></TableRow>
+                <TableRow className="hover:bg-transparent"><TableCell colSpan={6} className="p-0"><div className="flex min-h-[16rem] items-center justify-center px-6 text-center text-sm text-muted-foreground">{t('sites.errorState')}</div></TableCell></TableRow>
               ) : rows.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">{t('sites.empty')}</TableCell></TableRow>
+                <TableRow className="hover:bg-transparent"><TableCell colSpan={6} className="p-0"><StripedEmpty className="min-h-[16rem]">{t('sites.empty')}</StripedEmpty></TableCell></TableRow>
               ) : (
                 rows.map((s) => (
                   <TableRow key={s.siteId}>
