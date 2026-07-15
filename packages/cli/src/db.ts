@@ -51,20 +51,42 @@ export async function runDbReset(opts: JsonOpt & { force: boolean }): Promise<nu
   }
 }
 
+/** Human-readable refusal naming what is outstanding and the (non-destructive) remedy. */
+function pendingMigrationsMessage(pending: { internal: string[]; external: string[] }): string {
+  const count = pending.internal.length + pending.external.length;
+  const lines = [`db seed refused: the database schema is behind the code (${count} pending migration(s)).`];
+  if (pending.internal.length) lines.push(`  internal: ${pending.internal.join(', ')}`);
+  if (pending.external.length) lines.push(`  external: ${pending.external.join(', ')}`);
+  lines.push('', 'Run `openldr db migrate` first, then re-run `openldr db seed`.');
+  return lines.join('\n');
+}
+
 export async function runDbSeed(opts: JsonOpt): Promise<number> {
   const cfg = loadConfig();
   const ctx = await createDbContext(cfg);
-  const appCtx = await createAppContext(cfg);
   try {
-    const { resources, formsSeeded, workflowsSeeded, connectorsSeeded, dashboardsSeeded, settingsSeeded, terminology } = await seedDatabase(ctx, appCtx);
-    emit(
-      opts.json,
-      { ok: true, results: resources, formsSeeded, workflowsSeeded, connectorsSeeded, dashboardsSeeded, settingsSeeded, terminology },
-      `seeded ${resources.length} resources, ${formsSeeded} forms, ${workflowsSeeded} workflow(s), ${connectorsSeeded} connector(s), ${dashboardsSeeded} dashboard(s), ${settingsSeeded} setting(s), ${terminology.valueSetsImported} value set(s), ${terminology.ucumConceptsImported} UCUM concept(s)`,
-    );
-    return 0;
+    // Refuse BEFORE building the app context: creating it boots the SEC-06 workflow-secret
+    // shim, which on a stale schema logs a `relation ... does not exist` stack trace and
+    // then continues. Checking first means the operator sees the cause, not the symptom.
+    const pending = await ctx.pendingMigrations();
+    if (pending.internal.length || pending.external.length) {
+      emit(opts.json, { ok: false, error: 'pending_migrations', pending }, pendingMigrationsMessage(pending));
+      return 1;
+    }
+
+    const appCtx = await createAppContext(cfg);
+    try {
+      const { resources, formsSeeded, workflowsSeeded, connectorsSeeded, dashboardsSeeded, settingsSeeded, terminology } = await seedDatabase(ctx, appCtx);
+      emit(
+        opts.json,
+        { ok: true, results: resources, formsSeeded, workflowsSeeded, connectorsSeeded, dashboardsSeeded, settingsSeeded, terminology },
+        `seeded ${resources.length} resources, ${formsSeeded} forms, ${workflowsSeeded} workflow(s), ${connectorsSeeded} connector(s), ${dashboardsSeeded} dashboard(s), ${settingsSeeded} setting(s), ${terminology.valueSetsImported} value set(s), ${terminology.ucumConceptsImported} UCUM concept(s)`,
+      );
+      return 0;
+    } finally {
+      await appCtx.close();
+    }
   } finally {
-    await appCtx.close();
     await ctx.close();
   }
 }

@@ -29,6 +29,8 @@ export interface DbContext {
   logger: Logger;
   persist(resource: unknown, prov?: Provenance): Promise<PersistResult>;
   migrateAll(): Promise<{ internal: MigrationResultSet; external: MigrationResultSet }>;
+  /** Names of migrations that exist in code but have not run against the database yet. */
+  pendingMigrations(): Promise<{ internal: string[]; external: string[] }>;
   reset(opts?: { force?: boolean }): Promise<void>;
   close(): Promise<void>;
 }
@@ -55,6 +57,13 @@ export async function createDbContext(cfg: Config): Promise<DbContext> {
       const internalRes = await internalMigrator.migrateToLatest();
       const externalRes = await externalMigrator.migrateToLatest();
       return { internal: internalRes, external: externalRes };
+    },
+    // Read-only sibling of migrateAll: a migration kysely knows about but has no
+    // `executedAt` has not run yet. Reuses the migrator handles, so it opens no connections.
+    async pendingMigrations() {
+      const namesOf = async (migrator: typeof internalMigrator) =>
+        (await migrator.getMigrations()).filter((m) => !m.executedAt).map((m) => m.name);
+      return { internal: await namesOf(internalMigrator), external: await namesOf(externalMigrator) };
     },
     async reset(opts = {}) {
       if (cfg.NODE_ENV === 'production' && !opts.force) {
