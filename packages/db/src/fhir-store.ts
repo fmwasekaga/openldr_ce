@@ -29,6 +29,32 @@ export interface RemoteRecord {
 
 export type ApplyResult = 'applied' | 'skipped';
 
+export interface AmendInput {
+  resourceType: string;
+  id: string;
+  status: string; // e.g. 'amended' | 'corrected'
+  patch?: Record<string, unknown>; // shallow-merged into the current resource body
+  agent: string; // Provenance agent.who.display (who authored the amendment)
+  reason?: string; // Provenance reason text
+}
+export interface AmendResult {
+  version: number; // new version of the amended resource
+  provenanceId: string; // id of the created Provenance resource
+  siteId: string; // owning lab (routing key)
+}
+export class ResourceNotFoundError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ResourceNotFoundError';
+  }
+}
+export class NotLabOwnedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NotLabOwnedError';
+  }
+}
+
 export interface FhirStore {
   save(resource: FhirResource, provenance?: Provenance): Promise<SavedRef>;
   get(resourceType: string, id: string): Promise<FhirResource | null>;
@@ -37,6 +63,9 @@ export interface FhirStore {
   // Mirror-apply a remote change at its ORIGIN version/site. Idempotent on (resourceType,id,version):
   // a re-applied version is a no-op ('skipped'). Returns 'applied' when it wrote history/change_log.
   applyRemote(record: RemoteRecord): Promise<ApplyResult>;
+  // Sync S6a: author a central amendment of a lab-owned resource — new version (keeping the owning
+  // lab's site_id) + a Provenance resource + two sync_amendments outbox rows, all in one transaction.
+  amend(input: AmendInput): Promise<AmendResult>;
 }
 
 function contentHash(serialized: string): string {
@@ -53,6 +82,46 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
     // process boot won't take effect until restart. `||` so an empty app_settings value falls through.
     siteId = row?.value || process.env.OPENLDR_SITE_ID || null;
     return siteId;
+  }
+
+  async function nextVersion(trx: Kysely<InternalSchema>, resourceType: string, id: string): Promise<number> {
+    const hi = await trx
+      .selectFrom('fhir.resource_history')
+      .select(sql<number>`coalesce(max(version), 0)`.as('maxv'))
+      .where('resource_type', '=', resourceType)
+      .where('id', '=', id)
+      .executeTakeFirst();
+    return Number(hi?.maxv ?? 0) + 1;
+  }
+  async function writeVersion(
+    trx: Kysely<InternalSchema>,
+    v: { resourceType: string; id: string; version: number; body: Record<string, unknown>; siteId: string },
+  ): Promise<void> {
+    const serialized = JSON.stringify(v.body);
+    const contentHashHex = contentHash(serialized);
+    // INVARIANT (projection safe-frontier): change_log must NOT be the txn's first write — history is
+    // inserted FIRST here so the txn's xid is assigned before nextval(seq) is drawn for change_log.
+    // Do NOT reorder these inserts. (Mirrors save()/applyRemote().)
+    await trx
+      .insertInto('fhir.resource_history')
+      .values({ resource_type: v.resourceType, id: v.id, version: v.version, op: 'upsert', resource: serialized })
+      .execute();
+    await trx
+      .insertInto('fhir.fhir_resources')
+      .values({ resource_type: v.resourceType, id: v.id, version: v.version, version_id: String(v.version), resource: serialized })
+      .onConflict((oc) =>
+        oc.columns(['resource_type', 'id']).doUpdateSet({
+          version: v.version,
+          version_id: String(v.version),
+          resource: serialized,
+          updated_at: sql`now()`,
+        }),
+      )
+      .execute();
+    await trx
+      .insertInto('fhir.change_log')
+      .values({ resource_type: v.resourceType, resource_id: v.id, version: v.version, op: 'upsert', content_hash: contentHashHex, site_id: v.siteId })
+      .execute();
   }
 
   return {
@@ -244,6 +313,72 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
           .values({ resource_type: resourceType, resource_id: id, version, op, content_hash: contentHashHex, site_id: siteId })
           .execute();
         return 'applied';
+      });
+      // Best-effort projection-worker wakeup; interval polling is the correctness path (matches save()).
+      try { await sql`select pg_notify('fhir_changes', '')`.execute(db); } catch { /* ignore */ }
+      return result;
+    },
+
+    async amend(input) {
+      const { resourceType, id, status, patch, agent, reason } = input;
+      const provenanceId = randomUUID();
+      const result = await db.transaction().execute(async (trx): Promise<AmendResult> => {
+        const cur = await trx
+          .selectFrom('fhir.fhir_resources')
+          .select('resource')
+          .where('resource_type', '=', resourceType)
+          .where('id', '=', id)
+          .executeTakeFirst();
+        if (!cur) throw new ResourceNotFoundError(`${resourceType}/${id} not found`);
+
+        // Owning lab = the site_id on the resource's latest change_log row. A lab-owned resource
+        // (pushed up from a lab via applyRemote) carries that lab's site_id; a central-owned /
+        // unsynced resource (saved locally with no configured site) carries null → refuse to amend.
+        const owner = await trx
+          .selectFrom('fhir.change_log')
+          .select('site_id')
+          .where('resource_type', '=', resourceType)
+          .where('resource_id', '=', id)
+          .orderBy('version', 'desc')
+          .limit(1)
+          .executeTakeFirst();
+        const siteId = owner?.site_id ?? '';
+        if (!siteId) throw new NotLabOwnedError(`${resourceType}/${id} is not lab-owned`);
+
+        const nowIso = new Date().toISOString();
+        const base = cur.resource as Record<string, unknown>;
+
+        const amendedVersion = await nextVersion(trx, resourceType, id);
+        const amendedBody: Record<string, unknown> = {
+          ...base,
+          ...(patch ?? {}),
+          id,
+          status,
+          meta: { ...(base.meta as Record<string, unknown> | undefined), versionId: String(amendedVersion), lastUpdated: nowIso },
+        };
+        await writeVersion(trx, { resourceType, id, version: amendedVersion, body: amendedBody, siteId });
+
+        const provBody: Record<string, unknown> = {
+          resourceType: 'Provenance',
+          id: provenanceId,
+          target: [{ reference: `${resourceType}/${id}` }],
+          recorded: nowIso,
+          activity: { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v3-DataOperation', code: 'AMEND', display: 'amend' }] },
+          agent: [{ who: { display: agent } }],
+          ...(reason ? { reason: [{ text: reason }] } : {}),
+          meta: { versionId: '1', lastUpdated: nowIso },
+        };
+        await writeVersion(trx, { resourceType: 'Provenance', id: provenanceId, version: 1, body: provBody, siteId });
+
+        await trx
+          .insertInto('sync_amendments')
+          .values([
+            { site_id: siteId, resource_type: resourceType, resource_id: id, version: amendedVersion },
+            { site_id: siteId, resource_type: 'Provenance', resource_id: provenanceId, version: 1 },
+          ])
+          .execute();
+
+        return { version: amendedVersion, provenanceId, siteId };
       });
       // Best-effort projection-worker wakeup; interval polling is the correctness path (matches save()).
       try { await sql`select pg_notify('fhir_changes', '')`.execute(db); } catch { /* ignore */ }
