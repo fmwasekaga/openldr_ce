@@ -258,9 +258,14 @@ async function main(): Promise<void> {
     assert(rowsAfterA === BATCH_SIZE, `${BATCH_SIZE} rows durably persisted from the gzipped batch (got ${rowsAfterA})`);
     pass(`server inflated a real gzipped request body and persisted all ${BATCH_SIZE} records`);
 
-    // ── 4. PARSE IDENTITY: re-POST the SAME batch A PLAIN → every record recognised as already-applied.
-    //    This is the real identity proof: if the gzipped parse had produced even one differing record,
-    //    the plain re-push would apply it (applied>0) instead of skipping all 200. ──
+    // ── 4. PARSE AGREEMENT: re-POST the SAME batch A PLAIN → every record recognised as already-applied.
+    //    Scope of this proof, precisely: applyRemote's idempotency key is (resource_type, id, version) —
+    //    it does NOT compare bodies. So skipping all 200 proves the gzipped parse produced the same
+    //    records BY IDENTITY (type/id/version) and the same ackSeq as the plain parse would have; it does
+    //    NOT prove the resource CONTENT round-tripped. Content equality is proven separately and directly
+    //    in step 7, which gunzips a real response and asserts byte-equality against the uncompressed one.
+    //    (Body corruption is not a realistic gzip failure mode anyway — inflate is lossless and a damaged
+    //    stream throws rather than silently mutating — but don't claim more than is actually asserted.) ──
     step('4. parse identity: re-POST the SAME batch PLAIN (no Content-Encoding)');
     const plainSameRes = await fetch(`${baseUrl}/api/sync/push`, {
       method: 'POST',
@@ -272,12 +277,12 @@ async function main(): Promise<void> {
     assert(plainSame.applied === 0, `plain re-push applied 0 (got ${plainSame.applied})`);
     assert(
       plainSame.skipped === BATCH_SIZE,
-      `plain parse saw all ${BATCH_SIZE} records as already-present → the gzipped parse produced IDENTICAL records (got ${plainSame.skipped})`,
+      `plain parse saw all ${BATCH_SIZE} records as already-present → the gzipped parse produced the same records by (type,id,version) (got ${plainSame.skipped})`,
     );
     assert(plainSame.ackSeq === gzBody.ackSeq, `plain re-push ackSeq matches the gzipped push (${plainSame.ackSeq} === ${gzBody.ackSeq})`);
     const rowsAfterRepush = await countPushed(`${RUN_TAG}-a`);
     assert(rowsAfterRepush === BATCH_SIZE, `row count unchanged at ${BATCH_SIZE} after the plain re-push (got ${rowsAfterRepush})`);
-    pass('gzipped and plain bodies parse to byte-identical records');
+    pass('gzipped and plain bodies parse to the same records by (type,id,version) + the same ackSeq');
 
     // ── 5. OLD-CENTRAL SAFETY / NO REGRESSION: a FRESH batch B, plain, applies exactly like the gzipped
     //    one did — the plain path is not merely idempotent, it still does real work. ──
