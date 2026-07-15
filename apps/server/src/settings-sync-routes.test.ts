@@ -471,4 +471,24 @@ describe('settings sync amend route', () => {
     });
     expect(res.statusCode).toBe(400);
   });
+
+  // Empty-string activity is falsy → forwarded as undefined AND audited as 'amend' (same guard both sides).
+  it('audits empty-string activity as "amend"', async () => {
+    const ctx = fakeCtx();
+    const app = adminApp(ctx);
+    const res = await app.inject({
+      method: 'POST', url: '/api/settings/sync/amend',
+      payload: { resourceType: 'Observation', id: 'obs-1', status: 'amended', activity: '' },
+    });
+    expect(res.statusCode).toBe(200);
+
+    const amend = amendMock(ctx);
+    expect(amend).toHaveBeenCalledWith(expect.objectContaining({ activity: undefined }));
+
+    const events = (ctx as unknown as { __auditEvents: unknown[] }).__auditEvents;
+    const ev = events.find((e) => (e as { action: string }).action === 'settings.sync.amend') as
+      | { metadata: { activity: string } }
+      | undefined;
+    expect(ev?.metadata.activity).toBe('amend');
+  });
 });

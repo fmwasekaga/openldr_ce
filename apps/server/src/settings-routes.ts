@@ -89,7 +89,7 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
         action: 'settings.sync.amend',
         entityType: b.resourceType,
         entityId: b.id,
-        metadata: { version: result.version, provenanceId: result.provenanceId, siteId: result.siteId, activity: typeof b.activity === 'string' ? b.activity : 'amend' },
+        metadata: { version: result.version, provenanceId: result.provenanceId, siteId: result.siteId, activity: typeof b.activity === 'string' && b.activity ? b.activity : 'amend' },
       });
       reply.code(200).send(result);
     } catch (e) {
