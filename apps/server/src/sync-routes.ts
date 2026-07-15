@@ -31,6 +31,25 @@ async function sitePrincipal(
   return { siteId };
 }
 
+// EVERY async handler below MUST `return reply.send(...)` — the `return` is load-bearing, not style.
+// Do not "tidy" it away.
+//
+// Fastify 5's wrap-thenable.js re-sends the handler's resolved value when:
+//     payload !== undefined || (reply.sent === false && reply.raw.headersSent === false && ...)
+// `reply.sent` is `raw.writableEnded`. With a BARE `reply.send(x); ` the handler resolves to
+// undefined, so the guard falls through to the second clause. Before @fastify/compress (S7-B) that
+// clause was always false — a bare send wrote synchronously, so writableEnded/headersSent were
+// already true by the time the promise resolved, and Fastify skipped the re-send.
+//
+// compress breaks that assumption: once a payload crosses the 1024-byte threshold it is gzipped
+// through an ASYNC stream, so nothing is written yet when the handler's promise resolves — the guard
+// passes and Fastify calls `reply.send(undefined)`, clobbering the real body. The client gets
+// `content-encoding: gzip`, `content-length: 0`, and a gunzip error.
+//
+// `return`ing makes payload === reply (not undefined), which Fastify recognises as already-sent.
+// This bites ONLY responses >= 1024 bytes — i.e. exactly the big pull/terminology pages this slice
+// exists to compress — which is why every sub-threshold unit test stayed green while /api/sync/pull
+// returned empty bodies on the wire. Regression-covered by `pnpm sync:gzip:accept`.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerSyncRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
   // POST /api/sync/push — a lab pushes an ordered window of change_log records. Each record is
@@ -116,7 +135,8 @@ export function registerSyncRoutes(app: FastifyInstance<any, any, any, any>, ctx
 
     // Empty batch → ackSeq stayed at fromSeq (the cursor never moves backward).
     const response: PushResponse = { ackSeq, applied, skipped, rejects };
-    reply.code(200).send(response);
+    // `return` is load-bearing, not style — see the note above registerSyncRoutes.
+    return reply.code(200).send(response);
   });
 
   // POST /api/sync/pull — global reference-data delta since the lab's cursor. Auth-only (NOT
@@ -134,7 +154,7 @@ export function registerSyncRoutes(app: FastifyInstance<any, any, any, any>, ctx
     // (Sync S5) reuses it verbatim. The HTTP route serves everything servePull returns (S3 behaviour
     // unchanged); only the bundle exporter filters terminology signals out.
     const { records, nextSeq } = await servePull(ctx, fromSeq);
-    reply.code(200).send({ records, nextSeq });
+    return reply.code(200).send({ records, nextSeq });
   });
 
   // POST /api/sync/pull-amendments — the owning lab's amendment delta since its 'sync-amend-pull'
@@ -149,7 +169,7 @@ export function registerSyncRoutes(app: FastifyInstance<any, any, any, any>, ctx
     const fromSeq = typeof rawFrom === 'number' && Number.isFinite(rawFrom) ? rawFrom : 0;
 
     const { records, nextSeq } = await serveAmendments(ctx, principal.siteId, fromSeq);
-    reply.code(200).send({ records, nextSeq });
+    return reply.code(200).send({ records, nextSeq });
   });
 
   // POST /api/sync/terminology/concepts — keyset-paginated bulk drain of ONE terminology system's
@@ -170,7 +190,7 @@ export function registerSyncRoutes(app: FastifyInstance<any, any, any, any>, ctx
     // The keyset query lives in @openldr/bootstrap (serveConceptsPage) so the offline pull-bundle
     // exporter (Sync S5) drains the same code. Behaviour unchanged from the inline route.
     const page = await serveConceptsPage(ctx, b.systemUrl, typeof b.afterCode === 'string' && b.afterCode ? b.afterCode : null, limit);
-    reply.send(page);
+    return reply.send(page);
   });
 
   // POST /api/sync/terminology/map-elements — keyset-paginated bulk drain of ONE concept map's
@@ -199,6 +219,6 @@ export function registerSyncRoutes(app: FastifyInstance<any, any, any, any>, ctx
         ? { sourceSystem: b.afterSourceSystem, sourceCode: typeof b.afterSourceCode === 'string' ? b.afterSourceCode : '' }
         : null;
     const page = await serveMapElementsPage(ctx, b.mapUrl, afterKey, limit);
-    reply.send(page);
+    return reply.send(page);
   });
 }
