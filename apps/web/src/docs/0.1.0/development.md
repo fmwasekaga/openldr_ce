@@ -43,7 +43,7 @@ pnpm install
 
 # dev config — enables a no-login dev admin so you don't need to configure Keycloak
 cp .env.example .env
-printf '\nAUTH_DEV_BYPASS=true\n' >> .env
+printf '\nAUTH_DEV_BYPASS=true\n' >> .env   # required: the bypass is off unless you set it
 
 # backing services (Postgres :5433, MinIO :9010/:9011, Keycloak :8180)
 docker compose up -d
@@ -53,9 +53,14 @@ pnpm openldr db reset
 pnpm openldr db seed
 ```
 
-> The database is **not** migrated automatically in dev. If the app shows empty data or
-> the server logs `relation "…" does not exist`, run `pnpm openldr db reset` then
-> `pnpm openldr db seed`.
+> The database is **not** migrated automatically in dev (`MIGRATE_ON_START` is off), so
+> **after any pull that brings new migrations, run `pnpm openldr db migrate`**. It is
+> non-destructive and keeps your data. If the app shows empty data or the server logs
+> `relation "…" does not exist`, that is the fix — `db seed` refuses to run against a
+> schema that is behind the code and tells you what is pending.
+>
+> Reach for `pnpm openldr db reset` only when you actually want a clean slate: it **drops
+> and recreates the schema**, destroying everything in your dev database.
 
 ## Run the apps
 
@@ -72,6 +77,11 @@ Studio proxies `/api` to the server on port 3000. The landing site needs an expl
 on, Studio loads straight in as a dev admin — no sign-in required. Remove it from `.env`
 to exercise the real Keycloak flow.
 
+> `AUTH_DEV_BYPASS` is **off unless you set it explicitly** — it is not implied by
+> `NODE_ENV=development`. If Studio asks you to sign in on an existing checkout, add
+> `AUTH_DEV_BYPASS=true` to `.env`. When it is on, the server logs a warning at startup
+> and Studio shows a banner, because in that mode the API is unauthenticated.
+
 ## Handy commands
 
 | Command | What it does |
@@ -79,7 +89,8 @@ to exercise the real Keycloak flow.
 | `pnpm test` | Run the workspace test suites. |
 | `pnpm typecheck` | Type-check every package and app. |
 | `pnpm build` | Build everything (Turbo). |
-| `pnpm openldr db reset` | Drop and recreate the dev database schema. |
+| `pnpm openldr db migrate` | Apply pending migrations. Non-destructive — run this after a pull. |
+| `pnpm openldr db reset` | Drop and recreate the dev database schema (**destructive**). |
 | `pnpm openldr db seed` | Seed the default forms, workflows, and terminology. |
 | `pnpm -C apps/studio test` | Run just the Studio tests. |
 

@@ -99,6 +99,22 @@ provider.
 | `KEYCLOAK_ADMIN_CLIENT_ID` | Client ID used for admin API calls. |
 | `KEYCLOAK_ADMIN_CLIENT_SECRET` | Client secret for admin API calls. |
 
+### Development-only auth bypass
+
+`AUTH_DEV_BYPASS` turns **authentication off**: any API request without a bearer token is
+served as a dev admin. It exists so local development and end-to-end tests can run without
+a configured Keycloak. It is **off unless you explicitly set it**, and the server refuses
+to start with it enabled under `NODE_ENV=production`.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `AUTH_DEV_BYPASS` | `false` | Serve unauthenticated API requests as a dev admin. Local development only. |
+| `AUTH_DEV_USERNAME` | `dev-admin` | Username of the injected dev actor. |
+| `AUTH_DEV_ROLES` | `lab_admin` | Roles granted to the injected dev actor. |
+
+Never set this in a deployment. When it is on, Studio shows an "Authentication bypass
+active" banner and the server logs a warning at startup.
+
 ## Secrets
 
 | Variable | Purpose |
