@@ -19,7 +19,7 @@ import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, run
 import { runMarketVerify, runMarketInstall, runMarketList, runMarketRollback, runMarketEnable, runMarketDisable, runMarketRemove } from './market';
 import { runArtifactKeygen, runArtifactNew, runArtifactBuild, runArtifactPack, runArtifactSign, runArtifactTest, runArtifactPublish } from './artifact';
 import { runSettingsFlagsList, runSettingsFlagsSet, runSettingsDanger, runSettingsSyncShow, runSettingsSyncSet, runSettingsNumbersList, runSettingsNumbersSet } from './settings';
-import { runSyncStatus, runSyncNow, runSyncEnroll, runSyncList, runSyncRotate, runSyncRevoke, runSyncAmend, runSyncExport, runSyncImport } from './sync';
+import { runSyncStatus, runSyncNow, runSyncEnroll, runSyncList, runSyncRotate, runSyncRevoke, runSyncAmend, runSyncMergePatient, runSyncExport, runSyncImport } from './sync';
 import { runErrorsList } from './errors';
 
 const program = new Command();
@@ -194,6 +194,16 @@ syncGroup.command('amend')
   .option('--json', 'emit JSON', false)
   .action(async (opts) => {
     try { process.exitCode = await runSyncAmend(opts); } catch (err) { process.stderr.write(`sync amend failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+syncGroup.command('merge-patient')
+  .description('Merge a duplicate patient into a survivor (central, intra-lab) — re-points the patient\'s lab history')
+  .requiredOption('--survivor <id>', 'the canonical Patient id to keep')
+  .requiredOption('--duplicate <id>', 'the duplicate Patient id to replace')
+  .option('--reason <text>', 'merge reason (recorded on the Provenance)')
+  .option('--agent <name>', 'merging agent name', 'central')
+  .option('--json', 'emit JSON', false)
+  .action(async (opts) => {
+    try { process.exitCode = await runSyncMergePatient(opts); } catch (err) { process.stderr.write(`sync merge-patient failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
 syncGroup.command('export').description('Write a signed offline sync bundle to a file (lab→push, central→pull with --site)')
   .option('--kind <kind>', 'push|pull (default: pull if --site is given, else push)').option('--site <id>', 'site id (required for a pull export)').option('--from <seq>', 'push: start cursor (default: safe frontier)').option('--out <file>', 'output bundle path').option('--json', 'emit the bundle manifest as JSON', false)

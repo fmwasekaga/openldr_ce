@@ -9,6 +9,7 @@ import {
   importPushBundle,
   exportPullBundle,
   importPullBundle,
+  mergePatients,
 } from '@openldr/bootstrap';
 import { unpackBundle } from '@openldr/sync';
 import { loadConfig } from '@openldr/config';
@@ -166,6 +167,48 @@ export async function runSyncAmend(opts: {
         return fail(json, 'only Observation, DiagnosticReport, ServiceRequest can be amended');
       default:
         return fail(json, `sync amend failed: ${redactError(err)}`);
+    }
+  } finally {
+    await ctx.close();
+  }
+}
+
+// `openldr sync merge-patient` — intra-lab patient merge (Sync S6b). Runs on central.
+export async function runSyncMergePatient(opts: {
+  survivor?: string;
+  duplicate?: string;
+  reason?: string;
+  agent?: string;
+  json?: boolean;
+}): Promise<number> {
+  const json = opts.json ?? false;
+  if (!opts.survivor || !opts.duplicate) return fail(json, '--survivor and --duplicate are required');
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const result = await mergePatients(ctx, {
+      survivorId: opts.survivor,
+      duplicateId: opts.duplicate,
+      reason: opts.reason,
+      agent: opts.agent ?? 'central',
+    });
+    emit(json, result, [
+      `survivor   = ${result.survivorId}`,
+      `duplicate  = ${result.duplicateId}`,
+      `repointed  = ${result.repointed}`,
+      `provenance = ${result.provenanceId}`,
+      `owningSite = ${result.siteId}`,
+    ].join('\n'));
+    return 0;
+  } catch (err) {
+    switch (err instanceof Error ? err.name : '') {
+      case 'SamePatientError':
+        return fail(json, 'survivor and duplicate are the same patient');
+      case 'PatientNotFoundError':
+        return fail(json, 'patient not found');
+      case 'CrossSiteMergeError':
+        return fail(json, 'patients are not owned by the same site (intra-lab merge only)');
+      default:
+        return fail(json, `sync merge-patient failed: ${redactError(err)}`);
     }
   } finally {
     await ctx.close();
