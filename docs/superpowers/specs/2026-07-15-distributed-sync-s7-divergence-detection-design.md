@@ -122,7 +122,7 @@ Callers **log and tally only** — the row is already durably recorded in-transa
 | Call site | Current shape | Does widening error? |
 |---|---|---|
 | `apps/server/src/sync-routes.ts:135` | `if (result === 'applied') applied++; else skipped++;` | **No** — `else` silently absorbs `'diverged'` into `skipped` |
-| `packages/bootstrap/src/sync-bundle.ts:199` | same if/else shape | **No** — same silent absorption |
+| `packages/bootstrap/src/sync-bundle.ts:198` | `if (result === 'applied') applied++;` — **no `else`, no `skipped` counter at all** (verified: `skipped` appears nowhere in the file; it returns `{applied, ackSeq, siteId}`) | **No** — `'diverged'` is dropped with no branch whatsoever |
 | `packages/sync/src/amend-pull-worker.ts:10` | `applyRecord: (rec) => Promise<'applied' \| 'skipped'>` — a **hardcoded literal union**, not `ApplyResult` | **Yes** — errors at the bootstrap wiring where `applyRemote` is assigned |
 
 So the type system catches **one of three**. The `else`-absorbs-the-new-variant pattern is the same class of hazard as S7-B's bare `reply.send` — a green gate that cannot see the failure mode.
