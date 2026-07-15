@@ -181,6 +181,7 @@ export const pt: EnShape = {
     title: 'Definições',
     subNav: {
       general: 'Geral',
+      sites: 'Sites',
       connectors: 'Conectores',
       marketplace: 'Marketplace',
     },
@@ -539,7 +540,6 @@ export const pt: EnShape = {
     terminology: 'Terminologia',
     forms: 'Formulários',
     users: 'Utilizadores',
-    sites: 'Sites',
     audit: 'Auditoria',
     activity: 'Atividade',
     query: 'Consulta',

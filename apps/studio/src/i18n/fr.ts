@@ -181,6 +181,7 @@ export const fr: EnShape = {
     title: 'Paramètres',
     subNav: {
       general: 'Général',
+      sites: 'Sites',
       connectors: 'Connecteurs',
       marketplace: 'Marketplace',
     },
@@ -539,7 +540,6 @@ export const fr: EnShape = {
     terminology: 'Terminologie',
     forms: 'Formulaires',
     users: 'Utilisateurs',
-    sites: 'Sites',
     audit: 'Audit',
     activity: 'Activité',
     query: 'Requête',

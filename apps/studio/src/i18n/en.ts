@@ -177,6 +177,7 @@ export const en = {
     title: 'Settings',
     subNav: {
       general: 'General',
+      sites: 'Sites',
       connectors: 'Connectors',
       marketplace: 'Marketplace',
     },
@@ -543,7 +544,6 @@ export const en = {
     terminology: 'Terminology',
     forms: 'Forms',
     users: 'Users',
-    sites: 'Sites',
     audit: 'Audit',
     activity: 'Activity',
     query: 'Query',

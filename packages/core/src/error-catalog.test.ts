@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { AppError, CATALOG, DOMAINS, appError, catalogFor, domainForPrefix, codeForUnknown } from './error-catalog';
+import { AppError, CATALOG, DOMAINS, appError, catalogFor, domainForPrefix, codeForStatus, codeForUnknown } from './error-catalog';
 import { ZodError } from 'zod';
 
 describe('error catalog', () => {
@@ -67,5 +67,35 @@ describe('error catalog', () => {
   it('codeForUnknown does not false-positive on connect-substring words', () => {
     expect(codeForUnknown(new Error('reconnect attempt failed'))).toBe('SY0500');
     expect(codeForUnknown(new Error('connection refused'))).toBe('SY0503');
+  });
+
+  // codeForStatus derives the code from `SY0<status>`, so the derivation is only sound while every
+  // status-named SY entry actually carries the status it is named for. Pin that invariant.
+  it('every SY04xx/SY05xx entry has an httpStatus matching its own number', () => {
+    const statusNamed = Object.values(CATALOG).filter((e) => /^SY0[45]\d\d$/.test(e.code));
+    expect(statusNamed.length).toBeGreaterThan(0);
+    for (const entry of statusNamed) {
+      expect(entry.httpStatus, `${entry.code} must map to HTTP ${entry.code.slice(2)}`).toBe(Number(entry.code.slice(2)));
+    }
+  });
+
+  it('codeForStatus returns the exact catalog entry for a status it knows', () => {
+    expect(codeForStatus(400)).toBe('SY0400');
+    expect(codeForStatus(413)).toBe('SY0413');
+    expect(codeForStatus(415)).toBe('SY0415');
+    expect(codeForStatus(503)).toBe('SY0503');
+  });
+
+  it('codeForStatus falls back to the generic code for a status with no entry', () => {
+    expect(codeForStatus(422)).toBe('SY0400'); // unmapped 4xx → generic bad request
+    expect(codeForStatus(429)).toBe('SY0400');
+    expect(codeForStatus(502)).toBe('SY0500'); // unmapped 5xx → generic server error
+    expect(codeForStatus(504)).toBe('SY0500');
+  });
+
+  it('codeForStatus only ever answers with a real catalog code', () => {
+    for (let status = 400; status <= 599; status++) {
+      expect(CATALOG[codeForStatus(status)], `status ${status}`).toBeDefined();
+    }
   });
 });

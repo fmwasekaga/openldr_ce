@@ -7,7 +7,7 @@ import { DashboardPage } from './dashboard/DashboardPage';
 import { Audit } from './pages/Audit';
 import { Activity } from './pages/Activity';
 import { Users } from './pages/Users';
-import { Sites } from './pages/Sites';
+import { Sites } from './pages/settings/Sites';
 import { SettingsShell } from '@/pages/settings/SettingsShell';
 import { General } from '@/pages/settings/General';
 import { Marketplace } from '@/pages/settings/Marketplace';
@@ -37,10 +37,13 @@ export function App() {
       <Route path="/query" element={<RequireRole roles={['lab_admin', 'lab_manager', 'data_analyst']}><QueryPage /></RequireRole>} />
       <Route path="/terminology" element={<Terminology />} />
       <Route path="/users" element={<RequireRole role="lab_admin"><Users /></RequireRole>} />
-      <Route path="/sites" element={<RequireRole role="lab_admin"><Sites /></RequireRole>} />
+      {/* Sites moved under Settings (was top-level /sites) so it isn't confused with a future
+          Facilities / master facility list. The old path redirects so existing links keep working. */}
+      <Route path="/sites" element={<Navigate to="/settings/sites" replace />} />
       <Route path="/settings" element={<RequireRole><SettingsShell /></RequireRole>}>
         <Route index element={<Navigate to="general" replace />} />
         <Route path="general" element={<RequireRole><General /></RequireRole>} />
+        <Route path="sites" element={<RequireRole role="lab_admin"><Sites /></RequireRole>} />
         <Route path="marketplace" element={<RequireRole role="lab_admin"><Marketplace /></RequireRole>} />
         <Route path="connectors" element={<RequireRole role="lab_admin"><Connectors /></RequireRole>} />
       </Route>
