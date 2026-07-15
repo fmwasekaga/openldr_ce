@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Kysely } from 'kysely';
 import { makeMigratedDb } from './migrations/internal/test-helpers';
-import { createFhirStore, ResourceNotFoundError, NotLabOwnedError } from './fhir-store';
+import { createFhirStore, ResourceNotFoundError, NotLabOwnedError, UnsupportedResourceTypeError } from './fhir-store';
 
 async function memDb(): Promise<Kysely<any>> {
   return makeMigratedDb() as unknown as Promise<Kysely<any>>;
@@ -115,5 +115,36 @@ describe('FhirStore.amend', () => {
     await expect(
       store.amend({ resourceType: 'Observation', id: 'local-1', status: 'amended', agent: 'c' }),
     ).rejects.toBeInstanceOf(NotLabOwnedError);
+  });
+
+  it('amends a ServiceRequest with activity=update: Provenance activity is UPDATE, version bumped, site preserved', async () => {
+    const store = createFhirStore(db);
+    await store.applyRemote({ resourceType: 'ServiceRequest', id: 'sr-1', version: 1, op: 'upsert', siteId: 'lab-a', resource: { resourceType: 'ServiceRequest', id: 'sr-1', status: 'active' } as any });
+
+    const result = await store.amend({ resourceType: 'ServiceRequest', id: 'sr-1', status: 'completed', activity: 'update', agent: 'central-ops', reason: 'order fulfilled' });
+
+    expect(result.version).toBe(2);
+    expect(result.siteId).toBe('lab-a');
+    const sr = (await store.get('ServiceRequest', 'sr-1')) as any;
+    expect(sr.status).toBe('completed');
+    expect(sr.meta.versionId).toBe('2');
+    const prov = (await store.get('Provenance', result.provenanceId)) as any;
+    expect(prov.activity.coding[0].code).toBe('UPDATE');
+    expect(prov.activity.coding[0].display).toBe('update');
+  });
+
+  it('defaults activity to AMEND when omitted (S6a regression guard)', async () => {
+    const store = createFhirStore(db);
+    await store.applyRemote({ resourceType: 'Observation', id: 'obs-def', version: 1, op: 'upsert', siteId: 'lab-a', resource: { resourceType: 'Observation', id: 'obs-def', status: 'preliminary' } as any });
+    const result = await store.amend({ resourceType: 'Observation', id: 'obs-def', status: 'amended', agent: 'c' });
+    const prov = (await store.get('Provenance', result.provenanceId)) as any;
+    expect(prov.activity.coding[0].code).toBe('AMEND');
+    expect(prov.activity.coding[0].display).toBe('amend');
+  });
+
+  it('rejects a non-allowlisted resource type with UnsupportedResourceTypeError (before any write)', async () => {
+    const store = createFhirStore(db);
+    // No Patient row exists — the allowlist check must fire regardless (before the not-found check).
+    await expect(store.amend({ resourceType: 'Patient', id: 'p-1', status: 'active', agent: 'c' })).rejects.toBeInstanceOf(UnsupportedResourceTypeError);
   });
 });

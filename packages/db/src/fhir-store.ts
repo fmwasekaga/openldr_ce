@@ -36,6 +36,9 @@ export interface AmendInput {
   patch?: Record<string, unknown>; // shallow-merged into the current resource body
   agent: string; // Provenance agent.who.display (who authored the amendment)
   reason?: string; // Provenance reason text
+  activity?: string; // Provenance activity token (Sync S6c). Default 'amend' (result correction);
+                     // an order status/metadata change passes 'update'. Mapped to the v3-DataOperation
+                     // coding as { code: activity.toUpperCase(), display: activity.toLowerCase() }.
 }
 export interface AmendResult {
   version: number; // new version of the amended resource
@@ -54,6 +57,17 @@ export class NotLabOwnedError extends Error {
     this.name = 'NotLabOwnedError';
   }
 }
+export class UnsupportedResourceTypeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'UnsupportedResourceTypeError';
+  }
+}
+
+// Sync S6c: the resource types a central operator may amend/co-edit. Results (Observation /
+// DiagnosticReport) + lab orders (ServiceRequest). Anything else is rejected — amend must not inject a
+// `status`/version onto an arbitrary lab-owned resource type.
+export const AMENDABLE_TYPES: ReadonlySet<string> = new Set(['Observation', 'DiagnosticReport', 'ServiceRequest']);
 
 export interface FhirStore {
   save(resource: FhirResource, provenance?: Provenance): Promise<SavedRef>;
@@ -324,7 +338,11 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
     },
 
     async amend(input) {
-      const { resourceType, id, status, patch, agent, reason } = input;
+      const { resourceType, id, status, patch, agent, reason, activity } = input;
+      if (!AMENDABLE_TYPES.has(resourceType)) {
+        throw new UnsupportedResourceTypeError(`${resourceType} is not amendable (allowed: ${[...AMENDABLE_TYPES].join(', ')})`);
+      }
+      const activityCode = activity ?? 'amend';
       const provenanceId = randomUUID();
       const result = await db.transaction().execute(async (trx): Promise<AmendResult> => {
         const cur = await trx
@@ -371,7 +389,7 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
           id: provenanceId,
           target: [{ reference: `${resourceType}/${id}` }],
           recorded: nowIso,
-          activity: { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v3-DataOperation', code: 'AMEND', display: 'amend' }] },
+          activity: { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v3-DataOperation', code: activityCode.toUpperCase(), display: activityCode.toLowerCase() }] },
           agent: [{ who: { display: agent } }],
           ...(reason ? { reason: [{ text: reason }] } : {}),
           meta: { versionId: '1', lastUpdated: nowIso },
