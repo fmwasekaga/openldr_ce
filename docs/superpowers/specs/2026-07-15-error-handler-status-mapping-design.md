@@ -17,10 +17,23 @@ So on every route today, a client's own bad request is reported as a server erro
 | schema validation failure      | `FST_ERR_VALIDATION`            | 400         | 500   |
 | unsupported content-type       | `FST_ERR_CTP_INVALID_MEDIA_TYPE`| 415         | 500   |
 
-`apps/server/src/workflows-routes.ts:99` throws
-`Object.assign(new Error('file too large'), { statusCode: 413 })` — flattened to 500 the same way.
-
 This is wrong for clients and it buries real 500s in noise.
+
+### A second, different defect at the workflows 413
+
+`apps/server/src/workflows-routes.ts` throws
+`Object.assign(new Error('file too large'), { statusCode: 413 })`. This was initially assumed to be
+flattened to 500 the same way — **it isn't**. Both `readBinaryBody` call sites catch it and
+hand-roll a reply:
+
+```js
+catch (err) { const code = (err as { statusCode?: number }).statusCode ?? 400; reply.code(code); return { error: (err as Error).message }; }
+```
+
+So it never reaches the central handler and already answers 413. The actual defect is that these two
+routes bypass the error contract entirely: their body is `{ error }` with **no `code` and no
+`correlationId`**. Fixed by throwing an `AppError` and deleting the local catches, so they propagate
+like every other route.
 
 ## Why the obvious fix is wrong
 
@@ -94,10 +107,17 @@ untouched.
 
 ### Call site
 
-`apps/server/src/workflows-routes.ts:99` converts to `throw appError('SY0413')`. Both forms produce
-413/SY0413 under the new handler, but quoting the catalog at the throw site matches the rest of the
-codebase and makes intent legible. The plain-`statusCode` mapping then exists purely as the safety
-net for third-party library errors, which is its honest job.
+`readBinaryBody` converts to `throw appError('SY0413')` (and `appError('SY0400')` for a non-binary
+body), and **both local catches are deleted** so the error propagates to the central handler. That
+deletion — not the throw conversion — is what actually fixes those routes, per the second defect
+above.
+
+Quoting the catalog at the throw site matches the rest of the codebase. The plain-`statusCode`
+mapping then exists purely as the safety net for third-party library errors, which is its honest job
+— after this change there are no remaining hand-rolled `statusCode` throws in `apps/server/src`.
+
+`reply` becomes unused in the `/uploads` handler once its catch is gone, and is dropped from the
+signature.
 
 ## Testing
 
@@ -121,6 +141,18 @@ at the pure-function level:
 **Core — `packages/core/src/error-catalog.test.ts`:**
 - `codeForStatus` exact hits, 4xx fallback, 5xx fallback
 - the `SY0[45]\d\d` httpStatus invariant
+
+## Implementation gotchas
+
+Two things surfaced during the build that the design didn't anticipate:
+
+- **`errorMessage(err)` never returns empty for an `Error`.** It degrades to `err.name`, so an error
+  with an empty message yields a bare `"Error"` — which would shadow the catalog default and make
+  `errorMessage(err) || CATALOG[code].message` unreachable dead code. The mapping branch therefore
+  tests `err.message` directly and only calls `errorMessage` when there is one.
+- **Fastify ships a default `text/plain` body parser.** A `text/plain` request is accepted with a
+  200, so it does NOT trigger `FST_ERR_CTP_INVALID_MEDIA_TYPE`. The 415 test uses `application/xml`,
+  which has no registered parser.
 
 ## Migration: S7-B (`feat/sync-s7-gzip`)
 
