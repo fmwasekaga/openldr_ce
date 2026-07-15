@@ -206,7 +206,7 @@ export function Activity() {
           </Button>
         </div>
 
-        <div className="flex-1 overflow-auto">
+        <div className="flex flex-1 flex-col overflow-auto">
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
@@ -217,15 +217,9 @@ export function Activity() {
                 <TableHead className="w-28 text-xs uppercase">{t('activity.colStatus')}</TableHead>
               </TableRow>
             </TableHeader>
+            {!loading && !error && filtered.length > 0 && (
             <TableBody className="[&_tr:last-child]:border-b">
-              {loading ? (
-                <TableRow className="hover:bg-transparent"><TableCell colSpan={5} className="p-0"><LoadingState className="min-h-[16rem]" label={t('common.loading')} /></TableCell></TableRow>
-              ) : error ? (
-                <TableRow><TableCell colSpan={5} className="py-8 text-center text-destructive">{error}</TableCell></TableRow>
-              ) : filtered.length === 0 ? (
-                <TableRow className="hover:bg-transparent"><TableCell colSpan={5} className="p-0"><StripedEmpty className="min-h-[16rem]">{t('activity.empty')}</StripedEmpty></TableCell></TableRow>
-              ) : (
-                pageRows.map((p) => (
+                {pageRows.map((p) => (
                   <TableRow
                     key={p.correlationId}
                     className="cursor-pointer transition-colors hover:bg-[rgba(70,130,180,0.08)]"
@@ -243,10 +237,13 @@ export function Activity() {
                     </TableCell>
                     <TableCell><StatusBadge status={p.status} /></TableCell>
                   </TableRow>
-                ))
-              )}
+                ))}
             </TableBody>
+            )}
           </Table>
+          {loading && <LoadingState className="flex-1" label={t('common.loading')} />}
+          {!loading && error && <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-destructive">{error}</div>}
+          {!loading && !error && filtered.length === 0 && <StripedEmpty className="flex-1">{t('activity.empty')}</StripedEmpty>}
         </div>
 
         <TablePagination

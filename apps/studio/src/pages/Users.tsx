@@ -182,25 +182,23 @@ export function Users() {
           {toast ? <div className={toast.kind === 'ok' ? 'rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700' : 'rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive'}>{toast.text}</div> : null}
         </div>
 
-        <div className="flex-1 overflow-auto">
+        <div className="flex flex-1 flex-col overflow-auto">
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>{table.visibleColumns.map((c) => <TableHead key={c.id} className={c.headClassName}>{c.id === '__actions' ? '' : t(c.labelKey)}</TableHead>)}</TableRow>
             </TableHeader>
-            <TableBody className="[&_tr:last-child]:border-b">
-              {loading ? (
-                <TableRow className="hover:bg-transparent"><TableCell colSpan={table.visibleColumns.length} className="p-0"><LoadingState className="min-h-[16rem]" label={t('common.loading')} /></TableCell></TableRow>
-              ) : view.rows.length === 0 ? (
-                <TableRow className="hover:bg-transparent"><TableCell colSpan={table.visibleColumns.length} className="p-0"><StripedEmpty className="min-h-[16rem]">{rows.length === 0 ? t('users.noUsers') : t('users.noMatch')}</StripedEmpty></TableCell></TableRow>
-              ) : (
-                view.rows.map((u) => (
+            {!loading && view.rows.length > 0 && (
+              <TableBody className="[&_tr:last-child]:border-b">
+                {view.rows.map((u) => (
                   <TableRow key={u.id} className="cursor-pointer transition-colors hover:bg-[rgba(70,130,180,0.08)]" onClick={() => setEditing(u)}>
                     {table.visibleColumns.map((c) => <TableCell key={c.id} className={c.cellClassName}>{c.accessor(u)}</TableCell>)}
                   </TableRow>
-                ))
-              )}
-            </TableBody>
+                ))}
+              </TableBody>
+            )}
           </Table>
+          {loading && <LoadingState className="flex-1" label={t('common.loading')} />}
+          {!loading && view.rows.length === 0 && <StripedEmpty className="flex-1">{rows.length === 0 ? t('users.noUsers') : t('users.noMatch')}</StripedEmpty>}
         </div>
 
         <TablePagination page={table.page} pageSize={table.pageSize} total={view.total} onPageChange={table.setPage} onPageSizeChange={table.setPageSize} leftSlot={<span className="text-muted-foreground">{t('users.count', { count: view.total })}</span>} />

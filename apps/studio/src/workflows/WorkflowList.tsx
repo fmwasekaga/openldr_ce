@@ -154,7 +154,7 @@ export function WorkflowList() {
           {actionError ? <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">{actionError}</div> : null}
         </div>
 
-        <div className="flex-1 overflow-auto">
+        <div className="flex flex-1 flex-col overflow-auto">
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
@@ -164,13 +164,9 @@ export function WorkflowList() {
                 <TableHead className="w-16" />
               </TableRow>
             </TableHeader>
+            {!loading && pageRows.length > 0 && (
             <TableBody className="[&_tr:last-child]:border-b">
-              {loading ? (
-                <TableRow className="hover:bg-transparent"><TableCell colSpan={4} className="p-0"><LoadingState className="min-h-[16rem]" label="Loading…" /></TableCell></TableRow>
-              ) : pageRows.length === 0 ? (
-                <TableRow className="hover:bg-transparent"><TableCell colSpan={4} className="p-0"><StripedEmpty className="min-h-[16rem]">{search ? 'No workflows match.' : 'No workflows yet.'}</StripedEmpty></TableCell></TableRow>
-              ) : (
-                pageRows.map((w) => (
+                {pageRows.map((w) => (
                   <TableRow key={w.id} className="cursor-pointer transition-colors hover:bg-[rgba(70,130,180,0.08)]" onClick={() => navigate(`/workflows/${w.id}`)}>
                     <TableCell>
                       <span className="font-medium" data-testid={`open-${w.id}`}>{w.name}</span>
@@ -195,10 +191,12 @@ export function WorkflowList() {
                       </DropdownMenu>
                     </TableCell>
                   </TableRow>
-                ))
-              )}
+                ))}
             </TableBody>
+            )}
           </Table>
+          {loading && <LoadingState className="flex-1" label="Loading…" />}
+          {!loading && pageRows.length === 0 && <StripedEmpty className="flex-1">{search ? 'No workflows match.' : 'No workflows yet.'}</StripedEmpty>}
         </div>
 
         <TablePagination
