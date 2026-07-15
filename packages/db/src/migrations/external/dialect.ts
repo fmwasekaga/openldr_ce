@@ -30,3 +30,13 @@ export function nowExpr(engine: TargetEngine): RawBuilder<unknown> {
   if (engine === 'mysql') return sql`CURRENT_TIMESTAMP`;
   return sql`now()`;
 }
+// SQL Server has no native boolean type; bit is its 0/1 equivalent. Postgres and MySQL both
+// accept the `boolean` keyword natively (MySQL treats it as a tinyint(1) alias).
+export function booleanType(engine: TargetEngine): string {
+  return engine === 'mssql' ? 'bit' : 'boolean';
+}
+// DEFAULT literal for a boolean column. Postgres/MySQL both accept the bare true/false keyword
+// as a column default; SQL Server's `bit` type rejects true/false and needs the numeric 1/0.
+export function boolDefault(engine: TargetEngine, value: boolean): boolean | RawBuilder<unknown> {
+  return engine === 'mssql' ? sql.raw(value ? '1' : '0') : value;
+}

@@ -1109,6 +1109,7 @@ export type { SyncHandle, SyncStatus, SyncDirectionStatus, SyncMode } from './sy
 export { migrateLegacySyncConfig } from './sync-settings-migrate';
 export { sealDefinitionSecrets } from './workflow-secret-seal';
 export { migrateWorkflowSecrets } from './workflow-secret-migrate';
+export { mergePatients } from './patient-merge';
 export {
   enrollSite,
   listSites,
