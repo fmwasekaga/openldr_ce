@@ -7,7 +7,6 @@ import { recordAudit } from './audit-helper';
 import { requireRole } from './rbac';
 
 export function registerReportDesignRoutes(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   app: FastifyInstance<any, any, any, any>, ctx: AppContext, deps: RunStoredQueryDeps,
 ): void {
   const MANAGE = { preHandler: requireRole('lab_admin', 'lab_manager') };

@@ -5,7 +5,6 @@ import { requireRole } from './rbac';
 // Read-only payload-lifecycle views: same analyst-facing roles that can read reports/audit.
 const VIEW = { preHandler: requireRole('lab_admin', 'lab_manager', 'data_analyst', 'system_auditor') };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerActivityRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
   app.get('/api/activity', VIEW, async (req) => {
     const q = req.query as { limit?: string; offset?: string };

@@ -61,7 +61,6 @@ async function devActor(ctx: AppContext): Promise<RequestActor> {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerAuth(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
   app.addHook('onRequest', async (req: FastifyRequest, reply: FastifyReply) => {
     const path = (req.raw.url ?? '').split('?')[0];

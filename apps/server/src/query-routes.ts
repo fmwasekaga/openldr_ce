@@ -24,7 +24,6 @@ export interface QueryRouteDeps {
   runConnectorSql(input: { connectorId: string; sql: string; rowCap?: number; offset?: number }): Promise<{ columns: { key: string; label: string }[]; rows: Record<string, unknown>[] }>;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext, deps: QueryRouteDeps): void {
   const GUARD = { preHandler: requireRole(...AUTHOR_ROLES) };
 

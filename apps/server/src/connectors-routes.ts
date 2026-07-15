@@ -60,7 +60,6 @@ function hostFor(config: Record<string, string> | undefined, explicit: string | 
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext, deps: ConnectorsRouteDeps): void {
   const { connectors } = deps;
   const key = (): string | undefined => ctx.cfg.SECRETS_ENCRYPTION_KEY;

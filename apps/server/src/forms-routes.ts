@@ -33,7 +33,6 @@ const responseInput = z.object({
   answers: z.record(z.unknown()),
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
   app.get('/api/forms', async () => ctx.forms.list());
 

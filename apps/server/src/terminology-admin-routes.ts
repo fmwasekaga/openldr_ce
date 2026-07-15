@@ -25,7 +25,6 @@ const loincImportInput = z.object({
   acceptLicense: z.boolean(),
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
   const admin = ctx.terminology.admin;
   type IdParam = { id: string };

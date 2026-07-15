@@ -3,7 +3,6 @@ import type { AppContext } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
 import { recordAudit } from './audit-helper';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerOntologyRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
   const ontology = ctx.terminology.ontology;
   type IdParam = { id: string };

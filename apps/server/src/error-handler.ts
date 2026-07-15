@@ -57,7 +57,6 @@ export function toErrorResponse(err: unknown): ErrorResponse {
  * one line per failure — error level for 5xx, warn for 4xx — so the correlationId in the UI greps
  * straight to the server log.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerErrorHandler(app: FastifyInstance<any, any, any, any>): void {
   app.setErrorHandler((err: unknown, req: FastifyRequest, reply: FastifyReply) => {
     const { status, code, message } = toErrorResponse(err);

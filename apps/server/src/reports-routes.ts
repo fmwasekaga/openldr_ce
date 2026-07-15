@@ -35,7 +35,6 @@ const schedulePatch = z.object({
   params: z.record(z.string()).optional(),
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
   app.get('/api/reports', async () => ctx.reporting.listAll());
 

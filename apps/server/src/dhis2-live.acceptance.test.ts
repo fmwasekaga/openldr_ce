@@ -106,7 +106,6 @@ describe.skipIf(!LIVE)('DHIS2 live acceptance (SP-6)', () => {
 
   it('pullMetadata() returns non-empty live SL-demo metadata (SP-4)', async () => {
     const md = await target.pullMetadata();
-    // eslint-disable-next-line no-console
     console.log('  metadata counts =', JSON.stringify({ dataElements: md.dataElements.length, orgUnits: md.orgUnits.length, categoryOptionCombos: md.categoryOptionCombos.length, programs: md.programs?.length ?? 0, programStages: md.programStages?.length ?? 0 }));
     expect(md.dataElements.length).toBeGreaterThan(0);
     expect(md.orgUnits.length).toBeGreaterThan(0);
@@ -132,7 +131,6 @@ describe.skipIf(!LIVE)('DHIS2 live acceptance (SP-6)', () => {
     const conv = (await buildWhonetSink().invokeBytes('wf_convert', new Uint8Array(whonetBytes), { config: { output: 'rows' } })) as { items: { json: Record<string, unknown> }[] };
     expect(conv.items.length).toBeGreaterThan(0);
     const row0 = conv.items[0].json;
-    // eslint-disable-next-line no-console
     console.log('  whonet row0 columns =', JSON.stringify(Object.keys(row0)));
 
     // Pick a string column on the row to use as the org-unit key. Prefer a facility-ish column; fall back to the first string column.
@@ -151,7 +149,6 @@ describe.skipIf(!LIVE)('DHIS2 live acceptance (SP-6)', () => {
         orgUnitMap: { [facVal]: ou }, period: PERIOD, dryRun: false,
       },
     }, { config, allowedHosts: [HOST] })) as { meta: { kind: string; dataValues: number; result?: { status?: string; imported?: number; updated?: number } } };
-    // eslint-disable-next-line no-console
     console.log('  whonet->dhis2 import result =', JSON.stringify(out.meta.result));
     expect(out.meta.dataValues).toBe(1);
     const r = out.meta.result;
@@ -185,7 +182,6 @@ describe.skipIf(!LIVE)('DHIS2 live acceptance (SP-6)', () => {
       orgUnitMap: { [ou]: ou }, period: PERIOD, dryRun: false,
     });
     const r = out.result as { status?: string; imported?: number; updated?: number } | undefined;
-    // eslint-disable-next-line no-console
     console.log('  import result =', JSON.stringify(r));
     expect(r).toBeTruthy();
     expect((r!.status ?? '').toLowerCase()).not.toBe('error');
@@ -228,7 +224,6 @@ describe.skipIf(!LIVE)('DHIS2 live acceptance (SP-6)', () => {
     const live = (await sink.invoke('wf_push', node(false), { config, allowedHosts: [HOST] })) as
       { meta: { result?: { status?: string; imported?: number; updated?: number } } };
     const r = live.meta.result;
-    // eslint-disable-next-line no-console
     console.log('  wf_push import result =', JSON.stringify(r));
     expect(r).toBeTruthy();
     expect((r!.status ?? '').toLowerCase()).not.toBe('error');

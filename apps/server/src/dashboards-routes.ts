@@ -39,7 +39,6 @@ function assertSqlAuthoringAllowed(sqlEnabled: boolean, d: Dashboard, prevTempla
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerDashboardRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
   app.get('/api/dashboards/models', async () => ctx.dashboards.models());
 

@@ -20,7 +20,6 @@ interface UiPluginRow {
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerPluginUiRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
   // Any authenticated user may list plugin UIs — the sidebar uses this to build nav entries.
   // The broker (per-op) is the real security boundary, enforcing capability + role checks.

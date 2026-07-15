@@ -110,7 +110,6 @@ function localToSummary(u: {
 // ---------------------------------------------------------------------------
 // Route registration
 // ---------------------------------------------------------------------------
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerUsersRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
   // ------------------------------------------------------------------
   // GET /api/users — composes directory + profiles; falls back to local

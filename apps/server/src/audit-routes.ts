@@ -2,7 +2,6 @@ import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerAuditRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
   app.get('/api/audit', async (req, reply) => {
     try {
