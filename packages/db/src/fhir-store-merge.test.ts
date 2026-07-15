@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Kysely } from 'kysely';
 import { createFhirStore, PatientNotFoundError, CrossSiteMergeError, SamePatientError } from './fhir-store';
-import { makeMigratedDb } from './migrations/internal/test-helpers'; // confirm exact path from a sibling test
+import { makeMigratedDb } from './migrations/internal/test-helpers';
 
 async function seedPatient(store: ReturnType<typeof createFhirStore>, id: string, site: string) {
   await store.applyRemote({ resourceType: 'Patient', id, version: 1, op: 'upsert', siteId: site, resource: { resourceType: 'Patient', id, active: true, name: [{ family: id }] } as any });
@@ -75,5 +75,31 @@ describe('FhirStore.mergePatients', () => {
     await seedPatient(store, 'p-dup', 'lab-a');
     const result = await store.mergePatients({ survivorId: 'p-surv', duplicateId: 'p-dup', agent: 'mpi', referencingRefs: [{ resourceType: 'Observation', id: 'ghost' }] });
     expect(result.repointed).toBe(0);
+  });
+
+  it('skips a ref of a non-mergeable type (never grafts a spurious subject)', async () => {
+    const store = createFhirStore(db);
+    await seedPatient(store, 'p-surv', 'lab-a');
+    await seedPatient(store, 'p-dup', 'lab-a');
+    await store.applyRemote({ resourceType: 'Coverage', id: 'cov-1', version: 1, op: 'upsert', siteId: 'lab-a', resource: { resourceType: 'Coverage', id: 'cov-1', subject: { reference: 'Patient/p-dup' } } as any });
+    const result = await store.mergePatients({ survivorId: 'p-surv', duplicateId: 'p-dup', agent: 'mpi', referencingRefs: [{ resourceType: 'Coverage', id: 'cov-1' }] });
+    expect(result.repointed).toBe(0);
+    const cov = (await store.get('Coverage', 'cov-1')) as any;
+    expect(cov.subject.reference).toBe('Patient/p-dup'); // untouched — no spurious re-point
+    const covLog = await db.selectFrom('fhir.change_log').select('version').where('resource_type', '=', 'Coverage').where('resource_id', '=', 'cov-1').execute();
+    expect(covLog.map((r) => Number(r.version))).toEqual([1]); // no version bump
+  });
+
+  it('skips a cross-site referencing ref (never re-stamps a resource owned by another site)', async () => {
+    const store = createFhirStore(db);
+    await seedPatient(store, 'p-surv', 'lab-a');
+    await seedPatient(store, 'p-dup', 'lab-a');
+    await seedRef(store, 'Observation', 'obs-x', 'p-dup', 'lab-b'); // owned by a DIFFERENT site
+    const result = await store.mergePatients({ survivorId: 'p-surv', duplicateId: 'p-dup', agent: 'mpi', referencingRefs: [{ resourceType: 'Observation', id: 'obs-x' }] });
+    expect(result.repointed).toBe(0);
+    const obs = (await store.get('Observation', 'obs-x')) as any;
+    expect(obs.subject.reference).toBe('Patient/p-dup'); // untouched
+    const obsLog = await db.selectFrom('fhir.change_log').select('version').where('resource_type', '=', 'Observation').where('resource_id', '=', 'obs-x').execute();
+    expect(obsLog.map((r) => Number(r.version))).toEqual([1]); // no version bump
   });
 });

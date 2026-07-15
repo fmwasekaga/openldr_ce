@@ -73,6 +73,10 @@ export class SamePatientError extends Error {
   constructor(message: string) { super(message); this.name = 'SamePatientError'; }
 }
 
+// Sync S6b: the referencing resource types a merge re-points. All carry the patient link in `subject`,
+// so the re-point patch is uniform. A ref of any other type is skipped (never graft a spurious subject).
+const MERGE_REF_TYPES: ReadonlySet<string> = new Set(['Observation', 'ServiceRequest', 'DiagnosticReport', 'Specimen']);
+
 export interface MergeInput {
   survivorId: string;
   duplicateId: string;
@@ -484,9 +488,15 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
         outboxRows.push({ site_id: site, resource_type: 'Patient', resource_id: duplicateId, version: dupVersion });
 
         let repointed = 0;
+        // Two guards enforce the intra-lab + subject-based invariant the primitive trusts the caller for:
+        // (1) only re-point subject-bearing lab-data types, (2) never re-stamp a resource owned by a
+        // different site. Anything failing either is skipped (uncounted) rather than trusted blindly.
         for (const ref of referencingRefs) {
+          if (!MERGE_REF_TYPES.has(ref.resourceType)) continue; // only subject-bearing lab-data types
           const row = await trx.selectFrom('fhir.fhir_resources').select('resource').where('resource_type', '=', ref.resourceType).where('id', '=', ref.id).executeTakeFirst();
-          if (!row) continue;
+          if (!row) continue; // stale read-model entry
+          const refSite = await latestSite(trx, ref.resourceType, ref.id);
+          if (refSite !== site) continue; // defense: never re-stamp a cross-site resource (intra-lab only)
           const body = row.resource as Record<string, unknown>;
           const v = await nextVersion(trx, ref.resourceType, ref.id);
           const newBody: Record<string, unknown> = {
