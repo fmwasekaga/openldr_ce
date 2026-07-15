@@ -53,6 +53,7 @@ import * as m051 from './051_sync_sites';
 import * as m052 from './052_sync_site_keys';
 import * as m053 from './053_workflow_secrets';
 import * as m054 from './054_sync_amendments';
+import * as m055 from './055_sync_quarantine';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -109,4 +110,5 @@ export const internalMigrations: Record<string, Migration> = {
   '052_sync_site_keys': { up: m052.up, down: m052.down },
   '053_workflow_secrets': { up: m053.up, down: m053.down },
   '054_sync_amendments': { up: m054.up, down: m054.down },
+  '055_sync_quarantine': { up: m055.up, down: m055.down },
 };
