@@ -3,6 +3,8 @@ import { type Kysely, sql } from 'kysely';
 import type { FhirResource } from '@openldr/fhir';
 import type { InternalSchema } from './schema/internal';
 import type { Provenance } from './provenance';
+import { divergenceHash } from './divergence-hash';
+import { recordDivergence } from './sync-divergence-store';
 
 export interface SavedRef {
   resourceType: string;
@@ -27,7 +29,16 @@ export interface RemoteRecord {
   resource?: FhirResource; // present for op:'upsert'
 }
 
-export type ApplyResult = 'applied' | 'skipped';
+// 'diverged' (sync S7): a history row already exists at this (resource_type, id, version) but its
+// content DIFFERS from the incoming record — two sides independently authored the same version. The
+// incoming content is NOT applied (the local copy is kept); it is recorded in sync_divergences for an
+// operator. Detect-and-surface only: there is no auto-heal, by design.
+//
+// NOTE: widening this union does NOT produce a compile error at every call site — sync-routes.ts and
+// sync-bundle.ts both use `if (result === 'applied') ... else skipped++`, so `else` silently absorbs
+// the new variant. Those sites are updated explicitly (see the S7 plan, Task 6). Correctness does not
+// depend on them: the row is written in applyRemote's OWN transaction.
+export type ApplyResult = 'applied' | 'skipped' | 'diverged';
 
 export interface AmendInput {
   resourceType: string;
@@ -315,23 +326,59 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
       // write a self-contradictory history row (op='upsert', resource=null) or hit an opaque NOT NULL
       // violation deep inside the tx.
       if (op === 'upsert' && !record.resource) throw new Error('applyRemote: upsert requires resource');
+      // Mirror-store the origin content verbatim (id normalized). Null for a tombstone. Computed ONCE,
+      // before the transaction, because it is BOTH what we would store AND (sync S7) what we hash to
+      // compare against the stored copy — deriving them from one expression is what keeps the incoming
+      // hash apples-to-apples with the local one. Pure JS: no DB access, so no write ordering is affected.
+      const normalized: Record<string, unknown> | null =
+        op === 'upsert' && record.resource ? { ...record.resource, id } : null;
+      const content = normalized ? JSON.stringify(normalized) : null;
+
       const result = await db.transaction().execute(async (trx): Promise<ApplyResult> => {
-        // Idempotency: the history PK is (resource_type,id,version). A matching row means this exact
-        // origin version was already applied → no-op (no fhir_resources / change_log writes). We use an
-        // explicit existence SELECT rather than ON CONFLICT DO NOTHING + numInsertedOrUpdatedRows because
-        // that row-count is engine-dependent (pg-mem reports 1 even on a conflict no-op), so it can't
-        // discriminate a real insert from a skip. This SELECT is deterministic on real pg and pg-mem alike.
+        // Idempotency + divergence detection (sync S7). This SELECT is unchanged in ROLE — it still
+        // decides "have we already applied this exact origin version?" — but it now also reads the
+        // stored body so we can tell a genuine re-drain (identical content → skip, as always) from a
+        // same-version DIVERGENCE (different content → the incoming edit is being dropped, and that
+        // must not be silent). We use an explicit existence SELECT rather than ON CONFLICT DO NOTHING +
+        // numInsertedOrUpdatedRows because that row-count is engine-dependent (pg-mem reports 1 even on
+        // a conflict no-op), so it can't discriminate a real insert from a skip. This SELECT is
+        // deterministic on real pg and pg-mem alike. Still read-only: it assigns no xid, so the
+        // safe-frontier invariant (change_log must not be the txn's first write) is unaffected. Do not
+        // reorder. `op` is deliberately NOT selected: `resource IS NULL` already IS the tombstone
+        // marker (a delete writes resource:null, an upsert is guarded to always carry a body), so
+        // reading op would add a second, redundant source of truth for the same fact.
         const already = await trx
           .selectFrom('fhir.resource_history')
-          .select('version')
+          .select(['version', 'resource'])
           .where('resource_type', '=', resourceType)
           .where('id', '=', id)
           .where('version', '=', version)
           .executeTakeFirst();
-        if (already) return 'skipped';
+        if (already) {
+          // NULL-aware: null == null means two tombstones, which AGREE (nothing was lost).
+          // `already.resource` arrives as a parsed object on pg/pg-mem but as text on some drivers;
+          // divergenceHash normalizes both. The incoming side is hashed from `normalized` — the SAME
+          // id-normalized shape the store path writes — so a wire body that merely omits the redundant
+          // `id` cannot manufacture a phantom divergence.
+          const localHash = divergenceHash(already.resource);
+          const incomingHash = divergenceHash(normalized);
+          if (localHash === incomingHash) return 'skipped'; // byte-identical to pre-S7 behavior
 
-        // Mirror-store the origin content verbatim (id normalized). Null for a tombstone.
-        const content = op === 'upsert' && record.resource ? JSON.stringify({ ...record.resource, id }) : null;
+          // Same version, different content. Keep the local copy (no fhir_resources / change_log
+          // writes on this path) and durably record what we dropped, in THIS transaction — the skip
+          // and the record of why it happened commit together, so a crash can never leave a dropped
+          // edit with no trace.
+          await recordDivergence(trx, {
+            resourceType,
+            resourceId: id,
+            version,
+            localHash,
+            incomingHash,
+            incomingBody: normalized,
+            incomingSiteId: siteId,
+          });
+          return 'diverged';
+        }
 
         // INVARIANT (projection safe-frontier): the change_log insert must NOT be this transaction's first
         // write — the resource_history insert here (and the fhir_resources write below) precede it, so the
