@@ -84,6 +84,10 @@ Distributed sync links labs to a central OpenLDR server. Two command groups cove
 
 For an order (co-edit lab request status/metadata), amend the `ServiceRequest`, e.g. `openldr sync amend --resource-type ServiceRequest --id <id> --status completed --activity update`.
 
+| Command | Purpose |
+|---|---|
+| `openldr sync merge-patient --survivor <id> --duplicate <id> [--reason <text>]` | Intra-lab patient merge on central: re-points the duplicate patient's lab history (requests/results/specimens) to the survivor and marks the duplicate replaced. Both patients must belong to the same site. |
+
 The owning lab drains these central-authored amendments on its pull pass via the `'sync-amend-pull'` cursor (a distinct `change_cursors` consumer alongside `'sync-push'`, `'sync-pull'`, and the terminology cursor).
 
 **Central-side enrollment — `openldr sync`** (run on the central server)
