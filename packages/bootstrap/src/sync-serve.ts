@@ -2,6 +2,8 @@ import { formSyncBody, type FormRow } from '@openldr/forms';
 import type {
   PullRecord,
   PullResponse,
+  SyncRecord,
+  AmendmentPullResponse,
   ConceptsPage,
   ConceptWire,
   MapElementsPage,
@@ -71,6 +73,68 @@ export async function servePull(ctx: AppContext, fromSeq: number): Promise<PullR
   }
   records.sort((a, b) => a.seq - b.seq);
 
+  return { records, nextSeq };
+}
+
+/** Serve the owning lab's amendment delta after `fromSeq` (Sync S6a). Site-scoped: reads sync_amendments
+ *  WHERE site_id = siteId AND seq > fromSeq, deduped to the LATEST version per (resource_type,
+ *  resource_id), each body read LIVE from fhir.resource_history at that version. Records use the same
+ *  SyncRecord wire shape S1 push carries — the lab applies them via applyRemote. Per-record body fetch is
+ *  try/caught (poison-pill isolation): a missing/unreadable history row is skipped, and nextSeq (the max
+ *  RAW seq in the window) still advances past it so one bad row cannot wedge the stream. */
+export async function serveAmendments(ctx: AppContext, siteId: string, fromSeq: number): Promise<AmendmentPullResponse> {
+  const rows = await ctx.internalDb
+    .selectFrom('sync_amendments')
+    .selectAll()
+    .where('site_id', '=', siteId)
+    .where('seq', '>', fromSeq)
+    .orderBy('seq', 'asc')
+    .limit(BATCH)
+    .execute();
+  const nextSeq = rows.reduce((m, r) => Math.max(m, Number(r.seq)), fromSeq);
+
+  // Dedup to the LATEST row per (resource_type, resource_id) — a resource amended twice in the window
+  // collapses to its newest version (applyRemote is monotonic anyway; this just trims payload). A
+  // resource and its Provenance have distinct ids, so both survive.
+  const latest = new Map<string, (typeof rows)[number]>();
+  for (const r of rows) latest.set(`${r.resource_type} ${r.resource_id}`, r); // later seq overwrites (asc)
+
+  const records: (SyncRecord & { seq: number })[] = [];
+  for (const r of latest.values()) {
+    const seq = Number(r.seq);
+    const version = Number(r.version);
+    let body: unknown;
+    try {
+      const hist = await ctx.internalDb
+        .selectFrom('fhir.resource_history')
+        .select('resource')
+        .where('resource_type', '=', r.resource_type)
+        .where('id', '=', r.resource_id)
+        .where('version', '=', version)
+        .executeTakeFirst();
+      // resource is a JSON column: an object under pg, a string under some drivers — parse to an object
+      // so the wire body is always structured (mirrors serveConceptsPage's jsonb parse guard).
+      const raw = hist?.resource ?? null;
+      body = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch (e) {
+      ctx.logger.warn(
+        { error: e instanceof Error ? e.message : String(e), resourceType: r.resource_type, resourceId: r.resource_id, seq },
+        'sync amend serve: history fetch failed for record, skipping',
+      );
+      continue;
+    }
+    if (body == null) continue; // history row vanished — skip; nextSeq still advances past it.
+    records.push({
+      seq,
+      resourceType: r.resource_type,
+      id: r.resource_id,
+      version,
+      op: 'upsert',
+      siteId: r.site_id,
+      resource: body as SyncRecord['resource'],
+    });
+  }
+  records.sort((a, b) => a.seq - b.seq);
   return { records, nextSeq };
 }
 
