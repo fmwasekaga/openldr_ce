@@ -14,6 +14,10 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('status', 'text', (c) => c.notNull())
     .addColumn('last_error', 'text')
     .addColumn('last_seq', 'bigint')
+    // The failing pull record's body (central's descriptor for the bulk entity). Kept so an operator
+    // retry can REPLAY central's real descriptor rather than reconciling with an empty one (which would
+    // stamp terminology_systems with a null version / empty resource_id and corrupt the metadata).
+    .addColumn('last_body', 'jsonb')
     .addColumn('first_failed_at', 'timestamptz', (c) => c.notNull().defaultTo(sql`now()`))
     .addColumn('updated_at', 'timestamptz', (c) => c.notNull().defaultTo(sql`now()`))
     .addColumn('quarantined_at', 'timestamptz')

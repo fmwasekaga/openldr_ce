@@ -74,6 +74,7 @@ export interface SyncQuarantineTable {
   status: string;
   last_error: string | null;
   last_seq: number | null;
+  last_body: unknown | null;
   first_failed_at: Generated<Date>;
   updated_at: Generated<Date>;
   quarantined_at: Date | null;
