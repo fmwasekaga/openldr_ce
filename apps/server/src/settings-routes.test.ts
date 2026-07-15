@@ -19,6 +19,8 @@ function fakeCtx(syncEnabled = true) {
       sync: {
         status: async () => ({ ...SYNC_STATUS, enabled: syncEnabled }),
         triggerNow,
+        listQuarantine: async () => [],
+        retryQuarantine: async () => ({ ok: true }),
       },
       __triggerNow: triggerNow,
       featureFlags: {
@@ -212,6 +214,38 @@ describe('settings routes', () => {
     expect(res.json()).toEqual({ triggered: false, reason: 'disabled' });
     expect((ctx as any).__triggerNow).not.toHaveBeenCalled();
     expect((ctx as any).__audit.some((e: any) => e.action === 'settings.sync.now')).toBe(false);
+  });
+
+  it('GET /api/settings/sync/quarantine lists quarantined items', async () => {
+    const rows = [{ entityType: 'terminology_system', entityId: 'http://x', attempts: 3, status: 'quarantined' }];
+    const { ctx, deps } = fakeCtx();
+    (ctx as any).sync.listQuarantine = async () => rows;
+    const app = appWithUser(['lab_admin'], (a) => registerSettingsRoutes(a, ctx, deps));
+    const res = await app.inject({ method: 'GET', url: '/api/settings/sync/quarantine' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual(rows);
+  });
+
+  it('POST /api/settings/sync/quarantine/retry delegates + audits', async () => {
+    const retry = vi.fn(async () => ({ ok: true }));
+    const { ctx, deps } = fakeCtx();
+    (ctx as any).sync.retryQuarantine = retry;
+    const app = appWithUser(['lab_admin'], (a) => registerSettingsRoutes(a, ctx, deps));
+    const res = await app.inject({ method: 'POST', url: '/api/settings/sync/quarantine/retry', payload: { entityType: 'terminology_system', entityId: 'http://x' } });
+    expect(res.statusCode).toBe(200);
+    expect(retry).toHaveBeenCalledWith('terminology_system', 'http://x');
+    expect((ctx as any).__audit.some((e: any) => e.action === 'settings.sync.quarantine.retry')).toBe(true);
+  });
+
+  it('retry returns 400 on missing fields; 409 when pull disabled', async () => {
+    const { ctx, deps } = fakeCtx();
+    const app = appWithUser(['lab_admin'], (a) => registerSettingsRoutes(a, ctx, deps));
+    expect((await app.inject({ method: 'POST', url: '/api/settings/sync/quarantine/retry', payload: {} })).statusCode).toBe(400);
+
+    const { ctx: ctx2, deps: deps2 } = fakeCtx();
+    (ctx2 as any).sync.retryQuarantine = async () => ({ ok: false, error: 'sync pull is not enabled on this node' });
+    const app2 = appWithUser(['lab_admin'], (a) => registerSettingsRoutes(a, ctx2, deps2));
+    expect((await app2.inject({ method: 'POST', url: '/api/settings/sync/quarantine/retry', payload: { entityType: 'terminology_system', entityId: 'http://x' } })).statusCode).toBe(409);
   });
 
   it('failed danger op still audits the attempt (ok: false) and returns 500', async () => {
