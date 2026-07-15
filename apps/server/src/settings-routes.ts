@@ -64,6 +64,41 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
     return { triggered: true };
   });
 
+  // POST /api/settings/sync/amend — a central operator amends a lab-owned result (Sync S6a). User-authed
+  // + lab_admin (this is a central-side authoring action), deliberately NOT under /api/sync/* (that
+  // surface is machine-cred). fhirStore.amend does the transactional version-bump + Provenance + outbox
+  // write, keeping the owning lab's site_id; the amendment then flows down that lab's pull-amendments
+  // stream. Audited SECRET/PHI-free: resource reference + new version only.
+  app.post('/api/settings/sync/amend', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const b = (req.body ?? {}) as { resourceType?: unknown; id?: unknown; status?: unknown; reason?: unknown; patch?: unknown; agent?: unknown };
+    if (typeof b.resourceType !== 'string' || !b.resourceType || typeof b.id !== 'string' || !b.id || typeof b.status !== 'string' || !b.status) {
+      reply.code(400).send({ error: 'resourceType, id and status are required' });
+      return;
+    }
+    try {
+      const result = await ctx.fhirStore.amend({
+        resourceType: b.resourceType,
+        id: b.id,
+        status: b.status,
+        reason: typeof b.reason === 'string' ? b.reason : undefined,
+        patch: b.patch && typeof b.patch === 'object' ? (b.patch as Record<string, unknown>) : undefined,
+        agent: typeof b.agent === 'string' && b.agent ? b.agent : 'central',
+      });
+      await recordAudit(ctx, req, {
+        action: 'settings.sync.amend',
+        entityType: b.resourceType,
+        entityId: b.id,
+        metadata: { version: result.version, provenanceId: result.provenanceId, siteId: result.siteId },
+      });
+      reply.code(200).send(result);
+    } catch (e) {
+      const name = e instanceof Error ? e.name : '';
+      if (name === 'ResourceNotFoundError') { reply.code(404).send({ error: 'resource not found' }); return; }
+      if (name === 'NotLabOwnedError') { reply.code(409).send({ error: 'resource is not lab-owned' }); return; }
+      throw e; // unknown → 500 via the global handler
+    }
+  });
+
   // ------------------------------------------------------------------
   // Sync S4d enrollment (central mints lab clients). Admin-only + audited, under /api/settings/*
   // (user-authed) — deliberately NOT under /api/sync/* (that surface is machine-cred + skips the
