@@ -21,6 +21,13 @@ export function projectPatient(r: Record<string, unknown>, prov: Provenance): In
     phone: str(telecom.find((t) => t['system'] === 'phone')?.['value']),
     email: str(telecom.find((t) => t['system'] === 'email')?.['value']),
     managing_organization: reference(r['managingOrganization']),
+    active: r['active'] === undefined || r['active'] === null ? true : Boolean(r['active']),
+    replaced_by_id: (() => {
+      const links = (r['link'] as Record<string, unknown>[] | undefined) ?? [];
+      const rep = links.find((l) => l['type'] === 'replaced-by');
+      const ref = (rep?.['other'] as Record<string, unknown> | undefined)?.['reference'];
+      return typeof ref === 'string' && ref.startsWith('Patient/') ? ref.slice('Patient/'.length) : null;
+    })(),
     ...provColumns(prov),
   };
 }

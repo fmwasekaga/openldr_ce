@@ -19,6 +19,8 @@ export interface PatientsTable extends ProvenanceColumns {
   phone: string | null;
   email: string | null;
   managing_organization: string | null;
+  active: Generated<boolean>;
+  replaced_by_id: string | null;
 }
 
 export interface LabRequestsTable extends ProvenanceColumns {
