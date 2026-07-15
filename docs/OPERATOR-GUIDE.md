@@ -204,7 +204,7 @@ Flow:
 
 2. **On each lab**, enter those values under **Settings → General → Distributed Sync** (or `pnpm openldr settings sync set …`), choose a **mode** — `push`, `pull`, or `bidirectional` — set the interval, and enable. Monitor with the card's live status panel or `pnpm openldr sync status`, and force a pass with **Sync now** / `pnpm openldr sync now`.
 
-Result amendments (co-edit): a central operator can correct a lab-owned result without breaking ownership. `POST /api/settings/sync/amend` (admin, `lab_admin`) or `pnpm openldr sync amend --resource-type <t> --id <id> --status <s> [--reason …] [--patch <json>]` writes a new FHIR version on central and queues it. The owning lab drains those amendments on its next `pull`/`bidirectional` pass through the `'sync-amend-pull'` cursor, applying the higher versionId back into its own store.
+Result amendments (co-edit): a central operator can correct a lab-owned result without breaking ownership. `POST /api/settings/sync/amend` (admin, `lab_admin`) or `pnpm openldr sync amend --resource-type <t> --id <id> --status <s> [--reason …] [--patch <json>]` writes a new FHIR version on central and queues it. The owning lab drains those amendments on its next `pull`/`bidirectional` pass through the `'sync-amend-pull'` cursor, applying the higher versionId back into its own store. Order status/metadata co-edit uses this same amend surface against the `ServiceRequest` (e.g. `activity: update`).
 
 Troubleshooting:
 
