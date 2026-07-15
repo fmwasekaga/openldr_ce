@@ -61,13 +61,23 @@ describe('startup migration config', () => {
 });
 
 describe('auth config', () => {
-  it('defaults AUTH_DEV_BYPASS on in development', () => {
+  // AUTH_DEV_BYPASS disables API authentication, so it is fail-safe OFF unless explicitly
+  // enabled — NODE_ENV must never be able to turn it on by omission.
+  it('defaults AUTH_DEV_BYPASS off in development', () => {
     const cfg = ConfigSchema.parse({ ...base, NODE_ENV: 'development' });
-    expect(cfg.AUTH_DEV_BYPASS).toBe(true);
+    expect(cfg.AUTH_DEV_BYPASS).toBe(false);
+  });
+  it('defaults AUTH_DEV_BYPASS off when NODE_ENV is unset', () => {
+    const cfg = ConfigSchema.parse(base);
+    expect(cfg.AUTH_DEV_BYPASS).toBe(false);
   });
   it('defaults AUTH_DEV_BYPASS off in production', () => {
     const cfg = ConfigSchema.parse({ ...base, NODE_ENV: 'production' });
     expect(cfg.AUTH_DEV_BYPASS).toBe(false);
+  });
+  it('honours an explicit AUTH_DEV_BYPASS=true in development', () => {
+    const cfg = ConfigSchema.parse({ ...base, NODE_ENV: 'development', AUTH_DEV_BYPASS: 'true' });
+    expect(cfg.AUTH_DEV_BYPASS).toBe(true);
   });
   it('rejects AUTH_DEV_BYPASS=true under production', () => {
     expect(() => ConfigSchema.parse({ ...base, NODE_ENV: 'production', AUTH_DEV_BYPASS: 'true' })).toThrow(/AUTH_DEV_BYPASS/);

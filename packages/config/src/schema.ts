@@ -180,7 +180,11 @@ export const ConfigSchema = z
   })
   .transform((cfg) => ({
     ...cfg,
-    AUTH_DEV_BYPASS: cfg.AUTH_DEV_BYPASS ?? cfg.NODE_ENV !== 'production',
+    // Fail-safe OFF: the bypass disables API authentication, so it is opt-in ONLY — never
+    // derived from NODE_ENV. A forgotten env var must not silently unauthenticate the API
+    // (NODE_ENV itself defaults to 'development', so deriving it here fails OPEN). Every
+    // intentional consumer sets it explicitly: e2e/playwright.config.ts, install/development.{sh,ps1}.
+    AUTH_DEV_BYPASS: cfg.AUTH_DEV_BYPASS ?? false,
   }));
 
 export type Config = z.infer<typeof ConfigSchema>;
