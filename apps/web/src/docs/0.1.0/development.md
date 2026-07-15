@@ -43,7 +43,7 @@ pnpm install
 
 # dev config — enables a no-login dev admin so you don't need to configure Keycloak
 cp .env.example .env
-printf '\nAUTH_DEV_BYPASS=true\n' >> .env
+printf '\nAUTH_DEV_BYPASS=true\n' >> .env   # required: the bypass is off unless you set it
 
 # backing services (Postgres :5433, MinIO :9010/:9011, Keycloak :8180)
 docker compose up -d
@@ -71,6 +71,11 @@ Studio proxies `/api` to the server on port 3000. The landing site needs an expl
 `--port` because it defaults to the same port as Studio (5173). With `AUTH_DEV_BYPASS`
 on, Studio loads straight in as a dev admin — no sign-in required. Remove it from `.env`
 to exercise the real Keycloak flow.
+
+> `AUTH_DEV_BYPASS` is **off unless you set it explicitly** — it is not implied by
+> `NODE_ENV=development`. If Studio asks you to sign in on an existing checkout, add
+> `AUTH_DEV_BYPASS=true` to `.env`. When it is on, the server logs a warning at startup
+> and Studio shows a banner, because in that mode the API is unauthenticated.
 
 ## Handy commands
 

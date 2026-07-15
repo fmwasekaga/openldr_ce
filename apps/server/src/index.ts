@@ -7,6 +7,14 @@ async function main(): Promise<void> {
   const cfg = loadConfig();
   const logger = createLogger({ level: cfg.LOG_LEVEL });
 
+  // Studio shows a banner when the bypass is on, but a server-only/headless/CI run has no
+  // UI to show it. Warn first thing so an unintended bypass is visible in the log too.
+  if (cfg.AUTH_DEV_BYPASS) {
+    logger.warn(
+      'AUTH_DEV_BYPASS is ON — API requests are NOT authenticated. Local development only; never run a real deployment in this mode.',
+    );
+  }
+
   // Durable plugin-crash capture: a crashing Extism worker can take the whole process down
   // before the in-app audit DB write flushes. These handlers synchronously append a crash
   // marker (naming the in-flight plugin via the in-flight registry) to PLUGIN_CRASH_LOG_DIR,
