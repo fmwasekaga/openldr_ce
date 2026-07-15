@@ -135,10 +135,7 @@ export async function runSyncDivergenceList(opts: JsonOpt): Promise<number> {
 }
 
 export async function runSyncDivergenceShow(resourceType: string, resourceId: string, version: number, opts: JsonOpt): Promise<number> {
-  if (!Number.isInteger(version) || version < 1) {
-    process.stderr.write('version must be a positive integer\n');
-    return 1;
-  }
+  if (!Number.isInteger(version) || version < 1) return fail(opts.json, 'version must be a positive integer');
   const ctx = await createAppContext(loadConfig());
   try {
     const row = await ctx.sync.getDivergence(resourceType, resourceId, version);
@@ -154,10 +151,7 @@ export async function runSyncDivergenceShow(resourceType: string, resourceId: st
 }
 
 export async function runSyncDivergenceClear(resourceType: string, resourceId: string, version: number, opts: JsonOpt): Promise<number> {
-  if (!Number.isInteger(version) || version < 1) {
-    process.stderr.write('version must be a positive integer\n');
-    return 1;
-  }
+  if (!Number.isInteger(version) || version < 1) return fail(opts.json, 'version must be a positive integer');
   const ctx = await createAppContext(loadConfig());
   try {
     // Mirror the endpoint: a double-clear reports honestly instead of silently succeeding.
