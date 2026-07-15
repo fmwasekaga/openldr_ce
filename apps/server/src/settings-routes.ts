@@ -115,6 +115,31 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
     return reply.code(200).send(row);
   });
 
+  // Clearing is the ONLY lifecycle a divergence has (spec decision 3): nothing auto-resolves it. A
+  // later higher version arriving would tell you the disagreement ENDED, not that the RIGHT content
+  // won — auto-closing on that would reintroduce the silent loss this slice exists to eliminate.
+  app.post('/api/settings/sync/divergences/:resourceType/:resourceId/:version/clear', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const p = req.params as { resourceType: string; resourceId: string; version: string };
+    const version = Number(p.version);
+    if (!Number.isInteger(version) || version < 1) {
+      return reply.code(400).send({ error: 'version must be a positive integer' });
+    }
+    // 404 rather than a silent success: a double-clear should tell the operator the row is already gone.
+    const row = await ctx.sync.getDivergence(p.resourceType, p.resourceId, version);
+    if (!row) return reply.code(404).send({ error: 'divergence not found' });
+
+    await ctx.sync.clearDivergence(p.resourceType, p.resourceId, version);
+    // Audit AFTER the clear commits (S4d precedent): a recordAudit throw must not fail an operation
+    // that already succeeded. PHI-free — the key only, never the body we just discarded.
+    await recordAudit(ctx, req, {
+      action: 'settings.sync.divergence.clear',
+      entityType: p.resourceType,
+      entityId: p.resourceId,
+      metadata: { version },
+    });
+    return reply.code(204).send();
+  });
+
   // POST /api/settings/sync/amend — a central operator amends a lab-owned result (Sync S6a). User-authed
   // + lab_admin (this is a central-side authoring action), deliberately NOT under /api/sync/* (that
   // surface is machine-cred). fhirStore.amend does the transactional version-bump + Provenance + outbox

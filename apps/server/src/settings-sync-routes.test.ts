@@ -607,8 +607,8 @@ describe('settings sync merge-patient route', () => {
 
 // ---------------------------------------------------------------------------
 // Sync S7: same-version divergence routes — GET list (PHI-free), GET detail
-// (PHI, audited). ctx.sync gains listDivergences/getDivergence (clearDivergence
-// is exercised once the clear route lands) on top of the S7-A quarantine methods.
+// (PHI, audited), POST clear (audited). ctx.sync gains listDivergences/
+// getDivergence/clearDivergence on top of the S7-A quarantine methods.
 // ---------------------------------------------------------------------------
 describe('settings sync divergence routes', () => {
   const SUMMARY = {
@@ -686,7 +686,7 @@ describe('settings sync divergence routes', () => {
     expect(syncMock(ctx).getDivergence).not.toHaveBeenCalled();
   });
 
-  it('rejects non-admin actor → 403 for list and detail', async () => {
+  it('rejects non-admin actor → 403 for list, detail and clear', async () => {
     const { ctx } = divergenceCtx();
     const app = Fastify();
     app.addHook('onRequest', async (req) => {
@@ -695,7 +695,39 @@ describe('settings sync divergence routes', () => {
     registerSettingsRoutes(app, ctx);
     expect((await app.inject({ method: 'GET', url: '/api/settings/sync/divergences' })).statusCode).toBe(403);
     expect((await app.inject({ method: 'GET', url: '/api/settings/sync/divergences/Observation/o1/2' })).statusCode).toBe(403);
+    expect((await app.inject({ method: 'POST', url: '/api/settings/sync/divergences/Observation/o1/2/clear' })).statusCode).toBe(403);
     expect(syncMock(ctx).listDivergences).not.toHaveBeenCalled();
     expect(syncMock(ctx).getDivergence).not.toHaveBeenCalled();
+    expect(syncMock(ctx).clearDivergence).not.toHaveBeenCalled();
+  });
+
+  it('clear removes the row, returns 204, and audits', async () => {
+    const { ctx, clearDivergence } = divergenceCtx();
+    const app = adminApp(ctx);
+    const res = await app.inject({ method: 'POST', url: '/api/settings/sync/divergences/Observation/o1/2/clear' });
+    expect(res.statusCode).toBe(204);
+    expect(res.rawPayload.length).toBe(0);
+    expect(clearDivergence).toHaveBeenCalledWith('Observation', 'o1', 2);
+
+    const events = (ctx as unknown as { __auditEvents: unknown[] }).__auditEvents;
+    expect(events.map((e) => (e as { action: string }).action)).toContain('settings.sync.divergence.clear');
+    expect(JSON.stringify(events)).not.toContain('amended');
+  });
+
+  it('clear 404s when there is no such divergence (and does not call clearDivergence)', async () => {
+    const { ctx, clearDivergence } = divergenceCtx();
+    syncMock(ctx).getDivergence.mockResolvedValueOnce(undefined);
+    const app = adminApp(ctx);
+    const res = await app.inject({ method: 'POST', url: '/api/settings/sync/divergences/Observation/nope/2/clear' });
+    expect(res.statusCode).toBe(404);
+    expect(clearDivergence).not.toHaveBeenCalled();
+  });
+
+  it('clear 400s on a non-numeric version', async () => {
+    const { ctx, clearDivergence } = divergenceCtx();
+    const app = adminApp(ctx);
+    const res = await app.inject({ method: 'POST', url: '/api/settings/sync/divergences/Observation/o1/abc/clear' });
+    expect(res.statusCode).toBe(400);
+    expect(clearDivergence).not.toHaveBeenCalled();
   });
 });
