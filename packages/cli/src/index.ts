@@ -190,6 +190,7 @@ syncGroup.command('amend')
   .option('--reason <text>', 'amendment reason (recorded on the Provenance)')
   .option('--patch <json>', 'JSON object shallow-merged into the resource body')
   .option('--agent <name>', 'amending agent name (Provenance agent.who.display)', 'central')
+  .option('--activity <token>', "Provenance activity token: 'amend' (default) or 'update' for order status", 'amend')
   .option('--json', 'emit JSON', false)
   .action(async (opts) => {
     try { process.exitCode = await runSyncAmend(opts); } catch (err) { process.stderr.write(`sync amend failed: ${redactError(err)}\n`); process.exitCode = 1; }
