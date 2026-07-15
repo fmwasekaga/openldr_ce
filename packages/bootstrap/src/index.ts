@@ -43,6 +43,7 @@ import { createSyncPullWorker, type SyncPullWorker } from './sync-pull-worker';
 import { createSyncHandle, type SyncHandle } from './sync-handle';
 import { createRetryQuarantine } from './sync-retry-quarantine';
 import { migrateLegacySyncConfig } from './sync-settings-migrate';
+import { encodePushBody, advertisesGzip } from './sync-gzip';
 import { migrateWorkflowSecrets } from './workflow-secret-migrate';
 
 // Which directions run for a given mode. Push runs for 'push' + 'bidirectional'; pull runs for
@@ -765,6 +766,10 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       clientId: syncCfg.clientId,
       clientSecret: syncCfg.clientSecret,
     });
+    // Sync S7-B: learned from central's RFC 7694 Accept-Encoding advert on each push response. Starts
+    // false so the FIRST push is always plain — an old central never advertises and we never gzip it.
+    // In-memory by design: it re-learns on the next response after a restart.
+    let centralAcceptsGzip = false;
     // Shared POST helper: throws on non-2xx with the STATUS ONLY (never the bearer token).
     const postJson = async (url: string, body: unknown, token: string): Promise<unknown> => {
       const res = await fetch(url, {
@@ -794,11 +799,15 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
           return row?.resource ?? null;
         },
         postPush: async (batch: PushBatch, token: string): Promise<PushResponse> => {
+          const json = JSON.stringify(batch);
+          const { body, headers: encHeaders } = encodePushBody(json, centralAcceptsGzip);
           const res = await fetch(`${syncCfg.centralUrl}/api/sync/push`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify(batch),
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...encHeaders },
+            body,
           });
+          // Learn central's capability from THIS response so subsequent pushes can compress.
+          if (advertisesGzip(res.headers.get('accept-encoding'))) centralAcceptsGzip = true;
           // Throw (never leaking the token) so the runner leaves the cursor put and retries next cycle.
           if (!res.ok) throw new Error(`sync push POST /api/sync/push failed: central responded ${res.status}`);
           return (await res.json()) as PushResponse;
