@@ -41,6 +41,7 @@ import { createSyncPushRunner, createSyncPullRunner, createAmendmentPullRunner, 
 import { createSyncPushWorker, type SyncPushWorker } from './sync-push-worker';
 import { createSyncPullWorker, type SyncPullWorker } from './sync-pull-worker';
 import { createSyncHandle, type SyncHandle } from './sync-handle';
+import { createRetryQuarantine } from './sync-retry-quarantine';
 import { migrateLegacySyncConfig } from './sync-settings-migrate';
 import { migrateWorkflowSecrets } from './workflow-secret-migrate';
 
@@ -855,32 +856,9 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       };
       const quarantine = syncQuarantine;
       // Sync S7-A: targeted re-sync of a quarantined bulk entity, independent of the advanced cursor.
-      // Re-sync FIRST and clear ONLY on success: clearing up front would lose all operator visibility if
-      // the process died mid-retry, and a failed retry would re-record from scratch (attempts:1, seq:0),
-      // discarding first_failed_at / quarantined_at history. The stored body is central's REAL descriptor
-      // for the entity — replaying it keeps the reconcile's terminology_systems stamp faithful (passing
-      // undefined would stamp version:null / resource_id:'' / generation:0 and corrupt the metadata).
-      syncRetryQuarantine = async (entityType: string, entityId: string) => {
-        const row = await quarantine.get(entityType, entityId);
-        try {
-          if (entityType === 'terminology_system') await termBulk.syncSystem(entityId, row?.lastBody);
-          else if (entityType === 'concept_map') await termBulk.syncConceptMap(entityId, row?.lastBody);
-          else return { ok: false, error: `not a retriable bulk entity type: ${entityType}` };
-          await quarantine.clear(entityType, entityId); // healed → the row goes away
-          return { ok: true };
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          // Leave the existing row intact; just re-record the error so attempts keeps climbing from its
-          // real history rather than resetting.
-          await quarantine.recordFailure(entityType, entityId, {
-            seq: row?.lastSeq ?? 0,
-            error: msg,
-            body: row?.lastBody,
-            threshold: QUARANTINE_THRESHOLD,
-          });
-          return { ok: false, error: msg };
-        }
-      };
+      // See sync-retry-quarantine.ts for the (test-pinned) refuse-untracked / replay-descriptor /
+      // clear-only-on-success contract.
+      syncRetryQuarantine = createRetryQuarantine({ quarantine, termBulk, threshold: QUARANTINE_THRESHOLD });
       const syncPullRunner = createSyncPullRunner({
         getToken: () => tokenProvider.getToken(), // SHARE the token provider instance
         applyRecord,
