@@ -100,15 +100,12 @@ export function createSyncDivergenceStore(db: Kysely<InternalSchema>): SyncDiver
         .orderBy('detected_at', 'desc')
         .orderBy('version', 'desc')
         .execute();
-      return rows.map((r) => ({
-        resourceType: r.resource_type,
-        resourceId: r.resource_id,
-        version: Number(r.version), // bigint reads back as string on real pg
-        localHash: r.local_hash,
-        incomingHash: r.incoming_hash,
-        incomingSiteId: r.incoming_site_id,
-        detectedAt: r.detected_at,
-      }));
+      // Reuse toRow rather than re-hand-mapping the columns: the coercion rules (bigint, jsonb) live in
+      // ONE place. The selected row has no incoming_body — toRow maps that to null, and we drop it here.
+      return rows.map((r) => {
+        const { incomingBody: _drop, ...summary } = toRow(r);
+        return summary;
+      });
     },
     async get(resourceType, resourceId, version) {
       const row = await db
@@ -118,7 +115,7 @@ export function createSyncDivergenceStore(db: Kysely<InternalSchema>): SyncDiver
         .where('resource_id', '=', resourceId)
         .where('version', '=', version)
         .executeTakeFirst();
-      return row ? toRow(row as never) : undefined;
+      return row ? toRow(row) : undefined;
     },
     async clear(resourceType, resourceId, version) {
       await db
