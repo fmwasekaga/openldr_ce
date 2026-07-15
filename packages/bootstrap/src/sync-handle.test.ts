@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { makeMigratedDb } from '@openldr/db/testing';
-import { createSyncQuarantineStore } from '@openldr/db';
+import { createSyncQuarantineStore, createSyncDivergenceStore, recordDivergence } from '@openldr/db';
 import { createSyncHandle } from './sync-handle';
 
 type Db = Awaited<ReturnType<typeof makeMigratedDb>>;
@@ -225,5 +225,55 @@ describe('createSyncHandle quarantine', () => {
     const h2 = createSyncHandle({ db, ...base, retryQuarantine: retry });
     expect(await h2.retryQuarantine('terminology_system', 'http://x')).toEqual({ ok: true });
     expect(retry).toHaveBeenCalledWith('terminology_system', 'http://x');
+  });
+});
+
+describe('createSyncHandle divergences', () => {
+  it('passes list/get/clear through to the store: list() is PHI-free, get() carries the body, clear() removes it', async () => {
+    // Scope note: unlike the quarantine suite above, there is NO gated counterpart to contrast against
+    // here — all three divergence methods are available whenever opts.divergences is set, and
+    // opts.enabled/opts.mode play no part in any of them. So this does NOT cover the S7-A
+    // "hidden behind a sync gate" regression class; that lives in where index.ts CONSTRUCTS the store
+    // (outside both gates), which nothing currently asserts — it is a whole-slice review checklist item.
+    // Seed via the REAL store (not a hand-rolled row) so this pins the actual bigint/jsonb coercion too.
+    const db = await makeMigratedDb();
+    const store = createSyncDivergenceStore(db);
+    await recordDivergence(db, {
+      resourceType: 'Observation',
+      resourceId: 'o1',
+      version: 2,
+      localHash: 'a',
+      incomingHash: 'b',
+      incomingBody: { status: 'amended' },
+      incomingSiteId: 'lab-a',
+    });
+
+    const handle = createSyncHandle({
+      db,
+      enabled: false, // inert here: no divergence method reads enabled/mode (see scope note above)
+      mode: 'push',
+      centralUrl: '',
+      siteId: 'lab-a',
+      divergences: store,
+    });
+
+    const rows = await handle.listDivergences();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ resourceType: 'Observation', resourceId: 'o1', version: 2 });
+    expect((rows[0] as any).incomingBody).toBeUndefined(); // list() stays PHI-free
+
+    const full = await handle.getDivergence('Observation', 'o1', 2);
+    expect(full?.incomingBody).toEqual({ status: 'amended' });
+
+    await handle.clearDivergence('Observation', 'o1', 2);
+    expect(await handle.getDivergence('Observation', 'o1', 2)).toBeUndefined();
+  });
+
+  it('degrades to empty/undefined/no-op when no divergence store was provided', async () => {
+    const db = await makeMigratedDb();
+    const handle = createSyncHandle({ db, enabled: false, mode: 'push', centralUrl: '', siteId: 'lab-a' });
+    expect(await handle.listDivergences()).toEqual([]);
+    expect(await handle.getDivergence('Observation', 'o1', 2)).toBeUndefined();
+    await expect(handle.clearDivergence('Observation', 'o1', 2)).resolves.toBeUndefined();
   });
 });

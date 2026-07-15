@@ -1,5 +1,8 @@
 import type { Kysely } from 'kysely';
-import type { InternalSchema, SyncQuarantineRow, SyncQuarantineStore } from '@openldr/db';
+import type {
+  InternalSchema, SyncQuarantineRow, SyncQuarantineStore,
+  SyncDivergenceRow, SyncDivergenceSummary, SyncDivergenceStore,
+} from '@openldr/db';
 
 // Sync S4 (Task 5): a read/trigger handle over the two sync directions, always present on AppContext
 // (even when sync is disabled). status() reflects each worker's live isRunning() plus its cursor
@@ -36,6 +39,11 @@ export interface SyncHandle {
   triggerNow(): void;
   listQuarantine(): Promise<SyncQuarantineRow[]>;
   retryQuarantine(entityType: string, entityId: string): Promise<{ ok: boolean; error?: string }>;
+  /** PHI-FREE summaries. The dropped body requires getDivergence(). */
+  listDivergences(): Promise<SyncDivergenceSummary[]>;
+  /** Includes incomingBody (PHI) — callers must gate + audit. */
+  getDivergence(resourceType: string, resourceId: string, version: number): Promise<SyncDivergenceRow | undefined>;
+  clearDivergence(resourceType: string, resourceId: string, version: number): Promise<void>;
 }
 
 interface WorkerRef {
@@ -53,6 +61,9 @@ export function createSyncHandle(opts: {
   pullWorker?: WorkerRef;
   quarantine?: SyncQuarantineStore;
   retryQuarantine?: (entityType: string, entityId: string) => Promise<{ ok: boolean; error?: string }>;
+  /** Built UNCONDITIONALLY by the host (outside both sync gates): divergence rows are durable and must
+   *  be listable on a push-only or sync-disabled node. */
+  divergences?: SyncDivergenceStore;
 }): SyncHandle {
   const cursorRow = (consumer: string) =>
     opts.db
@@ -106,6 +117,15 @@ export function createSyncHandle(opts: {
     async retryQuarantine(entityType: string, entityId: string): Promise<{ ok: boolean; error?: string }> {
       if (!opts.retryQuarantine) return { ok: false, error: 'sync pull is not enabled on this node' };
       return opts.retryQuarantine(entityType, entityId);
+    },
+    async listDivergences(): Promise<SyncDivergenceSummary[]> {
+      return opts.divergences ? opts.divergences.list() : [];
+    },
+    async getDivergence(resourceType, resourceId, version): Promise<SyncDivergenceRow | undefined> {
+      return opts.divergences ? opts.divergences.get(resourceType, resourceId, version) : undefined;
+    },
+    async clearDivergence(resourceType, resourceId, version): Promise<void> {
+      if (opts.divergences) await opts.divergences.clear(resourceType, resourceId, version);
     },
   };
 }

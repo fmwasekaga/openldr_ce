@@ -353,6 +353,35 @@ describe('exportPushBundle / importPushBundle', () => {
     expect(res.applied).toBe(1);
     expect(ctx.fhirStore._applied.map((r) => r.id)).toEqual(['ok']); // 'evil' never applied
   });
+
+  it('a diverged record is not counted as applied but the ackSeq/pull-cursor bookkeeping still happens', async () => {
+    // applyRemote returning 'diverged' means the record was HANDLED (the divergence was recorded
+    // durably by applyRemote itself, in its own txn) — the import must not throw, must not count it
+    // toward `applied`, and must still advance ackSeq/reportedPullCursor past it exactly like any
+    // other handled record. importPushBundle's return shape is unchanged ({ applied, ackSeq, siteId }) —
+    // there is no `diverged` field on the wire; it is surfaced only via ctx.logger.warn.
+    const site = hexKeys();
+    const warnCalls: unknown[] = [];
+    const ctx = makeCtx({
+      logger: { warn: (...a: unknown[]) => warnCalls.push(a), error() {}, info() {}, debug() {} },
+      fhirStore: { applyRemote: async () => 'diverged' as const },
+    });
+    ctx.syncSites._rows.set(SITE, { siteId: SITE, status: 'active', signingPublicKey: site.pub, reportedPullCursor: 0 });
+    const manifest: BundleManifest = {
+      formatVersion: 1, kind: 'push', siteId: SITE, fromCursor: 0, toCursor: 1, recordCount: 1,
+      signerKeyId: SITE, producedAt: new Date().toISOString(), pullCursor: 9,
+    };
+    const records: BundleRecords = {
+      kind: 'push',
+      records: [{ resourceType: 'Patient', id: 'p1', version: 2, op: 'upsert', siteId: SITE, seq: 1, resource: { resourceType: 'Patient', id: 'p1' } }],
+    };
+    const bytes = signBundle(manifest, records, site.priv);
+
+    const res = await importPushBundle(ctx, bytes);
+    expect(res).toEqual({ applied: 0, ackSeq: 1, siteId: SITE }); // handled, but not tallied as 'applied'
+    expect(ctx.syncSites._rows.get(SITE)!.reportedPullCursor).toBe(9); // piggyback still recorded
+    expect(warnCalls.some((c) => JSON.stringify(c).includes('divergence'))).toBe(true);
+  });
 });
 
 // --- PULL (reference-config) ---------------------------------------------------------------------

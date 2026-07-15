@@ -1,4 +1,4 @@
-import type { Logger } from '@openldr/db';
+import type { ApplyResult, Logger } from '@openldr/db';
 import type { PullRequest, AmendmentPullResponse, SyncRecord } from './batch';
 
 // Injected deps for the amendment pull runner (Sync S6a). Kept pure over its deps (fakeable in tests).
@@ -7,7 +7,10 @@ import type { PullRequest, AmendmentPullResponse, SyncRecord } from './batch';
 export interface AmendPullDeps {
   postPull: (req: PullRequest, token: string) => Promise<AmendmentPullResponse>;
   getToken: () => Promise<string>;
-  applyRecord: (rec: SyncRecord & { seq: number }) => Promise<'applied' | 'skipped'>;
+  // ApplyResult (not a hand-copied literal union) so this cannot drift from the store it wraps.
+  // 'diverged' (S7) is a HANDLED outcome, not an error: the record was inspected, the divergence was
+  // recorded durably by applyRemote itself, and the cursor advances normally.
+  applyRecord: (rec: SyncRecord & { seq: number }) => Promise<ApplyResult>;
   readCursor: () => Promise<number>; // change_cursors consumer 'sync-amend-pull'
   advanceCursor: (seq: number) => Promise<void>;
   logger: Logger;
@@ -39,10 +42,12 @@ export function createAmendmentPullRunner(deps: AmendPullDeps): AmendmentPullRun
 
       let safeSeq = cursor;
       let applied = 0;
+      let diverged = 0;
       for (const rec of resp.records) {
         try {
-          await deps.applyRecord(rec);
-          applied++;
+          const result = await deps.applyRecord(rec);
+          if (result === 'diverged') diverged++;
+          else applied++;
           safeSeq = rec.seq;
         } catch (err) {
           deps.logger.warn(
@@ -51,6 +56,15 @@ export function createAmendmentPullRunner(deps: AmendPullDeps): AmendmentPullRun
           );
           safeSeq = rec.seq; // quarantined record is handled — safe to advance past it
         }
+      }
+      // A divergence here means CENTRAL's amendment landed on a version the lab had already minted
+      // itself — the lab KEPT its own copy and dropped central's, recording it in sync_divergences
+      // (applyRemote's own transaction). This is the lab-side half of the slice's symmetry: central
+      // detects the lab's dropped push (see sync-routes.ts / sync-bundle.ts); the lab detects
+      // central's dropped amendment right here, on pull. No wire-protocol change is needed for this —
+      // that IS the symmetry. Surfaced via logger.warn so it isn't silent.
+      if (diverged > 0) {
+        deps.logger.warn({ diverged }, 'sync amendment pull: same-version divergence(s) detected — see sync_divergences');
       }
       const target = Math.max(safeSeq, resp.nextSeq);
       if (target > cursor) await deps.advanceCursor(target);

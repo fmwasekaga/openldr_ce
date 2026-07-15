@@ -604,3 +604,130 @@ describe('settings sync merge-patient route', () => {
     expect(merge).not.toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Sync S7: same-version divergence routes — GET list (PHI-free), GET detail
+// (PHI, audited), POST clear (audited). ctx.sync gains listDivergences/
+// getDivergence/clearDivergence on top of the S7-A quarantine methods.
+// ---------------------------------------------------------------------------
+describe('settings sync divergence routes', () => {
+  const SUMMARY = {
+    resourceType: 'Observation',
+    resourceId: 'o1',
+    version: 2,
+    localHash: 'hash-local',
+    incomingHash: 'hash-incoming',
+    incomingSiteId: 'lab-b',
+    detectedAt: new Date('2026-07-15T00:00:00.000Z'),
+  };
+  // Distinctive PHI marker ('amended') so the "audit carries no PHI" assertions are non-vacuous.
+  const FULL_ROW = { ...SUMMARY, incomingBody: { status: 'amended' } };
+
+  function divergenceCtx() {
+    const ctx = fakeCtx();
+    const clearDivergence = vi.fn(async () => {});
+    (ctx as unknown as { sync: Record<string, unknown> }).sync = {
+      listDivergences: vi.fn(async () => [SUMMARY]),
+      getDivergence: vi.fn(async () => FULL_ROW as typeof FULL_ROW | undefined),
+      clearDivergence,
+    };
+    return { ctx, clearDivergence };
+  }
+
+  function syncMock(ctx: AppContext) {
+    return (ctx as unknown as {
+      sync: {
+        listDivergences: ReturnType<typeof vi.fn>;
+        getDivergence: ReturnType<typeof vi.fn>;
+        clearDivergence: ReturnType<typeof vi.fn>;
+      };
+    }).sync;
+  }
+
+  it('list omits incomingBody (PHI-free by construction)', async () => {
+    const { ctx } = divergenceCtx();
+    const app = adminApp(ctx);
+    const res = await app.inject({ method: 'GET', url: '/api/settings/sync/divergences' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as Array<Record<string, unknown>>;
+    expect(body).toHaveLength(1);
+    // Structural absence, not falsiness — a body carrying `incomingBody: undefined` must also fail.
+    expect(body[0]).not.toHaveProperty('incomingBody');
+    expect(body[0].resourceId).toBe('o1');
+  });
+
+  it('detail includes incomingBody and audits the PHI read', async () => {
+    const { ctx } = divergenceCtx();
+    const app = adminApp(ctx);
+    const res = await app.inject({ method: 'GET', url: '/api/settings/sync/divergences/Observation/o1/2' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().incomingBody).toEqual({ status: 'amended' });
+    expect(syncMock(ctx).getDivergence).toHaveBeenCalledWith('Observation', 'o1', 2);
+
+    const events = (ctx as unknown as { __auditEvents: unknown[] }).__auditEvents;
+    expect(events.map((e) => (e as { action: string }).action)).toContain('settings.sync.divergence.view');
+    // The audit row carries the (type, id, version) key only — never the body we just read.
+    expect(JSON.stringify(events)).not.toContain('amended');
+  });
+
+  it('detail 404s for an unknown key', async () => {
+    const { ctx } = divergenceCtx();
+    syncMock(ctx).getDivergence.mockResolvedValueOnce(undefined);
+    const app = adminApp(ctx);
+    const res = await app.inject({ method: 'GET', url: '/api/settings/sync/divergences/Observation/nope/2' });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('detail 400s on a non-numeric version', async () => {
+    const { ctx } = divergenceCtx();
+    const app = adminApp(ctx);
+    const res = await app.inject({ method: 'GET', url: '/api/settings/sync/divergences/Observation/o1/abc' });
+    expect(res.statusCode).toBe(400);
+    expect(syncMock(ctx).getDivergence).not.toHaveBeenCalled();
+  });
+
+  it('rejects non-admin actor → 403 for list, detail and clear', async () => {
+    const { ctx } = divergenceCtx();
+    const app = Fastify();
+    app.addHook('onRequest', async (req) => {
+      req.user = { id: 'tech', username: 'tech', displayName: null, roles: ['lab_technician'] };
+    });
+    registerSettingsRoutes(app, ctx);
+    expect((await app.inject({ method: 'GET', url: '/api/settings/sync/divergences' })).statusCode).toBe(403);
+    expect((await app.inject({ method: 'GET', url: '/api/settings/sync/divergences/Observation/o1/2' })).statusCode).toBe(403);
+    expect((await app.inject({ method: 'POST', url: '/api/settings/sync/divergences/Observation/o1/2/clear' })).statusCode).toBe(403);
+    expect(syncMock(ctx).listDivergences).not.toHaveBeenCalled();
+    expect(syncMock(ctx).getDivergence).not.toHaveBeenCalled();
+    expect(syncMock(ctx).clearDivergence).not.toHaveBeenCalled();
+  });
+
+  it('clear removes the row, returns 204, and audits', async () => {
+    const { ctx, clearDivergence } = divergenceCtx();
+    const app = adminApp(ctx);
+    const res = await app.inject({ method: 'POST', url: '/api/settings/sync/divergences/Observation/o1/2/clear' });
+    expect(res.statusCode).toBe(204);
+    expect(res.rawPayload.length).toBe(0);
+    expect(clearDivergence).toHaveBeenCalledWith('Observation', 'o1', 2);
+
+    const events = (ctx as unknown as { __auditEvents: unknown[] }).__auditEvents;
+    expect(events.map((e) => (e as { action: string }).action)).toContain('settings.sync.divergence.clear');
+    expect(JSON.stringify(events)).not.toContain('amended');
+  });
+
+  it('clear 404s when there is no such divergence (and does not call clearDivergence)', async () => {
+    const { ctx, clearDivergence } = divergenceCtx();
+    syncMock(ctx).getDivergence.mockResolvedValueOnce(undefined);
+    const app = adminApp(ctx);
+    const res = await app.inject({ method: 'POST', url: '/api/settings/sync/divergences/Observation/nope/2/clear' });
+    expect(res.statusCode).toBe(404);
+    expect(clearDivergence).not.toHaveBeenCalled();
+  });
+
+  it('clear 400s on a non-numeric version', async () => {
+    const { ctx, clearDivergence } = divergenceCtx();
+    const app = adminApp(ctx);
+    const res = await app.inject({ method: 'POST', url: '/api/settings/sync/divergences/Observation/o1/abc/clear' });
+    expect(res.statusCode).toBe(400);
+    expect(clearDivergence).not.toHaveBeenCalled();
+  });
+});

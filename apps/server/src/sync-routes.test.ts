@@ -14,7 +14,7 @@ function rec(id: string, version: number, seq: number, siteId = SITE) {
 // Fake ctx: verifyToken resolves/rejects on demand; applyRemote is scripted per-id or default.
 function fakeCtx(opts: {
   verify?: (token: string) => Promise<Record<string, unknown>>;
-  apply?: (record: any) => Promise<'applied' | 'skipped'>;
+  apply?: (record: any) => Promise<'applied' | 'skipped' | 'diverged'>;
 }) {
   const calls: { apply: any[] } = { apply: [] };
   const ctx = {
@@ -116,6 +116,19 @@ describe('sync routes — POST /api/sync/push', () => {
     expect(body.applied).toBe(2);
     expect(body.rejects).toEqual([{ id: 'boom', version: 1, seq: 2, reason: 'apply-error' }]);
     expect(body.ackSeq).toBe(3);
+  });
+
+  it('a diverged record is not counted as skipped and does not reject the batch', async () => {
+    const { ctx, calls } = fakeCtx({ apply: async () => 'diverged' });
+    const records = [rec('p1', 2, 5)];
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/sync/push', headers: AUTH, payload: { fromSeq: 0, records } });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.skipped).toBe(0); // MUST NOT be folded into skipped
+    expect(body.applied).toBe(0);
+    expect(body.rejects).toEqual([]); // a divergence is NOT a reject
+    expect(body.ackSeq).toBe(5); // handled → the lab's cursor still advances
+    expect(calls.apply.length).toBe(1);
   });
 
   it('empty batch → ackSeq = fromSeq (cursor does not move backward)', async () => {

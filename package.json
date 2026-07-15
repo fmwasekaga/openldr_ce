@@ -43,6 +43,7 @@
     "sync:order-status:accept": "tsx scripts/sync-order-status-live-acceptance.ts",
     "sync:patient-merge:accept": "tsx scripts/sync-patient-merge-live-acceptance.ts",
     "sync:quarantine:accept": "tsx scripts/sync-quarantine-live-acceptance.ts",
+    "sync:divergence:accept": "tsx scripts/sync-divergence-live-acceptance.ts",
     "sync:terminology:accept": "tsx scripts/sync-terminology-live-acceptance.ts",
     "sync:gzip:accept": "tsx scripts/sync-gzip-live-acceptance.ts",
     "sync:enroll:accept": "tsx scripts/sync-enroll-live-acceptance.ts",

@@ -81,6 +81,7 @@ export function registerSyncRoutes(app: FastifyInstance<any, any, any, any>, ctx
 
     let applied = 0;
     let skipped = 0;
+    let diverged = 0;
     // Every handled record advances ackSeq; a non-finite seq can never contribute, so it can't
     // poison the anchor into NaN (which would serialize to JSON null and break the lab's cursor).
     let ackSeq = fromSeq;
@@ -133,6 +134,7 @@ export function registerSyncRoutes(app: FastifyInstance<any, any, any, any>, ctx
         // SyncRecord & { seq } is structurally a superset of RemoteRecord; the extra seq is harmless.
         const result = await ctx.fhirStore.applyRemote(rec);
         if (result === 'applied') applied++;
+        else if (result === 'diverged') diverged++;
         else skipped++;
       } catch (e) {
         // One bad record must not 500 the whole batch — record it as a reject and continue.
@@ -142,6 +144,15 @@ export function registerSyncRoutes(app: FastifyInstance<any, any, any, any>, ctx
         );
         rejects.push({ id: rec.id, version: rec.version, seq: rec.seq, reason: 'apply-error' });
       }
+    }
+
+    // A divergence means this lab pushed content at a version central had already authored
+    // differently — central KEPT its own copy and dropped the lab's, recording it in sync_divergences
+    // for an operator. Deliberately NOT reported in PushResponse: adding a field would break the
+    // no-wire-change property, and the lab detects its own side independently when it pulls the
+    // amendment (each side records what IT dropped). Logged so it is visible here too.
+    if (diverged > 0) {
+      ctx.logger.warn({ siteId: principal.siteId, diverged }, 'sync push: same-version divergence(s) detected — see sync_divergences');
     }
 
     // Empty batch → ackSeq stayed at fromSeq (the cursor never moves backward).

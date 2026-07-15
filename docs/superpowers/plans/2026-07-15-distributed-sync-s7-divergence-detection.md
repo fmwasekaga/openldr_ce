@@ -984,14 +984,21 @@ git commit -m "feat(sync): retype applyRecord to ApplyResult; diverged is handle
 - Modify: `packages/bootstrap/src/sync-bundle.ts` (~line 198-200)
 - Test: `apps/server/src/sync-routes.test.ts` (existing — add one case)
 
-**Context — this is the task the compiler cannot help with.** Both sites currently read:
+**Context — this is the task the compiler cannot help with.** The two sites have DIFFERENT shapes; verified against the code, do not assume they match.
 
+`apps/server/src/sync-routes.ts:135`:
 ```typescript
 if (result === 'applied') applied++;
-else skipped++;
+else skipped++;              // ← 'diverged' silently absorbed into skipped
 ```
 
-`else` silently absorbs `'diverged'` into `skipped`. Correctness is unaffected (the row is already written by `applyRemote`), but a divergence would be invisible in logs and counts — the same class of blind spot as S7-B's bare `reply.send`.
+`packages/bootstrap/src/sync-bundle.ts:198` — **no `else`, no `skipped` counter anywhere in the file**; it returns `{ applied, ackSeq, siteId }`:
+```typescript
+if (result === 'applied') applied++;
+                             // ← 'diverged' dropped with no branch at all
+```
+
+Correctness is unaffected either way (the row is already written inside `applyRemote`'s transaction), but a divergence would be invisible in logs and counts — the same class of blind spot as S7-B's bare `reply.send`.
 
 **`PushResponse` does NOT change.** Keeping it byte-identical preserves the no-wire-change property: no peer can break on this slice. The count is logged, not returned.
 
@@ -1065,26 +1072,27 @@ Then, immediately before the `const response: PushResponse = ...` line, add:
 
 - [ ] **Step 4: Fix the bundle importer**
 
-In `packages/bootstrap/src/sync-bundle.ts`, apply the same change at ~line 198. Add `let diverged = 0;` beside the existing `applied`/`skipped` counters, then:
+`packages/bootstrap/src/sync-bundle.ts` (~line 198) is NOT the same shape as the push route — it has no `else` and no `skipped` counter. Only `applied` is tallied, and the function returns `{ applied, ackSeq, siteId }`. So add a `diverged` counter beside the existing `applied` declaration and give the new variant its own branch:
 
 ```typescript
       const result = await ctx.fhirStore.applyRemote(rec);
       if (result === 'applied') applied++;
       else if (result === 'diverged') diverged++;
-      else skipped++;
 ```
 
-and after the loop, before the function returns:
+(There is deliberately still no `else` — a plain `'skipped'` remains uncounted here, exactly as before. Do not add a `skipped` counter; that would be scope creep.)
+
+After the loop, before the `return`:
 
 ```typescript
-    // Same-version divergence (S7) — the record was handled and recorded in sync_divergences by
-    // applyRemote itself; surfaced here so a bundle import is not silent about it.
-    if (diverged > 0) {
-      ctx.logger.warn({ diverged }, 'sync import: same-version divergence(s) detected — see sync_divergences');
-    }
+  // Same-version divergence (S7) — the record was handled and recorded in sync_divergences by
+  // applyRemote itself; surfaced here so a bundle import is not silent about it.
+  if (diverged > 0) {
+    ctx.logger.warn({ diverged, siteId: manifest.siteId }, 'sync import: same-version divergence(s) detected — see sync_divergences');
+  }
 ```
 
-> Do **not** change this function's return type. If it returns a counts object that callers destructure, adding a field is safe — but only do so if the existing shape already carries `applied`/`skipped`; check before editing, and keep it additive.
+> Do **not** change this function's return type — leave `{ applied, ackSeq, siteId }` as-is. Callers destructure it, and `diverged` is a log-only concern here (same reasoning as `PushResponse`: no wire/shape change).
 
 - [ ] **Step 5: Run tests to verify they pass**
 

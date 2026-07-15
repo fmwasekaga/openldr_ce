@@ -80,6 +80,19 @@ export interface SyncQuarantineTable {
   quarantined_at: Date | null;
 }
 
+// Distributed sync S7: same-version divergence record (see migration 056). Nullable hash/body columns
+// mean "tombstone" — a delete-vs-edit collision at the same version is a real divergence.
+export interface SyncDivergencesTable {
+  resource_type: string;
+  resource_id: string;
+  version: number;
+  local_hash: string | null;
+  incoming_hash: string | null;
+  incoming_body: unknown | null;
+  incoming_site_id: string;
+  detected_at: Generated<Date>;
+}
+
 export interface OutboxEventsTable {
   id: string;
   type: string;
@@ -617,6 +630,7 @@ export interface InternalSchema {
   reference_change_log: ReferenceChangeLogTable;
   sync_amendments: SyncAmendmentsTable;
   sync_quarantine: SyncQuarantineTable;
+  sync_divergences: SyncDivergencesTable;
   outbox_events: OutboxEventsTable;
   ingest_batches: IngestBatchesTable;
   plugins: PluginsTable;

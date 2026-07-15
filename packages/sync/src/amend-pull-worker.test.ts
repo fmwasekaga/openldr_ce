@@ -56,4 +56,27 @@ describe('createAmendmentPullRunner', () => {
     expect(n).toBe(0);
     expect(cursor).toBe(3);
   });
+
+  it('treats a diverged apply as handled — cursor advances, not counted as applied, and warns', async () => {
+    const applied: unknown[] = [];
+    const warnings: unknown[][] = [];
+    const logger = { ...silent, warn: (...args: unknown[]) => { warnings.push(args); } };
+    let cursor = 0;
+    const resp: AmendmentPullResponse = { records: [rec(7, 'd')], nextSeq: 7 };
+    const runner = createAmendmentPullRunner({
+      getToken: async () => 't',
+      postPull: async () => resp,
+      applyRecord: async (r) => { applied.push(r); return 'diverged' as const; },
+      readCursor: async () => cursor,
+      advanceCursor: async (s) => { cursor = s; },
+      logger: logger as any,
+    });
+    const n = await runner.runCycle();
+    expect(applied).toHaveLength(1); // the record WAS inspected/applied-attempted
+    expect(n).toBe(0); // but NOT counted as 'applied' — it was dropped in favor of the local copy
+    expect(cursor).toBe(7); // handled, not quarantined — cursor still advances past it
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0][0]).toMatchObject({ diverged: 1 });
+    expect(warnings[0][1]).toMatch(/divergence/i);
+  });
 });
