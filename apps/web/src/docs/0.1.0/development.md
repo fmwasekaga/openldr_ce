@@ -53,9 +53,14 @@ pnpm openldr db reset
 pnpm openldr db seed
 ```
 
-> The database is **not** migrated automatically in dev. If the app shows empty data or
-> the server logs `relation "…" does not exist`, run `pnpm openldr db reset` then
-> `pnpm openldr db seed`.
+> The database is **not** migrated automatically in dev (`MIGRATE_ON_START` is off), so
+> **after any pull that brings new migrations, run `pnpm openldr db migrate`**. It is
+> non-destructive and keeps your data. If the app shows empty data or the server logs
+> `relation "…" does not exist`, that is the fix — `db seed` refuses to run against a
+> schema that is behind the code and tells you what is pending.
+>
+> Reach for `pnpm openldr db reset` only when you actually want a clean slate: it **drops
+> and recreates the schema**, destroying everything in your dev database.
 
 ## Run the apps
 
@@ -84,7 +89,8 @@ to exercise the real Keycloak flow.
 | `pnpm test` | Run the workspace test suites. |
 | `pnpm typecheck` | Type-check every package and app. |
 | `pnpm build` | Build everything (Turbo). |
-| `pnpm openldr db reset` | Drop and recreate the dev database schema. |
+| `pnpm openldr db migrate` | Apply pending migrations. Non-destructive — run this after a pull. |
+| `pnpm openldr db reset` | Drop and recreate the dev database schema (**destructive**). |
 | `pnpm openldr db seed` | Seed the default forms, workflows, and terminology. |
 | `pnpm -C apps/studio test` | Run just the Studio tests. |
 

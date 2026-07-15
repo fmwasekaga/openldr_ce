@@ -45,12 +45,21 @@ admin/danger actions are also available in the Studio UI under Settings.
 
 ## Common tasks
 
-Reset and seed a development database:
+Bring a database up to date after pulling new migrations (non-destructive, keeps data):
+
+```
+pnpm openldr db migrate
+```
+
+Reset and seed a development database (`db reset` **drops and recreates** the schema):
 
 ```
 pnpm openldr db reset
 pnpm openldr db seed
 ```
+
+`db seed` refuses to run when migrations are pending, naming what is outstanding — run
+`db migrate` first.
 
 Install and run an ingest plugin, then ingest a file with it:
 
