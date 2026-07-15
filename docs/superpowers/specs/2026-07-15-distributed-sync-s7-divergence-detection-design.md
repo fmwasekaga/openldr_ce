@@ -129,7 +129,15 @@ So the type system catches **one of three**. The `else`-absorbs-the-new-variant 
 
 **This is a tally/observability concern, not a correctness one:** decision 6 puts the row write inside `applyRemote`'s transaction precisely so that no caller's behavior can cause a divergence to go unrecorded. A missed call site under-reports `'diverged'` in logs and counts; it never loses the row.
 
-Mitigation, since the compiler won't do it: the plan **enumerates all three sites explicitly** and each gets a test pinning that `'diverged'` is counted as its own thing rather than folded into `skipped`. `AmendPullDeps.applyRecord` is retyped to `ApplyResult` so it stops drifting from the store it wraps.
+Mitigation, since the compiler won't do it — **as built, all three sites branch on `'diverged'` explicitly**, each with a test pinning that it is counted as its own thing rather than folded into another tally, and each with a `logger.warn` so it isn't silent:
+
+| Call site | As built |
+|---|---|
+| `apps/server/src/sync-routes.ts` | `else if (result === 'diverged') diverged++;` + warn. `PushResponse` unchanged — the count is logged, not returned (§6). |
+| `packages/bootstrap/src/sync-bundle.ts` | `else if (result === 'diverged') diverged++;` + warn. Still no `else` — a plain `'skipped'` remains uncounted there, as before. Return shape unchanged. |
+| `packages/sync/src/amend-pull-worker.ts` | `applyRecord` retyped to `ApplyResult` so it stops drifting from the store it wraps; `'diverged'` increments its own counter (excluded from the `applied` return) + warn. The cursor still advances — `'diverged'` is a **handled** outcome, never quarantined. |
+
+**The third site was nearly missed, and the miss is instructive.** The implementation plan narrowed this from three sites to two, and the test it specified for `amend-pull-worker` asserted `runCycle()` returned `1` for a diverged record — *pinning the folding* rather than forbidding it. Every per-task review passed, because each task did exactly what its own task said. Only the whole-slice review caught it. The consequence was not data loss (the row is written in `applyRemote`'s own transaction regardless) but something arguably worse to debug: a lab that dropped a central clinical amendment logged `applied 1`. Since §6's no-wire-change argument delegates *all* lab-side discovery to that one path, it was the worst of the three to lose.
 
 ## 6. The both-sides symmetry (why detect-only is sufficient)
 
