@@ -229,10 +229,13 @@ describe('createSyncHandle quarantine', () => {
 });
 
 describe('createSyncHandle divergences', () => {
-  it('exposes divergences even when sync is disabled and no workers exist', async () => {
-    // Regression, mirroring the S7-A quarantine lesson: a store built and populated on some EARLIER
-    // boot must still be listable/gettable/clearable on a push-only or sync-disabled boot. Seed via
-    // the REAL store (not a hand-rolled row) so this pins the actual column mapping too.
+  it('passes list/get/clear through to the store: list() is PHI-free, get() carries the body, clear() removes it', async () => {
+    // Scope note: unlike the quarantine suite above, there is NO gated counterpart to contrast against
+    // here — all three divergence methods are available whenever opts.divergences is set, and
+    // opts.enabled/opts.mode play no part in any of them. So this does NOT cover the S7-A
+    // "hidden behind a sync gate" regression class; that lives in where index.ts CONSTRUCTS the store
+    // (outside both gates), which nothing currently asserts — it is a whole-slice review checklist item.
+    // Seed via the REAL store (not a hand-rolled row) so this pins the actual bigint/jsonb coercion too.
     const db = await makeMigratedDb();
     const store = createSyncDivergenceStore(db);
     await recordDivergence(db, {
@@ -247,11 +250,11 @@ describe('createSyncHandle divergences', () => {
 
     const handle = createSyncHandle({
       db,
-      enabled: false, // sync off this boot
+      enabled: false, // inert here: no divergence method reads enabled/mode (see scope note above)
       mode: 'push',
       centralUrl: '',
       siteId: 'lab-a',
-      divergences: store, // ...but the store is still wired
+      divergences: store,
     });
 
     const rows = await handle.listDivergences();
