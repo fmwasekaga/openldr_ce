@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { Copy, MoreHorizontal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { AppShell } from '@/shell/AppShell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -105,10 +104,13 @@ export function Sites() {
   }, [t]);
 
   return (
-    <AppShell title={t('sites.title')} fullBleed>
+    <>
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex items-center justify-between border-b border-border px-3 py-2">
-          <span className="text-sm text-muted-foreground">{t('sites.subtitle')}</span>
+          <div>
+            <h1 className="text-lg font-semibold">{t('sites.title')}</h1>
+            <p className="text-sm text-muted-foreground">{t('sites.subtitle')}</p>
+          </div>
           <div className="flex items-center gap-2">
             <Button size="sm" onClick={openEnroll}>{t('sites.enroll')}</Button>
             <DropdownMenu>
@@ -243,7 +245,7 @@ export function Sites() {
         destructive
         onConfirm={() => { void doRevoke(); }}
       />
-    </AppShell>
+    </>
   );
 }
 
