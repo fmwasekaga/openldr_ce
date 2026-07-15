@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { ZodError } from 'zod';
 import { sealDefinitionSecrets, type AppContext } from '@openldr/bootstrap';
 import { WorkflowSchema, WorkflowDefinitionSchema, runWorkflow, type RunEvent, createWorkflowNodeRegistry, HOST_NODE_DESCRIPTORS, mapSecretFields, isSecretRef } from '@openldr/workflows';
-import { ConfigError } from '@openldr/core';
+import { ConfigError, appError } from '@openldr/core';
 import { toCsv } from '@openldr/reporting';
 import { recordAudit } from './audit-helper';
 import { requireRole } from './rbac';
@@ -96,7 +96,7 @@ async function extractWorkflowSecrets(ctx: AppContext, workflowId: string, defin
 /** Reads the request body (Buffer or async-iterable stream) into a Buffer, enforcing the byte cap. */
 async function readBinaryBody(body: unknown, maxBytes: number): Promise<Buffer> {
   if (Buffer.isBuffer(body)) {
-    if (body.length > maxBytes) throw Object.assign(new Error('file too large'), { statusCode: 413 });
+    if (body.length > maxBytes) throw appError('SY0413');
     return body;
   }
   if (body && typeof (body as AsyncIterable<Buffer>)[Symbol.asyncIterator] === 'function') {
@@ -104,12 +104,12 @@ async function readBinaryBody(body: unknown, maxBytes: number): Promise<Buffer> 
     for await (const c of body as AsyncIterable<Buffer | string>) {
       const buf = Buffer.isBuffer(c) ? c : Buffer.from(c);
       total += buf.length;
-      if (total > maxBytes) throw Object.assign(new Error('file too large'), { statusCode: 413 });
+      if (total > maxBytes) throw appError('SY0413');
       chunks.push(buf);
     }
     return Buffer.concat(chunks);
   }
-  throw Object.assign(new Error('expected a binary body'), { statusCode: 400 });
+  throw appError('SY0400', { message: 'expected a binary body' });
 }
 
 function sanitizeFilename(name: string): string {
@@ -152,11 +152,12 @@ export function registerWorkflowRoutes(
 
   // Upload a binary file for use as a workflow trigger input. Returns a BinaryRef that can be
   // passed into execute-stream's `files` map or as a webhook body substitute.
-  app.post('/api/workflows/:id/uploads', MANAGE, async (req, reply) => {
+  app.post('/api/workflows/:id/uploads', MANAGE, async (req) => {
     const max = ctx.cfg.WORKFLOW_FILE_MAX_BYTES;
-    let buf: Buffer;
-    try { buf = await readBinaryBody(req.body, max); }
-    catch (err) { const code = (err as { statusCode?: number }).statusCode ?? 400; reply.code(code); return { error: (err as Error).message }; }
+    // Deliberately no local catch: readBinaryBody throws AppErrors, and letting them propagate to
+    // the central error handler is what earns this route the app-wide {error, code, correlationId}
+    // body. Catching here to hand-roll `{ error }` is what silently bypassed that contract.
+    const buf = await readBinaryBody(req.body, max);
     const filename = sanitizeFilename(((req.query as { filename?: string }).filename) ?? 'upload');
     const objectKey = `workflow-uploads/${randomUUID()}/${filename}`;
     const contentType = (req.headers['content-type'] as string | undefined) ?? 'application/octet-stream';
@@ -415,9 +416,8 @@ export function registerWorkflowRoutes(
     let webhookBody: unknown = req.body;
     const ct = String(req.headers['content-type'] ?? '');
     if (!ct.includes('application/json') && req.body && (Buffer.isBuffer(req.body) || typeof (req.body as AsyncIterable<unknown>)[Symbol.asyncIterator] === 'function')) {
-      let buf: Buffer;
-      try { buf = await readBinaryBody(req.body, ctx.cfg.WORKFLOW_FILE_MAX_BYTES); }
-      catch (err) { const code = (err as { statusCode?: number }).statusCode ?? 400; reply.code(code); return { error: (err as Error).message }; }
+      // As above: propagate to the central error handler rather than hand-rolling a reply.
+      const buf = await readBinaryBody(req.body, ctx.cfg.WORKFLOW_FILE_MAX_BYTES);
       const objectKey = `workflow-uploads/${randomUUID()}/webhook`;
       await ctx.blob.put(objectKey, new Uint8Array(buf), 'application/octet-stream');
       files = { file: { objectKey, contentType: 'application/octet-stream', fileName: 'webhook', byteSize: buf.length } };

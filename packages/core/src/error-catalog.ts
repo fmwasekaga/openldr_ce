@@ -54,8 +54,11 @@ const ENTRIES: readonly CatalogEntry[] = [
   { code: 'DB0001', domain: 'dashboards', httpStatus: 400, message: 'dashboard query failed' },
   { code: 'DB0002', domain: 'dashboards', httpStatus: 403, message: 'SQL authoring is disabled' },
   { code: 'DB0003', domain: 'dashboards', httpStatus: 404, message: 'dashboard model not found' },
-  // System / fallback (SY)
+  // System / fallback (SY). A code named SY0<status> MUST map to that HTTP status — codeForStatus
+  // derives the code from the status by name, and error-catalog.test.ts pins the invariant.
   { code: 'SY0400', domain: 'system', httpStatus: 400, message: 'bad request' },
+  { code: 'SY0413', domain: 'system', httpStatus: 413, message: 'request payload too large' },
+  { code: 'SY0415', domain: 'system', httpStatus: 415, message: 'unsupported media type' },
   { code: 'SY0500', domain: 'system', httpStatus: 500, message: 'unexpected server error' },
   { code: 'SY0503', domain: 'system', httpStatus: 503, message: 'a backing service is unavailable', retryable: true },
 ];
@@ -97,6 +100,21 @@ export function catalogFor(prefix: string): CatalogEntry[] {
 /** Human domain name for a 2-letter prefix, or undefined. */
 export function domainForPrefix(prefix: string): string | undefined {
   return DOMAINS[prefix];
+}
+
+/**
+ * Map an HTTP status a THIRD PARTY already classified (a library error's `statusCode`) onto a
+ * catalog code, so an outside error still answers in our vocabulary.
+ *
+ * Exists so the server can honour `err.statusCode` for the response STATUS without also passing the
+ * library's own `err.code` through as our `code` — a raw `FST_ERR_VALIDATION` on the wire would
+ * break the one-catalog contract and be ungreppable. The catalog is its own lookup table: an entry
+ * named `SY0<status>` is the mapping, and anything unmapped degrades to the generic 4xx/5xx code.
+ */
+export function codeForStatus(status: number): string {
+  const exact = `SY0${status}`;
+  if (CATALOG[exact]) return exact;
+  return status >= 500 ? 'SY0500' : 'SY0400';
 }
 
 /**

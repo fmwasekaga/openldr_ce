@@ -6,6 +6,7 @@ import { createWorkflowSecretStore } from '@openldr/db';
 import { makeMigratedDb } from '@openldr/db/testing';
 import { createWebhookRegistry } from '@openldr/workflows';
 import { registerWorkflowRoutes } from './workflows-routes';
+import { registerErrorHandler } from './error-handler';
 
 // Lightweight in-memory secret store for the legacy (non-secret) route tests. Mirrors
 // createWorkflowSecretStore semantics incl. the fail-closed ConfigError when no key is set.
@@ -696,8 +697,12 @@ describe('workflow routes', () => {
     expect(ctx.blob.put).toHaveBeenCalled();
   });
 
-  it('POST /uploads rejects an over-cap body with 413', async () => {
-    const app = Fastify();
+  // Registers the REAL central error handler, as production does — an over-cap upload must answer
+  // the app-wide {error, code, correlationId} contract, not a bespoke body only this route emits.
+  it('POST /uploads rejects an over-cap body with 413 and the standard error contract', async () => {
+    const app = Fastify({ logger: false });
+    registerErrorHandler(app);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
     const ctx = fakeCtx();
     ctx.cfg.WORKFLOW_FILE_MAX_BYTES = 2;
@@ -709,6 +714,8 @@ describe('workflow routes', () => {
       payload: Buffer.from('toolong'),
     });
     expect(res.statusCode).toBe(413);
+    expect(res.json()).toMatchObject({ code: 'SY0413', error: 'request payload too large' });
+    expect(res.json().correlationId).toBeTruthy();
   });
 
   it('indexes a workflow with an event trigger on create', async () => {
