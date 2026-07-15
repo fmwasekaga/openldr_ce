@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { authFetch, getMe, type ClientConfig, type CurrentUser } from '@/api';
 import { getOidc, type OidcClient } from './oidc';
 import { Button } from '@/components/ui/button';
+import { StripedEmpty } from '@/components/ui/striped-empty';
 
 /** Module-level guard: prevents StrictMode double-invocation from issuing two signinRedirects. */
 let redirecting = false;
@@ -87,14 +88,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   if (configError) {
     return (
-      <div className="flex h-screen items-center justify-center">
+      <StripedEmpty className="h-screen">
         <div className="flex flex-col items-center gap-4 rounded-lg border border-border bg-card p-8 text-center shadow-sm">
           <p className="text-sm text-muted-foreground">{t('common.configUnreachable')}</p>
           <Button variant="outline" onClick={() => window.location.reload()}>
             Reload
           </Button>
         </div>
-      </div>
+      </StripedEmpty>
     );
   }
 
@@ -103,9 +104,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // The /auth/callback effect sets loading=false itself, so CallbackPage still renders.
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <p className="text-sm text-muted-foreground">{t('common.signingIn')}</p>
-      </div>
+      <StripedEmpty className="h-screen">
+        <div className="flex flex-col items-center gap-4 rounded-lg border border-border bg-card p-8 text-center shadow-sm">
+          <p className="text-sm text-muted-foreground">{t('common.signingIn')}</p>
+        </div>
+      </StripedEmpty>
     );
   }
 

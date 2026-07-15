@@ -20,6 +20,7 @@ import { DashboardFilterBar } from './filters/DashboardFilterBar';
 import { DashboardFilterEditor } from './filters/DashboardFilterEditor';
 import { exportDashboard, importDashboard } from './io';
 import { WidgetEditorDialog } from './editor/WidgetEditorDialog';
+import { StripedEmpty } from '@/components/ui/striped-empty';
 
 function defaultsFor(filters: DashboardFilterDef[]): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -119,8 +120,10 @@ export function DashboardPage() {
 
   if (!current) {
     return (
-      <AppShell title="Dashboard">
-        <div className="ui-scope p-4 text-sm text-muted-foreground">{error ?? 'Loading…'}</div>
+      <AppShell title="Dashboard" fullBleed>
+        <div className="ui-scope flex min-h-0 flex-1 flex-col">
+          <StripedEmpty>{error ?? 'Loading…'}</StripedEmpty>
+        </div>
       </AppShell>
     );
   }

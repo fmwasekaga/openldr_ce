@@ -10,6 +10,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TablePagination } from '@/components/ui/table-pagination';
+import { StripedEmpty } from '@/components/ui/striped-empty';
+import { LoadingState } from '@/components/ui/spinner';
 import { fetchWorkflows, createWorkflow, deleteWorkflow, type Workflow } from '@/api';
 
 function newWorkflowId(): string {
@@ -152,7 +154,7 @@ export function WorkflowList() {
           {actionError ? <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">{actionError}</div> : null}
         </div>
 
-        <div className="flex-1 overflow-auto">
+        <div className="flex flex-1 flex-col overflow-auto">
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
@@ -162,13 +164,9 @@ export function WorkflowList() {
                 <TableHead className="w-16" />
               </TableRow>
             </TableHeader>
+            {!loading && pageRows.length > 0 && (
             <TableBody className="[&_tr:last-child]:border-b">
-              {loading ? (
-                <TableRow><TableCell colSpan={4} className="py-8 text-center text-muted-foreground">Loading...</TableCell></TableRow>
-              ) : pageRows.length === 0 ? (
-                <TableRow><TableCell colSpan={4} className="py-8 text-center text-muted-foreground">{search ? 'No workflows match.' : 'No workflows yet.'}</TableCell></TableRow>
-              ) : (
-                pageRows.map((w) => (
+                {pageRows.map((w) => (
                   <TableRow key={w.id} className="cursor-pointer transition-colors hover:bg-[rgba(70,130,180,0.08)]" onClick={() => navigate(`/workflows/${w.id}`)}>
                     <TableCell>
                       <span className="font-medium" data-testid={`open-${w.id}`}>{w.name}</span>
@@ -193,10 +191,12 @@ export function WorkflowList() {
                       </DropdownMenu>
                     </TableCell>
                   </TableRow>
-                ))
-              )}
+                ))}
             </TableBody>
+            )}
           </Table>
+          {loading && <LoadingState className="flex-1" label="Loading…" />}
+          {!loading && pageRows.length === 0 && <StripedEmpty className="flex-1">{search ? 'No workflows match.' : 'No workflows yet.'}</StripedEmpty>}
         </div>
 
         <TablePagination

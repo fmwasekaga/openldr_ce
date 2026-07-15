@@ -8,6 +8,7 @@ import { TabBar } from './workspace/TabBar';
 import { TableTab } from './workspace/TableTab';
 import { QueryTab } from './workspace/QueryTab';
 import { useQueryStore } from './store';
+import { StripedEmpty } from '@/components/ui/striped-empty';
 
 function Workspace(): JSX.Element {
   const { tabs, activeId } = useQueryStore();
@@ -16,7 +17,7 @@ function Workspace(): JSX.Element {
     <div className="flex h-full min-w-0 flex-1 flex-col">
       <TabBar />
       <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-        {!active && <div className="grid h-full place-items-center text-sm text-muted-foreground">Select a table or open a query</div>}
+        {!active && <StripedEmpty>Select a table or open a query</StripedEmpty>}
         {active?.kind === 'table' && <TableTab tab={active} />}
         {active?.kind === 'dataset' && <TableTab tab={active} />}
         {active?.kind === 'query' && <QueryTab tab={active} />}

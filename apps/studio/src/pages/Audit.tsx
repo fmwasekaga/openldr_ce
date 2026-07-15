@@ -3,6 +3,8 @@ import { Copy, Filter, RefreshCw, RotateCcw, X } from 'lucide-react';
 import { AppShell } from '@/shell/AppShell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { StripedEmpty } from '@/components/ui/striped-empty';
+import { LoadingState } from '@/components/ui/spinner';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -361,7 +363,7 @@ export function Audit() {
           <button type="submit" className="hidden" aria-hidden="true">Apply</button>
         </form>
 
-        <div className="flex-1 overflow-auto">
+        <div className="flex flex-1 flex-col overflow-auto">
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
@@ -372,15 +374,9 @@ export function Audit() {
                 <TableHead className="text-xs uppercase">Entity ID</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody className="[&_tr:last-child]:border-b">
-              {loading ? (
-                <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">Loading...</TableCell></TableRow>
-              ) : error ? (
-                <TableRow><TableCell colSpan={5} className="py-8 text-center text-destructive">{error}</TableCell></TableRow>
-              ) : events.length === 0 ? (
-                <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">No audit events.</TableCell></TableRow>
-              ) : (
-                events.map((event) => (
+            {!loading && !error && events.length > 0 && (
+              <TableBody className="[&_tr:last-child]:border-b">
+                {events.map((event) => (
                   <TableRow key={event.id} className="cursor-pointer transition-colors hover:bg-[rgba(70,130,180,0.08)]" onClick={() => { void openEvent(event); }} title="Open audit event details">
                     <TableCell><span className="whitespace-nowrap font-mono text-xs text-muted-foreground">{formatTimestamp(event.occurredAt)}</span></TableCell>
                     <TableCell className="text-sm">{event.actorName}</TableCell>
@@ -388,10 +384,13 @@ export function Audit() {
                     <TableCell className="font-mono text-xs">{event.entityType}</TableCell>
                     <TableCell><span className="font-mono text-xs text-muted-foreground">{event.entityId}</span></TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
+                ))}
+              </TableBody>
+            )}
           </Table>
+          {loading && <LoadingState className="flex-1" label="Loading…" />}
+          {!loading && error && <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-destructive">{error}</div>}
+          {!loading && !error && events.length === 0 && <StripedEmpty className="flex-1">No audit events.</StripedEmpty>}
         </div>
 
         <TablePagination

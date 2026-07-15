@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { FileInput, MoreHorizontal, RefreshCw } from 'lucide-react';
 import { AppShell } from '@/shell/AppShell';
 import { Badge } from '@/components/ui/badge';
+import { StripedEmpty } from '@/components/ui/striped-empty';
+import { LoadingState } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -230,7 +232,7 @@ export function Forms() {
           {error ? <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div> : null}
         </div>
 
-        <div className="flex-1 overflow-auto">
+        <div className="flex flex-1 flex-col overflow-auto">
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
@@ -244,13 +246,9 @@ export function Forms() {
                 <TableHead className="w-16" />
               </TableRow>
             </TableHeader>
+            {!loading && pageRows.length > 0 && (
             <TableBody className="[&_tr:last-child]:border-b">
-              {loading ? (
-                <TableRow><TableCell colSpan={8} className="py-8 text-center text-muted-foreground">Loading...</TableCell></TableRow>
-              ) : pageRows.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="py-8 text-center text-muted-foreground">{search ? 'No forms match.' : 'No forms yet.'}</TableCell></TableRow>
-              ) : (
-                pageRows.map((form) => (
+                {pageRows.map((form) => (
                   <TableRow key={form.id} className="cursor-pointer transition-colors hover:bg-[rgba(70,130,180,0.08)]" onClick={() => navigate(rowHref(form))}>
                     <TableCell>
                       <div className="flex items-center gap-2 font-medium">
@@ -296,10 +294,12 @@ export function Forms() {
                       </DropdownMenu>
                     </TableCell>
                   </TableRow>
-                ))
-              )}
+                ))}
             </TableBody>
+            )}
           </Table>
+          {loading && <LoadingState className="flex-1" label="Loading…" />}
+          {!loading && pageRows.length === 0 && <StripedEmpty className="flex-1">{search ? 'No forms match.' : 'No forms yet.'}</StripedEmpty>}
         </div>
 
         <TablePagination

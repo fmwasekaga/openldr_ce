@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DataEditor, GridCellKind } from '@glideapps/glide-data-grid';
 import type { GridCell, GridColumn, GridSelection, Item, Theme } from '@glideapps/glide-data-grid';
 import type { RunResult } from '../api';
+import { StripedEmpty } from '@/components/ui/striped-empty';
 
 type ColType = 'pk' | 'num' | 'bool' | 'text';
 
@@ -157,9 +158,7 @@ export function ResultsGrid({ result }: { result: Omit<RunResult, 'ms'> | null }
             height={size.height}
           />
         ) : (
-          <div className="grid h-full place-items-center text-sm text-muted-foreground">
-            {result ? 'No rows' : 'No results'}
-          </div>
+          <StripedEmpty>{result ? 'No rows' : 'No results'}</StripedEmpty>
         )}
       </div>
       {stats && (

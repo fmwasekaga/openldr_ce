@@ -14,6 +14,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { DatePicker } from '@/components/ui/date-picker';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { StripedEmpty } from '@/components/ui/striped-empty';
 import {
   listModels,
   runWidgetQuery,
@@ -176,19 +177,7 @@ function ConfigPanel({
 }
 
 function EmptyPanel({ text }: { text: string }) {
-  return (
-    <div className="relative flex h-full w-full items-center justify-center overflow-hidden">
-      <svg className="absolute inset-0 h-full w-full stroke-foreground/10" fill="none" aria-hidden="true">
-        <defs>
-          <pattern id="emptyHatch" x="0" y="0" width="10" height="10" patternUnits="userSpaceOnUse">
-            <path d="M-3 13 15-5M-5 5l18-18M-1 21 17 3" />
-          </pattern>
-        </defs>
-        <rect width="100%" height="100%" fill="url(#emptyHatch)" stroke="none" />
-      </svg>
-      <span className="relative text-xs text-muted-foreground">{text}</span>
-    </div>
-  );
+  return <StripedEmpty>{text}</StripedEmpty>;
 }
 
 export function WidgetEditorDialog({

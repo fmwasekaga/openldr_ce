@@ -10,6 +10,8 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { StripedEmpty } from '@/components/ui/striped-empty';
+import { LoadingState } from '@/components/ui/spinner';
 import { fetchSites, enrollSite, rotateSite, revokeSite, type SyncSiteRow, type EnrollResult } from '@/api';
 
 function formatDate(iso: string | null): string {
@@ -120,7 +122,7 @@ export function Sites() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto">
+        <div className="flex flex-1 flex-col overflow-auto">
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
@@ -132,15 +134,9 @@ export function Sites() {
                 <TableHead className="w-16" />
               </TableRow>
             </TableHeader>
+            {!loading && !errored && rows.length > 0 && (
             <TableBody className="[&_tr:last-child]:border-b">
-              {loading ? (
-                <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">{t('sites.loading')}</TableCell></TableRow>
-              ) : errored ? (
-                <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">{t('sites.errorState')}</TableCell></TableRow>
-              ) : rows.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">{t('sites.empty')}</TableCell></TableRow>
-              ) : (
-                rows.map((s) => (
+                {rows.map((s) => (
                   <TableRow key={s.siteId}>
                     <TableCell className="font-medium">{s.siteId}</TableCell>
                     <TableCell>{s.name || <span className="text-muted-foreground">-</span>}</TableCell>
@@ -171,10 +167,13 @@ export function Sites() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))
-              )}
+                ))}
             </TableBody>
+            )}
           </Table>
+          {loading && <LoadingState className="flex-1" label={t('sites.loading')} />}
+          {!loading && errored && <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-muted-foreground">{t('sites.errorState')}</div>}
+          {!loading && !errored && rows.length === 0 && <StripedEmpty className="flex-1">{t('sites.empty')}</StripedEmpty>}
         </div>
       </div>
 
