@@ -186,6 +186,7 @@ export async function importPushBundle(
   if (records.kind !== 'push') throw new Error('sync import: push bundle payload kind mismatch');
 
   let applied = 0;
+  let diverged = 0;
   let ackSeq = manifest.fromCursor;
   for (const rec of records.records) {
     if (typeof rec?.seq === 'number' && Number.isFinite(rec.seq)) ackSeq = Math.max(ackSeq, rec.seq);
@@ -197,10 +198,17 @@ export async function importPushBundle(
     try {
       const result = await ctx.fhirStore.applyRemote(rec);
       if (result === 'applied') applied++;
+      else if (result === 'diverged') diverged++;
     } catch (e) {
       // Per-record isolation: one bad record must not abort the whole bundle.
       ctx.logger.warn({ error: e instanceof Error ? e.message : String(e), id: rec.id, seq: rec.seq }, 'sync import: applyRemote failed for record');
     }
+  }
+
+  // Same-version divergence (S7) — the record was handled and recorded in sync_divergences by
+  // applyRemote itself; surfaced here so a bundle import is not silent about it.
+  if (diverged > 0) {
+    ctx.logger.warn({ diverged, siteId: manifest.siteId }, 'sync import: same-version divergence(s) detected — see sync_divergences');
   }
 
   // Piggybacked lab pull position (how current the lab's reference config is). Best-effort tracking.
