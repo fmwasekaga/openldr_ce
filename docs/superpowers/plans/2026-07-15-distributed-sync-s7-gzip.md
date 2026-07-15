@@ -15,9 +15,12 @@
 - `apps/server` uses **Fastify `^5.2.0`** → needs **`@fastify/compress` v8+**.
 - `@fastify/compress` genuinely does BOTH halves. Verified option names:
   - Response: `globalCompression`, `threshold`, `encodings`, `onUnsupportedEncoding` (→406).
-  - Request: `globalDecompression: true`, `requestEncodings: ['gzip']` ("the body will be automatically decompressed if the `Content-Encoding` header matches"), `forceRequestEncoding`, and **`onUnsupportedRequestEncoding: (request, encoding) => ({ statusCode: 415, ... })`**.
+  - Request: `globalDecompression: true`, `requestEncodings: ['gzip']` ("the body will be automatically decompressed if the `Content-Encoding` header matches"), `forceRequestEncoding`, and `onUnsupportedRequestEncoding`.
+  - **⚠ CORRECTION (found at implementation time):** the installed version is **v9**, whose signature is `onUnsupportedRequestEncoding?: (encoding, request, reply) => Error | undefined | null` — it returns an **Error**, NOT the `(request, encoding) => ({statusCode, ...})` plain-object shape the docs snippet above shows (that is v8-era). Return an **`AppError`** (it `extends Error`) built from a catalog code, so it flows through `toErrorResponse`'s existing AppError branch and keeps the coded/correlationId contract. Do NOT return a bare `Error` with a `.statusCode` — the central error handler only special-cases `AppError` and will flatten it to a 500, and "fixing" that by teaching the handler to honour any plain Error's `statusCode` is a cross-cutting change that silently replaces catalog codes with ungreppable `FST_ERR_*` strings (see `packages/core/src/error-catalog.ts`: "One catalog … Codes are STABLE").
   - Per-route escape hatches exist: `{ compress: false, decompress: false }`.
 - Existing register idiom in `apps/server/src/app.ts:133`: `void app.register(fastifyStatic, { ... })` (fire-and-forget; Fastify defers to `ready()`).
+  - **⚠ DO NOT COPY THAT IDIOM FOR COMPRESS.** It is safe for `fastifyStatic` because that plugin registers its OWN routes. `@fastify/compress` adds **hooks over existing routes** — and every route in `buildApp` is attached **synchronously**, so it snapshots its hooks before a deferred (`void`) registration ever runs. Result: nothing compresses, nothing inflates, the 415 never fires — while the synchronously-added advert hook still works, so central would advertise gzip it cannot accept and the Task 2 client would 400 every push. Compress MUST be registered so its hooks precede the routes: either make `buildApp` async and `await app.register(compress, ...)` first, or wrap the route registrations in an encapsulated plugin (`void app.register(async (i) => { ...routes on i... })`) so avvio orders them after.
+  - **The test MUST drive the real `buildApp`**, not a hand-built app. A test that does `await register(compress)` then adds its own routes is the one arrangement that works, so it passes while the shipped app is broken — it pins the options object but not the registration *order*, which is the thing that breaks. Reuse the `ctxWith(...)` stub factory at `apps/server/src/app.test.ts:352`.
 - `node:zlib` is already used in-repo (`packages/sync/src/bundle.ts`) — no new client dep.
 - Client call sites: `postJson` at `packages/bootstrap/src/index.ts:769`, `postPush` at `:796`.
 
@@ -417,7 +420,12 @@ git commit -m "docs(sync): document gzip transport compression + negotiation"
 
 **Resolved the spec's one open question:** `@fastify/compress`'s request-decompression options are confirmed (`globalDecompression`, `requestEncodings`, `onUnsupportedRequestEncoding` → 415) — Task 1 uses them verbatim, so there's no plan-time guessing left.
 
-**Type consistency:** `encodePushBody`/`advertisesGzip`/`GZIP_MIN_BYTES` (Task 2) are used verbatim in `index.ts`'s `postPush` and in the Task 2 tests. The plugin options in Task 1's test are byte-identical to those in `buildApp`, so the test genuinely pins the shipped config.
+**Type consistency:** `encodePushBody`/`advertisesGzip`/`GZIP_MIN_BYTES` (Task 2) are used verbatim in `index.ts`'s `postPush` and in the Task 2 tests.
+
+**⚠ POST-REVIEW CORRECTION — this plan contained two real errors, corrected in the "Verified facts" section above. Read them before implementing Task 1:**
+1. It prescribed `void app.register(compress, ...)` (copying the `fastifyStatic` idiom). That is **wrong** for a hooks-over-routes plugin and made the slice inert while still advertising gzip support — which would have broken every push once Task 2 landed.
+2. It claimed a test registering the plugin itself "genuinely pins the shipped config". It does **not** — it pins the options object but not the registration order, so it stays green while the real app is broken. The test must drive `buildApp`.
+Both were caught by the whole-slice review, not by the per-task gate — a reminder that "options match" is not the same as "wiring works", and that a test which builds its own app proves nothing about the one that ships.
 
 **Placeholder scan:** no TBDs. Task 3 delegates only the provision/teardown *idiom* to the sibling harness (a pattern to copy, not undefined logic); every assertion is specified, including the ≥50% shrink threshold. Task 1 Step 1 specifies the version check rather than assuming.
 
