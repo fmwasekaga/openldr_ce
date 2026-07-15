@@ -82,6 +82,39 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
     return reply.code(200).send(result);
   });
 
+  // Sync S7: same-version divergence — applyRemote found a history row at this version whose content
+  // DIFFERS from the incoming record, kept the local copy, and recorded what it dropped. Detect-and-
+  // surface only: an operator inspects, decides, and (if central should win) re-authors at max+1 via
+  // POST /api/settings/sync/amend, then clears. lab_admin + user-authed, deliberately NOT under
+  // /api/sync/* (that surface is machine-cred).
+  //
+  // LIST is PHI-FREE (the store does not select incoming_body). This is the surface a UI lands on;
+  // reading the dropped result content requires the explicit detail call below, which is audited.
+  app.get('/api/settings/sync/divergences', { preHandler: requireRole('lab_admin') }, async () =>
+    ctx.sync.listDivergences(),
+  );
+
+  // DETAIL returns incomingBody = the dropped content = PHI. Audited for that reason, even though the
+  // audit row itself carries only the key.
+  app.get('/api/settings/sync/divergences/:resourceType/:resourceId/:version', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const p = req.params as { resourceType: string; resourceId: string; version: string };
+    const version = Number(p.version);
+    if (!Number.isInteger(version) || version < 1) {
+      return reply.code(400).send({ error: 'version must be a positive integer' });
+    }
+    const row = await ctx.sync.getDivergence(p.resourceType, p.resourceId, version);
+    if (!row) return reply.code(404).send({ error: 'divergence not found' });
+    await recordAudit(ctx, req, {
+      action: 'settings.sync.divergence.view',
+      entityType: p.resourceType,
+      entityId: p.resourceId,
+      metadata: { version },
+    });
+    // The `return` on each send is load-bearing, not style — see the comment block in sync-routes.ts.
+    // This payload carries a full FHIR body and WILL cross the 1KB compress threshold.
+    return reply.code(200).send(row);
+  });
+
   // POST /api/settings/sync/amend — a central operator amends a lab-owned result (Sync S6a). User-authed
   // + lab_admin (this is a central-side authoring action), deliberately NOT under /api/sync/* (that
   // surface is machine-cred). fhirStore.amend does the transactional version-bump + Provenance + outbox
