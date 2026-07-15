@@ -25,7 +25,6 @@ const defaultDeps: DangerDeps = {
   clearAudit: dangerClearAudit,
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext, deps: DangerDeps = defaultDeps): void {
   app.get('/api/settings/flags', { preHandler: requireRole('lab_admin') }, async () => ctx.featureFlags.all());
 
@@ -71,8 +70,7 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
   app.post('/api/settings/sync/quarantine/retry', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
     const b = (req.body ?? {}) as { entityType?: unknown; entityId?: unknown };
     if (typeof b.entityType !== 'string' || !b.entityType || typeof b.entityId !== 'string' || !b.entityId) {
-      reply.code(400).send({ error: 'entityType and entityId are required' });
-      return;
+      return reply.code(400).send({ error: 'entityType and entityId are required' });
     }
     const result = await ctx.sync.retryQuarantine(b.entityType, b.entityId);
     await recordAudit(ctx, req, { action: 'settings.sync.quarantine.retry', entityType: b.entityType, entityId: b.entityId, metadata: { ok: result.ok } });
@@ -92,8 +90,7 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
   app.post('/api/settings/sync/amend', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
     const b = (req.body ?? {}) as { resourceType?: unknown; id?: unknown; status?: unknown; reason?: unknown; patch?: unknown; agent?: unknown; activity?: unknown };
     if (typeof b.resourceType !== 'string' || !b.resourceType || typeof b.id !== 'string' || !b.id || typeof b.status !== 'string' || !b.status) {
-      reply.code(400).send({ error: 'resourceType, id and status are required' });
-      return;
+      return reply.code(400).send({ error: 'resourceType, id and status are required' });
     }
     try {
       const result = await ctx.fhirStore.amend({
@@ -114,9 +111,9 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
       return reply.code(200).send(result); // `return` is load-bearing — see sync-routes.ts's comment block
     } catch (e) {
       const name = e instanceof Error ? e.name : '';
-      if (name === 'ResourceNotFoundError') { reply.code(404).send({ error: 'resource not found' }); return; }
-      if (name === 'NotLabOwnedError') { reply.code(409).send({ error: 'resource is not lab-owned' }); return; }
-      if (name === 'UnsupportedResourceTypeError') { reply.code(400).send({ error: 'resource type is not amendable' }); return; }
+      if (name === 'ResourceNotFoundError') return reply.code(404).send({ error: 'resource not found' });
+      if (name === 'NotLabOwnedError') return reply.code(409).send({ error: 'resource is not lab-owned' });
+      if (name === 'UnsupportedResourceTypeError') return reply.code(400).send({ error: 'resource type is not amendable' });
       throw e; // unknown → 500 via the global handler
     }
   });
@@ -127,8 +124,7 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
   app.post('/api/settings/sync/merge-patient', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
     const b = (req.body ?? {}) as { survivorId?: unknown; duplicateId?: unknown; reason?: unknown; agent?: unknown };
     if (typeof b.survivorId !== 'string' || !b.survivorId || typeof b.duplicateId !== 'string' || !b.duplicateId) {
-      reply.code(400).send({ error: 'survivorId and duplicateId are required' });
-      return;
+      return reply.code(400).send({ error: 'survivorId and duplicateId are required' });
     }
     try {
       const result = await mergePatients(ctx, {
@@ -143,9 +139,9 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
       return reply.code(200).send(result); // `return` is load-bearing — see sync-routes.ts's comment block
     } catch (e) {
       const name = e instanceof Error ? e.name : '';
-      if (name === 'SamePatientError') { reply.code(400).send({ error: 'survivor and duplicate are the same patient' }); return; }
-      if (name === 'PatientNotFoundError') { reply.code(404).send({ error: 'patient not found' }); return; }
-      if (name === 'CrossSiteMergeError') { reply.code(409).send({ error: 'patients are not owned by the same site' }); return; }
+      if (name === 'SamePatientError') return reply.code(400).send({ error: 'survivor and duplicate are the same patient' });
+      if (name === 'PatientNotFoundError') return reply.code(404).send({ error: 'patient not found' });
+      if (name === 'CrossSiteMergeError') return reply.code(409).send({ error: 'patients are not owned by the same site' });
       throw e; // unknown → 500 via the global handler
     }
   });

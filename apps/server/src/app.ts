@@ -33,7 +33,6 @@ import { registerAuth } from './auth-plugin';
 import { readAppVersion } from './version';
 
 export function registerConfigRoute(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   app: FastifyInstance<any, any, any, any>,
   ctx: {
     cfg: { TARGET_STORE_ADAPTER: string; AUTH_DEV_BYPASS: boolean; OIDC_ISSUER_URL: string; OIDC_WEB_CLIENT_ID: string; OIDC_AUDIENCE?: string };

@@ -106,5 +106,18 @@ returns an **empty** body once the payload crosses ~1KB and the send goes async.
 `return` is load-bearing, not style; the mechanism is explained in the comment block at
 the top of `apps/server/src/sync-routes.ts`.
 
+Use `await reply.send(...)` instead where the function must still resolve to something
+else — an auth helper that signals "already answered" by resolving `undefined`, say.
+Both wait on the reply thenable, which is what makes them safe. `void reply.send(...)` is
+**not** an acknowledgement: it discards that thenable without awaiting it, so it is exactly
+as broken as a bare send. A synchronous handler (`setNotFoundHandler`, `setErrorHandler`)
+never reaches this machinery and is unaffected.
+
+This is enforced by the `openldr/require-return-reply-send` ESLint rule
+(`apps/server/eslint-rules/`), so `pnpm --filter @openldr/server lint` fails on a bare or
+`void`-ed send in an async function. The rule exists because no test shape catches this:
+unit-test fixtures sit under the 1KB threshold, so the bug is invisible even to a test that
+drives the real `buildApp`. Only a real-HTTP acceptance harness sees it.
+
 > A fuller contribution guide (coding conventions, review process, and a PR checklist)
 > is still being written — check back, or open an issue to start a discussion.

@@ -136,7 +136,6 @@ function secretEquals(token: string, secret: string): boolean {
   return timingSafeEqual(a, b);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerWorkflowRoutes(
   app: FastifyInstance<any, any, any, any>,
   ctx: AppContext,

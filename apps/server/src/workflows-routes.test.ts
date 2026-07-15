@@ -37,31 +37,23 @@ function fakeSecretStore() {
 
 // In-memory fakes for the trigger registries widened onto ctx.workflows (runs/schedules/webhooks/runner).
 function fakeWorkflowExtras() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const runRecords: any[] = [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const scheduleRows: any[] = [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const webhookEntries = new Map<string, { workflowId: string; secret: string | null }>();
   const norm = (p: string) => p.replace(/^\/+/, '').replace(/\/+$/, '');
   let ingestIds: string[] = [];
   let eventIds: string[] = [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const runAndRecordCalls: any[] = [];
   return {
     runRecords, scheduleRows, webhookEntries, runAndRecordCalls,
     getIngestIds: () => ingestIds,
     getEventIds: () => eventIds,
     runs: {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       record: async (r: any) => { runRecords.push(r); },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       list: async (id: string) => runRecords.filter((r) => r.workflowId === id),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       get: async (runId: string) => runRecords.find((r) => r.id === runId),
     },
     schedules: {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       upsert: async (s: any) => {
         const i = scheduleRows.findIndex((x) => x.workflowId === s.workflowId && x.nodeId === s.nodeId);
         if (i >= 0) scheduleRows[i] = s; else scheduleRows.push(s);
@@ -69,13 +61,11 @@ function fakeWorkflowExtras() {
       removeForWorkflow: async (workflowId: string) => {
         for (let i = scheduleRows.length - 1; i >= 0; i--) if (scheduleRows[i].workflowId === workflowId) scheduleRows.splice(i, 1);
       },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       list: async () => scheduleRows as any[],
       get: async (workflowId: string, nodeId: string) => scheduleRows.find((x) => x.workflowId === workflowId && x.nodeId === nodeId),
       setNextDue: async () => {},
     },
     webhooks: {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       register: (path: string, entry: any) => { webhookEntries.set(norm(path), entry); },
       resolve: (path: string) => webhookEntries.get(norm(path)),
       clear: (workflowId: string) => { for (const [k, v] of webhookEntries) if (v.workflowId === workflowId) webhookEntries.delete(k); },
@@ -85,7 +75,6 @@ function fakeWorkflowExtras() {
     runner: {
       setIngestWorkflowIds: (ids: string[]) => { ingestIds = ids; },
       setEventWorkflowIds: (ids: string[]) => { eventIds = ids; },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       runAndRecord: async (workflowId: string, source: string, input: unknown, files?: unknown) => { runAndRecordCalls.push({ workflowId, source, input, files }); },
       registerRunner: async () => {},
       reconcile: async () => {},
@@ -102,7 +91,6 @@ function fakeWorkflowExtras() {
 }
 
 function fakeCtx() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const data: any[] = [];
   const auditEvents: any[] = [];
   const extras = fakeWorkflowExtras();
@@ -110,13 +98,9 @@ function fakeCtx() {
   return {
     workflows: {
       store: {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         list: async () => data as any[],
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         get: async (id: string) => data.find((d) => d.id === id) as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         create: async (w: any) => { data.push(w); return w; },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         update: async (id: string, w: any) => { const i = data.findIndex((x) => x.id === id); if (i >= 0) data[i] = w; return w; },
         remove: async (id: string) => { const i = data.findIndex((x) => x.id === id); if (i >= 0) data.splice(i, 1); },
       },
@@ -140,7 +124,6 @@ function fakeCtx() {
     __auditEvents: auditEvents,
     __extras: extras,
     __secretStore: secretStore,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any;
 }
 
@@ -269,7 +252,6 @@ describe('workflow routes', () => {
       cfg: { WORKFLOW_CODE_TIMEOUT_MS: 5000, WORKFLOW_CODE_MEMORY_MB: 128, WORKFLOW_CODE_ENABLED: true },
       audit: { record: async (e: unknown) => { auditEvents.push(e); return e; } },
       logger: { error() {}, warn() {}, info() {} },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any;
 
     registerWorkflowRoutes(app, ctx);
@@ -702,7 +684,6 @@ describe('workflow routes', () => {
   it('POST /uploads rejects an over-cap body with 413 and the standard error contract', async () => {
     const app = Fastify({ logger: false });
     registerErrorHandler(app);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
     const ctx = fakeCtx();
     ctx.cfg.WORKFLOW_FILE_MAX_BYTES = 2;
@@ -720,7 +701,6 @@ describe('workflow routes', () => {
 
   it('indexes a workflow with an event trigger on create', async () => {
     const app = Fastify();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
     const ctx = fakeCtx();
     registerWorkflowRoutes(app, ctx);

@@ -13,19 +13,24 @@ async function sitePrincipal(
   const h = req.headers.authorization;
   const token = h?.startsWith('Bearer ') ? h.slice('Bearer '.length).trim() : '';
   if (!token) {
-    reply.code(401).send({ error: 'authentication required' });
+    // `await`, not `return` — this helper signals "already answered" to its caller by resolving
+    // undefined, so returning the reply would make it truthy and defeat every `if (!principal)`
+    // guard below. Awaiting the reply thenable still settles only once the body is flushed, so the
+    // caller's bare `return` cannot be clobbered by wrap-thenable even if a payload grows past the
+    // compression threshold. See the comment block on registerSyncRoutes.
+    await reply.code(401).send({ error: 'authentication required' });
     return;
   }
   let claims: Awaited<ReturnType<typeof ctx.auth.verifyToken>>;
   try {
     claims = await ctx.auth.verifyToken(token);
   } catch {
-    reply.code(401).send({ error: 'invalid token' });
+    await reply.code(401).send({ error: 'invalid token' });
     return;
   }
   const siteId = typeof claims['site_id'] === 'string' ? (claims['site_id'] as string) : '';
   if (!siteId) {
-    reply.code(403).send({ error: 'token missing site_id claim' });
+    await reply.code(403).send({ error: 'token missing site_id claim' });
     return;
   }
   return { siteId };
@@ -46,11 +51,18 @@ async function sitePrincipal(
 // passes and Fastify calls `reply.send(undefined)`, clobbering the real body. The client gets
 // `content-encoding: gzip`, `content-length: 0`, and a gunzip error.
 //
-// `return`ing makes payload === reply (not undefined), which Fastify recognises as already-sent.
+// `return`ing fixes it, though not for the obvious reason: a Reply is THENABLE
+// (Reply.prototype.then), so an async function returning one ADOPTS it, and Reply.prototype.then
+// only calls `fulfilled()` after `eos(this.raw)` — end-of-stream. The handler's promise therefore
+// cannot resolve until the body is flushed, and `reply.sent` is already true when the guard runs.
+// (It still resolves to undefined, NOT to the reply — the safety comes from the eos wait.) That is
+// why `await reply.send(...)` is exactly as safe, and why `void reply.send(...)` is exactly as
+// broken as a bare send: `void` discards the thenable without awaiting it.
+//
 // This bites ONLY responses >= 1024 bytes — i.e. exactly the big pull/terminology pages this slice
 // exists to compress — which is why every sub-threshold unit test stayed green while /api/sync/pull
-// returned empty bodies on the wire. Regression-covered by `pnpm sync:gzip:accept`.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// returned empty bodies on the wire. Regression-covered by `pnpm sync:gzip:accept`, and enforced
+// repo-wide by the `openldr/require-return-reply-send` lint rule (apps/server/eslint-rules/).
 export function registerSyncRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
   // POST /api/sync/push — a lab pushes an ordered window of change_log records. Each record is
   // mirror-applied at its origin version/site via fhirStore.applyRemote (idempotent).
@@ -62,8 +74,7 @@ export function registerSyncRoutes(app: FastifyInstance<any, any, any, any>, ctx
     const body = req.body as Partial<PushBatch> | undefined;
     const records = body?.records;
     if (!Array.isArray(records)) {
-      reply.code(400).send({ error: 'records must be an array' });
-      return;
+      return reply.code(400).send({ error: 'records must be an array' });
     }
     // The body crosses a trust boundary — sanitize fromSeq (a non-finite value must not seed ackSeq).
     const fromSeq = Number.isFinite(body?.fromSeq) ? (body!.fromSeq as number) : 0;
@@ -182,8 +193,7 @@ export function registerSyncRoutes(app: FastifyInstance<any, any, any, any>, ctx
 
     const b = (req.body ?? {}) as { systemUrl?: string; afterCode?: string; limit?: number };
     if (typeof b.systemUrl !== 'string' || !b.systemUrl) {
-      reply.code(400).send({ error: 'systemUrl required' });
-      return;
+      return reply.code(400).send({ error: 'systemUrl required' });
     }
     const limit = Number.isFinite(b.limit) && (b.limit as number) > 0 ? Math.min(b.limit as number, 5000) : 1000;
 
@@ -207,8 +217,7 @@ export function registerSyncRoutes(app: FastifyInstance<any, any, any, any>, ctx
       limit?: number;
     };
     if (typeof b.mapUrl !== 'string' || !b.mapUrl) {
-      reply.code(400).send({ error: 'mapUrl required' });
-      return;
+      return reply.code(400).send({ error: 'mapUrl required' });
     }
     const limit = Number.isFinite(b.limit) && (b.limit as number) > 0 ? Math.min(b.limit as number, 5000) : 1000;
 

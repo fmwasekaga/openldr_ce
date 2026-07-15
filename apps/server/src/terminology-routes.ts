@@ -2,7 +2,6 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { TerminologyError } from '@openldr/terminology';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerTerminologyRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
   const ops = ctx.terminology.ops;
 
