@@ -70,7 +70,7 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
   // write, keeping the owning lab's site_id; the amendment then flows down that lab's pull-amendments
   // stream. Audited SECRET/PHI-free: resource reference + new version only.
   app.post('/api/settings/sync/amend', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
-    const b = (req.body ?? {}) as { resourceType?: unknown; id?: unknown; status?: unknown; reason?: unknown; patch?: unknown; agent?: unknown };
+    const b = (req.body ?? {}) as { resourceType?: unknown; id?: unknown; status?: unknown; reason?: unknown; patch?: unknown; agent?: unknown; activity?: unknown };
     if (typeof b.resourceType !== 'string' || !b.resourceType || typeof b.id !== 'string' || !b.id || typeof b.status !== 'string' || !b.status) {
       reply.code(400).send({ error: 'resourceType, id and status are required' });
       return;
@@ -83,18 +83,20 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
         reason: typeof b.reason === 'string' ? b.reason : undefined,
         patch: b.patch && typeof b.patch === 'object' ? (b.patch as Record<string, unknown>) : undefined,
         agent: typeof b.agent === 'string' && b.agent ? b.agent : 'central',
+        activity: typeof b.activity === 'string' && b.activity ? b.activity : undefined,
       });
       await recordAudit(ctx, req, {
         action: 'settings.sync.amend',
         entityType: b.resourceType,
         entityId: b.id,
-        metadata: { version: result.version, provenanceId: result.provenanceId, siteId: result.siteId },
+        metadata: { version: result.version, provenanceId: result.provenanceId, siteId: result.siteId, activity: typeof b.activity === 'string' && b.activity ? b.activity : 'amend' },
       });
       reply.code(200).send(result);
     } catch (e) {
       const name = e instanceof Error ? e.name : '';
       if (name === 'ResourceNotFoundError') { reply.code(404).send({ error: 'resource not found' }); return; }
       if (name === 'NotLabOwnedError') { reply.code(409).send({ error: 'resource is not lab-owned' }); return; }
+      if (name === 'UnsupportedResourceTypeError') { reply.code(400).send({ error: 'resource type is not amendable' }); return; }
       throw e; // unknown → 500 via the global handler
     }
   });

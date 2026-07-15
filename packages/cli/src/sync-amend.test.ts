@@ -20,4 +20,16 @@ describe('runSyncAmend', () => {
     const code = await runSyncAmend({ resourceType: '', id: '', status: '', json: true });
     expect(code).toBe(1);
   });
+
+  it('passes --activity through to amend', async () => {
+    const code = await runSyncAmend({ resourceType: 'ServiceRequest', id: 'sr-1', status: 'completed', activity: 'update', json: true });
+    expect(code).toBe(0);
+    expect(amend).toHaveBeenCalledWith(expect.objectContaining({ resourceType: 'ServiceRequest', id: 'sr-1', status: 'completed', activity: 'update' }));
+  });
+
+  it('maps UnsupportedResourceTypeError to a non-zero exit', async () => {
+    amend.mockRejectedValueOnce(Object.assign(new Error('no'), { name: 'UnsupportedResourceTypeError' }));
+    const code = await runSyncAmend({ resourceType: 'Patient', id: 'p-1', status: 'active', json: true });
+    expect(code).toBe(1);
+  });
 });

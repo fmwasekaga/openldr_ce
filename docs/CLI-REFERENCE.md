@@ -80,7 +80,9 @@ Distributed sync links labs to a central OpenLDR server. Two command groups cove
 
 | Command | Purpose |
 |---|---|
-| `openldr sync amend --resource-type <t> --id <id> --status <s> [--reason <text>] [--patch <json>] [--agent <who>]` | Amend a lab-owned result on central: writes a new FHIR version and queues it for the owning lab to pull back. `--patch` is a JSON fragment merged into the resource. |
+| `openldr sync amend --resource-type <t> --id <id> --status <s> [--reason <text>] [--patch <json>] [--agent <who>] [--activity <verb>]` | Amend a lab-owned result on central: writes a new FHIR version and queues it for the owning lab to pull back. `--patch` is a JSON fragment merged into the resource. `--activity` (default `amend`) labels the co-edit; supported resource types are `Observation`, `DiagnosticReport`, and `ServiceRequest`. |
+
+For an order (co-edit lab request status/metadata), amend the `ServiceRequest`, e.g. `openldr sync amend --resource-type ServiceRequest --id <id> --status completed --activity update`.
 
 The owning lab drains these central-authored amendments on its pull pass via the `'sync-amend-pull'` cursor (a distinct `change_cursors` consumer alongside `'sync-push'`, `'sync-pull'`, and the terminology cursor).
 

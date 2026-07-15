@@ -362,12 +362,12 @@ describe('settings sync amend route', () => {
     // Audit: action + resource reference + new version; PHI/secret-free.
     const events = (ctx as unknown as { __auditEvents: unknown[] }).__auditEvents;
     const ev = events.find((e) => (e as { action: string }).action === 'settings.sync.amend') as
-      | { entityType: string; entityId: string; metadata: { version: number; provenanceId: string; siteId: string } }
+      | { entityType: string; entityId: string; metadata: { version: number; provenanceId: string; siteId: string; activity: string } }
       | undefined;
     expect(ev).toBeTruthy();
     expect(ev!.entityType).toBe('Observation');
     expect(ev!.entityId).toBe('obs-1');
-    expect(ev!.metadata).toEqual({ version: 2, provenanceId: 'prov-1', siteId: 'lab-a' });
+    expect(ev!.metadata).toEqual({ version: 2, provenanceId: 'prov-1', siteId: 'lab-a', activity: 'amend' });
   });
 
   it('POST /amend → 404 when fhirStore.amend throws ResourceNotFoundError', async () => {
@@ -420,5 +420,75 @@ describe('settings sync amend route', () => {
     });
     expect(res.statusCode).toBe(403);
     expect(amendMock(ctx)).not.toHaveBeenCalled();
+  });
+
+  // Sync S6c: order status changes ride the same endpoint via an 'activity' passthrough, and
+  // fhirStore.amend now rejects non-allowlisted resource types with UnsupportedResourceTypeError.
+  it('passes activity through to fhirStore.amend and returns 200', async () => {
+    const ctx = fakeCtx();
+    const app = adminApp(ctx);
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/settings/sync/amend',
+      payload: { resourceType: 'ServiceRequest', id: 'sr-1', status: 'completed', activity: 'update' },
+    });
+    expect(res.statusCode).toBe(200);
+
+    const amend = amendMock(ctx);
+    expect(amend).toHaveBeenCalledWith(expect.objectContaining({
+      resourceType: 'ServiceRequest', id: 'sr-1', status: 'completed', activity: 'update',
+    }));
+
+    // Audit metadata carries the activity too (PHI-free).
+    const events = (ctx as unknown as { __auditEvents: unknown[] }).__auditEvents;
+    const ev = events.find((e) => (e as { action: string }).action === 'settings.sync.amend') as
+      | { metadata: { activity: string } }
+      | undefined;
+    expect(ev?.metadata.activity).toBe('update');
+  });
+
+  it('defaults audit activity to "amend" when activity is omitted', async () => {
+    const ctx = fakeCtx();
+    const app = adminApp(ctx);
+    await app.inject({
+      method: 'POST', url: '/api/settings/sync/amend',
+      payload: { resourceType: 'Observation', id: 'obs-1', status: 'amended' },
+    });
+    const events = (ctx as unknown as { __auditEvents: unknown[] }).__auditEvents;
+    const ev = events.find((e) => (e as { action: string }).action === 'settings.sync.amend') as
+      | { metadata: { activity: string } }
+      | undefined;
+    expect(ev?.metadata.activity).toBe('amend');
+  });
+
+  it('maps UnsupportedResourceTypeError to 400', async () => {
+    const ctx = fakeCtx();
+    amendMock(ctx).mockRejectedValueOnce(Object.assign(new Error('no'), { name: 'UnsupportedResourceTypeError' }));
+    const app = adminApp(ctx);
+    const res = await app.inject({
+      method: 'POST', url: '/api/settings/sync/amend',
+      payload: { resourceType: 'Patient', id: 'p-1', status: 'active' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  // Empty-string activity is falsy → forwarded as undefined AND audited as 'amend' (same guard both sides).
+  it('audits empty-string activity as "amend"', async () => {
+    const ctx = fakeCtx();
+    const app = adminApp(ctx);
+    const res = await app.inject({
+      method: 'POST', url: '/api/settings/sync/amend',
+      payload: { resourceType: 'Observation', id: 'obs-1', status: 'amended', activity: '' },
+    });
+    expect(res.statusCode).toBe(200);
+
+    const amend = amendMock(ctx);
+    expect(amend).toHaveBeenCalledWith(expect.objectContaining({ activity: undefined }));
+
+    const events = (ctx as unknown as { __auditEvents: unknown[] }).__auditEvents;
+    const ev = events.find((e) => (e as { action: string }).action === 'settings.sync.amend') as
+      | { metadata: { activity: string } }
+      | undefined;
+    expect(ev?.metadata.activity).toBe('amend');
   });
 });

@@ -40,6 +40,7 @@
     "sync:accept": "tsx scripts/sync-live-acceptance.ts",
     "sync:pull:accept": "tsx scripts/sync-pull-live-acceptance.ts",
     "sync:amend:accept": "tsx scripts/sync-amend-live-acceptance.ts",
+    "sync:order-status:accept": "tsx scripts/sync-order-status-live-acceptance.ts",
     "sync:terminology:accept": "tsx scripts/sync-terminology-live-acceptance.ts",
     "sync:enroll:accept": "tsx scripts/sync-enroll-live-acceptance.ts",
     "sync:bundle:accept": "tsx scripts/sync-bundle-live-acceptance.ts",

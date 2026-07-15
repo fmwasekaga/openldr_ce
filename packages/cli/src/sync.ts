@@ -123,6 +123,7 @@ export async function runSyncAmend(opts: {
   reason?: string;
   patch?: string;
   agent?: string;
+  activity?: string;
   json?: boolean;
 }): Promise<number> {
   const json = opts.json ?? false;
@@ -146,6 +147,7 @@ export async function runSyncAmend(opts: {
       reason: opts.reason,
       patch,
       agent: opts.agent ?? 'central',
+      activity: opts.activity,
     });
     emit(json, result, [
       `resource    = ${opts.resourceType}/${opts.id}`,
@@ -160,6 +162,8 @@ export async function runSyncAmend(opts: {
         return fail(json, 'resource not found');
       case 'NotLabOwnedError':
         return fail(json, 'resource is not lab-owned (central can only amend synced-up results)');
+      case 'UnsupportedResourceTypeError':
+        return fail(json, 'only Observation, DiagnosticReport, ServiceRequest can be amended');
       default:
         return fail(json, `sync amend failed: ${redactError(err)}`);
     }
