@@ -351,4 +351,86 @@ describe('createSyncPullRunner', () => {
     expect(advanceCursor).toHaveBeenCalledWith(1); // capped at seq1
     expect(logger.warns[0]).toMatchObject({ entityId: 'f2', seq: 2 });
   });
+
+  // Sync S7-A: optional hold->quarantine hooks
+  it('holds while holdFailure returns hold, then advances past once it returns quarantine', async () => {
+    let cursor = 0;
+    const decisions = ['hold', 'hold', 'quarantine'] as const;
+    let call = 0;
+    const resp = {
+      records: [
+        { seq: 5, entityType: 'terminology_system', entityId: 'http://x', op: 'upsert', body: {} },
+        { seq: 6, entityType: 'setting', entityId: 's1', op: 'upsert', body: 'v' },
+      ],
+      nextSeq: 6,
+    } as any;
+    const runner = createSyncPullRunner({
+      getToken: async () => 't',
+      postPull: async () => resp,
+      applyRecord: async (r: any) => {
+        if (r.entityType === 'terminology_system') throw new Error('poison');
+        return 'applied';
+      },
+      readCursor: async () => cursor,
+      advanceCursor: async (s: number) => {
+        cursor = s;
+      },
+      holdFailure: async () => decisions[Math.min(call++, decisions.length - 1)],
+      holdSuccess: async () => {},
+      logger: fakeLogger(),
+    });
+    await runner.runCycle();
+    expect(cursor).toBe(0); // held (attempt 1)
+    await runner.runCycle();
+    expect(cursor).toBe(0); // held (attempt 2)
+    await runner.runCycle();
+    expect(cursor).toBe(6); // quarantined -> advanced past poison; setting seq 6 applied
+  });
+
+  it('calls holdSuccess after a hold-record applies successfully', async () => {
+    let cursor = 0;
+    let cleared = false;
+    const resp = {
+      records: [{ seq: 5, entityType: 'terminology_system', entityId: 'http://x', op: 'upsert', body: {} }],
+      nextSeq: 5,
+    } as any;
+    const runner = createSyncPullRunner({
+      getToken: async () => 't',
+      postPull: async () => resp,
+      applyRecord: async () => 'applied',
+      readCursor: async () => cursor,
+      advanceCursor: async (s: number) => {
+        cursor = s;
+      },
+      holdFailure: async () => 'hold',
+      holdSuccess: async () => {
+        cleared = true;
+      },
+      logger: fakeLogger(),
+    });
+    await runner.runCycle();
+    expect(cleared).toBe(true);
+    expect(cursor).toBe(5);
+  });
+
+  it('never calls holdFailure on a transport failure (outer catch)', async () => {
+    let called = false;
+    const runner = createSyncPullRunner({
+      getToken: async () => {
+        throw new Error('down');
+      },
+      postPull: async () => ({ records: [], nextSeq: 0 }) as any,
+      applyRecord: async () => 'applied',
+      readCursor: async () => 3,
+      advanceCursor: async () => {},
+      holdFailure: async () => {
+        called = true;
+        return 'hold';
+      },
+      holdSuccess: async () => {},
+      logger: fakeLogger(),
+    });
+    await runner.runCycle();
+    expect(called).toBe(false);
+  });
 });

@@ -16,6 +16,12 @@ export interface PullDeps {
   // terminology bulk kinds ('terminology_system'/'concept_map'), whose apply drains + reconciles a whole
   // system/map — a partial transfer is never "done", so a failed one must replay.
   isHoldRecord?: (rec: PullRecord) => boolean;
+  // Sync S7-A: durable poison-bulk quarantine hooks (optional — absent = always-hold, unchanged). On a
+  // HOLD-record apply failure, holdFailure durably counts consecutive failures for the record's entity and
+  // returns 'quarantine' once a threshold is crossed (→ advance PAST it instead of holding forever), else
+  // 'hold'. holdSuccess clears the counter after a hold-record applies successfully.
+  holdFailure?: (rec: PullRecord, err: Error) => Promise<'hold' | 'quarantine'>;
+  holdSuccess?: (rec: PullRecord) => Promise<void>;
   logger: Logger;
 }
 
@@ -70,24 +76,37 @@ export function createSyncPullRunner(deps: PullDeps): SyncPullRunner {
           await deps.applyRecord(rec);
           applied++;
           safeSeq = rec.seq; // fully applied → safe up to and including its seq
+          if (isHold(rec)) await deps.holdSuccess?.(rec); // S7-A: clear any quarantine counter for this entity
         } catch (err) {
           if (isHold(rec)) {
-            // All-or-nothing bulk record failed: STOP here. Do not advance past it; retry the whole thing
-            // next cycle (a partial bulk transfer is never done). safeSeq stays at the last handled record.
+            const decision = (await deps.holdFailure?.(rec, err as Error)) ?? 'hold';
+            if (decision === 'hold') {
+              // All-or-nothing bulk record failed and hasn't crossed the quarantine threshold: STOP here. Do
+              // not advance past it; retry the whole thing next cycle. safeSeq stays at the last handled
+              // record.
+              deps.logger.warn(
+                { err: (err as Error).message, entityType: rec.entityType, entityId: rec.entityId, seq: rec.seq },
+                'sync pull: bulk apply failed; holding cursor (will retry)',
+              );
+              held = true;
+              break;
+            }
+            // S7-A: crossed the failure threshold → quarantine. Advance PAST it (like a per-row skip) so the
+            // rest of the stream is no longer wedged; the durable store already recorded it for the operator.
+            deps.logger.error(
+              { err: (err as Error).message, entityType: rec.entityType, entityId: rec.entityId, seq: rec.seq },
+              'sync pull: bulk apply repeatedly failed; quarantined, advancing past',
+            );
+            safeSeq = rec.seq;
+          } else {
+            // Quarantine kind (S2/Layer-A per-row): log, skip, keep going — and it is safe to advance PAST it
+            // so it is not replayed forever.
             deps.logger.warn(
               { err: (err as Error).message, entityType: rec.entityType, entityId: rec.entityId, seq: rec.seq },
-              'sync pull: bulk apply failed; holding cursor (will retry)',
+              'sync pull: apply failed; skipping (quarantine)',
             );
-            held = true;
-            break;
+            safeSeq = rec.seq; // a quarantined record is "handled" — safe to advance past it
           }
-          // Quarantine kind (S2/Layer-A per-row): log, skip, keep going — and it is safe to advance PAST it
-          // so it is not replayed forever.
-          deps.logger.warn(
-            { err: (err as Error).message, entityType: rec.entityType, entityId: rec.entityId, seq: rec.seq },
-            'sync pull: apply failed; skipping (quarantine)',
-          );
-          safeSeq = rec.seq; // a quarantined record is "handled" — safe to advance past it
         }
       }
 
