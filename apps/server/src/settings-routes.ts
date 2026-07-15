@@ -76,8 +76,12 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
     }
     const result = await ctx.sync.retryQuarantine(b.entityType, b.entityId);
     await recordAudit(ctx, req, { action: 'settings.sync.quarantine.retry', entityType: b.entityType, entityId: b.entityId, metadata: { ok: result.ok } });
-    if (!result.ok && (result.error ?? '').includes('not enabled')) { reply.code(409).send(result); return; }
-    reply.code(200).send(result);
+    // The `return` on each send is load-bearing, not style — see the comment block in sync-routes.ts.
+    // With compression registered globally, a bare `reply.send(x)` in an async handler resolves to
+    // undefined before an async (gzipped) send has written, so Fastify re-sends undefined and clobbers
+    // the body. These payloads are under the 1KB threshold today, but that's an assumption that drifts.
+    if (!result.ok && (result.error ?? '').includes('not enabled')) return reply.code(409).send(result);
+    return reply.code(200).send(result);
   });
 
   // POST /api/settings/sync/amend — a central operator amends a lab-owned result (Sync S6a). User-authed
@@ -107,7 +111,7 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
         entityId: b.id,
         metadata: { version: result.version, provenanceId: result.provenanceId, siteId: result.siteId, activity: typeof b.activity === 'string' && b.activity ? b.activity : 'amend' },
       });
-      reply.code(200).send(result);
+      return reply.code(200).send(result); // `return` is load-bearing — see sync-routes.ts's comment block
     } catch (e) {
       const name = e instanceof Error ? e.name : '';
       if (name === 'ResourceNotFoundError') { reply.code(404).send({ error: 'resource not found' }); return; }
@@ -136,7 +140,7 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
         action: 'settings.sync.merge', entityType: 'Patient', entityId: b.duplicateId,
         metadata: { survivorId: result.survivorId, duplicateId: result.duplicateId, repointed: result.repointed, provenanceId: result.provenanceId },
       });
-      reply.code(200).send(result);
+      return reply.code(200).send(result); // `return` is load-bearing — see sync-routes.ts's comment block
     } catch (e) {
       const name = e instanceof Error ? e.name : '';
       if (name === 'SamePatientError') { reply.code(400).send({ error: 'survivor and duplicate are the same patient' }); return; }

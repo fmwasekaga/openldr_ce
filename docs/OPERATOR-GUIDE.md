@@ -206,7 +206,11 @@ Flow:
 
 Result amendments (co-edit): a central operator can correct a lab-owned result without breaking ownership. `POST /api/settings/sync/amend` (admin, `lab_admin`) or `pnpm openldr sync amend --resource-type <t> --id <id> --status <s> [--reason …] [--patch <json>]` writes a new FHIR version on central and queues it. The owning lab drains those amendments on its next `pull`/`bidirectional` pass through the `'sync-amend-pull'` cursor, applying the higher versionId back into its own store. Order status/metadata co-edit uses this same amend surface against the `ServiceRequest` (e.g. `activity: update`). Intra-lab MPI merge: `POST /api/settings/sync/merge-patient` (admin, `lab_admin`) or `pnpm openldr sync merge-patient --survivor <id> --duplicate <id> [--reason …]` keeps the survivor, marks the duplicate `replaced-by` the survivor, and re-attributes the duplicate's lab history to it — the superseded duplicate then shows `active=false` in the patient list.
 
+Transport compression: sync traffic is gzip-compressed both ways, with no configuration. Responses — including the large terminology bulk drains and pull pages — compress automatically once they exceed ~1KB. Push bodies compress only after central advertises support (an `Accept-Encoding: gzip` response header, RFC 7694), so a lab on a newer build talking to an older central simply keeps sending uncompressed and keeps working: there is **no upgrade-order requirement** and no operator action.
+
 Troubleshooting:
+
+- `415` from a machine endpoint: the request body used a `Content-Encoding` central does not accept — only `gzip` is supported. The coded response is `SY0415`.
 
 - One bad record blocks the pull: the pull stream is ordered, so a terminology system/concept map (or other bulk record) that keeps failing to apply used to silently wedge **all** config and terminology sync behind it. Such a record is now quarantined after 3 failed attempts and the stream moves on. Inspect the held/quarantined records with `pnpm openldr sync quarantine list` or `GET /api/settings/sync/quarantine` (admin, `lab_admin`); once the cause is fixed, re-apply it with `pnpm openldr sync quarantine retry <entityType> <entityId>` or `POST /api/settings/sync/quarantine/retry`.
 

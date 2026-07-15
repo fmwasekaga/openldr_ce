@@ -172,3 +172,11 @@ Admin routes under `/api/settings/sync/*` are user-authed and `lab_admin`-gated.
 | `POST` | `/api/settings/sync/merge-patient` | Intra-lab patient merge (`lab_admin`): re-points the duplicate patient's lab history to the survivor and marks the duplicate replaced. Body: `{ survivorId, duplicateId, reason? }`. `400` same-patient/bad-input, `404` patient not found, `409` cross-site (patients in different sites). |
 
 The machine endpoints `POST /api/sync/push` (a lab pushes operational change-log records up) and `POST /api/sync/pull` (a lab pulls the reference-data delta down) are authenticated by lab **client credentials**, not user sessions, and scope by the token's `site_id`. `POST /api/sync/pull-amendments` (also client-credentials-authed and site-scoped) lets the owning lab drain the central-authored amendment stream for its own resources.
+
+### Compression
+
+Compression is global, so it applies to every route above — but it matters most for sync, which moves the largest payloads over the thinnest links.
+
+- **Responses**: compressed when the client sends `Accept-Encoding: gzip` and the body exceeds 1024 bytes. Already-compressed content types (PDF, xlsx) are skipped.
+- **Requests**: a gzipped body (`Content-Encoding: gzip`) is accepted on every route. Any other request encoding → `415` with code `SY0415`.
+- **Advert**: every response carries `Accept-Encoding: gzip` (RFC 7694) so a client can discover that the server accepts compressed request bodies before it sends one. The sync push client reads this off the response and only then starts gzipping, which is what lets a newer lab talk to an older central.

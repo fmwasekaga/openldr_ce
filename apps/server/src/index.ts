@@ -85,7 +85,7 @@ async function main(): Promise<void> {
 
   const ingest = await createIngestContext(cfg);
 
-  const app = buildApp(ctx);
+  const app = await buildApp(ctx);
 
   await ctx.reportScheduler.registerRunner(ingest.eventing);
   // Arming existing schedules is best-effort: a pending migration or transient DB

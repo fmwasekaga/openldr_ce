@@ -6,6 +6,8 @@ import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
 import { registerErrorHandler } from './error-handler';
 import fastifyStatic from '@fastify/static';
+import compress from '@fastify/compress';
+import { appError } from '@openldr/core';
 import type { AppContext } from '@openldr/bootstrap';
 import { registerReportRoutes } from './reports-routes';
 import { registerTerminologyRoutes } from './terminology-routes';
@@ -52,13 +54,47 @@ export function registerConfigRoute(
   }));
 }
 
-export function buildApp(ctx: AppContext) {
+export async function buildApp(ctx: AppContext) {
   const app = Fastify({
     loggerInstance: ctx.logger,
     // Short 8-char correlation id per request; surfaces in every error body + one log line.
     genReqId: () => randomUUID().replace(/-/g, '').slice(0, 8),
   });
   registerErrorHandler(app);
+
+  // Sync S7-B: compress the wire in both directions. Labs reconcile over bandwidth-constrained,
+  // often asymmetric links, so this is the cheapest available win — it shrinks the big terminology
+  // bulk pages / pull responses AND (via globalDecompression) accepts gzipped push bodies.
+  // Content negotiation is transparent: a client that doesn't ask simply doesn't get compressed bytes,
+  // so nothing existing breaks. `compressible`/mime-db skips already-compressed types (PDF/xlsx exports).
+  //
+  // This MUST be `await`ed here, before any route is added — which is why buildApp is async. The
+  // plugin works by installing an `onRoute` listener that rewrites each route's hooks as it is
+  // registered; a fire-and-forget `void app.register(...)` (the @fastify/static idiom below) defers
+  // the plugin to ready(), by which point every route has already been added and the listener sees
+  // NONE of them — leaving the plugin silently inert. @fastify/static is safe that way because it
+  // registers its OWN routes; compress decorates pre-existing ones.
+  await app.register(compress, {
+    globalCompression: true,
+    globalDecompression: true,
+    threshold: 1024,
+    encodings: ['gzip'],
+    requestEncodings: ['gzip'],
+    // v9 calls this as (encoding, request) and requires a real Error back. Returning an AppError
+    // keeps the 415 inside the error-code catalog: registerErrorHandler's existing AppError branch
+    // maps it to status 415 + code SY0415 + a correlationId, with no cross-cutting change to how
+    // any other error is classified.
+    onUnsupportedRequestEncoding: (encoding) =>
+      appError('SY0415', { message: `unsupported content-encoding: ${encoding}` }),
+  });
+
+  // RFC 7694: advertise to clients that this server ACCEPTS gzipped request bodies. The sync push
+  // client reads this off the response and only then starts gzipping its batches — an older central
+  // never sends it, so an upgraded lab safely keeps pushing plain JSON. Truthful globally, since
+  // globalDecompression accepts gzip on every route.
+  app.addHook('onSend', async (_req, reply) => {
+    if (!reply.getHeader('accept-encoding')) reply.header('Accept-Encoding', 'gzip');
+  });
 
   app.get('/health', async (_req, reply) => {
     const result = await ctx.health.runAll();

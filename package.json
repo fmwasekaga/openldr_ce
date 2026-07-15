@@ -44,6 +44,7 @@
     "sync:patient-merge:accept": "tsx scripts/sync-patient-merge-live-acceptance.ts",
     "sync:quarantine:accept": "tsx scripts/sync-quarantine-live-acceptance.ts",
     "sync:terminology:accept": "tsx scripts/sync-terminology-live-acceptance.ts",
+    "sync:gzip:accept": "tsx scripts/sync-gzip-live-acceptance.ts",
     "sync:enroll:accept": "tsx scripts/sync-enroll-live-acceptance.ts",
     "sync:bundle:accept": "tsx scripts/sync-bundle-live-acceptance.ts",
     "sync:e2e": "tsx scripts/sync-two-instance-harness.ts",

@@ -58,6 +58,9 @@ const ENTRIES: readonly CatalogEntry[] = [
   // derives the code from the status by name, and error-catalog.test.ts pins the invariant.
   { code: 'SY0400', domain: 'system', httpStatus: 400, message: 'bad request' },
   { code: 'SY0413', domain: 'system', httpStatus: 413, message: 'request payload too large' },
+  // Shared by two callers: codeForStatus derives this from a third party's 415 by name, and S7-B's
+  // @fastify/compress onUnsupportedRequestEncoding raises it for a gzip request body it can't inflate
+  // (overriding this default message with the offending encoding). Kept generic for that reason.
   { code: 'SY0415', domain: 'system', httpStatus: 415, message: 'unsupported media type' },
   { code: 'SY0500', domain: 'system', httpStatus: 500, message: 'unexpected server error' },
   { code: 'SY0503', domain: 'system', httpStatus: 503, message: 'a backing service is unavailable', retryable: true },
