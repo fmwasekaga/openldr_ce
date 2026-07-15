@@ -34,7 +34,7 @@ import { createReportScheduler, type ReportScheduler } from './report-scheduler'
 import { createPluginScheduleApi, createPluginScheduleRunner, type PluginScheduleRunner } from './plugin-schedule';
 import { createFormArtifactInstaller, type FormArtifactInstaller } from './form-artifact-install';
 import { type PluginRuntime } from '@openldr/plugins';
-import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore } from '@openldr/db';
+import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
 import { createSyncPushRunner, createSyncPullRunner, createAmendmentPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, type PushBatch, type PushResponse, type SyncConfig } from '@openldr/sync';
@@ -726,6 +726,9 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   // decrypted with the same SECRETS_ENCRYPTION_KEY / open() scheme the connector store uses.
   let syncPushWorker: SyncPushWorker | undefined;
   let syncPullWorker: SyncPullWorker | undefined;
+  let syncQuarantine: import('@openldr/db').SyncQuarantineStore | undefined;
+  let syncRetryQuarantine: ((entityType: string, entityId: string) => Promise<{ ok: boolean; error?: string }>) | undefined;
+  const QUARANTINE_THRESHOLD = 3; // Sync S7-A: consecutive bulk-apply failures before quarantine
   const syncDecrypt = (blob: string): string => open(blob, parseSecretKey(cfg.SECRETS_ENCRYPTION_KEY ?? ''));
   // Symmetric seal/open pair exposed on AppContext so the sync settings route + CLI can write-encrypt
   // the client secret with the SAME key scheme syncDecrypt reads (open(seal(x,key),key) === x).
@@ -845,6 +848,22 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
         }
         return referenceApplier(rec);
       };
+      const quarantine = createSyncQuarantineStore(internal.db);
+      syncQuarantine = quarantine;
+      // Sync S7-A: targeted re-sync of a quarantined bulk entity, independent of the advanced cursor.
+      syncRetryQuarantine = async (entityType: string, entityId: string) => {
+        await quarantine.clear(entityType, entityId);
+        try {
+          if (entityType === 'terminology_system') await termBulk.syncSystem(entityId, undefined);
+          else if (entityType === 'concept_map') await termBulk.syncConceptMap(entityId, undefined);
+          else return { ok: false, error: `not a retriable bulk entity type: ${entityType}` };
+          return { ok: true };
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          await quarantine.recordFailure(entityType, entityId, { seq: 0, error: msg, threshold: QUARANTINE_THRESHOLD });
+          return { ok: false, error: msg };
+        }
+      };
       const syncPullRunner = createSyncPullRunner({
         getToken: () => tokenProvider.getToken(), // SHARE the token provider instance
         applyRecord,
@@ -852,6 +871,10 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
           (await postJson(`${syncCfg.centralUrl}/api/sync/pull`, body, token)) as import('@openldr/sync').PullResponse,
         readCursor: () => readChangeCursor(internal.db, 'sync-pull'),
         advanceCursor: (seq) => advanceChangeCursor(internal.db, 'sync-pull', seq),
+        holdFailure: (rec, err) =>
+          quarantine.recordFailure(rec.entityType, rec.entityId, { seq: rec.seq, error: err.message, threshold: QUARANTINE_THRESHOLD })
+            .then((r) => (r.status === 'quarantined' ? 'quarantine' : 'hold')),
+        holdSuccess: (rec) => quarantine.clear(rec.entityType, rec.entityId),
         logger,
       });
       // Sync S6a: the amendment pull runner — a SECOND stream drained in the same host loop, over its own
@@ -901,6 +924,8 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     siteId: syncCfg?.siteId ?? '',
     pushWorker: syncPushWorker,
     pullWorker: syncPullWorker,
+    quarantine: syncQuarantine,
+    retryQuarantine: syncRetryQuarantine,
   });
 
   const pluginData = createPluginDataStore(internal.db);

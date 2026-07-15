@@ -174,3 +174,29 @@ describe('createSyncHandle.triggerNow', () => {
     expect(() => handle.triggerNow()).not.toThrow();
   });
 });
+
+describe('createSyncHandle quarantine', () => {
+  it('listQuarantine returns [] when no store; delegates when present', async () => {
+    const db = await makeMigratedDb();
+    const rows = [{ entityType: 'terminology_system', entityId: 'http://x', attempts: 3, status: 'quarantined' }] as any;
+    const base = { enabled: true, mode: 'pull' as const, centralUrl: '', siteId: '' };
+    const h1 = createSyncHandle({ db, ...base });
+    expect(await h1.listQuarantine()).toEqual([]);
+    const h2 = createSyncHandle({ db, ...base, quarantine: { list: async () => rows } as any });
+    expect(await h2.listQuarantine()).toEqual(rows);
+  });
+
+  it('retryQuarantine errors when pull not enabled; delegates when wired', async () => {
+    const db = await makeMigratedDb();
+    const base = { enabled: true, mode: 'pull' as const, centralUrl: '', siteId: '' };
+    const h1 = createSyncHandle({ db, ...base });
+    expect(await h1.retryQuarantine('terminology_system', 'http://x')).toEqual({
+      ok: false,
+      error: expect.stringContaining('not enabled'),
+    });
+    const retry = vi.fn(async () => ({ ok: true }));
+    const h2 = createSyncHandle({ db, ...base, retryQuarantine: retry });
+    expect(await h2.retryQuarantine('terminology_system', 'http://x')).toEqual({ ok: true });
+    expect(retry).toHaveBeenCalledWith('terminology_system', 'http://x');
+  });
+});
