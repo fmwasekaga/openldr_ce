@@ -156,7 +156,12 @@ async function main(): Promise<void> {
       advanceCursor: (seq) => advanceChangeCursor(labDb, 'sync-pull', seq),
       holdFailure: (rec, err) =>
         quarantine
-          .recordFailure(rec.entityType, rec.entityId, { seq: rec.seq, error: err.message, threshold: THRESHOLD })
+          // `body` mirrors the production wiring in bootstrap/src/index.ts: the record's descriptor is
+          // persisted on the quarantine row so an operator retry can replay central's REAL signal
+          // (url/version/kind/resourceId/generation) instead of an empty one. Keep this in sync with
+          // bootstrap — a harness that drops `body` would silently prove the wrong thing if this file
+          // is ever extended to cover the retry path.
+          .recordFailure(rec.entityType, rec.entityId, { seq: rec.seq, error: err.message, body: rec.body, threshold: THRESHOLD })
           .then((r) => (r.status === 'quarantined' ? 'quarantine' : 'hold')),
       holdSuccess: (rec) => quarantine.clear(rec.entityType, rec.entityId),
       logger: {
