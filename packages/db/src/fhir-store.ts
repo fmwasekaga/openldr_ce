@@ -342,7 +342,7 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
       if (!AMENDABLE_TYPES.has(resourceType)) {
         throw new UnsupportedResourceTypeError(`${resourceType} is not amendable (allowed: ${[...AMENDABLE_TYPES].join(', ')})`);
       }
-      const activityCode = activity ?? 'amend';
+      const activityCode = activity || 'amend';
       const provenanceId = randomUUID();
       const result = await db.transaction().execute(async (trx): Promise<AmendResult> => {
         const cur = await trx

@@ -142,6 +142,15 @@ describe('FhirStore.amend', () => {
     expect(prov.activity.coding[0].display).toBe('amend');
   });
 
+  it('treats an empty-string activity as the AMEND default (falsy coalescing)', async () => {
+    const store = createFhirStore(db);
+    await store.applyRemote({ resourceType: 'Observation', id: 'obs-empty', version: 1, op: 'upsert', siteId: 'lab-a', resource: { resourceType: 'Observation', id: 'obs-empty', status: 'preliminary' } as any });
+    const result = await store.amend({ resourceType: 'Observation', id: 'obs-empty', status: 'amended', activity: '', agent: 'c' });
+    const prov = (await store.get('Provenance', result.provenanceId)) as any;
+    expect(prov.activity.coding[0].code).toBe('AMEND');
+    expect(prov.activity.coding[0].display).toBe('amend');
+  });
+
   it('rejects a non-allowlisted resource type with UnsupportedResourceTypeError (before any write)', async () => {
     const store = createFhirStore(db);
     // No Patient row exists — the allowlist check must fire regardless (before the not-found check).
