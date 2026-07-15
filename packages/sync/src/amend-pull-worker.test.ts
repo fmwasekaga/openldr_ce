@@ -56,4 +56,22 @@ describe('createAmendmentPullRunner', () => {
     expect(n).toBe(0);
     expect(cursor).toBe(3);
   });
+
+  it('treats a diverged apply as handled — cursor advances, no quarantine', async () => {
+    const applied: unknown[] = [];
+    let cursor = 0;
+    const resp: AmendmentPullResponse = { records: [rec(7, 'd')], nextSeq: 7 };
+    const runner = createAmendmentPullRunner({
+      getToken: async () => 't',
+      postPull: async () => resp,
+      applyRecord: async (r) => { applied.push(r); return 'diverged' as const; },
+      readCursor: async () => cursor,
+      advanceCursor: async (s) => { cursor = s; },
+      logger: silent,
+    });
+    const n = await runner.runCycle();
+    expect(applied).toHaveLength(1);
+    expect(n).toBe(1);
+    expect(cursor).toBe(7);
+  });
 });

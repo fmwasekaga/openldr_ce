@@ -1,4 +1,4 @@
-import type { Logger } from '@openldr/db';
+import type { ApplyResult, Logger } from '@openldr/db';
 import type { PullRequest, AmendmentPullResponse, SyncRecord } from './batch';
 
 // Injected deps for the amendment pull runner (Sync S6a). Kept pure over its deps (fakeable in tests).
@@ -7,7 +7,10 @@ import type { PullRequest, AmendmentPullResponse, SyncRecord } from './batch';
 export interface AmendPullDeps {
   postPull: (req: PullRequest, token: string) => Promise<AmendmentPullResponse>;
   getToken: () => Promise<string>;
-  applyRecord: (rec: SyncRecord & { seq: number }) => Promise<'applied' | 'skipped'>;
+  // ApplyResult (not a hand-copied literal union) so this cannot drift from the store it wraps.
+  // 'diverged' (S7) is a HANDLED outcome, not an error: the record was inspected, the divergence was
+  // recorded durably by applyRemote itself, and the cursor advances normally.
+  applyRecord: (rec: SyncRecord & { seq: number }) => Promise<ApplyResult>;
   readCursor: () => Promise<number>; // change_cursors consumer 'sync-amend-pull'
   advanceCursor: (seq: number) => Promise<void>;
   logger: Logger;
