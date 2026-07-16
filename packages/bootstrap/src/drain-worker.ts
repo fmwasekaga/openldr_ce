@@ -22,9 +22,9 @@ export interface DrainWorker {
   trigger(): void;
   /** True once start() has scheduled the loop and stop() has not been called. Read by the sync status surface. */
   isRunning(): boolean;
-  /** One full drain, awaitable. Exposed for tests; start()/trigger() fire it without awaiting. */
+  /** One full drain, awaitable. The awaitable form of trigger() — start()/trigger() fire it without awaiting. */
   tickOnce(): Promise<void>;
-  /** The resolved budget. Exposed so a test can assert the interval-derived default. */
+  /** The resolved drain budget, for status/diagnostics — it is derived from intervalMs, so it is otherwise invisible to an operator. */
   readonly budgetMs: number;
 }
 
@@ -39,10 +39,10 @@ export interface DrainWorkerDeps {
   intervalMs: number;
   /** Defaults to floor(intervalMs / 2). Injected by tests so they never sleep. */
   drainBudgetMs?: number;
-  /** Push only — a lab cannot LISTEN to central's Postgres. Absent → interval-only, exactly as pre-S7. */
-  listenClient?: DrainListenClient;
-  /** Required when listenClient is set. e.g. 'fhir_changes'. */
-  listenChannel?: string;
+  // Push only — a lab cannot LISTEN to central's Postgres. Absent → interval-only, exactly as pre-S7.
+  // One optional, not two: a client without a channel would silently degrade to interval-only — no
+  // LISTEN, no error, no log — which is the exact slow-drain bug this slice exists to kill.
+  listen?: { client: DrainListenClient; channel: string };
   /** 'sync push' | 'sync pull' — disambiguates log lines now that both share this loop. */
   label: string;
   logger: Logger;
@@ -81,11 +81,11 @@ export function createDrainWorker(opts: DrainWorkerDeps): DrainWorker {
     }
   }
 
-  if (opts.listenClient && opts.listenChannel) {
+  if (opts.listen) {
     // Mirrors projection-worker.ts:34-37. Interval polling stays the correctness-bearing path: if the
     // LISTEN never lands (pooled/serverless PG), we degrade to exactly the pre-S7 cadence.
-    opts.listenClient.query(`listen ${opts.listenChannel}`).catch(() => undefined);
-    opts.listenClient.on('notification', () => { if (!stopped) void tickOnce(); });
+    opts.listen.client.query(`listen ${opts.listen.channel}`).catch(() => undefined);
+    opts.listen.client.on('notification', () => { if (!stopped) void tickOnce(); });
   }
 
   return {
@@ -100,8 +100,8 @@ export function createDrainWorker(opts: DrainWorkerDeps): DrainWorker {
       if (timer) { clearInterval(timer); timer = undefined; }
       // Fire-and-forget: this stop() is SYNCHRONOUS because index.ts:1115-1116 calls it without await
       // (unlike projection-worker's async stop). The client is .end()ed at shutdown anyway.
-      if (opts.listenClient && opts.listenChannel) {
-        void opts.listenClient.query(`unlisten ${opts.listenChannel}`).catch(() => undefined);
+      if (opts.listen) {
+        void opts.listen.client.query(`unlisten ${opts.listen.channel}`).catch(() => undefined);
       }
     },
     trigger() {
