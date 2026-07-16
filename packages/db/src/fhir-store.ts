@@ -3,6 +3,7 @@ import { type Kysely, sql } from 'kysely';
 import type { FhirResource } from '@openldr/fhir';
 import type { InternalSchema } from './schema/internal';
 import type { Provenance } from './provenance';
+import { provenanceFromRow } from './provenance';
 import { divergenceHash } from './divergence-hash';
 import { recordDivergence } from './sync-divergence-store';
 
@@ -291,14 +292,7 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
         .where('id', '=', id)
         .executeTakeFirst();
       if (!row) return null;
-      // Omit NULL columns rather than carrying nulls: Provenance's fields are
-      // optional, and provColumns() maps absent -> NULL on the way back out.
-      const provenance: Provenance = {};
-      if (row.source_system !== null) provenance.sourceSystem = row.source_system;
-      if (row.plugin_id !== null) provenance.pluginId = row.plugin_id;
-      if (row.plugin_version !== null) provenance.pluginVersion = row.plugin_version;
-      if (row.batch_id !== null) provenance.batchId = row.batch_id;
-      return { resource: row.resource as FhirResource, provenance };
+      return { resource: row.resource as FhirResource, provenance: provenanceFromRow(row) };
     },
 
     async listByType(resourceType, limit = 500) {

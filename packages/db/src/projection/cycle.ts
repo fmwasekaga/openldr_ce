@@ -5,6 +5,7 @@ import type { RelationalWriter } from '../relational-writer';
 import { planProjection, type ProjectionTask, type Gap } from './plan';
 import { readCursor, advanceCursor } from './cursor';
 import type { SafeFetchResult } from './fetch';
+import { provenanceFromRow } from '../provenance';
 
 export type FetchSafeRows = (db: Kysely<InternalSchema>, cursor: number, limit: number) => Promise<SafeFetchResult>;
 
@@ -74,19 +75,14 @@ export async function reprojectAll(deps: Pick<ProjectionDeps, 'internalDb' | 're
   for (;;) {
     const rows = await deps.internalDb
       .selectFrom('fhir.fhir_resources')
-      .select('resource')
+      .select(['resource', 'source_system', 'plugin_id', 'plugin_version', 'batch_id'])
       .orderBy('resource_type')
       .orderBy('id')
       .limit(page)
       .offset(offset)
       .execute();
     if (rows.length === 0) break;
-    // reprojectAll's SELECT only fetches `resource` (see above), not the provenance
-    // columns, so there is nothing to carry here. `{}` is explicit rather than a
-    // default — same as before this slice made provenance required — and is out of
-    // scope to fix: that would mean re-fetching provenance for every row in a full
-    // rebuild, a separate change from the deferred-projection bug this slice targets.
-    await deps.relationalWriter.writeMany(rows.map((r) => ({ resource: r.resource, provenance: {} })));
+    await deps.relationalWriter.writeMany(rows.map((r) => ({ resource: r.resource, provenance: provenanceFromRow(r) })));
     projected += rows.length;
     offset += rows.length;
     if (rows.length < page) break;
