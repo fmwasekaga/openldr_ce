@@ -28,15 +28,24 @@ describe('sync-site-cursor-store', () => {
     await db.destroy();
   });
 
-  it('advances reported_at on a re-report', async () => {
+  it('re-report TOUCHES the row: seq changes and reported_at is refreshed', async () => {
     const db = await makeMigratedDb();
     const store = createSyncSiteCursorStore(db as never);
     await store.report('lab-a', 'sync-pull', 1);
     const first = (await store.list()).find((r) => r.siteId === 'lab-a')!.reportedAt.getTime();
-    await new Promise((r) => setTimeout(r, 5));
+    await new Promise((r) => setTimeout(r, 10));
     await store.report('lab-a', 'sync-pull', 2);
     const second = (await store.list()).find((r) => r.siteId === 'lab-a')!.reportedAt.getTime();
-    expect(second).toBeGreaterThanOrEqual(first);
+    // Two independent assertions catching two independent mutants:
+    //   seq === 2 catches the whole doUpdateSet degrading to doNothing (the row would keep seq 1).
+    expect(await store.get('lab-a', 'sync-pull')).toBe(2);
+    //   second > first catches `reported_at: now()` being DROPPED from doUpdateSet while seq stays —
+    //   the exact mutant `>=` and a seq check both miss (seq still moves, timestamp goes stale but
+    //   equal satisfies >=). reported_at going stale unnoticed is the whole reason list() exists (a
+    //   later observability slice reads it), so this must have teeth. Strict `>` is safe, NOT a flake:
+    //   the two now() calls are separated by a list() SELECT + a report() INSERT round-tripped through
+    //   the DB (tens of ms of real wall-clock, measured), not by the sub-ms gap `>=` was guarding.
+    expect(second).toBeGreaterThan(first);
     await db.destroy();
   });
 

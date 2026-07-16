@@ -22,6 +22,7 @@ export interface SyncSiteCursorStore {
   /** The site's reported position, or **0** when never reported. 0 means "give it everything"
    *  (exportPullBundle relies on this); undefined would mean "give it nothing". */
   get(siteId: string, consumer: ReportedConsumer): Promise<number>;
+  // The only read surface for reported_at — a later observability slice reads it. Not dead code.
   list(): Promise<SyncSiteCursorRow[]>;
 }
 
