@@ -205,8 +205,14 @@ are `.passthrough()` and nearly all fields are `.optional()`. Actually required:
   (`detector.ts:92-106`).
 - **A stale message to fix:** `specimen_missing` says *"v2 storage will reject"*. **CE will not
   reject it** — CE is more lenient than v2 was. Correct the message; do not rely on CE.
-- **Never run this path with `--no-check`.** The audit gate is the only thing between bad
-  source data and CE's store on this path.
+- **`--no-check` is refused when the target is CE — enforced in code, not documentation.**
+  On the v2 path, storage rejected specimen-less records as a backstop (hence
+  `specimen_missing`'s message). CE has no such backstop, so on the CE path the audit gate is
+  the *only* thing between bad source data and the store. `--no-check` (and any
+  `--quarantine-severity` that disables the gate) must **exit non-zero before the first query
+  runs** when a CE target is configured. A rule that depends on an operator reading a doc is
+  not a rule; someone reaching for `--no-check` to force a stubborn batch through would land
+  junk in the system of record silently.
 
 **Mapper conformance is checked in cdr-toolchain's tests, not by CE.** Add
 [`fhir-validator-js`](https://github.com/Outburn-IL/fhir-validator-js) (v1.4.1, 2026-06-28) as a
