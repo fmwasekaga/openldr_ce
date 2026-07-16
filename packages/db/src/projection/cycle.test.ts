@@ -194,4 +194,26 @@ describe('reprojectAll', () => {
     await internalDb.destroy();
     await externalDb.destroy();
   });
+
+  it('carries provenance from the canonical rows into the rebuilt rows', async () => {
+    // reprojectAll is the REPAIR path. It selected only `resource`, so a full
+    // rebuild wrote NULL provenance for every row — meaning nothing could ever
+    // populate provenance on an existing row. Same bug as the deferred path.
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const fhirStore = createFhirStore(internalDb as never);
+    const relationalWriter = createRelationalWriter(externalDb as never, 'postgres');
+    await fhirStore.save(
+      { resourceType: 'Patient', id: 'p1', name: [{ family: 'A' }] } as never,
+      { sourceSystem: 'cdr', batchId: 'batch-1' },
+    );
+
+    await reprojectAll({ internalDb: internalDb as never, relationalWriter });
+
+    const [row] = await externalDb.selectFrom('patients').selectAll().execute();
+    expect(row.source_system).toBe('cdr');
+    expect(row.batch_id).toBe('batch-1');
+    await internalDb.destroy();
+    await externalDb.destroy();
+  });
 });
