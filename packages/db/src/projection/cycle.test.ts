@@ -98,6 +98,53 @@ describe('createProjectionRunner (stateful gaps across cycles)', () => {
   });
 });
 
+describe('getWithProvenance', () => {
+  it('returns the resource alongside its stored provenance', async () => {
+    const internalDb = await makeMigratedDb();
+    const fhirStore = createFhirStore(internalDb as never);
+    await fhirStore.save(
+      { resourceType: 'Patient', id: 'p1', name: [{ family: 'A' }] } as never,
+      { sourceSystem: 'cdr', batchId: 'batch-1', pluginId: 'plug', pluginVersion: '1.2.3' },
+    );
+
+    const found = await fhirStore.getWithProvenance('Patient', 'p1');
+    expect(found).not.toBeNull();
+    expect((found!.resource as unknown as { id: string }).id).toBe('p1');
+    expect(found!.provenance).toEqual({
+      sourceSystem: 'cdr', batchId: 'batch-1', pluginId: 'plug', pluginVersion: '1.2.3',
+    });
+    await internalDb.destroy();
+  });
+
+  it('returns an empty provenance (not undefined) when the columns are NULL', async () => {
+    const internalDb = await makeMigratedDb();
+    const fhirStore = createFhirStore(internalDb as never);
+    await fhirStore.save({ resourceType: 'Patient', id: 'p2' } as never);
+
+    const found = await fhirStore.getWithProvenance('Patient', 'p2');
+    expect(found).not.toBeNull();
+    expect(found!.provenance).toEqual({});
+    await internalDb.destroy();
+  });
+
+  it('returns null for a missing resource', async () => {
+    const internalDb = await makeMigratedDb();
+    const fhirStore = createFhirStore(internalDb as never);
+    expect(await fhirStore.getWithProvenance('Patient', 'nope')).toBeNull();
+    await internalDb.destroy();
+  });
+
+  it('leaves get() unchanged — terminology-store.ts:161 depends on the bare resource', async () => {
+    const internalDb = await makeMigratedDb();
+    const fhirStore = createFhirStore(internalDb as never);
+    await fhirStore.save({ resourceType: 'Patient', id: 'p3' } as never, { sourceSystem: 'cdr' });
+    const r = await fhirStore.get('Patient', 'p3');
+    expect((r as { resourceType: string }).resourceType).toBe('Patient');
+    expect((r as Record<string, unknown>).provenance).toBeUndefined();
+    await internalDb.destroy();
+  });
+});
+
 describe('reprojectAll', () => {
   it('rebuilds the read-model from canonical and sets the cursor to max seq', async () => {
     const internalDb = await makeMigratedDb();
