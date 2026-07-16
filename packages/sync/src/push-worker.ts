@@ -157,9 +157,19 @@ export function createSyncPushRunner(deps: PushDeps): SyncPushRunner {
       // Advance only as far as BOTH central acked AND the local safe frontier we actually pushed.
       // Central is a separate trust domain: clamping to newCursor stops a buggy/hostile ackSeq from
       // jumping the cursor past records the lab never sent (which would permanently, silently skip
-      // committed changes). The `> cursor` guard additionally prevents backwards regression.
+      // committed changes).
       const target = Math.min(resp.ackSeq, newCursor);
-      if (target > cursor) await deps.advanceCursor(target);
+      if (target <= cursor) {
+        // A success path with N>0 records ALWAYS has newCursor > cursor, so this means ackSeq <= cursor:
+        // a central acking at or behind where we already were. Anomalous by definition — report 'failed' so
+        // the drain stops instead of re-posting this identical window until the budget expires, every tick.
+        deps.logger.error(
+          { ackSeq: resp.ackSeq, cursor, newCursor, count: records.length },
+          'sync push: central acked at or behind the cursor; not advancing (will retry next tick)',
+        );
+        return { outcome: 'failed', applied: resp.applied };
+      }
+      await deps.advanceCursor(target);
 
       // Report the count central durably applied (not records.length), so a partially-rejected batch
       // reflects real work done.

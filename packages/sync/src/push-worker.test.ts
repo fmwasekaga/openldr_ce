@@ -407,6 +407,41 @@ describe('createSyncPushRunner', () => {
     expect(cursor).toBe(0);
   });
 
+  it('reports failed when central acks at or behind the cursor: cursor unmoved, error logged', async () => {
+    // A success path with N>0 records ALWAYS has newCursor > cursor, so target <= cursor means the
+    // central acked backwards (stale/cached 200, proxy replay, buggy reimplementation, hostile peer).
+    // Reporting 'progressed' here would make the drain loop re-post this IDENTICAL window until the
+    // budget expires — every tick, forever — because the cursor never moves. 'failed' stops the drain
+    // and makes the anomaly operator-visible rather than a silent permanent wedge.
+    let cursor = 5;
+    const advanceCursor = vi.fn(async (s: number) => {
+      cursor = s;
+    });
+    const logger = fakeLogger();
+    const deps: PushDeps = {
+      internalDb: fakeDb([
+        { seq: 6, version: 1, site_id: 's' },
+        { seq: 7, version: 1, site_id: 's' },
+      ]),
+      fetchSafeRows: fetchQueue([{ rows: [row(6, 10, 'p6'), row(7, 10, 'p7')], boundary: 100, xmax: 200 }]),
+      fetchContent: okContent,
+      // central acks 5 — at the cursor we already held, behind the two records (seq 6,7) we just sent
+      postPush: async () => ({ ackSeq: 5, applied: 2, skipped: 0, rejects: [] }),
+      getToken: async () => 't',
+      readCursor: async () => cursor,
+      advanceCursor,
+      logger,
+    };
+
+    const r = await createSyncPushRunner(deps).runCycle();
+    expect(r.outcome).toBe('failed');
+    expect(r.applied).toBe(2); // reporting-only: central may genuinely have applied them
+    expect(advanceCursor).not.toHaveBeenCalled();
+    expect(cursor).toBe(5); // wedge is now retried + logged, never silently advanced past
+    expect(logger.errors).toHaveLength(1);
+    expect(logger.errors[0]).toMatchObject({ ackSeq: 5, cursor: 5, newCursor: 7, count: 2 });
+  });
+
   it('reports progressed on a posted window — even when central applied 0', async () => {
     // The window WAS processed and the cursor advanced; `applied` is reporting only. A drain loop
     // keying off the count would stop here with records still queued.
