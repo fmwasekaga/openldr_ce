@@ -281,6 +281,75 @@ so this is a regression check); `pnpm turbo run typecheck test` in `cdr-toolchai
   `"07/20/2024"` under US ordering and emit a plausible but wrong timestamp. Omitting the field
   is honest; a guessed clinical timestamp is not.
 
+## SCOPE ADDITION 2026-07-16 — derive `result_status` + `authorised_at` from AUDTDATA
+
+Approved by the user mid-implementation ("fix it now, before the live run"), after they queried
+the live v1 database and found `Requests.HL7ResultStatusCode` holds **five** values — `A, F, I,
+R, X` — contradicting the CLI.
+
+### The defect
+
+The CLI contradicts itself, and its own fidelity gate cannot see it:
+
+| Location | Behaviour |
+|---|---|
+| `apps/cli/src/export/v1-transform.ts:305` | `HL7ResultStatusCode: "F", // assume Final unless we discover otherwise` |
+| `apps/cli/src/export/v2-transform.ts:344` | `result_status: rejection.rejected ? "X" : null` |
+| `apps/cli/src/compare/mapping.ts:51-65` | the 13 compared fields **exclude** result status |
+
+`v2-transform.ts:340-343` claims *"DISA doesn't surface a per-request status"*. That is **true of
+`SpecimenRecpt` but false of DISA**: `AUDTDATA` carries per-panel audit events, and
+`v1-transform.ts:167-207` (`extractAuditFacts`) already decodes `WA500` (print/review =
+authorised) and `WL101` (results inserted) to populate `AuthorisedDateTime`/`AuthorisedBy`.
+`toV1()` receives `auditRows` (`v1-transform.ts:211-219`); **`toV2()` does not**. The signal is
+absent for want of an input, not for want of data. The same omission is why
+`v2-transform.ts:329-330` emits `analysis_at: null, authorised_at: null`.
+
+Consequence for this slice: every `DiagnosticReport` would land in CE with `status: "unknown"`
+and **no `issued` date**.
+
+### Derivation (to be validated empirically, NOT trusted)
+
+| v1 code | HL7 table 0123 | Rule |
+|---|---|---|
+| `X` | Order cancelled | rejected — `Condition` (`REGDAT4.ts:123`, bytes 548-553) or `RJREA`/`RJREM`. Already implemented. |
+| `I` | Specimen received, procedure incomplete | no ordered panel produced results (no `WL101`) |
+| `A` | Some but not all results available | some ordered panels resulted, some not |
+| `R` | Results stored, not yet verified | resulted (`WL101`) but not authorised (no `WA500`) |
+| `F` | Final | all ordered panels authorised (`WA500`) |
+
+Precedence: `X > I > A > R > F`. `authorised_at` = the `WA500` event timestamp, per the
+mechanism `v1-transform.ts:277` already uses.
+
+Corroboration that these semantics match the team's existing assumptions:
+`compare-batch.ts:60-65` already treats v1's `I` as *"interim / not-yet-authorised"*.
+
+### How we know the rules are right — the compare gate, not our judgement
+
+v1 is the **trusted mirror** and holds the real value for the same labs. Therefore:
+
+1. Derive `result_status` in `toV2`.
+2. **Add result status to `compare/mapping.ts`'s compared fields** — closing the blind spot that
+   let this defect live since the first commit (`git log -S "HL7ResultStatusCode"` shows the
+   field was never compared, and no commit ever removed a comparison; it was never there).
+3. Run `compare-batch` against real v1 across a large sample and tune the rules until the
+   mismatch rate is acceptable.
+
+This is the fidelity gate's whole purpose, applied to the one field it was blind to. We do not
+ship a guess; we ship something v1 agrees with.
+
+### Risk that must be respected
+
+`v2-transform.ts` is the **live v2 migration path** for Moz/Zambia. Today it sends
+`result_status: null`; afterwards it sends real codes. This is a production behaviour change on
+a running migration. It must not regress the existing v2 export — and note the compare gate
+would not have caught such a regression before step 2 above.
+
+Not addressed here: `A` requires an ordered-vs-resulted panel comparison; logic exists for
+anomaly detection (`audit/detector.ts`) but is not wired to status. The unmapped byte ranges
+(`REGDAT4` 553-615, 448-482, 619-653; `TESTDATA_STATUS` 0-79) may hold a status byte, but that
+is unverified and would need SQL Profiler reverse-engineering — explicitly not this slice.
+
 ## Explicitly out of scope
 
 - The marketplace plugin, its webview, and any wasm. (Deferred; see below.)
