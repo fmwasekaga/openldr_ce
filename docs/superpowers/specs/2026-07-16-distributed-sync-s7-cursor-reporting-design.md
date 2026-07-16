@@ -119,7 +119,7 @@ If #5 wants real push lag, the lab must report its `change_log` head as well —
 | Piece | Package / file |
 |---|---|
 | `sync_site_cursors` (migration `057`, unprefixed → public schema) + `InternalSchema` type | `packages/db/src/migrations/internal/` + `schema/internal.ts` |
-| Drop `sync_sites.reported_pull_cursor` (same migration) | ditto |
+| Drop `sync_sites.reported_pull_cursor` (migration `058`, its own migration — create and drop are independent concerns, and the drop must land with its readers in the cutover commit, not with the additive create) | ditto |
 | `createSyncSiteCursorStore(db)` — `report(siteId, consumer, seq)` / `get(siteId, consumer)` (**`0` for unknown**, per §4.2) / `list()` | `packages/db/src/sync-site-cursor-store.ts` **(new)** |
 | Remove `get`/`setReportedPullCursor` + `SyncSiteRow.reportedPullCursor` | `packages/db/src/sync-site-store.ts:27-28,76-88`, `schema/internal.ts:612` |
 | Record on pull + pull-amendments (best-effort) | `apps/server/src/sync-routes.ts:167,186` |
