@@ -91,10 +91,24 @@ pattern requires `no` adjacent to the noun; real descriptions put words between.
 between `no` and `growth` rather than requiring adjacency — bounded, so it cannot match "no" and a
 "growth" many words away in an unrelated phrase.
 
-### 3. Add the missing moulds
+### 3. Add the missing fungi — **16 genera, measured**
 
-Add `absidia` and `rhizopus` to `FUNGUS_RE`. Do **not** attempt a comprehensive mycology list — add
-what the real dictionary contains, verified by the harness below.
+**AMENDED 2026-07-16.** This section originally said "add `absidia` and `rhizopus`", extrapolated
+from the single example found. Re-measuring the real dictionary against a broad medical-mycology
+net found **16 distinct genera** `FUNGUS_RE` misses, covering 30 codes currently classified
+`bacteria`:
+
+```
+absidia | acremonium | alternaria | bipolaris | curvularia | exophiala | geotrichum | hansenula
+madurella | malassezia | phialophora | pichia | rhizopus | rhodotorula | sporothrix | torulopsis
+```
+
+Notable among them: `SPOSC` *Sporothrix schenckii*, `MALFU` *Malassezia furfur*, and
+**`TORGL` *Torulopsis glabrata*** — the historical name for ***Candida glabrata***, a major
+drug-resistant yeast, currently reported as a bacterium.
+
+Add exactly these 16. Do **not** extend beyond what the dictionary contains — the harness verifies
+the result, and speculative genera are untestable.
 
 ### Verification harness (the point of the slice)
 
