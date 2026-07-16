@@ -23,9 +23,6 @@ export interface SyncSiteStore {
   setStatus(siteId: string, status: 'active' | 'revoked'): Promise<void>;
   // Sync S5: record the site's public signing key (hex SPKI DER) exchanged at enroll/rotate.
   setSigningPublicKey(siteId: string, hexDer: string): Promise<void>;
-  // Sync S5: the lab's last-applied 'sync-pull' position (0 when unknown/null).
-  getReportedPullCursor(siteId: string): Promise<number>;
-  setReportedPullCursor(siteId: string, seq: number): Promise<void>;
 }
 
 function fromRow(r: {
@@ -72,21 +69,6 @@ export function createSyncSiteStore(db: Kysely<InternalSchema>): SyncSiteStore {
     // Persist ONLY the public key — the site's private key is never stored centrally.
     async setSigningPublicKey(siteId, hexDer) {
       await db.updateTable('sync_sites').set({ signing_public_key: hexDer }).where('site_id', '=', siteId).execute();
-    },
-    async getReportedPullCursor(siteId) {
-      const r = await db
-        .selectFrom('sync_sites')
-        .select('reported_pull_cursor')
-        .where('site_id', '=', siteId)
-        .executeTakeFirst();
-      return Number(r?.reported_pull_cursor ?? 0);
-    },
-    async setReportedPullCursor(siteId, seq) {
-      await db
-        .updateTable('sync_sites')
-        .set({ reported_pull_cursor: String(seq) })
-        .where('site_id', '=', siteId)
-        .execute();
     },
   };
 }

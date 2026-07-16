@@ -617,8 +617,6 @@ export interface SyncSitesTable {
   // Sync S5: the site's ed25519 SPKI DER public key (hex) — central verifies the lab's push
   // bundles with it. The site's PRIVATE key is never persisted centrally.
   signing_public_key: string | null;
-  // Sync S5: last-applied lab 'sync-pull' position, piggybacked on pull requests (bigint → string).
-  reported_pull_cursor: string | null;
 }
 
 // Workflow secret store (SEC-06): encrypted at-rest store for secrets extracted from workflow

@@ -216,7 +216,7 @@ export async function importPushBundle(
   }
 
   // Piggybacked lab pull position (how current the lab's reference config is). Best-effort tracking.
-  if (manifest.pullCursor != null) await ctx.syncSites.setReportedPullCursor(manifest.siteId, manifest.pullCursor);
+  if (manifest.pullCursor != null) await ctx.syncSiteCursors.report(manifest.siteId, 'sync-pull', manifest.pullCursor);
 
   // No 'diverged' field here either — same no-wire-change reasoning as /api/sync/push (see the
   // comment above the PushResponse construction in apps/server/src/sync-routes.ts). It is logged, not
@@ -237,7 +237,7 @@ export async function exportPullBundle(
   opts: { siteId: string; out?: string },
 ): Promise<{ path: string; manifest: BundleManifest }> {
   const { privHex } = await ensureCentralKeypair(ctx);
-  const from = await ctx.syncSites.getReportedPullCursor(opts.siteId); // 0 → full snapshot
+  const from = await ctx.syncSiteCursors.get(opts.siteId, 'sync-pull'); // 0 → full snapshot
   const resp = await servePull(ctx, from);
   const records = resp.records;
   // Embed terminology content in the record body so the lab reconciles it offline. Only an UPSERT

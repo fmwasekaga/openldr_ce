@@ -399,6 +399,7 @@ export function ctxWith(status: 'up' | 'down'): AppContext {
       },
     } as never,
     syncSites: {} as never,
+    syncSiteCursors: {} as never,
     blob: {} as never,
     eventing: {} as never,
     store: {} as never,

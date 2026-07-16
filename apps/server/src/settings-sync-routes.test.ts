@@ -75,8 +75,6 @@ function fakeCtx() {
       async setSigningPublicKey(siteId: string, publicKey: string) {
         signingKeys.set(siteId, publicKey);
       },
-      async getReportedPullCursor() { return 0; },
-      async setReportedPullCursor() {},
     },
 
     // Sync S5: in-memory app_settings backing ensureCentralKeypair (get→{value}|undefined, set(k,v,actor)).
