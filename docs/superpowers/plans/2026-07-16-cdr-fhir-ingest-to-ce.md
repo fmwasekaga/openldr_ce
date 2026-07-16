@@ -75,6 +75,35 @@ only `resourceType` (`patient.ts:8`).
 
 ---
 
+## AMENDMENT 2026-07-16 — timezone threading (applies to Tasks 3–6, 8, 10)
+
+Found during Task 2's review; approved by the user. Supersedes the affected code blocks below.
+
+1. **`fhirDateTime` takes a required offset:**
+   `fhirDateTime(raw: string | null | undefined, tzOffset: string): string | undefined`.
+   `tzOffset` is `"+02:00"` / `"-05:00"` / `"Z"`, validated against `/^(Z|[+-]\d{2}:\d{2})$/`;
+   a malformed offset throws. No `new Date()` fallback — unrecognised input → `undefined`.
+
+2. **`toFhir` takes options and threads the offset through:**
+   ```ts
+   export interface ToFhirOptions { tzOffset: string }
+   export function toFhir(payload: V2Payload, opts: ToFhirOptions): FhirResource[]
+   ```
+   **Every `fhirDateTime(x)` call in Tasks 3–6 becomes `fhirDateTime(x, opts.tzOffset)`**, and
+   `patientResource` / `requestResources` / `observationResource` / `astResource` /
+   `isolateResource` each take `opts` (or the offset) as a parameter. Every test calling
+   `toFhir(payload)` becomes `toFhir(payload, { tzOffset: "+02:00" })`, and the Task 4
+   assertions expecting `"2024-07-20T08:30:00Z"` become `"2024-07-20T08:30:00+02:00"`.
+
+3. **Task 8 adds a fourth config key:** `OPENLDR_CE_TIMEZONE` (`z.string().optional()`),
+   `openldrCeTimezone?: string` on `LoadedConfig` and `ConfigOverrides`, assembled as
+   `overrides.openldrCeTimezone ?? env.data.OPENLDR_CE_TIMEZONE`. **No default.**
+
+4. **Task 10 requires it:** add `--ce-tz <offset>`; `assertCeGatesEnabled` (or a sibling guard)
+   must throw `CliError("CONFIG_MISSING", ...)` when a CE target is configured and no offset is
+   set. Fail fast, before the first query. **Never default to UTC** — Moz/Zambia are UTC+2 and a
+   silent 2h skew in migration-fidelity data is the worst available failure mode.
+
 ## File Structure
 
 | File | Responsibility |
