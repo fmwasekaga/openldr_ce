@@ -183,6 +183,42 @@ Questionnaire, QuestionnaireResponse, CodeSystem, ValueSet, ConceptMap
 | Invalid FHIR resource | `persist-store` throws; the workflow run fails. Partial saves possible within one payload (see non-atomicity above) — keep payloads to one lab so the blast radius is one record. |
 | Wrong/missing webhook token | 401 from CE; fail fast and loudly (fail-closed by design). |
 
+## Validation: who checks what
+
+CE's validation is **structural, per-resource, and lenient** — `validateResource` resolves
+`resourceType` → a zod schema → `safeParse` (`packages/fhir/src/validate.ts:19-38`). Schemas
+are `.passthrough()` and nearly all fields are `.optional()`. Actually required:
+
+| Resource | Required fields |
+|---|---|
+| `Specimen` | `resourceType` only — `{"resourceType":"Specimen"}` is valid |
+| `DiagnosticReport` | `resourceType`, `status`, `code` |
+| `Observation` | `resourceType`, `status`, `code` |
+
+**CE is therefore not a safety net for mapping bugs.** Consequences this slice must respect:
+
+- **Cross-resource clinical rules are not reachable by CE at all** — they span resources, and
+  zod validates one resource in isolation. The two canonical examples are already **error**-level
+  audit rules that quarantine upstream, before any push:
+  `dob_after_specimen_date` (`apps/cli/src/audit/detector.ts:~208-230`, compares DOB against the
+  earliest of taken/collected/received with a 1-day tolerance) and `specimen_missing`
+  (`detector.ts:92-106`).
+- **A stale message to fix:** `specimen_missing` says *"v2 storage will reject"*. **CE will not
+  reject it** — CE is more lenient than v2 was. Correct the message; do not rely on CE.
+- **Never run this path with `--no-check`.** The audit gate is the only thing between bad
+  source data and CE's store on this path.
+
+**Mapper conformance is checked in cdr-toolchain's tests, not by CE.** Add
+[`fhir-validator-js`](https://github.com/Outburn-IL/fhir-validator-js) (v1.4.1, 2026-06-28) as a
+**devDependency**, run over the mapper's output. It wraps the official HL7 validator, so it
+catches what CE waves through: bad date formats, wrong cardinality, invalid codes, missing
+genuinely-required R4 fields. It self-provisions an Adoptium JRE and downloads the validator
+JAR — no manual Java on dev or CI, and **it never ships**: the production CLI and any image
+built from it require no JVM. Rejected alternatives: `@haste-health/fhir-validation`
+(2 downloads/wk, last published 2026-01-20, repo link wrong — effectively abandoned) and
+`@d4l/js-fhir-validator` (8 downloads/wk; JSON-schema only — no invariants, no profiles, so it
+adds little over CE's zod).
+
 ## Testing
 
 **Unit** (`fhir-transform`): the v2 `.example.json` bundle and `.v2.example.txt` encode the
@@ -190,6 +226,13 @@ same logical record, so `hl7-fhir.schema.js`'s `convert()` output is a known-goo
 for a known-good FHIR bundle. Round-trip that fixture through the inverse mapping and assert
 it reconstructs the bundle's resources. Add hand-built fixtures for the micro `hasMember` tree,
 since the shipped example doesn't cover it.
+
+**Conformance**: every resource the mapper emits passes `fhir-validator-js` against R4. Record
+what strict R4 demands — that output is the input to the CE-strictness slice below.
+
+**Audit**: add a rule asserting the mapper's output carries the fields CE's projection needs.
+This defends the path we control; it is explicitly *not* a substitute for CE-side validation
+(a different producer has no such gate).
 
 **Live**, in order, gated at each step:
 1. `--limit 1 --dry-run --emit-payloads` — inspect the FHIR without sending.
@@ -200,6 +243,19 @@ since the shipped example doesn't cover it.
 **Gate:** `pnpm turbo run typecheck test --force` in `openldr_ce` (no code changes expected,
 so this is a regression check); `pnpm turbo run typecheck test` in `cdr-toolchain`.
 
+## Decisions on record (2026-07-16)
+
+- **Full-fidelity PHI into the local dev Postgres (`:5433`) — approved.** Real Mozambique/Zambia
+  patient data will land in a dev database on the development laptop. CE has redaction, and
+  Zambia needs patient details to link with their EMR.
+- **Running `--limit 1` against the live production DISA — approved.** Read-only is verified
+  (39 `.query()` calls, all `SELECT`; zero write DML).
+- **`abnormal_flag` → `Observation.interpretation` and `rpt_range` →
+  `Observation.referenceRange` — confirmed.** The v2 schema's FHIR path nulls both
+  (`hl7-fhir.schema.js:802-805`) while its v2 path populates them (`:192-194`); going
+  FHIR-ward we map them rather than inherit the drop.
+- **CE strictness levels — approved in principle, deferred to its own slice** (see below).
+
 ## Explicitly out of scope
 
 - The marketplace plugin, its webview, and any wasm. (Deferred; see below.)
@@ -207,8 +263,34 @@ so this is a regression check); `pnpm turbo run typecheck test` in `cdr-toolchai
 - An HTTP ingest route in CE core. The webhook path needs no CE code; if bulk volume later
   demands blob-backed batches, that is a separate decision.
 - Pseudonymisation. Full-fidelity PHI is the explicit call.
+- **Tightening CE's zod schemas.** Approved in principle, but a CE-core change with blast
+  radius across sync, the projection worker, and existing producers. Its own slice.
 
-## Follow-on (not this slice)
+## Follow-on: CE FHIR strictness levels (next slice, own spec)
+
+Approved in principle 2026-07-16: **tighten CE's FHIR validation by default**, with a
+strictness level — low / medium / high — settable in Settings and overridable on the
+`persist-store` workflow node.
+
+Rationale (the decisive argument): the CDR audit gate only defends *this* path. Any other
+producer — a vendor plugin, another country's tooling, the DHIS2 path, a future
+direct-from-DISA pusher — has no such gate, and CE accepts their output silently today. CE is
+the system of record and cannot assume its producers validated first.
+
+Why it is **not** in this slice: it is a CE-core change to `validateResource` with real blast
+radius. Everything that persists FHIR today rides the lenient schemas — the `fhir-bundle`
+converter (`packages/ingest/src/converters/fhir-bundle.ts`), plugins holding `emit-fhir`, the
+seeds, and the sync workstream's `change_log` replay. Tightening by default may reject data CE
+has already accepted, which must not land mid-live-sync-testing. That slice needs its own
+"what breaks" investigation.
+
+Sequencing: this slice's conformance run (above) establishes what strict R4 actually demands,
+which defines what "high" means. Slice 1 informs slice 2.
+
+Surfaces already exist: Settings feature flags, and `persist-store` already accepts node config
+(`packages/workflows/src/host-nodes.ts:80`).
+
+## Follow-on: review UI (not this slice)
 
 The review UI, when it comes, needs no new CE machinery either: `POST /api/plugins/:id/broker`
 already relays webview calls to the broker (`apps/server/src/plugin-ui-routes.ts`), `storage.*`
