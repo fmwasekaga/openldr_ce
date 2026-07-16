@@ -36,7 +36,7 @@ describe('runProjectionCycle', () => {
     const fhirStore = createFhirStore(internalDb as never);
     const relationalWriter = createRelationalWriter(externalDb as never, 'postgres');
     await fhirStore.save({ resourceType: 'Patient', id: 'p1' } as never);
-    await relationalWriter.write({ resourceType: 'Patient', id: 'p1' });
+    await relationalWriter.write({ resourceType: 'Patient', id: 'p1' }, {});
     await fhirStore.delete('Patient', 'p1');
 
     const fetch: FetchSafeRows = async () => ({
@@ -46,6 +46,34 @@ describe('runProjectionCycle', () => {
     });
     await createProjectionRunner({ internalDb: internalDb as never, fhirStore, relationalWriter, logger, fetch, batchSize: 500 }).runCycle();
     expect(await externalDb.selectFrom('patients').selectAll().execute()).toHaveLength(0);
+    await internalDb.destroy();
+    await externalDb.destroy();
+  });
+
+  it('carries provenance from the canonical row into the projected row', async () => {
+    // The bug this file never caught: applyProjection called write(canonical) with
+    // no provenance, and write() defaulted it to {} — so source_system/plugin_id/
+    // plugin_version/batch_id were NULL in EVERY projected row, for every producer,
+    // silently defeating the batchId design in persist-store-service.ts:11-17.
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const fhirStore = createFhirStore(internalDb as never);
+    const relationalWriter = createRelationalWriter(externalDb as never, 'postgres');
+    await fhirStore.save(
+      { resourceType: 'Patient', id: 'p1', name: [{ family: 'A' }] } as never,
+      { sourceSystem: 'cdr', batchId: 'batch-1' },
+    );
+
+    const fetch: FetchSafeRows = async () => ({
+      rows: [{ seq: 1, xid: 1, resource_type: 'Patient', resource_id: 'p1', op: 'upsert' }],
+      boundary: 100,
+      xmax: 200,
+    });
+    await createProjectionRunner({ internalDb: internalDb as never, fhirStore, relationalWriter, logger, fetch, batchSize: 500 }).runCycle();
+
+    const [row] = await externalDb.selectFrom('patients').selectAll().execute();
+    expect(row.source_system).toBe('cdr');
+    expect(row.batch_id).toBe('batch-1');
     await internalDb.destroy();
     await externalDb.destroy();
   });
@@ -98,6 +126,53 @@ describe('createProjectionRunner (stateful gaps across cycles)', () => {
   });
 });
 
+describe('getWithProvenance', () => {
+  it('returns the resource alongside its stored provenance', async () => {
+    const internalDb = await makeMigratedDb();
+    const fhirStore = createFhirStore(internalDb as never);
+    await fhirStore.save(
+      { resourceType: 'Patient', id: 'p1', name: [{ family: 'A' }] } as never,
+      { sourceSystem: 'cdr', batchId: 'batch-1', pluginId: 'plug', pluginVersion: '1.2.3' },
+    );
+
+    const found = await fhirStore.getWithProvenance('Patient', 'p1');
+    expect(found).not.toBeNull();
+    expect((found!.resource as unknown as { id: string }).id).toBe('p1');
+    expect(found!.provenance).toEqual({
+      sourceSystem: 'cdr', batchId: 'batch-1', pluginId: 'plug', pluginVersion: '1.2.3',
+    });
+    await internalDb.destroy();
+  });
+
+  it('returns an empty provenance (not undefined) when the columns are NULL', async () => {
+    const internalDb = await makeMigratedDb();
+    const fhirStore = createFhirStore(internalDb as never);
+    await fhirStore.save({ resourceType: 'Patient', id: 'p2' } as never);
+
+    const found = await fhirStore.getWithProvenance('Patient', 'p2');
+    expect(found).not.toBeNull();
+    expect(found!.provenance).toEqual({});
+    await internalDb.destroy();
+  });
+
+  it('returns null for a missing resource', async () => {
+    const internalDb = await makeMigratedDb();
+    const fhirStore = createFhirStore(internalDb as never);
+    expect(await fhirStore.getWithProvenance('Patient', 'nope')).toBeNull();
+    await internalDb.destroy();
+  });
+
+  it('leaves get() unchanged — terminology-store.ts:161 depends on the bare resource', async () => {
+    const internalDb = await makeMigratedDb();
+    const fhirStore = createFhirStore(internalDb as never);
+    await fhirStore.save({ resourceType: 'Patient', id: 'p3' } as never, { sourceSystem: 'cdr' });
+    const r = await fhirStore.get('Patient', 'p3');
+    expect((r as { resourceType: string }).resourceType).toBe('Patient');
+    expect((r as Record<string, unknown>).provenance).toBeUndefined();
+    await internalDb.destroy();
+  });
+});
+
 describe('reprojectAll', () => {
   it('rebuilds the read-model from canonical and sets the cursor to max seq', async () => {
     const internalDb = await makeMigratedDb();
@@ -116,6 +191,28 @@ describe('reprojectAll', () => {
     const maxRow = await internalDb.selectFrom('fhir.change_log').select((eb: any) => eb.fn.max('seq').as('m')).executeTakeFirst();
     expect(await readCursor(internalDb as never, 'projection')).toBe(Number((maxRow as any).m));
 
+    await internalDb.destroy();
+    await externalDb.destroy();
+  });
+
+  it('carries provenance from the canonical rows into the rebuilt rows', async () => {
+    // reprojectAll is the REPAIR path. It selected only `resource`, so a full
+    // rebuild wrote NULL provenance for every row — meaning nothing could ever
+    // populate provenance on an existing row. Same bug as the deferred path.
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const fhirStore = createFhirStore(internalDb as never);
+    const relationalWriter = createRelationalWriter(externalDb as never, 'postgres');
+    await fhirStore.save(
+      { resourceType: 'Patient', id: 'p1', name: [{ family: 'A' }] } as never,
+      { sourceSystem: 'cdr', batchId: 'batch-1' },
+    );
+
+    await reprojectAll({ internalDb: internalDb as never, relationalWriter });
+
+    const [row] = await externalDb.selectFrom('patients').selectAll().execute();
+    expect(row.source_system).toBe('cdr');
+    expect(row.batch_id).toBe('batch-1');
     await internalDb.destroy();
     await externalDb.destroy();
   });

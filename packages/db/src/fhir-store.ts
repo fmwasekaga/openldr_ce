@@ -3,6 +3,7 @@ import { type Kysely, sql } from 'kysely';
 import type { FhirResource } from '@openldr/fhir';
 import type { InternalSchema } from './schema/internal';
 import type { Provenance } from './provenance';
+import { provenanceFromRow } from './provenance';
 import { divergenceHash } from './divergence-hash';
 import { recordDivergence } from './sync-divergence-store';
 
@@ -112,6 +113,11 @@ export const AMENDABLE_TYPES: ReadonlySet<string> = new Set(['Observation', 'Dia
 export interface FhirStore {
   save(resource: FhirResource, provenance?: Provenance): Promise<SavedRef>;
   get(resourceType: string, id: string): Promise<FhirResource | null>;
+  /** Like `get`, but also returns the row's stored provenance. The deferred projection
+   *  needs it — `get` alone silently produced NULL source_system/batch_id in every
+   *  projected row. Additive rather than a change to `get`, because
+   *  terminology-store.ts:161 wants the bare resource. */
+  getWithProvenance(resourceType: string, id: string): Promise<{ resource: FhirResource; provenance: Provenance } | null>;
   listByType(resourceType: string, limit?: number): Promise<{ id: string; resource: FhirResource }[]>;
   delete(resourceType: string, id: string): Promise<DeleteResult>;
   // Mirror-apply a remote change at its ORIGIN version/site. Idempotent on (resourceType,id,version):
@@ -276,6 +282,17 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
         .where('id', '=', id)
         .executeTakeFirst();
       return row ? (row.resource as FhirResource) : null;
+    },
+
+    async getWithProvenance(resourceType, id) {
+      const row = await db
+        .selectFrom('fhir.fhir_resources')
+        .select(['resource', 'source_system', 'plugin_id', 'plugin_version', 'batch_id'])
+        .where('resource_type', '=', resourceType)
+        .where('id', '=', id)
+        .executeTakeFirst();
+      if (!row) return null;
+      return { resource: row.resource as FhirResource, provenance: provenanceFromRow(row) };
     },
 
     async listByType(resourceType, limit = 500) {

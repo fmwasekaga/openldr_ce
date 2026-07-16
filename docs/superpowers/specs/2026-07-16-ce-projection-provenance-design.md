@@ -150,9 +150,21 @@ type system forbids the latter.
 
 ## Explicitly out of scope
 
-- **Backfilling existing projected rows.** Every row projected before this fix has NULL provenance
-  forever unless re-projected. `reprojectAll` exists and would heal them, but running it is an
-  operational decision with a cost — not this slice's call.
+- **RUNNING a backfill.** Every row projected before this fix keeps NULL provenance until
+  re-projected. Executing `reprojectAll` against a populated store is an operational decision with a
+  real cost — not this slice's call.
+
+  ⚠ **AMENDED 2026-07-16 — the original justification here was FALSE.** This section previously read
+  *"`reprojectAll` exists and would heal them"*. It would not: `reprojectAll` (`cycle.ts:76`) selects
+  **only the `resource` column**, exactly as `get` did — so a full rebuild writes NULL provenance for
+  every row. **The identical bug, one function below the one this slice fixes.** Found during
+  implementation, when making `provenance` required broke its `writeMany` call.
+
+  Consequence of fixing only the deferred path: **nothing could ever populate provenance on an
+  existing row.** New writes carry it, old rows keep NULLs forever, and the repair tool silently
+  repairs nothing. That is a worse state than either finishing or not starting, so **fixing
+  `reprojectAll` is IN scope** (approved 2026-07-16): its SELECT gains the four provenance columns
+  and carries them through `writeMany`. **Running** it remains out of scope.
 - Slice A (classifier) and Slice C (organism semantics).
 - The AST fan-out bug and the unfiltered `ast` window (`report-seeds.ts:648-662`, known).
 

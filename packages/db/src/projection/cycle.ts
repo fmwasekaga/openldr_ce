@@ -5,6 +5,7 @@ import type { RelationalWriter } from '../relational-writer';
 import { planProjection, type ProjectionTask, type Gap } from './plan';
 import { readCursor, advanceCursor } from './cursor';
 import type { SafeFetchResult } from './fetch';
+import { provenanceFromRow } from '../provenance';
 
 export type FetchSafeRows = (db: Kysely<InternalSchema>, cursor: number, limit: number) => Promise<SafeFetchResult>;
 
@@ -24,9 +25,12 @@ export interface ProjectionRunner {
 }
 
 async function applyProjection(task: ProjectionTask, deps: ProjectionDeps): Promise<void> {
-  const canonical = await deps.fhirStore.get(task.resourceType, task.id);
-  if (canonical) {
-    await deps.relationalWriter.write(canonical);
+  // getWithProvenance, not get: the projected row must carry the canonical row's
+  // source_system/plugin_id/plugin_version/batch_id, or the read model cannot say
+  // which producer or which run wrote it.
+  const found = await deps.fhirStore.getWithProvenance(task.resourceType, task.id);
+  if (found) {
+    await deps.relationalWriter.write(found.resource, found.provenance);
   } else {
     await deps.relationalWriter.deleteById(task.resourceType, task.id);
   }
@@ -71,14 +75,14 @@ export async function reprojectAll(deps: Pick<ProjectionDeps, 'internalDb' | 're
   for (;;) {
     const rows = await deps.internalDb
       .selectFrom('fhir.fhir_resources')
-      .select('resource')
+      .select(['resource', 'source_system', 'plugin_id', 'plugin_version', 'batch_id'])
       .orderBy('resource_type')
       .orderBy('id')
       .limit(page)
       .offset(offset)
       .execute();
     if (rows.length === 0) break;
-    await deps.relationalWriter.writeMany(rows.map((r) => ({ resource: r.resource })));
+    await deps.relationalWriter.writeMany(rows.map((r) => ({ resource: r.resource, provenance: provenanceFromRow(r) })));
     projected += rows.length;
     offset += rows.length;
     if (rows.length < page) break;
