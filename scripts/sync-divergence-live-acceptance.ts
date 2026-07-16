@@ -259,8 +259,15 @@ async function main(): Promise<void> {
       } as never,
     });
 
-    const applied1 = await runner.runCycle();
-    ok(`drain cycle #1 handled ${applied1} record(s); cursor now ${amendCursor}`);
+    const cycle1 = await runner.runCycle();
+    ok(
+      `drain cycle #1 → outcome '${cycle1.outcome}', applied ${cycle1.applied} ` +
+        `(diverged records are EXCLUDED from applied by design); cursor now ${amendCursor}`,
+    );
+    // The S7 contract this slice rests on: a window carrying a divergence still reports 'progressed',
+    // because the WINDOW was processed and the cursor advanced — never because `applied` is non-zero.
+    // This harness is the live proof of that claim, so assert it rather than only logging it.
+    assert(cycle1.outcome === 'progressed', `drain cycle #1 reports outcome 'progressed' despite the divergence (got '${cycle1.outcome}')`);
 
     const labRows = await labDiv.list();
     assert(labRows.length === 1, `lab has exactly ONE divergence row (got ${labRows.length})`);
@@ -313,8 +320,13 @@ async function main(): Promise<void> {
     const rePush = await centralStore.applyRemote(pushRecord);
     assert(rePush === 'diverged', `re-pushed colliding v2 still returns 'diverged' (got '${rePush}')`);
     amendCursor = 0; // rewind the cursor so the runner re-serves + re-applies the same amendment window
-    const applied2 = await runner.runCycle();
-    ok(`drain cycle #2 (cursor rewound to 0) handled ${applied2} record(s)`);
+    const cycle2 = await runner.runCycle();
+    ok(
+      `drain cycle #2 (cursor rewound to 0) → outcome '${cycle2.outcome}', applied ${cycle2.applied} ` +
+        `(diverged records are EXCLUDED from applied by design)`,
+    );
+    // Re-delivering the same diverged window still processes it and advances the cursor → 'progressed'.
+    assert(cycle2.outcome === 'progressed', `drain cycle #2 reports outcome 'progressed' on re-delivery (got '${cycle2.outcome}')`);
 
     const cenRows2 = await centralDiv.list();
     const labRows2 = await labDiv.list();
