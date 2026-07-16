@@ -315,7 +315,11 @@ function fakePullCtx(opts: {
   settings?: Record<string, { value: string }>;
   terminologySystems?: any[];
   conceptMapState?: any[];
+  // S7 (A1): override ctx.syncSiteCursors.report — e.g. to make it reject, to prove the pull route
+  // tolerates a failed cursor recording. Default records into `.calls` for assertions.
+  reportCursor?: (siteId: string, consumer: string, seq: number) => Promise<void>;
 }) {
+  const cursorCalls: unknown[] = [];
   const ctx = {
     logger: { warn: () => {}, error: () => {} },
     auth: { verifyToken: opts.verify ?? (async () => ({ sub: 'client-1', site_id: SITE })) },
@@ -331,6 +335,14 @@ function fakePullCtx(opts: {
     dashboards: { store: { get: async (id: string) => (opts.dashboards ?? {})[id] } },
     reportDefs: { get: async (id: string) => (opts.reports ?? {})[id] },
     appSettings: { get: async (id: string) => (opts.settings ?? {})[id] ?? null },
+    syncSiteCursors: {
+      report:
+        opts.reportCursor ??
+        (async (siteId: string, consumer: string, seq: number) => {
+          cursorCalls.push([siteId, consumer, seq]);
+        }),
+      calls: cursorCalls,
+    },
   } as any;
   return ctx;
 }
@@ -595,6 +607,47 @@ describe('sync routes — POST /api/sync/pull', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().records).toEqual([{ seq: 9, entityType: 'terminology_system', entityId: 'http://gone', op: 'delete' }]);
   });
+
+  // --- S7 (A1): reported site cursors ------------------------------------------------------------
+
+  it('records the reporting site fromSeq (not nextSeq) on pull', async () => {
+    const ctx = fakePullCtx({
+      log: [logRow(900, 'setting', 's1', 'upsert', 'h')],
+      settings: { s1: { value: 'v' } },
+    });
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/sync/pull', headers: AUTH, payload: { fromSeq: 500 } });
+    expect(res.statusCode).toBe(200);
+    // Sanity: nextSeq genuinely differs from fromSeq, or this test couldn't distinguish the two.
+    expect(res.json().nextSeq).toBe(900);
+    expect(ctx.syncSiteCursors.calls).toEqual([[SITE, 'sync-pull', 500]]);
+  });
+
+  it('a throwing cursor store does NOT fail the pull', async () => {
+    const ctx = fakePullCtx({
+      log: [logRow(1, 'setting', 's1', 'upsert', 'h')],
+      settings: { s1: { value: 'v' } },
+      reportCursor: async () => { throw new Error('cursor store down'); },
+    });
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/sync/pull', headers: AUTH, payload: { fromSeq: 0 } });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.records).toHaveLength(1);
+    expect(body.nextSeq).toBe(1);
+  });
+
+  it('a non-finite fromSeq records 0, not NaN (trust boundary)', async () => {
+    const ctx = fakePullCtx({});
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/sync/pull', headers: AUTH, payload: { fromSeq: 'haha' } });
+    expect(res.statusCode).toBe(200);
+    expect(ctx.syncSiteCursors.calls).toEqual([[SITE, 'sync-pull', 0]]);
+  });
+
+  it('records the TOKEN-derived site, never a body-supplied one', async () => {
+    const ctx = fakePullCtx({});
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/sync/pull', headers: AUTH, payload: { fromSeq: 1, siteId: 'lab-evil' } });
+    expect(res.statusCode).toBe(200);
+    expect(ctx.syncSiteCursors.calls).toEqual([[SITE, 'sync-pull', 1]]);
+  });
 });
 
 // --- POST /api/sync/terminology/concepts ---------------------------------------------------------
@@ -773,11 +826,27 @@ describe('sync routes — POST /api/sync/terminology/map-elements', () => {
 // serveAmendments is a REAL @openldr/bootstrap import (not stubbable), so this suite backs ctx with a
 // migrated pg-mem internalDb + a real FhirStore, seeds amendments per site, and asserts the route
 // passes the token's site through — proving the endpoint is genuinely site-scoped.
-function fakeAmendCtx(db: any, opts: { verify?: (token: string) => Promise<Record<string, unknown>> } = {}) {
+function fakeAmendCtx(
+  db: any,
+  opts: {
+    verify?: (token: string) => Promise<Record<string, unknown>>;
+    // S7 (A1): override ctx.syncSiteCursors.report — see fakePullCtx for the same knob.
+    reportCursor?: (siteId: string, consumer: string, seq: number) => Promise<void>;
+  } = {},
+) {
+  const cursorCalls: unknown[] = [];
   return {
     logger: { warn: () => {}, error: () => {}, info: () => {} },
     auth: { verifyToken: opts.verify ?? (async () => ({ sub: 'client-1', site_id: 'lab-a' })) },
     internalDb: db,
+    syncSiteCursors: {
+      report:
+        opts.reportCursor ??
+        (async (siteId: string, consumer: string, seq: number) => {
+          cursorCalls.push([siteId, consumer, seq]);
+        }),
+      calls: cursorCalls,
+    },
   } as any;
 }
 
@@ -845,5 +914,14 @@ describe('sync routes — POST /api/sync/pull-amendments', () => {
     const res = await appWith(ctx).inject({ method: 'POST', url: '/api/sync/pull-amendments', headers: AUTH, payload: { fromSeq: 'oops' } });
     expect(res.statusCode).toBe(200);
     expect(res.json().records.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("records on pull-amendments under its own consumer ('sync-amend-pull', not 'sync-pull')", async () => {
+    const db = await makeMigratedDb();
+    await seedAmendment(db, 'lab-a', 'obs-a');
+    const ctx = fakeAmendCtx(db, { verify: async () => ({ sub: 'client-1', site_id: 'lab-a' }) });
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/sync/pull-amendments', headers: AUTH, payload: { fromSeq: 7 } });
+    expect(res.statusCode).toBe(200);
+    expect(ctx.syncSiteCursors.calls).toEqual([['lab-a', 'sync-amend-pull', 7]]);
   });
 });
