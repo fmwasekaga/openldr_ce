@@ -1,6 +1,8 @@
 export type { SyncRecord, PushBatch, PushResponse } from './batch';
 export type { PullRecord, PullRequest, PullResponse, AmendmentPullResponse } from './batch';
 export type { ConceptWire, ConceptsPage, MapElementWire, MapElementsPage } from './batch';
+export { combineCycleResults } from './cycle-result';
+export type { CycleOutcome, CycleResult } from './cycle-result';
 export { createTerminologyBulkSync } from './terminology-sync';
 export type { TerminologyBulkDeps, TerminologyBulkSync } from './terminology-sync';
 export { createSyncPushRunner, collectPushRecords } from './push-worker';
