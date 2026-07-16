@@ -137,18 +137,27 @@ function fakeAppSettings(initial: Record<string, string> = {}) {
 }
 
 function fakeSyncSites() {
-  const rows = new Map<string, { siteId: string; status: 'active' | 'revoked'; signingPublicKey: string | null; reportedPullCursor: number }>();
+  const rows = new Map<string, { siteId: string; status: 'active' | 'revoked'; signingPublicKey: string | null }>();
   return {
     _rows: rows,
     async get(siteId: string) {
       return rows.get(siteId);
     },
-    async getReportedPullCursor(siteId: string) {
-      return rows.get(siteId)?.reportedPullCursor ?? 0;
+  };
+}
+
+// Sync S7 (A1): the reported per-stream cursors, keyed `${siteId}::${consumer}`. Mirrors the real
+// SyncSiteCursorStore's report/get; get returns 0 for a never-reported (site, consumer).
+function fakeSyncSiteCursors() {
+  const cursors = new Map<string, number>();
+  const key = (siteId: string, consumer: string) => `${siteId}::${consumer}`;
+  return {
+    _cursors: cursors,
+    async report(siteId: string, consumer: string, seq: number) {
+      cursors.set(key(siteId, consumer), seq);
     },
-    async setReportedPullCursor(siteId: string, seq: number) {
-      const r = rows.get(siteId);
-      if (r) r.reportedPullCursor = seq;
+    async get(siteId: string, consumer: string) {
+      return cursors.get(key(siteId, consumer)) ?? 0;
     },
   };
 }
@@ -177,6 +186,7 @@ function makeCtx(over: Partial<Record<string, unknown>> = {}) {
     logger: { warn() {}, error() {}, info() {}, debug() {} },
     appSettings: fakeAppSettings(),
     syncSites: fakeSyncSites(),
+    syncSiteCursors: fakeSyncSiteCursors(),
     fhirStore: fakeFhirStore(),
     internalDb: fakeInternalDb({}),
     dashboards: { store: { get: async () => undefined } },
@@ -230,7 +240,7 @@ describe('exportPushBundle / importPushBundle', () => {
         'fhir.resource_history': [{ resource_type: 'Patient', id: 'p1', version: 5, resource: { resourceType: 'Patient', id: 'p1' } }],
       }),
     });
-    ctx.syncSites._rows.set(SITE, { siteId: SITE, status: 'active', signingPublicKey: site.pub, reportedPullCursor: 0 });
+    ctx.syncSites._rows.set(SITE, { siteId: SITE, status: 'active', signingPublicKey: site.pub });
     return { ctx, site };
   }
 
@@ -271,7 +281,7 @@ describe('exportPushBundle / importPushBundle', () => {
         })),
       }),
     });
-    ctx.syncSites._rows.set(SITE, { siteId: SITE, status: 'active', signingPublicKey: site.pub, reportedPullCursor: 0 });
+    ctx.syncSites._rows.set(SITE, { siteId: SITE, status: 'active', signingPublicKey: site.pub });
 
     const { manifest } = await exportPushBundle(ctx, {});
     // The bundle carries ALL 5 records (not just the first 2-row page) and spans the full range.
@@ -292,7 +302,7 @@ describe('exportPushBundle / importPushBundle', () => {
     const res = await importPushBundle(ctx, bytes);
     expect(res).toEqual({ applied: 2, ackSeq: 2, siteId: SITE });
     expect(ctx.fhirStore._applied.map((r) => r.id)).toEqual(['p1', 'p2']);
-    expect(ctx.syncSites._rows.get(SITE)!.reportedPullCursor).toBe(4);
+    expect(await ctx.syncSiteCursors.get(SITE, 'sync-pull')).toBe(4);
 
     // Re-import: applyRemote reports skipped for all → applied 0 (idempotent).
     const again = await importPushBundle(ctx, bytes);
@@ -329,14 +339,14 @@ describe('exportPushBundle / importPushBundle', () => {
     await expect(importPushBundle(ctx, bytes)).rejects.toBeInstanceOf(SiteNotFoundError);
 
     // Revoked site is also rejected.
-    ctx.syncSites._rows.set(SITE, { siteId: SITE, status: 'revoked', signingPublicKey: hexKeys().pub, reportedPullCursor: 0 });
+    ctx.syncSites._rows.set(SITE, { siteId: SITE, status: 'revoked', signingPublicKey: hexKeys().pub });
     await expect(importPushBundle(ctx, bytes)).rejects.toBeInstanceOf(SiteNotFoundError);
   });
 
   it('skips a cross-site record (rec.siteId != manifest.siteId) without applying it', async () => {
     const site = hexKeys();
     const ctx = makeCtx();
-    ctx.syncSites._rows.set(SITE, { siteId: SITE, status: 'active', signingPublicKey: site.pub, reportedPullCursor: 0 });
+    ctx.syncSites._rows.set(SITE, { siteId: SITE, status: 'active', signingPublicKey: site.pub });
     const manifest: BundleManifest = {
       formatVersion: 1, kind: 'push', siteId: SITE, fromCursor: 0, toCursor: 2, recordCount: 2,
       signerKeyId: SITE, producedAt: new Date().toISOString(), pullCursor: 0,
@@ -357,7 +367,7 @@ describe('exportPushBundle / importPushBundle', () => {
   it('a diverged record is not counted as applied but the ackSeq/pull-cursor bookkeeping still happens', async () => {
     // applyRemote returning 'diverged' means the record was HANDLED (the divergence was recorded
     // durably by applyRemote itself, in its own txn) — the import must not throw, must not count it
-    // toward `applied`, and must still advance ackSeq/reportedPullCursor past it exactly like any
+    // toward `applied`, and must still advance ackSeq/the reported pull cursor past it exactly like any
     // other handled record. importPushBundle's return shape is unchanged ({ applied, ackSeq, siteId }) —
     // there is no `diverged` field on the wire; it is surfaced only via ctx.logger.warn.
     const site = hexKeys();
@@ -366,7 +376,7 @@ describe('exportPushBundle / importPushBundle', () => {
       logger: { warn: (...a: unknown[]) => warnCalls.push(a), error() {}, info() {}, debug() {} },
       fhirStore: { applyRemote: async () => 'diverged' as const },
     });
-    ctx.syncSites._rows.set(SITE, { siteId: SITE, status: 'active', signingPublicKey: site.pub, reportedPullCursor: 0 });
+    ctx.syncSites._rows.set(SITE, { siteId: SITE, status: 'active', signingPublicKey: site.pub });
     const manifest: BundleManifest = {
       formatVersion: 1, kind: 'push', siteId: SITE, fromCursor: 0, toCursor: 1, recordCount: 1,
       signerKeyId: SITE, producedAt: new Date().toISOString(), pullCursor: 9,
@@ -379,7 +389,7 @@ describe('exportPushBundle / importPushBundle', () => {
 
     const res = await importPushBundle(ctx, bytes);
     expect(res).toEqual({ applied: 0, ackSeq: 1, siteId: SITE }); // handled, but not tallied as 'applied'
-    expect(ctx.syncSites._rows.get(SITE)!.reportedPullCursor).toBe(9); // piggyback still recorded
+    expect(await ctx.syncSiteCursors.get(SITE, 'sync-pull')).toBe(9); // piggyback still recorded
     expect(warnCalls.some((c) => JSON.stringify(c).includes('divergence'))).toBe(true);
   });
 });
@@ -407,7 +417,9 @@ describe('exportPullBundle / importPullBundle', () => {
     });
     // setting body is served from appSettings.get
     (ctx.appSettings as ReturnType<typeof fakeAppSettings>)._map.set('s1', 'on');
-    ctx.syncSites._rows.set(SITE, { siteId: SITE, status: 'active', signingPublicKey: null, reportedPullCursor: reportedCursor });
+    ctx.syncSites._rows.set(SITE, { siteId: SITE, status: 'active', signingPublicKey: null });
+    // exportPullBundle reads the site's reported 'sync-pull' position from syncSiteCursors (0 → full snapshot).
+    ctx.syncSiteCursors._cursors.set(`${SITE}::sync-pull`, reportedCursor);
     return ctx;
   }
 
@@ -441,7 +453,7 @@ describe('exportPullBundle / importPullBundle', () => {
         ],
       }),
     });
-    ctx.syncSites._rows.set(SITE, { siteId: SITE, status: 'active', signingPublicKey: null, reportedPullCursor: 0 });
+    ctx.syncSites._rows.set(SITE, { siteId: SITE, status: 'active', signingPublicKey: null });
 
     const { manifest } = await exportPullBundle(ctx, { siteId: SITE });
     expect(manifest).toMatchObject({ kind: 'pull', siteId: SITE, fromCursor: 0, toCursor: 1, recordCount: 1, signerKeyId: 'central' });

@@ -10,7 +10,7 @@
 //      PUBLIC key (sync_sites.signing_public_key) and never the private key.
 //   2. PUSH round-trip: the lab exports a signed push bundle of its change_log window to a file, central
 //      imports the file bytes, and every seeded resource is mirrored at its ORIGIN version with the
-//      origin site_id + central records the piggybacked lab pull cursor (reported_pull_cursor).
+//      origin site_id + central records the piggybacked lab 'sync-pull' cursor (sync_site_cursors).
 //   3. Tamper / wrong-key rejection: a byte-tampered payload and a bundle re-signed with a throwaway key
 //      are both rejected with BundleSignatureError, and a re-import of the GOOD bundle is idempotent
 //      (applyRemote monotonic → nothing re-applied).
@@ -284,9 +284,9 @@ async function main(): Promise<void> {
     const cenStamp = await centralCtx.internalDb.selectFrom('fhir.change_log').select(['resource_id', 'site_id']).where('resource_id', 'in', SEED_IDS).execute();
     assert(cenStamp.length === 5, `central change_log has 5 rows for the seed (got ${cenStamp.length})`);
     assert(cenStamp.every((r) => r.site_id === SITE_ID), `every central change_log seed row carries origin site_id='${SITE_ID}'`);
-    // reported_pull_cursor is set from the manifest's piggybacked lab 'sync-pull' position.
-    const reported = await centralCtx.syncSites.getReportedPullCursor(SITE_ID);
-    assert(reported === (pushManifest.pullCursor ?? 0), `central recorded reported_pull_cursor=${reported} from the piggyback (manifest.pullCursor=${pushManifest.pullCursor})`);
+    // The reported 'sync-pull' cursor is set from the manifest's piggybacked lab position.
+    const reported = await centralCtx.syncSiteCursors.get(SITE_ID, 'sync-pull');
+    assert(reported === (pushManifest.pullCursor ?? 0), `central recorded sync-pull cursor=${reported} from the piggyback (manifest.pullCursor=${pushManifest.pullCursor})`);
     pass('(push) all 5 mirrored at origin version + origin site_id; piggybacked pull cursor recorded');
 
     // ── 5. Tamper + wrong-key rejection + idempotent re-import. ──

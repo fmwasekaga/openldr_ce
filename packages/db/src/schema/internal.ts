@@ -93,6 +93,15 @@ export interface SyncDivergencesTable {
   detected_at: Generated<Date>;
 }
 
+// Distributed sync S7 (A1): each site's REPORTED consumed position per stream (migration 057).
+// See the migration comment: `seq` is NEVER clamped to max — it is a safety floor, not a counter.
+export interface SyncSiteCursorsTable {
+  site_id: string;
+  consumer: string;
+  seq: number;
+  reported_at: Generated<Date>;
+}
+
 export interface OutboxEventsTable {
   id: string;
   type: string;
@@ -608,8 +617,6 @@ export interface SyncSitesTable {
   // Sync S5: the site's ed25519 SPKI DER public key (hex) — central verifies the lab's push
   // bundles with it. The site's PRIVATE key is never persisted centrally.
   signing_public_key: string | null;
-  // Sync S5: last-applied lab 'sync-pull' position, piggybacked on pull requests (bigint → string).
-  reported_pull_cursor: string | null;
 }
 
 // Workflow secret store (SEC-06): encrypted at-rest store for secrets extracted from workflow
@@ -631,6 +638,7 @@ export interface InternalSchema {
   sync_amendments: SyncAmendmentsTable;
   sync_quarantine: SyncQuarantineTable;
   sync_divergences: SyncDivergencesTable;
+  sync_site_cursors: SyncSiteCursorsTable;
   outbox_events: OutboxEventsTable;
   ingest_batches: IngestBatchesTable;
   plugins: PluginsTable;

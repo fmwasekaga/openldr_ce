@@ -55,6 +55,8 @@ import * as m053 from './053_workflow_secrets';
 import * as m054 from './054_sync_amendments';
 import * as m055 from './055_sync_quarantine';
 import * as m056 from './056_sync_divergences';
+import * as m057 from './057_sync_site_cursors';
+import * as m058 from './058_drop_reported_pull_cursor';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -113,4 +115,6 @@ export const internalMigrations: Record<string, Migration> = {
   '054_sync_amendments': { up: m054.up, down: m054.down },
   '055_sync_quarantine': { up: m055.up, down: m055.down },
   '056_sync_divergences': { up: m056.up, down: m056.down },
+  '057_sync_site_cursors': { up: m057.up, down: m057.down },
+  '058_drop_reported_pull_cursor': { up: m058.up, down: m058.down },
 };

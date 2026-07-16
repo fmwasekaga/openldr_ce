@@ -176,6 +176,17 @@ export function registerSyncRoutes(app: FastifyInstance<any, any, any, any>, ctx
     // (Sync S5) reuses it verbatim. The HTTP route serves everything servePull returns (S3 behaviour
     // unchanged); only the bundle exporter filters terminology signals out.
     const { records, nextSeq } = await servePull(ctx, fromSeq);
+
+    // S7 (A1): record what this lab says it has consumed, so a later slice can trim
+    // reference_change_log / sync_amendments against the SLOWEST site. fromSeq — what it HAS — not
+    // nextSeq, which it may fail to apply. Best-effort: a failure here leaves the floor stale-LOW, so
+    // a later slice trims LESS. Never fail a pull over bookkeeping.
+    try {
+      await ctx.syncSiteCursors.report(principal.siteId, 'sync-pull', fromSeq);
+    } catch (err) {
+      ctx.logger.warn({ err, siteId: principal.siteId }, 'sync pull: failed to record the reported cursor');
+    }
+
     return reply.code(200).send({ records, nextSeq });
   });
 
@@ -191,6 +202,16 @@ export function registerSyncRoutes(app: FastifyInstance<any, any, any, any>, ctx
     const fromSeq = typeof rawFrom === 'number' && Number.isFinite(rawFrom) ? rawFrom : 0;
 
     const { records, nextSeq } = await serveAmendments(ctx, principal.siteId, fromSeq);
+
+    // S7 (A1): same recording as /api/sync/pull, under the amendments' OWN consumer key so the two
+    // logs (reference_change_log vs sync_amendments) get independent floors. Best-effort — see the
+    // comment above the /api/sync/pull recording for why a failure here must never fail the pull.
+    try {
+      await ctx.syncSiteCursors.report(principal.siteId, 'sync-amend-pull', fromSeq);
+    } catch (err) {
+      ctx.logger.warn({ err, siteId: principal.siteId }, 'sync amendment pull: failed to record the reported cursor');
+    }
+
     return reply.code(200).send({ records, nextSeq });
   });
 

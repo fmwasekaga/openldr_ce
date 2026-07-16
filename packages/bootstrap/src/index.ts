@@ -34,7 +34,7 @@ import { createReportScheduler, type ReportScheduler } from './report-scheduler'
 import { createPluginScheduleApi, createPluginScheduleRunner, type PluginScheduleRunner } from './plugin-schedule';
 import { createFormArtifactInstaller, type FormArtifactInstaller } from './form-artifact-install';
 import { type PluginRuntime } from '@openldr/plugins';
-import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore } from '@openldr/db';
+import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
 import { createSyncPushRunner, createSyncPullRunner, createAmendmentPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, combineCycleResults, type PushBatch, type PushResponse, type SyncConfig } from '@openldr/sync';
@@ -287,6 +287,11 @@ export interface AppContext {
   /** Sync S4d: central-side registry of enrolled labs (site_id → client_id, status, who/when).
    *  Never stores the client secret. The enrollment orchestrator writes here + ctx.auth.clients. */
   syncSites: SyncSiteStore;
+  /** Sync S7 (A1): what each lab reports it has consumed of the two central-side logs it pulls
+   *  (reference_change_log, sync_amendments). Built unconditionally (see the construction site,
+   *  beside the quarantine/divergence stores) — a later retention slice reads these on any node,
+   *  regardless of which sync workers this boot started. Nothing trims against them yet. */
+  syncSiteCursors: SyncSiteCursorStore;
   workflows: {
     store: WorkflowStore;
     runs: WorkflowRunStore;
@@ -740,6 +745,10 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   // operator on a push-only or sync-disabled node must still be able to list/clear them. (S7-A shipped
   // exactly this bug first: listQuarantine was hidden on non-pull nodes until the final review caught it.)
   const syncDivergences = createSyncDivergenceStore(internal.db);
+  // S7 (A1): what each lab reports it has consumed. Built UNCONDITIONALLY, like the quarantine and
+  // divergence stores beside it: the rows are durable and a later retention slice must read them on
+  // any node. Nothing trims against them yet — this slice only records.
+  const syncSiteCursors = createSyncSiteCursorStore(internal.db);
   let syncRetryQuarantine: ((entityType: string, entityId: string) => Promise<{ ok: boolean; error?: string }>) | undefined;
   const QUARANTINE_THRESHOLD = 3; // Sync S7-A: consecutive bulk-apply failures before quarantine
   const syncDecrypt = (blob: string): string => open(blob, parseSecretKey(cfg.SECRETS_ENCRYPTION_KEY ?? ''));
@@ -1116,6 +1125,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     reportDefs: reportDefStore,
     reportCategories,
     syncSites,
+    syncSiteCursors,
     workflows,
     plugins,
     pluginData,

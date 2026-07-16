@@ -53,11 +53,13 @@ import {
 import {
   createSyncPushRunner,
   createSyncPullRunner,
+  createAmendmentPullRunner,
   createSyncTokenProvider,
   type PushBatch,
   type PushResponse,
   type PullRequest,
   type PullResponse,
+  type AmendmentPullResponse,
 } from '@openldr/sync';
 import { loadConfig, type Config } from '@openldr/config';
 import { createAppContext, enrollSite, revokeSite, type AppContext } from '@openldr/bootstrap';
@@ -402,6 +404,94 @@ async function main(): Promise<void> {
     assert((labDash as { managed_origin?: string } | undefined)?.managed_origin === 'central', `lab dashboard stamped managed_origin='central'`);
     assert((labDash as { name?: string } | undefined)?.name === 'E2E Round-trip Dashboard', `lab dashboard name mirrored central's`);
     pass('(pull) central-managed dashboard landed on the lab stamped managed_origin=central, over real HTTP + real token');
+
+    // The lab's FINAL 'sync-pull' cursor. The drain above ran a final catch-up cycle at this fully-drained
+    // position, and central's /api/sync/pull route records fromSeq (what the lab HAS) on EVERY request —
+    // so central's last recorded 'sync-pull' value equals this number. Captured now for the S7 A1 assertion
+    // below; it is > 0 because reference data was applied (pullApplied >= 1).
+    const labPullCursor = await pullCursor();
+
+    // ── 5b. AMENDMENT PULL (central → lab) over REAL HTTP. This is the ONLY live exercise of
+    //    /api/sync/pull-amendments in the whole suite (sync:amend:accept calls serveAmendments IN-PROCESS
+    //    and says so — "does NOT stand up Fastify/JWKS"), and therefore the only place T5's
+    //    'sync-amend-pull' recording is reachable over the wire. Central amends the lab-owned Observation
+    //    it mirrored during push (→ v2 + a Provenance = two sync_amendments outbox rows for this site);
+    //    the lab drains its amendment stream back down through the real route + real token. ──
+    step('5b. AMEND central → lab over real HTTP (POST /api/sync/pull-amendments, real bearer token)');
+    const amendResult = await centralCtx.fhirStore.amend({
+      resourceType: 'Observation',
+      id: obsId,
+      status: 'amended',
+      patch: { valueQuantity: { value: 14.2, unit: 'g/dL' } },
+      agent: 'central-reviewer',
+      reason: 'E2E QC re-run: hemoglobin corrected 13.5 → 14.2 g/dL',
+    });
+    assert(amendResult.siteId === SITE_ID, `central amendment routed to the owning lab '${SITE_ID}' (got '${amendResult.siteId}')`);
+    const amendOutbox = await centralCtx.internalDb
+      .selectFrom('sync_amendments')
+      .select((eb) => eb.fn.max('seq').as('m'))
+      .where('site_id', '=', SITE_ID)
+      .executeTakeFirst();
+    const amendSeqTarget = amendOutbox?.m != null ? Number(amendOutbox.m) : 0;
+    ok(`central amended Observation ${obsId} → v${amendResult.version}; central sync_amendments max(seq)=${amendSeqTarget}`);
+
+    const amendPullRunner = createAmendmentPullRunner({
+      getToken: () => tokenProvider.getToken(),
+      applyRecord: (rec) => labCtx!.fhirStore.applyRemote(rec),
+      postPull: async (req: PullRequest, token: string): Promise<AmendmentPullResponse> => {
+        const res = await fetch(`${centralUrl}/api/sync/pull-amendments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(req),
+        });
+        if (!res.ok) throw new Error(`sync amend pull POST /api/sync/pull-amendments failed: central responded ${res.status}`);
+        return (await res.json()) as AmendmentPullResponse;
+      },
+      readCursor: () => readCursor(labCtx!.internalDb, 'sync-amend-pull'),
+      advanceCursor: (seq) => advanceCursor(labCtx!.internalDb, 'sync-amend-pull', seq),
+      logger: runnerLogger,
+    });
+
+    // Same CycleResult (S7) drain shape as the push/pull sides above.
+    const amendCursorRead = () => readCursor(labCtx!.internalDb, 'sync-amend-pull');
+    let amendApplied = 0;
+    let amendOutcome = '';
+    for (let i = 0; i < 50; i++) {
+      const before = await amendCursorRead();
+      const r = await amendPullRunner.runCycle();
+      const after = await amendCursorRead();
+      amendApplied += r.applied;
+      amendOutcome = r.outcome;
+      if (r.applied === 0 && after === before) break;
+      await sleep(20);
+    }
+    assert(amendApplied === 2, `lab applied both amendment records (Observation v2 + Provenance) over HTTP (got ${amendApplied})`);
+    assert(amendOutcome === 'drained', `amend drain finishes on a 'drained' cycle over real HTTP (got '${amendOutcome}')`);
+    const labAmendCursor = await amendCursorRead();
+    assert(labAmendCursor >= amendSeqTarget, `lab 'sync-amend-pull' cursor reached max amendment seq (${labAmendCursor} >= ${amendSeqTarget})`);
+    const labAmendedObs = (await labCtx.fhirStore.get('Observation', obsId)) as { status?: string } | null;
+    assert(labAmendedObs?.status === 'amended', `lab Observation converged to 'amended' after the HTTP amend pull (got '${labAmendedObs?.status}')`);
+    pass('(amend) central-authored amendment landed on the lab over real HTTP + real token');
+
+    // ── 5c. THE SLICE UNDER TEST (S7 A1): central recorded each site's REPORTED cursor from the two real
+    //    HTTP pull routes, so a later slice can trim reference_change_log / sync_amendments against the
+    //    slowest site. The recorded floor is fromSeq — what the lab HAS — captured on every request; each
+    //    drain above ran a final catch-up cycle at its fully-drained cursor, so central's last recorded
+    //    value per consumer equals the lab's final cursor for that stream. That equality is only reachable
+    //    if the recording actually fired: a never-reported site reads EXACTLY 0 (store default), so this
+    //    fails hard the moment either T5 report() call is gone — never a vacuous `>= 0`. ──
+    step('5d. central recorded the lab-reported pull + amend cursors over the REAL HTTP routes (S7 A1)');
+    const pullCur = await centralCtx.syncSiteCursors.get(SITE_ID, 'sync-pull');
+    assert(
+      labPullCursor > 0 && pullCur === labPullCursor,
+      `central recorded 'sync-pull' cursor for ${SITE_ID} == lab's final pull cursor (${pullCur} === ${labPullCursor})`,
+    );
+    const amendCur = await centralCtx.syncSiteCursors.get(SITE_ID, 'sync-amend-pull');
+    assert(
+      labAmendCursor > 0 && amendCur === labAmendCursor,
+      `central recorded 'sync-amend-pull' cursor for ${SITE_ID} == lab's final amend cursor (${amendCur} === ${labAmendCursor})`,
+    );
+    pass('(S7 A1) both reported cursors landed on central from the real HTTP pull routes');
   } catch (e) {
     if (failures === 0) failures++;
     console.error('\n[FAIL]', e instanceof Error ? e.stack : e);
