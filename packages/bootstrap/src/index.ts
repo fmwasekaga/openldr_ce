@@ -728,6 +728,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   // decrypted with the same SECRETS_ENCRYPTION_KEY / open() scheme the connector store uses.
   let syncPushWorker: SyncPushWorker | undefined;
   let syncPullWorker: SyncPullWorker | undefined;
+  let syncPushListenClient: pg.Client | undefined;
   // Sync S7-A: the quarantine store is built UNCONDITIONALLY — it only needs internal.db, and listing is
   // "just reads the table". A push-only node, a sync-disabled node, or a boot where readSyncConfig
   // degraded to disabled all still have durable quarantine rows from earlier boots, and an operator
@@ -822,9 +823,25 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
         advanceCursor: (seq) => advanceChangeCursor(internal.db, 'sync-push', seq),
         logger,
       });
+      // S7: a DEDICATED LISTEN client wakes the push drain the moment a resource is written, instead
+      // of waiting up to sync.interval_minutes. Mirrors the projection worker's client (index.ts:704).
+      // It must be its own connection — `pg` LISTEN on a pooled client is unreliable, and a missed
+      // NOTIFY here degrades silently to interval-only (it still "works", just slowly).
+      // Interval polling remains the correctness-bearing path: if this cannot connect (pooled or
+      // serverless PG), push degrades to exactly the pre-S7 cadence rather than failing boot.
+      const pushListenClient = new pg.Client({ connectionString: cfg.INTERNAL_DATABASE_URL });
+      let pushListenConnected = true;
+      try {
+        await pushListenClient.connect();
+      } catch (e) {
+        pushListenConnected = false;
+        logger.warn({ err: e }, 'sync push worker: LISTEN client failed to connect; falling back to interval-only polling');
+      }
+      if (pushListenConnected) syncPushListenClient = pushListenClient;
       syncPushWorker = createSyncPushWorker({
         runner: { runCycle: () => syncPushRunner.runCycle() },
         intervalMs,
+        listenClient: syncPushListenClient,
         logger,
       });
       syncPushWorker.start();
@@ -1118,6 +1135,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       syncPullWorker?.stop();
       await projectionWorker.stop();
       if (projectionListenConnected) await projectionListenClient.end().catch(() => undefined);
+      if (syncPushListenClient) await syncPushListenClient.end().catch(() => undefined);
       await Promise.allSettled([eventing.close(), store.close(), internal.close()]);
     },
   };
