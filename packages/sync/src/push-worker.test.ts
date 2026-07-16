@@ -79,7 +79,7 @@ describe('createSyncPushRunner', () => {
       logger: fakeLogger(),
     };
 
-    const applied = await createSyncPushRunner(deps).runCycle();
+    const result = await createSyncPushRunner(deps).runCycle();
 
     expect(pushes).toHaveLength(1);
     expect(pushes[0].token).toBe('tok-123');
@@ -93,7 +93,8 @@ describe('createSyncPushRunner', () => {
     expect(recs[1]).toMatchObject({ resourceType: 'Patient', id: 'p2', version: 6, op: 'delete', siteId: 'lab-a', seq: 2 });
     expect(recs[1].resource).toBeUndefined();
     expect(advancedTo).toBe(2);
-    expect(applied).toBe(2);
+    expect(result.outcome).toBe('progressed');
+    expect(result.applied).toBe(2);
   });
 
   it('advances the cursor to central ackSeq on success (not the local frontier)', async () => {
@@ -137,8 +138,9 @@ describe('createSyncPushRunner', () => {
       logger,
     };
 
-    const applied = await createSyncPushRunner(deps).runCycle();
-    expect(applied).toBe(0);
+    const result = await createSyncPushRunner(deps).runCycle();
+    expect(result.outcome).toBe('failed');
+    expect(result.applied).toBe(0);
     expect(readCursor).toHaveBeenCalledTimes(1);
     expect(advanceCursor).not.toHaveBeenCalled();
     expect(logger.errors).toHaveLength(1);
@@ -164,8 +166,9 @@ describe('createSyncPushRunner', () => {
       logger,
     };
 
-    const applied = await createSyncPushRunner(deps).runCycle();
-    expect(applied).toBe(1);
+    const result = await createSyncPushRunner(deps).runCycle();
+    expect(result.outcome).toBe('progressed');
+    expect(result.applied).toBe(1);
     expect(advancedTo).toBe(2); // advanced PAST the rejected seq 2 — never blocks the stream
     expect(logger.warns).toHaveLength(1);
     expect(logger.warns[0]).toMatchObject({ id: 'p2', version: 6, seq: 2, reason: 'schema-invalid' });
@@ -206,14 +209,16 @@ describe('createSyncPushRunner', () => {
 
     const runner = createSyncPushRunner(deps);
 
-    const applied1 = await runner.runCycle();
-    expect(applied1).toBe(1);
+    const result1 = await runner.runCycle();
+    expect(result1.outcome).toBe('progressed');
+    expect(result1.applied).toBe(1);
     expect(pushes[0].records.map((r) => r.id)).toEqual(['p5']); // only the SAFE prefix (seq7 > frontier 5)
     expect(pushes[0].records[0].seq).toBe(5);
     expect(cursorVal).toBe(5);
 
-    const applied2 = await runner.runCycle();
-    expect(applied2).toBe(1);
+    const result2 = await runner.runCycle();
+    expect(result2.outcome).toBe('progressed');
+    expect(result2.applied).toBe(1);
     expect(pushes[1].records.map((r) => r.id)).toEqual(['p7']); // gap6 confirmed via CARRIED pendingGaps
     expect(pushes[1].records[0].seq).toBe(7);
     expect(cursorVal).toBe(7);
@@ -237,8 +242,9 @@ describe('createSyncPushRunner', () => {
       logger,
     };
 
-    const applied = await createSyncPushRunner(deps).runCycle();
-    expect(applied).toBe(0);
+    const result = await createSyncPushRunner(deps).runCycle();
+    expect(result.outcome).toBe('failed');
+    expect(result.applied).toBe(0);
     expect(postPush).not.toHaveBeenCalled(); // failed before transport
     expect(advanceCursor).not.toHaveBeenCalled();
     expect(logger.errors).toHaveLength(1);
@@ -269,12 +275,13 @@ describe('createSyncPushRunner', () => {
       logger,
     };
 
-    const applied = await createSyncPushRunner(deps).runCycle();
+    const result = await createSyncPushRunner(deps).runCycle();
     expect(pushes).toHaveLength(1);
     expect(pushes[0].records.map((r) => r.id)).toEqual(['p2']); // p1 skipped, not a bodiless upsert
     expect(logger.warns.some((w) => (w as { id?: string }).id === 'p1')).toBe(true);
     expect(advancedTo).toBe(2); // cursor still advances past the skipped record (quarantine)
-    expect(applied).toBe(1);
+    expect(result.outcome).toBe('progressed');
+    expect(result.applied).toBe(1);
   });
 
   it('skips records with null site_id (M1) or missing meta (M2); an all-skipped cycle advances without pushing', async () => {
@@ -300,8 +307,9 @@ describe('createSyncPushRunner', () => {
       logger,
     };
 
-    const applied = await createSyncPushRunner(deps).runCycle();
-    expect(applied).toBe(0);
+    const result = await createSyncPushRunner(deps).runCycle();
+    expect(result.outcome).toBe('drained');
+    expect(result.applied).toBe(0);
     expect(pushed).toBe(false); // nothing pushed — every record was a defensive skip
     expect(logger.warns).toHaveLength(2); // one for null site_id, one for missing meta
     expect(advancedTo).toBe(2); // frontier still advances so the bad rows are not re-scanned forever
@@ -348,9 +356,73 @@ describe('createSyncPushRunner', () => {
       logger: fakeLogger(),
     };
 
-    const applied = await createSyncPushRunner(deps).runCycle();
-    expect(applied).toBe(0);
+    const result = await createSyncPushRunner(deps).runCycle();
+    expect(result.outcome).toBe('drained');
+    expect(result.applied).toBe(0);
     expect(pushed).toBe(false);
     expect(advanceCursor).not.toHaveBeenCalled(); // frontier held before the in-flight gap (newCursor === cursor)
+  });
+
+  it('reports drained when there is nothing to push (no network call)', async () => {
+    let posted = 0;
+    const deps: PushDeps = {
+      internalDb: fakeDb([]),
+      fetchSafeRows: fetchQueue([{ rows: [], boundary: 0, xmax: 0 }]),
+      fetchContent: okContent,
+      postPush: async () => {
+        posted++;
+        throw new Error('must not post');
+      },
+      getToken: async () => 't',
+      readCursor: async () => 0,
+      advanceCursor: async () => {},
+      logger: fakeLogger(),
+    };
+
+    const r = await createSyncPushRunner(deps).runCycle();
+    expect(r.outcome).toBe('drained');
+    expect(r.applied).toBe(0);
+    expect(posted).toBe(0);
+  });
+
+  it('reports failed when the transport throws, and does not advance the cursor', async () => {
+    let cursor = 0;
+    const deps: PushDeps = {
+      internalDb: fakeDb([{ seq: 1, version: 1, site_id: 's' }]),
+      fetchSafeRows: fetchQueue([{ rows: [row(1, 10, 'p1')], boundary: 100, xmax: 200 }]),
+      fetchContent: okContent,
+      postPush: async () => {
+        throw new Error('central down');
+      },
+      getToken: async () => 't',
+      readCursor: async () => cursor,
+      advanceCursor: async (s) => {
+        cursor = s;
+      },
+      logger: fakeLogger(),
+    };
+
+    const r = await createSyncPushRunner(deps).runCycle();
+    expect(r.outcome).toBe('failed');
+    expect(cursor).toBe(0);
+  });
+
+  it('reports progressed on a posted window — even when central applied 0', async () => {
+    // The window WAS processed and the cursor advanced; `applied` is reporting only. A drain loop
+    // keying off the count would stop here with records still queued.
+    const deps: PushDeps = {
+      internalDb: fakeDb([{ seq: 1, version: 1, site_id: 's' }]),
+      fetchSafeRows: fetchQueue([{ rows: [row(1, 10, 'p1')], boundary: 100, xmax: 200 }]),
+      fetchContent: okContent,
+      postPush: async () => ({ ackSeq: 5, applied: 0, skipped: 0, rejects: [] }),
+      getToken: async () => 't',
+      readCursor: async () => 0,
+      advanceCursor: async () => {},
+      logger: fakeLogger(),
+    };
+
+    const r = await createSyncPushRunner(deps).runCycle();
+    expect(r.outcome).toBe('progressed');
+    expect(r.applied).toBe(0);
   });
 });

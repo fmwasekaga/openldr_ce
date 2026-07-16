@@ -1,6 +1,7 @@
 import type { FhirResource } from '@openldr/fhir';
 import { planProjection, type ChangeRow, type FetchSafeRows, type Gap, type Logger } from '@openldr/db';
 import type { PushBatch, PushResponse, SyncRecord } from './batch';
+import type { CycleResult } from './cycle-result';
 
 // The internal Kysely handle, derived from FetchSafeRows' first parameter (Kysely<InternalSchema>) so
 // this package needs no direct `kysely` dependency.
@@ -23,7 +24,7 @@ export interface PushDeps {
 }
 
 export interface SyncPushRunner {
-  runCycle(): Promise<number>;
+  runCycle(): Promise<CycleResult>;
 }
 
 // Map each SAFE change row to a wire `SyncRecord`, resolving version/siteId from the batched change_log
@@ -115,7 +116,7 @@ export async function collectPushRecords(
 export function createSyncPushRunner(deps: PushDeps): SyncPushRunner {
   let pendingGaps: Gap[] = [];
   return {
-    async runCycle(): Promise<number> {
+    async runCycle(): Promise<CycleResult> {
       const cursor = await deps.readCursor();
       // Compute the window's records via the shared safe-frontier collector (byte-identical to what an
       // S5 offline push bundle carries). It threads `pendingGaps` in + out of this stateful closure.
@@ -129,7 +130,7 @@ export function createSyncPushRunner(deps: PushDeps): SyncPushRunner {
         // guard). Still advance past any confirmed-rolled-back gaps the planner cleared, exactly like
         // projection moves its frontier over a pure-gap cycle.
         if (newCursor > cursor) await deps.advanceCursor(newCursor);
-        return 0;
+        return { outcome: 'drained', applied: 0 };
       }
 
       let resp: PushResponse;
@@ -141,7 +142,7 @@ export function createSyncPushRunner(deps: PushDeps): SyncPushRunner {
       } catch (err) {
         // Transport/HTTP/token failure: leave the cursor put so the same window retries next cycle.
         deps.logger.error({ err, fromSeq: cursor, count: records.length }, 'sync push failed; cursor not advanced (will retry)');
-        return 0;
+        return { outcome: 'failed', applied: 0 };
       }
 
       // A persistently-rejected record never blocks the stream: it's logged, and because the cursor
@@ -162,7 +163,10 @@ export function createSyncPushRunner(deps: PushDeps): SyncPushRunner {
 
       // Report the count central durably applied (not records.length), so a partially-rejected batch
       // reflects real work done.
-      return resp.applied;
+      // 'progressed' because the WINDOW was processed and the cursor advanced — NOT because applied
+      // is non-zero. A batch central rejected or diverged wholesale still progressed the cursor, and
+      // a drain loop must go again.
+      return { outcome: 'progressed', applied: resp.applied };
     },
   };
 }
