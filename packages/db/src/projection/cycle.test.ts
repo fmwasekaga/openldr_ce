@@ -49,6 +49,34 @@ describe('runProjectionCycle', () => {
     await internalDb.destroy();
     await externalDb.destroy();
   });
+
+  it('carries provenance from the canonical row into the projected row', async () => {
+    // The bug this file never caught: applyProjection called write(canonical) with
+    // no provenance, and write() defaulted it to {} — so source_system/plugin_id/
+    // plugin_version/batch_id were NULL in EVERY projected row, for every producer,
+    // silently defeating the batchId design in persist-store-service.ts:11-17.
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const fhirStore = createFhirStore(internalDb as never);
+    const relationalWriter = createRelationalWriter(externalDb as never, 'postgres');
+    await fhirStore.save(
+      { resourceType: 'Patient', id: 'p1', name: [{ family: 'A' }] } as never,
+      { sourceSystem: 'cdr', batchId: 'batch-1' },
+    );
+
+    const fetch: FetchSafeRows = async () => ({
+      rows: [{ seq: 1, xid: 1, resource_type: 'Patient', resource_id: 'p1', op: 'upsert' }],
+      boundary: 100,
+      xmax: 200,
+    });
+    await createProjectionRunner({ internalDb: internalDb as never, fhirStore, relationalWriter, logger, fetch, batchSize: 500 }).runCycle();
+
+    const [row] = await externalDb.selectFrom('patients').selectAll().execute();
+    expect(row.source_system).toBe('cdr');
+    expect(row.batch_id).toBe('batch-1');
+    await internalDb.destroy();
+    await externalDb.destroy();
+  });
 });
 
 describe('createProjectionRunner (stateful gaps across cycles)', () => {
