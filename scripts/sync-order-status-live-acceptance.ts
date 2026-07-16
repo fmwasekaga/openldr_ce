@@ -213,9 +213,10 @@ async function main(): Promise<void> {
       } as never,
     });
 
-    const applied1 = await runner.runCycle();
-    ok(`drain cycle #1 applied ${applied1} record(s); cursor now ${amendCursor}`);
-    assert(applied1 === 2, `lab applied 2 amendment records (ServiceRequest v2 + Provenance) (got ${applied1})`);
+    const cycle1 = await runner.runCycle();
+    ok(`drain cycle #1 applied ${cycle1.applied} record(s), outcome '${cycle1.outcome}'; cursor now ${amendCursor}`);
+    assert(cycle1.applied === 2, `lab applied 2 amendment records (ServiceRequest v2 + Provenance) (got ${cycle1.applied})`);
+    assert(cycle1.outcome === 'progressed', `drain cycle #1 reports outcome 'progressed' (got '${cycle1.outcome}')`);
 
     // ── 4. Assertions at the lab: converged to the completed order, 'UPDATE' Provenance, site preserved ──
     step('4. assert lab converged: completed v2 + UPDATE Provenance + owning site preserved');
@@ -300,8 +301,9 @@ async function main(): Promise<void> {
     // ── 7. Idempotent re-drain: a second cycle applies 0 and does not move the cursor ──
     step('7. assert idempotent re-drain: second cycle applies 0, cursor unchanged');
     const cursorBefore = amendCursor;
-    const applied2 = await runner.runCycle();
-    assert(applied2 === 0, `second drain cycle applied 0 records (got ${applied2})`);
+    const cycle2 = await runner.runCycle();
+    assert(cycle2.applied === 0, `second drain cycle applied 0 records (got ${cycle2.applied})`);
+    assert(cycle2.outcome === 'drained', `second drain cycle reports outcome 'drained' (got '${cycle2.outcome}')`);
     assert(amendCursor === cursorBefore, `cursor unchanged after idempotent re-drain (${amendCursor} === ${cursorBefore})`);
     pass('idempotent: no re-apply, no cursor drift');
   } catch (e) {
