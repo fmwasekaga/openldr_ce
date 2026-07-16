@@ -308,11 +308,51 @@ describe('createSyncPushRunner', () => {
     };
 
     const result = await createSyncPushRunner(deps).runCycle();
-    expect(result.outcome).toBe('drained');
+    // The cursor ADVANCED (see advancedTo below), so per spec §5.1.1 this is 'progressed', not 'drained'
+    // — 'drained' would stop the host's drain loop even though there is more backlog to collect at the
+    // new cursor. See the dedicated regression test below for the full failure scenario this guards.
+    expect(result.outcome).toBe('progressed');
     expect(result.applied).toBe(0);
     expect(pushed).toBe(false); // nothing pushed — every record was a defensive skip
     expect(logger.warns).toHaveLength(2); // one for null site_id, one for missing meta
     expect(advancedTo).toBe(2); // frontier still advances so the bad rows are not re-scanned forever
+  });
+
+  it('a guard-skipped window that advances the cursor reports progressed, not drained (regression: 30h backlog-drain bug)', async () => {
+    // Scenario from the slice's headline use case: a lab bulk-imports a large backlog BEFORE
+    // sync.site_id is set, so every imported change_log row carries site_id = null. Sync is then
+    // enabled. Each cycle: fetchSafeRows returns a full window, every row is skipped by the M1 null
+    // site_id guard, but newCursor > cursor (the frontier still moved past the skipped window). If this
+    // reported 'drained', the host drain loop would stop after ONE window per tick — the exact pre-S7
+    // rate (500 records / 15 min tick) this slice exists to fix. It must report 'progressed' so the
+    // drain loop re-reads the cursor and keeps collecting new windows within the same time budget.
+    let pushed = false;
+    let advancedTo: number | undefined;
+    const logger = fakeLogger();
+    const deps: PushDeps = {
+      internalDb: fakeDb([
+        { seq: 1, version: 1, site_id: null },
+        { seq: 2, version: 1, site_id: null },
+      ]),
+      fetchSafeRows: fetchQueue([{ rows: [row(1, 10, 'p1', 'upsert'), row(2, 10, 'p2', 'upsert')], boundary: 100, xmax: 200 }]),
+      fetchContent: okContent,
+      postPush: async () => {
+        pushed = true;
+        return { ackSeq: 2, applied: 0, skipped: 0, rejects: [] };
+      },
+      getToken: async () => 't',
+      readCursor: async () => 0,
+      advanceCursor: async (s) => {
+        advancedTo = s;
+      },
+      logger,
+    };
+
+    const result = await createSyncPushRunner(deps).runCycle();
+    expect(result.outcome).toBe('progressed'); // cursor advanced → drain loop must continue
+    expect(result.applied).toBe(0);
+    expect(pushed).toBe(false); // nothing pushed — every record was a defensive skip
+    expect(advancedTo).toBe(2); // frontier advanced past the all-guard-skipped window
   });
 
   it('clamps a central ackSeq beyond the local frontier to newCursor (I2)', async () => {

@@ -130,7 +130,14 @@ export function createSyncPushRunner(deps: PushDeps): SyncPushRunner {
         // guard). Still advance past any confirmed-rolled-back gaps the planner cleared, exactly like
         // projection moves its frontier over a pure-gap cycle.
         if (newCursor > cursor) await deps.advanceCursor(newCursor);
-        return { outcome: 'drained', applied: 0 };
+        // Per spec §5.1.1, 'progressed' iff the CURSOR ADVANCED — not merely "a window was processed".
+        // A window whose every safe row was skipped by a defensive guard (e.g. M1 null site_id from a
+        // bulk import that predates sync.site_id being set) still moves newCursor past that window. That
+        // IS progress: the next cycle reads a new cursor and collects a NEW window, so it cannot spin.
+        // Reporting 'drained' here would be the pre-S7 rate (one window per host tick) applied to the
+        // exact backlog this slice exists to drain fast — e.g. a 60k-row guard-skipped backlog would take
+        // ~30 hours to even reach the healthy records, because 'drained' stops the drain loop cold.
+        return { outcome: newCursor > cursor ? 'progressed' : 'drained', applied: 0 };
       }
 
       let resp: PushResponse;
