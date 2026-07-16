@@ -162,7 +162,7 @@ A notification arriving mid-drain is absorbed by the existing no-overlap guard; 
 
 | Piece | Package / file |
 |---|---|
-| `CycleOutcome` / `CycleResult` wire-free types | `packages/sync/src/batch.ts` (beside the other shared types) |
+| `CycleOutcome` / `CycleResult` + `combineCycleResults` | `packages/sync/src/cycle-result.ts` **(new)** — *not* `batch.ts`: that file is exclusively **wire** types (11 `export interface`, no functions, all shapes that cross the network). `CycleResult` is an internal control signal that never goes on the wire, and `combineCycleResults` is a function. Same package, same barrel. |
 | Push runner returns `CycleResult` | `packages/sync/src/push-worker.ts` |
 | Pull runner returns `CycleResult` (incl. `held → failed`) | `packages/sync/src/pull-worker.ts` |
 | Amendment runner returns `CycleResult` | `packages/sync/src/amend-pull-worker.ts` |
