@@ -24,9 +24,12 @@ export interface ProjectionRunner {
 }
 
 async function applyProjection(task: ProjectionTask, deps: ProjectionDeps): Promise<void> {
-  const canonical = await deps.fhirStore.get(task.resourceType, task.id);
-  if (canonical) {
-    await deps.relationalWriter.write(canonical);
+  // getWithProvenance, not get: the projected row must carry the canonical row's
+  // source_system/plugin_id/plugin_version/batch_id, or the read model cannot say
+  // which producer or which run wrote it.
+  const found = await deps.fhirStore.getWithProvenance(task.resourceType, task.id);
+  if (found) {
+    await deps.relationalWriter.write(found.resource, found.provenance);
   } else {
     await deps.relationalWriter.deleteById(task.resourceType, task.id);
   }
@@ -78,7 +81,12 @@ export async function reprojectAll(deps: Pick<ProjectionDeps, 'internalDb' | 're
       .offset(offset)
       .execute();
     if (rows.length === 0) break;
-    await deps.relationalWriter.writeMany(rows.map((r) => ({ resource: r.resource })));
+    // reprojectAll's SELECT only fetches `resource` (see above), not the provenance
+    // columns, so there is nothing to carry here. `{}` is explicit rather than a
+    // default — same as before this slice made provenance required — and is out of
+    // scope to fix: that would mean re-fetching provenance for every row in a full
+    // rebuild, a separate change from the deferred-projection bug this slice targets.
+    await deps.relationalWriter.writeMany(rows.map((r) => ({ resource: r.resource, provenance: {} })));
     projected += rows.length;
     offset += rows.length;
     if (rows.length < page) break;

@@ -6,10 +6,14 @@ import { insertBatchPg, mergeBatchMssql, insertBatchMysql, type WriteResult } fr
 import { projectResource, tableForResourceType } from './relational/index';
 
 export type { WriteResult };
-export interface RelationalWriteItem { resource: unknown; provenance?: Provenance; }
+/** `provenance` is REQUIRED, deliberately. It used to default to `{}`, which made a
+ *  caller that forgot indistinguishable from one that meant it — and that is exactly
+ *  how the deferred projection wrote NULL source_system/batch_id into every row for
+ *  months. A caller with genuinely no provenance passes `{}` explicitly. */
+export interface RelationalWriteItem { resource: unknown; provenance: Provenance; }
 
 export interface RelationalWriter {
-  write(resource: unknown, provenance?: Provenance): Promise<WriteResult>;
+  write(resource: unknown, provenance: Provenance): Promise<WriteResult>;
   writeMany(items: RelationalWriteItem[]): Promise<WriteResult[]>;
   deleteById(resourceType: string, id: string): Promise<void>;
 }
@@ -23,7 +27,7 @@ export function createRelationalWriter(db: Kysely<ExternalSchema>, engine: Targe
     else await insertBatchPg(anyDb, table, rows);
   }
   return {
-    async write(resource, provenance = {}) {
+    async write(resource, provenance) {
       const p = projectResource(resource, provenance);
       if (!p) return 'skipped';
       await upsert(p.table, [p.row]);
@@ -33,7 +37,7 @@ export function createRelationalWriter(db: Kysely<ExternalSchema>, engine: Targe
       const results: WriteResult[] = new Array(items.length).fill('skipped');
       const byTable = new Map<string, Record<string, unknown>[]>();
       items.forEach((it, idx) => {
-        const p = projectResource(it.resource, it.provenance ?? {});
+        const p = projectResource(it.resource, it.provenance);
         if (!p) return;
         results[idx] = 'written';
         const list = byTable.get(p.table) ?? [];

@@ -36,7 +36,7 @@ describe('runProjectionCycle', () => {
     const fhirStore = createFhirStore(internalDb as never);
     const relationalWriter = createRelationalWriter(externalDb as never, 'postgres');
     await fhirStore.save({ resourceType: 'Patient', id: 'p1' } as never);
-    await relationalWriter.write({ resourceType: 'Patient', id: 'p1' });
+    await relationalWriter.write({ resourceType: 'Patient', id: 'p1' }, {});
     await fhirStore.delete('Patient', 'p1');
 
     const fetch: FetchSafeRows = async () => ({
