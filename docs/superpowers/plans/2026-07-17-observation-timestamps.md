@@ -157,6 +157,23 @@ git commit -m "feat(export): add disaDatestampToIso — timezone-safe DATESTAMP 
 by `flattenDisa` via `coerceDatestamp(test.DATESTAMP)` (`compare/result-mapping.ts:574`).
 `buildLabResults` is **private** — test through the public `toV2` (`v2-transform.ts:660`).
 
+> ### ⚠ THIS TASK'S TEST INHERITS A DEFECT FOUND IN TASK 1 — READ FIRST
+>
+> The test below feeds `Date.UTC(...)` through `toV2` and asserts **those same digits**. That means a
+> `getFullYear()/getHours()`-based (local-getters) implementation **passes on a UTC host** — the
+> assertion cannot distinguish correct from broken unless the host is non-UTC. Task 1 shipped exactly
+> this bug and it was caught only by *building the mutant*, not by reading.
+>
+> **Task 1's test file already pins `TZ` (commit `0cd9b7cd`)** — `process.env.TZ = 'Africa/Dar_es_Salaam'`
+> (no DST ⇒ constant `-180`), plus a **loud** `TZ pin took effect` test asserting
+> `getTimezoneOffset() === -180` so the suite fails rather than silently un-guarding.
+>
+> **You are appending to that same file, so you inherit the pin — but you MUST prove it covers your
+> new test too:** introduce a local-getters mutant, show your test goes **RED under `TZ=UTC`**, revert,
+> show GREEN. **Do not report this as done on a reasoned argument.** *(Note: an assertion that
+> distinguishes UTC from local components on **every** host is impossible — on a UTC host they are
+> identical for every input. Pinning is the only mechanism.)*
+
 - [ ] **Step 1: Write the failing test**
 
 Append to `apps/cli/src/export/v2-transform-datestamp.test.ts`. **Model the fixture on
