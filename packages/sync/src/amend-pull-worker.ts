@@ -1,5 +1,6 @@
 import type { ApplyResult, Logger } from '@openldr/db';
 import type { PullRequest, AmendmentPullResponse, SyncRecord } from './batch';
+import type { CycleResult } from './cycle-result';
 
 // Injected deps for the amendment pull runner (Sync S6a). Kept pure over its deps (fakeable in tests).
 // The bootstrap host wires applyRecord to fhirStore.applyRemote, postPull to POST
@@ -17,7 +18,7 @@ export interface AmendPullDeps {
 }
 
 export interface AmendmentPullRunner {
-  runCycle(): Promise<number>;
+  runCycle(): Promise<CycleResult>;
 }
 
 /** A stateful amendment pull runner. Each cycle reads the 'sync-amend-pull' cursor, asks central for the
@@ -28,7 +29,7 @@ export interface AmendmentPullRunner {
  *  it — one bad record can never wedge the stream. Advances to central's nextSeq, guarded `> cursor`. */
 export function createAmendmentPullRunner(deps: AmendPullDeps): AmendmentPullRunner {
   return {
-    async runCycle(): Promise<number> {
+    async runCycle(): Promise<CycleResult> {
       const cursor = await deps.readCursor();
       let resp: AmendmentPullResponse;
       try {
@@ -36,9 +37,9 @@ export function createAmendmentPullRunner(deps: AmendPullDeps): AmendmentPullRun
         resp = await deps.postPull({ fromSeq: cursor }, token);
       } catch (err) {
         deps.logger.warn({ err: (err as Error).message }, 'sync amend pull failed; cursor not advanced (will retry)');
-        return 0;
+        return { outcome: 'failed', applied: 0 };
       }
-      if (resp.records.length === 0) return 0;
+      if (resp.records.length === 0) return { outcome: 'drained', applied: 0 };
 
       let safeSeq = cursor;
       let applied = 0;
@@ -67,8 +68,24 @@ export function createAmendmentPullRunner(deps: AmendPullDeps): AmendmentPullRun
         deps.logger.warn({ diverged }, 'sync amendment pull: same-version divergence(s) detected — see sync_divergences');
       }
       const target = Math.max(safeSeq, resp.nextSeq);
-      if (target > cursor) await deps.advanceCursor(target);
-      return applied;
+      const advanced = target > cursor;
+      if (advanced) await deps.advanceCursor(target);
+      if (!advanced) {
+        // The window was processed but the cursor did not move — a stale/hostile response served
+        // records at or behind the cursor (nextSeq <= cursor). Reporting 'progressed' here would make
+        // the drain loop re-fetch this IDENTICAL window and hammer it until the budget expires — the
+        // same regression class the reference pull runner's hold guard and the push runner's
+        // central-acked-behind-cursor guard (S7) both exist to prevent.
+        deps.logger.error(
+          { cursor, safeSeq, nextSeq: resp.nextSeq, count: applied },
+          'sync amend pull: window processed but cursor did not advance; not looping (will retry next tick)',
+        );
+        return { outcome: 'failed', applied };
+      }
+      // 'progressed' because the cursor genuinely advanced — 'applied' stays a REPORTING count only. A
+      // window where every record diverges (excluded from `applied` at :49-50) or is quarantined still
+      // reports 'progressed' here, because the WINDOW was processed, not because a count is non-zero.
+      return { outcome: 'progressed', applied };
     },
   };
 }

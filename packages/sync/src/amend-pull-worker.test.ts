@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createAmendmentPullRunner } from './amend-pull-worker';
 import type { AmendmentPullResponse } from './batch';
 
@@ -21,8 +21,9 @@ describe('createAmendmentPullRunner', () => {
       advanceCursor: async (s) => { cursor = s; },
       logger: silent,
     });
-    const n = await runner.runCycle();
-    expect(n).toBe(2);
+    const r = await runner.runCycle();
+    expect(r.outcome).toBe('progressed');
+    expect(r.applied).toBe(2);
     expect(applied).toEqual(['a', 'b']);
     expect(cursor).toBe(6);
   });
@@ -38,7 +39,8 @@ describe('createAmendmentPullRunner', () => {
       advanceCursor: async (s) => { cursor = s; },
       logger: silent,
     });
-    await runner.runCycle();
+    const r = await runner.runCycle();
+    expect(r.outcome).toBe('progressed');
     expect(cursor).toBe(6);
   });
 
@@ -52,12 +54,30 @@ describe('createAmendmentPullRunner', () => {
       advanceCursor: async (s) => { cursor = s; },
       logger: silent,
     });
-    const n = await runner.runCycle();
-    expect(n).toBe(0);
+    const r = await runner.runCycle();
+    expect(r.outcome).toBe('failed');
+    expect(r.applied).toBe(0);
     expect(cursor).toBe(3);
   });
 
-  it('treats a diverged apply as handled — cursor advances, not counted as applied, and warns', async () => {
+  it('reports drained on an empty window', async () => {
+    let cursor = 4;
+    const runner = createAmendmentPullRunner({
+      getToken: async () => 't',
+      postPull: async () => ({ records: [], nextSeq: 4 }),
+      applyRecord: async () => 'applied',
+      readCursor: async () => cursor,
+      advanceCursor: async (s) => { cursor = s; },
+      logger: silent,
+    });
+    const r = await runner.runCycle();
+    // Asserted explicitly (not just falsy/zero) so an impl that returned 'failed' instead would be caught.
+    expect(r.outcome).toBe('drained');
+    expect(r.applied).toBe(0);
+    expect(cursor).toBe(4); // nothing to advance to
+  });
+
+  it('a fully-diverged window still reports progressed — applied is reporting, not control', async () => {
     const applied: unknown[] = [];
     const warnings: unknown[][] = [];
     const logger = { ...silent, warn: (...args: unknown[]) => { warnings.push(args); } };
@@ -71,12 +91,40 @@ describe('createAmendmentPullRunner', () => {
       advanceCursor: async (s) => { cursor = s; },
       logger: logger as any,
     });
-    const n = await runner.runCycle();
+    const r = await runner.runCycle();
     expect(applied).toHaveLength(1); // the record WAS inspected/applied-attempted
-    expect(n).toBe(0); // but NOT counted as 'applied' — it was dropped in favor of the local copy
+    // A window where EVERY record diverges genuinely progressed the cursor — 'applied' excludes
+    // diverged records from the count, but control (outcome) must key off the window, never the count.
+    // while (runCycle() > 0) would have stopped here with the backlog unsent; this is why CycleResult
+    // separates the two.
+    expect(r.outcome).toBe('progressed');
+    expect(r.applied).toBe(0); // but NOT counted as 'applied' — it was dropped in favor of the local copy
     expect(cursor).toBe(7); // handled, not quarantined — cursor still advances past it
     expect(warnings).toHaveLength(1);
     expect(warnings[0][0]).toMatchObject({ diverged: 1 });
     expect(warnings[0][1]).toMatch(/divergence/i);
+  });
+
+  it('reports failed (not progressed) when the window processed but the cursor could not advance — stale/hostile nextSeq', async () => {
+    // Same regression class as the reference pull runner's hold guard and the push runner's
+    // central-acked-behind-cursor guard: reporting 'progressed' with the cursor unmoved would make the
+    // drain loop re-fetch this IDENTICAL window and hammer it for the whole budget.
+    const cursor = 10;
+    const advanceCursor = vi.fn(async () => {});
+    const logger = { ...silent, error: vi.fn() };
+    const resp: AmendmentPullResponse = { records: [rec(7, 'a')], nextSeq: 7 }; // stale: nextSeq (7) <= cursor (10)
+    const runner = createAmendmentPullRunner({
+      getToken: async () => 't',
+      postPull: async () => resp,
+      applyRecord: async () => 'applied',
+      readCursor: async () => cursor,
+      advanceCursor,
+      logger: logger as any,
+    });
+    const r = await runner.runCycle();
+    expect(r.outcome).toBe('failed');
+    expect(r.applied).toBe(1); // reporting-only: the record was still applied
+    expect(advanceCursor).not.toHaveBeenCalled();
+    expect(logger.error).toHaveBeenCalledTimes(1);
   });
 });

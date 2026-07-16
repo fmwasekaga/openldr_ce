@@ -37,7 +37,7 @@ import { type PluginRuntime } from '@openldr/plugins';
 import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
-import { createSyncPushRunner, createSyncPullRunner, createAmendmentPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, type PushBatch, type PushResponse, type SyncConfig } from '@openldr/sync';
+import { createSyncPushRunner, createSyncPullRunner, createAmendmentPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, combineCycleResults, type PushBatch, type PushResponse, type SyncConfig } from '@openldr/sync';
 import { createSyncPushWorker, type SyncPushWorker } from './sync-push-worker';
 import { createSyncPullWorker, type SyncPullWorker } from './sync-pull-worker';
 import { createSyncHandle, type SyncHandle } from './sync-handle';
@@ -907,12 +907,14 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       });
       syncPullWorker = createSyncPullWorker({
         runner: {
-          // One host loop drains BOTH downward streams per cycle: reference config first, then amendments.
-          // Each runner owns its cursor + failure model; the sum of applied counts is returned.
+          // One host loop drains BOTH downward streams per cycle: reference config first, then
+          // amendments. Each runner owns its cursor + failure model. combineCycleResults (S7) folds
+          // the two outcomes: 'progressed' wins so a healthy stream keeps draining while a sick one
+          // only logs; 'failed' beats 'drained' so one sick stream never reads as caught up.
           runCycle: async () => {
             const ref = await syncPullRunner.runCycle();
             const amend = await amendmentPullRunner.runCycle();
-            return ref + amend;
+            return combineCycleResults(ref, amend);
           },
         },
         intervalMs,

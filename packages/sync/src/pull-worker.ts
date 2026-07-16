@@ -1,5 +1,6 @@
 import type { Logger } from '@openldr/db';
 import type { PullRequest, PullResponse, PullRecord } from './batch';
+import type { CycleResult } from './cycle-result';
 
 // Injected dependencies for the pull runner. Kept pure over its deps so the cursor + transport + applier
 // are fakeable in tests (no real DB). The bootstrap host (Task 8) wires `applyRecord` to db's reference
@@ -26,7 +27,7 @@ export interface PullDeps {
 }
 
 export interface SyncPullRunner {
-  runCycle(): Promise<number>;
+  runCycle(): Promise<CycleResult>;
 }
 
 // Default hold policy: the two terminology bulk kinds are all-or-nothing (their apply drains + reconciles
@@ -49,7 +50,7 @@ const defaultIsHoldRecord = (rec: PullRecord): boolean =>
 export function createSyncPullRunner(deps: PullDeps): SyncPullRunner {
   const isHold = deps.isHoldRecord ?? defaultIsHoldRecord;
   return {
-    async runCycle(): Promise<number> {
+    async runCycle(): Promise<CycleResult> {
       const cursor = await deps.readCursor();
       let resp: PullResponse;
       try {
@@ -60,10 +61,10 @@ export function createSyncPullRunner(deps: PullDeps): SyncPullRunner {
       } catch (err) {
         // Transport/HTTP/token failure: leave the cursor put so the same window retries next cycle.
         deps.logger.warn({ err: (err as Error).message }, 'sync pull failed; cursor not advanced (will retry)');
-        return 0;
+        return { outcome: 'failed', applied: 0 };
       }
 
-      if (resp.records.length === 0) return 0;
+      if (resp.records.length === 0) return { outcome: 'drained', applied: 0 };
 
       // Records arrive in seq order. Track the highest seq it is SAFE to advance to: it advances to a
       // record's seq once that record is "handled" (applied OR quarantined), but a HELD failure stops the
@@ -127,8 +128,30 @@ export function createSyncPullRunner(deps: PullDeps): SyncPullRunner {
       // so Math.max(safeSeq, nextSeq) === nextSeq). A hold caps the advance at the last safe seq BEFORE the
       // held record. The `> cursor` guard prevents a stale/hostile response from regressing the cursor.
       const target = held ? safeSeq : Math.max(safeSeq, resp.nextSeq);
-      if (target > cursor) await deps.advanceCursor(target);
-      return applied;
+      const advanced = target > cursor;
+      if (advanced) await deps.advanceCursor(target);
+      if (held) {
+        // A HELD bulk record's cursor is capped BEFORE the failing record: the next cycle would fetch
+        // the identical window and re-fail identically. Report 'failed' so the drain stops and the
+        // retry waits for the next tick rather than spinning for the whole budget.
+        return { outcome: 'failed', applied };
+      }
+      if (!advanced) {
+        // The window was processed but the cursor did not move — a stale/hostile response served
+        // records at or behind the cursor (nextSeq <= cursor). Reporting 'progressed' here would make
+        // the drain loop re-fetch this IDENTICAL window and hammer it until the budget expires, exactly
+        // the regression class the push runner's central-acked-behind-cursor guard (S7) exists to
+        // prevent. 'failed' stops the drain and makes the anomaly operator-visible instead of a silent
+        // spin.
+        deps.logger.error(
+          { cursor, safeSeq, nextSeq: resp.nextSeq, count: applied },
+          'sync pull: window processed but cursor did not advance; not looping (will retry next tick)',
+        );
+        return { outcome: 'failed', applied };
+      }
+      // 'progressed' because the WINDOW was processed and the cursor genuinely advanced — never because
+      // `applied` is non-zero. A window entirely quarantined still reports 'progressed' here.
+      return { outcome: 'progressed', applied };
     },
   };
 }

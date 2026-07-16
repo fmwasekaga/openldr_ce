@@ -1,60 +1,28 @@
 import type { Logger } from '@openldr/core';
+import type { CycleResult } from '@openldr/sync';
+import { createDrainWorker, type DrainWorker } from './drain-worker';
 
-// Host loop for the directional sync pull runner (sync S2). Sibling of createSyncPushWorker: it wraps
-// a `runner.runCycle()` in a self-scheduling interval, guards against overlapping cycles, and swallows a
-// failing cycle so a transient central/token/transport outage never kills the loop. Like the push worker
-// it has no LISTEN wakeup (S2 pulls on a plain cadence) and is started explicitly via start() so the
-// bootstrap host only spins it up when sync is configured.
+// Host loop for the downward sync streams (sync S2 reference config + S6a amendments). A thin wrapper
+// over the shared createDrainWorker (S7). No LISTEN wakeup: the lab polls central over HTTPS and
+// cannot LISTEN to central's Postgres — pull latency stays at the interval, by design.
 
-export interface SyncPullWorker {
-  /** Begin the interval loop. Idempotent — a second call while running is a no-op. */
-  start(): void;
-  /** Halt the loop; no further cycles are scheduled. */
-  stop(): void;
-  /** Run one cycle now (no-overlap guarded). Used by tests and an optional "sync now". */
-  trigger(): void;
-  /** True once start() has scheduled the loop and stop() has not been called. Read by the sync status surface. */
-  isRunning(): boolean;
-}
+// Structurally identical to DrainWorker by construction — createSyncPullWorker returns a DrainWorker
+// verbatim. Extending rather than re-declaring the members means the two cannot drift, and it stops the
+// type from hiding `budgetMs`, which the returned object already carries at runtime. The distinct name
+// is kept so the bootstrap host and the sync status surface are unchanged.
+export interface SyncPullWorker extends DrainWorker {}
 
 export interface SyncPullWorkerDeps {
-  runner: { runCycle(): Promise<number> };
+  runner: { runCycle(): Promise<CycleResult> };
   intervalMs: number;
   logger: Logger;
 }
 
 export function createSyncPullWorker(opts: SyncPullWorkerDeps): SyncPullWorker {
-  let stopped = false;
-  let running = false;
-  let timer: ReturnType<typeof setInterval> | undefined;
-
-  async function tickOnce(): Promise<void> {
-    if (running) return; // never overlap cycles — a cycle still in flight when the timer fires is skipped
-    running = true;
-    try {
-      await opts.runner.runCycle();
-    } catch (err) {
-      // A transient failure (central down, token outage, transport error) must not kill the loop.
-      opts.logger.error({ err }, 'sync pull cycle failed');
-    } finally {
-      running = false;
-    }
-  }
-
-  return {
-    start() {
-      if (timer || stopped) return;
-      timer = setInterval(() => { if (!stopped) void tickOnce(); }, opts.intervalMs);
-    },
-    stop() {
-      stopped = true;
-      if (timer) { clearInterval(timer); timer = undefined; }
-    },
-    trigger() {
-      if (!stopped) void tickOnce();
-    },
-    isRunning() {
-      return timer !== undefined && !stopped;
-    },
-  };
+  return createDrainWorker({
+    runner: opts.runner,
+    intervalMs: opts.intervalMs,
+    label: 'sync pull',
+    logger: opts.logger,
+  });
 }
