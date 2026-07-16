@@ -72,7 +72,8 @@ Changing `Promise<number>` → an object is **compiler-enforced at every call si
 
 | Runner | Situation | Outcome |
 |---|---|---|
-| push | `records.length === 0` (`:131`) | `drained` |
+| push | `records.length === 0` **and `newCursor === cursor`** (a pure-gap cycle) | `drained` |
+| push | `records.length === 0` **but `newCursor > cursor`** — every row skipped by a defensive guard, yet the cursor moved | **`progressed`** — see §5.1.1 |
 | push | transport/token catch (`:143`) | `failed` |
 | push | posted OK **and the cursor advanced** | `progressed` |
 | push | posted OK but **`min(ackSeq, newCursor) <= cursor`** | **`failed`** — see §5.1.1 |
@@ -86,7 +87,18 @@ Changing `Promise<number>` → an object is **compiler-enforced at every call si
 | amend | window processed but **`max(safeSeq, nextSeq) <= cursor`** | **`failed`** — see §5.1.1 |
 | amend | window processed **and the cursor advanced** (`:71`) | `progressed` — **including when `applied === 0`** (see below) |
 
-### 5.1.1 `progressed` requires the cursor to have ADVANCED — not merely a processed window
+### 5.1.1 `progressed` ⟺ the cursor ADVANCED — in **both** directions
+
+**The rule is an equivalence, not an implication.** `progressed` iff the cursor moved. Two distinct bugs come from getting either half wrong, and this spec shipped both before the whole-slice review caught the second:
+
+- **Cursor did NOT move, but we say `progressed`** → the loop refetches the identical window and spins for the whole budget (§ below).
+- **Cursor DID move, but we say `drained`** → the loop **stops while there is still work**, silently reverting to the pre-S7 one-batch-per-tick rate.
+
+**The second is not hypothetical, and it lands on this spec's own headline scenario.** Push's empty-window branch advances the cursor past rows that every defensive guard skipped (null `site_id`, missing meta) and originally reported `drained`. Consider a lab that bulk-imports 60k records *before* `sync.site_id` is set — the **first enrollment** case §1 opens with. Every cycle fetches 500 rows, skips all 500, advances the cursor 500, and reports `drained`, stopping the drain. **60k ÷ 500 × 15 min ≈ 30 hours** before the cursor even reaches the healthy records. The exact bug this slice exists to kill, intact inside it.
+
+`progressed` is provably safe there: the cursor *moved*, so the next cycle reads a new cursor and collects a **new** window. It cannot hammer. A pure-gap cycle (`newCursor === cursor`) stays `drained` and is unaffected.
+
+**Why the per-task reviews all passed it:** the §5.1 table originally mapped `records.length === 0 → drained` flatly, and this section was added mid-slice to correct the *rule* — without revisiting the table row it had just invalidated. Every task did exactly what its row said. Only a cross-task read surfaces a spec that contradicts itself.
 
 **This corrects an unsound rule in the first draft of this spec.** The original table mapped "window processed" straight to `progressed`, which silently covered the case where the cursor does **not** move. That is the difference between a patient retry and a hammer:
 
@@ -218,3 +230,5 @@ Today that is structurally impossible — 500 is the per-tick ceiling. **Then re
 - **The amendment echo** (§8) costs one round-trip per amendment, now prompt rather than delayed. Pre-existing.
 - **Terminology in-memory bulk is untouched** (§3) — a single large code system still materializes fully in memory. Its own slice.
 - **A wholly-`failed` first cycle ends the tick.** Correct (don't hammer a down central), but it means a link that fails on cycle 1 makes no progress that tick even if the failure was transient. The interval retry is the recovery path, exactly as today.
+- **A failing stream is now retried ~225×/tick instead of 1×.** Per §5.2, `progressed + failed → progressed`, so if central's `/api/sync/pull-amendments` is down while `/api/sync/pull` has a backlog, the drain keeps looping and re-hits the broken endpoint every cycle for the whole budget. Deliberate — the alternative (either-failed ⇒ stop) lets one sick stream freeze a healthy one, the wedge S7-A spent a slice removing — and it is budget-bounded. But it is a real log-spam and load amplification against a peer that is already unwell.
+- **Neither LISTEN client registers an `error` handler.** A long-lived `pg.Client` emits `'error'` on connection drop, and an unhandled `'error'` on an EventEmitter throws — so a PG restart could take the process down. This slice's push client mirrors the pre-existing projection client (`index.ts:704`), so the exposure is doubled rather than introduced. `packages/bootstrap/src/listener-postgres.ts` already has the right pattern (handler + reconnect); adopting it for both is a follow-up.
