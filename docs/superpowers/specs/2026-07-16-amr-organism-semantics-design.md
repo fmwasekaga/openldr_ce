@@ -1,7 +1,7 @@
 # AMR organism semantics (Slice C) — Design
 
 **Date:** 2026-07-16
-**Status:** design approved, researched to falsification, NOT implemented
+**Status:** ⚠ DISPUTED — §2/§3 hardcode a vocabulary the terminology page exists to hold. Needs redesign; see the STOP block. NOT implemented.
 **Repos:** `cdr-toolchain` (mapper) + `openldr_ce` (AMR queries) — **both halves must land together**
 **Depends on:** Slice A (organism classifier) — DONE, `3c3f120`
 
@@ -66,6 +66,54 @@ dictionary adds one.
 **CE's projection reads `coding[0]` only** (`relational/observation.ts` via `codeable()`), so
 `observation_code = code.coding[0].code` and `coded_value = valueCodeableConcept.coding[0].code`.
 **Anything CE must filter on has to be in `coding[0]`.**
+
+## 🛑 STOP — §2 and §3 below are DISPUTED. Do not build them as written.
+
+**User correction, 2026-07-16 (end of session):**
+
+> *"we have terminology page for a reason, so we don't have to hardcode things … we built this
+> together very well in `D:\Projects\Repositories\corlix`, I think test definitions page … these are
+> sort of ideas/references you look into and think how can we adopt."*
+
+**They are right, and §2/§3 contain the exact anti-pattern.** I concluded "ValueSets are
+unnecessary — the seeded queries are the config surface" and "add 6 antibiotics to
+`ANTIBIOGRAM_PANEL`". Both **hardcode a clinical vocabulary into source**:
+
+- §2 inlines `'634-6'`, `'580-1'`, `'264868006'` into 9 SQL strings.
+- §3 grows a hand-maintained antibiotic list — the same list whose own comment already admits it
+  silently drops any drug nobody remembered to add. **Adding 6 more does not fix that; it feeds it.**
+  The next site with a drug we didn't think of loses it silently, exactly as we just lost 6.
+
+I reached "no ValueSets" from a real obstacle — reports run against the **external** warehouse,
+`value_sets` lives in the **internal** DB, so they cannot join. **That is a problem to solve, not a
+licence to hardcode.** Rule 0 applies to my own conclusions: *what would make "ValueSets are
+impossible here" false?* I never asked. Candidate answers I have NOT investigated:
+
+- project the needed terminology into the external warehouse (it is already a projection target)
+- resolve the codes at query-*run* time and substitute them (`substituteParams` already exists —
+  see `amr-resistance-parity.test.ts:32`, which notes a KNOWN GAP there)
+- expose the antibiotic panel + organism codes as report **params** (the queries already take
+  `from`/`to`/`facility`/`country`/`year`)
+- model them as a terminology-backed **test definition**, per corlix
+
+**Reference to study before redesigning (`D:\Projects\Repositories\corlix`):**
+- `docs/superpowers/plans/2026-06-10-test-definition-ontology.md` ← the test-definition ontology
+- `docs/superpowers/plans/2026-06-11-marketplace-test-definitions.md`
+- `docs/superpowers/plans/2026-06-07-terminology-publisher-ia-slice{1,2,3}.md`
+- `apps/api/src/terminology/`
+
+corlix is an **LIS** and CE is a **repository** — do not copy the shape. Read for the *idea*: how a
+clinical vocabulary is defined once, in a page, and referenced rather than inlined.
+
+**What survives from this spec:** the falsification table, the code lookups (`580-1`, SNOMED
+`264868006`, parasites=0), the seed mechanics (`SEED_QUERIES` updates, defs/designs are
+create-only), the regression modes, the antibiogram finding *as a finding*, and §1 (the mapper) —
+which emits standard codes and is not a hardcoding question.
+
+**Also carry forward (user, same message):** *"I work better if I could see it"* and *"if you code
+for a whole day only for us to test and fail, I will obviously try alternatives"*. Microbiology is
+hard; prefer a small visible slice they can look at over a long unattended build. And **we are on
+live data (a backup)** — design changes are expected, not a failure.
 
 ## Design
 
