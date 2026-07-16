@@ -93,6 +93,15 @@ export interface SyncDivergencesTable {
   detected_at: Generated<Date>;
 }
 
+// Distributed sync S7 (A1): each site's REPORTED consumed position per stream (migration 057).
+// See the migration comment: `seq` is NEVER clamped to max — it is a safety floor, not a counter.
+export interface SyncSiteCursorsTable {
+  site_id: string;
+  consumer: string;
+  seq: number;
+  reported_at: Generated<Date>;
+}
+
 export interface OutboxEventsTable {
   id: string;
   type: string;
@@ -631,6 +640,7 @@ export interface InternalSchema {
   sync_amendments: SyncAmendmentsTable;
   sync_quarantine: SyncQuarantineTable;
   sync_divergences: SyncDivergencesTable;
+  sync_site_cursors: SyncSiteCursorsTable;
   outbox_events: OutboxEventsTable;
   ingest_batches: IngestBatchesTable;
   plugins: PluginsTable;
