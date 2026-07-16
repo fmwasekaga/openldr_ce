@@ -1,6 +1,7 @@
 import type { FhirResource } from '@openldr/fhir';
 import { planProjection, type ChangeRow, type FetchSafeRows, type Gap, type Logger } from '@openldr/db';
 import type { PushBatch, PushResponse, SyncRecord } from './batch';
+import type { CycleResult } from './cycle-result';
 
 // The internal Kysely handle, derived from FetchSafeRows' first parameter (Kysely<InternalSchema>) so
 // this package needs no direct `kysely` dependency.
@@ -23,7 +24,7 @@ export interface PushDeps {
 }
 
 export interface SyncPushRunner {
-  runCycle(): Promise<number>;
+  runCycle(): Promise<CycleResult>;
 }
 
 // Map each SAFE change row to a wire `SyncRecord`, resolving version/siteId from the batched change_log
@@ -115,7 +116,7 @@ export async function collectPushRecords(
 export function createSyncPushRunner(deps: PushDeps): SyncPushRunner {
   let pendingGaps: Gap[] = [];
   return {
-    async runCycle(): Promise<number> {
+    async runCycle(): Promise<CycleResult> {
       const cursor = await deps.readCursor();
       // Compute the window's records via the shared safe-frontier collector (byte-identical to what an
       // S5 offline push bundle carries). It threads `pendingGaps` in + out of this stateful closure.
@@ -129,7 +130,14 @@ export function createSyncPushRunner(deps: PushDeps): SyncPushRunner {
         // guard). Still advance past any confirmed-rolled-back gaps the planner cleared, exactly like
         // projection moves its frontier over a pure-gap cycle.
         if (newCursor > cursor) await deps.advanceCursor(newCursor);
-        return 0;
+        // Per spec §5.1.1, 'progressed' iff the CURSOR ADVANCED — not merely "a window was processed".
+        // A window whose every safe row was skipped by a defensive guard (e.g. M1 null site_id from a
+        // bulk import that predates sync.site_id being set) still moves newCursor past that window. That
+        // IS progress: the next cycle reads a new cursor and collects a NEW window, so it cannot spin.
+        // Reporting 'drained' here would be the pre-S7 rate (one window per host tick) applied to the
+        // exact backlog this slice exists to drain fast — e.g. a 60k-row guard-skipped backlog would take
+        // ~30 hours to even reach the healthy records, because 'drained' stops the drain loop cold.
+        return { outcome: newCursor > cursor ? 'progressed' : 'drained', applied: 0 };
       }
 
       let resp: PushResponse;
@@ -141,7 +149,7 @@ export function createSyncPushRunner(deps: PushDeps): SyncPushRunner {
       } catch (err) {
         // Transport/HTTP/token failure: leave the cursor put so the same window retries next cycle.
         deps.logger.error({ err, fromSeq: cursor, count: records.length }, 'sync push failed; cursor not advanced (will retry)');
-        return 0;
+        return { outcome: 'failed', applied: 0 };
       }
 
       // A persistently-rejected record never blocks the stream: it's logged, and because the cursor
@@ -156,13 +164,26 @@ export function createSyncPushRunner(deps: PushDeps): SyncPushRunner {
       // Advance only as far as BOTH central acked AND the local safe frontier we actually pushed.
       // Central is a separate trust domain: clamping to newCursor stops a buggy/hostile ackSeq from
       // jumping the cursor past records the lab never sent (which would permanently, silently skip
-      // committed changes). The `> cursor` guard additionally prevents backwards regression.
+      // committed changes).
       const target = Math.min(resp.ackSeq, newCursor);
-      if (target > cursor) await deps.advanceCursor(target);
+      if (target <= cursor) {
+        // A success path with N>0 records ALWAYS has newCursor > cursor, so this means ackSeq <= cursor:
+        // a central acking at or behind where we already were. Anomalous by definition — report 'failed' so
+        // the drain stops instead of re-posting this identical window until the budget expires, every tick.
+        deps.logger.error(
+          { ackSeq: resp.ackSeq, cursor, newCursor, count: records.length },
+          'sync push: central acked at or behind the cursor; not advancing (will retry next tick)',
+        );
+        return { outcome: 'failed', applied: resp.applied };
+      }
+      await deps.advanceCursor(target);
 
       // Report the count central durably applied (not records.length), so a partially-rejected batch
       // reflects real work done.
-      return resp.applied;
+      // 'progressed' because the WINDOW was processed and the cursor advanced — NOT because applied
+      // is non-zero. A batch central rejected or diverged wholesale still progressed the cursor, and
+      // a drain loop must go again.
+      return { outcome: 'progressed', applied: resp.applied };
     },
   };
 }

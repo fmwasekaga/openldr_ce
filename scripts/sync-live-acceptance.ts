@@ -239,20 +239,24 @@ async function main(): Promise<void> {
     };
 
     // Drain: run cycles until the lab cursor stops advancing AND nothing is applied (max-iter capped so
-    // a bug cannot infinite-loop). Returns total applied + cycle count.
-    async function drain(maxIters = 200): Promise<{ cycles: number; applied: number }> {
+    // a bug cannot infinite-loop). Returns total applied + cycle count + the last cycle's CycleResult
+    // outcome (S7) — the loop only breaks once a cycle reports 0 applied AND no cursor movement, so
+    // whatever outcome that final cycle reports is the drain's real "caught up" (or "stuck") signal.
+    async function drain(maxIters = 200): Promise<{ cycles: number; applied: number; lastOutcome: string }> {
       let applied = 0;
       let cycles = 0;
+      let lastOutcome = '';
       for (let i = 0; i < maxIters; i++) {
         const before = await labCursor();
-        const a = await runner.runCycle();
+        const r = await runner.runCycle();
         const after = await labCursor();
-        applied += a;
+        applied += r.applied;
+        lastOutcome = r.outcome;
         cycles++;
-        if (a === 0 && after === before) break;
+        if (r.applied === 0 && after === before) break;
         await sleep(20);
       }
-      return { cycles, applied };
+      return { cycles, applied, lastOutcome };
     }
 
     // ── Seed the lab ──
@@ -268,8 +272,9 @@ async function main(): Promise<void> {
     // ── Push drain #1 ──
     step('2. push drain #1: replicate lab → central');
     const d1 = await drain();
-    ok(`drain #1: ${d1.cycles} cycle(s), ${d1.applied} record(s) applied by central`);
+    ok(`drain #1: ${d1.cycles} cycle(s), ${d1.applied} record(s) applied by central, last outcome '${d1.lastOutcome}'`);
     assert(d1.applied === 5, `central durably applied all 5 records (got ${d1.applied})`);
+    assert(d1.lastOutcome === 'drained', `drain #1 finishes on a 'drained' cycle (got '${d1.lastOutcome}')`);
     assert((await labCursor()) >= labSeqTarget, `lab 'sync-push' cursor reached max seq (${await labCursor()} >= ${labSeqTarget})`);
 
     // ── Assertion (a): central fhir_resources has all 5 at the SAME versions the lab has ──
@@ -312,8 +317,9 @@ async function main(): Promise<void> {
     const cenChangeLogBefore = (await centralDb.selectFrom('fhir.change_log').select((eb) => eb.fn.countAll().as('n')).executeTakeFirst());
     const clBefore = cenChangeLogBefore?.n != null ? Number(cenChangeLogBefore.n) : -1;
     const d2 = await drain();
-    ok(`drain #2: ${d2.cycles} cycle(s), ${d2.applied} applied`);
+    ok(`drain #2: ${d2.cycles} cycle(s), ${d2.applied} applied, last outcome '${d2.lastOutcome}'`);
     assert(d2.applied === 0, `second drain applied 0 records (all idempotent skips) (got ${d2.applied})`);
+    assert(d2.lastOutcome === 'drained', `second drain finishes on a 'drained' cycle (got '${d2.lastOutcome}')`);
     assert((await labCursor()) === cursorBefore, `lab cursor unchanged after re-drain (${await labCursor()} === ${cursorBefore})`);
     assert((await centralResourceCount()) === countBefore, `central fhir_resources count unchanged (${await centralResourceCount()} === ${countBefore})`);
     const clAfterRow = (await centralDb.selectFrom('fhir.change_log').select((eb) => eb.fn.countAll().as('n')).executeTakeFirst());

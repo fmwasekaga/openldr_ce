@@ -72,16 +72,45 @@ Changing `Promise<number>` → an object is **compiler-enforced at every call si
 
 | Runner | Situation | Outcome |
 |---|---|---|
-| push | `records.length === 0` (`:131`) | `drained` |
+| push | `records.length === 0` **and `newCursor === cursor`** (a pure-gap cycle) | `drained` |
+| push | `records.length === 0` **but `newCursor > cursor`** — every row skipped by a defensive guard, yet the cursor moved | **`progressed`** — see §5.1.1 |
 | push | transport/token catch (`:143`) | `failed` |
-| push | posted OK (`:165`) | `progressed` |
+| push | posted OK **and the cursor advanced** | `progressed` |
+| push | posted OK but **`min(ackSeq, newCursor) <= cursor`** | **`failed`** — see §5.1.1 |
 | pull | `resp.records.length === 0` (`:66`) | `drained` |
 | pull | transport/token catch (`:63`) | `failed` |
 | pull | **`held === true`** (`:129`) | **`failed`** |
-| pull | window processed (`:131`) | `progressed` |
+| pull | window processed but **`max(safeSeq, nextSeq) <= cursor`** | **`failed`** — see §5.1.1 |
+| pull | window processed **and the cursor advanced** | `progressed` |
 | amend | transport/token catch (`amend-pull-worker.ts:39`) | `failed` |
 | amend | `resp.records.length === 0` (`:41`) | `drained` |
-| amend | window processed (`:71`) | `progressed` — **including when `applied === 0`** (see below) |
+| amend | window processed but **`max(safeSeq, nextSeq) <= cursor`** | **`failed`** — see §5.1.1 |
+| amend | window processed **and the cursor advanced** (`:71`) | `progressed` — **including when `applied === 0`** (see below) |
+
+### 5.1.1 `progressed` ⟺ the cursor ADVANCED — in **both** directions
+
+**The rule is an equivalence, not an implication.** `progressed` iff the cursor moved. Two distinct bugs come from getting either half wrong, and this spec shipped both before the whole-slice review caught the second:
+
+- **Cursor did NOT move, but we say `progressed`** → the loop refetches the identical window and spins for the whole budget (§ below).
+- **Cursor DID move, but we say `drained`** → the loop **stops while there is still work**, silently reverting to the pre-S7 one-batch-per-tick rate.
+
+**The second is not hypothetical, and it lands on this spec's own headline scenario.** Push's empty-window branch advances the cursor past rows that every defensive guard skipped (null `site_id`, missing meta) and originally reported `drained`. Consider a lab that bulk-imports 60k records *before* `sync.site_id` is set — the **first enrollment** case §1 opens with. Every cycle fetches 500 rows, skips all 500, advances the cursor 500, and reports `drained`, stopping the drain. **60k ÷ 500 × 15 min ≈ 30 hours** before the cursor even reaches the healthy records. The exact bug this slice exists to kill, intact inside it.
+
+`progressed` is provably safe there: the cursor *moved*, so the next cycle reads a new cursor and collects a **new** window. It cannot hammer. A pure-gap cycle (`newCursor === cursor`) stays `drained` and is unaffected.
+
+**Why the per-task reviews all passed it:** the §5.1 table originally mapped `records.length === 0 → drained` flatly, and this section was added mid-slice to correct the *rule* — without revisiting the table row it had just invalidated. Every task did exactly what its row said. Only a cross-task read surfaces a spec that contradicts itself.
+
+**This corrects an unsound rule in the first draft of this spec.** The original table mapped "window processed" straight to `progressed`, which silently covered the case where the cursor does **not** move. That is the difference between a patient retry and a hammer:
+
+`progressed` sends the drain loop back to re-read the cursor and re-collect. If the cursor did not move, it refetches the **identical window**, gets the identical result, and repeats — for the entire budget, **every tick, forever**. Pre-S7 the loop exited after one cycle, so the same peer misbehaviour cost one wasted round-trip per 15 minutes. The drain **amplifies it to ~225 per tick**. The budget bounds the damage per tick; it does not stop it recurring.
+
+**It is reachable, and was already pinned by a test before this slice began.** `pull-worker.test.ts` has a pre-existing case — *"does not advance the cursor backward when nextSeq <= cursor (defensive)"*, `readCursor: 10`, response `nextSeq: 7` — proving a **non-held, fully-processed** window can leave the cursor unmoved. `safeSeq = rec.seq` is a direct assignment, **not** a monotonic max, so a window served at/behind the cursor drives `safeSeq` *backward*.
+
+**`failed` breaks no legitimate case.** On push, `records.length > 0` guarantees every sent seq `> cursor`, so `newCursor > cursor` always — `target <= cursor` ⟺ `ackSeq <= cursor`, i.e. a central acking at or behind where we already were. On pull, a window whose records **all** failed-and-quarantined still advances (`safeSeq = rec.seq` runs on the quarantine path too — a quarantined record is *handled*), so `!advanced` is unreachable except under an anomalous peer: a stale/cached 200, a proxy replay, a buggy reimplementation, or a hostile one. That is this codebase's declared threat model — `push-worker.ts`'s clamp comment exists solely to defend "a buggy/hostile ackSeq" and calls central "a separate trust domain."
+
+**The fix is strictly better than pre-S7, not damage control.** Today such a peer wedges the cursor **permanently and silently**. Reporting `failed` (with an `error` log naming the cursor, the ack, and the count) makes it visible, retried on the next tick, and operator-diagnosable — closing an observability hole the code has never had.
+
+Each runner keeps the guard **inline** rather than sharing a helper. The kernel is ~3 lines, but push clamps **down** (`Math.min(ackSeq, newCursor)` — a trust boundary) while pull/amend clamp **up** (`Math.max(safeSeq, nextSeq)`), the log payloads differ, and push returns *before* advancing while pull/amend persist partial progress *first*. A shared helper would obscure the down-vs-up distinction, which is the most important thing about it.
 
 **The amend runner is the live proof that `applied` cannot be the control signal.** It excludes diverged records from `applied` (`:49-50`) but advances the cursor regardless (`:70`). So a window in which *every* record diverges returns `applied: 0` while having genuinely progressed — `while (runCycle() > 0)` would stop there with thousands still queued. This is not a hypothetical drift risk; it is in the file today, shipped hours ago. Any `progressed` mapping must key off the fact that the window was processed, **never** off the count.
 
@@ -201,3 +230,5 @@ Today that is structurally impossible — 500 is the per-tick ceiling. **Then re
 - **The amendment echo** (§8) costs one round-trip per amendment, now prompt rather than delayed. Pre-existing.
 - **Terminology in-memory bulk is untouched** (§3) — a single large code system still materializes fully in memory. Its own slice.
 - **A wholly-`failed` first cycle ends the tick.** Correct (don't hammer a down central), but it means a link that fails on cycle 1 makes no progress that tick even if the failure was transient. The interval retry is the recovery path, exactly as today.
+- **A failing stream is now retried ~225×/tick instead of 1×.** Per §5.2, `progressed + failed → progressed`, so if central's `/api/sync/pull-amendments` is down while `/api/sync/pull` has a backlog, the drain keeps looping and re-hits the broken endpoint every cycle for the whole budget. Deliberate — the alternative (either-failed ⇒ stop) lets one sick stream freeze a healthy one, the wedge S7-A spent a slice removing — and it is budget-bounded. But it is a real log-spam and load amplification against a peer that is already unwell.
+- **Neither LISTEN client registers an `error` handler.** A long-lived `pg.Client` emits `'error'` on connection drop, and an unhandled `'error'` on an EventEmitter throws — so a PG restart could take the process down. This slice's push client mirrors the pre-existing projection client (`index.ts:704`), so the exposure is doubled rather than introduced. `packages/bootstrap/src/listener-postgres.ts` already has the right pattern (handler + reconnect); adopting it for both is a follow-up.

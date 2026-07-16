@@ -1,123 +1,44 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createSyncPullWorker } from './sync-pull-worker';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { DrainWorkerDeps } from './drain-worker';
+
+// The wrapper's ONLY unique behaviour is that it has NO listen pair (a lab cannot LISTEN to central's
+// Postgres — pull latency stays at the interval, by design) and that it labels its cycles 'sync pull'.
+// Everything else (cadence, overlap guard, bounded drain, error survival, start/stop/isRunning) is
+// createDrainWorker's and is covered by drain-worker.test.ts against the real implementation. Mirrors
+// sync-push-worker.test.ts (S7): a bare-number runCycle mock here would type-error against
+// `Promise<CycleResult>` and, if faked past that, would silently break the drain loop after one cycle
+// (destructuring 'outcome' off a number yields undefined) — testing this wrapper against a fake
+// createDrainWorker sidesteps that trap entirely.
+const createDrainWorker = vi.fn((_opts: DrainWorkerDeps) => ({
+  start() {},
+  stop() {},
+  trigger() {},
+  isRunning: () => false,
+  tickOnce: async () => {},
+  budgetMs: 0,
+}));
+vi.mock('./drain-worker', () => ({ createDrainWorker: (o: DrainWorkerDeps) => createDrainWorker(o) }));
+
+const { createSyncPullWorker } = await import('./sync-pull-worker');
 
 const silentLogger = { info() {}, error() {}, warn() {}, debug() {} } as never;
+const runner = { runCycle: async () => ({ outcome: 'drained' as const, applied: 0 }) };
 
-afterEach(() => {
-  vi.useRealTimers();
+const lastDeps = (): DrainWorkerDeps => createDrainWorker.mock.calls[0][0];
+
+beforeEach(() => {
+  createDrainWorker.mockClear();
 });
 
 describe('createSyncPullWorker', () => {
-  it('runs a cycle on each interval tick and stop() halts scheduling', async () => {
-    vi.useFakeTimers();
-    const runCycle = vi.fn().mockResolvedValue(0);
-    const worker = createSyncPullWorker({ runner: { runCycle }, intervalMs: 1000, logger: silentLogger });
+  it('wires the runner, interval, and logger straight through with no listen pair', () => {
+    createSyncPullWorker({ runner, intervalMs: 1000, logger: silentLogger });
 
-    worker.start();
-    expect(runCycle).toHaveBeenCalledTimes(0); // nothing runs until the first interval elapses
-
-    await vi.advanceTimersByTimeAsync(1000);
-    expect(runCycle).toHaveBeenCalledTimes(1);
-    await vi.advanceTimersByTimeAsync(2000);
-    expect(runCycle).toHaveBeenCalledTimes(3);
-
-    worker.stop();
-    await vi.advanceTimersByTimeAsync(5000);
-    expect(runCycle).toHaveBeenCalledTimes(3); // no further cycles after stop()
-  });
-
-  it('does not overlap cycles (a slow cycle blocks the next tick)', async () => {
-    vi.useFakeTimers();
-    let running = 0;
-    let maxConcurrent = 0;
-    const runCycle = vi.fn().mockImplementation(async () => {
-      running++;
-      maxConcurrent = Math.max(maxConcurrent, running);
-      await new Promise((r) => setTimeout(r, 2500)); // outlives two interval ticks
-      running--;
-      return 0;
-    });
-    const worker = createSyncPullWorker({ runner: { runCycle }, intervalMs: 1000, logger: silentLogger });
-
-    worker.start();
-    await vi.advanceTimersByTimeAsync(3000); // three ticks fire while the first cycle is still in flight
-    expect(maxConcurrent).toBe(1);
-    expect(runCycle).toHaveBeenCalledTimes(1);
-
-    worker.stop();
-  });
-
-  it('keeps looping after a runCycle rejection', async () => {
-    vi.useFakeTimers();
-    const runCycle = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('boom'))
-      .mockResolvedValue(0);
-    const errorSpy = vi.fn();
-    const worker = createSyncPullWorker({
-      runner: { runCycle },
-      intervalMs: 1000,
-      logger: { info() {}, error: errorSpy, warn() {}, debug() {} } as never,
-    });
-
-    worker.start();
-    await vi.advanceTimersByTimeAsync(1000); // first cycle rejects
-    expect(runCycle).toHaveBeenCalledTimes(1);
-    expect(errorSpy).toHaveBeenCalledTimes(1);
-
-    await vi.advanceTimersByTimeAsync(1000); // loop survives — second cycle runs
-    expect(runCycle).toHaveBeenCalledTimes(2);
-
-    worker.stop();
-  });
-
-  it('trigger() runs a cycle immediately and does not overlap an in-flight cycle', async () => {
-    vi.useFakeTimers();
-    let running = 0;
-    let maxConcurrent = 0;
-    const runCycle = vi.fn().mockImplementation(async () => {
-      running++;
-      maxConcurrent = Math.max(maxConcurrent, running);
-      await new Promise((r) => setTimeout(r, 100));
-      running--;
-      return 0;
-    });
-    const worker = createSyncPullWorker({ runner: { runCycle }, intervalMs: 10_000, logger: silentLogger });
-
-    worker.trigger();
-    worker.trigger(); // second trigger while first is in flight is dropped by the overlap guard
-    await vi.advanceTimersByTimeAsync(100);
-    expect(maxConcurrent).toBe(1);
-    expect(runCycle).toHaveBeenCalledTimes(1);
-
-    worker.stop();
-  });
-
-  it('isRunning() reflects started-and-not-stopped state', async () => {
-    vi.useFakeTimers();
-    const runCycle = vi.fn().mockResolvedValue(0);
-    const worker = createSyncPullWorker({ runner: { runCycle }, intervalMs: 1000, logger: silentLogger });
-
-    expect(worker.isRunning()).toBe(false); // not started yet
-    worker.start();
-    expect(worker.isRunning()).toBe(true); // running after start()
-    worker.stop();
-    expect(worker.isRunning()).toBe(false); // halted after stop()
-  });
-
-  it('start() is idempotent and start() after stop() is a no-op', async () => {
-    vi.useFakeTimers();
-    const runCycle = vi.fn().mockResolvedValue(0);
-    const worker = createSyncPullWorker({ runner: { runCycle }, intervalMs: 1000, logger: silentLogger });
-
-    worker.start();
-    worker.start(); // must not create a second interval
-    await vi.advanceTimersByTimeAsync(1000);
-    expect(runCycle).toHaveBeenCalledTimes(1);
-
-    worker.stop();
-    worker.start(); // must not resurrect the loop after stop()
-    await vi.advanceTimersByTimeAsync(3000);
-    expect(runCycle).toHaveBeenCalledTimes(1);
+    const deps = lastDeps();
+    expect(deps.runner).toBe(runner);
+    expect(deps.intervalMs).toBe(1000);
+    expect(deps.label).toBe('sync pull');
+    // No LISTEN wakeup for pull — the lab cannot LISTEN to central's Postgres over HTTPS.
+    expect(deps.listen).toBeUndefined();
   });
 });

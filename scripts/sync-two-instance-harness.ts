@@ -297,18 +297,26 @@ async function main(): Promise<void> {
     const labSeqTarget = labMaxSeqRow?.m != null ? Number(labMaxSeqRow.m) : 0;
     ok(`seeded 5 lab resources (site ${SITE_ID}); lab max(seq)=${labSeqTarget}`);
 
-    // Drain the push runner to completion (capped so a bug cannot infinite-loop).
+    // Drain the push runner to completion (capped so a bug cannot infinite-loop). Each cycle now
+    // returns a CycleResult (S7): sum `.applied` and keep the last cycle's outcome — the loop only
+    // breaks once a cycle reports 0 applied AND no cursor movement, so that final outcome is the
+    // drain's real "caught up" (or "central is down") signal.
     const pushCursor = () => readCursor(labCtx!.internalDb, 'sync-push');
     let pushApplied = 0;
+    let pushOutcome = '';
     for (let i = 0; i < 50; i++) {
       const before = await pushCursor();
-      const a = await pushRunner.runCycle();
+      const r = await pushRunner.runCycle();
       const after = await pushCursor();
-      pushApplied += a;
-      if (a === 0 && after === before) break;
+      pushApplied += r.applied;
+      pushOutcome = r.outcome;
+      if (r.applied === 0 && after === before) break;
       await sleep(20);
     }
     assert(pushApplied === 5, `central durably applied all 5 pushed records over HTTP (got ${pushApplied})`);
+    // A real HTTP push that reached central and caught up must end 'drained' — never 'failed', which
+    // is what a transport/token outage across this hop would report.
+    assert(pushOutcome === 'drained', `push drain finishes on a 'drained' cycle over real HTTP (got '${pushOutcome}')`);
     assert((await pushCursor()) >= labSeqTarget, `lab 'sync-push' cursor reached max seq (${await pushCursor()} >= ${labSeqTarget})`);
 
     // Assert central mirrored every resource at its ORIGIN version with the ORIGIN site_id.
@@ -371,17 +379,24 @@ async function main(): Promise<void> {
       logger: runnerLogger,
     });
 
+    // Same CycleResult (S7) drain shape as the push side above.
     const pullCursor = () => readCursor(labCtx!.internalDb, 'sync-pull');
     let pullApplied = 0;
+    let pullOutcome = '';
     for (let i = 0; i < 50; i++) {
       const before = await pullCursor();
-      const a = await pullRunner.runCycle();
+      const r = await pullRunner.runCycle();
       const after = await pullCursor();
-      pullApplied += a;
-      if (a === 0 && after === before) break;
+      pullApplied += r.applied;
+      pullOutcome = r.outcome;
+      if (r.applied === 0 && after === before) break;
       await sleep(20);
     }
+    // Kept at the original `>= 1`: central's captured reference window here is whatever its dashboard
+    // store emitted, so the exact count is not pinned by this harness (sync:pull:accept pins it at 4).
     assert(pullApplied >= 1, `lab applied the pulled reference record over HTTP (got ${pullApplied})`);
+    // A real HTTP pull that reached central and caught up must end 'drained' — never 'failed'.
+    assert(pullOutcome === 'drained', `pull drain finishes on a 'drained' cycle over real HTTP (got '${pullOutcome}')`);
     const labDash = await labCtx.internalDb.selectFrom('dashboards').selectAll().where('id', '=', dashId).executeTakeFirst();
     assert(!!labDash, `lab dashboards has '${dashId}' after pull`);
     assert((labDash as { managed_origin?: string } | undefined)?.managed_origin === 'central', `lab dashboard stamped managed_origin='central'`);

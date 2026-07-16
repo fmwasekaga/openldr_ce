@@ -175,8 +175,11 @@ async function main(): Promise<void> {
     // ── 1. Cycle 1: the poison fails → HELD. The cursor does not move and the config record BEHIND the
     //    poison is blocked. This is the wedge, reproduced. ──
     step('1. cycle #1 — poison bulk fails → cursor HELD, the config behind it is blocked (the wedge)');
-    const applied1 = await runner.runCycle();
-    assert(applied1 === 0, `cycle #1 applied 0 records (got ${applied1})`);
+    const cycle1 = await runner.runCycle();
+    assert(cycle1.applied === 0, `cycle #1 applied 0 records (got ${cycle1.applied})`);
+    // S7: a held bulk record (hasn't crossed the quarantine threshold) reports 'failed' — the drain
+    // must stop instead of re-failing the identical window every tick.
+    assert(cycle1.outcome === 'failed', `cycle #1 reports outcome 'failed' (held, not yet quarantined) (got '${cycle1.outcome}')`);
     assert((await readChangeCursor(labDb, 'sync-pull')) === 0, `'sync-pull' cursor still 0 (held)`);
     assert(appliedSettings.length === 0, `THE WEDGE: setting '${VICTIM_ID}' behind the poison did NOT apply (got [${appliedSettings.join(',')}])`);
     const q1 = await quarantine.get(POISON_TYPE, POISON_ID);
@@ -188,8 +191,9 @@ async function main(): Promise<void> {
     // ── 2. Cycle 2: still under threshold → still held. Transient-failure semantics preserved: a bulk that
     //    fails once or twice replays rather than being abandoned. ──
     step('2. cycle #2 — still under threshold → still HELD (transient-failure semantics preserved)');
-    const applied2 = await runner.runCycle();
-    assert(applied2 === 0, `cycle #2 applied 0 records (got ${applied2})`);
+    const cycle2 = await runner.runCycle();
+    assert(cycle2.applied === 0, `cycle #2 applied 0 records (got ${cycle2.applied})`);
+    assert(cycle2.outcome === 'failed', `cycle #2 reports outcome 'failed' (still held) (got '${cycle2.outcome}')`);
     assert((await readChangeCursor(labDb, 'sync-pull')) === 0, `'sync-pull' cursor still 0 after cycle #2`);
     assert(appliedSettings.length === 0, `setting '${VICTIM_ID}' still blocked after cycle #2 (got [${appliedSettings.join(',')}])`);
     const q2 = await quarantine.get(POISON_TYPE, POISON_ID);
@@ -200,8 +204,11 @@ async function main(): Promise<void> {
     // ── 3. Cycle 3: the threshold is crossed → QUARANTINE. The runner advances PAST the poison, the window
     //    completes, and the config record that was blocked FINALLY APPLIES. This is the crux of S7-A. ──
     step('3. cycle #3 — threshold crossed → QUARANTINED, cursor advances, THE BLOCKED CONFIG APPLIES');
-    const applied3 = await runner.runCycle();
-    assert(applied3 === 1, `cycle #3 applied 1 record — the previously-blocked setting (got ${applied3})`);
+    const cycle3 = await runner.runCycle();
+    assert(cycle3.applied === 1, `cycle #3 applied 1 record — the previously-blocked setting (got ${cycle3.applied})`);
+    // S7: quarantine-and-advance is NOT a hold — the window completed and the cursor genuinely moved,
+    // so this reports 'progressed' (not 'failed').
+    assert(cycle3.outcome === 'progressed', `cycle #3 reports outcome 'progressed' (quarantined-and-advanced) (got '${cycle3.outcome}')`);
     const q3 = await quarantine.get(POISON_TYPE, POISON_ID);
     assert(q3?.status === 'quarantined', `quarantine row is 'quarantined' after cycle #3 (got '${q3?.status}')`);
     assert(q3?.attempts === 3, `quarantine attempts === 3 (== threshold) after cycle #3 (got ${q3?.attempts})`);
@@ -232,8 +239,9 @@ async function main(): Promise<void> {
     step('4. cycle #4 — cause fixed + system re-published → applies → holdSuccess CLEARS the quarantine row');
     causeFixed = true;
     healPublished = true;
-    const applied4 = await runner.runCycle();
-    assert(applied4 === 1, `cycle #4 applied the re-published system (got ${applied4})`);
+    const cycle4 = await runner.runCycle();
+    assert(cycle4.applied === 1, `cycle #4 applied the re-published system (got ${cycle4.applied})`);
+    assert(cycle4.outcome === 'progressed', `cycle #4 reports outcome 'progressed' (got '${cycle4.outcome}')`);
     assert(appliedSystems.includes(POISON_ID), `the previously-poison system ${POISON_ID} applied successfully`);
     const q4 = await quarantine.get(POISON_TYPE, POISON_ID);
     assert(q4 === undefined, `quarantine row CLEARED by the runner's holdSuccess path (got ${JSON.stringify(q4)})`);
@@ -244,8 +252,9 @@ async function main(): Promise<void> {
 
     // ── 5. Steady state: nothing left to pull, no drift. ──
     step('5. cycle #5 — steady state: nothing to pull, cursor stable, quarantine empty');
-    const applied5 = await runner.runCycle();
-    assert(applied5 === 0, `cycle #5 applied 0 records (got ${applied5})`);
+    const cycle5 = await runner.runCycle();
+    assert(cycle5.applied === 0, `cycle #5 applied 0 records (got ${cycle5.applied})`);
+    assert(cycle5.outcome === 'drained', `cycle #5 reports outcome 'drained' (nothing left to pull) (got '${cycle5.outcome}')`);
     assert((await readChangeCursor(labDb, 'sync-pull')) === 7, `'sync-pull' cursor unchanged at 7`);
     assert((await quarantine.list()).length === 0, 'quarantine still empty');
     pass('steady state: no re-apply, no cursor drift, no quarantine resurrection');

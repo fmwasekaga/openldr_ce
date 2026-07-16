@@ -382,26 +382,34 @@ async function main(): Promise<void> {
       return r?.n != null ? Number(r.n) : -1;
     };
 
-    async function drain(maxIters = 200): Promise<{ cycles: number; applied: number }> {
+    // Returns total applied + cycle count + the last cycle's CycleResult outcome (S7) — the loop only
+    // breaks once a cycle reports 0 applied AND no cursor movement, so that final cycle's outcome is
+    // the drain's real "caught up" (or "stuck") signal. This harness's window mixes per-row reference
+    // records with the two bulk (hold-kind) entities `terminology_system`/`concept_map`; since
+    // applyRecord never throws here, every non-empty window fully applies and reports 'progressed'.
+    async function drain(maxIters = 200): Promise<{ cycles: number; applied: number; lastOutcome: string }> {
       let applied = 0;
       let cycles = 0;
+      let lastOutcome = '';
       for (let i = 0; i < maxIters; i++) {
         const before = await labCursor();
-        const a = await runner.runCycle();
+        const r = await runner.runCycle();
         const after = await labCursor();
-        applied += a;
+        applied += r.applied;
+        lastOutcome = r.outcome;
         cycles++;
-        if (a === 0 && after === before) break;
+        if (r.applied === 0 && after === before) break;
         await sleep(10);
       }
-      return { cycles, applied };
+      return { cycles, applied, lastOutcome };
     }
 
     // ── 3. Pull drain #1: replicate central → lab ──
     step('3. pull drain #1: replicate central → lab');
     const d1 = await drain();
-    ok(`drain #1: ${d1.cycles} cycle(s), ${d1.applied} record(s) applied by lab`);
+    ok(`drain #1: ${d1.cycles} cycle(s), ${d1.applied} record(s) applied by lab, last outcome '${d1.lastOutcome}'`);
     assert(d1.applied === 5, `lab applied all 5 signalled entities (got ${d1.applied})`);
+    assert(d1.lastOutcome === 'drained', `drain #1 finishes on a 'drained' cycle (got '${d1.lastOutcome}')`);
     const centralMaxSeq = Number((await centralDb.selectFrom('reference_change_log').select((eb) => eb.fn.max('seq').as('m')).executeTakeFirst())?.m ?? 0);
     assert((await labCursor()) === centralMaxSeq, `lab 'sync-pull' cursor reached central max seq (${await labCursor()} === ${centralMaxSeq})`);
 
@@ -462,7 +470,8 @@ async function main(): Promise<void> {
     const cursorBefore = await labCursor();
     const cyc = await runner.runCycle();
     const cursorAfter = await labCursor();
-    assert(cyc === 0, `final runCycle applied 0 records (got ${cyc})`);
+    assert(cyc.applied === 0, `final runCycle applied 0 records (got ${cyc.applied})`);
+    assert(cyc.outcome === 'drained', `final runCycle reports outcome 'drained' (got '${cyc.outcome}')`);
     assert(cursorAfter === cursorBefore, `lab 'sync-pull' cursor unchanged (${cursorAfter} === ${cursorBefore})`);
     pass('(e) idempotent: no re-apply, no cursor drift');
   } catch (e) {

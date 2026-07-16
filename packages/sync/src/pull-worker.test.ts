@@ -56,13 +56,14 @@ describe('createSyncPullRunner', () => {
       logger: fakeLogger(),
     };
 
-    const applied = await createSyncPullRunner(deps).runCycle();
+    const r = await createSyncPullRunner(deps).runCycle();
 
     expect(applyRecord).toHaveBeenCalledTimes(2);
     expect(applyRecord).toHaveBeenNthCalledWith(1, expect.objectContaining({ seq: 1, entityId: 'f1', op: 'upsert' }));
     expect(applyRecord).toHaveBeenNthCalledWith(2, expect.objectContaining({ seq: 2, entityId: 'f2', op: 'delete' }));
     expect(advanceCursor).toHaveBeenCalledWith(2);
-    expect(applied).toBe(2);
+    expect(r.outcome).toBe('progressed');
+    expect(r.applied).toBe(2);
   });
 
   it('passes the read cursor as fromSeq and the token to postPull', async () => {
@@ -96,8 +97,9 @@ describe('createSyncPullRunner', () => {
       logger: fakeLogger(),
     };
 
-    const applied = await createSyncPullRunner(deps).runCycle();
-    expect(applied).toBe(0);
+    const r = await createSyncPullRunner(deps).runCycle();
+    expect(r.outcome).toBe('drained'); // an impl that returned 'failed' here would also stop the drain
+    expect(r.applied).toBe(0); // — this asserts the outcome explicitly so that mutation would be caught
     expect(applyRecord).not.toHaveBeenCalled();
     expect(advanceCursor).not.toHaveBeenCalled();
   });
@@ -117,8 +119,9 @@ describe('createSyncPullRunner', () => {
       logger,
     };
 
-    const applied = await createSyncPullRunner(deps).runCycle();
-    expect(applied).toBe(0);
+    const r = await createSyncPullRunner(deps).runCycle();
+    expect(r.outcome).toBe('failed');
+    expect(r.applied).toBe(0);
     expect(applyRecord).not.toHaveBeenCalled();
     expect(advanceCursor).not.toHaveBeenCalled();
     expect(logger.warns).toHaveLength(1);
@@ -139,8 +142,9 @@ describe('createSyncPullRunner', () => {
       logger,
     };
 
-    const applied = await createSyncPullRunner(deps).runCycle();
-    expect(applied).toBe(0);
+    const r = await createSyncPullRunner(deps).runCycle();
+    expect(r.outcome).toBe('failed');
+    expect(r.applied).toBe(0);
     expect(postPull).not.toHaveBeenCalled(); // failed before transport (getToken inside the try)
     expect(advanceCursor).not.toHaveBeenCalled();
     expect(logger.warns).toHaveLength(1);
@@ -165,16 +169,22 @@ describe('createSyncPullRunner', () => {
       logger,
     };
 
-    const applied = await createSyncPullRunner(deps).runCycle();
+    const r = await createSyncPullRunner(deps).runCycle();
     expect(applyRecord).toHaveBeenCalledTimes(3); // every record attempted; one bad one does not stop the loop
-    expect(applied).toBe(2); // f1 + f3 applied, f2 skipped
+    expect(r.applied).toBe(2); // f1 + f3 applied, f2 skipped
+    expect(r.outcome).toBe('progressed');
     expect(advanceCursor).toHaveBeenCalledWith(3); // advanced PAST the failed seq — never blocks the stream
     expect(logger.warns).toHaveLength(1);
     expect(logger.warns[0]).toMatchObject({ entityType: 'form', entityId: 'f2', seq: 2 });
   });
 
-  it('does not advance the cursor backward when nextSeq <= cursor (defensive)', async () => {
+  it('does not advance the cursor backward when nextSeq <= cursor (defensive) — and reports failed, not progressed', async () => {
+    // T3 lesson applied here: a non-held window that fails to advance the cursor (stale/hostile
+    // nextSeq at/behind the cursor) must NOT report 'progressed' — the drain loop would re-fetch this
+    // IDENTICAL window and hammer it for the whole budget, exactly like the push runner's
+    // central-acked-behind-cursor regression.
     const advanceCursor = vi.fn(async () => {});
+    const logger = fakeLogger();
     const deps: PullDeps = {
       // stale/hostile response: nextSeq (7) is not past the current cursor (10)
       postPull: async () => ({ records: [rec(7, 'f7')], nextSeq: 7 }),
@@ -182,12 +192,14 @@ describe('createSyncPullRunner', () => {
       applyRecord: async () => 'applied',
       readCursor: async () => 10,
       advanceCursor,
-      logger: fakeLogger(),
+      logger,
     };
 
-    const applied = await createSyncPullRunner(deps).runCycle();
-    expect(applied).toBe(1); // the served record was still applied
+    const r = await createSyncPullRunner(deps).runCycle();
+    expect(r.applied).toBe(1); // the served record was still applied
     expect(advanceCursor).not.toHaveBeenCalled(); // but the cursor is never regressed
+    expect(r.outcome).toBe('failed'); // NOT 'progressed' — nothing actually moved
+    expect(logger.errors).toHaveLength(1);
   });
 
   it('quarantine-only batch (one throws): still advances to nextSeq, the bad one skipped (unchanged S2 behavior)', async () => {
@@ -206,8 +218,9 @@ describe('createSyncPullRunner', () => {
       logger,
     };
 
-    const applied = await createSyncPullRunner(deps).runCycle();
-    expect(applied).toBe(2); // f1 + f3, f2 skipped
+    const r = await createSyncPullRunner(deps).runCycle();
+    expect(r.applied).toBe(2); // f1 + f3, f2 skipped
+    expect(r.outcome).toBe('progressed');
     expect(advanceCursor).toHaveBeenCalledWith(3); // whole window handled → advance to nextSeq
     expect(logger.warns).toHaveLength(1);
     expect(logger.warns[0]).toMatchObject({ entityType: 'form', entityId: 'f2', seq: 2 });
@@ -233,9 +246,10 @@ describe('createSyncPullRunner', () => {
       logger,
     };
 
-    const applied = await createSyncPullRunner(deps).runCycle();
+    const r = await createSyncPullRunner(deps).runCycle();
     expect(applyRecord).toHaveBeenCalledTimes(2); // f1 applied, loinc thrown, loop stopped BEFORE f3
-    expect(applied).toBe(1); // only f1
+    expect(r.applied).toBe(1); // only f1
+    expect(r.outcome).toBe('failed'); // HELD — going again would re-fail the identical record immediately
     expect(advanceCursor).toHaveBeenCalledWith(1); // capped at seq1 (NOT nextSeq 3) → held record + rest replay
     expect(logger.warns).toHaveLength(1);
     expect(logger.warns[0]).toMatchObject({ entityType: 'terminology_system', entityId: 'loinc', seq: 2 });
@@ -256,9 +270,10 @@ describe('createSyncPullRunner', () => {
       logger,
     };
 
-    const applied = await createSyncPullRunner(deps).runCycle();
+    const r = await createSyncPullRunner(deps).runCycle();
     expect(applyRecord).toHaveBeenCalledTimes(1); // stopped at the first (held) record
-    expect(applied).toBe(0);
+    expect(r.applied).toBe(0);
+    expect(r.outcome).toBe('failed');
     expect(advanceCursor).not.toHaveBeenCalled(); // safeSeq stays at cursor (0) → not > cursor → no advance
     expect(logger.warns).toHaveLength(1);
     expect(logger.warns[0]).toMatchObject({ entityType: 'terminology_system', entityId: 'loinc', seq: 1 });
@@ -279,8 +294,9 @@ describe('createSyncPullRunner', () => {
       logger: fakeLogger(),
     };
 
-    const applied = await createSyncPullRunner(deps).runCycle();
-    expect(applied).toBe(2);
+    const r = await createSyncPullRunner(deps).runCycle();
+    expect(r.applied).toBe(2);
+    expect(r.outcome).toBe('progressed');
     expect(advanceCursor).toHaveBeenCalledWith(2); // both succeeded → whole window handled
   });
 
@@ -299,8 +315,9 @@ describe('createSyncPullRunner', () => {
       logger: fakeLogger(),
     };
 
-    const applied = await createSyncPullRunner(deps).runCycle();
-    expect(applied).toBe(3);
+    const r = await createSyncPullRunner(deps).runCycle();
+    expect(r.applied).toBe(3);
+    expect(r.outcome).toBe('progressed');
     expect(advanceCursor).toHaveBeenCalledWith(3);
   });
 
@@ -321,8 +338,9 @@ describe('createSyncPullRunner', () => {
       logger, // rely on the DEFAULT isHoldRecord (no override): report is quarantine
     };
 
-    const applied = await createSyncPullRunner(deps).runCycle();
-    expect(applied).toBe(0);
+    const r = await createSyncPullRunner(deps).runCycle();
+    expect(r.applied).toBe(0); // applied is REPORTING only — quarantined still means the window progressed
+    expect(r.outcome).toBe('progressed');
     expect(advanceCursor).toHaveBeenCalledWith(1); // report quarantined → advance past it to nextSeq
     expect(logger.warns[0]).toMatchObject({ entityType: 'report', seq: 1 });
   });
@@ -345,9 +363,10 @@ describe('createSyncPullRunner', () => {
       logger,
     };
 
-    const applied = await createSyncPullRunner(deps).runCycle();
+    const r = await createSyncPullRunner(deps).runCycle();
     expect(applyRecord).toHaveBeenCalledTimes(2); // held at seq2 → seq3 not processed
-    expect(applied).toBe(1);
+    expect(r.applied).toBe(1);
+    expect(r.outcome).toBe('failed'); // HELD
     expect(advanceCursor).toHaveBeenCalledWith(1); // capped at seq1
     expect(logger.warns[0]).toMatchObject({ entityId: 'f2', seq: 2 });
   });
@@ -438,11 +457,29 @@ describe('createSyncPullRunner', () => {
       },
       logger,
     });
-    const applied = await runner.runCycle();
-    expect(applied).toBe(1); // the apply DID succeed
+    const r = await runner.runCycle();
+    expect(r.applied).toBe(1); // the apply DID succeed
+    expect(r.outcome).toBe('progressed');
     expect(holdFailure).not.toHaveBeenCalled(); // and must never be counted as a failure
     expect(cursor).toBe(5); // the clear failure must not wedge the stream
     expect(logger.warns).toHaveLength(1); // just a warn
+  });
+
+  it('reports failed when a bulk record is HELD — going again would re-fail it immediately', async () => {
+    const advanceCursor = vi.fn(async () => {});
+    const deps: PullDeps = {
+      postPull: async () => ({ records: [holdRec(1, 'loinc')], nextSeq: 1 }),
+      getToken: async () => 't',
+      applyRecord: async () => {
+        throw new Error('bulk apply blew up');
+      },
+      readCursor: async () => 0,
+      advanceCursor,
+      holdFailure: async () => 'hold' as const,
+      logger: fakeLogger(),
+    };
+    const r = await createSyncPullRunner(deps).runCycle();
+    expect(r.outcome).toBe('failed'); // NOT 'progressed' — the drain loop must not spin on this
   });
 
   it('never calls holdFailure on a transport failure (outer catch)', async () => {

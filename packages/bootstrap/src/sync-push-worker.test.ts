@@ -1,123 +1,50 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createSyncPushWorker } from './sync-push-worker';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { DrainWorkerDeps } from './drain-worker';
+
+// The wrapper's ONLY unique behaviour is how it translates its bare `listenClient?` into
+// createDrainWorker's ATOMIC `listen: { client, channel }` pair — it owns the 'fhir_changes' channel
+// so callers cannot supply a client without one (a client-without-channel would silently degrade to
+// interval-only: no LISTEN, no error, no log — the exact slow-drain bug this slice exists to kill).
+// Everything else (cadence, overlap guard, bounded drain, error survival, start/stop/isRunning) is
+// createDrainWorker's and is covered by drain-worker.test.ts against the real implementation.
+const createDrainWorker = vi.fn((_opts: DrainWorkerDeps) => ({
+  start() {},
+  stop() {},
+  trigger() {},
+  isRunning: () => false,
+  tickOnce: async () => {},
+  budgetMs: 0,
+}));
+vi.mock('./drain-worker', () => ({ createDrainWorker: (o: DrainWorkerDeps) => createDrainWorker(o) }));
+
+const { createSyncPushWorker } = await import('./sync-push-worker');
 
 const silentLogger = { info() {}, error() {}, warn() {}, debug() {} } as never;
+const runner = { runCycle: async () => ({ outcome: 'drained' as const, applied: 0 }) };
 
-afterEach(() => {
-  vi.useRealTimers();
+const lastDeps = (): DrainWorkerDeps => createDrainWorker.mock.calls[0][0];
+
+beforeEach(() => {
+  createDrainWorker.mockClear();
 });
 
 describe('createSyncPushWorker', () => {
-  it('runs a cycle on each interval tick and stop() halts scheduling', async () => {
-    vi.useFakeTimers();
-    const runCycle = vi.fn().mockResolvedValue(0);
-    const worker = createSyncPushWorker({ runner: { runCycle }, intervalMs: 1000, logger: silentLogger });
+  it('supplies the fhir_changes channel alongside a listenClient as one atomic listen pair', () => {
+    const client = { query: async () => undefined, on: () => {} };
+    createSyncPushWorker({ runner, intervalMs: 1000, listenClient: client, logger: silentLogger });
 
-    worker.start();
-    expect(runCycle).toHaveBeenCalledTimes(0); // nothing runs until the first interval elapses
-
-    await vi.advanceTimersByTimeAsync(1000);
-    expect(runCycle).toHaveBeenCalledTimes(1);
-    await vi.advanceTimersByTimeAsync(2000);
-    expect(runCycle).toHaveBeenCalledTimes(3);
-
-    worker.stop();
-    await vi.advanceTimersByTimeAsync(5000);
-    expect(runCycle).toHaveBeenCalledTimes(3); // no further cycles after stop()
+    const deps = lastDeps();
+    // The channel is the wrapper's business, not the caller's — pinned to the exact string because a
+    // typo'd channel LISTENs successfully and then never fires.
+    expect(deps.listen).toEqual({ client, channel: 'fhir_changes' });
+    expect(deps.label).toBe('sync push');
+    expect(deps.intervalMs).toBe(1000);
+    expect(deps.runner).toBe(runner);
   });
 
-  it('does not overlap cycles (a slow cycle blocks the next tick)', async () => {
-    vi.useFakeTimers();
-    let running = 0;
-    let maxConcurrent = 0;
-    const runCycle = vi.fn().mockImplementation(async () => {
-      running++;
-      maxConcurrent = Math.max(maxConcurrent, running);
-      await new Promise((r) => setTimeout(r, 2500)); // outlives two interval ticks
-      running--;
-      return 0;
-    });
-    const worker = createSyncPushWorker({ runner: { runCycle }, intervalMs: 1000, logger: silentLogger });
+  it('passes listen: undefined with no listenClient (interval-only, exactly as pre-S7)', () => {
+    createSyncPushWorker({ runner, intervalMs: 1000, logger: silentLogger });
 
-    worker.start();
-    await vi.advanceTimersByTimeAsync(3000); // three ticks fire while the first cycle is still in flight
-    expect(maxConcurrent).toBe(1);
-    expect(runCycle).toHaveBeenCalledTimes(1);
-
-    worker.stop();
-  });
-
-  it('keeps looping after a runCycle rejection', async () => {
-    vi.useFakeTimers();
-    const runCycle = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('boom'))
-      .mockResolvedValue(0);
-    const errorSpy = vi.fn();
-    const worker = createSyncPushWorker({
-      runner: { runCycle },
-      intervalMs: 1000,
-      logger: { info() {}, error: errorSpy, warn() {}, debug() {} } as never,
-    });
-
-    worker.start();
-    await vi.advanceTimersByTimeAsync(1000); // first cycle rejects
-    expect(runCycle).toHaveBeenCalledTimes(1);
-    expect(errorSpy).toHaveBeenCalledTimes(1);
-
-    await vi.advanceTimersByTimeAsync(1000); // loop survives — second cycle runs
-    expect(runCycle).toHaveBeenCalledTimes(2);
-
-    worker.stop();
-  });
-
-  it('trigger() runs a cycle immediately and does not overlap an in-flight cycle', async () => {
-    vi.useFakeTimers();
-    let running = 0;
-    let maxConcurrent = 0;
-    const runCycle = vi.fn().mockImplementation(async () => {
-      running++;
-      maxConcurrent = Math.max(maxConcurrent, running);
-      await new Promise((r) => setTimeout(r, 100));
-      running--;
-      return 0;
-    });
-    const worker = createSyncPushWorker({ runner: { runCycle }, intervalMs: 10_000, logger: silentLogger });
-
-    worker.trigger();
-    worker.trigger(); // second trigger while first is in flight is dropped by the overlap guard
-    await vi.advanceTimersByTimeAsync(100);
-    expect(maxConcurrent).toBe(1);
-    expect(runCycle).toHaveBeenCalledTimes(1);
-
-    worker.stop();
-  });
-
-  it('isRunning() reflects started-and-not-stopped state', async () => {
-    vi.useFakeTimers();
-    const runCycle = vi.fn().mockResolvedValue(0);
-    const worker = createSyncPushWorker({ runner: { runCycle }, intervalMs: 1000, logger: silentLogger });
-
-    expect(worker.isRunning()).toBe(false); // not started yet
-    worker.start();
-    expect(worker.isRunning()).toBe(true); // running after start()
-    worker.stop();
-    expect(worker.isRunning()).toBe(false); // halted after stop()
-  });
-
-  it('start() is idempotent and start() after stop() is a no-op', async () => {
-    vi.useFakeTimers();
-    const runCycle = vi.fn().mockResolvedValue(0);
-    const worker = createSyncPushWorker({ runner: { runCycle }, intervalMs: 1000, logger: silentLogger });
-
-    worker.start();
-    worker.start(); // must not create a second interval
-    await vi.advanceTimersByTimeAsync(1000);
-    expect(runCycle).toHaveBeenCalledTimes(1);
-
-    worker.stop();
-    worker.start(); // must not resurrect the loop after stop()
-    await vi.advanceTimersByTimeAsync(3000);
-    expect(runCycle).toHaveBeenCalledTimes(1);
+    expect(lastDeps().listen).toBeUndefined();
   });
 });
