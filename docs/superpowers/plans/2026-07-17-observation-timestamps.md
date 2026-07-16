@@ -101,7 +101,7 @@ test("disaDatestampToIso returns null for null and for an invalid Date", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd D:/Projects/Repositories/cdr-toolchain && node --import tsx --test apps/cli/src/export/v2-transform-datestamp.test.ts`
+Run: `cd D:/Projects/Repositories/cdr-toolchain/apps/cli && node --import tsx --test src/export/v2-transform-datestamp.test.ts`
 Expected: FAIL — `disaDatestampToIso is not a function` / not exported.
 
 - [ ] **Step 3: Write the implementation**
@@ -131,7 +131,7 @@ export function disaDatestampToIso(d: Date | null): string | null {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `node --import tsx --test apps/cli/src/export/v2-transform-datestamp.test.ts`
+Run: `cd apps/cli && node --import tsx --test src/export/v2-transform-datestamp.test.ts`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
@@ -210,7 +210,7 @@ test("result_timestamp is null when the panel carried no DATESTAMP", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `node --import tsx --test apps/cli/src/export/v2-transform-datestamp.test.ts`
+Run: `cd apps/cli && node --import tsx --test src/export/v2-transform-datestamp.test.ts`
 Expected: FAIL — `expected '2019-01-23T15:56:42', got null` (the stub).
 
 - [ ] **Step 3: Write the implementation**
@@ -232,10 +232,10 @@ with:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `node --import tsx --test apps/cli/src/export/v2-transform-datestamp.test.ts`
+Run: `cd apps/cli && node --import tsx --test src/export/v2-transform-datestamp.test.ts`
 Expected: PASS.
 
-Then the full suite: `node --import tsx --test "apps/cli/src/export/*.test.ts"`
+Then the full suite: `cd apps/cli && node --import tsx --test "src/export/*.test.ts"`
 Expected: PASS. ⚠ If a compare/audit test breaks, **stop and report** — `result_timestamp` may have
 been relied upon as always-null.
 
@@ -290,7 +290,7 @@ test("fhirInstant returns undefined for null/empty", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `node --import tsx --test apps/cli/src/export/fhir-primitives.test.ts`
+Run: `cd apps/cli && node --import tsx --test src/export/fhir-primitives.test.ts`
 Expected: FAIL — `fhirInstant is not a function`.
 
 - [ ] **Step 3: Write the implementation**
@@ -325,7 +325,7 @@ const INSTANT_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `node --import tsx --test apps/cli/src/export/fhir-primitives.test.ts`
+Run: `cd apps/cli && node --import tsx --test src/export/fhir-primitives.test.ts`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -436,7 +436,7 @@ test("no collection time omits effectiveDateTime rather than falling back to iss
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `node --import tsx --test apps/cli/src/export/fhir-transform-timestamps.test.ts`
+Run: `cd apps/cli && node --import tsx --test src/export/fhir-transform-timestamps.test.ts`
 Expected: FAIL — `effectiveDateTime` is `"2019-01-23T15:56:42+03:00"` (the **result** time), and
 `issued` is absent.
 
@@ -493,14 +493,14 @@ idiom:
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `node --import tsx --test apps/cli/src/export/fhir-transform-timestamps.test.ts`
+Run: `cd apps/cli && node --import tsx --test src/export/fhir-transform-timestamps.test.ts`
 Expected: PASS (5 tests).
 
 Run the conformance gate:
-`FHIR_CONFORMANCE=1 node --import tsx --test apps/cli/src/export/fhir-conformance.test.ts`
+`cd apps/cli && FHIR_CONFORMANCE=1 node --import tsx --test src/export/fhir-conformance.test.ts`
 Expected: PASS.
 
-Run the whole export suite: `node --import tsx --test "apps/cli/src/export/*.test.ts"`
+Run the whole export suite: `cd apps/cli && node --import tsx --test "src/export/*.test.ts"`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
