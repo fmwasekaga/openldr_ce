@@ -69,6 +69,7 @@ A client sending `application/json` + a bare array works.**
 | D2 | **Enforce a CE ingest profile and reject loudly.** Not "accept any valid FHIR". |
 | D3 | **Mount `/api/fhir/`**; auth = **machine bearer with a `site_id` claim**. |
 | D4 | **Migrate `cdr-toolchain` now**; the array is never a FHIR contract again. **And fix the content-type trap in this slice.** |
+| D5 | **ATOMIC — all-or-nothing.** *"make it atomic, dont accept transaction if we cant honour it"*. **Reverses** this spec's first draft (which copied corlix's `transaction`-label-with-`batch`-semantics). See §4.1. |
 
 ---
 
@@ -131,19 +132,40 @@ foreign CDR's shape and is the model for D3.
 signals "already answered" by resolving `undefined` — returning the reply would make it truthy and
 defeat every `if (!principal)` guard.
 
-**Persist is non-atomic and async — and this bounds what the response may claim.**
-- `FhirStore.save(resource, provenance?)` (`fhir-store.ts:114`) takes **NO transaction** ⇒ a
-  multi-resource atomic write is **impossible** without changing `FhirStore`.
-- `persistResources` (`persist.ts:31-44`) **throws mid-loop** on the first invalid resource (`:39`) —
-  resources before it are **already saved**. **Partial write, no rollback, no per-entry report.**
-  ⇒ **the route must NOT call it as-is**; it needs its own per-entry `try`/`catch` (corlix's loop
-  shape).
-- `persist.ts:41` only ever returns `{ saved: true, flattened: 'deferred' }`. Projection is
-  **asynchronous** (`persist.ts:17-19`). ⇒ **the response can honestly say "stored", NEVER "landed in
-  `lab_results`".**
-- ⚠ **`'written' | 'skipped' | 'degraded'` (`persist.ts:8`) are DEAD** — never produced. So
-  `persist-store-service.ts`'s `flattened[r.flattened] += 1` tally always yields
-  `{written:0, skipped:0, degraded:0, deferred:N}`. **Decoration.** Do not build on it.
+**Atomicity IS achievable — and the load-bearing invariant STRENGTHENS. (D5, verified.)**
+- `FhirStore.save(resource, provenance?)` (`fhir-store.ts:114`) takes no transaction **in its
+  signature** — but its body **already opens one**: `db.transaction().execute(...)`
+  (`fhir-store.ts:214`), spanning `fhir_resources` + `resource_history` + `change_log` for **one**
+  resource. **Atomicity across N is hoisting that transaction, not inventing one.**
+- ⚠ **THE INVARIANT** (`fhir-store.ts:~260`, verbatim): *"the change_log insert must NOT be this
+  transaction's first write. The fhir_resources upsert + resource_history insert above run first, so
+  the txn's xid is assigned before `nextval(seq)` is drawn here. The R2 projection worker relies on
+  this: a gap's txn xid < the snapshot's xmax that stamps its x0. Inserting into change_log as a
+  transaction's first statement would reopen a permanent-skip window."*
+  **With one txn spanning N resources it HOLDS AND STRENGTHENS**: resource 1's history/
+  `fhir_resources` insert assigns the xid before *any* `change_log` `nextval` is drawn.
+  ⚠ **It is stated at THREE sites** — `save()` (`:214+`), `applyRemote()` (`:311`), and
+  `writeVersion()` (`:164-176`, *"Do NOT reorder these inserts. (Mirrors save()/applyRemote().)"*).
+  **A 4th writer must carry it too, or the ordering must be factored into one helper.**
+- **The projection copes**: `fetchSafeChangeRows` (`projection/fetch.ts:18-19`) reads under
+  `repeatable read` with an `xmin`/`xmax` snapshot. N rows sharing **one** xid become visible
+  **together** ⇒ the projection can never observe a **partial** Bundle. Strictly better than today.
+- **Concurrency is already correct for this**: the `resource_history` PK `(resource_type,id,version)`
+  serializes concurrent same-key writes; a race loser hits duplicate-key and **rolls back
+  atomically** (`fhir-store.ts:215-221`). Under `saveMany` a race loser rolls back **the whole
+  Bundle** — which is exactly what atomic means.
+- `persistResources` (`persist.ts:31-44`) **throws mid-loop** on the first invalid resource (`:39`),
+  leaving resources before it **already saved** — **partial write, no rollback.**
+  ⇒ **the route must NOT call it as-is.** Under D5 it is replaced by **validate-all-then-write-all**
+  (§4.1), which removes the partial-write hazard rather than reporting around it.
+
+**Projection remains async — and this still bounds what the response may claim.**
+`persist.ts:41` only ever returns `{ saved: true, flattened: 'deferred' }` (`persist.ts:17-19`).
+⇒ even when atomic, the response may honestly say **"stored"**, **NEVER** "landed in `lab_results`".
+Atomicity is over the **FHIR write**, not the projection.
+⚠ **`'written' | 'skipped' | 'degraded'` (`persist.ts:8`) are DEAD** — never produced. So
+`persist-store-service.ts`'s `flattened[r.flattened] += 1` tally always yields
+`{written:0, skipped:0, degraded:0, deferred:N}`. **Decoration.** Do not build on it.
 
 **OperationOutcome already exists** — `packages/fhir/src/operation-outcome.ts`: `outcomeFromIssues`
 (`:17`), `singleIssueOutcome` (`:21`), **`issuesFromZodError` (`:30`)** which maps zod →
@@ -170,19 +192,70 @@ body >1KB**. A transaction-response Bundle is comfortably >1KB ⇒ **every send 
 | **Route** | `POST /api/fhir/` |
 | **Accepts** | a **`transaction` Bundle** only, `Content-Type: application/fhir+json` |
 | **Returns** | a **`transaction-response` Bundle** |
-| **Rejects** | bare array, non-Bundle, `Bundle.type !== 'transaction'` ⇒ `400` + **`OperationOutcome`** — ⚠ **the accepted-type set is an OPEN decision; see the warning below before implementing this row** |
+| **Rejects** | bare array, non-Bundle, `Bundle.type !== 'transaction'` ⇒ `400` + **`OperationOutcome`** |
 | **Auth** | machine bearer + **`site_id` claim**, per `sitePrincipal` |
-| **Atomicity** | **NOT atomic** — per-entry, like corlix (`transaction.ts:8-9`). Forced by `fhir-store.ts:114`. |
+| **Atomicity** | ✅ **ATOMIC — all-or-nothing (D5).** One DB transaction spans every entry. |
 
-**One contract, no aliases.** `transaction` only — matching corlix — because `collection` carries no
-per-entry `request`, and accepting several types recreates the ambiguity we are removing.
+**One contract, no aliases.** `transaction` only — because `collection` carries no per-entry
+`request`, and accepting several types recreates the ambiguity we are removing.
 
-⚠ **We accept `Bundle.type: 'transaction'` while NOT being atomic.** FHIR's `transaction` implies
-all-or-nothing; ours is `batch` semantics under a `transaction` label. corlix has exactly this
-mismatch and documents it. **Options: (a) match corlix and document loudly, (b) accept `batch` too
-and let clients choose honest semantics, (c) make it atomic (needs `FhirStore` change).**
-**DECIDE IN PLANNING — not settled in the brainstorm.** Recommendation: (a) for corlix symmetry,
-with the non-atomicity stated in the CapabilityStatement and the spec.
+### D5 — atomic, because we will not claim a standard we do not honour
+
+**User, 2026-07-16 (verbatim):** *"make it atomic, dont accept transaction if we cant honour it"*
+
+This **reverses** the earlier draft of this spec, which proposed accepting `Bundle.type:
+'transaction'` with `batch` semantics underneath — *"like corlix"*. corlix has exactly that mismatch
+and documents it (`corlix transaction.ts:8-9`). **Documenting a lie does not stop it being one**, and
+it is the same defect the user objected to at the top of this spec: claiming FHIR while doing
+something else. **Precedent is not a justification.** We diverge from corlix here, deliberately.
+
+FHIR's `transaction` means all-or-nothing. So ours is.
+
+### 4.1.1 Validate-all-then-write-all
+
+Atomicity **simplifies** the route rather than complicating it:
+
+1. **Parse + profile-validate EVERY entry. No writes.**
+2. **Any entry fails** ⇒ `400` + a `transaction-response` whose entries carry per-entry
+   `OperationOutcome`s naming every defect. **NOTHING is written.**
+3. **All pass** ⇒ **one** `FhirStore` transaction writes all N ⇒ `200` + `transaction-response`,
+   `201` per entry.
+
+This **deletes** the earlier draft's per-entry `try`/`catch`-around-writes, and with it the
+partial-write hazard of `persistResources` (`persist.ts:39`). A failure mode removed beats a failure
+mode reported.
+
+⚠ **The write still needs `saveMany`** — see §4.1.2. `persistResources` must NOT be used as-is.
+
+### 4.1.2 `FhirStore.saveMany` — the mechanism
+
+> **SKETCH — the shape is not settled; verify against the real file before coding.**
+
+`save()` already wraps ONE resource in `db.transaction().execute(...)` (`fhir-store.ts:214`).
+`saveMany(resources, provenance): Promise<SavedRef[]>` hoists that to span N, preserving per-resource
+ordering (`resource_history` + `fhir_resources` **before** that resource's `change_log`).
+
+**Why the invariant survives** — see §3: resource 1's first write assigns the txn's xid before any
+`change_log` `nextval` is drawn, so it holds **more** strongly than in the per-resource case.
+
+Also hoist out of the loop: `resolveSiteId()` (once, before the txn) and the `pg_notify` wakeup
+(once, **after** the txn — it is best-effort and must never affect the write, `fhir-store.ts:271-273`).
+
+⚠ **Two options, DECIDE IN PLANNING:**
+- **(a) add `saveMany`** — additive, no existing caller changes. But the ordering invariant then
+  lives at a **4th** site (§3 lists three).
+- **(b) factor the ordering into one helper** that `save`/`applyRemote`/`writeVersion`/`saveMany`
+  share — removes the duplication that makes the invariant fragile, but **touches the sync write
+  path**, which is live and load-bearing ([[distributed-sync-central-workstream]]).
+**Recommendation: (a).** This slice should not refactor the sync write path. Log (b) as debt.
+
+⚠ **Rule 8:** `FhirStore` is a **shared interface**. Adding `saveMany` obliges a typecheck of
+**every** consuming package (`turbo typecheck`), not just `@openldr/db` — vitest strips types and
+will stay green over a type error.
+
+⚠ **pg-mem**: tests run against pg-mem in places (`fhir-store.ts:222` notes bigint reads back
+differently). **SKETCH — verify pg-mem supports the hoisted transaction** before assuming the test
+suite proves atomicity.
 
 ### 4.2 Profile enforcement — the substance of the slice
 
@@ -264,7 +337,9 @@ and by [[cdr-ce-fhir-ingest]]. Grep both and fix every derived statement, not ju
 | a bare **array** ⇒ `400` + OperationOutcome | someone "helpfully" re-adds array support |
 | `Bundle.type: 'collection'` ⇒ `400` + OperationOutcome | the type check is dropped |
 | a valid transaction Bundle ⇒ `200` + **`transaction-response`** with **one entry per request entry** | entries are silently dropped |
-| entry 2 invalid ⇒ entries 1 and 3 still stored, **entry 2 reports an OperationOutcome** | someone calls `persistResources` directly and it throws mid-loop (`persist.ts:39`) |
+| **entry 2 invalid ⇒ entries 1 and 3 are NOT stored either** (D5 atomicity) — assert the store is **empty**, and entry 2's OperationOutcome names the defect | someone calls `persistResources` as-is (`persist.ts:39` throws mid-loop ⇒ **1 and 3 ARE stored** ⇒ red), or `saveMany` is replaced by a per-resource loop |
+| **a mid-Bundle DB failure rolls back EVERY entry** (e.g. a duplicate `resource_history` PK on entry 3 — `fhir-store.ts:215-221`) ⇒ store empty | the transaction is per-resource rather than hoisted |
+| **`change_log` is never the txn's FIRST write** under `saveMany` — assert `fhir_resources`/`resource_history` precede it | someone reorders the inserts ⇒ **reopens the projection permanent-skip window** (§3). ⚠ **SKETCH — how to assert this deterministically is UNRESOLVED; a naive test will be vacuous. Resolve in planning.** |
 | **profile**: Observation without `effectiveDateTime` ⇒ rejected, outcome names `Observation.effectiveDateTime` | the profile regresses to bare R4 — **the corlix failure mode (§2)** |
 | **profile**: S/I/R in `valueCodeableConcept` with no `interpretation` ⇒ rejected | ⚠ **this is exactly what corlix sends** — the highest-value test in the slice |
 | `application/fhir+json` body arrives **parsed** (not a stream) | the passthrough parser regresses (§4.3) |
@@ -294,7 +369,14 @@ error.
 
 - **Auth bypass added, route guard forgotten** ⇒ `/api/fhir/` is **unauthenticated and world-writable**.
   The bypass (§3) and the `sitePrincipal` guard are **one change, never two**. **Worst case in the slice.**
-- Route calls `persistResources` as-is ⇒ **partial write + 500**, no per-entry report (`persist.ts:39`).
+- Route calls `persistResources` as-is ⇒ **partial write + 500** (`persist.ts:39`) — **D5 violated
+  silently**: the caller sees a failure and assumes nothing landed, while some entries did. **This is
+  the atomicity claim failing exactly the way the user forbade.**
+- `saveMany` written as a loop of `save()` calls ⇒ **N transactions, not one** ⇒ non-atomic while the
+  route advertises `transaction`. **Looks correct, tests green if the test only checks the happy
+  path** — which is why the failure-path test in §5 asserts the store is **empty**.
+- `change_log` inserted before `fhir_resources`/`resource_history` in `saveMany` ⇒ **reopens the
+  projection permanent-skip window** (§3). Silent, and it corrupts the read model, not the write.
 - Async handler uses a bare `reply.send()` ⇒ **empty gzip body**; lint catches it, `app.inject` does not.
 - Parser changed without re-testing ValueSet import ⇒ terminology import breaks (§4.3).
 - Profile too strict on day one ⇒ **cdr-toolchain's own payload is rejected**. Mitigate: build the
@@ -310,7 +392,11 @@ error.
   extension, `Organization`/`Location` emission, the `identifier[0]` ordering hack) **plus design**
   for the `hasMember` micro tree and facility attribution, **plus** a new client (CE has no
   `/api/v1/processor/*`). **Its own workstream. Do not let "Bundle support" imply it.**
-- **Making the write atomic.** Needs `FhirStore.save` to take a transaction (`fhir-store.ts:114`).
+- ~~Making the write atomic.~~ **NOW IN SCOPE — see D5 / §4.1.2.**
+- **Factoring the change_log ordering invariant into one shared helper** across
+  `save`/`applyRemote`/`writeVersion`/`saveMany` (§4.1.2 option (b)). Real debt — the invariant lives
+  at 3 sites today and this slice adds a 4th — but it touches the **live sync write path**. Named,
+  separate.
 - **`GET /api/fhir/*` / search / `CapabilityStatement`.** Ingest only. ⚠ But a FHIR base URL with no
   `metadata` is itself a half-truth — **flag as the natural next slice.**
 - **Per-resource endpoints** (`POST /api/fhir/Observation`) — corlix has them; CE does not need them yet.
