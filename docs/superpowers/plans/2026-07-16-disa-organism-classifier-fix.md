@@ -40,7 +40,7 @@ compare gate cannot catch a mistake here — `organism_type` is not among its 13
   import assert from "node:assert/strict";
   ```
 - Run one file: `cd apps/cli && node --import tsx --test src/export/codebook-classify.test.ts`
-- Full suite: `cd apps/cli && pnpm test` — currently **117 tests, 116 pass, 1 skipped**. Must stay green.
+- Full suite: `cd apps/cli && pnpm test` — currently **131 tests, 130 pass, 1 skipped**. Must stay green.
 - Typecheck: `cd apps/cli && pnpm typecheck`
 - **NEVER add a `Co-Authored-By` trailer.**
 - **`pnpm dev -- <cmd>` is broken** — it passes a literal `--` that breaks commander's option
@@ -78,7 +78,7 @@ git status --short   # expect: clean
 cd /d/Projects/Repositories/cdr-toolchain/apps/cli && pnpm test 2>&1 | grep -E "ℹ (tests|pass|fail|skipped)"
 ```
 
-Expected: `tests 117`, `pass 116`, `fail 0`, `skipped 1`. If it is already red, **STOP and report** — do not build on a red baseline.
+Expected: `tests 131`, `pass 130`, `fail 0`, `skipped 1`. If it is already red, **STOP and report** — do not build on a red baseline.
 
 ---
 
@@ -221,7 +221,7 @@ to the module-scope function by name.
 cd /d/Projects/Repositories/cdr-toolchain/apps/cli && pnpm typecheck && pnpm test 2>&1 | grep -E "ℹ (tests|pass|fail|skipped)"
 ```
 
-Expected: typecheck clean; **117 / 116 pass / 1 skipped** — identical to Task 1's baseline. A changed count means something else moved; **STOP and report**.
+Expected: typecheck clean; **131 / 130 pass / 1 skipped** — identical to Task 1's baseline. A changed count means something else moved; **STOP and report**.
 
 - [ ] **Step 4: Commit**
 
@@ -440,7 +440,7 @@ Expected: 8 tests, all passing.
 cd /d/Projects/Repositories/cdr-toolchain/apps/cli && pnpm test 2>&1 | grep -E "ℹ (tests|pass|fail|skipped)" && pnpm typecheck
 ```
 
-Expected: **125 tests, 124 pass, 1 skipped** (117 + 8 new), typecheck clean.
+Expected: **139 tests, 138 pass, 1 skipped** (131 + 8 new), typecheck clean.
 
 **If any pre-existing test now fails, STOP and report it.** Existing audit/export tests may encode the old behaviour — that is exactly the signal we need, and it must be reviewed by a human, not silently "fixed".
 
