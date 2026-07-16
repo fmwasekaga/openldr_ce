@@ -133,10 +133,19 @@ type system forbids the latter.
 - **`getWithProvenance` returns `{}`** for a row with NULL provenance columns (not `undefined`,
   not a throw).
 - **`get` is unchanged** — `terminology-store.ts:161` still compiles and its tests still pass.
-- **Live verification**: re-ingest one CDR lab (see `2026-07-16-cdr-fhir-ingest-to-ce-design.md`
-  for the runbook) and confirm `public.lab_requests.source_system = 'cdr'` and `batch_id` matches
-  `fhir.fhir_resources.batch_id` for the same id. **This is the only check that proves the whole
-  chain** — the unit tests cannot see the real `fhir_resources` columns.
+- **CORRECTION 2026-07-16:** an earlier draft of this section claimed "the unit tests cannot see the
+  real `fhir_resources` columns" and that only a live run could prove the chain. **That is wrong.**
+  `makeMigratedDb()` (`packages/db/src/migrations/internal/test-helpers.ts`) runs **every real
+  internal migration** against pg-mem, and `makeMigratedExternalDb()` does the same for the external
+  schema — so `fhir.fhir_resources` genuinely has the provenance columns under test. The full chain
+  (**save with provenance → runCycle → assert the projected row carries it**) is an ordinary unit
+  test in `cycle.test.ts`. Write it there.
+- **Note the runner:** `packages/db` uses **vitest** (`vitest run --testTimeout 15000`), with
+  `describe`/`it`/`expect`. This is **not** cdr-toolchain's `node:test` — different repo, different
+  convention.
+- **Live verification** (corroboration, not the proof): re-ingest one CDR lab (runbook in
+  `2026-07-16-cdr-fhir-ingest-to-ce-design.md`) and confirm `public.lab_requests.source_system =
+  'cdr'` with `batch_id` matching `fhir.fhir_resources.batch_id` for the same id.
 - Gate: `pnpm turbo run typecheck test --force`.
 
 ## Explicitly out of scope
@@ -152,5 +161,7 @@ type system forbids the latter.
 Low. One additive method, one call site, and a type change with one production caller. The blast
 radius is the projection path, which is asynchronous and already failure-tolerant.
 
-The honest risk is the opposite one: **this fix changes nothing visible until rows are re-projected**,
-so "it works" must be proven by the live check, not by a green suite.
+The honest risk is the opposite one: **this fix changes nothing visible until rows are re-projected**.
+Already-projected rows keep their NULLs until `reprojectAll` runs (out of scope, above), so an
+operator checking the read model after deploying this will still see NULLs on old rows and may
+reasonably conclude it didn't work.
