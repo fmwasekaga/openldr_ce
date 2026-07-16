@@ -56,6 +56,16 @@ const DATETIME_RE = /^\d{4}(-\d{2}(-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}
    validation**. Ids must be sanitised (Task 2).
 2. **`fhirDateTime` requires a timezone when a time is present.** `2024-07-20T08:30:00` is
    **invalid**; `2024-07-20T08:30:00Z` is valid. Date-only (`2024-07-20`) is valid.
+   **AMENDED 2026-07-16 — the zone is a required config value, never assumed.** `disaToIso`
+   emits unzoned local time on purpose (`apps/cli/src/export/v2-transform.ts:38-50`: *"No
+   timezone — DISA stores local time; v2 is responsible for tz interpretation per deployment"*).
+   Moz/Zambia are UTC+2, so appending `Z` would silently shift every timestamp 2h earlier.
+   `fhirDateTime` therefore takes an explicit `tzOffset` (e.g. `+02:00`), and
+   `OPENLDR_CE_TIMEZONE` / `--ce-tz` is **required** when a CE target is set (Tasks 8 + 10).
+   **No `new Date()` fallback:** `disaToIso` passes unrecognised input through raw
+   (`v2-transform.ts:46`), and JS's parser would silently reinterpret e.g. `"07/20/2024"` under
+   US ordering. Unrecognised → `undefined` (omit the field). A guessed clinical timestamp is
+   worse than an absent one.
 3. **`fhirString` is `z.string().min(1)`** (`primitives.ts:12`) — an empty string fails. When a
    V2 value is `null` or `""`, **omit the field**; never emit `""`.
 

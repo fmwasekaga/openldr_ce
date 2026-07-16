@@ -261,6 +261,25 @@ so this is a regression check); `pnpm turbo run typecheck test` in `cdr-toolchai
   (`hl7-fhir.schema.js:802-805`) while its v2 path populates them (`:192-194`); going
   FHIR-ward we map them rather than inherit the drop.
 - **CE strictness levels — approved in principle, deferred to its own slice** (see below).
+- **Timezone: a required, configurable UTC offset — approved 2026-07-16.** DISA stores **local
+  wall-clock time with no timezone**, and `disaToIso` deliberately preserves that, emitting
+  `2024-07-20T08:30:00` unzoned. Its comment is explicit
+  (`apps/cli/src/export/v2-transform.ts:38-41`): *"No timezone — DISA stores local time; v2 is
+  responsible for tz interpretation per deployment (PRD §5.1)."* FHIR requires a zone, so the
+  choice now lands on this mapper.
+  **Assuming UTC is rejected as unsafe:** Mozambique and Zambia are both UTC+2, so stamping `Z`
+  on a local time silently shifts every timestamp two hours earlier — no error, just quietly
+  false data. It would also manufacture phantom audit findings (a 00:30 local collection lands
+  at 22:30 the previous day, inverting DOB/collection ordering).
+  **Therefore:** `OPENLDR_CE_TIMEZONE` / `--ce-tz` (e.g. `+02:00`) is **required** whenever a CE
+  target is configured; the run fails fast if it is unset. No default — a silent 2-hour skew in
+  data feeding a migration-fidelity comparison is the worst available failure mode.
+- **Unrecognised date formats are omitted, not guessed — decided 2026-07-16.** `disaToIso`
+  passes through anything it does not recognise as a raw string
+  (`v2-transform.ts:46`: *"pass through anything we don't recognise"*). The mapper must **not**
+  fall back to `new Date(s)`: JS's permissive parser would silently reinterpret e.g.
+  `"07/20/2024"` under US ordering and emit a plausible but wrong timestamp. Omitting the field
+  is honest; a guessed clinical timestamp is not.
 
 ## Explicitly out of scope
 
