@@ -174,9 +174,11 @@ order by 1`,
   sum(case when o.abnormal_flag = 'S' then 1 else 0 end)::int as s,
   round(100.0 * sum(case when o.abnormal_flag = 'R' then 1 else 0 end) / nullif(count(*), 0), 1)::float8 as "percentR"
 from lab_results o
+left join specimens s on o.specimen_id = s.id
 where o.abnormal_flag in ('S', 'I', 'R')
-  and o.result_timestamp >= {{param.from}}
-  and o.result_timestamp <= ({{param.to}} || 'T23:59:59.999Z')
+  and (coalesce(o.result_timestamp, s.received_time) is null
+       or (coalesce(o.result_timestamp, s.received_time) >= {{param.from}}
+           and coalesce(o.result_timestamp, s.received_time) <= ({{param.to}} || 'T23:59:59.999Z')))
   and ({{param.facility}} = '' or o.patient_id in (
     select p.id from patients p where p.managing_organization = {{param.facility}}
   ))
@@ -194,9 +196,11 @@ order by "percentR" desc`,
   cast(sum(case when o.abnormal_flag = 'S' then 1 else 0 end) as int) as s,
   cast(round(100.0 * sum(case when o.abnormal_flag = 'R' then 1 else 0 end) / nullif(count(*), 0), 1) as float) as "percentR"
 from lab_results o
+left join specimens s on o.specimen_id = s.id
 where o.abnormal_flag in ('S', 'I', 'R')
-  and o.result_timestamp >= {{param.from}}
-  and o.result_timestamp <= ({{param.to}} + 'T23:59:59.999Z')
+  and (coalesce(o.result_timestamp, s.received_time) is null
+       or (coalesce(o.result_timestamp, s.received_time) >= {{param.from}}
+           and coalesce(o.result_timestamp, s.received_time) <= ({{param.to}} + 'T23:59:59.999Z')))
   and ({{param.facility}} = '' or o.patient_id in (
     select p.id from patients p where p.managing_organization = {{param.facility}}
   ))
@@ -213,9 +217,11 @@ order by "percentR" desc`,
   cast(sum(case when o.abnormal_flag = 'S' then 1 else 0 end) as signed) as s,
   cast(round(100.0 * sum(case when o.abnormal_flag = 'R' then 1 else 0 end) / nullif(count(*), 0), 1) as double) as \`percentR\`
 from lab_results o
+left join specimens s on o.specimen_id = s.id
 where o.abnormal_flag in ('S', 'I', 'R')
-  and o.result_timestamp >= {{param.from}}
-  and o.result_timestamp <= concat({{param.to}}, 'T23:59:59.999Z')
+  and (coalesce(o.result_timestamp, s.received_time) is null
+       or (coalesce(o.result_timestamp, s.received_time) >= {{param.from}}
+           and coalesce(o.result_timestamp, s.received_time) <= concat({{param.to}}, 'T23:59:59.999Z')))
   and ({{param.facility}} = '' or o.patient_id in (
     select p.id from patients p where p.managing_organization = {{param.facility}}
   ))
@@ -597,11 +603,13 @@ order by case band when '0-4' then 1 when '5-14' then 2 when '15-24' then 3 when
   sum(case when o.abnormal_flag = 'R' then 1 else 0 end)::int as resistant
 from lab_results o
 join patients p on o.patient_id = p.id
+left join specimens s on o.specimen_id = s.id
 where o.abnormal_flag in ('S', 'I', 'R')
   and o.patient_id is not null and o.patient_id <> ''
   and p.managing_organization is not null
-  and o.result_timestamp >= {{param.from}}
-  and o.result_timestamp <= ({{param.to}} || 'T23:59:59.999Z')
+  and (coalesce(o.result_timestamp, s.received_time) is null
+       or (coalesce(o.result_timestamp, s.received_time) >= {{param.from}}
+           and coalesce(o.result_timestamp, s.received_time) <= ({{param.to}} || 'T23:59:59.999Z')))
 group by p.managing_organization
 order by p.managing_organization`,
       // Task 2 port: ::int -> cast(...as int); end-of-day string || -> + (the `{{param.to}}`
@@ -612,11 +620,13 @@ order by p.managing_organization`,
   cast(sum(case when o.abnormal_flag = 'R' then 1 else 0 end) as int) as resistant
 from lab_results o
 join patients p on o.patient_id = p.id
+left join specimens s on o.specimen_id = s.id
 where o.abnormal_flag in ('S', 'I', 'R')
   and o.patient_id is not null and o.patient_id <> ''
   and p.managing_organization is not null
-  and o.result_timestamp >= {{param.from}}
-  and o.result_timestamp <= ({{param.to}} + 'T23:59:59.999Z')
+  and (coalesce(o.result_timestamp, s.received_time) is null
+       or (coalesce(o.result_timestamp, s.received_time) >= {{param.from}}
+           and coalesce(o.result_timestamp, s.received_time) <= ({{param.to}} + 'T23:59:59.999Z')))
 group by p.managing_organization
 order by p.managing_organization`,
       // Task 5 mysql port: ::int -> cast(...as signed); end-of-day string || -> concat().
@@ -627,11 +637,13 @@ order by p.managing_organization`,
   cast(sum(case when o.abnormal_flag = 'R' then 1 else 0 end) as signed) as resistant
 from lab_results o
 join patients p on o.patient_id = p.id
+left join specimens s on o.specimen_id = s.id
 where o.abnormal_flag in ('S', 'I', 'R')
   and o.patient_id is not null and o.patient_id <> ''
   and p.managing_organization is not null
-  and o.result_timestamp >= {{param.from}}
-  and o.result_timestamp <= concat({{param.to}}, 'T23:59:59.999Z')
+  and (coalesce(o.result_timestamp, s.received_time) is null
+       or (coalesce(o.result_timestamp, s.received_time) >= {{param.from}}
+           and coalesce(o.result_timestamp, s.received_time) <= concat({{param.to}}, 'T23:59:59.999Z')))
 group by p.managing_organization
 order by p.managing_organization`,
     },

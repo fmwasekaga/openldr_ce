@@ -1,7 +1,77 @@
 # Observation timestamps — `effectiveDateTime` — Design
 
 **Date:** 2026-07-17
-**Status:** ⚠ **AMENDED 2026-07-17 mid-execution — `issued` is DROPPED. D1 was FALSIFIED. See §0.0.**
+**Status:** ✅ **BUILT + LIVE-PROVEN (T8 PASSED).** ⚠ **AMENDED TWICE.** `issued` DROPPED (D1
+falsified, §0.0). **§4.1(b)'s expression was INVERTED and the design MISSED the actual bug — §0.1.**
+
+---
+
+## 0.1 ⛔ READ BEFORE §4 — this design was WRONG in two ways. Both were caught by MEASUREMENT.
+
+**§4 below still contains the original text. It is preserved for the record, not to be followed.**
+
+### (a) §4.1(b) told us to copy an INVERTED rule
+
+It says: reuse `fhir-transform`'s DiagnosticReport expression `taken ?? collected` — *"byte-identical
+… Reuse it; do not invent a second rule."* Graded against v1's `SpecimenDateTime` (the oracle),
+random spread sample, **n=147 labs**:
+
+| expression | rate |
+|---|---|
+| **`collected ?? taken`** ✅ **IMPLEMENTED, for BOTH resources** | **100.0%** |
+| `taken ?? collected` — *what §4.1(b) says to copy* | 93.9% |
+| `collected` alone | 52.4% ⇒ **the fallback is load-bearing** |
+
+The **instinct** ("one rule, no drift") was right; it pointed at the **wrong rule**. `fhir-transform`
+was inverted and this design would have propagated it into the field the slice exists to fix.
+
+**And it would have been a silent no-op anyway.** `specimenrecpt.ts` cast the mssql **Date object**
+`as string | null`; `String(Date)` produced `"Fri Sep 20 2013 03:00:00 GMT+0300 (East Africa Time)"`;
+`disaToIso` passed it through; `fhirDateTime` returned `undefined`; the key vanished. **`taken` was
+MALFORMED on 136 of 147 labs (92.5%)** ⇒ implementing §4.1(b) as written scores **1.4%**, with a
+green suite. **That is this design's OWN §6 last regression mode — it was not hypothetical, it was
+already happening.** Fixed at source via `Core.DateOnlyIso` (UTC components; date-only, never
+midnight).
+
+### (b) ⛔ THE DESIGN NEVER LOOKED AT THE BUILDER THAT WAS THE BUG
+
+**Fixing exactly what §4.1(b) names does NOT fix the reported bug.** Measured live: after fixing
+`observationResource`, `has_effective` went 0→88 and **the acceptance query was STILL 0**.
+
+`astResource` and `isolateResource` emit Observations too, and **NEITHER carried `effectiveDateTime`
+at all** — absent, not stubbed. CE projects `result_timestamp: str(r['effectiveDateTime'])`, so every
+AST row landed NULL. And `q-amr-resistance` / `q-amr-facility-summary` filter
+`abnormal_flag in ('S','I','R')` — **which IS the AST path**. Those 31 rows are the *entire
+population those two reports read*.
+
+⚠ **§7 already knew** the flags arrive "via the isolate/AST path" — it just never connected that to
+the field being fixed. **A fact can sit in the spec and still go unused.**
+⇒ All three builders now share `collectionTime()`.
+
+### T8 — the live proof (the only evidence that mattered)
+
+| | before | after |
+|---|---|---|
+| `lab_results.result_timestamp` populated | **0 / 135** | **132 / 135** |
+| **acceptance query** (0 for ANY range) | **0** | **31** ✅ |
+| S/I/R rows with a time | **0 / 31** | **31 / 31** |
+
+The 3 residual NULLs are **CORRECT**: `TZDISATDS0013541` has `taken` **and** `collected` null in DISA
+⇒ **omit, never fabricate**; its `received_at` keeps it visible via the chain.
+
+### Two more claims of this design that measurement overturned
+
+- **§4.4 "re-ingest is the only cure" — only half true.** The **AMR SQL fix works with NO re-ingest**:
+  against the old NULL-timestamp data it returned **27 rows** via the `s.received_time` fallback.
+  ⇒ existing installs get their reports back the moment the seed upgrades. (Re-ingest remains
+  required for `result_timestamp` itself.)
+- **§6 "only a live run on a real MSSQL/MySQL warehouse" can catch a dropped escape — FALSE.** The
+  seeds are **strings**. Per-dialect structural tests catch it, **mutation-verified**: reverting mysql
+  alone turns 3 tests red and names it.
+
+**The lesson, recorded:** every intermediate signal — green tests, a rising `has_effective`, a clean
+typecheck — agreed with a fix that did not work. **Verify against the SYMPTOM the bug was reported as
+("two reports return zero rows"), never against the mechanism you decided causes it.**
 
 ---
 
