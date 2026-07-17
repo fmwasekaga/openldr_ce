@@ -261,6 +261,33 @@ loss (§1). **A record without it must not be emittable** — make the type requ
 ⚠ **`V2Payload` is single-`lab_request` today** (`lab_request: V2LabRequest`, one `lab_results[]`).
 This is a **shape change to the payload**, not a field addition. See §6.
 
+#### 5.1a ✅ DECIDED (user, 2026-07-17) — `lab_requests[]`, and **v2 is legacy**
+
+The payload shape was a real fork, because `V2Payload` feeds **two** consumers that want opposite
+things. **Verified, not assumed:**
+
+| consumer | what it does today | file:line |
+|---|---|---|
+| **openldr-v2 ingest** | reads **`message?.lab_request`** — *singular* | `external-persistence.service.ts:534`, and `:117` `requests: message?.lab_request ? 1 : 0` |
+| **CE / FHIR** | `toFhir(payload: V2Payload)` → **ONE** `ServiceRequest` + **ONE** `DiagnosticReport`, both `id: rootId` | `fhir-transform.ts:323-324,150,178` |
+
+⚠ **These live in a THIRD repo** (`D:\Projects\Repositories\openldr-v2`) — **not** `openldr_ce`, **not**
+`cdr-toolchain`. `obr_set_id` appears **nowhere in `openldr_ce`'s code**, only in docs.
+
+**DECISION:** `V2Payload.lab_requests: V2LabRequest[]` (one payload per lab, N requests inside), and
+**CE is the target; openldr-v2 is legacy** — a gate/comparison artifact, **not a live ingest
+consumer**. ⇒ **openldr-v2 is OUT OF SCOPE. Do not edit it. Do not treat `?? 1` as a bug to fix
+there.**
+
+⇒ **§6's "v2 ingest — N records per lab is a volume change" was WRONG** and is superseded: it would
+have been a **wire-contract break** in a third repo, not a volume change. That break is now moot,
+because we are not feeding it.
+
+⚠ **The rejected option is worth knowing:** `toV2` returning `V2Payload[]` (one per OBR) would need
+**zero** v2-side change — `:632`'s `request?.obr_set_id ?? 1` starts working the instant we populate
+it. It was rejected because it duplicates `patient` + `data_quality` N times and makes `toFhir` emit
+N Bundles with **N duplicate Patients**, contradicting §5.2.
+
 ### 5.2 FHIR — one OBR = one `ServiceRequest` + one `DiagnosticReport`
 
 This is the **idiomatic** v2→FHIR mapping, not a workaround: OBR is the order, so it maps to
@@ -315,7 +342,9 @@ Every consumer that assumes *one lab = one record* is affected. **Enumerate befo
   (`fetchRequestByRequestId` returns the **lowest** OBRSetID, `openldr.ts:110`). **With N records it
   must pair per `obr_set_id`** — otherwise the gate's own numbers become meaningless and this slice
   cannot prove itself.
-- **v2 ingest** — N records per lab is a volume change
+- ~~**v2 ingest** — N records per lab is a volume change~~ ⛔ **WRONG, and superseded by §5.1a.** It
+  would have been a **wire-contract break** in a third repo (`openldr-v2`), not a volume change.
+  **Moot: v2 is legacy and out of scope.**
 
 ---
 
@@ -340,8 +369,23 @@ Every consumer that assumes *one lab = one record* is affected. **Enumerate befo
 1. ~~T1 first~~ ✅ **DONE (§2).** `obr_set_id` = **`TestOrders` position** (99.95% at n=3,874), **not**
    `TESTINDEX` (93.6%). The design is **re-founded**, not void.
 2. The gate reports `obr_set_id` **match**, not 158/158 `only_v1`, pairing per `obr_set_id`.
-3. `analysis_at` / `result_status` / `tested_by` / `section_code` are sourced **per panel** — the
-   53,011 / 7,845 / 23,600 / 45,173 divergences stop being crushed into one value.
+3. ⛔ **CORRECTED — this was OVER-PROMISED. Only `section_code` is in reach.** The original read:
+   *"`analysis_at` / `result_status` / `tested_by` / `section_code` are sourced per panel — the
+   53,011 / 7,845 / 23,600 / 45,173 divergences stop being crushed into one value."* **Three of the
+   four are NOT "crushed into one value" — they are NOT SOURCED AT ALL**, so making them per-OBR
+   changes `null` into `null` per OBR. Verified in `buildLabRequest`:
+
+   | field | v1 divergence | today | this slice? |
+   |---|---|---|---|
+   | `section_code` | 45,173 | `panel?.section` — derived from `panel_code` (`v2-transform.ts:349`) | ✅ **YES** — per-OBR for free, once `panel_code` is per-OBR |
+   | `analysis_at` | 53,011 | **`null` — hardcoded stub**, *"disalab doesn't expose analysis_at on SpecimenRecpt"* (`:357`) | ❌ **NO** — needs the **timestamps** slice ([[disa-timestamp-stub-and-amr-zero-rows]]) |
+   | `tested_by` | 23,600 | `nz(s.ReceivedInLabBy) ?? nz(s.TakenBy) ?? nz(s.CollectedBy)` (`:379`) — **specimen-level** | ❌ **NO** — v1's is per-OBR; needs sourcing (cf. `TESTDATA_STATUS[77..79]`, [[disa-result-status-signal]]) |
+   | `result_status` | 7,845 | `rejection.rejected ? "X" : null` (`:372`) — **specimen-level** `detectDisaRejection` | ❌ **NO** — needs **per-OBR** rejection detection |
+
+   ⇒ **Acceptance #3 is now: `panel_code` and `section_code` are per-OBR.** The other three become
+   **per-OBR-shaped holes** this slice creates and later slices fill. That is the honest sequencing:
+   **the structure must exist before the values can hang off it.** ⚠ Do NOT let a future plan claim
+   #3 is met because the fields are "now per-OBR" — a per-OBR `null` is still `null`.
 4. Superseded iterations emit an **order with no results** (§3) — verified against a real multi-run
    lab such as `TZDISATDS0047711` (5 orders, results under OBR 3 and 4 only).
 5. **A record cannot be emitted without `obr_set_id`** — enforced by the type, not a convention.
