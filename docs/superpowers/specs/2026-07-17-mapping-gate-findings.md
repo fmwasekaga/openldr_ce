@@ -90,16 +90,42 @@ disagrees. The old gate called these same 1,519 observations 1,518/1,519 matched
 bug*: all panels collide on `(request_id, 1, facility_id)` and `ON CONFLICT DO UPDATE` silently
 overwrites.
 
-### 3.3 `testing_facility_code` — 195/195 MISMATCH, and it is NOT a stub
+### 3.3 `testing_facility_code` — 195/195 MISMATCH: CDR names the WRONG FACILITY
 
-CDR emits DISA's facility concept; v1's `TestingFacilityCode` is `'TDS'` — **the lab, not the
-requesting facility**. CDR carries the *same* concept for both `requesting_facility_code` and
-`testing_facility_code` by design (`v2-transform.ts:316-321`: *"DISA doesn't carry a separate
-requesting-facility code distinct from the testing lab"*).
-⇒ **The comparator is wrong, not the export**: `requesting_facility_code` matches 195/195 while
-`testing_facility_code` mismatches 195/195 **on the same value**. v1's testing facility is the site
-code, and CDR has it — in `DEFAULT_SITE`, not in the facility concept. **Fix the def before
-reporting this upstream.**
+⚠ **CORRECTED 2026-07-17. An earlier version of this section called this "a gate bug — fix the def
+before reporting it upstream". THAT WAS WRONG, and acting on it would have deleted a real defect by
+weakening the gate — the `allowDisaEmpty` pattern exactly.** Checked before "fixing" it:
+
+| | |
+|---|---|
+| `DEFAULT_SITE` | **only coding-system ids** (`site-config.ts:30-38`) — there is **no lab code in it**, which is what the wrong call assumed |
+| `config.ts` | no site/lab code either |
+| `buildFacilityConcept` | uses `facility.Code` — **the REQUESTING clinic** |
+| proof it is the clinic | **`lims_facility_code` matched 195/195** against that same concept, and v1's `LIMSFacilityCode` is the requesting facility |
+
+**Measured across ALL TDS requests:**
+```
+TestingFacilityCode 'TDS' : 172,092 rows (98.8%)   <- ONE constant: the lab
+                       '' :   2,169 rows (1.2%)
+distinct requesting facilities (LIMSFacilityCode) : 3,349
+```
+⇒ **One testing lab serving 3,349 requesting clinics.** CDR puts **one of the 3,349 clinics** into
+the `testing_facility_code` slot. v2 *has* that slot; CDR fills it with the wrong facility.
+
+⚠ **The code comment that caused this has the relationship BACKWARDS**
+(`v2-transform.ts:316-321`): *"DISA doesn't carry a separate requesting-facility code distinct from
+the testing lab… Emit the same concept for both; v2 consumers can infer requesting == testing from
+the equality."* **DISA carries the REQUESTING facility.** The **testing lab is the DISA instance
+itself** — which is precisely why v1 has `TDS` and `DEFAULT_SITE` does not. And v1 proves the two are
+distinct: it stores both, differently, on every row.
+
+⇒ **The def is CORRECT. The export is wrong. `requesting_facility_code` matching 195/195 is not
+evidence the def is broken — it is evidence CDR emits the clinic in both slots.**
+
+**The fix (its own slice):** the testing facility is a property of the DISA *deployment*, not of any
+record — one instance is one lab. So it belongs in `SiteConfig` (e.g. `testing_facility_code: "TDS"`),
+**not** derived from the LabNo prefix. ⚠ Do **not** infer it from `LabNumber.slice(0,3)`: that is an
+undocumented coincidence of this site's numbering, and CDR must run in Zambia and Mozambique.
 
 ### 3.4 `rejection_code` / `rejection_desc` — real, but rare here
 
@@ -178,8 +204,10 @@ a `SpecimenDateTime` — the `collected ?? taken` precedence question, at ~11%, 
 
 ## 7. Recommended next slices, in blast-radius order
 
-1. **Fix the `testing_facility_code` DEF** (§3.3) — a gate bug producing 195/195 false red. **Do this
-   before anyone reads section 3 as an export defect.**
+1. **`testing_facility_code`** (§3.3) — CDR names the requesting clinic as the testing lab, on
+   **195/195**. Add `testing_facility_code` to `SiteConfig`; do **not** derive it from the LabNo.
+   ⚠ **This was listed here as "fix the DEF — a gate bug". That was WRONG** (see §3.3): the def is
+   correct and the export is not. **Fixing the def would have deleted the finding.**
 2. **`result_type`** (§3.1) — 100% wrong, invisible to the old gate.
 3. **Re-run T7 on a RANDOM sample** (§0) — every number here is drawn from the 200 oldest labs.
    Until then this is an inventory of one corner of one site.
