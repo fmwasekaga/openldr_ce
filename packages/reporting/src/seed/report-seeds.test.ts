@@ -256,3 +256,89 @@ describe('SEED_REPORT_DEFS — r-amr-antibiogram', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// The AMR date predicate — ONE shared chain, in EVERY dialect.
+//
+// The bug: `q-amr-resistance` and `q-amr-facility-summary` compared
+// `o.result_timestamp` BARE against the range. `result_timestamp` was NULL on
+// 135/135 ingested rows (the mapper stubbed it), and `NULL >= x` is never true,
+// so both returned ZERO rows for ANY date range — silently. The other three
+// survived via `coalesce(result_timestamp, received_time)` plus an `is null`
+// escape: someone solved this once and patched 3 of 5.
+//
+// ⚠ These are STRUCTURAL assertions on the SQL text, per dialect. The design
+// assumed only "a live run on a real MSSQL/MySQL warehouse" could catch a
+// dropped escape — but the seeds are strings, so the drop is catchable here,
+// on every dialect, with no warehouse. The five amr-*-parity tests assert
+// NOTHING (it.skip + expect(true).toBe(true)), so this is the only cover.
+// ---------------------------------------------------------------------------
+
+const AMR_DATE_QUERIES = [
+  'q-amr-resistance',
+  'q-amr-facility-summary',
+  'q-amr-glass-ris',
+  'q-amr-first-isolate-summary',
+  'q-amr-antibiogram',
+] as const;
+
+describe('SEED_QUERIES — AMR date filtering is NULL-safe in every dialect', () => {
+  it('never compares a bare result_timestamp against the range', () => {
+    // The mutation this kills: reverting any dialect to `and o.result_timestamp >= {{param.from}}`.
+    // A bare comparison on a nullable column silently drops every row with no time.
+    for (const id of AMR_DATE_QUERIES) {
+      const q = SEED_QUERIES.find((x) => x.id === id);
+      expect(q, `${id} must exist`).toBeTruthy();
+      for (const [dialect, sql] of Object.entries(q!.sql)) {
+        expect(/and\s+o+\.result_timestamp\s*[<>]=/.test(sql), `${id}/${dialect} compares result_timestamp BARE`).toBe(false);
+      }
+    }
+  });
+
+  it('wraps every range comparison in the coalesce chain, in all three dialects', () => {
+    for (const id of AMR_DATE_QUERIES) {
+      const q = SEED_QUERIES.find((x) => x.id === id);
+      for (const [dialect, sql] of Object.entries(q!.sql)) {
+        expect(/coalesce\(o+\.result_timestamp,\s*s\.received_time\)/.test(sql), `${id}/${dialect} lacks the coalesce chain`).toBe(true);
+      }
+    }
+  });
+
+  it('keeps the fail-open `is null` escape in all three dialects', () => {
+    // FAIL-OPEN: a record with NO time stays VISIBLE rather than silently
+    // vanishing. Loud and slightly wrong beats quiet and wrong.
+    // The mutation this kills: dropping the escape from ONE dialect — which
+    // would make that dialect alone return fewer rows, invisibly.
+    for (const id of AMR_DATE_QUERIES) {
+      const q = SEED_QUERIES.find((x) => x.id === id);
+      for (const [dialect, sql] of Object.entries(q!.sql)) {
+        expect(/coalesce\(o+\.result_timestamp,\s*s\.received_time\)\s+is null/.test(sql), `${id}/${dialect} lost the is-null escape`).toBe(true);
+      }
+    }
+  });
+
+  it('joins specimens wherever the chain reads s.received_time', () => {
+    // The chain is meaningless without the join — and the two broken queries had
+    // NO specimen join at all, so this is what makes the fix real rather than
+    // referencing a phantom alias.
+    for (const id of AMR_DATE_QUERIES) {
+      const q = SEED_QUERIES.find((x) => x.id === id);
+      for (const [dialect, sql] of Object.entries(q!.sql)) {
+        expect(/join\s+specimens\s+s\s+on/.test(sql), `${id}/${dialect} reads s.received_time with no specimens join`).toBe(true);
+      }
+    }
+  });
+
+  it('preserves each dialect’s OWN end-of-day concat operator', () => {
+    // ⚠ VACUITY GUARD. Every assertion above would pass if all three dialects
+    // held the same postgres string. They must NOT: `||` (pg), `+` (mssql),
+    // `concat()` (mysql). A find-and-replace across dialects is the exact
+    // mistake the design warned about, and it ships SQL that cannot parse.
+    for (const id of AMR_DATE_QUERIES) {
+      const q = SEED_QUERIES.find((x) => x.id === id);
+      expect(q!.sql.postgres, `${id}/postgres`).toMatch(/\{\{param\.to\}\}\s*\|\|\s*'T23:59:59\.999Z'/);
+      expect(q!.sql.mssql, `${id}/mssql`).toMatch(/\{\{param\.to\}\}\s*\+\s*'T23:59:59\.999Z'/);
+      expect(q!.sql.mysql, `${id}/mysql`).toMatch(/concat\(\{\{param\.to\}\},\s*'T23:59:59\.999Z'\)/);
+    }
+  });
+});
