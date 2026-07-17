@@ -12,6 +12,36 @@
 
 ---
 
+## ⛔ AMENDED 2026-07-17 MID-EXECUTION — `issued` IS DROPPED. READ THIS FIRST.
+
+**Spec D1 (`issued ← TESTDATA.DATESTAMP`) was FALSIFIED by measurement.** ~37% of `DATESTAMP`s are
+**bulk-load/migration artifacts**, not release times: **44,625 rows in a 3-HOUR window** on
+2016-03-08 (~860× the ~52/day average); **71,247 of 191,121** across 3 such days. The live Candida
+record `TZDISATDS0013541` is on that spike — registered 2013-10-04, `DATESTAMP` 2016-03-08. Full
+evidence: **spec §0.0**.
+
+**User decision: *"drop issued from the slice, effectiveDateTime only"*.**
+
+### Revised task list — supersedes everything below
+
+| task | status |
+|---|---|
+| **T1** `disaDatestampToIso` | ✅ **DONE + APPROVED** (`4aca20f2`, `0cd9b7cd`). **KEPT** though now consumer-less (user decision). |
+| **T2** un-stub `result_timestamp` | ✅ **DONE + APPROVED** (`a58b8c31`). **KEPT.** ⚠ Until T4 lands, `effectiveDateTime` = `DATESTAMP` = the migration stamp — **T4 is what makes the branch correct again.** |
+| **T3** `fhirInstant` | ⛔ **CANCELLED** — existed only to guard `issued`. |
+| **T4** map the times | ⚠ **REDUCED** — `effectiveDateTime` ← collection ONLY. **Do NOT add an `issued` mapping.** |
+| **T5** `lab_results.issued` migration | ⛔ **CANCELLED.** |
+| **T6** project `issued` | ⛔ **CANCELLED.** |
+| **T7** the chain | ⚠ **REDUCED** — chain is `coalesce(result_timestamp, s.received_time)`, which the **3 working queries ALREADY have** ⇒ they are **UNCHANGED**. Only the **2 broken** queries change (12 predicates + 6 new specimen joins). **The 36 coalesce edits are CANCELLED.** |
+| **T8** live verification | ⚠ **REDUCED** — verify `has_effective` only; there is no `issued` column. |
+
+⚠ **Naming trap:** the V2 payload's `V2Result.result_timestamp` and CE's `lab_results.result_timestamp`
+column are **different things that share a name**. The CE column reads `Observation.effectiveDateTime`
+(`relational/observation.ts:28`); after T4 it holds the **collection** time. The V2 field holds
+`DATESTAMP` and, after T4, has **no reader**.
+
+---
+
 ## ⚠ Read before Task 1
 
 1. **DISA stores BLOBS, not columns.** Never verify a DISA fact with `select count(col)`. See
@@ -101,7 +131,7 @@ test("disaDatestampToIso returns null for null and for an invalid Date", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd D:/Projects/Repositories/cdr-toolchain && node --import tsx --test apps/cli/src/export/v2-transform-datestamp.test.ts`
+Run: `cd D:/Projects/Repositories/cdr-toolchain/apps/cli && node --import tsx --test src/export/v2-transform-datestamp.test.ts`
 Expected: FAIL — `disaDatestampToIso is not a function` / not exported.
 
 - [ ] **Step 3: Write the implementation**
@@ -131,7 +161,7 @@ export function disaDatestampToIso(d: Date | null): string | null {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `node --import tsx --test apps/cli/src/export/v2-transform-datestamp.test.ts`
+Run: `cd apps/cli && node --import tsx --test src/export/v2-transform-datestamp.test.ts`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
@@ -156,6 +186,23 @@ git commit -m "feat(export): add disaDatestampToIso — timezone-safe DATESTAMP 
 `DisaObs.datestamp: Date | null` **is already in scope** (`compare/result-mapping.ts:16`), populated
 by `flattenDisa` via `coerceDatestamp(test.DATESTAMP)` (`compare/result-mapping.ts:574`).
 `buildLabResults` is **private** — test through the public `toV2` (`v2-transform.ts:660`).
+
+> ### ⚠ THIS TASK'S TEST INHERITS A DEFECT FOUND IN TASK 1 — READ FIRST
+>
+> The test below feeds `Date.UTC(...)` through `toV2` and asserts **those same digits**. That means a
+> `getFullYear()/getHours()`-based (local-getters) implementation **passes on a UTC host** — the
+> assertion cannot distinguish correct from broken unless the host is non-UTC. Task 1 shipped exactly
+> this bug and it was caught only by *building the mutant*, not by reading.
+>
+> **Task 1's test file already pins `TZ` (commit `0cd9b7cd`)** — `process.env.TZ = 'Africa/Dar_es_Salaam'`
+> (no DST ⇒ constant `-180`), plus a **loud** `TZ pin took effect` test asserting
+> `getTimezoneOffset() === -180` so the suite fails rather than silently un-guarding.
+>
+> **You are appending to that same file, so you inherit the pin — but you MUST prove it covers your
+> new test too:** introduce a local-getters mutant, show your test goes **RED under `TZ=UTC`**, revert,
+> show GREEN. **Do not report this as done on a reasoned argument.** *(Note: an assertion that
+> distinguishes UTC from local components on **every** host is impossible — on a UTC host they are
+> identical for every input. Pinning is the only mechanism.)*
 
 - [ ] **Step 1: Write the failing test**
 
@@ -210,7 +257,7 @@ test("result_timestamp is null when the panel carried no DATESTAMP", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `node --import tsx --test apps/cli/src/export/v2-transform-datestamp.test.ts`
+Run: `cd apps/cli && node --import tsx --test src/export/v2-transform-datestamp.test.ts`
 Expected: FAIL — `expected '2019-01-23T15:56:42', got null` (the stub).
 
 - [ ] **Step 3: Write the implementation**
@@ -232,10 +279,10 @@ with:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `node --import tsx --test apps/cli/src/export/v2-transform-datestamp.test.ts`
+Run: `cd apps/cli && node --import tsx --test src/export/v2-transform-datestamp.test.ts`
 Expected: PASS.
 
-Then the full suite: `node --import tsx --test "apps/cli/src/export/*.test.ts"`
+Then the full suite: `cd apps/cli && node --import tsx --test "src/export/*.test.ts"`
 Expected: PASS. ⚠ If a compare/audit test breaks, **stop and report** — `result_timestamp` may have
 been relied upon as always-null.
 
@@ -290,7 +337,7 @@ test("fhirInstant returns undefined for null/empty", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `node --import tsx --test apps/cli/src/export/fhir-primitives.test.ts`
+Run: `cd apps/cli && node --import tsx --test src/export/fhir-primitives.test.ts`
 Expected: FAIL — `fhirInstant is not a function`.
 
 - [ ] **Step 3: Write the implementation**
@@ -325,7 +372,7 @@ const INSTANT_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `node --import tsx --test apps/cli/src/export/fhir-primitives.test.ts`
+Run: `cd apps/cli && node --import tsx --test src/export/fhir-primitives.test.ts`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -436,7 +483,7 @@ test("no collection time omits effectiveDateTime rather than falling back to iss
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `node --import tsx --test apps/cli/src/export/fhir-transform-timestamps.test.ts`
+Run: `cd apps/cli && node --import tsx --test src/export/fhir-transform-timestamps.test.ts`
 Expected: FAIL — `effectiveDateTime` is `"2019-01-23T15:56:42+03:00"` (the **result** time), and
 `issued` is absent.
 
@@ -493,14 +540,14 @@ idiom:
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `node --import tsx --test apps/cli/src/export/fhir-transform-timestamps.test.ts`
+Run: `cd apps/cli && node --import tsx --test src/export/fhir-transform-timestamps.test.ts`
 Expected: PASS (5 tests).
 
 Run the conformance gate:
-`FHIR_CONFORMANCE=1 node --import tsx --test apps/cli/src/export/fhir-conformance.test.ts`
+`cd apps/cli && FHIR_CONFORMANCE=1 node --import tsx --test src/export/fhir-conformance.test.ts`
 Expected: PASS.
 
-Run the whole export suite: `node --import tsx --test "apps/cli/src/export/*.test.ts"`
+Run the whole export suite: `cd apps/cli && node --import tsx --test "src/export/*.test.ts"`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**

@@ -1,7 +1,60 @@
-# Observation timestamps — `effectiveDateTime` + `issued` — Design
+# Observation timestamps — `effectiveDateTime` — Design
 
 **Date:** 2026-07-17
-**Status:** Design agreed in brainstorm. NOT implemented.
+**Status:** ⚠ **AMENDED 2026-07-17 mid-execution — `issued` is DROPPED. D1 was FALSIFIED. See §0.0.**
+
+---
+
+## 0.0 ⛔ CORRECTION — `issued ← TESTDATA.DATESTAMP` is FALSIFIED. Do NOT build it.
+
+**This spec asserted `DATESTAMP` is a RELEASE time. I never checked. It is not — for ~37% of rows.**
+
+Caught during T2's review: the reviewer noted `DisaObs.datestamp`'s own doc
+(`compare/result-mapping.ts:12-15`) says *"when the panel iteration was **created**"* — and
+**created ≠ released**. Measured against live DISA:
+
+| finding | measurement |
+|---|---|
+| `TESTDATA` averages | **~52 panels/day** over 10 years (191,121 rows) |
+| **2016-03-08** | **44,625 rows — in a 3-HOUR window.** ~250/minute, **~860× the daily average** |
+| 2018-03-13 | 19,674 rows |
+| 2018-11-14 | 6,948 rows |
+| **3 bulk-load days total** | **71,247 of 191,121 = 37%** |
+
+⇒ **Those `DATESTAMP`s are MIGRATION artifacts, not clinical events.** `TZDISATDS0013541` (the live
+Candida record) sits on the 2016-03-08 spike: registered **2013-10-04**, `DATESTAMP` **2016-03-08** —
+**2.5 years apart**.
+
+**Mapping that to `issued` would assert 37% of results "were made available to providers" during a
+3-hour window in 2016** — a fabricated clinical fact, published in a standard field. Exactly the
+defect this whole workstream exists to remove.
+
+⚠ **It would also poison the AMR chain.** D4's `coalesce(result_timestamp, s.received_time, issued)`
+used `issued` as the FINAL fallback ⇒ a record lacking the earlier two would be dated **2016-03-08**
+and silently land in the wrong reporting period.
+
+**What survives:** `DATESTAMP` is NOT junk — for **non-migrated** rows it behaves exactly like a
+release time (`MSENS`/sensitivity lands **3–6 days after** its own culture on `TDS0118330` and
+`TDS0123369` — clinically correct). It is **unreliable for a subset, and the field cannot tell you
+which**. Reviving `issued` needs the migration understood first — its own slice.
+
+### Consequences (user decision, 2026-07-17: *"drop issued from the slice, effectiveDateTime only"*)
+
+| | |
+|---|---|
+| **Scope now** | `effectiveDateTime` ← collection time. **That alone** fixes the 135 NULL timestamps AND both zero-row AMR queries. |
+| **D1** | amended — `issued` mapping **dropped**. |
+| **D2** | ⛔ **`lab_results.issued` column NOT needed** (§4.2 void). |
+| **D4** | chain becomes `coalesce(result_timestamp, s.received_time)` — **which the 3 working queries ALREADY have** ⇒ only the **2 broken** queries change. §3.6's 36 coalesce sites → **0**. |
+| **§4.1(c)** | `fhirInstant` **not needed** (it existed only to guard `issued`). |
+| **T1/T2** | **KEPT as-is** (user decision) though now consumer-less — `V2Result.result_timestamp` is read ONLY by `fhir-transform.ts:244` (verified), which T4 re-points. Dead but accurately commented. |
+
+⚠ **1 site of 22.** The spikes may be an artifact of THIS restore; the full dataset is on the user's
+Linux desktop. Confirm before generalising nationally.
+
+---
+
+**Original status:** Design agreed in brainstorm. NOT implemented.
 **Repos:** `cdr-toolchain` (the mapper) **+** `openldr_ce` (column + 5 seeded queries)
 **Blocks:** [[fhir-bundle-wire-contract]]'s profile (D2) — see §1.3
 
