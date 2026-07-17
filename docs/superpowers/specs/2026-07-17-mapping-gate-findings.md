@@ -95,20 +95,67 @@ queued as defects at some point. Both are correct. Green here is a **result**, n
 
 ### 3.1 Confirmed stubs — CDR hardcodes `null` against populated v1
 
-| field | v1 | CDR | measured (195 labs / 1,487 obs) |
-|---|---|---|---|
-| **`result_type`** | `HL7ResultTypeCode` | derived, wrong | **1,487 mismatch — 100%** |
-| **`analysis_at`** | `AnalysisDateTime` 99.0% | `null` (`v2-transform:337`) | **195 only_v1 — 100%** |
-| **`abnormal_flag`** | `HL7AbnormalFlagCodes` 16.7% | `null` (`:496`) | **257 only_v1 (17.3%)** |
-| **`rpt_flag`** | `LIMSRptFlag` 1.3% | `null` (`:497`) | **29 only_v1 (1.9%)** |
-| `result_status` | `HL7ResultStatusCode` 100% | `"X"` only when rejected (`:350`) | **184 only_v1, 10 mismatch, 1 match** |
-| `tested_by` | `TestedBy` 96.4% | — | **194 only_v1** |
-| `age_years` / `age_days` | 93.4% | computed only when DOB+received exist | **183 only_v1 each; age_days 11 mismatch** |
-| `authorised_at` | 91.2% | `null` (`:338`) | **29 only_v1** — the conditional rule correctly greened **166** non-final rows |
-| `authorised_by` | 91.1% | — | **31 only_v1** |
+**RANDOM sample — 158 labs / 469 paired observations.**
 
-⚠ **`result_type` at 100% mismatch is the single biggest finding.** Every observation's type code
-disagrees. The old gate called these same 1,519 observations 1,518/1,519 matched.
+| field | v1 | CDR | measured |
+|---|---|---|---|
+| **`result_type`** | `HL7ResultTypeCode` | derived, wrong | **469 mismatch — 100%** |
+| **`analysis_at`** | `AnalysisDateTime` 99.0% | `null` (`v2-transform:337`) | **158 only_v1 — 100%** |
+| **`abnormal_flag`** | 25.9% (doc-excluded) | `null` (`:496`) | **140 only_v1 (29.9%)** |
+| **`rpt_flag`** | `LIMSRptFlag` 1.3% | `null` (`:497`) | **10 only_v1 (2.1%)** |
+| **`authorised_at`** | 91.2% | `null` (`:338`) | **149 only_v1 (94.3%)**, 9 greened by the conditional rule |
+| **`authorised_by`** | 91.1% | — | **149 only_v1** |
+| **`tested_by`** | `TestedBy` 96.4% | — | **81 MISMATCH + 70 only_v1** — see §5b |
+| `age_years` | 93.4% | computed only when DOB + received exist | **105 only_v1**, 52 match |
+| `age_days` | 93.4% | ditto | **105 only_v1, 37 mismatch**, 15 match |
+| `result_value` | 98.5% | | **144 mismatch** (30.7%) |
+| `rpt_range` | 16.7% | codebook string vs v1's numeric split | **114 only_v1, 28 mismatch** |
+| `panel_code` | 100% | primary panel | **19 mismatch** — the multi-panel grain (§3.2) |
+
+⚠ **`result_type` at 100% mismatch is the single biggest finding** — 469/469 here, 1,487/1,487 on the
+biased sample. Every observation's type code disagrees, on every sample. The old gate called these
+same observations ~96% matched.
+
+⚠ **`authorised_at` shifted from 29 only_v1 (biased) to 149 (94.3%).** The conditional rule greened
+**166** rows in the biased sample and only **9** here — i.e. the 200 oldest labs were ~85%
+NON-FINAL, while the random sample is **94.3% final**, matching the measured population (F = 90.6%).
+**A third proof of the bias** — and consistent with the oldest LabNos being `INSTRUMENT VALIDATION`
+QC records, which are never finalised.
+
+### 3.1b ⛔ NEW — `detectDisaRejection` appears to fire on 89% of labs; v1 says 0.6%
+
+`result_status` on the random sample: **1 match / 141 MISMATCH / 16 only_v1**.
+
+CDR emits `result_status: rejection.rejected ? "X" : null` (`v2-transform.ts:350`) — the **only**
+non-null value it can produce is `"X"`. So **141 mismatches mean CDR called 141 of 158 labs rejected
+(89%)** while v1 records them as `F`. And on the same labs `rejection_code` is **157/158 match (both
+empty)** — **v1 recorded an actual rejection on ONE lab.**
+
+⇒ **`detectDisaRejection` is a massive false-positive**, and it is not cosmetic: a rejected request
+means "no result" to downstream consumers, and it changes `panel_code` sourcing
+(`v2-transform.ts:283-287`).
+
+**DIAGNOSED — the detector contradicts its own comment** (`compare/result-mapping.ts:647-670`):
+
+```ts
+// RJREA is the coded reject REASON ... — the meaningful signal. RJREM is a free-text
+// remark that is frequently padding ("F"), so it is only a fallback for the reason text.
+   ...
+const rejected = condition !== null || reasons.size > 0 || memos.size > 0;
+//                                                         ^^^^^^^^^^^^^^ RJREM
+```
+
+The comment states RJREM is **frequently padding (`"F"`)** and therefore **"only a fallback for the
+reason TEXT"**. The code then makes `memos.size > 0` a **rejection TRIGGER**. ⇒ **any lab whose RJREM
+is padded is marked rejected.** The author identified the exact hazard in prose and then fell into
+it one line later.
+
+⚠ **`s.Condition` is the other candidate** — any non-empty `Condition` also triggers. **Which of the
+two dominates is NOT yet measured**, so the fix slice must count `RJREM`-padding vs `Condition`
+before changing the predicate. The mechanism is confirmed; the proportions are not.
+
+⚠ The biased sample showed only 10 mismatches (5%) vs 141 (89%) here — **another field the old
+sample would have let through.**
 
 ### 3.2 `obr_set_id` — CDR cannot represent a multi-panel request
 
@@ -277,13 +324,14 @@ and the sample bias is gone.
    ⚠ **This was listed here as "fix the DEF — a gate bug". That was WRONG** (see §3.3): the def is
    correct and the export is not. **Fixing the def would have deleted the finding.**
 2. **`result_type`** (§3.1) — **469/469 wrong (100%)**, on both samples, invisible to the old gate.
-3. **`tested_by`** (§5b) — **81 mismatches (51%)**, and the biased sample showed **zero**. CDR
+3. **`detectDisaRejection`** (§3.1b) — CDR calls 89% of labs rejected; v1 says 0.6%. **DIAGNOSED**: `rejected` includes `memos.size > 0` while the comment two lines up says RJREM is padding and should only supply reason TEXT. ⚠ Measure RJREM-padding vs `Condition` before changing the predicate.
+4. **`tested_by`** (§5b) — **81 mismatches (51%)**, and the biased sample showed **zero**. CDR
    contradicts v1, it does not merely omit. **Newly visible; not diagnosed.**
-4. **`obr_set_id`** (§3.2) — 61.2% of requests; must emit the column, not just split records.
-5. **Investigate `numeric_value`** (§3.5) — **68.4% only_v1**, undiagnosed, the largest volume.
-6. **`abnormal_flag`** (§3.1) — the original driver; **29.9%** (vs a 25.9% doc-excluded population),
+5. **`obr_set_id`** (§3.2) — 61.2% of requests; must emit the column, not just split records.
+6. **Investigate `numeric_value`** (§3.5) — **68.4% only_v1**, undiagnosed, the largest volume.
+7. **`abnormal_flag`** (§3.1) — the original driver; **29.9%** (vs a 25.9% doc-excluded population),
    real, and blocks the two AMR reports.
-7. **`effectiveDateTime` = `collected ?? taken`** (§5) — the fallback fires on **44.3%**, not the
+8. **`effectiveDateTime` = `collected ?? taken`** (§5) — the fallback fires on **44.3%**, not the
    ~11% the biased run implied. `fhir-transform:184` is currently inverted.
 
 ✅ **Done:** re-run on a random sample (was #3 in the first draft). It changed §5, §5b and the
