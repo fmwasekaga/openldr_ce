@@ -66,8 +66,44 @@ a numeric/bit it is `<> 0`. Using one rule for both produces confident nonsense 
 | `LIMSAnalyzerCode` | 78,289 (44.9%) | |
 | `LIMSVendorCode` | 46,381 (26.6%) | |
 | `CollectionVolume` | 36,374 non-zero (20.9%) | |
-| `CostUnits` | 36,374 non-zero (20.9%) | |
+| `CostUnits` | 36,374 non-zero (20.9%) | ⚠ **undecided — §9** |
 | **`LIMSRejectionCode`/`Desc`** | 4,518 (2.6%) | ⛔ `toV2` has a whole `detectDisaRejection` path (`v2-transform.ts:669`) and **nothing grades it** |
+
+⛔ **Not carried (§3.1b):** ~~`WorkUnits`~~, ~~`Deceased`~~, ~~`TargetTimeDays`~~,
+~~`TargetTimeMins`~~ — all measured **0 non-zero**.
+
+### 3.1b ⛔ NOT CARRIED TO CE — a product decision (user, 2026-07-17)
+
+> *"DateTimeValue, Note, WorkUnits, Deceased, TargetTime all not necessary as they barely got used,
+> some of these fields are so old, I don't see the need to carry them over to the new ce"*
+
+**Dropped deliberately.** The measurements support it:
+
+| column | measured | why dropping is safe |
+|---|---|---|
+| `Requests.WorkUnits` | **0 non-zero** of 174,261 | dead |
+| `Requests.Deceased` | **0 non-zero** | dead |
+| `Requests.TargetTimeDays` | **0 non-zero** | dead |
+| `Requests.TargetTimeMins` | **0 non-zero** | dead |
+| `LabResults.WorkUnits` | **227 non-zero** (0.04%) | noise |
+| `LabResults.Note` | 68,645 (10.7%) | a **bit** (0/1), meaning undocumented; legacy |
+| `LabResults.DateTimeValue` | 33,004 (5.1%) | **redundant** — see below |
+
+**`DateTimeValue` is a typed projection, not data.** For 30,198 of its 33,004 rows the same value is
+already in `LIMSRptResult` as text (`'01/03/2013'` ↔ `2013-03-01`), which CDR carries as
+`result_value`. **Checked the exception rather than assumed it:** 2,806 rows have `DateTimeValue`
+with an EMPTY `LIMSRptResult` — and **all 2,806 are one observation, `TPT` *"Tranportation Time"*
+(v1's own typo) under panel `COL`**. Logistics, not a clinical result.
+⇒ Dropping `DateTimeValue` loses **2,806 rows of transport-time metadata and nothing else**.
+
+⚠ **This is a DECISION, not a measurement — do not merge it with `measured_empty` (§3.2).** They
+expire differently: a measurement is falsified by the next site's data; a decision is only reversed
+by a person. Conflating them is how *"we have no evidence"* silently becomes *"we decided"*.
+
+⚠ **`CostUnits` is NOT in this list and must not be assumed into it.** It is `WorkUnits`' sibling but
+behaves nothing like it: `Requests.CostUnits` is **36,374 non-zero (20.9%)** and
+`LabResults.CostUnits` is **127,140 non-zero (19.7%)**, while both `WorkUnits` are dead. **Needs an
+explicit decision** — see §9.
 
 ### 3.2 `Requests` — uncovered, EMPTY on TDS
 
@@ -86,16 +122,17 @@ of magnitude.
 
 | column | non-empty | note |
 |---|---|---|
-| `CostUnits` | 127,140 non-zero (19.7%) | |
-| `Note` | 68,645 (10.7%) | **a bit**, not text |
+| `CostUnits` | 127,140 non-zero (19.7%) | ⚠ **undecided — §9** |
 | `SIHiRange` | 50,761 non-zero (7.9%) | ⚠ CDR emits `rpt_range` as a **string**; v1 splits lo/hi **numerically** |
 | `CodedValue` | 49,410 (7.7%) | ⚠ **distinct from `LIMSCodedValue`**, which IS covered |
 | `ResultSemiquantitive` | 49,409 non-zero (7.7%) | `-1` × 37,185, `1` × 12,205, `2`/`3` × 19. Tracks `CodedValue` almost exactly. Likely the `<` / `>` qualifier — **measure before mapping** |
 | `LIMSRptUnits` | 45,461 (7.1%) | CDR emits `rpt_units`; ungraded |
 | `SILoRange` | 32,664 non-zero (5.1%) | |
-| `DateTimeValue` | 33,004 (5.1%) | the **value** of date-typed obs, not a timestamp |
 | **`LIMSRptFlag`** | **8,372 (1.3%)** | `L` 5,337 / `H` 2,194 / `L-` 666 / `H+` 145. ⇒ `v2-transform.ts:497` `rpt_flag: null` **is a real defect, at 8,372 rows** |
 | `LOINCCode` | **2** | dead |
+| ~~`Note`~~ | 68,645 (10.7%) | ⛔ **not carried — §3.1b** |
+| ~~`DateTimeValue`~~ | 33,004 (5.1%) | ⛔ **not carried — §3.1b** |
+| ~~`WorkUnits`~~ | 227 (0.04%) | ⛔ **not carried — §3.1b** |
 
 ⚠ **`LIMSRptFlag`'s value set (`L`/`H`/`L-`/`H+`) DIFFERS from `HL7AbnormalFlagCodes`
 (`N`/`L`/`H`/`LL`/`HH`).** They are the LIMS-native and HL7-normalised flags — **two different
@@ -172,9 +209,27 @@ Every v1 column lands in exactly one bucket, each carrying its **measurement**:
    (+`LIMSVersionStamp` — ⚠ **`LabResults` spells it with a capital S**; `Requests` does not)
 4. **`measured_empty`** — **NEW.** 0% on TDS, carrying the count and the date. **Not "ignore":** a
    claim that expires the moment another site's data lands.
+5. **`not_carried`** — **NEW (§3.1b).** A deliberate product decision that CE does not model this
+   legacy field. Carries the decision, the decider, the date, and the measurement.
+
+⚠ **Buckets 4 and 5 must NOT be merged, however similar they look in a report.** They mean opposite
+things and expire differently:
+
+| | claim | falsified by | if wrong |
+|---|---|---|---|
+| **`measured_empty`** | *"we observed no data — on ONE of 22 sites"* | **the next site's data** | a real field is silently uncovered |
+| **`not_carried`** | *"CE deliberately does not model this"* | **a person changing their mind** | nothing; it is a decision |
+
+**Conflating them is how *"we have no evidence"* becomes *"we decided"* without anyone deciding.**
 
 ⚠ **`measured_empty` is the bucket most likely to rot into the next `allowDisaEmpty`.** It must
 record *"0 of 174,261 on TDS, 2026-07-17"*, never *"n/a"*.
+⚠ **`not_carried` must name WHO decided and WHEN** — otherwise a later reader cannot tell a decision
+from a guess, and re-litigates it.
+
+⇒ **Neither bucket is graded, so neither can produce red.** That is correct for both — but it also
+means a mistake in either is **invisible in the report**. They are the two buckets to review by
+hand, not by test.
 
 ### 5.4 New defs that follow from §3
 
@@ -211,10 +266,38 @@ widen a PHI blast radius**, and a findings doc is exactly the wrong place for a 
 ## 8. Acceptance
 
 1. The coverage guard asserts against a **DB-derived** list of **60** / **28** columns and passes.
-2. Every column is in exactly one of the four buckets, each with a measurement.
+2. Every column is in exactly one of the **five** buckets, each with a measurement.
 3. `OBRSetID` is fetched, and the `rows[0]` choice is explicit.
 4. The gate reports `rpt_flag` red at **~8,372** rows — **not** ~107,602 (that would mean it was
    mapped onto `abnormal_flag`) and **not** ~635,483 (the `''` rule broken).
 5. `EncryptedPatientID` is accounted for **without** being fetched.
 6. No regression: 173 tests, 172 pass, 1 pre-existing skip; the DISA↔v1 batch output stays
    byte-identical.
+7. `not_carried` (§3.1b) columns are **absent from the SELECT** and produce **no red** — dropping
+   them must cost nothing at runtime, not merely be tolerated by the gate.
+
+---
+
+## 9. ⛔ OPEN — decide before the plan
+
+**`CostUnits`.** Not in the user's not-carried list, and it does **not** behave like its sibling:
+
+| | `WorkUnits` | `CostUnits` |
+|---|---|---|
+| `Requests` | **0 non-zero** — dead | **36,374 (20.9%)** |
+| `LabResults` | 227 (0.04%) — noise | **127,140 (19.7%)** |
+
+The stated principle (*"barely got used… so old"*) does not obviously reach it — ~20% of rows is not
+"barely". But CDR has no counterpart field, so a def would report `only_v1` on every populated row
+and add ~127k red to the inventory for a billing metric CE may not want at all.
+
+**Three ways to go — needs a person, not a guess:**
+1. **`not_carried`** — same call as `WorkUnits`, on the grounds that billing units are out of CE's
+   scope regardless of population.
+2. **def** — grade it, accept ~127k `only_v1`, and let the report argue for carrying it.
+3. **`measured_empty`** — ⛔ **WRONG and listed only to rule it out.** It is 20% populated; filing it
+   here would be a false measurement.
+
+⚠ **Do not resolve this by inference from the not-carried list.** That list is a decision, and
+extending a decision to a field its author did not name is exactly how `patient_class` nearly became
+a fabricated defect — in the opposite direction.
