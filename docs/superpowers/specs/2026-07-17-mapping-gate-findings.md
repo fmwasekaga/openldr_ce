@@ -336,3 +336,76 @@ and the sample bias is gone.
 
 ✅ **Done:** re-run on a random sample (was #3 in the first draft). It changed §5, §5b and the
 `abnormal_flag` denominator, and it proved the scope rule.
+
+---
+
+# 6. THE `obr_set_id` SLICE — BUILT, and graded against live v1 (2026-07-17)
+
+Plan `docs/superpowers/plans/2026-07-17-obr-set-id.md`. Same **random spread** sample as every
+number above (`abs(checksum([LabNo])) % 500 = 0` → 211 labs, 158 with a v1 counterpart).
+
+## 6.1 The headline — the gate now grades 278 records where it graded 158
+
+| | before | after |
+|---|---|---|
+| **records graded** | **158** (one per lab) | **278** (one per ORDERED PANEL) |
+| **`obr_set_id`** | **158/158 `only_v1`** | **278 match / 0 mismatch / 0 only_v1** ✅ |
+| **`panel_code`** | 139 match / **19 mismatch** | **278 match / 0 mismatch** ✅ |
+| **OBR pairing** | n/a | `paired 278 / only_v2 0 / only_v1 0` |
+
+**120 panels that had NO v2 counterpart at all now have one.** `panel_code`'s **19 mismatches were
+the multi-panel grain artifact** (§3.2 predicted exactly this) and are gone — not by widening an
+assertion, but because each panel now names itself.
+
+**`obr_pairing` is 278/0/0** — every emitted OBR found its v1 row and vice versa. ⚠ The **0.05%
+v1-staleness residual (design §2.4) did NOT appear in this sample** — consistent with the `[CD4,CD4]`
+cases being absent from the 838-lab sample too. **It is not disproven, it is unsampled.** The counter
+exists so it reports as a number when it does appear.
+
+## 6.2 Live acceptance on the two named labs
+
+| lab | criterion | result |
+|---|---|---|
+| `TDS0109482` (`ROTEL`, **0 TestResults**) | emits **1** request, 0 results | ✅ 1 request (`obr 1 ROTEL`), `lab_results: []`. **CDR previously emitted NOTHING for this lab.** Audit flags `record_has_no_observations`. |
+| `TDS0012427` (`COL#1` + `COL#101` + `RNAHF#2`) | emits **2** requests, not 3 | ✅ `obr 1 COL`, `obr 2 RNAHF`. **All results carry `obr_set_id: 1`** — they are `COL#101`'s observations (`COLST`/`COLBY`/`TPCON`/`TPD`), filed under OBR 1. **The `+100` rule, live.** |
+
+## 6.3 ⛔ CORRECTING MY OWN §8.3 AGAIN — `section_code` did NOT improve
+
+The design's §8.3 was corrected once (three of four fields are stubs, not "crushed"). **The live run
+shows the surviving claim was ALSO too generous.** I wrote *"`section_code` ✅ YES — per-OBR for
+free"*:
+
+| field | before (158) | after (278) | verdict |
+|---|---|---|---|
+| `section_code` | **0 match** / 119 mismatch / 39 only_v1 | **0 match** / 159 mismatch / 119 only_v1 | ⛔ **still 0 match** |
+
+`section_code` **is** now per-OBR (the structure is right), but it **never matched v1 before and
+still never matches**. `v2-transform.ts` sources it from the **codebook** (`panel?.section`) while v1
+carries `HL7SectionCode` — **a broken VALUE mapping, independent of the grain.** This slice neither
+fixed nor regressed it.
+
+⇒ **Acceptance #3 delivers `panel_code` ONLY.** *"Per-OBR"* and *"correct"* are different claims, and
+I conflated them twice. **A field can be perfectly per-OBR and perfectly wrong.**
+
+## 6.4 The holes this slice deliberately leaves (all confirmed by the run)
+
+Per-OBR-shaped, still unsourced — **later slices, not this one**:
+
+| field | after (278) | why |
+|---|---|---|
+| `analysis_at` | 1 match / **277 only_v1** | hardcoded stub — needs the **timestamps** slice |
+| `authorised_at` | 28 / **250 only_v1** | stub |
+| `tested_by` | 12 / **148 mismatch** | specimen-level; every OBR gets the same wrong value |
+| `testing_facility_code` | **277 mismatch** | known: the requesting clinic in the lab's slot |
+| `section_code` | **0 match** | §6.3 — a broken value mapping |
+
+## 6.5 What the DISA↔v1 gate did — unchanged, as required
+
+`labs_matched_perfectly: 158`, every `per_field` **158 match / 0 mismatch**. The legacy leg still
+reads v1's lowest-OBR row deliberately, so acceptance #10 holds.
+
+## 6.6 ⚠ Spotted in passing — NOT this slice's bug, NOT fixed
+
+`TDS0109482.taken_datetime` emits **`"Tue Feb 20 2018 03:00:00 GMT+0300 (East Africa Time)"`** — a
+raw JS `Date.toString()`, not ISO. `disaToIso` passed a value through unconverted. **Pre-existing and
+unrelated to the grain**; recorded so it is not lost. Any consumer parsing that as ISO gets nothing.
