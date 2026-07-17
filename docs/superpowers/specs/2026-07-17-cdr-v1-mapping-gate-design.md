@@ -98,21 +98,77 @@ v1 TDS results: 643,855 rows
 
 **CORRECTED stub evidence — scoped to DISA (the numbers that justify this slice):**
 
-| v1 column | ❌ all-sites (wrong) | ✅ **DISA/TDS** |
+| v1 column | ❌ all-sites (wrong) | ⚠️ **DISA/TDS — NON-NULL, ALSO WRONG (see §3.3c)** |
 |---|---|---|
-| **`HL7AbnormalFlagCodes`** | 92.1% | **100.0% — 643,855 / 643,855** |
-| `LIMSRptFlag` | 91.8% | **100.0%** |
-| `HL7ResultStatusCode` | 96.8% | **100.0%** |
-| `HL7PatientClassCode` | 96.8% | **100.0%** |
-| `AuthorisedBy` | 100% | **100.0%** |
-| `AnalysisDateTime` | 84.7% | **99.0%** |
-| `AuthorisedDateTime` | 79.6% | **91.2%** |
-| `AgeInDays` | 98.4% | **93.4%** |
-| `ReceivedDateTime` | 95.8% | **88.7%** |
-| `SpecimenDateTime` | 97.1% | **83.1%** |
+| **`HL7AbnormalFlagCodes`** | 92.1% | ~~**100.0% — 643,855 / 643,855**~~ → **16.7%** |
+| `LIMSRptFlag` | 91.8% | ~~**100.0%**~~ → *not a column on `OpenLdrV1LabResult`* |
+| `HL7ResultStatusCode` | 96.8% | **100.0%** ✅ *(survives)* |
+| `HL7PatientClassCode` | 96.8% | ~~**100.0%**~~ → **0.0% — EMPTY ON EVERY ROW** |
+| `AuthorisedBy` | 100% | ~~**100.0%**~~ → **91.1%** |
+| `AnalysisDateTime` | 84.7% | **99.0%** ✅ *(datetime — no empty-string form)* |
+| `AuthorisedDateTime` | 79.6% | **91.2%** ✅ *(datetime)* |
+| `AgeInDays` | 98.4% | **93.4%** ✅ *(numeric)* |
+| `ReceivedDateTime` | 95.8% | **88.7%** ✅ *(datetime)* |
+| `SpecimenDateTime` | 97.1% | **83.1%** ✅ *(datetime)* |
 
-⇒ **Every stub's case is STRONGER once scoped correctly.** For DISA, v1 has an abnormal flag and a
-result status on **100%** of rows while CDR hardcodes both `null`.
+⇒ ~~**Every stub's case is STRONGER once scoped correctly.**~~ **FALSIFIED for the VARCHAR columns —
+see §3.3c.** The datetime/numeric rows survive; the string rows do not.
+
+### 3.3c ⛔ THE `count(col)` DEFECT — the spec's own table measured the WRONG LAYER (2026-07-17, during T4)
+
+**Measured, DISA/TDS:**
+```
+HL7AbnormalFlagCodes:  non-NULL 643,855 (100.0%)   NON-EMPTY 107,602 (16.7%)
+  value distribution:  '' 536,253 | 'N' 99,232 | 'L' 6,003 | 'H' 2,339 | 'LL' 16 | 'HH' 12
+HL7PatientClassCode:   non-NULL 174,261 (100.0%)   NON-EMPTY 0 (0.0%)
+AuthorisedBy:          non-NULL 174,261 (100.0%)   NON-EMPTY 158,807 (91.1%)
+```
+
+**`count(col)` counts NON-NULL. v1 writes `''`, not `NULL`, for an absent string.** So every
+`100.0%` in the table above was `count()` measuring a column that is mostly empty. This is the
+**same failure as [[disa-stores-blobs-not-columns]] and the multi-LIMS error**: the query answered a
+different question than the one asked. Third occurrence. **The rule generalises: for any v1 VARCHAR,
+`count(col)` is meaningless — use `count(nullif(ltrim(rtrim(col)),''))`.**
+
+**Two consequences, and they point in OPPOSITE directions:**
+
+| stub | spec said | truth | verdict |
+|---|---|---|---|
+| `abnormal_flag: null` | defect vs **100.0%** | v1 has a flag on **107,602 rows (16.7%)** | ✅ **STILL A REAL DEFECT** — 107,602 rows lost. Magnitude was overstated **6×**. |
+| `patient_class: null` | defect vs **100.0%** | v1 is **empty on all 174,261 rows** | ⛔ **NOT A DEFECT.** CDR's `null` **already matches v1 exactly.** |
+
+⚠ **`patient_class` was named as a stub to fix in §3.5 and in the plan's T7. It is not one.** Had the
+gate asserted "v1 is 100% populated ⇒ red", it would have reported a **fabricated defect** and sent a
+fix slice to invent data v1 never had — the *inverse* of the bug this gate exists to catch, and worse,
+because it manufactures work rather than hiding it.
+
+⇒ **The comparator MUST treat v1's `''` as EMPTY** (`isEmpty` in `comparators.ts:8-12` already does).
+Then `V2 null` ↔ `v1 ''` scores **match** (both absent) and `V2 null` ↔ `v1 'N'` scores **only_v1** —
+the honest 107,602-row finding, with no false red on the other 536,253.
+
+### 3.3d ⛔ v1 KEEPS documentation observations — 36.6% of its result rows (2026-07-17, during T4)
+
+The plan's T4 asked whether v1 keeps the documentation observations the export drops via
+`excludeObs`. **It does.** Measured, DISA/TDS `LabResults`:
+
+```
+VLID  218,181 rows |  EIDID  17,664 rows  =  235,845 of 643,855  (36.6%)
+```
+These are unambiguously questionnaire data, not results — the observation descriptions are
+*"Is the client pregnant?"*, *"Drug Adherance"*, *"Reason for HVL Testing"*, *"Child feeding"*.
+CDR routes them to the **forms feed** instead (`config/tanzania.yaml` → `VLID: hiv_vl_documentation`),
+so their absence from the lab payload is **correct and intentional — not data loss**.
+
+⚠ **But only when `--country tanzania` is set.** `OPENLDR_COUNTRY` is **unset** on this laptop, so
+`loadCountryDocConfig(undefined)` returns `EMPTY_DOC_CONFIG` and those panels are **NOT** excluded.
+**The gate must therefore take `--country`, or it grades a payload the TZ deployment never ships.**
+Done in T4 (`bf13bbd`), and the batch summary now records which country drove the run.
+
+⇒ **The result-level gate (T6) MUST exclude v1 rows under documentation panels from pairing** — a
+**counted scope rule**, reported as its own number, never a silent drop. Precedent: `labs_pending_in_v1`
+(`compare-batch.ts:57-65`), which is the §3.3b conditional-rule pattern already in the codebase.
+**Without this, 235,845 rows score `only_v1` and drown every real finding** — the exact failure §3.3b
+warns about, at 36.6% scale.
 
 **The harness already exists** — `apps/cli/src/commands/compare-batch.ts:140`: *"Scan many records
 end-to-end (DISA ↔ OpenLDR v1). Emits one NDJSON line per lab on stdout (summary stats), plus a
