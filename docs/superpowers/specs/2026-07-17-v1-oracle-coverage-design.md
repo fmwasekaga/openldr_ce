@@ -156,7 +156,46 @@ statement about `patient_guid`, which is a different concern entirely.
 (`external-persistence.service.ts:499`, `:518`). CDR's `V2Patient` has no such field, so it is
 **always NULL for DISA data** — a purpose-built de-identified-analytics capability, unused.
 
-**(b) `patient_guid = requestId` is a COMPROMISE, and CE inherits it.**
+**(a2) Patient identifiers are FLATTENED — typed ids are silently dropped.** (user, 2026-07-17:
+*"for countries with a registry, Patient is supposed to have its national id number captured…
+something like idType and IdCode… could be License with code 12345678. If it's not there then I
+forgot to add it"*)
+
+**It is not there — but it does not need inventing. It already exists and is being discarded.**
+
+| layer | identifier model | verdict |
+|---|---|---|
+| CDR → FHIR (`fhir-transform.ts:51-61`) | builds `Patient.identifier[]`: `urn:openldr:folder-no`, and `urn:openldr:national-id` **with `type.coding = [{ system: ".../v2-0203", code: "NI" }]`** | ✅ **typed, plural, standards-based ALREADY** |
+| FHIR → v2 (`hl7-fhir.schema.js:368-382`) | `patientNationalId()` scans `identifier[]` and returns **the FIRST** whose `type.coding[0].code` ∈ `NI`/`SS`/`NN`/`SSN` (or whose system string contains *"national-id"*) — **as one flat string** | ⛔ **lossy** |
+| `V2Patient` / `patients` table | `national_id: string \| null` — **one slot, untyped** | ⛔ **lossy** |
+
+**Three distinct losses at the flattening step:**
+1. **`identifier[]` is a LIST; v2 keeps ONE.** Every additional identifier is dropped.
+2. **The TYPE is discarded.** Once it is `national_id`, nothing records whether it was a national
+   ID, an SSN, a passport or a license.
+3. ⛔ **Any type OUTSIDE `NI`/`SS`/`NN`/`SSN` is SILENTLY DROPPED.** The user's own example — a
+   **License (`DL`)** with code `12345678` — **matches nothing and is lost**. So are `PPN`
+   (passport), `HC` (health card), `MR` (medical record).
+
+⇒ **`idType`/`idCode` is exactly FHIR's `Identifier.type.coding.code` + `Identifier.value`, on the
+HL7 `v2-0203` code system CDR already cites.** ⇒ **The fix is to STOP FLATTENING, not to invent a
+parallel model.** CE is FHIR-native and can carry `identifier[]` with types as-is — inventing
+`idType`/`idCode` fields would re-solve, in a bespoke way, a problem the standard already solves and
+CDR already emits correctly.
+
+⚠ **DISA cannot exercise this today** — `NID` measured **0 of 40**. So this is invisible on TDS and
+would only surface at a site with a real registry. **A gate scoped to TDS will never catch it.**
+
+**(b) `patient_guid = requestId` — a COMPROMISE, but a DELIBERATE one; CE inherits it.**
+
+⚠ **Read the rationale before "fixing" it.** (user, 2026-07-17): *"it was meant to be a **snapshot
+not a registry** — it's very hard for some countries to track users especially if there is no
+national id, so this at least helps a bit."*
+
+⇒ **~98,259 Patient resources for ~44,829 real people is a KNOWN CONSEQUENCE of a defensible
+stance**, not an oversight. Where no national registry exists, a per-request snapshot is honest: it
+does not claim an identity it cannot establish. **Do not "correct" it into a registry by default** —
+a wrong cross-visit merge is worse than no merge, because it silently fuses two people's results.
 `v2-transform.ts:194-197`: *"DISA has no native patient GUID — use the request_id… This means no
 cross-visit dedup downstream; that's accepted."* With `UNIQUE (patient_guid, facility_id)`, **every
 request creates a new patient row** — CE would hold ~98,259 "patients" for ~44,829 real ones. And it
@@ -391,8 +430,17 @@ nearly became a fabricated defect, inverted. **If a field looks like it "obvious
    - **`patient_guid`** — *"external patient identifier from source"*. **DISA has none**, so v2 used
      `requestId`: *"no cross-visit dedup downstream; that's accepted"* (`v2-transform.ts:194-197`).
      ⇒ one patient row **per request** (~98,259 for ~44,829 real people), and via
-     `fhir-transform.ts:332` **CE's FHIR `Patient.id` inherits it**. **This is the compromise to
-     replace, not to copy.**
+     `fhir-transform.ts:332` **CE's FHIR `Patient.id` inherits it**.
+     ⚠ **This is a SNAPSHOT-not-a-registry stance, not an accident** — see §3.1d(b). Where no
+     national registry exists it is the honest answer: it never claims an identity it cannot
+     establish. **The improvement is to stop it being the ONLY option — not to force merging.**
+     A wrong merge silently fuses two people's results; that is worse than no merge.
+   - **Typed identifiers** (§3.1d(a2)) — **the highest-leverage piece, and it needs no invention.**
+     CDR already emits `Patient.identifier[]` with `type.coding` on HL7 `v2-0203`; v2 flattens it to
+     one untyped `national_id` and **silently drops any type outside `NI`/`SS`/`NN`/`SSN`** (a
+     License `DL`, a passport `PPN`). **Stop flattening.** Where a country HAS a registry, this is
+     what makes real identity possible — without imposing it on countries that do not.
+     ⚠ **Invisible on TDS** — DISA `NID` is **0 of 40**. Only a registry site exercises it.
    - **`encrypted_patient_id`** — de-identified analytics tracking. v2 has the column and persists
      it; **CDR never populates it**. A separate question: does CE want this capability at all?
    ⚠ Measured constraints: `FolderNo` **42.5%**, `NID` **0%**, names 100% but **polluted** —
