@@ -188,14 +188,27 @@ would only surface at a site with a real registry. **A gate scoped to TDS will n
 
 **(b) `patient_guid = requestId` — a COMPROMISE, but a DELIBERATE one; CE inherits it.**
 
-⚠ **Read the rationale before "fixing" it.** (user, 2026-07-17): *"it was meant to be a **snapshot
-not a registry** — it's very hard for some countries to track users especially if there is no
-national id, so this at least helps a bit."*
+⛔ **SETTLED. Not an open question, and NOT this project's to reopen.** (user, 2026-07-17):
 
-⇒ **~98,259 Patient resources for ~44,829 real people is a KNOWN CONSEQUENCE of a defensible
-stance**, not an oversight. Where no national registry exists, a per-request snapshot is honest: it
-does not claim an identity it cannot establish. **Do not "correct" it into a registry by default** —
-a wrong cross-visit merge is worse than no merge, because it silently fuses two people's results.
+> *"DISA genuinely has no patient identifier — hard to measure hence why I just settled for
+> requestId, least till the vendor can create a tool that communicates with ce, but we can't force
+> them, as there could be charges involved plus we don't know their timeline, hence why we are going
+> along with a custom tool from us for now."*
+>
+> *"it was meant to be a **snapshot not a registry** — it's very hard for some countries to track
+> users especially if there is no national id, so this at least helps a bit."*
+
+⇒ **~98,259 Patient resources for ~44,829 real people is a KNOWN CONSEQUENCE of a defensible stance
+under a constraint we do not control**, not an oversight. Where no national registry exists, a
+per-request snapshot is honest: it never claims an identity it cannot establish.
+
+⚠ **The blocker is COMMERCIAL, not technical.** A real patient identity for the DISA route needs the
+**vendor** to build a tool that talks to CE. They cannot be forced; there may be charges; the
+timeline is unknown. **The CDR toolchain exists precisely because that cannot be waited on.**
+
+⇒ ⛔ **No slice should "fix" `patient_guid = requestId`.** No amount of CDR-side engineering
+manufactures an identifier DISA does not have, and a wrong cross-visit merge silently fuses two
+people's results — worse than no merge. **Do not raise this again as a defect.**
 `v2-transform.ts:194-197`: *"DISA has no native patient GUID — use the request_id… This means no
 cross-visit dedup downstream; that's accepted."* With `UNIQUE (patient_guid, facility_id)`, **every
 request creates a new patient row** — CE would hold ~98,259 "patients" for ~44,829 real ones. And it
@@ -424,23 +437,25 @@ nearly became a fabricated defect, inverted. **If a field looks like it "obvious
 
 ## 10. Follow-up slices — named so they are not lost
 
-1. **Define CE's patient identity — do not inherit v2's compromise** (from §3.1d). ⚠ **Three
-   separate concerns; do not collapse them** (this is the mistake this spec already made once):
-   - **DB linkage** — solved. `patients.id` UUID PK / CE's own resource id. Nobody needs to design this.
-   - **`patient_guid`** — *"external patient identifier from source"*. **DISA has none**, so v2 used
-     `requestId`: *"no cross-visit dedup downstream; that's accepted"* (`v2-transform.ts:194-197`).
-     ⇒ one patient row **per request** (~98,259 for ~44,829 real people), and via
-     `fhir-transform.ts:332` **CE's FHIR `Patient.id` inherits it**.
-     ⚠ **This is a SNAPSHOT-not-a-registry stance, not an accident** — see §3.1d(b). Where no
-     national registry exists it is the honest answer: it never claims an identity it cannot
-     establish. **The improvement is to stop it being the ONLY option — not to force merging.**
-     A wrong merge silently fuses two people's results; that is worse than no merge.
-   - **Typed identifiers** (§3.1d(a2)) — **the highest-leverage piece, and it needs no invention.**
-     CDR already emits `Patient.identifier[]` with `type.coding` on HL7 `v2-0203`; v2 flattens it to
-     one untyped `national_id` and **silently drops any type outside `NI`/`SS`/`NN`/`SSN`** (a
-     License `DL`, a passport `PPN`). **Stop flattening.** Where a country HAS a registry, this is
-     what makes real identity possible — without imposing it on countries that do not.
-     ⚠ **Invisible on TDS** — DISA `NID` is **0 of 40**. Only a registry site exercises it.
+1. **Stop flattening typed patient identifiers** (from §3.1d(a2)). ⚠ **Three separate concerns; do
+   not collapse them** — this spec already made that mistake once:
+   - **DB linkage** — solved. `patients.id` UUID PK / CE's own resource id. Needs no design.
+   - **`patient_guid`** — ⛔ **SETTLED, CLOSED, and NOT this project's to reopen** (§3.1d(b)). DISA
+     has no patient identifier; `requestId` stands until the **vendor** ships a tool that talks to
+     CE — a **commercial** blocker (cannot compel them, possible charges, unknown timeline), which
+     is the very reason the CDR toolchain exists. **No CDR-side engineering manufactures an
+     identifier the source does not have. Do not raise it as a defect.**
+   - **Typed identifiers** — the actual work, and it needs no invention: CDR already emits
+     `Patient.identifier[]` with `type.coding` on HL7 `v2-0203`; the **v2 ingest** flattens it to one
+     untyped `national_id` and **silently drops any type outside `NI`/`SS`/`NN`/`SSN`** (License
+     `DL`, passport `PPN`, health card `HC`). **Stop flattening.**
+
+   ⚠ **SCOPE — this is NOT a DISA-route fix, and that is the point.** DISA has no identifier to
+   carry (`NID` **0 of 40**), so **nothing about this changes DISA/TDS output today.** It matters for
+   **other sources**: a future vendor tool, another LIMS, or a v1 client posting to CE directly — the
+   registry countries. ⇒ **It is a CE INGEST-CONTRACT concern, not a CDR one**, and it belongs with
+   [[fhir-bundle-wire-contract]] rather than in a CDR export slice.
+   ⚠ **A TDS-scoped gate can never catch this.** Its absence proves nothing about the code.
    - **`encrypted_patient_id`** — de-identified analytics tracking. v2 has the column and persists
      it; **CDR never populates it**. A separate question: does CE want this capability at all?
    ⚠ Measured constraints: `FolderNo` **42.5%**, `NID` **0%**, names 100% but **polluted** —
