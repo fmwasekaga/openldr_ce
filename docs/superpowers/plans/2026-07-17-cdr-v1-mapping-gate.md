@@ -14,6 +14,49 @@
 
 ---
 
+## ⛔ AMENDED 2026-07-17 AFTER EXECUTING TASK 1 — READ THIS FIRST
+
+**Task 1 ran. Verdict: the `1900-01-01` sentinel hypothesis is KILLED** — by a third outcome neither
+the spec nor this plan anticipated:
+
+```
+1900-01-01 rows by site:  TZLABMATE = 10,759   <- ALL of them (a DIFFERENT LIMS)
+TDS (the DISA site):      0 sentinel rows, in ANY date column, of 174,261
+```
+
+⇒ **The sentinel is irrelevant to DISA.** `allowDisaEmpty`'s cause is **STILL UNKNOWN**.
+
+**And it exposed a bigger error: v1 is MULTI-LIMS, so every percentage in the spec was the wrong
+population** (measured across all 3.6M rows, ~22 sites, ≥2 vendors). Re-scoped to DISA, **every
+stub's case is STRONGER** — `HL7AbnormalFlagCodes` is **100.0% (643,855/643,855)**, not 92.1%.
+
+### Revised task list — supersedes everything below
+
+| task | status |
+|---|---|
+| **T1** sentinel investigation | ✅ **DONE — KILLED.** No code. |
+| **T2** sentinel normaliser | ⛔ **CANCELLED** — the sentinel is a LabMate artifact; DISA has none. **Do not build it.** |
+| **T3** delete `allowDisaEmpty` | ⛔ **CANCELLED** — its cause is unknown, so deleting it is unjustified. ⚠ **Reduced to: fix its FALSE comment** (`mapping.ts:165-172` claims *"an obvious literal default like 2013-02-06"* — that is **11 rows of 3,602,986**). The hatch **stays**; the comment must say the cause is **unknown**. |
+| **T4** wire `toV2()` in | ✅ unchanged — **plus D6 scoping** (below) |
+| **T5** V2↔v1 field defs | ✅ unchanged — **plus D6 scoping** |
+| **T6** result-level gate | ✅ unchanged — **the acceptance number is now `abnormal_flag` vs 100.0% of 643,855** |
+| **T7** run at scale | ✅ unchanged — **must scope to DISA** |
+| **T8 (NEW)** investigate `allowDisaEmpty`'s real cause | ⬜ **added.** On TDS, `ReceivedDateTime` is **88.7%** populated with **no sentinel**. When DISA's `ReceivedInLabDateTime` **and** `RegisteredDateTime` are both empty, where does v1's value come from? **Needs the DECODER, not SQL.** |
+
+### ⚠ D6 — SCOPE EVERY v1 QUERY TO DISA
+
+**v1 is multi-LIMS.** Every v1 query — in the gate, in any probe, in any measurement — **MUST** filter
+`RequestID LIKE 'TZDISAT%'`. Without it, the gate compares **DISA payloads against LabMate rows**.
+
+**The baseline** (user: *"focus on data that both CDR and v1 have"*):
+```
+INTERSECTION: 98,259 requests   (every v1 TDS request exists in DISA)
+DISA-only:    31,149            (v1 never ingested them — v1's SCOPE, not a CDR defect)
+v1 TDS results: 643,855 rows
+```
+
+---
+
 ## ⛔ Read before Task 1
 
 1. **This slice MEASURES. It does NOT fix any stub.** *"once the mapping is good, everything else
@@ -424,7 +467,7 @@ git commit -m "feat(compare): strict V2<->v1 field defs + evidence-bearing excep
 **Files:** `apps/cli/src/compare/v2-mapping.ts`, `apps/cli/src/compare/v2-diff.ts`
 
 **This is the task that proves the whole slice.** `abnormal_flag` is hardcoded `null`
-(`v2-transform.ts:495`) while v1's `HL7AbnormalFlagCodes` is **92.1% of 11,597,899 rows**.
+(`v2-transform.ts:495`) while v1's `HL7AbnormalFlagCodes` is **100.0% of 643,855 DISA/TDS rows — 643,855 of 643,855**.
 
 ⚠ **The v1 side is ALREADY fetched** — `OpenLdrV1LabResult.HL7AbnormalFlagCodes`
 (`apps/cli/src/openldr.ts:62`). Nothing compares it. That is the bug.
@@ -439,7 +482,7 @@ panel by adding a higher TESTINDEX row; v1's migration kept only the final itera
 ```ts
 // The whole slice exists because the gate never looked at the export.
 // v2-transform.ts:495 hardcodes `abnormal_flag: null` while v1 has
-// HL7AbnormalFlagCodes on 92.1% of 11.6M rows. If this test does NOT go red on
+// HL7AbnormalFlagCodes on 100.0% of 643,855 DISA rows. If this does NOT go red on
 // a real batch, the gate is not reading the V2 payload — which IS the bug.
 test("a stubbed V2 field vs a populated v1 column reports only_v1", () => {
   const r = compareV2Result(
@@ -461,7 +504,7 @@ test("a stubbed V2 field vs a populated v1 column reports only_v1", () => {
 git add apps/cli/src/compare/
 git commit -m "feat(compare): result-level V2<->v1 gate
 
-abnormal_flag is hardcoded null in v2-transform while v1 has it on 92.1% of
+abnormal_flag is hardcoded null in v2-transform while v1 has it on 100.0% of
 11.6M rows. Nothing compared it. Now it is red."
 ```
 

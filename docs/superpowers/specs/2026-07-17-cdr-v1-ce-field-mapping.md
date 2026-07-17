@@ -1,8 +1,65 @@
 # CDR ↔ v1 ↔ CE — the field mapping
 
 **Date:** 2026-07-17
-**Status:** Measured against live DISA + live v1 + live CE. **BLOCKS the timestamps slice.**
+**Status:** ⚠ **RE-SCOPED 2026-07-17 — every percentage in the original was measured on the WRONG
+POPULATION. See §0.0.** Corrected numbers below.
 **Why:** *"v1 was populated by disalab's tool so it means the data must exist in CDR somewhere."* — the user.
+
+---
+
+## 0.0 ⛔ CORRECTION — v1 is MULTI-LIMS. My original percentages were the wrong population.
+
+**I measured every v1 percentage across all 3,602,986 rows and attributed it to DISA. v1 aggregates
+~22 sites across at least TWO LIMS VENDORS.** Measured:
+
+```
+TZDISATBG  1,145,785 + 121,655 (LIMSVendorCode='DISA')
+TZDISATMS    982,283
+TZDISATMB    569,775 + 77,856
+TZDISATZA    266,888
+TZDISATDS    127,880 +  46,381   = 174,261   <- the ONLY site we hold DISA data for
+TZLABMATE     10,759             <- a DIFFERENT LIMS (LabMate)
+```
+
+**This is the third time I have made a population claim from the wrong population** (after *"only 21
+labs have micro"* and *"collection time is 0.08%"*). Same shape each time: **measure an aggregate,
+attribute it to a subset.** See [[plans-cite-or-flag]] Rule 0.
+
+### 0.0.1 The baseline (user: *"focus on data that both CDR and v1 have"*)
+
+```
+v1 TDS:        174,261 rows (per-OBR) = 98,259 distinct RequestIDs
+DISA REGDAT4:  129,408 LabNos
+INTERSECTION:   98,259   <- every v1 TDS request exists in DISA
+DISA-only:      31,149   <- DISA has them; v1 NEVER ingested them (24% of DISA)
+```
+⇒ **The comparable universe is 98,259 requests / 643,855 v1 result rows.** All §0.0.2 numbers are on
+it. ⚠ The **31,149 DISA-only** requests are **v1's ingest scope, not a CDR defect** — out of scope,
+but do not mistake them for loss.
+
+### 0.0.2 CORRECTED percentages — scoped to DISA (TDS), the baseline
+
+| v1 column | ❌ I claimed (all 3.6M) | ✅ ACTUAL (DISA/TDS) |
+|---|---|---|
+| **`HL7AbnormalFlagCodes`** | 92.1% of 11.6M | **100.0%** — **643,855 / 643,855** |
+| **`LIMSRptFlag`** | 91.8% | **100.0%** — 643,855 / 643,855 |
+| **`HL7ResultStatusCode`** | 96.8% | **100.0%** |
+| **`HL7PatientClassCode`** | 96.8% | **100.0%** |
+| **`AuthorisedBy`** | 100% | **100.0%** |
+| **`AnalysisDateTime`** | 84.7% | **99.0%** |
+| **`AuthorisedDateTime`** | 79.6% | **91.2%** |
+| `AgeInDays` | 98.4% | **93.4%** |
+| `ReceivedDateTime` | 95.8% | **88.7%** |
+| `SpecimenDateTime` | 97.1% | **83.1%** |
+
+⇒ **The case for every stub is STRONGER than the original claimed**, not weaker. For DISA, v1 holds an
+abnormal flag and a result status on **100%** of rows while CDR hardcodes both to `null`.
+
+⚠ **Every other percentage in this document below is still the ALL-SITES figure and is therefore
+SUSPECT. Re-scope to `RequestID LIKE 'TZDISAT%'` before relying on any of them.**
+
+⚠ **The gate must scope its v1 queries to DISA sites**, or it will compare DISA payloads against
+LabMate rows.
 
 ---
 
@@ -11,10 +68,10 @@
 **v1 (`OpenLDRData`) is the ORACLE.** It was populated from the same DISA by DISA's own tooling.
 ⇒ **every populated v1 column is PROOF the data exists in DISA and CDR can reach it.**
 
-Scale: **`Requests` = 3,602,986 rows. `LabResults` = 11,597,899 rows.**
+⚠ **But the oracle is MULTI-LIMS — scope every query to DISA sites (§0.0).**
 
-I spent hours theorising which field *ought* to be the collection time. v1 had answered it 3.5
-million times. **Ask the oracle first.**
+I spent hours theorising which field *ought* to be the collection time. v1 had answered it. **Ask the
+oracle first — and check which population you are asking about.**
 
 ---
 

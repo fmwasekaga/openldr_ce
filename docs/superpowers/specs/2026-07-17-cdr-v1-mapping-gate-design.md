@@ -64,7 +64,8 @@ grep -rn "toV2|toFhir|V2Payload|V2LabRequest|V2Result" \
 | D2 | **Strict by default. Every exception NAMED, JUSTIFIED, COUNTED** — with evidence, not a boolean. |
 | D3 | **Cover EVERY v1 column** except v1's own bookkeeping. Low population is a **fact to record, not a reason to skip**. |
 | D4 | **Let the RED derive the mapping.** A field reporting "collected 97.1% / taken 3%" *tells* us the rule. |
-| D5 | **v1's `1900-01-01` is a SENTINEL** — investigate and report; do not assume (§3.3). |
+| D5 | ~~v1's `1900-01-01` is a SENTINEL~~ — **investigated 2026-07-17: KILLED.** All sentinel rows are `TZLABMATE` (a different LIMS); DISA's site has **zero**. `allowDisaEmpty`'s cause is **UNKNOWN** and the hatch **STAYS** for now. See §3.3. |
+| D6 | **SCOPE EVERYTHING TO DISA.** v1 is **multi-LIMS** (~22 sites, ≥2 vendors). Every v1 query — in the gate and in any measurement — **MUST** filter `RequestID LIKE 'TZDISAT%'`, or it compares DISA payloads against LabMate rows. **Baseline = the 98,259-request intersection** (user: *"focus on data that both CDR and v1 have"*). |
 
 **D1's consequence — the inversion is an ARCHITECTURE bug, not a ternary bug.**
 `fhir-transform.ts:184`'s `lr.taken_datetime ?? lr.collected_datetime` **is field logic living in the
@@ -81,8 +82,37 @@ layer violation — and the blind spot — intact.**
 Everything cited was read at the line or measured. **Unverified items are marked SKETCH.**
 
 **v1 is the ORACLE.** Same DISA, populated by DISA's own vendor tool ⇒ **every populated v1 column
-PROVES the data exists and CDR can reach it.** Scale: `Requests` **3,602,986**; `LabResults`
-**11,597,899**.
+PROVES the data exists and CDR can reach it.**
+
+⚠ **BUT v1 is MULTI-LIMS (D6).** Its **3,602,986** `Requests` / **11,597,899** `LabResults` span ~22
+sites and ≥2 vendors (incl. `TZLABMATE`, **not DISA**). **Those totals are NOT the DISA population.**
+
+**THE BASELINE — DISA (TDS), the intersection:**
+```
+v1 TDS:        174,261 rows (per-OBR) = 98,259 distinct RequestIDs
+DISA REGDAT4:  129,408 LabNos
+INTERSECTION:   98,259   <- every v1 TDS request exists in DISA
+DISA-only:      31,149   <- v1 never ingested them (24%) — v1's SCOPE, not a CDR defect
+v1 TDS results: 643,855 rows
+```
+
+**CORRECTED stub evidence — scoped to DISA (the numbers that justify this slice):**
+
+| v1 column | ❌ all-sites (wrong) | ✅ **DISA/TDS** |
+|---|---|---|
+| **`HL7AbnormalFlagCodes`** | 92.1% | **100.0% — 643,855 / 643,855** |
+| `LIMSRptFlag` | 91.8% | **100.0%** |
+| `HL7ResultStatusCode` | 96.8% | **100.0%** |
+| `HL7PatientClassCode` | 96.8% | **100.0%** |
+| `AuthorisedBy` | 100% | **100.0%** |
+| `AnalysisDateTime` | 84.7% | **99.0%** |
+| `AuthorisedDateTime` | 79.6% | **91.2%** |
+| `AgeInDays` | 98.4% | **93.4%** |
+| `ReceivedDateTime` | 95.8% | **88.7%** |
+| `SpecimenDateTime` | 97.1% | **83.1%** |
+
+⇒ **Every stub's case is STRONGER once scoped correctly.** For DISA, v1 has an abnormal flag and a
+result status on **100%** of rows while CDR hardcodes both `null`.
 
 **The harness already exists** — `apps/cli/src/commands/compare-batch.ts:140`: *"Scan many records
 end-to-end (DISA ↔ OpenLDR v1). Emits one NDJSON line per lab on stdout (summary stats), plus a
@@ -186,7 +216,38 @@ Per D1, **FHIR is pure reshaping**. So:
 ⚠ **The gate then asserts `V2.specimen_datetime === v1.SpecimenDateTime` STRICTLY.** That single
 assertion is what the old "either wins" could never make.
 
-### 3.3 Dissolve `allowDisaEmpty` — the sentinel (D5)
+### 3.3 ⛔ KILLED — the sentinel hypothesis is WRONG. `allowDisaEmpty`'s cause is UNKNOWN.
+
+**Task 1 executed 2026-07-17. Verdict: KILLED — by a third outcome neither the spec nor the plan
+anticipated.**
+
+```
+1900-01-01 rows by site:  TZLABMATE = 10,759   <- ALL of them
+TDS (the DISA site):      0 sentinel rows, in ANY date column, of 174,261
+```
+
+**Every sentinel row is `TZLABMATE` — a DIFFERENT LIMS. DISA's site has ZERO.**
+⇒ **The sentinel is irrelevant to the DISA↔v1 gate.** It is LabMate's migration artifact.
+⇒ **`allowDisaEmpty`'s real cause is STILL UNKNOWN.**
+⇒ **Do NOT build the normaliser. Do NOT delete `allowDisaEmpty` on the strength of this section.**
+
+**Why I got it wrong:** I measured `1900-01-01` across **all 3,602,986** v1 rows and attributed it to
+DISA. v1 is **multi-LIMS**. Same error as *"only 21 labs have micro"* and *"collection time is
+0.08%"* — **a population claim from the wrong population**, three times.
+
+**What survives:** the hatch's *stated* justification is still false — *"an obvious literal default
+like 2013-02-06"* is **11 rows of 3,602,986**. It was justified by an anecdote that does not hold.
+**But "the justification is wrong" ≠ "the hatch is unnecessary."**
+
+**The open question for a future task:** on TDS, `ReceivedDateTime` is **88.7%** populated with **no
+sentinel**. So when DISA's `ReceivedInLabDateTime` **and** `RegisteredDateTime` are both empty, where
+does v1's `ReceivedDateTime` come from? **That needs the DECODER, not SQL.** Until it is answered,
+**`allowDisaEmpty` stays** — with its comment corrected to say the cause is unknown rather than
+asserting a `2013-02-06` default.
+
+<details><summary>Original §3.3 (WRONG — kept for the record)</summary>
+
+### ~~Dissolve `allowDisaEmpty` — the sentinel (D5)~~
 
 **Measured in v1** (`Requests`, n=3,602,986):
 
@@ -218,6 +279,8 @@ do NOT keep the hatch on the strength of this section.**
 **For the user's team, if it holds:** *"v1 encodes 'no date' as 1900-01-01; our gate read that as a
 real date it couldn't explain, so it stopped checking the field. It wasn't a missing source — it was
 a sentinel we hadn't decoded."*
+
+</details>
 
 ### 3.4 Exceptions become evidence, not flags (D2)
 
