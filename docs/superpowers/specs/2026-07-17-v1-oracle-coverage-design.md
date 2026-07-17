@@ -65,12 +65,11 @@ a numeric/bit it is `<> 0`. Using one rule for both produces confident nonsense 
 | `EncryptedPatientID` | 88,115 (50.6%) | ⚠ **PHI — see §6** |
 | `LIMSAnalyzerCode` | 78,289 (44.9%) | |
 | `LIMSVendorCode` | 46,381 (26.6%) | |
-| `CollectionVolume` | 36,374 non-zero (20.9%) | |
-| `CostUnits` | 36,374 non-zero (20.9%) | ⚠ **undecided — §9** |
+| `CollectionVolume` | 36,374 non-zero (20.9%) | ⚠ **kept** — `CostUnits` was dropped, this was not; do not pattern-match them together |
 | **`LIMSRejectionCode`/`Desc`** | 4,518 (2.6%) | ⛔ `toV2` has a whole `detectDisaRejection` path (`v2-transform.ts:669`) and **nothing grades it** |
 
 ⛔ **Not carried (§3.1b):** ~~`WorkUnits`~~, ~~`Deceased`~~, ~~`TargetTimeDays`~~,
-~~`TargetTimeMins`~~ — all measured **0 non-zero**.
+~~`TargetTimeMins`~~ (all **0 non-zero**), ~~`CostUnits`~~ (20.9% — dropped on **scope**).
 
 ### 3.1b ⛔ NOT CARRIED TO CE — a product decision (user, 2026-07-17)
 
@@ -88,6 +87,14 @@ a numeric/bit it is `<> 0`. Using one rule for both produces confident nonsense 
 | `LabResults.WorkUnits` | **227 non-zero** (0.04%) | noise |
 | `LabResults.Note` | 68,645 (10.7%) | a **bit** (0/1), meaning undocumented; legacy |
 | `LabResults.DateTimeValue` | 33,004 (5.1%) | **redundant** — see below |
+| `Requests.CostUnits` | 36,374 non-zero (**20.9%**) | ⚠ **not "barely used" — see below** |
+| `LabResults.CostUnits` | 127,140 non-zero (**19.7%**) | ⚠ ditto |
+
+⚠ **`CostUnits` is `not_carried` on SCOPE, not on population** (user, 2026-07-17, asked explicitly
+rather than inferred). Unlike the rest of this table it is **~20% populated** — the *"barely got
+used"* rationale does **not** apply. The decision is that **billing/cost units are out of CE's scope
+regardless of population**. Recorded this way so a future reader does not "correct" it by pointing at
+the 127,140 rows and assuming an oversight — the number was known when the call was made.
 
 **`DateTimeValue` is a typed projection, not data.** For 30,198 of its 33,004 rows the same value is
 already in `LIMSRptResult` as text (`'01/03/2013'` ↔ `2013-03-01`), which CDR carries as
@@ -100,10 +107,8 @@ with an EMPTY `LIMSRptResult` — and **all 2,806 are one observation, `TPT` *"T
 expire differently: a measurement is falsified by the next site's data; a decision is only reversed
 by a person. Conflating them is how *"we have no evidence"* silently becomes *"we decided"*.
 
-⚠ **`CostUnits` is NOT in this list and must not be assumed into it.** It is `WorkUnits`' sibling but
-behaves nothing like it: `Requests.CostUnits` is **36,374 non-zero (20.9%)** and
-`LabResults.CostUnits` is **127,140 non-zero (19.7%)**, while both `WorkUnits` are dead. **Needs an
-explicit decision** — see §9.
+**Net effect: 9 columns dropped** — `WorkUnits` ×2, `Deceased`, `TargetTimeDays`, `TargetTimeMins`,
+`Note`, `DateTimeValue`, `CostUnits` ×2.
 
 ### 3.2 `Requests` — uncovered, EMPTY on TDS
 
@@ -122,7 +127,6 @@ of magnitude.
 
 | column | non-empty | note |
 |---|---|---|
-| `CostUnits` | 127,140 non-zero (19.7%) | ⚠ **undecided — §9** |
 | `SIHiRange` | 50,761 non-zero (7.9%) | ⚠ CDR emits `rpt_range` as a **string**; v1 splits lo/hi **numerically** |
 | `CodedValue` | 49,410 (7.7%) | ⚠ **distinct from `LIMSCodedValue`**, which IS covered |
 | `ResultSemiquantitive` | 49,409 non-zero (7.7%) | `-1` × 37,185, `1` × 12,205, `2`/`3` × 19. Tracks `CodedValue` almost exactly. Likely the `<` / `>` qualifier — **measure before mapping** |
@@ -130,6 +134,7 @@ of magnitude.
 | `SILoRange` | 32,664 non-zero (5.1%) | |
 | **`LIMSRptFlag`** | **8,372 (1.3%)** | `L` 5,337 / `H` 2,194 / `L-` 666 / `H+` 145. ⇒ `v2-transform.ts:497` `rpt_flag: null` **is a real defect, at 8,372 rows** |
 | `LOINCCode` | **2** | dead |
+| ~~`CostUnits`~~ | 127,140 (19.7%) | ⛔ **not carried — §3.1b** (scope, not population) |
 | ~~`Note`~~ | 68,645 (10.7%) | ⛔ **not carried — §3.1b** |
 | ~~`DateTimeValue`~~ | 33,004 (5.1%) | ⛔ **not carried — §3.1b** |
 | ~~`WorkUnits`~~ | 227 (0.04%) | ⛔ **not carried — §3.1b** |
@@ -278,26 +283,14 @@ widen a PHI blast radius**, and a findings doc is exactly the wrong place for a 
 
 ---
 
-## 9. ⛔ OPEN — decide before the plan
+## 9. Decisions taken
 
-**`CostUnits`.** Not in the user's not-carried list, and it does **not** behave like its sibling:
+| # | decision | by | date |
+|---|---|---|---|
+| 1 | Drop 7 legacy fields — `WorkUnits` ×2, `Deceased`, `TargetTimeDays`, `TargetTimeMins`, `Note`, `DateTimeValue` — as `not_carried`. *"barely got used… so old, I don't see the need to carry them over to the new ce"* | user | 2026-07-17 |
+| 2 | Drop `CostUnits` ×2 as `not_carried` — **on scope, not population**. Asked explicitly because at ~20% the stated rationale did not reach it; the answer was that billing/cost units are out of CE's scope regardless. | user | 2026-07-17 |
 
-| | `WorkUnits` | `CostUnits` |
-|---|---|---|
-| `Requests` | **0 non-zero** — dead | **36,374 (20.9%)** |
-| `LabResults` | 227 (0.04%) — noise | **127,140 (19.7%)** |
-
-The stated principle (*"barely got used… so old"*) does not obviously reach it — ~20% of rows is not
-"barely". But CDR has no counterpart field, so a def would report `only_v1` on every populated row
-and add ~127k red to the inventory for a billing metric CE may not want at all.
-
-**Three ways to go — needs a person, not a guess:**
-1. **`not_carried`** — same call as `WorkUnits`, on the grounds that billing units are out of CE's
-   scope regardless of population.
-2. **def** — grade it, accept ~127k `only_v1`, and let the report argue for carrying it.
-3. **`measured_empty`** — ⛔ **WRONG and listed only to rule it out.** It is 20% populated; filing it
-   here would be a false measurement.
-
-⚠ **Do not resolve this by inference from the not-carried list.** That list is a decision, and
-extending a decision to a field its author did not name is exactly how `patient_class` nearly became
-a fabricated defect — in the opposite direction.
+⚠ **Decision 2 was ASKED, not inferred.** Extending decision 1 to a field its author did not name is
+exactly how `patient_class` nearly became a fabricated defect — in the opposite direction. If a
+future field looks like it "obviously" belongs in `not_carried`, **that is the moment to ask, not to
+assume.**
