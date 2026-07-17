@@ -12,6 +12,36 @@
 
 ---
 
+## ⛔ AMENDED 2026-07-17 MID-EXECUTION — `issued` IS DROPPED. READ THIS FIRST.
+
+**Spec D1 (`issued ← TESTDATA.DATESTAMP`) was FALSIFIED by measurement.** ~37% of `DATESTAMP`s are
+**bulk-load/migration artifacts**, not release times: **44,625 rows in a 3-HOUR window** on
+2016-03-08 (~860× the ~52/day average); **71,247 of 191,121** across 3 such days. The live Candida
+record `TZDISATDS0013541` is on that spike — registered 2013-10-04, `DATESTAMP` 2016-03-08. Full
+evidence: **spec §0.0**.
+
+**User decision: *"drop issued from the slice, effectiveDateTime only"*.**
+
+### Revised task list — supersedes everything below
+
+| task | status |
+|---|---|
+| **T1** `disaDatestampToIso` | ✅ **DONE + APPROVED** (`4aca20f2`, `0cd9b7cd`). **KEPT** though now consumer-less (user decision). |
+| **T2** un-stub `result_timestamp` | ✅ **DONE + APPROVED** (`a58b8c31`). **KEPT.** ⚠ Until T4 lands, `effectiveDateTime` = `DATESTAMP` = the migration stamp — **T4 is what makes the branch correct again.** |
+| **T3** `fhirInstant` | ⛔ **CANCELLED** — existed only to guard `issued`. |
+| **T4** map the times | ⚠ **REDUCED** — `effectiveDateTime` ← collection ONLY. **Do NOT add an `issued` mapping.** |
+| **T5** `lab_results.issued` migration | ⛔ **CANCELLED.** |
+| **T6** project `issued` | ⛔ **CANCELLED.** |
+| **T7** the chain | ⚠ **REDUCED** — chain is `coalesce(result_timestamp, s.received_time)`, which the **3 working queries ALREADY have** ⇒ they are **UNCHANGED**. Only the **2 broken** queries change (12 predicates + 6 new specimen joins). **The 36 coalesce edits are CANCELLED.** |
+| **T8** live verification | ⚠ **REDUCED** — verify `has_effective` only; there is no `issued` column. |
+
+⚠ **Naming trap:** the V2 payload's `V2Result.result_timestamp` and CE's `lab_results.result_timestamp`
+column are **different things that share a name**. The CE column reads `Observation.effectiveDateTime`
+(`relational/observation.ts:28`); after T4 it holds the **collection** time. The V2 field holds
+`DATESTAMP` and, after T4, has **no reader**.
+
+---
+
 ## ⚠ Read before Task 1
 
 1. **DISA stores BLOBS, not columns.** Never verify a DISA fact with `select count(col)`. See
