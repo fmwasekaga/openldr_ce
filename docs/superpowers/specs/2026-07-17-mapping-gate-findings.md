@@ -1,64 +1,93 @@
 # Mapping Gate Findings — the CDR export graded against v1
 
-**Run:** `compare-batch --limit 200 --v2 --results --summary-only --country tanzania`, 2026-07-17.
-**Sample:** 200 labs selected; **195 graded** (5 absent from v1), **1,487 paired observations**.
-**Gate:** `cdr-toolchain` @ `a6d15bd`, coverage guard green at **60/60** and **28/28** v1 columns.
+**Gate:** `cdr-toolchain` @ `4f087ef`, coverage guard green at **60/60** and **28/28** v1 columns.
+
+**PRIMARY RUN — random sample (2026-07-17):**
+```
+compare-batch --where "abs(checksum([LabNo])) % 500 = 0" --limit 250 \
+              --v2 --results --summary-only --country tanzania
+211 labs selected | 158 graded (53 absent from v1) | 469 paired observations
+```
+**Superseded run — biased sample:** `--limit 200` → 195 graded, 1,487 obs. Kept only for contrast.
 
 > **This report MEASURES. It fixes nothing.** Each fix is its own slice, justified from here.
 
 ---
 
-## 0. ⛔ READ FIRST — three things that would make this report lie
+## 0. ⛔ READ FIRST
 
-**1. The sample is BIASED, and not mildly.** `REGDAT4.LabNumbers` selects
-`ORDER BY [LabNo] OFFSET 0 ROWS FETCH NEXT 200` — **the 200 numerically-first lab numbers**, i.e.
-the oldest records at one site. Proof it is not representative: **`v1_results_documentation_excluded`
-came back `0`**, yet `VLID`+`EIDID` are **235,845 of 643,855 TDS result rows (36.6%)** overall. A
-representative 200-lab sample would contain ~70 of them. **It contains none.**
-⇒ **Every percentage below is "the first 200 labs of TDS", NOT "TDS", and certainly not "DISA".**
-⚠ The documentation-panel scope rule is therefore **still unproven on real data** — unit-tested only.
+### 0.1 Why the sample had to be re-drawn — and the proof it worked
 
-**2. TDS is 1 site of 22**, and v1 is multi-LIMS. Nothing here generalises to Zambia or Mozambique.
+`REGDAT4.LabNumbers` hardcodes `ORDER BY [LabNo] OFFSET n FETCH NEXT limit`
+(`compare-batch.ts:202`), so **`--limit N` always returns the N numerically-lowest LabNos** — the
+oldest records at one site. `--where` cannot reorder it, so the sample is drawn with a deterministic
+spread instead: `abs(checksum([LabNo])) % 500 = 0` → **211 labs spanning `TDS0010710`–`TDS0138648`**
+of the full `TDS0010001`–`TDS0139520` range. Reproducible, unlike `NEWID()`.
 
-**3. `only_v1` on a stubbed field means "CDR emits nothing", NOT "CDR loses data".** For
-`request_type` / `registered_by` / `ordering_notes` etc. CDR has **no such field at all** — that is a
-scope question for CE, not a bug to fix. **Do not open fix slices from section 3 without deciding
-scope first.** This is the `patient_class` trap in a new costume.
+**Two independent confirmations that the first run was badly biased and this one is not:**
+
+| | biased (200 oldest) | **random (211 spread)** | population |
+|---|---|---|---|
+| documentation rows excluded | **0** | **341** | 36.6% of TDS results |
+| labs absent from v1 | 5/200 = **2.5%** | **53/211 = 25.1%** | **24%** DISA-only (spec §1) |
+
+⇒ **The documentation-panel scope rule is now PROVEN on real data** — it fired 341 times. It was
+unit-tested only before.
+⇒ The random sample reproduces the known 24% DISA-only rate; the biased one under-reported it **10×**.
+
+⚠ **Every number below is the RANDOM sample unless labelled otherwise.** Where the two disagree, the
+biased one was wrong — and several did disagree materially (§4, §5).
+
+### 0.2 Still true, and still limiting
+
+- **TDS is 1 site of 22**, and v1 is multi-LIMS. Nothing here generalises to Zambia or Mozambique.
+- **`only_v1` on a field CDR has no slot for means "CE does not model this", NOT "CDR loses data".**
+  For `request_type` / `registered_by` / `ordering_notes` that is a **scope question**, not a bug.
+  **Do not open fix slices from §4 without deciding scope first** — this is the `patient_class` trap
+  in a new costume.
+- **`abnormal_flag`'s denominator:** the graded population EXCLUDES documentation rows, so the
+  comparable figure is **25.9%** (105,775 / 408,010), **not** the all-rows 16.7%.
 
 ---
 
 ## 1. The headline: the old gate cannot see any of this
 
-On the **same 195 labs**, the DISA↔v1 gate reports:
+On the **same 211 labs**, the DISA↔v1 gate reports:
 
 ```
-195/195 labs perfect        1,518/1,519 observations match
+156/211 labs perfect        835/864 observations match   (~96% green)
 ```
 
-The V2↔v1 gate on the identical labs reports **`result_type` wrong on 1,487 of 1,487 (100%)**.
+The V2↔v1 gate on the identical labs reports **`result_type` wrong on 469 of 469 (100%)**.
 **That gap is the blind spot, measured.** The old gate grades the disalab *decoder*; nothing has ever
-graded the *export*.
+graded the *export*. Both samples agree on this: 100% wrong, twice.
 
 ---
 
-## 2. The plan's five falsification checks — ALL HELD
+## 2. The plan's five falsification checks — ALL HELD, on BOTH samples
 
-The plan named these in advance precisely so the run could refute the work. It did not.
+Named in advance precisely so the run could refute the work. It did not — and the random sample is
+the stronger test, because it is the one that could have broken them.
 
-| check | predicted | measured | verdict |
-|---|---|---|---|
-| `abnormal_flag` red | ~16.7% | **257/1,487 = 17.3%** | ✅ |
-| `rpt_flag` red | ~1.3% | **29/1,487 = 1.9%** | ✅ |
-| `patient_class` | **all match** | **195/195 match** | ✅ **not a defect** |
-| `lims_facility_code` | **all match** | **195/195 match** | ✅ mapping proven |
-| `obr_set_id` | **all only_v1** | **195/195 only_v1** | ✅ defect confirmed |
+| check | predicted | biased | **random** | verdict |
+|---|---|---|---|---|
+| `abnormal_flag` red | **25.9%** (doc-excluded pop.) | 17.3% | **140/469 = 29.9%** | ✅ |
+| `rpt_flag` red | ~1.3% | 1.9% | **10/469 = 2.1%** | ✅ |
+| `patient_class` | **all match** | 195/195 | **158/158 match** | ✅ **not a defect** |
+| `lims_facility_code` | **all match** | 195/195 | **158/158 match** | ✅ mapping proven |
+| `obr_set_id` | **all only_v1** | 195/195 | **158/158 only_v1** | ✅ defect confirmed |
 
-⇒ **The `''`-is-empty rule is correct on live data.** Had it been broken, `abnormal_flag` would read
-~100% and `rpt_flag` ~98.7%. Both landed within a point of the predicted population.
+⚠ **The `abnormal_flag` prediction used the WRONG DENOMINATOR** — I wrote ~16.7%, which is
+107,602/643,855 across **all** rows. But the gate excludes documentation rows, so the comparable
+population is **105,775 / 408,010 = 25.9%**. Measured **29.9%**. ⇒ **consistent with 25.9%, and the
+apparent "miss" against 16.7% was my arithmetic, not the gate.** The biased sample's 17.3% looked
+closer to the wrong number purely by coincidence.
 
-⇒ **`patient_class` and `lims_facility_code` are the load-bearing greens.** Both were fields I had
-—or the spec had— queued as defects. Both are correct. Green here is a **result**, not an absence
-of one.
+⇒ **The `''`-is-empty rule is correct on live data.** Had it broken, `abnormal_flag` would read
+~100% and `rpt_flag` ~98%. Neither did, on either sample.
+
+⇒ **`patient_class` and `lims_facility_code` are the load-bearing greens** — 158/158 each. Both were
+queued as defects at some point. Both are correct. Green here is a **result**, not an absence of one.
 
 ---
 
@@ -175,30 +204,69 @@ value. ⚠ **Still not a mapping.** It says they travel together, not what eithe
 
 ---
 
-## 5. D4 — `collected_datetime ↔ SpecimenDateTime`: the prediction SURVIVES
+## 5. D4 — `collected_datetime ↔ SpecimenDateTime`: read the SHAPE, not the rate
 
-| sample | match rate |
-|---|---|
-| 20 labs (T6) | **2/20 = 10%** ⇒ looked falsified |
-| **195 labs (this run)** | **174/195 = 89.2%** ⇒ **prediction holds** |
+⚠ **My third call on this field, and the first two were both driven by sample artefacts.** The rate
+is wildly unstable; the **shape** is not, and the shape is the finding:
 
-⚠ **I reported after the 20-lab run that D4 "looks falsified". That was wrong, and the error was
-sample size, not the mapping.** The plan's instruction — *"if it is not ~97%, the fix slice must
-follow the data"* — cuts both ways: the data now says `collected` is right. **Do not re-open D4.**
+| sample | match | **mismatch** | only_v1 | my call at the time |
+|---|---|---|---|---|
+| 20 labs | 2 = 10% | **0** | 18 | *"looks falsified"* ❌ |
+| 195 oldest | 174 = 89.2% | **0** | 21 | *"prediction holds, do not re-open"* ❌ |
+| **211 random** | **88 = 55.7%** | **0** | **70 = 44.3%** | see below |
 
-The residual **21 `only_v1`** are requests where DISA's `CollectedDateTime` is empty and v1 still has
-a `SpecimenDateTime` — the `collected ?? taken` precedence question, at ~11%, not ~90%.
+⇒ **`mismatch` is ZERO on all three samples.** When DISA has a `CollectedDateTime`, it **always**
+equals v1's `SpecimenDateTime` — 0 disagreements in 264 comparisons across three samples.
+**`collected` is never WRONG; it is often ABSENT.**
+
+⇒ **That CONFIRMS `SpecimenDateTime = collected ?? taken`**, which is what D4 actually claimed. The
+def deliberately tests `collected` **alone** (strict, no candidate array), so the `only_v1` column is
+not a defect — **it is a direct measurement of the fallback rate: 44.3%.** v1 fell back to `taken` on
+70 of 158 requests.
+
+⚠ **Both of my earlier verdicts were wrong for the same reason: I read the match RATE off one sample
+and pronounced.** The rate moves 10% → 89.2% → 55.7% depending on which labs you draw. The
+zero-mismatch shape held every time and was the real signal from the start.
+
+⇒ **Actionable:** the fallback is **44.3%**, not the ~11% the biased run implied. Any fix to
+`effectiveDateTime` (`fhir-transform:184`, currently inverted) must implement `collected ?? taken`
+— **on nearly half the corpus the fallback IS the value.**
+
+---
+
+## 5b. What the biased sample HID — and one defect it hid entirely
+
+| field | biased (195) | **random (158)** | what changed |
+|---|---|---|---|
+| **`tested_by`** | 1 match / **0 mismatch** / 194 only_v1 | 7 match / **81 MISMATCH** / 70 only_v1 | ⛔ **81 real disagreements appeared from nothing.** CDR emits a `tested_by` that CONTRADICTS v1 on 51% of labs. The biased sample showed **zero**. **A new defect, invisible before.** |
+| `ordering_notes` | 26 match / 169 only_v1 | **0 match / 158 only_v1** | 100% — the 26 "matches" were empty-vs-empty in old records |
+| `analyzer_code` | 175 match / 20 only_v1 | **67 match / 91 only_v1 (57.6%)** | the biased run implied ~10% populated; the real rate tracks the measured 44.9% |
+| `vendor_code` | 192 / 3 | **120 / 38 (24.1%)** | tracks the measured 26.6% |
+| `collection_volume` | **195 match / 0** | **136 / 22 (13.9%)** | biased run said "always empty" — it is not |
+| `section_code` | 0 / 14 mismatch / 181 | **0 / 119 mismatch / 39** | mostly MISMATCH, not absence |
+| `numeric_value` | 1,083 only_v1 (72.8%) | **321 only_v1 (68.4%)** | consistent — the big one is real |
+| `obx_sub_id` | 336 mismatch (22.6%) | **56 mismatch (11.9%)** | halved, still real |
+
+⚠ **`tested_by` is the lesson.** A field showing **0 mismatches** on 195 labs showed **81** on 158.
+Absence of a signal in a biased sample is not evidence of absence — and it is exactly the kind of
+false green that would have shipped.
+
+⇒ **`si_coded_value` and `result_semiquantitive` scored IDENTICALLY again** (430 match / 39 only_v1,
+both). **Third independent observation** of that correlation. Still not a mapping — it says they
+travel together, not what either means.
 
 ---
 
 ## 6. What this run CANNOT see
 
-1. **Documentation panels** — `v1_results_documentation_excluded: 0`. The 36.6% scope rule never
-   fired. **Unproven on real data.**
-2. **Typed patient identifiers** — DISA `NID` is 0/40. Only a registry country exercises them.
-3. **Any `not_carried` column** (25 of 88) — by decision, not by measurement.
-4. **Any site but TDS** — 1 of 22.
-5. **`collection_volume`, `analyzer_code` at their real rates** — the sample skews them to ~0.
+1. **Typed patient identifiers** — DISA `NID` is 0/40. Only a registry country exercises them.
+2. **Any `not_carried` column** (25 of 88) — by decision, not by measurement.
+3. **Any site but TDS** — 1 of 22, and v1 is multi-LIMS.
+4. **Whether the 53 DISA-only labs (25.1%) matter** — v1 never ingested them; they are v1's scope
+   gap, not CDR's, and nothing here grades them.
+
+✅ **Resolved since the first run:** the documentation-panel scope rule is proven (341 exclusions),
+and the sample bias is gone.
 
 ---
 
@@ -208,9 +276,15 @@ a `SpecimenDateTime` — the `collected ?? taken` precedence question, at ~11%, 
    **195/195**. Add `testing_facility_code` to `SiteConfig`; do **not** derive it from the LabNo.
    ⚠ **This was listed here as "fix the DEF — a gate bug". That was WRONG** (see §3.3): the def is
    correct and the export is not. **Fixing the def would have deleted the finding.**
-2. **`result_type`** (§3.1) — 100% wrong, invisible to the old gate.
-3. **Re-run T7 on a RANDOM sample** (§0) — every number here is drawn from the 200 oldest labs.
-   Until then this is an inventory of one corner of one site.
+2. **`result_type`** (§3.1) — **469/469 wrong (100%)**, on both samples, invisible to the old gate.
+3. **`tested_by`** (§5b) — **81 mismatches (51%)**, and the biased sample showed **zero**. CDR
+   contradicts v1, it does not merely omit. **Newly visible; not diagnosed.**
 4. **`obr_set_id`** (§3.2) — 61.2% of requests; must emit the column, not just split records.
-5. **Investigate `numeric_value`** (§3.5) — 72.8% red, undiagnosed.
-6. **`abnormal_flag`** (§3.1) — the original driver; 17.3%, real, and blocks the AMR reports.
+5. **Investigate `numeric_value`** (§3.5) — **68.4% only_v1**, undiagnosed, the largest volume.
+6. **`abnormal_flag`** (§3.1) — the original driver; **29.9%** (vs a 25.9% doc-excluded population),
+   real, and blocks the two AMR reports.
+7. **`effectiveDateTime` = `collected ?? taken`** (§5) — the fallback fires on **44.3%**, not the
+   ~11% the biased run implied. `fhir-transform:184` is currently inverted.
+
+✅ **Done:** re-run on a random sample (was #3 in the first draft). It changed §5, §5b and the
+`abnormal_flag` denominator, and it proved the scope rule.
