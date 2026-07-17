@@ -130,24 +130,50 @@ by bit"*. Without a marker in the model, *"add them back"* becomes archaeology t
 (100% populated with `'TDS'`). Filing either as "empty" would be a **false measurement** — the exact
 `count(col)` error in prose form.
 
-### 3.1d `EncryptedPatientID` — dropped, but the gap it leaves is REAL (user, 2026-07-17)
+### 3.1d `EncryptedPatientID` — dropped (user, 2026-07-17)
 
-**Not carried.** ⚠ **But NOT because it is redundant — that premise was FALSIFIED.** It is a **stable
-per-patient key**: 88,115 rows → **44,829 distinct values**, one spanning **116 requests**.
+⚠ **CORRECTED. An earlier draft treated `EncryptedPatientID` and `patient_guid` as the same thing.
+They are not — and v2's schema already models them as THREE separate columns.** The user's
+correction, verified against `02-openldr_external.sql`:
 
-**CE has no replacement.** `buildPatient` sets `patient_guid: requestId` and says so outright:
-*"DISA has no native patient GUID… This means no cross-visit dedup downstream; that's accepted"*
-(`v2-transform.ts:194-197`). DISA's own candidates are weak — measured on 40 labs: **`FolderNo`
-17/40 (42.5%)**, **`NID` 0/40**, names 100% but polluted (the first four samples are
-`INSTRUMENT VALIDATION` — QC records, not patients).
+| v2 column | purpose | populated by CDR? |
+|---|---|---|
+| `patients.id` UUID PK | **DB linkage** — what `lab_requests.patient_id` FKs to. The database's own business. | n/a — generated |
+| `patients.patient_guid` VARCHAR(255) | *"external patient identifier **from source**"*, under `UNIQUE (patient_guid, facility_id)` | ⚠ **yes — with `requestId`** |
+| `patients.encrypted_patient_id` VARCHAR(128) | *"Encrypted/hashed ID for **de-identified analytics**"* — track a patient **without exposing names**. **This is v1's `EncryptedPatientID`'s real home.** | ⛔ **NO — `V2Patient` has no such field** |
 
-⚠ **The privacy rationale is moot, but inverted from the assumption:** `EncryptedPatientID` is a
-**pseudonym**, while CE stores real names, DOB and phone. **CE is MORE identifying than v1.** So
-dropping it costs nothing in privacy — it costs **linkage**.
+**So the decision is narrow: CE does not carry v1's `EncryptedPatientID` VALUE.** It is v1's own hash,
+computed by v1's ingest; importing it would inherit another system's derivation. **`not_carried`.**
 
-⇒ **Dropping it is correct** (importing v1's pseudonym is not how CE should key patients), **and it
-leaves a real capability gap.** Follow-up slice, named so it is not lost: **give CDR a real patient
-key from DISA** (`FolderNo` where present, else a deterministic identity hash). **Not this slice.**
+⚠ **What this decision is NOT.** It is not a claim that the field was redundant — my framing of it as
+*"a stand-in for missing names"* was **wrong**, and measuring killed it: it is a working pseudonymous
+patient key (88,115 rows → **44,829 distinct**, one spanning **116 requests**). And it is **not** a
+statement about `patient_guid`, which is a different concern entirely.
+
+#### The two gaps it leaves — both real, both OUT OF SCOPE here
+
+**(a) `encrypted_patient_id` is never populated.** v2 built the column *and* persists it
+(`external-persistence.service.ts:499`, `:518`). CDR's `V2Patient` has no such field, so it is
+**always NULL for DISA data** — a purpose-built de-identified-analytics capability, unused.
+
+**(b) `patient_guid = requestId` is a COMPROMISE, and CE inherits it.**
+`v2-transform.ts:194-197`: *"DISA has no native patient GUID — use the request_id… This means no
+cross-visit dedup downstream; that's accepted."* With `UNIQUE (patient_guid, facility_id)`, **every
+request creates a new patient row** — CE would hold ~98,259 "patients" for ~44,829 real ones. And it
+does not stop at v2: `fhir-transform.ts:332` does `patientId = fhirId(payload.patient.patient_guid)`,
+so **CE's FHIR `Patient.id` is per-request too.** The compromise propagates all the way through.
+
+⇒ **User: *"that was v2, ce might do it differently — the goal is to improve the process, not build on
+top of a compromise."*** ⇒ **CE must NOT inherit `patient_guid = requestId` by default.**
+
+**Follow-up slice (§10.1), named so it is not lost:** define CE's patient identity **properly** —
+`patient_guid` (source identity) and `encrypted_patient_id` (de-identified tracking) are **separate
+questions with separate answers**, and neither is *"copy what v2 did"*.
+⚠ Constraints that slice must respect, measured: DISA has **no** patient identifier — `FolderNo`
+**17/40 (42.5%)**, `NID` **0/40**; and names are 100% present but **polluted** — the first four
+samples are `INSTRUMENT VALIDATION` (QC records, not patients). **Any identity scheme must exclude QC
+first**, and a deterministic hash over dirty identity fields will happily mint a stable id for a
+non-person.
 
 **Net effect: 25 columns `not_carried`** — 9 (§3.1b) + 15 (§3.1c) + `EncryptedPatientID`.
 
@@ -345,7 +371,7 @@ place for a patient identifier.
 | 1 | Drop 7 legacy fields — `WorkUnits` ×2, `Deceased`, `TargetTimeDays`, `TargetTimeMins`, `Note`, `DateTimeValue` — as `not_carried`. *"barely got used… so old, I don't see the need to carry them over to the new ce"* | user | 2026-07-17 |
 | 2 | Drop `CostUnits` ×2 as `not_carried` — **on scope, not population**. Asked explicitly because at ~20% the stated rationale did not reach it; the answer was that billing/cost units are out of CE's scope regardless. | user | 2026-07-17 |
 | 3 | Drop the 15-column legacy sweep (§3.1c) as `not_carried`, **with `revisit` on the 4 specimen-site columns and `ReceivingFacilityCode`**. *"for now lets clean up and we will slowly add them back bit by bit"* | user | 2026-07-17 |
-| 4 | Drop `EncryptedPatientID` as `not_carried` — **and open a separate slice for a real CDR patient key** (§3.1d). Not dropped as redundant; that premise was falsified. | user | 2026-07-17 |
+| 4 | Drop v1's `EncryptedPatientID` **value** as `not_carried` — **and open a separate slice to define CE's patient identity properly** (§3.1d). ⚠ Not dropped as redundant; that premise was falsified. ⚠ **`EncryptedPatientID` ≠ `patient_guid`** — v2 models them as separate columns (+`id` for linkage); an earlier draft conflated them. *"the goal is to improve the process not build on top of a compromise"* | user | 2026-07-17 |
 | 5 | Standardise on **`LIMSVersionStamp`** (capital S) in **CE's own schema only**. ⚠ `types.ts`'s `V1Request.LIMSVersionstamp` / `V1LabResult.LIMSVersionStamp` **must keep mirroring v1's inconsistency** — those types write into v1's real tables, so "fixing" the typo there breaks the write path. | user | 2026-07-17 |
 
 **Running total: 25 of 88 columns `not_carried`; 8 bookkeeping; the rest def / exception.**
@@ -359,11 +385,22 @@ nearly became a fabricated defect, inverted. **If a field looks like it "obvious
 
 ## 10. Follow-up slices — named so they are not lost
 
-1. **A real patient key for CDR** (from §3.1d). CE has **no cross-visit patient linkage**:
-   `patient_guid = requestId`, so the 116-visit patient is 116 patients. v1 could do this;
-   CE cannot. Candidates: DISA `FolderNo` (42.5% on a 40-lab sample), else a deterministic identity
-   hash. ⚠ Sample also showed `INSTRUMENT VALIDATION` QC records among "patients" — **any keying
-   scheme must exclude QC first**.
+1. **Define CE's patient identity — do not inherit v2's compromise** (from §3.1d). ⚠ **Three
+   separate concerns; do not collapse them** (this is the mistake this spec already made once):
+   - **DB linkage** — solved. `patients.id` UUID PK / CE's own resource id. Nobody needs to design this.
+   - **`patient_guid`** — *"external patient identifier from source"*. **DISA has none**, so v2 used
+     `requestId`: *"no cross-visit dedup downstream; that's accepted"* (`v2-transform.ts:194-197`).
+     ⇒ one patient row **per request** (~98,259 for ~44,829 real people), and via
+     `fhir-transform.ts:332` **CE's FHIR `Patient.id` inherits it**. **This is the compromise to
+     replace, not to copy.**
+   - **`encrypted_patient_id`** — de-identified analytics tracking. v2 has the column and persists
+     it; **CDR never populates it**. A separate question: does CE want this capability at all?
+   ⚠ Measured constraints: `FolderNo` **42.5%**, `NID` **0%**, names 100% but **polluted** —
+   `INSTRUMENT VALIDATION` QC records appear as "patients". **Exclude QC before keying anything**;
+   a deterministic hash over dirty fields mints a stable id for a non-person.
+   ⚠ **Privacy note, inverted from the obvious:** `EncryptedPatientID` is a *pseudonym* while CE
+   stores real names, DOB and phone — **CE is MORE identifying than v1**. Any "we de-identified it"
+   claim about CE must reckon with that.
 2. **`obr_set_id` on `V2LabRequest`** (from §4) — CDR cannot represent a multi-panel request (61.2%
    of TDS). ⚠ Emitting one record per panel WITHOUT `obr_set_id` is **worse than the bug**: all
    panels collide on `(request_id, 1, facility_id)` and silently overwrite.
