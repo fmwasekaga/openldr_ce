@@ -57,13 +57,11 @@ a numeric/bit it is `<> 0`. Using one rule for both produces confident nonsense 
 | column | non-empty | note |
 |---|---|---|
 | **`OBRSetID`** | **76,002 rows are `> 1` (43.6%)** | ⛔ **the multi-panel defect — §4** |
-| `RequestTypeCode` | 174,261 (100%) | `D` 154,987 / `E` 19,274 |
-| `ReceivingFacilityCode` | 174,261 (100%) | constant `TDS` |
+| `RequestTypeCode` | 174,261 (100%) | `D` 154,987 / `E` 19,274. ⚠ **NOT a duplicate of `priority`** — I suspected it was; falsified: orthogonal (`D`/`E` × `R`/`U`/`S`) |
 | `LIMSFacilityCode` | 174,261 (100%) | real facility codes (`0JJAA`, `BAGAE`, …) |
 | `RegisteredBy` | 173,915 (99.8%) | ⚠ CDR has **no** `registered_by` |
-| `OrderingNotes` | 171,670 (98.5%) | ⚠ CDR has **no** counterpart |
-| `EncryptedPatientID` | 88,115 (50.6%) | ⚠ **PHI — see §6** |
-| `LIMSAnalyzerCode` | 78,289 (44.9%) | |
+| `OrderingNotes` | 171,670 (98.5%) | ⚠ CDR has **no** counterpart. ⚠ **NOT free text** — I suspected PHI; falsified: numeric codes (`17`, `18`, `2421`, `06050100`) |
+| `LIMSAnalyzerCode` | 78,289 (44.9%) | real instrument codes (`ALINA`, `ALINK`, `75PCR`, `MSKAN`) — genuine provenance |
 | `LIMSVendorCode` | 46,381 (26.6%) | |
 | `CollectionVolume` | 36,374 non-zero (20.9%) | ⚠ **kept** — `CostUnits` was dropped, this was not; do not pattern-match them together |
 | **`LIMSRejectionCode`/`Desc`** | 4,518 (2.6%) | ⛔ `toV2` has a whole `detectDisaRejection` path (`v2-transform.ts:669`) and **nothing grades it** |
@@ -107,21 +105,65 @@ with an EMPTY `LIMSRptResult` — and **all 2,806 are one observation, `TPT` *"T
 expire differently: a measurement is falsified by the next site's data; a decision is only reversed
 by a person. Conflating them is how *"we have no evidence"* silently becomes *"we decided"*.
 
-**Net effect: 9 columns dropped** — `WorkUnits` ×2, `Deceased`, `TargetTimeDays`, `TargetTimeMins`,
-`Note`, `DateTimeValue`, `CostUnits` ×2.
+### 3.1c Legacy sweep — 15 more dropped (user, 2026-07-17)
 
-### 3.2 `Requests` — uncovered, EMPTY on TDS
+> *"lets do the clean up now… for now lets clean up and we will slowly add them back bit by bit"*
 
-`LOINCPanelCode`, `AdmitAttendDateTime`, `HL7SpecimenSourceCode`, `HL7SpecimenSiteCode`,
-`LIMSSpecimenSiteCode`, `LIMSSpecimenSiteDesc`, `HL7EthnicGroupCode`, `ReferringRequestID`,
-`LIMSPreReg_RegistrationDateTime`, `LIMSPreReg_ReceivedDateTime`,
-`LIMSPreReg_RegistrationFacilityCode`, `WorkUnits`, `Deceased`, `TargetTimeDays`, `TargetTimeMins`
-— all **0**. `Newborn` **6**, `Repeated` **3** (noise).
+| column(s) | measured (TDS) | why | **revisit?** |
+|---|---|---|---|
+| `LOINCPanelCode`, `LabResults.LOINCCode` | **0**, and **2** | ⛔ **CE resolves LOINC through its own terminology service.** Carrying v1's empty LOINC columns imports a problem CE already solved | no |
+| `LIMSPreReg_RegistrationDateTime`, `LIMSPreReg_ReceivedDateTime`, `LIMSPreReg_RegistrationFacilityCode` | **0** | pre-registration workflow, never used | no |
+| `AdmitAttendDateTime` | **0** | | no |
+| `ReferringRequestID` | **0** | | no |
+| `HL7EthnicGroupCode` | **0** | also **sensitive** — dropped on principle as well as population | no |
+| `HL7SpecimenSourceCode`, `HL7SpecimenSiteCode`, `LIMSSpecimenSiteCode`, `LIMSSpecimenSiteDesc` | **0** | specimen SITE never populated (specimen *source* IS carried — §1 defs) | ⚠ **YES** |
+| `Newborn`, `Repeated` | **6**, **3** | noise, not zero | no |
+| `ReceivingFacilityCode` | 174,261 — **constant `'TDS'`** | not zero: a **constant**, derivable from site config | ⚠ **YES** |
 
-⚠ **"Empty on TDS" is NOT "empty".** This laptop is **1 site of 22**. A column at 0% here may be
-90% in Zambia or Mozambique. ⇒ **Record the measurement; do NOT delete the column from the
-model.** See [[disa-organism-classifier]] for the last time a single-site sample misled by orders
-of magnitude.
+⚠ **`revisit: YES` is a first-class marker, not a footnote.** The user's words were *"some of them may
+need to be revisited like specimen-site and ReceivingFacilityCode… we will slowly add them back bit
+by bit"*. Without a marker in the model, *"add them back"* becomes archaeology through a git log.
+**A `not_carried` entry that is expected to return is a different thing from one that is gone.**
+
+⚠ **Two of these are NOT measured-zero and the distinction must survive:** `Newborn`/`Repeated` are
+**noise** (6 and 3 rows — real data, just negligible), and `ReceivingFacilityCode` is a **constant**
+(100% populated with `'TDS'`). Filing either as "empty" would be a **false measurement** — the exact
+`count(col)` error in prose form.
+
+### 3.1d `EncryptedPatientID` — dropped, but the gap it leaves is REAL (user, 2026-07-17)
+
+**Not carried.** ⚠ **But NOT because it is redundant — that premise was FALSIFIED.** It is a **stable
+per-patient key**: 88,115 rows → **44,829 distinct values**, one spanning **116 requests**.
+
+**CE has no replacement.** `buildPatient` sets `patient_guid: requestId` and says so outright:
+*"DISA has no native patient GUID… This means no cross-visit dedup downstream; that's accepted"*
+(`v2-transform.ts:194-197`). DISA's own candidates are weak — measured on 40 labs: **`FolderNo`
+17/40 (42.5%)**, **`NID` 0/40**, names 100% but polluted (the first four samples are
+`INSTRUMENT VALIDATION` — QC records, not patients).
+
+⚠ **The privacy rationale is moot, but inverted from the assumption:** `EncryptedPatientID` is a
+**pseudonym**, while CE stores real names, DOB and phone. **CE is MORE identifying than v1.** So
+dropping it costs nothing in privacy — it costs **linkage**.
+
+⇒ **Dropping it is correct** (importing v1's pseudonym is not how CE should key patients), **and it
+leaves a real capability gap.** Follow-up slice, named so it is not lost: **give CDR a real patient
+key from DISA** (`FolderNo` where present, else a deterministic identity hash). **Not this slice.**
+
+**Net effect: 25 columns `not_carried`** — 9 (§3.1b) + 15 (§3.1c) + `EncryptedPatientID`.
+
+### 3.2 `measured_empty` — the bucket is now EMPTY
+
+Every column that would have landed here was swept into `not_carried` by §3.1b–d as a **scope
+decision**. Bucket 4 stays defined because the next site's data will need it.
+
+⚠ **This is the most important line in the document.** *"Empty on TDS"* is **NOT** *"empty"* — this
+laptop is **1 site of 22**, and a column at 0% here may be 90% in Zambia or Mozambique. Those 15
+columns are dropped **because CE chose not to model them**, ***NOT*** **because they are unpopulated.**
+
+⇒ **If another site shows data in a `not_carried` column, that does NOT make the decision wrong** —
+it makes it a decision worth re-reading, which is what `revisit` is for. **Do not "correct" a
+`not_carried` entry by pointing at a population count.** See [[disa-organism-classifier]] for the
+last time a single-site sample misled by orders of magnitude.
 
 ### 3.3 `LabResults` — uncovered (of 643,855)
 
@@ -214,8 +256,15 @@ Every v1 column lands in exactly one bucket, each carrying its **measurement**:
    (+`LIMSVersionStamp` — ⚠ **`LabResults` spells it with a capital S**; `Requests` does not)
 4. **`measured_empty`** — **NEW.** 0% on TDS, carrying the count and the date. **Not "ignore":** a
    claim that expires the moment another site's data lands.
-5. **`not_carried`** — **NEW (§3.1b).** A deliberate product decision that CE does not model this
-   legacy field. Carries the decision, the decider, the date, and the measurement.
+5. **`not_carried`** — **NEW (§3.1b–d).** A deliberate product decision that CE does not model this
+   legacy field. Carries the decision, the decider, the date, the measurement, and:
+   ```
+   revisit?: string   // set when the field is EXPECTED BACK, with what would bring it
+   ```
+   ⚠ **`revisit` is required for anything dropped "for now".** The user's plan is explicit —
+   *"we will slowly add them back bit by bit"* — and a bucket that cannot express "gone" vs
+   "parked" turns that plan into archaeology through a git log. Day-one `revisit` entries:
+   the 4 specimen-site columns and `ReceivingFacilityCode` (§3.1c).
 
 ⚠ **Buckets 4 and 5 must NOT be merged, however similar they look in a report.** They mean opposite
 things and expire differently:
@@ -247,14 +296,20 @@ hand, not by test.
 
 ---
 
-## 6. ⛔ `EncryptedPatientID` — do NOT fetch it reflexively
+## 6. PHI — `EncryptedPatientID` (resolved) and the standing rule
 
-50.6% populated, and **PHI**. The gate prints values into diff rows and batch summaries
-(`v2-diff.ts` → `valueForOutput`), which land in logs and committed findings docs.
+**`EncryptedPatientID` is `not_carried` (§3.1d)** — so it is never SELECTed and the PHI question is
+moot for it. The reasoning is recorded there because it is the opposite of what it looks like: the
+field is a **pseudonym**, and **CE stores real names, DOB and phone — CE is more identifying than
+v1.**
 
-⇒ **Default: do NOT add it to the SELECT.** If coverage demands it be *accounted for*, classify it
-as an exception (*"PHI; deliberately not fetched"*) with that reason. **Coverage is not a licence to
-widen a PHI blast radius**, and a findings doc is exactly the wrong place for a patient identifier.
+**The standing rule survives it.** The gate prints values into diff rows and batch summaries
+(`v2-diff.ts` → `valueForOutput`), which land in logs and in committed findings docs.
+
+⇒ **Coverage is not a licence to widen a PHI blast radius.** Any future column carrying patient
+identity is `not_carried` or an exception (*"PHI; deliberately not fetched"*) — **never fetched
+merely to make a coverage guard go green.** A findings doc committed to git is exactly the wrong
+place for a patient identifier.
 
 ---
 
@@ -289,8 +344,27 @@ widen a PHI blast radius**, and a findings doc is exactly the wrong place for a 
 |---|---|---|---|
 | 1 | Drop 7 legacy fields — `WorkUnits` ×2, `Deceased`, `TargetTimeDays`, `TargetTimeMins`, `Note`, `DateTimeValue` — as `not_carried`. *"barely got used… so old, I don't see the need to carry them over to the new ce"* | user | 2026-07-17 |
 | 2 | Drop `CostUnits` ×2 as `not_carried` — **on scope, not population**. Asked explicitly because at ~20% the stated rationale did not reach it; the answer was that billing/cost units are out of CE's scope regardless. | user | 2026-07-17 |
+| 3 | Drop the 15-column legacy sweep (§3.1c) as `not_carried`, **with `revisit` on the 4 specimen-site columns and `ReceivingFacilityCode`**. *"for now lets clean up and we will slowly add them back bit by bit"* | user | 2026-07-17 |
+| 4 | Drop `EncryptedPatientID` as `not_carried` — **and open a separate slice for a real CDR patient key** (§3.1d). Not dropped as redundant; that premise was falsified. | user | 2026-07-17 |
+| 5 | Standardise on **`LIMSVersionStamp`** (capital S) in **CE's own schema only**. ⚠ `types.ts`'s `V1Request.LIMSVersionstamp` / `V1LabResult.LIMSVersionStamp` **must keep mirroring v1's inconsistency** — those types write into v1's real tables, so "fixing" the typo there breaks the write path. | user | 2026-07-17 |
 
-⚠ **Decision 2 was ASKED, not inferred.** Extending decision 1 to a field its author did not name is
-exactly how `patient_class` nearly became a fabricated defect — in the opposite direction. If a
-future field looks like it "obviously" belongs in `not_carried`, **that is the moment to ask, not to
-assume.**
+**Running total: 25 of 88 columns `not_carried`; 8 bookkeeping; the rest def / exception.**
+
+⚠ **Decisions 2 and 4 were ASKED, not inferred — and 4 came back opposite to the framing that
+prompted it.** Extending a decision to a field its author did not name is exactly how `patient_class`
+nearly became a fabricated defect, inverted. **If a field looks like it "obviously" belongs in
+`not_carried`, that is the moment to ask.**
+
+---
+
+## 10. Follow-up slices — named so they are not lost
+
+1. **A real patient key for CDR** (from §3.1d). CE has **no cross-visit patient linkage**:
+   `patient_guid = requestId`, so the 116-visit patient is 116 patients. v1 could do this;
+   CE cannot. Candidates: DISA `FolderNo` (42.5% on a 40-lab sample), else a deterministic identity
+   hash. ⚠ Sample also showed `INSTRUMENT VALIDATION` QC records among "patients" — **any keying
+   scheme must exclude QC first**.
+2. **`obr_set_id` on `V2LabRequest`** (from §4) — CDR cannot represent a multi-panel request (61.2%
+   of TDS). ⚠ Emitting one record per panel WITHOUT `obr_set_id` is **worse than the bug**: all
+   panels collide on `(request_id, 1, facility_id)` and silently overwrite.
+3. **Add back `revisit` columns bit by bit** (from §3.1c) — specimen-site ×4, `ReceivingFacilityCode`.
