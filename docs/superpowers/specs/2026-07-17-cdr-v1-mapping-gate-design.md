@@ -282,6 +282,52 @@ a sentinel we hadn't decoded."*
 
 </details>
 
+### 3.3b CONDITIONAL RULES — not every gap is a defect (measured 2026-07-17)
+
+**User: *"whats with 99% and 91.2%, why are they not 100%?"*** Measured on DISA/TDS:
+
+| v1 status | rows | `AuthorisedDateTime` NULL | `AnalysisDateTime` NULL |
+|---|---|---|---|
+| **F** final | 157,791 | **73** (0.05%) | 1 |
+| **R** not reviewed | 10,020 | **8,845** (88%) | 1 |
+| **X** rejected | 4,627 | **4,622** (99.9%) | 30 |
+| **I** interim | 1,795 | **1,795** (100%) | **1,795** (100%) |
+| **A** | 28 | 28 | 0 |
+
+⇒ **The gaps ARE the non-final results.** `AuthorisedDateTime`'s missing **8.8%** (15,363 rows) is
+almost entirely `R`/`X`/`I`; `AnalysisDateTime`'s missing **1%** is **1,795 interim**. **A result
+never reviewed, rejected, or still interim HAS no authorisation time.** Among **final** results
+`AuthorisedDateTime` is **99.95%** populated.
+
+⚠ **⇒ "strict 100% or fail" is WRONG for these fields — it would flag CORRECT data as a defect and
+drown the report in false red**, which is the exact failure this gate exists to prevent.
+
+**A CONDITIONAL RULE is NOT an exception.** Distinguish them — they mean different things:
+
+| | says | needs `expected`? |
+|---|---|---|
+| **exception** (§3.4) | *"we tolerate a mismatch"* | **yes** — a count, so a regression fails |
+| **conditional rule** | *"the correct value DEPENDS ON STATE"* | **no** — it is the mapping, not a tolerance |
+
+```
+V2FieldRule {
+  field: string
+  // Empty is CORRECT when this predicate holds. Not a tolerance — a rule.
+  emptyIsCorrectWhen?: (v1: OpenLdrV1Request) => boolean
+}
+```
+Day-one rules (from the table above — **measured, not assumed**):
+- `authorised_at`: empty is correct when `HL7ResultStatusCode !== 'F'`
+- `analysis_at`: empty is correct when `HL7ResultStatusCode === 'I'`
+
+⚠ **Precedent already in the codebase:** `compare-batch.ts` has `labs_pending_in_v1` — *"v1's
+migration legitimately skips LabResults for these [status='I']"*. **The codebase already knew about
+`I`; the field defs never used it.**
+
+⚠ **KEEP THE RESIDUE VISIBLE.** **73 `F`-status rows have NO `AuthorisedDateTime`** (0.05%). A
+finalised result *should* have one. Small enough to be v1's own noise — **but it must be COUNTED, not
+smoothed away.** A conditional rule that silently absorbs it becomes the next `allowDisaEmpty`.
+
 ### 3.4 Exceptions become evidence, not flags (D2)
 
 Delete `allowDisaEmpty`. Replace with an explicit registry:
