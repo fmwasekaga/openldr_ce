@@ -23,6 +23,58 @@ Both on the same LAN. The lab reaches central at `http://<linux-lan-ip>:<port>`.
 2. **Deploy both nodes from that one build** — via the existing Docker installer / `openldr-{api,studio,web,gateway}` images built from the pushed `main`. (Deploy mechanics are the installer's concern; this runbook does not restate them.)
 3. **Real Keycloak, not the dev bypass.** Do **NOT** set `AUTH_DEV_BYPASS=true` — the whole point is to exercise real client-credentials tokens with the `site_id` claim over the wire.
 
+## ✅ Localhost pre-flight — EXECUTED 2026-07-17 (do this before the LAN attempt)
+
+Before booking two machines, the whole path was run on **one host** with two dev-server instances
+(`node dev.mjs`) on different ports, sharing one Keycloak — the runbook's own "remove one unknown at
+a time" philosophy, with the network held constant. **It passed**, and it de-risks the LAN run.
+
+**Topology used:** central `:3000` (DBs `openldr_central` / `openldr_central_target`), lab `:3001`
+(`openldr_lab` / `openldr_lab_target`), four fresh DBs on Postgres `:5433`, one shared Keycloak
+`:8180`. **Real Keycloak, `AUTH_DEV_BYPASS=false`** — genuine client-credentials tokens with the
+`site_id` claim, exactly as Phase 1 requires.
+
+**What it proved (all measured):**
+- **Enroll → configure → sync**, unforced, on the 1-minute interval. `openldr sync enroll` minted a
+  real Keycloak client `sync-lab-local-1`; the lab was configured via `openldr settings sync set …`
+  (bidirectional, interval 1); on restart it logged `sync workers started`.
+- **Real DISA data through the whole chain** — the genuinely new ingredient no prior harness covers:
+  CDR `export-batch --ce-url http://localhost:3001` posted **9 DISA labs → lab (9/9)**, then the lab
+  synced to central. **Central mirrored the lab exactly: 215 resources** (135 Observation / 28
+  DiagnosticReport / 28 ServiceRequest / 9 Patient / 9 Specimen).
+- **Push provenance** — central's `fhir.change_log` = **209 rows, every one `site_id='lab-local-1'`**.
+  The lab's identity travelled with its data (this is the acceptance, not the row count).
+- **Origin version preserved** — `TZDISATDS0010015-obs-1` is `version=1` on **both** sides; central
+  did not re-version on arrival.
+- **Reported cursors (the A1 slice) over real HTTP** — `sync_site_cursors` on central has both
+  `sync-pull` and `sync-amend-pull` for `lab-local-1` with fresh `reported_at`. `seq=0` is CORRECT:
+  a fresh central has no config to pull down, so the lab's consumed position is 0.
+- **Today's fixes rode the sync** — central's projected warehouse shows `132/135` `result_timestamp`
+  populated and the AMR acceptance query returns **31** (was 0), matching the direct T8 through the
+  two-node path.
+
+**⛔ Two things the pre-flight FORCED us to discover — handle them before the LAN run:**
+
+1. **`wf-cdr-ingest` is HAND-MADE DB state — nothing in the repo seeds it.** It appears in **zero**
+   source files (unlike `wf-sample`, seeded by `packages/workflows/src/sample-workflow.ts`). On a
+   clean DB there is **no webhook for CDR to push to** — the route fails closed (`workflows-routes.ts`,
+   *"webhook has no secret configured"* → 401, or 404 for an unknown path). In the pre-flight we
+   copied the `workflows` row **and** its `workflow_secrets` row (SEC-06 sealed value — portable
+   verbatim because both instances share `SECRETS_ENCRYPTION_KEY`) from an existing DB, then
+   restarted so the webhook registry rebuilt. **On the LAN lab this state will not exist.** Either
+   seed `wf-cdr-ingest` properly, or script the copy, or recreate it in Studio → Workflows — but
+   plan for it, or CDR's first push 404s.
+
+2. **Localhost HID the #1 tripwire below.** `OIDC_ISSUER_URL=http://localhost:8180/...` worked here
+   only because both instances share the host. **The pre-flight could not exercise the cross-machine
+   issuer.** That is the single most likely LAN failure and is the first thing to get right.
+
+**What the pre-flight did NOT cover** (still Phase-1-only): a real network hop / Fastify-over-the-wire
+between two OSes; the single-port **gateway** routing (`/api/sync/*` through nginx — the pre-flight
+hit the API directly); the cross-machine Keycloak issuer (#1 below); firewall; clock skew; and the
+**>500 catch-up drain** and **gzip-on-the-wire** steps (11–12) — deferred to the LAN run where a real
+link makes them meaningful.
+
 ## ⚠️ The #1 LAN tripwire — read before you start
 
 **Keycloak's issuer URL must be the address the LAB can reach, not `localhost`.** When central mints the lab's client, the token's `iss` claim is central's OIDC issuer. If that issuer is `http://localhost:8180/...`, a token minted on the Linux box will **fail validation when the lab presents it**, because "localhost" on the lab is the lab. Configure central's `OIDC_ISSUER_URL` to `http://<linux-lan-ip>:<kc-port>/realms/openldr` — the URL that resolves the same from *both* machines. This is the most common cross-machine sync failure and it will look like a mysterious 401.
