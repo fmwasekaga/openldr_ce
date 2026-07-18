@@ -207,7 +207,7 @@ export const DOC_GUIDES: DocGuide[] = [
     estimatedMinutes: 15,
     difficulty: 'intermediate',
     relatedSlugs: ['settings', 'users', 'environment'],
-    screenshotNames: [],
+    screenshotNames: ['sync-enroll-site.png', 'sync-settings-card.png'],
     status: 'published',
   },
   {

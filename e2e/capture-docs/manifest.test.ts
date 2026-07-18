@@ -31,8 +31,8 @@ describe('docs screenshot manifest', () => {
     const slugs = await registrySlugs();
     const names = manifest.shots.map((shot) => shot.name);
 
-    assert.equal(manifest.shots.length, 27);
-    assert.equal(new Set(names).size, 27);
+    assert.equal(manifest.shots.length, 29);
+    assert.equal(new Set(names).size, 29);
 
     for (const shot of manifest.shots) {
       assert.match(shot.name, /^[^/\\]+\.png$/);

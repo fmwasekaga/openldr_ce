@@ -43,6 +43,7 @@ export const DEFAULT_DOC_VERSION: string =
 /** Page titles (stable across versions). */
 export const TITLES: Record<string, string> = {
   'getting-started': 'Getting started',
+  'load-data': 'Load & push data',
   requirements: 'Requirements',
   install: 'Install',
   'windows-server': 'Windows Server (WSL2)',
@@ -54,6 +55,7 @@ export const TITLES: Record<string, string> = {
 /** Sidebar structure; `children` render indented under their parent. */
 export const NAV: Array<{ slug: string; children?: string[] }> = [
   { slug: 'getting-started' },
+  { slug: 'load-data' },
   { slug: 'requirements' },
   { slug: 'install', children: ['windows-server'] },
   { slug: 'environment' },

@@ -4,7 +4,7 @@ Marketplace is where administrators browse available artifacts, inspect details,
 
 ## Outcome
 
-You can use Installed, Available, and Registries views; inspect artifact details; compare versions and capabilities; approve an install; enable, disable, or remove installed artifacts; and create or edit a registry.
+You can use the Browse, Installed, and Registries views; inspect artifact details; compare versions and capabilities; approve an install; enable, disable, or remove installed artifacts; and create or edit a registry.
 
 ![Marketplace browse view with available artifacts](marketplace-browse.png)
 
@@ -18,7 +18,7 @@ You can use Installed, Available, and Registries views; inspect artifact details
 
 1. Open **Settings** and then **Marketplace**.
 2. Use **Installed** to review what is already available.
-3. Use **Available** to browse artifacts from configured registries.
+3. Use **Browse** to see artifacts from configured registries.
 4. Select an artifact card to open details.
 5. Review version, compatibility, capabilities, documentation, and install action.
 6. Choose the version that matches your app and operational need.

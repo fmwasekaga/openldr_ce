@@ -25,7 +25,9 @@ Enrollment creates a confidential Keycloak client (`sync-<siteId>`) with a `site
 
 ### Using the Sites page
 
-1. Open **Sites** in the sidebar (admin-only).
+![Enroll a site dialog with Site ID, Name, and Central URL](sync-enroll-site.png)
+
+1. Open **Settings → Sites** (admin-only). Sites is a Settings page, not a top-level sidebar item.
 2. Choose **Enroll site** and fill in:
 
    | Field | Notes |
@@ -54,6 +56,8 @@ openldr sync revoke lab-ndola-01
 ## On a lab — connect to central
 
 The lab operator takes the five values from enrollment — **client id**, **client secret**, **site id**, **central URL**, **OIDC issuer** — and enters them into the Sync card.
+
+![Distributed Sync card under Settings → General, with the live status panel](sync-settings-card.png)
 
 1. Open **Settings → General** and find the **Distributed Sync** card (admin-only).
 2. Fill in the fields:

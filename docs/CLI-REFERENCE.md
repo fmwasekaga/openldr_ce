@@ -17,24 +17,29 @@ Most commands return `0` on success and `1` on validation/runtime failure. Comma
 | Command | Purpose |
 |---|---|
 | `openldr health` | Probe configured adapters and service health. |
+| `openldr errors list` | List the error-code catalog. |
 | `openldr fhir validate <file>` | Validate a FHIR JSON resource or bundle. |
 | `openldr db migrate/reset/seed` | Manage internal and target database schema and seed data. |
 | `openldr target-store test` | Probe the analytics warehouse adapter. |
 | `openldr terminology ...` | Import, query, translate, and administer terminology assets. |
-| `openldr forms list/extract/ingest` | List forms, extract QuestionnaireResponse data, or ingest responses. |
+| `openldr forms list/extract` | List forms or extract QuestionnaireResponse data. |
+| `openldr ingest <file>` | **Ingest a data file through the pipeline** (accept + drain), optionally via a converter plugin. The primary "push data into CE" CLI. |
 | `openldr pipeline ...` | Inspect/retry ingest pipeline batches. |
 | `openldr queue status` | Inspect the event queue. |
 | `openldr provenance audit` | Inspect provenance/audit information. |
 | `openldr plugin ...` | Install, list, test, run, and remove WASM plugins. |
 | `openldr report ...` | List/run reports and export GLASS RIS. |
+| `openldr report-def list/delete` | Manage data-driven report definitions. |
+| `openldr report-design list/delete` | Manage Report Designer page designs. |
 | `openldr audit list` | Query append-only audit events. |
 | `openldr users list` / `openldr user ...` | Manage local users and roles. |
-| `openldr settings sync ...` | Read/write the lab⇄central sync configuration (the discrete `sync.*` keys the workers read). |
-| `openldr sync ...` | Lab⇄central sync status/control and central-side site enrollment. |
-| `openldr export` | Export a portable data snapshot manifest. |
-| `openldr dhis2 ...` | Manage DHIS2 mappings, org units, pushes, metadata, tracker, and schedules. |
+| `openldr settings flags/numbers/sync/danger ...` | Read/write feature flags, numeric limits, sync config, and danger-zone actions. |
+| `openldr sync ...` | Lab⇄central sync status/control, enrollment, amendment, divergence, and offline bundle export/import. |
+| `openldr export` | Export the complete dataset: canonical FHIR (NDJSON + Bundle) + flat-table CSV + manifest. |
 | `openldr market ...` | Verify, install, update, enable/disable, roll back, and remove marketplace bundles. |
 | `openldr artifact ...` | Author, build, sign, pack, test, and publish marketplace artifacts. |
+
+> **DHIS2 has no core CLI.** DHIS2 shipped as a removable plugin; there is no `openldr dhis2 …` command. Its mappings, org units, and pushes are driven from the plugin's own screens or from workflow nodes.
 
 ## Copy-Paste Examples
 
@@ -45,7 +50,7 @@ pnpm openldr health --json
 pnpm openldr db migrate --json
 pnpm openldr target-store test --engine pg --json
 pnpm openldr report list --json
-pnpm openldr dhis2 push mapping-1 --period 2026Q1 --dry-run --json
+pnpm openldr ingest samples/whonet-sample.sqlite --plugin whonet-sqlite --json
 ```
 
 ```bash
@@ -53,7 +58,30 @@ pnpm openldr health --json
 pnpm openldr db migrate --json
 pnpm openldr target-store test --engine pg --json
 pnpm openldr report list --json
-pnpm openldr dhis2 push mapping-1 --period 2026Q1 --dry-run --json
+pnpm openldr ingest samples/whonet-sample.sqlite --plugin whonet-sqlite --json
+```
+
+## Ingesting data — `openldr ingest`
+
+`openldr ingest <file>` runs a file through the ingest pipeline (accept → convert → drain into the FHIR store). It is the file/CLI half of the "push data into CE" story (the HTTP half is the workflow webhook — see [Operator Guide → Ingesting & pushing data](OPERATOR-GUIDE.md)).
+
+| Option | Default | Purpose |
+|---|---|---|
+| `--converter <id>` | `fhir-bundle` | Converter that parses the file. `fhir-bundle` expects a FHIR transaction/collection Bundle. |
+| `--plugin <id>` | — | Alias of `--converter`; use an installed WASM converter plugin (e.g. `whonet-sqlite`, `hl7v2`, `tabular`). |
+| `--config <file>` | — | Plugin config JSON (e.g. tabular column mapping). |
+| `--source <s>` | `cli` | Source-system identifier recorded on the batch/provenance. |
+| `--json` | off | Emit the batch result as JSON. |
+
+```bash
+# FHIR Bundle (default converter)
+pnpm openldr ingest bundle.json --json
+# WHONET SQLite via a converter plugin (must be installed first)
+pnpm openldr plugin install reference-plugins/whonet-sqlite/plugin.wasm
+pnpm openldr ingest samples/whonet-sample.sqlite --plugin whonet-sqlite --json
+# Inspect / retry the resulting batch
+pnpm openldr pipeline status --json
+pnpm openldr pipeline retry <batchId>
 ```
 
 ## Sync
@@ -77,8 +105,20 @@ Distributed sync links labs to a central OpenLDR server. Two command groups cove
 | `openldr sync now` | Trigger a sync pass immediately. Fails (exit `1`) if sync is disabled. |
 | `openldr sync quarantine list` | List bulk records the pull stream is holding or has quarantined, with attempt counts and the last error. |
 | `openldr sync quarantine retry <entityType> <entityId>` | Clear a quarantined bulk entity and re-sync it by id (url). Fails (exit `1`) if the retry does not apply. |
+| `openldr sync divergence list` | List same-version divergences detected between the lab and central. |
+| `openldr sync divergence show <resourceType> <resourceId> <version>` | Inspect one divergence. |
+| `openldr sync divergence clear <resourceType> <resourceId> <version>` | Acknowledge/clear a divergence. |
 
 A pull record that fails repeatedly is quarantined rather than left to block the stream — see [Operator Guide → Distributed sync](OPERATOR-GUIDE.md#distributed-sync).
+
+**Offline bundle (sneakernet) — `openldr sync`**
+
+For a lab with no live link, sync can move through a signed file instead of HTTP.
+
+| Command | Purpose |
+|---|---|
+| `openldr sync export` | Write a signed offline sync bundle to a file (on a lab this is the push delta; on central use `--site <id>` for that site's pull delta). |
+| `openldr sync import <file>` | Apply a signed offline sync bundle received from the other side. |
 
 **Result amendment — `openldr sync`** (run on the central server)
 
@@ -114,7 +154,7 @@ pnpm openldr sync list --json
 
 ## Captured Terminal Output
 
-The audit ran `--help` for 99 CLI command forms. Use `docs/audit/2026-06-23/cli-help-output.md` as the terminal-output appendix. It contains fenced `console` blocks with the prompt, command, real output, and `EXIT_CODE` for each command, including:
+`docs/audit/2026-06-23/cli-help-output.md` is a captured terminal-output appendix (dated 2026-06-23 — it predates the `errors`, `ingest`, `report-def`, `report-design`, and `sync divergence/export/import` additions, and still shows the removed `dhis2` group, so treat it as a snapshot, not the current surface; run `pnpm openldr <group> --help` for the live help). It contains fenced `console` blocks with the prompt, command, real output, and `EXIT_CODE` for each command, including:
 
 - top-level `openldr --help`;
 - every command family help page;

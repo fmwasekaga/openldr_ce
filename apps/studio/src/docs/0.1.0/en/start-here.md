@@ -1,6 +1,6 @@
 # Start Here
 
-Use this manual when you are working inside the OpenLDR web interface. It explains the pages users can actually see after signing in: dashboards, reports, workflows, forms, terminology, users, audit, settings, connectors, and marketplace.
+Use this manual when you are working inside the OpenLDR web interface. It explains the pages users can actually see after signing in: dashboards, reports, report designer, custom queries, workflows, forms, terminology, users, audit, activity, settings, connectors, and marketplace. Some pages appear only for certain roles.
 
 ## Outcome
 
@@ -35,7 +35,6 @@ You know where the web manual lives, how to search it by task, and how to follow
 - **A page is missing from the navigation:** ask an administrator to check your roles in **Users and Roles**.
 - **A screenshot looks too small:** select it to open the lightbox, then close the lightbox to return to the guide.
 - **Search returns too many results:** search for the outcome, role, or error text, such as `lab_admin`, `permission denied`, or `create workflow`.
-- **A guide says Coming soon:** the feature area is planned for a separate advanced web app and is not available in this in-app manual yet.
 
 ## Advanced web usage
 
