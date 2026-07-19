@@ -1244,6 +1244,8 @@ export * from './crash-audit';
 export * from './crash-loop';
 export * from './policy';
 export { wipeInternalDatabase, clearAuditAndRunHistory, listInternalDataTables, buildTruncateSql } from './danger';
+export { recordAuditEvent } from './record-audit';
+export type { AuditActor, AuditDetails } from './record-audit';
 
 /** Delete all dashboards and restore the built-in sample. Internal DB only. */
 export async function dangerResetDashboards(ctx: AppContext): Promise<void> {
