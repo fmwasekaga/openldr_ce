@@ -331,7 +331,7 @@ export function General() {
               aria-label={t('settings.general.sync.intervalMinutes.label')}
             />
           </div>
-          <div>
+          <div className="flex justify-end">
             <Button onClick={() => void saveSync()} disabled={syncSaving}>
               {t('settings.general.sync.save')}
             </Button>
@@ -353,7 +353,7 @@ export function General() {
               <dt className="text-muted-foreground">{t('settings.general.sync.pending')}</dt>
               <dd className="font-mono">{syncStatus?.pendingPush ?? 0}</dd>
             </dl>
-            <div>
+            <div className="flex justify-end">
               <Button variant="secondary" onClick={() => void doSyncNow()} disabled={syncNowBusy}>
                 {t('settings.general.sync.syncNow')}
               </Button>
