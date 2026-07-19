@@ -1,5 +1,7 @@
 import { type Kysely, sql } from 'kysely';
 import type { TargetEngine } from '../../engine';
+import * as m001 from './001_flat_tables';
+import * as m002 from './002_specimen_origin';
 
 const THIN_TABLES = ['patients', 'specimens', 'service_requests', 'diagnostic_reports', 'observations', 'organizations', 'locations'];
 const RENAMES: [string, string][] = [
@@ -28,9 +30,16 @@ export async function up(db: Kysely<unknown>, engine: TargetEngine): Promise<voi
   for (const [from, to] of RENAMES) await rename(db, engine, from, to);
 }
 
-// One-directional: renames canonical back to v2_ only (restores the pre-007 table NAMES). Recreating
-// the dropped thin tables is intentionally out of scope — the thin schema is gone for good. down()
-// runs only on real PG in dev, never under pg-mem tests.
+// True inverse of up(), so the full external down-chain is reversible (needed by `db reset`, which
+// runs every down() in reverse then re-migrates up). Mirror up()'s two steps in reverse order:
+// first rename canonical back to v2_ (freeing the patients/specimens/diagnostic_reports names that
+// up() reused), THEN recreate the 7 thin tables up() dropped. Recreating them restores the exact
+// pre-007 schema (001's tables + 002's specimens.origin) so the earlier down()s can unwind — 002
+// down drops specimens.origin and 001 down drops the thin tables. Without this, the reverse chain
+// hits `alter specimens drop origin` against a table that no longer exists. Recreated empty: down
+// migrations do not restore dropped row data, which is fine for the reset/rebuild path.
 export async function down(db: Kysely<unknown>, engine: TargetEngine): Promise<void> {
   for (const [from, to] of RENAMES) await rename(db, engine, to, from);
+  await m001.up(db, engine);
+  await m002.up(db, engine);
 }
