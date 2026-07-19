@@ -92,7 +92,7 @@ describe('error contract over a real request cycle', () => {
     expect(res.statusCode).toBe(422);
     expect(res.json()).toMatchObject({
       code: 'VA0002',
-      details: { outcome: { resourceType: 'OperationOutcome', issue: [{ severity: 'error', code: 'required' }] } },
+      outcome: { resourceType: 'OperationOutcome', issue: [{ severity: 'error', code: 'required' }] },
     });
   });
 
