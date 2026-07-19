@@ -35,6 +35,10 @@ export function createAmendmentPullRunner(deps: AmendPullDeps): AmendmentPullRun
   return {
     async runCycle(): Promise<CycleResult> {
       const cursor = await deps.readCursor();
+      // Mark a cycle attempt for the 'amend' direction's liveness. Harmless today (only push/pull
+      // liveness is surfaced on SyncStatus), but keeps every runner faithful to the recorder contract
+      // ("attempt() once per cycle") so amend liveness is correct if it is ever surfaced.
+      deps.activity?.attempt();
       let resp: AmendmentPullResponse;
       try {
         const token = await deps.getToken();

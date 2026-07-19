@@ -129,22 +129,39 @@ describe('createAmendmentPullRunner', () => {
   });
 });
 
-// A fake SyncActivityRecorder that captures every record(entry) verbatim (attempt() is a no-op — the
-// amend runner never calls it; see the design note in amend-pull-worker.ts).
+// A fake SyncActivityRecorder that counts attempt() calls and captures every record(entry) verbatim.
 function fakeActivity() {
   const records: { event: string; records?: number; error?: string; metadata?: Record<string, unknown> }[] = [];
+  const attempts = { n: 0 };
   return {
     recorder: {
-      attempt: () => {},
+      attempt: () => { attempts.n++; },
       record: (e: { event: string; records?: number; error?: string; metadata?: Record<string, unknown> }) => {
         records.push(e);
       },
     },
     records,
+    attempts,
   };
 }
 
 describe('amend pull runner activity emission', () => {
+  it('calls attempt() once per cycle (recorder contract)', async () => {
+    const { recorder, attempts } = fakeActivity();
+    let cursor = 0;
+    const runner = createAmendmentPullRunner({
+      getToken: async () => 't',
+      postPull: async () => ({ records: [], nextSeq: 0 }) as AmendmentPullResponse,
+      applyRecord: async () => 'applied' as const,
+      readCursor: async () => cursor,
+      advanceCursor: async (s) => { cursor = s; },
+      logger: silent,
+      activity: recorder,
+    });
+    await runner.runCycle();
+    expect(attempts.n).toBe(1);
+  });
+
   it('emits one "diverged" row per diverged record, carrying resource identity', async () => {
     const { recorder, records } = fakeActivity();
     let cursor = 0;
