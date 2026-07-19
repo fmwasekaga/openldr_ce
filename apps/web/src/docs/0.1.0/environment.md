@@ -93,6 +93,7 @@ provider.
 | `OIDC_ISSUER_URL` | Public issuer URL of the realm. |
 | `OIDC_INTERNAL_ISSUER_URL` | In-cluster realm base URL. Server-side token/admin/JWKS calls use it instead of the public issuer. |
 | `OIDC_INTERNAL_JWKS_URL` | In-cluster JWKS endpoint the API validates tokens against. |
+| `TLS_CERT_PATH` | Path to this server's public TLS certificate (PEM). When set, the Sites page can offer it for download so a remote lab can trust a self-signed central. The installer mounts the certificate and sets this automatically. |
 | `OIDC_AUDIENCE` | Expected token audience. |
 | `OIDC_WEB_CLIENT_ID` | Public client ID the studio app authenticates with. |
 | `KC_HOSTNAME` | Public base URL Keycloak advertises. |
