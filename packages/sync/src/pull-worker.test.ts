@@ -503,3 +503,107 @@ describe('createSyncPullRunner', () => {
     expect(called).toBe(false);
   });
 });
+
+// A fake SyncActivityRecorder that captures attempt() calls and every record(entry) verbatim, so tests
+// can assert exactly what the runner emitted without a real store. Mirrors the push-worker test helper.
+function fakeActivity() {
+  const records: { event: string; records?: number; error?: string; metadata?: Record<string, unknown> }[] = [];
+  const attempts = { n: 0 };
+  return {
+    recorder: {
+      attempt: () => {
+        attempts.n++;
+      },
+      record: (e: { event: string; records?: number; error?: string; metadata?: Record<string, unknown> }) => {
+        records.push(e);
+      },
+    },
+    records,
+    attempts,
+  };
+}
+
+describe('pull runner activity emission', () => {
+  it('calls attempt() exactly once per cycle, and emits no record on an empty window (drained)', async () => {
+    const { recorder, records, attempts } = fakeActivity();
+    const deps: PullDeps = {
+      postPull: async () => ({ records: [], nextSeq: 42 }),
+      getToken: async () => 't',
+      applyRecord: async () => 'applied',
+      readCursor: async () => 0,
+      advanceCursor: async () => {},
+      logger: fakeLogger(),
+      activity: recorder,
+    };
+
+    const r = await createSyncPullRunner(deps).runCycle();
+    expect(r.outcome).toBe('drained');
+    expect(attempts.n).toBe(1);
+    expect(records).toHaveLength(0);
+  });
+
+  it('emits exactly one sanitized "failed" entry when postPull throws (no raw secret in the entry)', async () => {
+    const { recorder, records, attempts } = fakeActivity();
+    const deps: PullDeps = {
+      postPull: async () => {
+        throw new Error('boom Bearer secrettoken123');
+      },
+      getToken: async () => 't',
+      applyRecord: async () => 'applied',
+      readCursor: async () => 0,
+      advanceCursor: async () => {},
+      logger: fakeLogger(),
+      activity: recorder,
+    };
+
+    const r = await createSyncPullRunner(deps).runCycle();
+    expect(r.outcome).toBe('failed');
+    expect(attempts.n).toBe(1);
+    expect(records).toHaveLength(1);
+    expect(records[0].event).toBe('failed');
+    expect(records[0].error).toBeDefined();
+    expect(records[0].error).not.toContain('secrettoken123');
+  });
+
+  it('emits one "quarantined" entry for a per-record apply failure (default isHoldRecord: non-terminology quarantines)', async () => {
+    const { recorder, records } = fakeActivity();
+    const applyRecord = vi.fn(async (r: PullRecord) => {
+      if (r.entityId === 'f2') throw new Error('constraint violation');
+      return 'applied' as const;
+    });
+    const deps: PullDeps = {
+      postPull: async () => ({ records: [rec(1, 'f1'), rec(2, 'f2'), rec(3, 'f3')], nextSeq: 3 }),
+      getToken: async () => 't',
+      applyRecord,
+      readCursor: async () => 0,
+      advanceCursor: async () => {},
+      logger: fakeLogger(),
+      activity: recorder,
+    };
+
+    const r = await createSyncPullRunner(deps).runCycle();
+    expect(r.outcome).toBe('progressed');
+    const quarantined = records.filter((r) => r.event === 'quarantined');
+    expect(quarantined).toHaveLength(1);
+    expect(quarantined[0].metadata).toMatchObject({ seq: 2, entityType: 'form', entityId: 'f2' });
+  });
+
+  it('emits a "synced" entry carrying the applied count on a fully-applied window', async () => {
+    const { recorder, records } = fakeActivity();
+    const deps: PullDeps = {
+      postPull: async () => ({ records: [rec(1, 'f1', 'upsert'), rec(2, 'f2', 'delete')], nextSeq: 2 }),
+      getToken: async () => 'tok-123',
+      applyRecord: async () => 'applied',
+      readCursor: async () => 0,
+      advanceCursor: async () => {},
+      logger: fakeLogger(),
+      activity: recorder,
+    };
+
+    const r = await createSyncPullRunner(deps).runCycle();
+    expect(r.outcome).toBe('progressed');
+    const synced = records.filter((r) => r.event === 'synced');
+    expect(synced).toHaveLength(1);
+    expect(synced[0].records).toBe(2);
+  });
+});

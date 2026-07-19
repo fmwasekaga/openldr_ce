@@ -1,6 +1,8 @@
 import type { Logger } from '@openldr/db';
 import type { PullRequest, PullResponse, PullRecord } from './batch';
 import type { CycleResult } from './cycle-result';
+import type { SyncActivityRecorder } from './activity';
+import { sanitizeSyncError } from './activity';
 
 // Injected dependencies for the pull runner. Kept pure over its deps so the cursor + transport + applier
 // are fakeable in tests (no real DB). The bootstrap host (Task 8) wires `applyRecord` to db's reference
@@ -24,6 +26,8 @@ export interface PullDeps {
   holdFailure?: (rec: PullRecord, err: Error) => Promise<'hold' | 'quarantine'>;
   holdSuccess?: (rec: PullRecord) => Promise<void>;
   logger: Logger;
+  /** Optional high-signal activity sink (Track A). Absent = no emission. */
+  activity?: SyncActivityRecorder;
 }
 
 export interface SyncPullRunner {
@@ -52,6 +56,7 @@ export function createSyncPullRunner(deps: PullDeps): SyncPullRunner {
   return {
     async runCycle(): Promise<CycleResult> {
       const cursor = await deps.readCursor();
+      deps.activity?.attempt();
       let resp: PullResponse;
       try {
         // getToken() lives INSIDE the try so a token-endpoint outage behaves exactly like a transport
@@ -61,6 +66,7 @@ export function createSyncPullRunner(deps: PullDeps): SyncPullRunner {
       } catch (err) {
         // Transport/HTTP/token failure: leave the cursor put so the same window retries next cycle.
         deps.logger.warn({ err: (err as Error).message }, 'sync pull failed; cursor not advanced (will retry)');
+        deps.activity?.record({ event: 'failed', error: sanitizeSyncError(err), metadata: { seq: cursor } });
         return { outcome: 'failed', applied: 0 };
       }
 
@@ -111,6 +117,10 @@ export function createSyncPullRunner(deps: PullDeps): SyncPullRunner {
               { err: (err as Error).message, entityType: rec.entityType, entityId: rec.entityId, seq: rec.seq },
               'sync pull: bulk apply repeatedly failed; quarantined, advancing past',
             );
+            deps.activity?.record({
+              event: 'quarantined',
+              metadata: { seq: rec.seq, entityType: rec.entityType, entityId: rec.entityId },
+            });
             safeSeq = rec.seq;
           } else {
             // Quarantine kind (S2/Layer-A per-row): log, skip, keep going — and it is safe to advance PAST it
@@ -119,6 +129,10 @@ export function createSyncPullRunner(deps: PullDeps): SyncPullRunner {
               { err: (err as Error).message, entityType: rec.entityType, entityId: rec.entityId, seq: rec.seq },
               'sync pull: apply failed; skipping (quarantine)',
             );
+            deps.activity?.record({
+              event: 'quarantined',
+              metadata: { seq: rec.seq, entityType: rec.entityType, entityId: rec.entityId },
+            });
             safeSeq = rec.seq; // a quarantined record is "handled" — safe to advance past it
           }
         }
@@ -134,6 +148,7 @@ export function createSyncPullRunner(deps: PullDeps): SyncPullRunner {
         // A HELD bulk record's cursor is capped BEFORE the failing record: the next cycle would fetch
         // the identical window and re-fail identically. Report 'failed' so the drain stops and the
         // retry waits for the next tick rather than spinning for the whole budget.
+        deps.activity?.record({ event: 'failed', error: 'sync pull: bulk apply held (will retry)', metadata: { seq: cursor } });
         return { outcome: 'failed', applied };
       }
       if (!advanced) {
@@ -147,10 +162,16 @@ export function createSyncPullRunner(deps: PullDeps): SyncPullRunner {
           { cursor, safeSeq, nextSeq: resp.nextSeq, count: applied },
           'sync pull: window processed but cursor did not advance; not looping (will retry next tick)',
         );
+        deps.activity?.record({
+          event: 'failed',
+          error: 'sync pull: cursor did not advance',
+          metadata: { seq: cursor, nextSeq: resp.nextSeq },
+        });
         return { outcome: 'failed', applied };
       }
       // 'progressed' because the WINDOW was processed and the cursor genuinely advanced — never because
       // `applied` is non-zero. A window entirely quarantined still reports 'progressed' here.
+      if (applied > 0) deps.activity?.record({ event: 'synced', records: applied, metadata: { seq: target } });
       return { outcome: 'progressed', applied };
     },
   };
