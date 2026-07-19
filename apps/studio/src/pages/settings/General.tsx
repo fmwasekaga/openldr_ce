@@ -10,13 +10,15 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { DangerConfirmDialog } from '@/terminology/DangerConfirmDialog';
+import { TypeToConfirmDialog } from '@/components/ui/type-to-confirm-dialog';
 import {
   fetchClientConfig, fetchFeatureFlags, setFeatureFlag, runDangerAction,
   fetchSyncConfig, saveSyncConfig, fetchSyncStatus, triggerSyncNow,
   fetchNumberSettings, setNumberSetting,
+  getValidation, setValidation,
   type ClientConfig, type FeatureFlag, type DangerAction,
   type SyncConfigView, type SyncConfigInput, type SyncMode, type SyncStatus, type SyncDirectionStatus,
-  type NumberSetting,
+  type NumberSetting, type ValidationStrictness,
 } from '@/api';
 
 type PendingDanger = null | 'reset-dashboards' | 'clear-audit' | 'factory-reset';
@@ -38,6 +40,9 @@ export function General() {
   const [syncNowBusy, setSyncNowBusy] = useState(false);
   const [numbers, setNumbers] = useState<NumberSetting[]>([]);
   const [busyNumber, setBusyNumber] = useState<string | null>(null);
+  const [validationLevel, setValidationLevel] = useState<ValidationStrictness | null>(null);
+  const [pendingValidation, setPendingValidation] = useState<ValidationStrictness | null>(null);
+  const [validationBusy, setValidationBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -48,6 +53,7 @@ export function General() {
         setSync(await fetchSyncConfig());
         setSyncStatus(await fetchSyncStatus());
         setNumbers(await fetchNumberSettings());
+        setValidationLevel((await getValidation()).strictness);
       }
     } catch (e) {
       toast.error(String(e instanceof Error ? e.message : e));
@@ -154,6 +160,20 @@ export function General() {
       setPending(null);
     }
   }, [t, load]);
+
+  const applyValidation = useCallback(async (level: ValidationStrictness) => {
+    setValidationBusy(true);
+    try {
+      const { strictness } = await setValidation(level);
+      setValidationLevel(strictness);
+      toast.success(t('settings.general.danger.validation.saved'));
+    } catch (e) {
+      toast.error(t('settings.general.danger.validation.saveFailed', { error: e instanceof Error ? e.message : String(e) }));
+    } finally {
+      setValidationBusy(false);
+      setPendingValidation(null);
+    }
+  }, [t]);
 
   const dangerMeta: Record<Exclude<PendingDanger, null>, { key: string }> = {
     'reset-dashboards': { key: 'resetDashboards' },
@@ -385,6 +405,31 @@ export function General() {
               </div>
             );
           })}
+          {validationLevel && (
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-sm font-medium">{t('settings.general.danger.validation.label')}</div>
+                <div className="text-xs text-muted-foreground">{t('settings.general.danger.validation.description')}</div>
+              </div>
+              <Select
+                value={validationLevel}
+                disabled={validationBusy}
+                onValueChange={(v) => {
+                  const level = v as ValidationStrictness;
+                  if (level !== validationLevel) setPendingValidation(level);
+                }}
+              >
+                <SelectTrigger className="w-48 shrink-0" aria-label={t('settings.general.danger.validation.label')}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(['low', 'medium', 'high'] as const).map((lvl) => (
+                    <SelectItem key={lvl} value={lvl}>{t(`settings.general.danger.validation.levels.${lvl}`)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </CardContent>
       </Card>
       )}
@@ -398,6 +443,24 @@ export function General() {
           confirmLabel={t(`settings.general.danger.${dangerMeta[pending].key}.button`)}
           summary={<p>{t(`settings.general.danger.${dangerMeta[pending].key}.warning`)}</p>}
           onConfirm={() => void runDanger(pending)}
+        />
+      )}
+
+      {isAdmin && pendingValidation && (
+        <TypeToConfirmDialog
+          open={pendingValidation !== null}
+          onOpenChange={(o) => { if (!o) setPendingValidation(null); }}
+          title={t('settings.general.danger.validation.dialogTitle', {
+            level: t(`settings.general.danger.validation.levels.${pendingValidation}`),
+          })}
+          body={<p>{t(pendingValidation === 'high'
+            ? 'settings.general.danger.validation.warningRaise'
+            : 'settings.general.danger.validation.warningLower')}</p>}
+          confirmPhrase={pendingValidation}
+          confirmLabel={t('settings.general.danger.validation.apply')}
+          cancelLabel={t('settings.general.danger.validation.cancel')}
+          destructive={pendingValidation !== 'high'}
+          onConfirm={() => void applyValidation(pendingValidation)}
         />
       )}
     </div>

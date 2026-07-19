@@ -272,6 +272,18 @@ export const pt: EnShape = {
         factoryReset: { label: 'Redefinição de fábrica', description: 'Apagar toda a base de dados interna e restaurar as predefinições de fábrica.', button: 'Redefinição de fábrica', confirm: 'redefinição de fábrica', title: 'Redefinição de fábrica?', warning: 'Isto apaga TODOS os dados internos — formulários, conectores, painéis, fluxos de trabalho, terminologia, utilizadores, auditoria — e redefine as predefinições. Os dados externos e o Keycloak não são afetados. Esta ação não pode ser desfeita.' },
         done: '{{action}} concluído',
         failed: '{{action}} falhou: {{error}}',
+        validation: {
+          label: 'Validação de dados',
+          description: 'Nível de rigor da validação para dados laboratoriais recebidos.',
+          levels: { low: 'Baixo', medium: 'Médio', high: 'Alto' },
+          dialogTitle: 'Alterar o nível de validação para {{level}}?',
+          warningLower: 'Reduzir a validação permite armazenar dados laboratoriais incompletos.',
+          warningRaise: 'Aumentar a validação pode rejeitar dados laboratoriais que antes seriam aceites.',
+          apply: 'Aplicar',
+          cancel: 'Cancelar',
+          saved: 'Nível de validação atualizado',
+          saveFailed: 'Não foi possível atualizar o nível de validação: {{error}}',
+        },
       },
     },
     connectors: {
