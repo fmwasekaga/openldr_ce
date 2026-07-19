@@ -178,6 +178,7 @@ export const fr: EnShape = {
     errNotFound: 'Site introuvable.',
     downloadCert: 'Télécharger le certificat central',
     certDownloadedToast: 'Certificat central téléchargé',
+    certDownloadFailed: 'Impossible de télécharger le certificat central',
   },
   settings: {
     title: 'Paramètres',

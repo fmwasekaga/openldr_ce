@@ -174,6 +174,7 @@ export const en = {
     errNotFound: 'Site not found.',
     downloadCert: 'Download central certificate',
     certDownloadedToast: 'Central certificate downloaded',
+    certDownloadFailed: 'Could not download the central certificate',
   },
   settings: {
     title: 'Settings',

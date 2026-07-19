@@ -105,8 +105,8 @@ export function Sites() {
 
   const doDownloadCert = useCallback(async () => {
     try { await downloadCentralCertificate(); toast.success(t('sites.certDownloadedToast')); }
-    catch (e) { showError(e); }
-  }, [t, showError]);
+    catch { toast.error(t('sites.certDownloadFailed')); }
+  }, [t]);
 
   return (
     <>

@@ -178,6 +178,7 @@ export const pt: EnShape = {
     errNotFound: 'Site não encontrado.',
     downloadCert: 'Transferir certificado central',
     certDownloadedToast: 'Certificado central transferido',
+    certDownloadFailed: 'Não foi possível transferir o certificado central',
   },
   settings: {
     title: 'Definições',
