@@ -53,11 +53,27 @@ export function registerConfigRoute(
   }));
 }
 
+/** Map the TRUST_PROXY env string to Fastify's `trustProxy` option. Unset/''/'false' → false (don't
+ *  trust X-Forwarded-For; req.ip is the socket peer). A bare integer → that many proxy hops (the
+ *  single gateway is '1'). 'true' → trust every hop. Anything else → a comma-separated list of trusted
+ *  proxy IPs/subnets, passed through to proxy-addr. */
+export function parseTrustProxy(v: string | undefined): boolean | number | string {
+  const s = (v ?? '').trim();
+  if (s === '' || s.toLowerCase() === 'false') return false;
+  if (s.toLowerCase() === 'true') return true;
+  if (/^\d+$/.test(s)) return Number(s);
+  return s;
+}
+
 export async function buildApp(ctx: AppContext) {
   const app = Fastify({
     loggerInstance: ctx.logger,
     // Short 8-char correlation id per request; surfaces in every error body + one log line.
     genReqId: () => randomUUID().replace(/-/g, '').slice(0, 8),
+    // When a reverse proxy (the gateway) fronts the app, trust its X-Forwarded-For so req.ip and the
+    // auth.failed audit reflect the real client, not the proxy's container IP. Off by default (safe for
+    // dev/direct); the installed stack sets TRUST_PROXY=1 (one gateway hop). See config TRUST_PROXY.
+    trustProxy: parseTrustProxy(ctx.cfg.TRUST_PROXY),
   });
   registerErrorHandler(app);
 

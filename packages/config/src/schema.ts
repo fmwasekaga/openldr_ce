@@ -15,6 +15,14 @@ export const ConfigSchema = z
     PORT: z.coerce.number().int().positive().default(3000),
     LOG_LEVEL: z.string().default('info'),
 
+    // Reverse-proxy trust for `req.ip` / X-Forwarded-For (Fastify `trustProxy`). Unset = OFF: don't
+    // trust XFF, so req.ip is the direct socket peer — correct for dev/direct and prevents a client
+    // spoofing its IP. Set to the number of proxy hops in front of the app ('1' for the single
+    // gateway) so req.ip and the `auth.failed` audit reflect the real client, not the gateway's
+    // container IP. 'true' (trust all) or a comma-separated list of trusted proxy IPs/subnets are
+    // also accepted. SECURITY: only enable when a trusted proxy actually fronts the app.
+    TRUST_PROXY: z.string().optional(),
+
     // Run internal + external DB migrations (migrateToLatest, idempotent) on server
     // startup before binding. Off by default so dev/tests manage their own schema; the
     // single-port prod deployment turns it on so a fresh DB self-migrates. See DEPLOYMENT.md.
