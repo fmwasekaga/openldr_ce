@@ -57,4 +57,18 @@ describe('createAuditStore', () => {
     const page = await store.list({ limit: 2, offset: 2 });
     expect(page.map((event) => event.entityId)).toEqual(['3', '2']);
   });
+
+  it('preserves a cli actor_type through record + read-back', async () => {
+    const db = await makeMigratedDb();
+    const store = createAuditStore(db);
+    const ev = await store.record({
+      actorType: 'cli', actorId: null, actorName: 'alice',
+      action: 'settings.flag.update', entityType: 'app_setting', entityId: 'x',
+    });
+    expect(ev.actorType).toBe('cli');
+    const got = await store.get(ev.id);
+    expect(got?.actorType).toBe('cli');
+    const listed = await store.list({});
+    expect(listed.find((e) => e.id === ev.id)?.actorType).toBe('cli');
+  });
 });
