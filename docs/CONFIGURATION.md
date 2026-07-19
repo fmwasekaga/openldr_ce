@@ -21,12 +21,13 @@ writes all of them into `.env.prod`; you can also set them manually.
 Keycloak is proxied by nginx at `/auth`. The application accesses it two ways:
 
 - **Browser (front-channel):** via the public `OIDC_ISSUER_URL` — e.g. `https://HOST/auth/realms/openldr`. This is the issuer embedded in tokens and used for OIDC discovery.
-- **Server (back-channel JWKS):** via `OIDC_INTERNAL_JWKS_URL` — the docker-internal address, which avoids the gateway and the need to trust a self-signed cert.
+- **Server (back-channel token/admin/JWKS):** via `OIDC_INTERNAL_ISSUER_URL` — the docker-internal realm base, which avoids the gateway and the need to trust a self-signed cert. `OIDC_INTERNAL_JWKS_URL` is a sibling that overrides just the JWKS endpoint when it differs from `OIDC_INTERNAL_ISSUER_URL` + `/protocol/openid-connect/certs`. Either way, the issuer **claim** is still validated against the public `OIDC_ISSUER_URL`.
 
 | Variable | Type | Default | Effect |
 |---|---:|---:|---|
 | `OIDC_ISSUER_URL` | URL | required | Public Keycloak realm issuer, e.g. `https://HOST/auth/realms/openldr`. Must match the token `iss` claim. |
-| `OIDC_INTERNAL_JWKS_URL` | URL | unset | Back-channel JWKS endpoint, e.g. `http://keycloak:8080/auth/realms/openldr/protocol/openid-connect/certs`. When set the server fetches signing keys over the docker network, bypassing the gateway TLS cert. |
+| `OIDC_INTERNAL_ISSUER_URL` | URL | unset | Back-channel Keycloak realm base, e.g. `http://keycloak:8080/auth/realms/openldr`. When set, server-side token/admin REST/JWKS calls use it instead of the public issuer (which, inside a container, resolves to the app itself). |
+| `OIDC_INTERNAL_JWKS_URL` | URL | unset | Back-channel JWKS endpoint, e.g. `http://keycloak:8080/auth/realms/openldr/protocol/openid-connect/certs`. When set the server fetches signing keys over the docker network, bypassing the gateway TLS cert. Overrides the JWKS URL derived from `OIDC_INTERNAL_ISSUER_URL`. |
 | `KC_HOSTNAME` | URL | `https://localhost/auth` | Keycloak's advertised external hostname (Keycloak v2 `hostname` setting). Must be `PUBLIC_ORIGIN + /auth`. |
 
 ## Required Core Settings

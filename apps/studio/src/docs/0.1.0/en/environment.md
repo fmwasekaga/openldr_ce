@@ -89,6 +89,7 @@ identity provider.
 | Variable | Purpose |
 | --- | --- |
 | `OIDC_ISSUER_URL` | Public issuer URL of the realm. |
+| `OIDC_INTERNAL_ISSUER_URL` | In-cluster realm base URL. Server-side token/admin/JWKS calls use it instead of the public issuer. |
 | `OIDC_INTERNAL_JWKS_URL` | In-cluster JWKS endpoint the API validates tokens against. |
 | `OIDC_AUDIENCE` | Expected token audience. |
 | `OIDC_WEB_CLIENT_ID` | Public client ID the studio app authenticates with. |
