@@ -43,6 +43,11 @@ admin/danger actions are also available in the Studio UI under Settings.
 | `errors` | List the error-code catalog. |
 | `target-store` | Test the target warehouse connection. |
 
+Mutating CLI commands (`sync enroll/rotate/revoke`, `user create/set-role/activate/deactivate`,
+`settings … set`, `settings danger …`, `db reset`, `terminology import/create`) record an audit
+event with actor type **`cli`** and actor name = the OS user (override with the global
+`--actor <name>`). They appear on the Audit page alongside UI actions.
+
 ## Common tasks
 
 Bring a database up to date after pulling new migrations (non-destructive, keeps data):

@@ -345,7 +345,7 @@ export function Audit() {
               </Button>
             )}
             <div className="flex-1" />
-            <span className="text-xs text-muted-foreground">Newest events first.</span>
+            <span className="text-xs text-muted-foreground">Newest events first. Sign-in history lives in Keycloak.</span>
             <Button
               type="button"
               variant="ghost"
