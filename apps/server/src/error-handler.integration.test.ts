@@ -24,6 +24,11 @@ async function buildTestApp(): Promise<FastifyInstance> {
   app.get('/boom', async () => { throw new Error('kaboom'); });
   app.get('/app-error', async () => { throw appError('RP0002'); });
   app.get('/too-large', async () => { throw Object.assign(new Error('file too large'), { statusCode: 413 }); });
+  app.get('/clinical-validation', async () => {
+    throw appError('VA0002', {
+      details: { outcome: { resourceType: 'OperationOutcome', issue: [{ severity: 'error', code: 'required' }] } },
+    });
+  });
 
   await app.ready();
   return app;
@@ -80,6 +85,15 @@ describe('error contract over a real request cycle', () => {
     const res = await app.inject({ method: 'GET', url: '/app-error' });
     expect(res.statusCode).toBe(404);
     expect(res.json()).toMatchObject({ code: 'RP0002', error: 'report not found' });
+  });
+
+  it('surfaces the OperationOutcome details for a clinical validation failure', async () => {
+    const res = await app.inject({ method: 'GET', url: '/clinical-validation' });
+    expect(res.statusCode).toBe(422);
+    expect(res.json()).toMatchObject({
+      code: 'VA0002',
+      outcome: { resourceType: 'OperationOutcome', issue: [{ severity: 'error', code: 'required' }] },
+    });
   });
 
   it('always answers with the {error, code, correlationId} contract and a catalog-shaped code', async () => {

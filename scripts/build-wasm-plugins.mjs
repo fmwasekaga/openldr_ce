@@ -63,7 +63,7 @@ const manifest = {
   // this list must match what the plugin emits or ingestion fails. read-input is advisory.
   capabilities: [
     { kind: 'read-input', formats: ['sqlite'] },
-    { kind: 'emit-fhir', resourceTypes: ['Patient', 'Specimen', 'Observation'] },
+    { kind: 'emit-fhir', resourceTypes: ['Patient', 'Specimen', 'Observation', 'ServiceRequest'] },
   ],
   workflowNodes: [
     {

@@ -272,6 +272,18 @@ export const fr: EnShape = {
         factoryReset: { label: 'Réinitialisation usine', description: "Effacer toute la base de données interne et restaurer les paramètres d'usine.", button: 'Réinitialisation usine', confirm: 'réinitialisation usine', title: 'Réinitialisation usine ?', warning: "Cela efface TOUTES les données internes — formulaires, connecteurs, tableaux de bord, flux de travail, terminologie, utilisateurs, audit — et réinitialise les valeurs par défaut. Les données cibles externes et Keycloak ne sont pas affectés. Cette action est irréversible." },
         done: '{{action}} terminé',
         failed: "{{action}} a échoué : {{error}}",
+        validation: {
+          label: 'Validation des données',
+          description: 'Niveau de rigueur de la validation pour les données de laboratoire entrantes.',
+          levels: { low: 'Faible', medium: 'Moyen', high: 'Élevé' },
+          dialogTitle: 'Changer le niveau de validation à {{level}} ?',
+          warningLower: 'Abaisser la validation permet le stockage de données de laboratoire incomplètes.',
+          warningRaise: 'Renforcer la validation peut rejeter des données de laboratoire qui auraient été acceptées auparavant.',
+          apply: 'Appliquer',
+          cancel: 'Annuler',
+          saved: 'Niveau de validation mis à jour',
+          saveFailed: 'Impossible de mettre à jour le niveau de validation : {{error}}',
+        },
       },
     },
     connectors: {

@@ -60,14 +60,14 @@ pub fn map_rows(rows: &[Row], m: &Mapping) -> Vec<Value> {
 
         if let Some(org) = get(row, &m.organism) {
             let code = get(row, &m.organism_code).unwrap_or(org);
-            out.push(fhir::observation_organism(&format!("tab-org-{sid}"), &pref, &sref, code, org));
+            out.push(fhir::observation_organism(&format!("tab-org-{sid}"), &pref, &sref, code, org, None));
         }
         if let Some(abs) = &m.antibiotics {
             for ab in abs {
                 if let Some(cell) = row.get(&ab.column) {
                     let v = cell.trim().to_ascii_uppercase();
                     if v == "S" || v == "I" || v == "R" {
-                        out.push(fhir::observation_ast(&format!("tab-ast-{sid}-{}", ab.code), &pref, &sref, &ab.code, &v));
+                        out.push(fhir::observation_ast(&format!("tab-ast-{sid}-{}", ab.code), &pref, &sref, &ab.code, &v, None));
                     }
                 }
             }

@@ -14,8 +14,15 @@ function fakeCtx(syncEnabled = true) {
   const audit: any[] = [];
   const ops = { resetDashboards: 0, factoryReset: 0, clearAudit: 0 };
   const triggerNow = vi.fn();
+  let strictness: 'low' | 'medium' | 'high' = 'high';
+  const validationStrictnessSet = vi.fn(async (level: 'low' | 'medium' | 'high', _actor: string | null) => { strictness = level; });
   return {
     ctx: {
+      validationStrictness: {
+        get: async () => strictness,
+        set: validationStrictnessSet,
+      },
+      __validationStrictnessSet: validationStrictnessSet,
       sync: {
         status: async () => ({ ...SYNC_STATUS, enabled: syncEnabled }),
         triggerNow,
@@ -257,5 +264,36 @@ describe('settings routes', () => {
     const row = (ctx as any).__audit.find((e: any) => e.action === 'settings.danger.clear-audit');
     expect(row).toBeTruthy();
     expect(row.metadata.ok).toBe(false);
+  });
+
+  it('GET /api/settings/validation returns the default strictness', async () => {
+    const { ctx, deps } = fakeCtx();
+    const app = appWithUser(['lab_admin'], (a) => registerSettingsRoutes(a, ctx, deps));
+    const res = await app.inject({ method: 'GET', url: '/api/settings/validation' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ strictness: 'high' });
+  });
+
+  it('PUT /api/settings/validation sets the strictness and audits', async () => {
+    const { ctx, deps } = fakeCtx();
+    const app = appWithUser(['lab_admin'], (a) => registerSettingsRoutes(a, ctx, deps));
+    const res = await app.inject({ method: 'PUT', url: '/api/settings/validation', payload: { strictness: 'medium' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ strictness: 'medium' });
+    expect((ctx as any).__validationStrictnessSet).toHaveBeenCalledWith('medium', 'u1');
+    const row = (ctx as any).__audit.find((e: any) => e.action === 'settings.validation_strictness');
+    expect(row).toBeTruthy();
+    expect(row.entityType).toBe('app_setting');
+    expect(row.entityId).toBe('validation.strictness');
+    expect(row.before).toEqual({ strictness: 'high' });
+    expect(row.after).toEqual({ strictness: 'medium' });
+  });
+
+  it('PUT /api/settings/validation with an invalid level is 400', async () => {
+    const { ctx, deps } = fakeCtx();
+    const app = appWithUser(['lab_admin'], (a) => registerSettingsRoutes(a, ctx, deps));
+    const res = await app.inject({ method: 'PUT', url: '/api/settings/validation', payload: { strictness: 'bogus' } });
+    expect(res.statusCode).toBe(400);
+    expect((ctx as any).__validationStrictnessSet).not.toHaveBeenCalled();
   });
 });

@@ -19,3 +19,15 @@ describe('fhir-store listByType', () => {
     await db.destroy();
   });
 });
+
+describe('fhir-store exists', () => {
+  it('is true for a saved resource and false for a missing one', async () => {
+    const db = await makeMigratedDb();
+    const store = createFhirStore(db);
+    await store.save({ resourceType: 'ServiceRequest', id: 'sr-1', status: 'active' } as never);
+
+    expect(await store.exists('ServiceRequest', 'sr-1')).toBe(true);
+    expect(await store.exists('ServiceRequest', 'nope')).toBe(false);
+    await db.destroy();
+  });
+});

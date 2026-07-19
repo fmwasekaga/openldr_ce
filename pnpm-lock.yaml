@@ -632,6 +632,9 @@ importers:
       '@openldr/dhis2':
         specifier: workspace:*
         version: link:../dhis2
+      '@openldr/fhir':
+        specifier: workspace:*
+        version: link:../fhir
       '@openldr/forms':
         specifier: workspace:*
         version: link:../forms

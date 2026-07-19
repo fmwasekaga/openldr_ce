@@ -62,6 +62,13 @@ export function registerErrorHandler(app: FastifyInstance<any, any, any, any>): 
     const { status, code, message } = toErrorResponse(err);
     const correlationId = String(req.id);
     const details = err instanceof AppError ? err.details : undefined;
+    // Only a whitelisted, safe-by-default field reaches the wire: the FHIR OperationOutcome, and
+    // only when present. The rest of an AppError's `details` (e.g. RP0004's zod flatten()) stays
+    // log-only — no arbitrary blob is ever exposed to clients.
+    const outcome =
+      err instanceof AppError && err.details && typeof err.details === 'object'
+        ? (err.details as { outcome?: unknown }).outcome
+        : undefined;
     // The originating library's own code (FST_ERR_VALIDATION, …) is deliberately withheld from the
     // response — it isn't catalog vocabulary — so log it. Without this, mapping a library error to
     // SY#### would DESTROY the diagnostic rather than translate it: a correlationId from a client's
@@ -79,6 +86,11 @@ export function registerErrorHandler(app: FastifyInstance<any, any, any, any>): 
     };
     if (status >= 500) req.log.error(line, message);
     else req.log.warn(line, message);
-    void reply.code(status).send({ error: message, code, correlationId });
+    void reply.code(status).send({
+      error: message,
+      code,
+      correlationId,
+      ...(outcome !== undefined ? { outcome } : {}),
+    });
   });
 }

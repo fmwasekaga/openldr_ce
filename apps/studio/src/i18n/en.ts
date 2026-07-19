@@ -268,6 +268,18 @@ export const en = {
         factoryReset: { label: 'Factory reset', description: 'Wipe the entire internal database and restore factory defaults.', button: 'Factory reset', confirm: 'factory reset', title: 'Factory reset?', warning: 'This wipes ALL internal data — forms, connectors, dashboards, workflows, terminology, users, audit — and reseeds defaults. External target data and Keycloak are not touched. This cannot be undone.' },
         done: '{{action}} complete',
         failed: '{{action}} failed: {{error}}',
+        validation: {
+          label: 'Data validation',
+          description: 'Validation strictness for incoming lab data.',
+          levels: { low: 'Low', medium: 'Medium', high: 'High' },
+          dialogTitle: 'Change validation strictness to {{level}}?',
+          warningLower: 'Lowering validation lets incomplete lab data be stored.',
+          warningRaise: 'Raising validation strictness may reject lab data that would previously have been accepted.',
+          apply: 'Apply',
+          cancel: 'Cancel',
+          saved: 'Validation strictness updated',
+          saveFailed: 'Could not update validation strictness: {{error}}',
+        },
       },
     },
     connectors: {

@@ -30,9 +30,11 @@ pub fn specimen(id: &str, subject_ref: &str, type_code: Option<&str>, collected:
     s
 }
 
-/// An organism-identification Observation (a coded value).
-pub fn observation_organism(id: &str, subject_ref: &str, specimen_ref: &str, organism_code: &str, organism_text: &str) -> Value {
-    json!({
+/// An organism-identification Observation (a coded value). `based_on` is an optional full
+/// reference (e.g. `"ServiceRequest/<id>"`) to the order this result fulfills; when `Some`, it is
+/// emitted as `basedOn`.
+pub fn observation_organism(id: &str, subject_ref: &str, specimen_ref: &str, organism_code: &str, organism_text: &str, based_on: Option<&str>) -> Value {
+    let mut o = json!({
         "resourceType": "Observation",
         "id": id,
         "status": "final",
@@ -41,12 +43,16 @@ pub fn observation_organism(id: &str, subject_ref: &str, specimen_ref: &str, org
         "subject": { "reference": subject_ref },
         "specimen": { "reference": specimen_ref },
         "valueCodeableConcept": { "coding": [{ "code": organism_code }], "text": organism_text }
-    })
+    });
+    if let Some(r) = based_on { o["basedOn"] = json!([{ "reference": r }]); }
+    o
 }
 
-/// An antibiotic-susceptibility Observation with an S/I/R interpretation code.
-pub fn observation_ast(id: &str, subject_ref: &str, specimen_ref: &str, antibiotic: &str, interpretation: &str) -> Value {
-    json!({
+/// An antibiotic-susceptibility Observation with an S/I/R interpretation code. `based_on` is an
+/// optional full reference (e.g. `"ServiceRequest/<id>"`) to the order this result fulfills; when
+/// `Some`, it is emitted as `basedOn`.
+pub fn observation_ast(id: &str, subject_ref: &str, specimen_ref: &str, antibiotic: &str, interpretation: &str, based_on: Option<&str>) -> Value {
+    let mut o = json!({
         "resourceType": "Observation",
         "id": id,
         "status": "final",
@@ -55,7 +61,9 @@ pub fn observation_ast(id: &str, subject_ref: &str, specimen_ref: &str, antibiot
         "subject": { "reference": subject_ref },
         "specimen": { "reference": specimen_ref },
         "interpretation": [{ "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation", "code": interpretation }] }]
-    })
+    });
+    if let Some(r) = based_on { o["basedOn"] = json!([{ "reference": r }]); }
+    o
 }
 
 /// A laboratory ServiceRequest (an order) referencing a subject.

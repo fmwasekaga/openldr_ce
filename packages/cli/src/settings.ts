@@ -153,6 +153,38 @@ export async function runSettingsSyncSet(field: string, value: string, opts: Jso
   }
 }
 
+const VALIDATION_LEVELS = ['low', 'medium', 'high'] as const;
+type ValidationLevel = (typeof VALIDATION_LEVELS)[number];
+
+export async function runSettingsValidationShow(opts: JsonOpt): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const strictness = await ctx.validationStrictness.get();
+    emit(opts.json, { strictness }, `strictness = ${strictness}`);
+    return 0;
+  } finally {
+    await ctx.close();
+  }
+}
+
+export async function runSettingsValidationSet(level: string, opts: JsonOpt): Promise<number> {
+  if (!VALIDATION_LEVELS.includes(level as ValidationLevel)) {
+    process.stderr.write(`level must be one of ${VALIDATION_LEVELS.join(' | ')} (got "${level}")\n`);
+    return 1;
+  }
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const before = await ctx.validationStrictness.get();
+    const after = level as ValidationLevel;
+    await ctx.validationStrictness.set(after, 'cli');
+    await ctx.audit.record({ actorType: 'system', actorName: 'cli', action: 'settings.validation_strictness', entityType: 'app_setting', entityId: 'validation.strictness', metadata: { before, after } });
+    emit(opts.json, { ok: true, strictness: after }, `set strictness = ${after}`);
+    return 0;
+  } finally {
+    await ctx.close();
+  }
+}
+
 const DANGER: Record<string, { run: (ctx: Awaited<ReturnType<typeof createAppContext>>) => Promise<void>; label: string }> = {
   'reset-dashboards': { run: dangerResetDashboards, label: 'dashboards reset to the sample' },
   'clear-audit': { run: dangerClearAudit, label: 'audit log + run history cleared' },

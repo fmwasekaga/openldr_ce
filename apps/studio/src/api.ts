@@ -451,6 +451,16 @@ export const runDangerAction = (action: DangerAction): Promise<{ ok: boolean; ac
   authFetch(`/api/settings/danger/${action}`, jbody({}, 'POST'))
     .then((r) => okJson<{ ok: boolean; action: string }>(r, `danger:${action}`));
 
+// ── FHIR validation strictness (Danger Zone) ───────────────────────────────────
+export type ValidationStrictness = 'low' | 'medium' | 'high';
+
+export const getValidation = (): Promise<{ strictness: ValidationStrictness }> =>
+  authFetch('/api/settings/validation').then((r) => okJson<{ strictness: ValidationStrictness }>(r, 'get validation strictness'));
+
+export const setValidation = (strictness: ValidationStrictness): Promise<{ strictness: ValidationStrictness }> =>
+  authFetch('/api/settings/validation', jbody({ strictness }, 'PUT'))
+    .then((r) => okJson<{ strictness: ValidationStrictness }>(r, 'set validation strictness'));
+
 export interface HealthCheckResult { status: string; latencyMs: number; detail?: string }
 export interface HealthReport { status: string; checks: Record<string, HealthCheckResult> }
 export const fetchHealth = (): Promise<HealthReport> =>

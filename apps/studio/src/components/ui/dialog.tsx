@@ -36,3 +36,11 @@ export const DialogContent = React.forwardRef<
   </DialogPortal>
 ));
 DialogContent.displayName = 'DialogContent';
+
+export function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return <div className={cn('flex flex-col gap-2', className)} {...props} />;
+}
+
+export function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return <div className={cn('mt-4 flex flex-row justify-end gap-2', className)} {...props} />;
+}
