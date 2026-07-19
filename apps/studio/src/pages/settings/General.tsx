@@ -391,20 +391,6 @@ export function General() {
         <CardHeader><CardTitle className="text-destructive">{t('settings.general.danger.title')}</CardTitle></CardHeader>
         <CardContent className="flex flex-col gap-4">
           <p className="text-sm text-muted-foreground">{t('settings.general.danger.description')}</p>
-          {(['reset-dashboards', 'clear-audit', 'factory-reset'] as const).map((action) => {
-            const k = dangerMeta[action].key;
-            return (
-              <div key={action} className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="text-sm font-medium">{t(`settings.general.danger.${k}.label`)}</div>
-                  <div className="text-xs text-muted-foreground">{t(`settings.general.danger.${k}.description`)}</div>
-                </div>
-                <Button variant="secondary" className="border-destructive/50 text-destructive" disabled={dangerBusy} onClick={() => setPending(action)}>
-                  {t(`settings.general.danger.${k}.button`)}
-                </Button>
-              </div>
-            );
-          })}
           {validationLevel && (
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -419,7 +405,7 @@ export function General() {
                   if (level !== validationLevel) setPendingValidation(level);
                 }}
               >
-                <SelectTrigger className="w-48 shrink-0" aria-label={t('settings.general.danger.validation.label')}>
+                <SelectTrigger className="w-48 shrink-0 border-destructive/50 text-destructive" aria-label={t('settings.general.danger.validation.label')}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -430,6 +416,20 @@ export function General() {
               </Select>
             </div>
           )}
+          {(['reset-dashboards', 'clear-audit', 'factory-reset'] as const).map((action) => {
+            const k = dangerMeta[action].key;
+            return (
+              <div key={action} className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-sm font-medium">{t(`settings.general.danger.${k}.label`)}</div>
+                  <div className="text-xs text-muted-foreground">{t(`settings.general.danger.${k}.description`)}</div>
+                </div>
+                <Button variant="secondary" className="border-destructive/50 text-destructive" disabled={dangerBusy} onClick={() => setPending(action)}>
+                  {t(`settings.general.danger.${k}.button`)}
+                </Button>
+              </div>
+            );
+          })}
         </CardContent>
       </Card>
       )}
