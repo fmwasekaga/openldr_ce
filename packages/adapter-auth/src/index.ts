@@ -42,7 +42,7 @@ export function createAuth(cfg: AuthConfig, deps: AuthDeps = {}): AuthPort {
   // URL when configured — the public issuer resolves to the app container itself. Token CLAIM
   // validation still uses the public issuerUrl (see verifyToken).
   const backChannelIssuer = cfg.internalIssuerUrl ?? cfg.issuerUrl;
-  const internalJwksUrl = cfg.internalJwksUrl
+  const effectiveJwksUrl = cfg.internalJwksUrl
     ?? (cfg.internalIssuerUrl ? `${cfg.internalIssuerUrl}/protocol/openid-connect/certs` : undefined);
   let keySetPromise: Promise<JWTVerifyGetKey> | undefined = deps.keySet
     ? Promise.resolve(deps.keySet)
@@ -51,8 +51,8 @@ export function createAuth(cfg: AuthConfig, deps: AuthDeps = {}): AuthPort {
   function getKeySet(): Promise<JWTVerifyGetKey> {
     if (!keySetPromise) {
       keySetPromise = (async () => {
-        if (internalJwksUrl) {
-          return jwksFactory(new URL(internalJwksUrl));
+        if (effectiveJwksUrl) {
+          return jwksFactory(new URL(effectiveJwksUrl));
         }
         const res = await fetchFn(discoveryUrl);
         if (!res.ok) throw new Error(`OIDC discovery returned ${res.status}`);
@@ -136,10 +136,10 @@ export function createAuth(cfg: AuthConfig, deps: AuthDeps = {}): AuthPort {
           // (back-channel) JWKS URL is configured, the public issuer is only reachable via the
           // gateway — NOT from inside the app container (where its host resolves to itself). Use
           // the internal JWKS URL so the probe reflects real auth readiness over the private network.
-          const probeUrl = internalJwksUrl ?? discoveryUrl;
+          const probeUrl = effectiveJwksUrl ?? discoveryUrl;
           const res = await fetchFn(probeUrl, { signal: controller.signal });
-          if (!res.ok) throw new Error(`OIDC ${internalJwksUrl ? 'JWKS' : 'discovery'} returned ${res.status}`);
-          return internalJwksUrl ? 'OIDC JWKS reachable (internal)' : 'OIDC issuer reachable';
+          if (!res.ok) throw new Error(`OIDC ${effectiveJwksUrl ? 'JWKS' : 'discovery'} returned ${res.status}`);
+          return effectiveJwksUrl ? 'OIDC JWKS reachable (internal)' : 'OIDC issuer reachable';
         } finally {
           clearTimeout(timer);
         }

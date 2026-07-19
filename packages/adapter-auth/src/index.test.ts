@@ -269,6 +269,18 @@ describe('internal issuer back-channel', () => {
     const claims = await auth.verifyToken(token);
     expect(claims.sub).toBe('user-123');
   });
+
+  it('prefers an explicit internalJwksUrl over one derived from internalIssuerUrl', async () => {
+    const fetchFn = vi.fn(async () => ({ ok: true, status: 200 }) as Response);
+    const auth = createAuth({
+      issuerUrl: 'https://public/realms/openldr',
+      internalIssuerUrl: 'http://kc:8080/realms/openldr',
+      internalJwksUrl: 'http://explicit:9000/realms/openldr/protocol/openid-connect/certs',
+    }, { fetchFn });
+    const r = await auth.healthCheck();
+    expect(r.status).toBe('up');
+    expect(fetchFn).toHaveBeenCalledWith('http://explicit:9000/realms/openldr/protocol/openid-connect/certs', expect.anything());
+  });
 });
 
 function dirMock() {
