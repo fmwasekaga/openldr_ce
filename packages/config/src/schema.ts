@@ -68,6 +68,10 @@ export const ConfigSchema = z
     // docker-network URL instead of via discovery on the public issuer (which may sit behind
     // the gateway with a self-signed cert). Issuer CLAIM validation still uses OIDC_ISSUER_URL.
     OIDC_INTERNAL_JWKS_URL: z.string().url().optional(),
+    // Internal (back-channel) Keycloak realm base URL, e.g. http://keycloak:8080/auth/realms/openldr.
+    // When set, server-side token/admin REST/JWKS calls use it instead of the public issuer (which,
+    // inside a container, resolves to the app itself). Issuer CLAIM validation still uses OIDC_ISSUER_URL.
+    OIDC_INTERNAL_ISSUER_URL: z.string().url().optional(),
     KEYCLOAK_ADMIN_CLIENT_ID: z.string().min(1).optional(),
     KEYCLOAK_ADMIN_CLIENT_SECRET: z.string().min(1).optional(),
 

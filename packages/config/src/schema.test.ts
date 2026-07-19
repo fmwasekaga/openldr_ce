@@ -96,4 +96,10 @@ describe('auth config', () => {
     const cfg = ConfigSchema.parse({ ...base });
     expect(cfg.KEYCLOAK_ADMIN_CLIENT_ID).toBeUndefined();
   });
+  it('accepts OIDC_INTERNAL_ISSUER_URL and defaults it to undefined', () => {
+    const withVal = ConfigSchema.parse({ ...base, OIDC_INTERNAL_ISSUER_URL: 'http://keycloak:8080/auth/realms/openldr' });
+    expect(withVal.OIDC_INTERNAL_ISSUER_URL).toBe('http://keycloak:8080/auth/realms/openldr');
+    const without = ConfigSchema.parse({ ...base });
+    expect(without.OIDC_INTERNAL_ISSUER_URL).toBeUndefined();
+  });
 });
