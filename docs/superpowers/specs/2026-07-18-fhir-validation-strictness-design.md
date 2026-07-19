@@ -195,11 +195,25 @@ POST /api/sync/push → applyRemote  (NO validateBatch — exempt)
 
 - **Default `high` changes front-door behaviour.** New ingests of a lab `Observation`/`LAB`
   `DiagnosticReport` without a resolvable `ServiceRequest` will now be **rejected**. This is the
-  intended effect, but the implementation plan MUST verify the repo's own fixtures still pass at
-  high — especially the WHONET sample ingest (`samples/whonet-sample.sqlite` via
-  `pnpm docs:seed` / `e2e:seed`) and any e2e/docs-screenshot data. If those produce lab results
-  without linked `ServiceRequest`s, either the fixtures are completed (add the orders) or the
-  seed/e2e harness sets `validation.strictness` explicitly. Resolve before flipping the default.
+  intended effect, but it breaks the repo's own WHONET sample ingest at default-high, so we
+  **complete the fixtures** (the chosen approach — *not* lowering the seed's level).
+
+  **Measured:** the WHONET plugin (`wasm/whonet-sqlite/src/mapping.rs` `map_isolates`) already
+  tags its organism/AST Observations `category=laboratory` (via the SDK helpers
+  `wasm/openldr-plugin-sdk/src/fhir.rs` `observation_organism`/`observation_ast`) but emits **no
+  `ServiceRequest`** and **no `basedOn`** — exactly the case rule #1 rejects. So the fixture fix is
+  a **converter change**, done in the plan:
+  1. `map_isolates` emits one lab **`ServiceRequest`** (order) per isolate, referencing the patient
+     (reuse the existing unused `fhir::service_request` helper); id e.g. `whonet-sr-<patient>-<n>`.
+  2. The SDK `observation_organism`/`observation_ast` helpers gain a `based_on` arg (or `map_isolates`
+     stamps `basedOn`) so every lab Observation references that `ServiceRequest`. (The HL7v2 plugin
+     already emits `ServiceRequest`+`DiagnosticReport`, so this only brings WHONET in line.)
+  3. Rebuild the plugin wasm (`pnpm build:plugins`) and re-verify `pnpm docs:seed` / `e2e:seed`
+     ingest 0 rejects at high.
+
+  The plan MUST also confirm the bootstrap `seed.ts` sample resources and any other front-door
+  fixture pass at high (the two-instance sync harness already links Observation→ServiceRequest, and
+  is on the exempt sync path regardless).
 - **Category coverage.** A lab result that omits `category` entirely won't match `appliesTo` and
   escapes rule #1. Documented as a known limitation of rule #1; a future rule could infer lab-ness
   from `code` (LOINC) if needed.
