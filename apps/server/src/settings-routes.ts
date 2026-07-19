@@ -314,6 +314,29 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
     return { key, value: after };
   });
 
+  // FHIR validation strictness (Task 9) — admin-tunable gate level read by createValidationStrictness.
+  // Admin-only + audited, same shape as the flags/numbers routes above.
+  app.get('/api/settings/validation', { preHandler: requireRole('lab_admin') }, async () =>
+    ({ strictness: await ctx.validationStrictness.get() }),
+  );
+
+  app.put('/api/settings/validation', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+    const body = req.body as { strictness?: string };
+    const levels = ['low', 'medium', 'high'];
+    if (!body?.strictness || !levels.includes(body.strictness)) {
+      reply.code(400);
+      return { error: 'invalid strictness' };
+    }
+    const before = await ctx.validationStrictness.get();
+    const level = body.strictness as 'low' | 'medium' | 'high';
+    await ctx.validationStrictness.set(level, req.user?.id ?? null);
+    await recordAudit(ctx, req, {
+      action: 'settings.validation_strictness', entityType: 'setting', entityId: 'validation.strictness',
+      before: { strictness: before }, after: { strictness: level },
+    });
+    return { strictness: level };
+  });
+
   const DANGER: Record<string, keyof DangerDeps> = {
     'reset-dashboards': 'resetDashboards',
     'factory-reset': 'factoryReset',
