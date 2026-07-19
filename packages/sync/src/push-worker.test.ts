@@ -501,3 +501,120 @@ describe('createSyncPushRunner', () => {
     expect(r.applied).toBe(0);
   });
 });
+
+// A fake SyncActivityRecorder that captures attempt() calls and every record(entry) verbatim, so tests
+// can assert exactly what the runner emitted without a real store.
+function fakeActivity() {
+  const records: { event: string; records?: number; error?: string; metadata?: Record<string, unknown> }[] = [];
+  const attempts = { n: 0 };
+  return {
+    recorder: {
+      attempt: () => {
+        attempts.n++;
+      },
+      record: (e: { event: string; records?: number; error?: string; metadata?: Record<string, unknown> }) => {
+        records.push(e);
+      },
+    },
+    records,
+    attempts,
+  };
+}
+
+describe('push runner activity emission', () => {
+  it('calls attempt() exactly once per cycle, and emits no record on an idle (pure-gap) cycle', async () => {
+    const { recorder, records, attempts } = fakeActivity();
+    const deps: PushDeps = {
+      internalDb: fakeDb([{ seq: 7, version: 1, site_id: 's' }]),
+      // seq6 is a freshly-observed in-flight gap (x0 = xmax 100 > boundary 60) → blocks; seq7 sits above it
+      fetchSafeRows: fetchQueue([{ rows: [row(7, 50, 'p7')], boundary: 60, xmax: 100 }]),
+      fetchContent: okContent,
+      postPush: async () => {
+        throw new Error('must not post');
+      },
+      getToken: async () => 't',
+      readCursor: async () => 5,
+      advanceCursor: async () => {},
+      logger: fakeLogger(),
+      activity: recorder,
+    };
+
+    const result = await createSyncPushRunner(deps).runCycle();
+    expect(result.outcome).toBe('drained');
+    expect(attempts.n).toBe(1);
+    expect(records).toHaveLength(0);
+  });
+
+  it('emits exactly one sanitized "failed" entry when postPush throws (no raw token in the entry)', async () => {
+    const { recorder, records, attempts } = fakeActivity();
+    const deps: PushDeps = {
+      internalDb: fakeDb([{ seq: 1, version: 1, site_id: 's' }]),
+      fetchSafeRows: fetchQueue([{ rows: [row(1, 10, 'p1')], boundary: 100, xmax: 200 }]),
+      fetchContent: okContent,
+      postPush: async () => {
+        throw new Error('boom Bearer secrettoken123');
+      },
+      getToken: async () => 't',
+      readCursor: async () => 0,
+      advanceCursor: async () => {},
+      logger: fakeLogger(),
+      activity: recorder,
+    };
+
+    const result = await createSyncPushRunner(deps).runCycle();
+    expect(result.outcome).toBe('failed');
+    expect(attempts.n).toBe(1);
+    expect(records).toHaveLength(1);
+    expect(records[0].event).toBe('failed');
+    expect(records[0].error).toBeDefined();
+    expect(records[0].error).not.toContain('secrettoken123');
+  });
+
+  it('emits a "synced" entry carrying resp.applied on a successful push', async () => {
+    const { recorder, records } = fakeActivity();
+    const deps: PushDeps = {
+      internalDb: fakeDb([
+        { seq: 1, version: 5, site_id: 'lab-a' },
+        { seq: 2, version: 6, site_id: 'lab-a' },
+      ]),
+      fetchSafeRows: fetchQueue([{ rows: [row(1, 10, 'p1', 'upsert'), row(2, 10, 'p2', 'upsert')], boundary: 100, xmax: 200 }]),
+      fetchContent: okContent,
+      postPush: async () => ({ ackSeq: 2, applied: 2, skipped: 0, rejects: [] }),
+      getToken: async () => 'tok-123',
+      readCursor: async () => 0,
+      advanceCursor: async () => {},
+      logger: fakeLogger(),
+      activity: recorder,
+    };
+
+    const result = await createSyncPushRunner(deps).runCycle();
+    expect(result.outcome).toBe('progressed');
+    const synced = records.filter((r) => r.event === 'synced');
+    expect(synced).toHaveLength(1);
+    expect(synced[0].records).toBe(2);
+  });
+
+  it('emits one "quarantined" entry per rejected record', async () => {
+    const { recorder, records } = fakeActivity();
+    const deps: PushDeps = {
+      internalDb: fakeDb([
+        { seq: 1, version: 1, site_id: 's' },
+        { seq: 2, version: 6, site_id: 's' },
+      ]),
+      fetchSafeRows: fetchQueue([{ rows: [row(1, 10, 'p1'), row(2, 10, 'p2')], boundary: 100, xmax: 200 }]),
+      fetchContent: okContent,
+      postPush: async () => ({ ackSeq: 2, applied: 1, skipped: 0, rejects: [{ id: 'p2', version: 6, seq: 2, reason: 'schema-invalid' }] }),
+      getToken: async () => 't',
+      readCursor: async () => 0,
+      advanceCursor: async () => {},
+      logger: fakeLogger(),
+      activity: recorder,
+    };
+
+    const result = await createSyncPushRunner(deps).runCycle();
+    expect(result.outcome).toBe('progressed');
+    const quarantined = records.filter((r) => r.event === 'quarantined');
+    expect(quarantined).toHaveLength(1);
+    expect(quarantined[0].metadata).toMatchObject({ seq: 2, entityId: 'p2', version: 6, reason: 'schema-invalid' });
+  });
+});
