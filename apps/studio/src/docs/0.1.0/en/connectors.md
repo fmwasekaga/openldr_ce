@@ -34,11 +34,11 @@ So the order is always: **create the connector first**, then open the node and p
 - Know the address, port, database/mailbox, and credentials of the system you are connecting to.
 - For email, have the sending account's SMTP details (or an App Password — see below).
 
-## Database connectors (Postgres, MySQL, Microsoft SQL)
+## Database connectors (Postgres, MySQL / MariaDB, Microsoft SQL)
 
-Use these for the SQL nodes — source extracts, report queries, and any node that reads or writes an external database.
+Use these for the SQL nodes — source extracts, report queries, and any node that reads or writes an external database. In the type dropdown the MySQL option is labelled **MySQL / MariaDB** and serves both engines. (For non-SQL stores, **MongoDB** and **Redis** connectors are also available — see [Other connector types](#other-connector-types).)
 
-**Postgres / MySQL fields**
+**Postgres / MySQL / MariaDB fields**
 
 | Field | Notes |
 | --- | --- |
@@ -118,7 +118,9 @@ If the App Passwords page says it is unavailable, 2‑Step Verification is not f
 ## Other connector types
 
 - **IMAP Email** — for the *Email Trigger* node, which starts a workflow when new mail arrives (host, port, user, password, TLS).
-- **SFTP / FTP** — for file-transfer nodes (host, port, user, password).
+- **SFTP** — for file-transfer nodes (host, port, user, password).
+- **MongoDB** — for reading or writing a MongoDB collection from a workflow node (connection URI and database).
+- **Redis** — for a Redis key/value store (host, port, password, database index).
 - **Plugin destinations** — connectors powered by an installed plugin (e.g. a DHIS2 sink). Select the plugin, then complete its configuration fields.
 
 ## Steps (create any connector)

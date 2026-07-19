@@ -22,6 +22,14 @@ export async function preparePage(page: Page, theme: 'dark' | 'light'): Promise<
       localStorage.setItem('openldr-theme', selectedTheme);
       localStorage.setItem('openldr-locale', 'en');
       localStorage.setItem('i18nextLng', 'en');
+      // Seed the AMR report's last-used parameters (Reports hydrates them via
+      // `loadLastParams()` on select) so its REQUIRED date range is pre-filled and the
+      // Run button is enabled for the reports-run-result shot. Keyed by the docs fixture
+      // report id; other shots ignore it.
+      localStorage.setItem(
+        'reports.lastParams',
+        JSON.stringify({ 'r-amr-resistance': { from: '2000-01-01', to: '2100-01-01' } }),
+      );
     } catch {
       // Ignore storage failures in synthetic pages.
     }
@@ -41,6 +49,8 @@ export async function runCaptureSteps(page: Page, steps: CaptureStep[]): Promise
         await page.getByLabel(step.label).fill(step.value, { timeout: 5_000 });
       } else if (step.action === 'fillTestId') {
         await page.getByTestId(step.testId).fill(step.value, { timeout: 5_000 });
+      } else if (step.action === 'fillPlaceholder') {
+        await page.getByPlaceholder(step.placeholder).first().fill(step.value, { timeout: 5_000 });
       } else if (step.action === 'selectText') {
         await page.getByText(step.text, { exact: false }).first().click({ timeout: 5_000 });
       } else if (step.action === 'waitForText') {

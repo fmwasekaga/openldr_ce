@@ -20,7 +20,7 @@ You can search the user list, create a user, edit profile fields, assign roles, 
 2. Search by username, display name, or email.
 3. Select the create action to add a new user when needed.
 4. Enter profile fields such as username, display name, and email.
-5. Open **Actions for docs.user** and choose **Edit** to update an existing account.
+5. On the row for the account you want to change, open its **Actions** menu (the **⋯** button, labelled *Actions for &lt;username&gt;*) and choose **Edit**.
 6. Assign only the roles required for the user’s tasks.
 7. Enable or disable the account state.
 8. Use reset actions only when the UI shows they are available for the account type.

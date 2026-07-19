@@ -36,7 +36,7 @@ admin/danger actions are also available in the Studio UI under Settings.
 | `plugin` | Manage WASM ingest plugins: `install`, `list`, `test`, `run`, `remove`. |
 | `report` | `list` and `run` analytics reports; `glass-export`. |
 | `audit` | Read the append-only audit log. |
-| `user` | Manage local users: `list`, `show`, `create`, `set-role`, `activate`, `deactivate`, `export`. |
+| `user` | Manage local users: `list`, `show`, `create`, `set-role`, `activate`, `deactivate`. (`export` is a top-level command — a full dataset export — not a `user` subcommand.) |
 | `market` | Marketplace artifacts: `verify`, `install`, `update`, `list`, `rollback`, `enable`, `disable`, `remove`. |
 | `artifact` | Author artifacts: `keygen`, `new`, `build`, `pack`, `sign`, `test`, `publish`. |
 | `sync` | Lab⇄central sync: `status`, `now`, and central-side `enroll`, `list`, `rotate`, `revoke`. |
@@ -71,7 +71,7 @@ pnpm openldr ingest data.sqlite --plugin whonet-sqlite
 Create a local user and assign roles:
 
 ```
-pnpm openldr user create --email alice@example.org --name "Alice"
+pnpm openldr user create --username alice --name "Alice" --email alice@example.org --role lab_technician
 pnpm openldr user set-role <id> lab_admin
 ```
 

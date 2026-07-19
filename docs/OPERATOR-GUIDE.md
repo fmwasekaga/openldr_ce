@@ -62,7 +62,7 @@ pnpm openldr target-store test --json
 Troubleshooting:
 
 - If SQL widgets are not visible, enable the `dashboard.raw_sql` feature flag in **Settings → General → Feature Flags** (admin-only) and ensure `TARGET_STORE_ADAPTER=pg`.
-- If widgets time out or return too much data, tune `DASHBOARD_SQL_TIMEOUT_MS` and `DASHBOARD_SQL_ROW_CAP`.
+- If widgets time out or return too much data, tune the `dashboard.sql_timeout_ms` and `dashboard.sql_row_cap` **number settings** under **Settings → General → Limits & tuning** (or `pnpm openldr settings numbers set …`). These are no longer environment variables.
 
 ## Reports
 
@@ -73,7 +73,7 @@ Worked example:
 ```bash
 pnpm openldr report list --json
 pnpm openldr report run amr-resistance --param from=2026-01-01 --param to=2026-03-31 --json
-pnpm openldr report glass-export --from 2026-01-01 --to 2026-03-31 --out glass-ris.csv
+pnpm openldr report glass-export --country ZMB --year 2026 --from 2026-01-01 --to 2026-03-31 --out glass-ris.csv
 ```
 
 Troubleshooting:
@@ -83,13 +83,13 @@ Troubleshooting:
 
 ## Workflows
 
-Use Workflow Builder for analyst-authored data jobs: triggers, SQL/FHIR/HTTP sources, JavaScript code, filtering, transforms, dataset materialization, file export, DHIS2 push, schedules, webhooks, ingest triggers, and run history.
+Use Workflow Builder for analyst-authored data jobs: triggers, SQL/FHIR/HTTP sources, JavaScript code, filtering, transforms, dataset materialization, file export, plugin sink pushes (e.g. the DHIS2 plugin, when installed), schedules, webhooks, ingest triggers, and run history.
 
 Key configuration:
 
-- `WORKFLOW_CODE_TIMEOUT_MS` and `WORKFLOW_CODE_MEMORY_MB` protect Code nodes.
+- `WORKFLOW_CODE_ENABLED` is the master switch for Code nodes (**default off, fail-safe** — `vm` is not a sandbox); `WORKFLOW_CODE_TIMEOUT_MS` and `WORKFLOW_CODE_MEMORY_MB` bound them once enabled.
 - `WORKFLOW_HTTP_ALLOWLIST` controls HTTP Request egress.
-- `WORKFLOW_DATASET_PUBLISH_ENABLED=true` publishes materialized datasets as `wf_ds_<name>` tables on PostgreSQL target stores.
+- Publishing materialized datasets as `wf_ds_<name>` tables (PostgreSQL target) is the `workflow.dataset_publish_enabled` **feature flag** (Settings → General), not an env var.
 
 Worked example:
 
@@ -150,24 +150,51 @@ Troubleshooting:
 - Published forms are runnable; draft/disabled/archived forms are not normal capture targets.
 - Use `GET /api/forms/:id/questionnaire` or the UI Export action for Questionnaire JSON.
 
-## DHIS2
+## Ingesting & pushing data
 
-Use DHIS2 for aggregate `dataValueSet` and tracker event pushes. Set `REPORTING_TARGET_ADAPTER=dhis2` and `SECRETS_ENCRYPTION_KEY` (`openssl rand -base64 32`), then create a DHIS2 connector under **Settings ▸ Connectors** (base URL + credentials, encrypted at rest) and select it from each mapping.
+"How do I push data into CE?" has three answers depending on what you have. **There is no generic `POST /fhir` or `POST /api/ingest` endpoint** — do not try to POST a FHIR Bundle to an arbitrary URL and expect it to persist.
 
-Worked example:
+### 1. From a file — `openldr ingest` (the reliable path)
+
+`openldr ingest <file>` runs a file through the pipeline (accept → convert → drain into the FHIR store). The **converter** decides how the file is parsed:
+
+- `--converter fhir-bundle` (default) — the file is a FHIR **transaction/collection Bundle** (a JSON object with `resourceType: "Bundle"` and an `entry` array). A bare JSON array is **not** a Bundle and will not persist clinical rows.
+- `--plugin <id>` — parse with an installed WASM converter plugin, e.g. `whonet-sqlite` (WHONET AMR databases), `hl7v2` (HL7 v2 messages), or `tabular` (CSV/TSV with a `--config` column mapping). Install the plugin first with `openldr plugin install`.
 
 ```bash
-pnpm openldr dhis2 orgunit import orgunits.json --json
-pnpm openldr dhis2 map import mapping.json --json
-pnpm openldr dhis2 validate mapping-1 --json
-pnpm openldr dhis2 push mapping-1 --period 2026Q1 --dry-run --json
+# A FHIR transaction Bundle
+pnpm openldr ingest bundle.json --json
+
+# A WHONET SQLite export via a converter plugin
+pnpm openldr plugin install reference-plugins/whonet-sqlite/plugin.wasm
+pnpm openldr ingest samples/whonet-sample.sqlite --plugin whonet-sqlite --json
+
+# Inspect / retry the batch it created
+pnpm openldr pipeline status --json
+pnpm openldr pipeline retry <batchId>
 ```
+
+A successful run prints `batch <id>: done (<n> resources)`. Zero resources means the converter did not recognise the input — check the file shape against the converter, not the pipeline.
+
+### 2. Over HTTP — a workflow webhook
+
+The only inbound HTTP data path is a **workflow webhook**: `POST /api/workflows/hooks/<path>`, gated by a per-webhook secret. The request body is delivered to the workflow as its input; **what gets persisted is whatever the workflow does with it**, not a fixed FHIR contract. Build the workflow first (Workflow Builder → a Webhook trigger → validate/transform → a Persist/Store node), then have the external system POST to that path with its secret. See [Workflows](#workflows). This is deliberately flexible — the same webhook can accept a form submission, a vendor JSON payload, or a Bundle you then normalise inside the workflow.
+
+An **ingest trigger** is the complement: a workflow with an `ingest` trigger runs *after* `openldr ingest` (or any pipeline batch) completes, so you can post-process each batch (notify, forward to a sink, re-report).
+
+### 3. Lab → central — sync push (not for third parties)
+
+`POST /api/sync/push` exists, but it is **machine-to-machine change-log replication** from an enrolled lab up to a central server, authenticated by client-credentials with a `site_id` claim. It is not a general ingest endpoint — a third-party system cannot use it. See [Distributed sync](#distributed-sync).
 
 Troubleshooting:
 
-- Use `--dry-run` before live pushes.
-- `DHIS2_SYNC_ENABLED=false` disables scheduled/event-driven sync.
-- Use `pnpm dhis2:seed` only for local/demo DHIS2 data setup.
+- `batch … done (0 resources)`: the converter did not parse the input (wrong `--converter`/`--plugin`, or a bare array where a Bundle was expected).
+- A webhook POST returns `401`/`404`: the per-webhook secret is wrong/missing, or the workflow (and thus its webhook path) is not saved/enabled — a webhook only exists once its workflow is saved.
+- Data ingested but not visible in reports: the analytics warehouse projection runs off the FHIR change log; confirm `TARGET_STORE_ADAPTER`/target DB and that the projection worker is running.
+
+## DHIS2 (plugin)
+
+DHIS2 is **no longer a core feature** — it ships as a removable `dhis2-sink` plugin installed from **Settings ▸ Marketplace**. There are no `REPORTING_TARGET_ADAPTER`/`DHIS2_SYNC_ENABLED` env vars and no `openldr dhis2 …` CLI. Once installed, configure it from the plugin's own screens: set `SECRETS_ENCRYPTION_KEY` (`openssl rand -base64 32`), create a DHIS2 connector under **Settings ▸ Connectors** (base URL + credentials, encrypted at rest), and drive aggregate `dataValueSet` / tracker pushes from the plugin UI or a workflow sink node (use its dry-run before a live push). See the plugin's bundled documentation for details.
 
 ## Users And Audit
 
@@ -220,4 +247,4 @@ Troubleshooting:
 
 ## i18n
 
-The app ships English, French, and Portuguese UI/doc bundles. In-app docs currently have a fixed page order: overview, getting-started, dashboard, reports, ingestion, terminology, DHIS2, external database, and CLI. Adding new in-app doc pages requires a source-code registry change, so broader monorepo docs live under `docs/**`.
+The app ships English, French, and Portuguese UI bundles. The in-app manual (`apps/studio/src/docs`) is grouped into Start here, Daily work, Data and design, Administration, and More — currently: Start Here, Dashboard, Reports, Workflows, Scheduled reports, Custom Queries, Report Designer, Forms, Terminology, Users and Roles, Audit, Settings, Distributed Sync, Connectors, Marketplace, Environment Variables, and Deployment & Developer Docs. French/Portuguese in-app guides fall back to English until authored. Adding an in-app page requires a source-code registry change (`apps/studio/src/docs/registry.ts`), so operator/API/deployment reference lives here under `docs/**` and on the public website.

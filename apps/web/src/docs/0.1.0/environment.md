@@ -45,13 +45,15 @@ redirects. The [installer](/docs/install) sets these from `--server-name` /
 
 ## Database
 
-OpenLDR uses two Postgres databases: an internal application database and a target
-(analytics) warehouse. Both are provided as connection URLs.
+OpenLDR always uses an internal Postgres application database. The **target (analytics)
+warehouse** is engine-swappable — Postgres (default), SQL Server, or MySQL/MariaDB — via
+`TARGET_STORE_ADAPTER` (see [Adapters](#adapters)). `TARGET_DATABASE_URL` applies to the
+Postgres target; SQL Server and MySQL use their own `MSSQL_*` / `MYSQL_*` variables below.
 
 | Variable | Purpose |
 | --- | --- |
-| `INTERNAL_DATABASE_URL` | Application database (users, forms, workflows, audit). |
-| `TARGET_DATABASE_URL` | Analytics warehouse the pipelines write to. |
+| `INTERNAL_DATABASE_URL` | Application database (users, forms, workflows, audit) — always Postgres. |
+| `TARGET_DATABASE_URL` | Analytics warehouse the pipelines write to (when `TARGET_STORE_ADAPTER=pg`). |
 | `POSTGRES_PASSWORD` | Password for the bundled Postgres container. |
 
 ## Adapters
@@ -64,8 +66,7 @@ bundled containers; change them only when pointing at external infrastructure.
 | `AUTH_ADAPTER` | `keycloak` | Identity provider backing sign-in. |
 | `BLOB_ADAPTER` | `minio` | Object-storage backend for uploads and artifacts. |
 | `EVENTING_ADAPTER` | `pg` | Event store used by workflow triggers. |
-| `TARGET_STORE_ADAPTER` | `pg` | Analytics warehouse engine (`pg` or `mssql`). |
-| `REPORTING_TARGET_ADAPTER` | `none` | Optional external reporting target. |
+| `TARGET_STORE_ADAPTER` | `pg` | Analytics warehouse engine: `pg`, `mssql`, or `mysql`. |
 
 ## Object storage (S3 / MinIO)
 
@@ -130,18 +131,35 @@ active" banner and the server logs a warning at startup.
 
 ## SQL Server target store
 
-Set only when `TARGET_STORE_ADAPTER=mssql`. Start the SQL Server profile with
-`docker compose --profile mssql up -d`.
+Set only when `TARGET_STORE_ADAPTER=mssql`. On a deployed stack the [installer](/docs/install)
+provisions this from its `--mssql-demo` / `--mssql-*` flags; the bare `--profile mssql`
+compose profile exists only in the development compose file.
 
 | Variable | Purpose |
 | --- | --- |
 | `MSSQL_HOST` | SQL Server host. |
-| `MSSQL_PORT` | SQL Server port. |
+| `MSSQL_PORT` | SQL Server port (default `1433`). |
 | `MSSQL_DATABASE` | Target database name. |
 | `MSSQL_USER` | Login. |
 | `MSSQL_PASSWORD` | Password. |
 | `MSSQL_ENCRYPT` | `true`/`false` — encrypt the connection. |
 | `MSSQL_TRUST_SERVER_CERT` | `true`/`false` — trust a self-signed server certificate. |
+
+## MySQL / MariaDB target store
+
+Set only when `TARGET_STORE_ADAPTER=mysql`. Serves both MySQL 8.4+ and MariaDB 11.4+. On a
+deployed stack the [installer](/docs/install) provisions this from its `--mysql-demo` /
+`--mysql-*` flags.
+
+| Variable | Purpose |
+| --- | --- |
+| `MYSQL_HOST` | MySQL/MariaDB host. |
+| `MYSQL_PORT` | Server port (default `3306`). |
+| `MYSQL_DATABASE` | Target database name. |
+| `MYSQL_USER` | Login. |
+| `MYSQL_PASSWORD` | Password. |
+| `MYSQL_SSL` | `true`/`false` — connect over TLS. |
+| `MYSQL_SSL_REJECT_UNAUTHORIZED` | `true`/`false` — reject an untrusted server certificate. |
 
 ## Marketplace
 

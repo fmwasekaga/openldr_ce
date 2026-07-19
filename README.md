@@ -142,8 +142,10 @@ For the complete source-backed CLI, configuration, HTTP API, and operator refere
 ```
 openldr/
 ├── apps/
-│   ├── server/         # Fastify API + built-SPA host
-│   └── web/            # React + Vite SPA
+│   ├── server/         # Fastify API; also hosts the built Studio SPA under /studio
+│   ├── studio/         # React + Vite SPA — the signed-in application
+│   └── web/            # React + Vite landing site + public documentation
+├── deploy/             # nginx single-port gateway, TLS, and installer assets
 ├── e2e/                # Playwright smoke, capture, and docs screenshots
 ├── packages/
 │   ├── audit/          # append-only audit store
@@ -152,11 +154,14 @@ openldr/
 │   ├── config/         # environment schema
 │   ├── dashboards/     # dashboard models, compile, SQL runner
 │   ├── db/             # internal/external schemas and migrations
-│   ├── dhis2/          # DHIS2 aggregate/tracker domain logic
+│   ├── dhis2/          # DHIS2 aggregate/tracker domain logic (surfaced via the plugin)
 │   ├── forms/          # FHIR Questionnaire / SDC form engine
+│   ├── ingest/         # ingest pipeline (accept, convert, drain)
 │   ├── marketplace/    # signed artifact bundle lifecycle
 │   ├── plugins/        # Extism/WASM runtime
+│   ├── ports/          # port interfaces for adapters
 │   ├── reporting/      # AMR/GLASS report catalog
+│   ├── sync/           # distributed lab⇄central sync workers
 │   ├── terminology/    # terminology and ontology services
 │   ├── users/          # local user profiles
 │   └── workflows/      # workflow builder runtime and stores

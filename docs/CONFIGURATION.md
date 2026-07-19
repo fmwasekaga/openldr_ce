@@ -37,7 +37,7 @@ Keycloak is proxied by nginx at `/auth`. The application accesses it two ways:
 | `PORT` | positive integer | `3000` | HTTP server port. |
 | `LOG_LEVEL` | string | `info` | Logger verbosity. |
 | `INTERNAL_DATABASE_URL` | URL | required | Operational PostgreSQL database for users, audit, eventing, plugins, workflows, forms, marketplace, and schedules. |
-| `TARGET_STORE_ADAPTER` | `pg\|mssql` | `pg` | Analytics warehouse adapter. |
+| `TARGET_STORE_ADAPTER` | `pg\|mssql\|mysql` | `pg` | Analytics warehouse adapter. |
 | `TARGET_DATABASE_URL` | URL | required when `TARGET_STORE_ADAPTER=pg` | PostgreSQL analytics warehouse. |
 | `WEB_DIST_DIR` | path | `apps/studio/dist` relative to built server | Overrides where the server serves the built SPA from. This is read directly by `apps/server/src/app.ts`. |
 
@@ -111,6 +111,20 @@ Required only when `TARGET_STORE_ADAPTER=mssql`.
 | `MSSQL_ENCRYPT` | boolean string | `false` | Enables encrypted SQL Server connection. |
 | `MSSQL_TRUST_SERVER_CERT` | boolean string | `true` | Trusts self-signed SQL Server certificates. |
 
+## MySQL / MariaDB Target Store
+
+Required only when `TARGET_STORE_ADAPTER=mysql`. Serves both MySQL 8.4+ and MariaDB 11.4+.
+
+| Variable | Type | Default | Effect |
+|---|---:|---:|---|
+| `MYSQL_HOST` | string | required for MySQL | MySQL/MariaDB host. |
+| `MYSQL_PORT` | positive integer | `3306` | Server port. |
+| `MYSQL_DATABASE` | string | required for MySQL | Database name. |
+| `MYSQL_USER` | string | required for MySQL | Login user. |
+| `MYSQL_PASSWORD` | string | required for MySQL | Login password. |
+| `MYSQL_SSL` | boolean string | `false` | Enables a TLS connection to the server. |
+| `MYSQL_SSL_REJECT_UNAUTHORIZED` | boolean string | `false` | When true, rejects a server certificate that does not validate against the trust store. |
+
 ## Connectors (DHIS2 & external targets)
 
 DHIS2 ships as a removable `dhis2-sink` plugin (Settings ▸ Marketplace). Its connection,
@@ -123,12 +137,7 @@ there are no DHIS2 env vars. Connector credentials are stored encrypted in the d
 
 ## Dashboards
 
-Dashboard raw SQL is toggled at runtime in **Settings → General → Feature Flags** (admin-only, default off).
-
-| Variable | Type | Default | Effect |
-|---|---:|---:|---|
-| `DASHBOARD_SQL_TIMEOUT_MS` | positive integer | `5000` | Statement timeout for raw dashboard SQL. |
-| `DASHBOARD_SQL_ROW_CAP` | positive integer | `10000` | Row cap for raw dashboard SQL. |
+Dashboard raw SQL is toggled at runtime in **Settings → General → Feature Flags** (`dashboard.raw_sql`, admin-only, default off). Its **statement timeout** and **row cap** are no longer environment variables — they are **number settings** under **Settings → General → Limits & tuning** (`dashboard.sql_timeout_ms`, `dashboard.sql_row_cap`), also settable with `openldr settings numbers set`.
 
 ## Workflows
 
@@ -138,7 +147,34 @@ Dashboard raw SQL is toggled at runtime in **Settings → General → Feature Fl
 | `WORKFLOW_CODE_TIMEOUT_MS` | positive integer | `5000` | Code node timeout. |
 | `WORKFLOW_CODE_MEMORY_MB` | positive integer | `128` | Code node worker memory cap. |
 | `WORKFLOW_HTTP_ALLOWLIST` | comma-separated hostnames | empty | Allowed hosts for Workflow HTTP Request nodes. Empty means no hosts are reachable. |
-| `WORKFLOW_DATASET_PUBLISH_ENABLED` | boolean string | `false` | When true and the target store is PostgreSQL, materialized workflow datasets are also published as `wf_ds_<name>` tables with one `data jsonb` column. |
+| `WORKFLOW_FILE_MAX_BYTES` | positive integer | `52428800` | Max byte size of a file uploaded to a workflow run (upload route + webhook body). |
+| `WORKFLOW_LOOP_MAX_ITEMS` | positive integer | `100000` | Max accumulated output items a single loop node may emit. |
+| `WORKFLOW_FILE_ACCESS_ENABLED` | boolean string | `false` | Master switch for the read/write-file node's host filesystem access (privilege risk → off by default). |
+| `WORKFLOW_FILE_ACCESS_ROOT` | path | empty | The single sandbox root all host file operations are confined to (empty = unset). |
+| `WORKFLOW_EMAIL_POLL_MIN_SECONDS` | positive integer | `30` | Floor for an email-trigger's poll interval, in seconds. |
+| `WORKFLOW_EMAIL_MAX_PER_POLL` | positive integer | `50` | Max unseen messages processed per email-trigger poll. |
+
+> `workflow.dataset_publish_enabled` (publish materialized datasets as real target tables) and `workflow.listeners_enabled` (external listener triggers — Postgres `LISTEN` / IMAP poll) are now **Settings → General feature flags**, not environment variables.
+
+## Plugin Runtime
+
+| Variable | Type | Default | Effect |
+|---|---:|---:|---|
+| `PLUGIN_UI_ENABLED` | boolean string | `true` | Master switch for the plugin webview/UI surface. When false the host serves no plugin nav/UI and the broker refuses all UI calls. |
+| `PLUGIN_EGRESS_ENABLED` | boolean string | `true` | Global network-egress kill-switch for plugin host services. When false the broker refuses any egress-bearing operation regardless of a plugin's grant. |
+| `PLUGIN_DATA_MAX_DOC_BYTES` | positive integer | `8388608` | Max serialized byte size of a plugin document persisted/forwarded through the broker. |
+| `PLUGIN_CRASH_LOG_DIR` | path | `.openldr/crash` | Directory for durable plugin crash markers, drained into the audit trail on the next boot. |
+
+## Crash-loop Breaker
+
+Restart circuit-breaker: if `CRASH_LOOP_THRESHOLD` process crashes occur within `CRASH_LOOP_WINDOW_SEC`, the next boot writes one `system.crash_loop` marker and backs off (escalating sleep-then-exit) so the orchestrator's restart policy slows a hot loop.
+
+| Variable | Type | Default | Effect |
+|---|---:|---:|---|
+| `CRASH_LOOP_THRESHOLD` | positive integer | `5` | Crashes within the window before the breaker trips. |
+| `CRASH_LOOP_WINDOW_SEC` | positive integer | `60` | Rolling window, in seconds. |
+| `CRASH_LOOP_BACKOFF_MS` | positive integer | `2000` | Initial backoff sleep before exit. |
+| `CRASH_LOOP_BACKOFF_CAP_MS` | positive integer | `60000` | Maximum backoff sleep. |
 
 ## Marketplace
 
@@ -150,6 +186,7 @@ Dashboard raw SQL is toggled at runtime in **Settings → General → Feature Fl
 | `MARKETPLACE_PUBLISH_TOKEN` | string | unset | GitHub token for marketplace publish PRs. |
 | `MARKETPLACE_PUBLISH_REPO` | `owner/repo` | unset | GitHub repository for marketplace publishing. |
 | `MARKETPLACE_PUBLISH_BRANCH` | string | `main` | Target branch for publish PRs. |
+| `MARKETPLACE_LOCAL_REGISTRY_ROOT` | path | empty | When non-empty, an admin-added **local** registry's directory must resolve inside this root (path-containment). Empty preserves current behaviour. |
 
 ## PowerShell And Bash Setup
 
@@ -184,7 +221,7 @@ pnpm -C apps/studio dev
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | Config validation fails on `TARGET_DATABASE_URL` | `TARGET_STORE_ADAPTER` defaults to `pg`, which requires `TARGET_DATABASE_URL`. | Set `TARGET_DATABASE_URL` or switch to `TARGET_STORE_ADAPTER=mssql` and provide all `MSSQL_*` keys. |
-| DHIS2 push fails with a connector error | No connector configured, the connector is disabled, or `SECRETS_ENCRYPTION_KEY` is unset. | Create/enable a connector under Settings ▸ Connectors and set `SECRETS_ENCRYPTION_KEY`. |
+| A connector/sink push fails with a connector error (e.g. the DHIS2 plugin) | No connector configured, the connector is disabled, or `SECRETS_ENCRYPTION_KEY` is unset. | Create/enable a connector under Settings ▸ Connectors and set `SECRETS_ENCRYPTION_KEY`. |
 | HTTP Request workflow node cannot reach a host | `WORKFLOW_HTTP_ALLOWLIST` does not include the hostname. | Set a comma-separated allowlist, for example `WORKFLOW_HTTP_ALLOWLIST=api.example.org,dhis2.local`. |
 | Built server serves API but not SPA | `WEB_DIST_DIR` points to a missing directory. | Build web with `pnpm -C apps/studio build` and set `WEB_DIST_DIR` to that `dist` path if using a custom layout. |
 | Raw SQL dashboard tab is hidden | Feature flag `dashboard.raw_sql` is off or target store is not PostgreSQL. | Enable the flag in **Settings → General → Feature Flags** (admin-only) and ensure `TARGET_STORE_ADAPTER=pg`. |

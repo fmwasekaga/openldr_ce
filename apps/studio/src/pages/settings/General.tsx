@@ -242,7 +242,7 @@ export function General() {
 
       {/* Lab ⇄ central sync — admin only. Config form + live status + manual trigger. */}
       {isAdmin && sync && (
-      <Card>
+      <Card data-testid="sync-card">
         <CardHeader><CardTitle>{t('settings.general.sync.title')}</CardTitle></CardHeader>
         <CardContent className="flex flex-col gap-4">
           <div className="flex items-start justify-between gap-4">
