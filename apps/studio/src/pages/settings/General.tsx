@@ -256,10 +256,10 @@ export function General() {
               aria-label={t('settings.general.sync.enabled.label')}
             />
           </div>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium">{t('settings.general.sync.mode.label')}</span>
+          <div className="flex items-center justify-between gap-4">
+            <div className="text-sm font-medium">{t('settings.general.sync.mode.label')}</div>
             <Select value={sync.mode} onValueChange={(v) => setSync({ ...sync, mode: v as SyncMode })}>
-              <SelectTrigger className="w-56" aria-label={t('settings.general.sync.mode.label')}>
+              <SelectTrigger className="w-96 shrink-0" aria-label={t('settings.general.sync.mode.label')}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -268,58 +268,69 @@ export function General() {
                 ))}
               </SelectContent>
             </Select>
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium">{t('settings.general.sync.centralUrl.label')}</span>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <div className="text-sm font-medium">{t('settings.general.sync.centralUrl.label')}</div>
             <Input
+              className="w-96 shrink-0"
               value={sync.centralUrl}
               placeholder="https://central.example.org"
               onChange={(e) => setSync({ ...sync, centralUrl: e.target.value })}
+              aria-label={t('settings.general.sync.centralUrl.label')}
             />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium">{t('settings.general.sync.siteId.label')}</span>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <div className="text-sm font-medium">{t('settings.general.sync.siteId.label')}</div>
             <Input
+              className="w-96 shrink-0"
               value={sync.siteId}
               placeholder="lab-ndola-01"
               onChange={(e) => setSync({ ...sync, siteId: e.target.value })}
+              aria-label={t('settings.general.sync.siteId.label')}
             />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium">{t('settings.general.sync.oidcIssuer.label')}</span>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <div className="text-sm font-medium">{t('settings.general.sync.oidcIssuer.label')}</div>
             <Input
+              className="w-96 shrink-0"
               value={sync.oidcIssuer}
               placeholder="https://central.example.org/auth/realms/openldr"
               onChange={(e) => setSync({ ...sync, oidcIssuer: e.target.value })}
+              aria-label={t('settings.general.sync.oidcIssuer.label')}
             />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium">{t('settings.general.sync.clientId.label')}</span>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <div className="text-sm font-medium">{t('settings.general.sync.clientId.label')}</div>
             <Input
+              className="w-96 shrink-0"
               value={sync.clientId}
               placeholder="sync-lab-ndola-01"
               onChange={(e) => setSync({ ...sync, clientId: e.target.value })}
+              aria-label={t('settings.general.sync.clientId.label')}
             />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium">{t('settings.general.sync.clientSecret.label')}</span>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <div className="text-sm font-medium">{t('settings.general.sync.clientSecret.label')}</div>
             <Input
               type="password"
+              className="w-96 shrink-0"
               value={secretInput}
               placeholder={sync.clientSecretSet ? t('settings.general.sync.clientSecretSet') : ''}
               onChange={(e) => setSecretInput(e.target.value)}
+              aria-label={t('settings.general.sync.clientSecret.label')}
             />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium">{t('settings.general.sync.intervalMinutes.label')}</span>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <div className="text-sm font-medium">{t('settings.general.sync.intervalMinutes.label')}</div>
             <Input
               type="number"
               min={1}
-              className="w-32"
+              className="w-96 shrink-0"
               value={sync.intervalMinutes}
               onChange={(e) => setSync({ ...sync, intervalMinutes: Number(e.target.value) })}
+              aria-label={t('settings.general.sync.intervalMinutes.label')}
             />
-          </label>
+          </div>
           <div>
             <Button onClick={() => void saveSync()} disabled={syncSaving}>
               {t('settings.general.sync.save')}
