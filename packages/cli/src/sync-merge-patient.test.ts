@@ -2,8 +2,13 @@ import { describe, it, expect, vi } from 'vitest';
 
 const merge = vi.hoisted(() => vi.fn(async () => ({ survivorId: 'p-surv', duplicateId: 'p-dup', repointed: 2, provenanceId: 'prov-1', siteId: 'lab-a' })));
 const close = vi.hoisted(() => vi.fn(async () => {}));
+const recordAuditEvent = vi.hoisted(() => vi.fn());
 
-vi.mock('@openldr/bootstrap', () => ({ createAppContext: async () => ({ close }), mergePatients: merge }));
+vi.mock('@openldr/bootstrap', () => ({
+  createAppContext: async () => ({ close }),
+  mergePatients: merge,
+  recordAuditEvent,
+}));
 vi.mock('@openldr/config', () => ({ loadConfig: () => ({}) }));
 
 import { runSyncMergePatient } from './sync';

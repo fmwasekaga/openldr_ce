@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mockCtx = vi.hoisted(() => ({ close: vi.fn() }));
+const mockCtx = vi.hoisted(() => ({
+  close: vi.fn(),
+  sync: { status: vi.fn(), triggerNow: vi.fn() },
+  fhirStore: { amend: vi.fn() },
+}));
 const enrollSite = vi.hoisted(() => vi.fn());
 const listSites = vi.hoisted(() => vi.fn());
 const rotateSite = vi.hoisted(() => vi.fn());
@@ -9,8 +13,10 @@ const exportPushBundle = vi.hoisted(() => vi.fn());
 const importPushBundle = vi.hoisted(() => vi.fn());
 const exportPullBundle = vi.hoisted(() => vi.fn());
 const importPullBundle = vi.hoisted(() => vi.fn());
+const mergePatients = vi.hoisted(() => vi.fn());
 const unpackBundle = vi.hoisted(() => vi.fn());
 const readFile = vi.hoisted(() => vi.fn(async () => Buffer.from('bundle-bytes')));
+const mocks = vi.hoisted(() => ({ recordAuditEvent: vi.fn() }));
 
 vi.mock('node:fs/promises', () => ({ readFile }));
 
@@ -28,9 +34,21 @@ vi.mock('@openldr/bootstrap', () => ({
   importPushBundle,
   exportPullBundle,
   importPullBundle,
+  mergePatients,
+  recordAuditEvent: mocks.recordAuditEvent,
 }));
 
-import { runSyncEnroll, runSyncList, runSyncRotate, runSyncRevoke, runSyncExport, runSyncImport } from './sync';
+import {
+  runSyncEnroll,
+  runSyncList,
+  runSyncRotate,
+  runSyncRevoke,
+  runSyncExport,
+  runSyncImport,
+  runSyncAmend,
+  runSyncMergePatient,
+  runSyncNow,
+} from './sync';
 
 // A typed enrollment error mirrors the orchestrator's `.name`-tagged Error subclasses.
 function named(name: string): Error {
@@ -277,5 +295,166 @@ describe('sync export|import commands', () => {
     importPushBundle.mockRejectedValueOnce(named('SiteNotFoundError'));
     await expect(runSyncImport('/tmp/in.bundle', { json: false })).resolves.toBe(1);
     expect(stderr()).toContain('unknown or revoked site');
+  });
+});
+
+describe('sync CLI audit', () => {
+  let out: ReturnType<typeof vi.fn>;
+  let err: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    out = vi.spyOn(process.stdout, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
+    err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
+  });
+  afterEach(() => {
+    out.mockRestore();
+    err.mockRestore();
+  });
+
+  it('sync enroll records settings.sync.enroll at cli parity', async () => {
+    enrollSite.mockResolvedValueOnce({
+      clientId: 'sync-lab-1',
+      clientSecret: 'sekret',
+      siteId: 'lab-1',
+      centralUrl: 'https://c',
+      oidcIssuer: 'https://kc/realms/openldr',
+      signingPrivateKey: 'priv',
+      centralPublicKey: 'pub',
+    });
+
+    await expect(runSyncEnroll('lab-1', { centralUrl: 'https://c', json: true })).resolves.toBe(0);
+
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      mockCtx,
+      expect.objectContaining({ actorType: 'cli' }),
+      expect.objectContaining({
+        action: 'settings.sync.enroll',
+        entityType: 'sync_site',
+        entityId: 'lab-1',
+        metadata: expect.objectContaining({ clientId: 'sync-lab-1' }),
+      }),
+    );
+  });
+
+  it('sync rotate records settings.sync.rotate at cli parity', async () => {
+    rotateSite.mockResolvedValueOnce({
+      clientId: 'sync-lab-1',
+      clientSecret: 'new-sekret',
+      signingPrivateKey: 'rotpriv',
+      centralPublicKey: 'rotpub',
+    });
+
+    await expect(runSyncRotate('lab-1', { json: true })).resolves.toBe(0);
+
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      mockCtx,
+      expect.objectContaining({ actorType: 'cli' }),
+      expect.objectContaining({
+        action: 'settings.sync.rotate',
+        entityType: 'sync_site',
+        entityId: 'lab-1',
+        metadata: expect.objectContaining({ clientId: 'sync-lab-1' }),
+      }),
+    );
+  });
+
+  it('sync revoke records settings.sync.revoke at cli parity', async () => {
+    revokeSite.mockResolvedValueOnce(undefined);
+
+    await expect(runSyncRevoke('lab-1', { json: true })).resolves.toBe(0);
+
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      mockCtx,
+      expect.objectContaining({ actorType: 'cli' }),
+      expect.objectContaining({
+        action: 'settings.sync.revoke',
+        entityType: 'sync_site',
+        entityId: 'lab-1',
+        metadata: {},
+      }),
+    );
+  });
+
+  it('sync amend records settings.sync.amend at cli parity', async () => {
+    mockCtx.fhirStore.amend.mockResolvedValueOnce({ version: 3, provenanceId: 'prov-1', siteId: 'lab-1' });
+
+    await expect(
+      runSyncAmend({ resourceType: 'Observation', id: 'obs-1', status: 'corrected', activity: 'correct', json: true }),
+    ).resolves.toBe(0);
+
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      mockCtx,
+      expect.objectContaining({ actorType: 'cli' }),
+      expect.objectContaining({
+        action: 'settings.sync.amend',
+        entityType: 'Observation',
+        entityId: 'obs-1',
+        metadata: { version: 3, provenanceId: 'prov-1', siteId: 'lab-1', activity: 'correct' },
+      }),
+    );
+  });
+
+  it("sync amend defaults metadata.activity to 'amend' when --activity is omitted (HTTP-twin parity)", async () => {
+    mockCtx.fhirStore.amend.mockResolvedValueOnce({ version: 1, provenanceId: 'prov-9', siteId: 'lab-1' });
+
+    await expect(
+      runSyncAmend({ resourceType: 'Observation', id: 'obs-9', status: 'corrected', json: true }),
+    ).resolves.toBe(0);
+
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      mockCtx,
+      expect.objectContaining({ actorType: 'cli' }),
+      expect.objectContaining({
+        action: 'settings.sync.amend',
+        entityType: 'Observation',
+        entityId: 'obs-9',
+        metadata: { version: 1, provenanceId: 'prov-9', siteId: 'lab-1', activity: 'amend' },
+      }),
+    );
+  });
+
+  it('sync merge-patient records settings.sync.merge at cli parity', async () => {
+    mergePatients.mockResolvedValueOnce({ survivorId: 'pat-1', duplicateId: 'pat-2', repointed: 4, provenanceId: 'prov-2', siteId: 'lab-1' });
+
+    await expect(runSyncMergePatient({ survivor: 'pat-1', duplicate: 'pat-2', json: true })).resolves.toBe(0);
+
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      mockCtx,
+      expect.objectContaining({ actorType: 'cli' }),
+      expect.objectContaining({
+        action: 'settings.sync.merge',
+        entityType: 'Patient',
+        entityId: 'pat-2',
+        metadata: { survivorId: 'pat-1', duplicateId: 'pat-2', repointed: 4, provenanceId: 'prov-2' },
+      }),
+    );
+  });
+
+  it('sync now records settings.sync.now at cli parity when triggered', async () => {
+    mockCtx.sync.status.mockResolvedValueOnce({ enabled: true });
+
+    await expect(runSyncNow({ json: true })).resolves.toBe(0);
+
+    expect(mockCtx.sync.triggerNow).toHaveBeenCalledTimes(1);
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      mockCtx,
+      expect.objectContaining({ actorType: 'cli' }),
+      expect.objectContaining({
+        action: 'settings.sync.now',
+        entityType: 'app_settings',
+        entityId: 'sync',
+        metadata: {},
+      }),
+    );
+  });
+
+  it('sync now does NOT record an audit event when sync is disabled', async () => {
+    mockCtx.sync.status.mockResolvedValueOnce({ enabled: false });
+
+    await expect(runSyncNow({ json: true })).resolves.toBe(1);
+
+    expect(mockCtx.sync.triggerNow).not.toHaveBeenCalled();
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
 });

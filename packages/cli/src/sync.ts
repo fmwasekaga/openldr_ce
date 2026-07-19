@@ -10,10 +10,12 @@ import {
   exportPullBundle,
   importPullBundle,
   mergePatients,
+  recordAuditEvent,
 } from '@openldr/bootstrap';
 import { unpackBundle } from '@openldr/sync';
 import { loadConfig } from '@openldr/config';
 import { redactError } from './redact-error';
+import { cliActor } from './cli-actor';
 
 // `openldr sync status|now` — surfaces the live SyncHandle (status + triggerNow) that the server
 // exposes under /api/settings/sync/*. Distinct from `openldr settings sync …`, which edits the stored
@@ -65,6 +67,12 @@ export async function runSyncNow(opts: JsonOpt): Promise<number> {
       return 1;
     }
     ctx.sync.triggerNow();
+    await recordAuditEvent(ctx, cliActor(), {
+      action: 'settings.sync.now',
+      entityType: 'app_settings',
+      entityId: 'sync',
+      metadata: {},
+    });
     emit(opts.json, { triggered: true }, 'sync triggered');
     return 0;
   } finally {
@@ -181,6 +189,12 @@ export async function runSyncEnroll(
   const ctx = await createAppContext(loadConfig());
   try {
     const result = await enrollSite(ctx, { siteId, name: opts.name ?? null, centralUrl, actor: null });
+    await recordAuditEvent(ctx, cliActor(), {
+      action: 'settings.sync.enroll',
+      entityType: 'sync_site',
+      entityId: siteId,
+      metadata: { clientId: result.clientId },
+    });
     emit(json, result, [
       SECRET_WARNING,
       '',
@@ -246,6 +260,12 @@ export async function runSyncAmend(opts: {
       agent: opts.agent ?? 'central',
       activity: opts.activity,
     });
+    await recordAuditEvent(ctx, cliActor(), {
+      action: 'settings.sync.amend',
+      entityType: opts.resourceType,
+      entityId: opts.id,
+      metadata: { version: result.version, provenanceId: result.provenanceId, siteId: result.siteId, activity: opts.activity ?? 'amend' },
+    });
     emit(json, result, [
       `resource    = ${opts.resourceType}/${opts.id}`,
       `version     = ${result.version}`,
@@ -286,6 +306,12 @@ export async function runSyncMergePatient(opts: {
       duplicateId: opts.duplicate,
       reason: opts.reason,
       agent: opts.agent ?? 'central',
+    });
+    await recordAuditEvent(ctx, cliActor(), {
+      action: 'settings.sync.merge',
+      entityType: 'Patient',
+      entityId: opts.duplicate,
+      metadata: { survivorId: result.survivorId, duplicateId: result.duplicateId, repointed: result.repointed, provenanceId: result.provenanceId },
     });
     emit(json, result, [
       `survivor   = ${result.survivorId}`,
@@ -338,6 +364,12 @@ export async function runSyncRotate(siteId: string, opts: JsonOpt): Promise<numb
   const ctx = await createAppContext(loadConfig());
   try {
     const result = await rotateSite(ctx, siteId);
+    await recordAuditEvent(ctx, cliActor(), {
+      action: 'settings.sync.rotate',
+      entityType: 'sync_site',
+      entityId: siteId,
+      metadata: { clientId: result.clientId },
+    });
     emit(opts.json, result, [
       SECRET_WARNING,
       '',
@@ -430,6 +462,12 @@ export async function runSyncRevoke(siteId: string, opts: JsonOpt): Promise<numb
   const ctx = await createAppContext(loadConfig());
   try {
     await revokeSite(ctx, siteId);
+    await recordAuditEvent(ctx, cliActor(), {
+      action: 'settings.sync.revoke',
+      entityType: 'sync_site',
+      entityId: siteId,
+      metadata: {},
+    });
     emit(opts.json, { revoked: true, siteId }, `revoked ${siteId}`);
     return 0;
   } catch (err) {

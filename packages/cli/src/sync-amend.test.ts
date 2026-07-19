@@ -2,8 +2,12 @@ import { describe, it, expect, vi } from 'vitest';
 
 const amend = vi.hoisted(() => vi.fn(async () => ({ version: 2, provenanceId: 'prov-1', siteId: 'lab-a' })));
 const close = vi.hoisted(() => vi.fn(async () => {}));
+const recordAuditEvent = vi.hoisted(() => vi.fn());
 
-vi.mock('@openldr/bootstrap', () => ({ createAppContext: async () => ({ fhirStore: { amend }, close }) }));
+vi.mock('@openldr/bootstrap', () => ({
+  createAppContext: async () => ({ fhirStore: { amend }, close }),
+  recordAuditEvent,
+}));
 vi.mock('@openldr/config', () => ({ loadConfig: () => ({}) }));
 
 import { runSyncAmend } from './sync';
