@@ -18,8 +18,9 @@ export function reasonFromError(e: unknown): AuthFailReason {
 
 /** In-memory dedup: returns true if this (key,reason) should be RECORDED now (first in window), false to
  *  collapse a repeat. Prunes expired entries on each call so the map stays bounded. */
-export function createAuthFailedThrottle(opts: { windowMs?: number; now?: () => number } = {}) {
+export function createAuthFailedThrottle(opts: { windowMs?: number; maxEntries?: number; now?: () => number } = {}) {
   const windowMs = opts.windowMs ?? 60_000;
+  const maxEntries = opts.maxEntries ?? 10_000;
   const now = opts.now ?? Date.now;
   const seen = new Map<string, number>();
   return function shouldRecord(key: string, reason: AuthFailReason): boolean {
@@ -27,6 +28,7 @@ export function createAuthFailedThrottle(opts: { windowMs?: number; now?: () => 
     for (const [k, exp] of seen) if (exp <= t) seen.delete(k);
     const id = `${key}::${reason}`;
     if (seen.has(id)) return false;
+    if (seen.size >= maxEntries) return false; // safety valve under flood
     seen.set(id, t + windowMs);
     return true;
   };

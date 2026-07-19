@@ -20,6 +20,13 @@ describe('createAuthFailedThrottle', () => {
     t += 61_000;
     expect(throttle('1.2.3.4', 'expired')).toBe(true);
   });
+  it('stops recording once maxEntries distinct keys fill the window (flood safety valve)', () => {
+    const throttle = createAuthFailedThrottle({ windowMs: 60_000, maxEntries: 3, now: () => 1000 });
+    expect(throttle('ip-1', 'invalid')).toBe(true);
+    expect(throttle('ip-2', 'invalid')).toBe(true);
+    expect(throttle('ip-3', 'invalid')).toBe(true);
+    expect(throttle('ip-4', 'invalid')).toBe(false);
+  });
 });
 describe('subFromUnverifiedToken', () => {
   it('extracts sub from an unverified jwt payload, null on garbage', () => {

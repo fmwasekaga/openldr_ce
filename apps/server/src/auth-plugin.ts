@@ -66,7 +66,7 @@ async function devActor(ctx: AppContext): Promise<RequestActor> {
 export function registerAuth(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
   const throttle = createAuthFailedThrottle();
   const recordAuthFailed = (req: FastifyRequest, reason: AuthFailReason, sub: string | null) => {
-    const key = sub ?? req.ip;
+    const key = req.ip; // throttle per connection IP; `sub` is attacker-controlled (unverified) and must NOT key the throttle
     if (!throttle(key, reason)) return;
     void safeRecord(ctx.audit, ctx.logger, {
       actorType: sub ? 'user' : 'system',
