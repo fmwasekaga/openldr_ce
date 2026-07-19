@@ -370,7 +370,15 @@ export interface SyncConfigInput {
   clientSecret?: string;
   intervalMinutes: number;
 }
-export interface SyncDirectionStatus { running: boolean; lastSeq: number; lastSyncedAt: string | null }
+export interface SyncDirectionStatus {
+  running: boolean;
+  lastSeq: number;
+  lastSyncedAt: string | null;
+  lastAttemptAt: string | null;
+  lastSuccessAt: string | null;
+  lastErrorAt: string | null;
+  lastError: string | null;
+}
 export interface SyncStatus {
   enabled: boolean;
   mode: SyncMode;
@@ -389,6 +397,19 @@ export const saveSyncConfig = (cfg: SyncConfigInput): Promise<SyncConfigView> =>
 
 export const fetchSyncStatus = (): Promise<SyncStatus> =>
   authFetch('/api/settings/sync/status').then((r) => okJson<SyncStatus>(r, 'sync status'));
+
+export interface SyncActivityRow {
+  id: string;
+  occurredAt: string;
+  direction: 'push' | 'pull' | 'amend';
+  event: 'synced' | 'failed' | 'quarantined' | 'diverged';
+  records: number;
+  error: string | null;
+  metadata: Record<string, unknown> | null;
+}
+
+export const fetchSyncActivity = (): Promise<SyncActivityRow[]> =>
+  authFetch('/api/settings/sync/activity').then((r) => okJson<SyncActivityRow[]>(r, 'sync activity'));
 
 /** POST /api/settings/sync/now. Returns 409 `{triggered:false,reason:'disabled'}` when sync is off —
  *  surface that as a result rather than an error so the caller can show an info toast. */
