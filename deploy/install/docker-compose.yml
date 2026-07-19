@@ -6,6 +6,8 @@ services:
     image: ghcr.io/open-laboratory-data-repository/openldr-api:${OPENLDR_VERSION:-latest}
     env_file: .env
     expose: ["3000"]
+    volumes:
+      - ./config/nginx/certs/fullchain.pem:/etc/openldr/tls-cert.pem:ro
     depends_on:
       postgres: { condition: service_healthy }
       minio: { condition: service_started }

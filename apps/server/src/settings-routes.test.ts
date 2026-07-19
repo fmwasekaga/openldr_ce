@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import Fastify from 'fastify';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { registerSettingsRoutes } from './settings-routes';
 
 const SYNC_STATUS = {
@@ -300,5 +303,51 @@ describe('settings routes', () => {
     const res = await app.inject({ method: 'PUT', url: '/api/settings/validation', payload: { strictness: 'bogus' } });
     expect(res.statusCode).toBe(400);
     expect((ctx as any).__validationStrictnessSet).not.toHaveBeenCalled();
+  });
+
+  describe('GET /api/settings/sync/central-certificate', () => {
+    const PEM = '-----BEGIN CERTIFICATE-----\nMIIFakeFakeFakeFakeFake==\n-----END CERTIFICATE-----\n';
+
+    it('lab_admin GET with a readable TLS_CERT_PATH streams the PEM as a download', async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'openldr-cert-'));
+      const file = join(dir, 'fullchain.pem');
+      await writeFile(file, PEM, 'utf8');
+      try {
+        const { ctx, deps } = fakeCtx();
+        (ctx as any).cfg.TLS_CERT_PATH = file;
+        const app = appWithUser(['lab_admin'], (a) => registerSettingsRoutes(a, ctx, deps));
+        const res = await app.inject({ method: 'GET', url: '/api/settings/sync/central-certificate' });
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toBe(PEM);
+        expect(res.headers['content-type']).toContain('application/x-pem-file');
+        expect(res.headers['content-disposition']).toContain('attachment');
+        expect(res.headers['content-disposition']).toContain('.pem');
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('TLS_CERT_PATH unset is 404', async () => {
+      const { ctx, deps } = fakeCtx();
+      const app = appWithUser(['lab_admin'], (a) => registerSettingsRoutes(a, ctx, deps));
+      const res = await app.inject({ method: 'GET', url: '/api/settings/sync/central-certificate' });
+      expect(res.statusCode).toBe(404);
+    });
+
+    it('TLS_CERT_PATH set but the file does not exist is 404', async () => {
+      const { ctx, deps } = fakeCtx();
+      (ctx as any).cfg.TLS_CERT_PATH = join(tmpdir(), 'openldr-cert-does-not-exist', 'no-such-file.pem');
+      const app = appWithUser(['lab_admin'], (a) => registerSettingsRoutes(a, ctx, deps));
+      const res = await app.inject({ method: 'GET', url: '/api/settings/sync/central-certificate' });
+      expect(res.statusCode).toBe(404);
+    });
+
+    it('non-admin GET is 403', async () => {
+      const { ctx, deps } = fakeCtx();
+      (ctx as any).cfg.TLS_CERT_PATH = join(tmpdir(), 'irrelevant.pem');
+      const app = appWithUser(['lab_technician'], (a) => registerSettingsRoutes(a, ctx, deps));
+      const res = await app.inject({ method: 'GET', url: '/api/settings/sync/central-certificate' });
+      expect(res.statusCode).toBe(403);
+    });
   });
 });

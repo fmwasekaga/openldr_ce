@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { readFile } from 'node:fs/promises';
 import type { AppContext } from '@openldr/bootstrap';
 import { dangerResetDashboards, dangerFactoryReset, dangerClearAudit, getSyncConfig, setSyncConfig, enrollSite, listSites, rotateSite, revokeSite, mergePatients } from '@openldr/bootstrap';
 import { requireRole } from './rbac';
@@ -247,6 +248,29 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
   });
 
   app.get('/api/settings/sync/sites', { preHandler: requireRole('lab_admin') }, async () => listSites(ctx));
+
+  // Serve this server's public TLS cert (PEM) so a remote lab can trust a self-signed central. The
+  // cert is public (presented in every TLS handshake) but the route is lab_admin like the rest of
+  // /api/settings/*. Path = TLS_CERT_PATH (installer-mounted fullchain.pem). No AppError/appError
+  // here: this file's own convention (see the divergence/enroll/danger routes above) is a plain
+  // reply.code(status).send({ error }) body, not the catalog — mirrored rather than introduced.
+  app.get('/api/settings/sync/central-certificate', { preHandler: requireRole('lab_admin') }, async (_req, reply) => {
+    const path = ctx.cfg.TLS_CERT_PATH;
+    if (!path) return reply.code(404).send({ error: 'no TLS certificate is configured (set TLS_CERT_PATH / mount the cert)' });
+    let pem: string;
+    try {
+      pem = await readFile(path, 'utf8');
+    } catch {
+      return reply.code(404).send({ error: 'configured TLS certificate file was not found' });
+    }
+    reply.header('content-type', 'application/x-pem-file');
+    reply.header('content-disposition', 'attachment; filename="central-certificate.pem"');
+    // The `return` on the send is load-bearing, not style — see the comment block in sync-routes.ts:
+    // with compression registered globally, a bare `reply.send(x)` in an async handler resolves to
+    // undefined before an async (gzipped) send has written, so Fastify re-sends undefined and
+    // clobbers the body.
+    return reply.send(pem);
+  });
 
   app.post('/api/settings/sync/sites/:siteId/rotate', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
     const { siteId } = req.params as { siteId: string };

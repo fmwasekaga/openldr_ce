@@ -102,4 +102,9 @@ describe('auth config', () => {
     const without = ConfigSchema.parse({ ...base });
     expect(without.OIDC_INTERNAL_ISSUER_URL).toBeUndefined();
   });
+  it('accepts TLS_CERT_PATH and defaults it to undefined', () => {
+    const withVal = ConfigSchema.parse({ ...base, TLS_CERT_PATH: '/etc/openldr/tls-cert.pem' });
+    expect(withVal.TLS_CERT_PATH).toBe('/etc/openldr/tls-cert.pem');
+    expect(ConfigSchema.parse({ ...base }).TLS_CERT_PATH).toBeUndefined();
+  });
 });
