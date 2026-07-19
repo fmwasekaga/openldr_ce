@@ -72,6 +72,9 @@ export const ConfigSchema = z
     // When set, server-side token/admin REST/JWKS calls use it instead of the public issuer (which,
     // inside a container, resolves to the app itself). Issuer CLAIM validation still uses OIDC_ISSUER_URL.
     OIDC_INTERNAL_ISSUER_URL: z.string().url().optional(),
+    // Filesystem path to this server's public TLS certificate (PEM). When set, the Sites page can
+    // offer it for download so a remote lab can trust this central's self-signed cert. Optional.
+    TLS_CERT_PATH: z.string().optional(),
     KEYCLOAK_ADMIN_CLIENT_ID: z.string().min(1).optional(),
     KEYCLOAK_ADMIN_CLIENT_SECRET: z.string().min(1).optional(),
 
