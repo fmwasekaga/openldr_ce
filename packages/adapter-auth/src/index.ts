@@ -12,6 +12,11 @@ export interface AuthConfig {
   /** When set, fetch JWKS directly from this URL (internal/back-channel) instead of via
    *  OIDC discovery on the public issuer. The issuer CLAIM is still validated against issuerUrl. */
   internalJwksUrl?: string;
+  /** Internal (back-channel) realm base URL, e.g. http://keycloak:8080/auth/realms/openldr.
+   *  When set, the token endpoint, admin REST base, and (absent an explicit internalJwksUrl)
+   *  the JWKS URL are derived from it instead of the public issuer. The issuer CLAIM is still
+   *  validated against issuerUrl. */
+  internalIssuerUrl?: string;
 }
 
 export class KcError extends Error {
@@ -33,6 +38,12 @@ export function createAuth(cfg: AuthConfig, deps: AuthDeps = {}): AuthPort {
   const fetchFn = deps.fetchFn ?? fetch;
   const jwksFactory = deps.remoteJwksFactory ?? ((url: URL) => createRemoteJWKSet(url));
   const discoveryUrl = `${cfg.issuerUrl}/.well-known/openid-configuration`;
+  // Server-side calls to Keycloak (token, admin REST, JWKS) must use the internal docker-network
+  // URL when configured — the public issuer resolves to the app container itself. Token CLAIM
+  // validation still uses the public issuerUrl (see verifyToken).
+  const backChannelIssuer = cfg.internalIssuerUrl ?? cfg.issuerUrl;
+  const internalJwksUrl = cfg.internalJwksUrl
+    ?? (cfg.internalIssuerUrl ? `${cfg.internalIssuerUrl}/protocol/openid-connect/certs` : undefined);
   let keySetPromise: Promise<JWTVerifyGetKey> | undefined = deps.keySet
     ? Promise.resolve(deps.keySet)
     : undefined;
@@ -40,8 +51,8 @@ export function createAuth(cfg: AuthConfig, deps: AuthDeps = {}): AuthPort {
   function getKeySet(): Promise<JWTVerifyGetKey> {
     if (!keySetPromise) {
       keySetPromise = (async () => {
-        if (cfg.internalJwksUrl) {
-          return jwksFactory(new URL(cfg.internalJwksUrl));
+        if (internalJwksUrl) {
+          return jwksFactory(new URL(internalJwksUrl));
         }
         const res = await fetchFn(discoveryUrl);
         if (!res.ok) throw new Error(`OIDC discovery returned ${res.status}`);
@@ -56,8 +67,8 @@ export function createAuth(cfg: AuthConfig, deps: AuthDeps = {}): AuthPort {
     return keySetPromise;
   }
 
-  const tokenEndpoint = `${cfg.issuerUrl}/protocol/openid-connect/token`;
-  const adminBase = cfg.issuerUrl.replace('/realms/', '/admin/realms/');
+  const tokenEndpoint = `${backChannelIssuer}/protocol/openid-connect/token`;
+  const adminBase = backChannelIssuer.replace('/realms/', '/admin/realms/');
   const adminConfigured = Boolean(cfg.adminClientId && cfg.adminClientSecret);
   const adminClientId = cfg.adminClientId ?? '';
   const adminClientSecret = cfg.adminClientSecret ?? '';
@@ -79,8 +90,8 @@ export function createAuth(cfg: AuthConfig, deps: AuthDeps = {}): AuthPort {
 
   async function adminFetchRaw(path: string, init: RequestInit): Promise<Response> {
     if (!adminConfigured) throw new IdentityAdminNotConfiguredError();
-    if (!cfg.issuerUrl.includes('/realms/')) {
-      throw new Error('OIDC_ISSUER_URL must be a Keycloak realm URL (containing /realms/) to use identity-admin actions');
+    if (!backChannelIssuer.includes('/realms/')) {
+      throw new Error('OIDC_ISSUER_URL/OIDC_INTERNAL_ISSUER_URL must be a Keycloak realm URL (containing /realms/) to use identity-admin actions');
     }
     const doFetch = async (tok: string) => {
       const headers = new Headers(init.headers);
@@ -125,10 +136,10 @@ export function createAuth(cfg: AuthConfig, deps: AuthDeps = {}): AuthPort {
           // (back-channel) JWKS URL is configured, the public issuer is only reachable via the
           // gateway — NOT from inside the app container (where its host resolves to itself). Use
           // the internal JWKS URL so the probe reflects real auth readiness over the private network.
-          const probeUrl = cfg.internalJwksUrl ?? discoveryUrl;
+          const probeUrl = internalJwksUrl ?? discoveryUrl;
           const res = await fetchFn(probeUrl, { signal: controller.signal });
-          if (!res.ok) throw new Error(`OIDC ${cfg.internalJwksUrl ? 'JWKS' : 'discovery'} returned ${res.status}`);
-          return cfg.internalJwksUrl ? 'OIDC JWKS reachable (internal)' : 'OIDC issuer reachable';
+          if (!res.ok) throw new Error(`OIDC ${internalJwksUrl ? 'JWKS' : 'discovery'} returned ${res.status}`);
+          return internalJwksUrl ? 'OIDC JWKS reachable (internal)' : 'OIDC issuer reachable';
         } finally {
           clearTimeout(timer);
         }

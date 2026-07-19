@@ -225,6 +225,52 @@ describe('identity admin actions', () => {
   });
 });
 
+describe('internal issuer back-channel', () => {
+  it('routes admin token + admin REST to internalIssuerUrl when set', async () => {
+    const { calls, fetchFn } = adminFetchMock();
+    const auth = createAuth(
+      { issuerUrl: 'https://public/realms/openldr', internalIssuerUrl: 'http://kc:8080/realms/openldr', adminClientId: 'svc', adminClientSecret: 'sek' },
+      { fetchFn },
+    );
+    await auth.resetPassword('u1', 'pw', true);
+    const token = calls.find((c) => c.url.endsWith('/protocol/openid-connect/token'))!;
+    expect(token.url).toBe('http://kc:8080/realms/openldr/protocol/openid-connect/token');
+    const reset = calls.find((c) => c.url.includes('/reset-password'))!;
+    expect(reset.url).toBe('http://kc:8080/admin/realms/openldr/users/u1/reset-password');
+  });
+
+  it('routes admin calls to the public issuerUrl when internalIssuerUrl is absent', async () => {
+    const { calls, fetchFn } = adminFetchMock();
+    const auth = createAuth(adminCfg, { fetchFn });
+    await auth.resetPassword('u1', 'pw', true);
+    const token = calls.find((c) => c.url.endsWith('/protocol/openid-connect/token'))!;
+    expect(token.url).toBe('https://kc/realms/openldr/protocol/openid-connect/token');
+    const reset = calls.find((c) => c.url.includes('/reset-password'))!;
+    expect(reset.url).toBe('https://kc/admin/realms/openldr/users/u1/reset-password');
+  });
+
+  it('healthCheck derives the JWKS url from internalIssuerUrl when no explicit internalJwksUrl', async () => {
+    const fetchFn = vi.fn(async () => ({ ok: true, status: 200 }) as Response);
+    const auth = createAuth({ issuerUrl: 'https://public/realms/openldr', internalIssuerUrl: 'http://kc:8080/realms/openldr' }, { fetchFn });
+    const r = await auth.healthCheck();
+    expect(r.status).toBe('up');
+    expect(r.detail).toContain('internal');
+    expect(fetchFn).toHaveBeenCalledWith('http://kc:8080/realms/openldr/protocol/openid-connect/certs', expect.anything());
+    expect(fetchFn).not.toHaveBeenCalledWith(expect.stringContaining('.well-known'), expect.anything());
+  });
+
+  it('verifyToken still validates against the PUBLIC issuer even when internalIssuerUrl differs', async () => {
+    const { sign, keySet } = await localKeySet();
+    const auth = createAuth(
+      { issuerUrl: 'https://kc/realms/openldr', internalIssuerUrl: 'http://kc:8080/realms/openldr' },
+      { keySet },
+    );
+    const token = await sign({ preferred_username: 'ada' }, { iss: 'https://kc/realms/openldr' });
+    const claims = await auth.verifyToken(token);
+    expect(claims.sub).toBe('user-123');
+  });
+});
+
 function dirMock() {
   const calls: Array<{ url: string; method: string; body?: string }> = [];
   const kcUser = { id: 'u1', username: 'ada', email: 'a@x', firstName: 'Ada', lastName: 'L', enabled: true, createdTimestamp: 1700000000000 };
