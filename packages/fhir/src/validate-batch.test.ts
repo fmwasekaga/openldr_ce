@@ -35,4 +35,20 @@ describe('validateBatch', () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.outcome.issue.length).toBe(2);
   });
+  it('skips clinical rules when structural validation fails', async () => {
+    // Batch: (a) structurally-invalid Observation, (b) clinically-broken lab result (no basedOn).
+    // At 'high' the result-requires-request rule WOULD fire — but structural failure short-circuits it.
+    const r = await run([{ resourceType: 'Observation' }, labObs()], 'high');
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      // The clinical rule emits code 'required' with a basedOn expression — it must be absent.
+      const clinical = r.outcome.issue.filter(
+        (i) => i.code === 'required' && (i.expression ?? []).some((e) => e.endsWith('.basedOn')),
+      );
+      expect(clinical).toHaveLength(0);
+      // Only structural issues remain (validateResource emits code 'structure' for missing required fields).
+      expect(r.outcome.issue.length).toBeGreaterThan(0);
+      expect(r.outcome.issue.every((i) => i.code === 'structure')).toBe(true);
+    }
+  });
 });
