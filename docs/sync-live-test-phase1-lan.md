@@ -17,6 +17,8 @@ Every sync acceptance harness to date runs on **one machine**. Only `pnpm sync:b
 
 Both on the same LAN. The lab reaches central at `http://<linux-lan-ip>:<port>`.
 
+> **Prerequisite (central):** enrollment mints a Keycloak client via the `openldr-admin` service account, so central needs `KEYCLOAK_ADMIN_CLIENT_ID`/`KEYCLOAK_ADMIN_CLIENT_SECRET` set to values that match the imported realm — otherwise enroll fails with **503 `identity provider admin client is not configured`**. Installer-based deploys (`install.sh`) now generate a unique `openldr-admin` secret into the realm import and `.env` automatically. For a dev/manual central, set both in `.env` (dev default: `openldr-admin` / `openldr-admin-dev-secret`, matching `infra/keycloak/openldr-realm.json`).
+
 ## Step 0 — a coherent, certified build
 
 1. **Push and certify first.** `main` is a clean fast-forward ahead of origin by the cursor-reporting slice; push it (`git push origin main`) so both nodes deploy the *same* commit. Do not test a build that only exists on the laptop.
