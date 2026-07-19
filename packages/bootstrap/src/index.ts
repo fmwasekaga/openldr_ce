@@ -54,6 +54,7 @@ export const shouldStartPull = (mode: SyncMode): boolean => mode !== 'push';
 import { createActivityService, type ActivityService } from './activity-service';
 import { createFeatureFlags, type FeatureFlags } from './feature-flags';
 import { createNumberSettings, type NumberSettings } from './number-settings';
+export { createValidationStrictness, VALIDATION_STRICTNESS_KEY, type ValidationStrictness } from './validation-settings';
 import { createReportCategoriesService, type ReportCategoriesService } from './report-categories';
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { policyFromConfig } from './policy';
