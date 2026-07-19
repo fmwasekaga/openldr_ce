@@ -228,7 +228,7 @@ export const en = {
         },
       },
       sync: {
-        title: 'Lab ⇄ central sync',
+        title: 'Distributed Sync',
         saved: 'Sync settings saved',
         saveFailed: 'Could not save: {{error}}',
         save: 'Save',

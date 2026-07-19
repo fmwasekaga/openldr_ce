@@ -240,7 +240,7 @@ export function General() {
       </Card>
       )}
 
-      {/* Lab ⇄ central sync — admin only. Config form + live status + manual trigger. */}
+      {/* Distributed Sync (lab ⇄ central) — admin only. Config form + live status + manual trigger. */}
       {isAdmin && sync && (
       <Card data-testid="sync-card">
         <CardHeader><CardTitle>{t('settings.general.sync.title')}</CardTitle></CardHeader>

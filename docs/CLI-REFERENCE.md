@@ -34,7 +34,7 @@ Most commands return `0` on success and `1` on validation/runtime failure. Comma
 | `openldr audit list` | Query append-only audit events. |
 | `openldr users list` / `openldr user ...` | Manage local users and roles. |
 | `openldr settings flags/numbers/sync/danger ...` | Read/write feature flags, numeric limits, sync config, and danger-zone actions. |
-| `openldr sync ...` | Lab⇄central sync status/control, enrollment, amendment, divergence, and offline bundle export/import. |
+| `openldr sync ...` | Distributed (lab⇄central) sync status/control, enrollment, amendment, divergence, and offline bundle export/import. |
 | `openldr export` | Export the complete dataset: canonical FHIR (NDJSON + Bundle) + flat-table CSV + manifest. |
 | `openldr market ...` | Verify, install, update, enable/disable, roll back, and remove marketplace bundles. |
 | `openldr artifact ...` | Author, build, sign, pack, test, and publish marketplace artifacts. |

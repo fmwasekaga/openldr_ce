@@ -39,7 +39,7 @@ admin/danger actions are also available in the Studio UI under Settings.
 | `user` | Manage local users: `list`, `show`, `create`, `set-role`, `activate`, `deactivate`. (`export` is a top-level command — a full dataset export — not a `user` subcommand.) |
 | `market` | Marketplace artifacts: `verify`, `install`, `update`, `list`, `rollback`, `enable`, `disable`, `remove`. |
 | `artifact` | Author artifacts: `keygen`, `new`, `build`, `pack`, `sign`, `test`, `publish`. |
-| `sync` | Lab⇄central sync: `status`, `now`, and central-side `enroll`, `list`, `rotate`, `revoke`. |
+| `sync` | Distributed (lab⇄central) sync: `status`, `now`, and central-side `enroll`, `list`, `rotate`, `revoke`. |
 | `errors` | List the error-code catalog. |
 | `target-store` | Test the target warehouse connection. |
 
