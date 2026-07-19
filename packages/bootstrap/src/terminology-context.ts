@@ -1,8 +1,9 @@
 import { Kysely } from 'kysely';
 import type { Config } from '@openldr/config';
-import { redact } from '@openldr/core';
+import { redact, createLogger, type Logger } from '@openldr/core';
 import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, referenceCapture, markTerminologyChanged, type TerminologyAdminStore, type InternalSchema, type OntologyStore, resolveSeedPublisherId, deriveSystemCode } from '@openldr/db';
 import { buildOntologyDistribution, createOperations, type Operations, type LoaderStore, loadLoinc, loadWhonetAmr, importTerminologyResource, stalenessReason, type LoadResult, type OntologyBuildProgress, type OntologyManifest } from '@openldr/terminology';
+import { createAuditStore, type AuditStore } from '@openldr/audit';
 
 function createOntologyApi(ontologyStore: OntologyStore) {
   return {
@@ -39,12 +40,16 @@ export interface TerminologyContext {
     amr(sqlitePath: string): Promise<LoadResult[]>;
     resource(json: unknown): Promise<LoadResult>;
   };
+  audit: AuditStore;
+  logger: Logger;
   close(): Promise<void>;
 }
 
 export async function createTerminologyContext(cfg: Config): Promise<TerminologyContext> {
   const internal = createInternalDb(cfg.INTERNAL_DATABASE_URL);
   const db = internal.db as unknown as Kysely<InternalSchema>;
+  const logger = createLogger({ level: cfg.LOG_LEVEL });
+  const audit = createAuditStore(db);
   const fhirStore = createFhirStore(db);
   const store = createTerminologyStore(db, fhirStore);
   const projection = {
@@ -108,6 +113,8 @@ export async function createTerminologyContext(cfg: Config): Promise<Terminology
       amr: (p) => loadWhonetAmr(p, loaderStore),
       resource: (json) => importTerminologyResource(json, loaderStore),
     },
+    audit,
+    logger,
     async close() { await internal.close(); },
   };
 }

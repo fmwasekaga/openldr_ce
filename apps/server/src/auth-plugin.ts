@@ -1,5 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
+import { safeRecord } from '@openldr/audit';
+import { reasonFromError, createAuthFailedThrottle, subFromUnverifiedToken, type AuthFailReason } from './auth-failed';
 
 export interface RequestActor {
   id: string;
@@ -62,6 +64,19 @@ async function devActor(ctx: AppContext): Promise<RequestActor> {
 }
 
 export function registerAuth(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
+  const throttle = createAuthFailedThrottle();
+  const recordAuthFailed = (req: FastifyRequest, reason: AuthFailReason, sub: string | null) => {
+    const key = req.ip; // throttle per connection IP; `sub` is attacker-controlled (unverified) and must NOT key the throttle
+    if (!throttle(key, reason)) return;
+    void safeRecord(ctx.audit, ctx.logger, {
+      actorType: sub ? 'user' : 'system',
+      actorId: sub,
+      actorName: sub ?? req.ip,
+      action: 'auth.failed', entityType: 'auth', entityId: reason,
+      metadata: { reason, ip: req.ip },
+    });
+  };
+
   app.addHook('onRequest', async (req: FastifyRequest, reply: FastifyReply) => {
     const path = (req.raw.url ?? '').split('?')[0];
     // Only /api/* is protected. /health and the static SPA stay public.
@@ -83,6 +98,7 @@ export function registerAuth(app: FastifyInstance<any, any, any, any>, ctx: AppC
         req.user = await devActor(ctx);
         return;
       }
+      recordAuthFailed(req, 'missing', null);
       reply.code(401);
       return reply.send({ error: 'authentication required' });
     }
@@ -92,6 +108,7 @@ export function registerAuth(app: FastifyInstance<any, any, any, any>, ctx: AppC
       claims = await ctx.auth.verifyToken(token);
     } catch (e) {
       ctx.logger.warn({ error: e instanceof Error ? e.message : String(e) }, 'token verification failed');
+      recordAuthFailed(req, reasonFromError(e), subFromUnverifiedToken(token));
       reply.code(401);
       return reply.send({ error: 'invalid token' });
     }
@@ -99,12 +116,14 @@ export function registerAuth(app: FastifyInstance<any, any, any, any>, ctx: AppC
     try {
       const u = await ctx.users.syncFromClaims(claims);
       if (u.status === 'disabled') {
+        recordAuthFailed(req, 'account-disabled', (claims as { sub?: string }).sub ?? null);
         reply.code(403);
         return reply.send({ error: 'account disabled' });
       }
       req.user = { id: u.id, username: u.username, displayName: u.displayName, roles: realmRolesFromClaims(claims) };
     } catch (e) {
       ctx.logger.error({ error: e instanceof Error ? e.message : String(e) }, 'user sync failed');
+      recordAuthFailed(req, 'sync-failed', (claims as { sub?: string }).sub ?? null);
       reply.code(401);
       return reply.send({ error: 'authentication failed' });
     }

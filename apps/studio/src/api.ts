@@ -505,7 +505,7 @@ export const fetchHealth = (): Promise<HealthReport> =>
 export interface AuditEvent {
   id: string;
   occurredAt: string;
-  actorType: 'user' | 'system';
+  actorType: 'user' | 'system' | 'cli';
   actorId: string | null;
   actorName: string;
   action: string;

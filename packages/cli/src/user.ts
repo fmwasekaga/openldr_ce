@@ -1,5 +1,6 @@
-import { createAppContext } from '@openldr/bootstrap';
+import { createAppContext, recordAuditEvent } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
+import { cliActor } from './cli-actor';
 
 interface JsonOpt {
   json: boolean;
@@ -47,6 +48,12 @@ export async function runUserCreate(opts: JsonOpt & { username: string; name?: s
   const ctx = await createAppContext(loadConfig());
   try {
     const u = await ctx.users.create({ username: opts.username, displayName: opts.name, email: opts.email, roles: opts.role });
+    await recordAuditEvent(ctx, cliActor(), {
+      action: 'user.create',
+      entityType: 'user',
+      entityId: u.id,
+      metadata: { username: opts.username, roles: opts.role, backend: 'local' },
+    });
     emit(opts.json, u, `created ${u.username} (${u.id})`);
     return 0;
   } finally {
@@ -62,6 +69,12 @@ export async function runUserSetRole(id: string, roles: string[], opts: JsonOpt)
       return 1;
     }
     await ctx.users.setRoles(id, roles);
+    await recordAuditEvent(ctx, cliActor(), {
+      action: 'user.update',
+      entityType: 'user',
+      entityId: id,
+      metadata: { roles, backend: 'local' },
+    });
     emit(opts.json, { id, roles }, `set roles for ${id}: [${roles.join(', ')}]`);
     return 0;
   } finally {
@@ -77,6 +90,12 @@ export async function runUserSetStatus(id: string, status: 'active' | 'disabled'
       return 1;
     }
     await ctx.users.setStatus(id, status);
+    await recordAuditEvent(ctx, cliActor(), {
+      action: 'user.status',
+      entityType: 'user',
+      entityId: id,
+      metadata: { enabled: status === 'active', backend: 'local' },
+    });
     emit(opts.json, { id, status }, `${id} is now ${status}`);
     return 0;
   } finally {

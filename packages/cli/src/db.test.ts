@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  dbCtx: { pendingMigrations: vi.fn(), migrateAll: vi.fn(), close: vi.fn() },
+  dbCtx: { pendingMigrations: vi.fn(), migrateAll: vi.fn(), reset: vi.fn(), close: vi.fn() },
   appCtx: { close: vi.fn() },
   createDbContext: vi.fn(),
   createAppContext: vi.fn(),
   seedDatabase: vi.fn(),
+  recordAuditEvent: vi.fn(),
 }));
 
 vi.mock('@openldr/config', () => ({
@@ -16,9 +17,10 @@ vi.mock('@openldr/bootstrap', () => ({
   createDbContext: mocks.createDbContext,
   createAppContext: mocks.createAppContext,
   seedDatabase: mocks.seedDatabase,
+  recordAuditEvent: mocks.recordAuditEvent,
 }));
 
-import { runDbSeed, runDbMigrate } from './db';
+import { runDbSeed, runDbMigrate, runDbReset } from './db';
 
 const SEED_RESULT = {
   resources: ['a', 'b', 'c'],
@@ -192,5 +194,53 @@ describe('db migrate error reporting', () => {
     expect(code).toBe(0);
     expect(out).toContain('055_sync_quarantine');
     expect(mocks.dbCtx.close).toHaveBeenCalled();
+  });
+});
+
+describe('db reset audit', () => {
+  let out: string;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    out = '';
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      out += String(chunk);
+      return true;
+    });
+    mocks.createDbContext.mockResolvedValue(mocks.dbCtx);
+    mocks.createAppContext.mockResolvedValue(mocks.appCtx);
+    mocks.dbCtx.reset.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('records db.reset as the cli actor with empty metadata, matching the reconciled shape', async () => {
+    const code = await runDbReset({ json: false, force: true });
+
+    expect(code).toBe(0);
+    expect(mocks.dbCtx.reset).toHaveBeenCalledWith({ force: true });
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      mocks.appCtx,
+      expect.objectContaining({ actorType: 'cli' }),
+      expect.objectContaining({
+        action: 'db.reset',
+        entityType: 'database',
+        entityId: 'internal+external',
+        metadata: {},
+      }),
+    );
+    expect(mocks.appCtx.close).toHaveBeenCalled();
+    expect(mocks.dbCtx.close).toHaveBeenCalled();
+  });
+
+  it('is best-effort: a failure building the audit app context does not fail the reset', async () => {
+    mocks.createAppContext.mockRejectedValueOnce(new Error('db down'));
+
+    const code = await runDbReset({ json: false, force: true });
+
+    expect(code).toBe(0);
+    expect(out).toContain('database reset complete');
   });
 });

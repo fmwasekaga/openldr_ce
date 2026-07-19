@@ -21,9 +21,11 @@ import { runArtifactKeygen, runArtifactNew, runArtifactBuild, runArtifactPack, r
 import { runSettingsFlagsList, runSettingsFlagsSet, runSettingsDanger, runSettingsSyncShow, runSettingsSyncSet, runSettingsNumbersList, runSettingsNumbersSet, runSettingsValidationShow, runSettingsValidationSet } from './settings';
 import { runSyncStatus, runSyncNow, runSyncEnroll, runSyncList, runSyncRotate, runSyncRevoke, runSyncAmend, runSyncMergePatient, runSyncExport, runSyncImport, runSyncQuarantineList, runSyncQuarantineRetry, runSyncDivergenceList, runSyncDivergenceShow, runSyncDivergenceClear } from './sync';
 import { runErrorsList } from './errors';
+import { setActorOverride } from './cli-actor';
 
 const program = new Command();
 program.name('openldr').description('OpenLDR CE operator CLI');
+program.option('--actor <name>', 'audit actor name for this invocation (defaults to the OS user)');
 
 program
   .command('health')
@@ -591,5 +593,7 @@ artifact.command('sign <dir>').requiredOption('--key <priv>').option('--json', '
 artifact.command('test <dir>').requiredOption('--sample <file>').option('--json', 'emit JSON', false).action(async (dir: string, o: { sample: string; json: boolean }) => { process.exitCode = await runArtifactTest(dir, o); });
 artifact.command('publish <bundleDir>').requiredOption('--to <registryDir>').option('--install', 'also install into the running CE', false).option('--approve', 'approve requested capabilities on install', false).option('--approved-by <actor>').option('--json', 'emit JSON', false)
   .action(async (bundleDir: string, o: { to: string; install: boolean; approve: boolean; approvedBy?: string; json: boolean }) => { process.exitCode = await runArtifactPublish(bundleDir, o); });
+
+program.hook('preAction', () => setActorOverride(program.opts().actor as string | undefined));
 
 program.parseAsync(process.argv);

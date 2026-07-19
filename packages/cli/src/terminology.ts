@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { loadConfig } from '@openldr/config';
-import { createTerminologyContext } from '@openldr/bootstrap';
+import { createTerminologyContext, recordAuditEvent } from '@openldr/bootstrap';
+import { cliActor } from './cli-actor';
 import { redactError } from './redact-error';
 
 function out(json: boolean, obj: unknown, human: string): void {
@@ -10,10 +11,21 @@ function out(json: boolean, obj: unknown, human: string): void {
 export async function runTerminologyImport(kind: string, path: string, opts: { acceptLicense?: boolean; json: boolean }): Promise<number> {
   const ctx = await createTerminologyContext(loadConfig());
   try {
-    if (kind === 'loinc') { const r = await ctx.loaders.loinc(path, !!opts.acceptLicense); out(opts.json, r, `loaded ${r.conceptsLoaded} LOINC concepts`); }
-    else if (kind === 'amr') { const r = await ctx.loaders.amr(path); out(opts.json, r, r.map((x) => `${x.system}: ${x.conceptsLoaded}`).join('\n')); }
-    else if (kind === 'resource') { const r = await ctx.loaders.resource(JSON.parse(readFileSync(path, 'utf8'))); out(opts.json, r, `imported ${r.resourceUrl} (${r.conceptsLoaded} concepts)`); }
-    else { process.stderr.write(`unknown import kind '${kind}' (loinc|amr|resource)\n`); return 1; }
+    if (kind === 'loinc') {
+      const r = await ctx.loaders.loinc(path, !!opts.acceptLicense);
+      out(opts.json, r, `loaded ${r.conceptsLoaded} LOINC concepts`);
+      await recordAuditEvent(ctx, cliActor(), { action: 'coding_system.import', entityType: 'coding_system', entityId: 'loinc', metadata: { source: 'loinc', result: r } });
+    } else if (kind === 'amr') {
+      // No HTTP-twin route for AMR import (grepped terminology-admin-routes.ts / ontology-routes.ts — neither
+      // has an amr import audit call). Flagged: using coding_system.import with entityId 'amr' by analogy to loinc.
+      const r = await ctx.loaders.amr(path);
+      out(opts.json, r, r.map((x) => `${x.system}: ${x.conceptsLoaded}`).join('\n'));
+      await recordAuditEvent(ctx, cliActor(), { action: 'coding_system.import', entityType: 'coding_system', entityId: 'amr', metadata: { source: 'amr', result: r } });
+    } else if (kind === 'resource') {
+      const r = await ctx.loaders.resource(JSON.parse(readFileSync(path, 'utf8')));
+      out(opts.json, r, `imported ${r.resourceUrl} (${r.conceptsLoaded} concepts)`);
+      await recordAuditEvent(ctx, cliActor(), { action: 'term.import', entityType: 'term', entityId: r.resourceUrl, metadata: { result: r } });
+    } else { process.stderr.write(`unknown import kind '${kind}' (loinc|amr|resource)\n`); return 1; }
     return 0;
   } catch (err) { process.stderr.write(`terminology import failed: ${redactError(err)}\n`); return 1; }
   finally { await ctx.close(); }
@@ -64,6 +76,7 @@ export async function runPublisherCreate(name: string, opts: { role?: 'local' | 
   try {
     const p = await ctx.admin.publishers.create({ name, role: opts.role ?? 'local', icon: opts.icon ?? null });
     out(opts.json ?? false, p, `created publisher ${p.id} (${p.name})`);
+    await recordAuditEvent(ctx, cliActor(), { action: 'publisher.create', entityType: 'publisher', entityId: p.id, metadata: { name } });
     return 0;
   } catch (err) { process.stderr.write(`terminology publisher create failed: ${redactError(err)}\n`); return 1; }
   finally { await ctx.close(); }
@@ -85,6 +98,7 @@ export async function runSystemCreate(code: string, name: string, opts: { url?: 
   try {
     const s = await ctx.admin.codingSystems.create({ systemCode: code, systemName: name, url: opts.url ?? null, systemVersion: opts.version ?? null, active: true, publisherId: opts.publisher ?? null });
     out(opts.json ?? false, s, `created code system ${s.id} (${s.systemCode})`);
+    await recordAuditEvent(ctx, cliActor(), { action: 'coding_system.create', entityType: 'coding_system', entityId: s.id, metadata: { systemCode: code } });
     return 0;
   } catch (err) { process.stderr.write(`terminology system create failed: ${redactError(err)}\n`); return 1; }
   finally { await ctx.close(); }
@@ -178,6 +192,7 @@ export async function runOntologyUnlink(systemId: string, opts: { json?: boolean
   try {
     await ctx.ontology.unlink(systemId);
     out(opts.json ?? false, { ok: true }, `unlinked ontology index for ${systemId}`);
+    await recordAuditEvent(ctx, cliActor(), { action: 'ontology_distribution.delete', entityType: 'ontology_distribution', entityId: systemId, metadata: {} });
     return 0;
   } catch (err) {
     process.stderr.write(`ontology unlink failed: ${redactError(err)}\n`);

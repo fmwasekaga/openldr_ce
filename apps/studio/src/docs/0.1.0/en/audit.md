@@ -2,6 +2,8 @@
 
 Audit helps administrators and managers trace user-visible changes across workflows, forms, users, reports, connectors, and settings.
 
+> **Sign-in history:** Successful logins and logouts are handled by Keycloak, not OpenLDR — the app never sees the password. Find them in the Keycloak admin console under **Realm → Events**. This log records failed authentications (`auth.failed`) and operator actions — including CLI actions, shown with the `cli` actor type.
+
 ## Outcome
 
 You can open Audit, apply filters, inspect an event, interpret actor/action/entity/time fields, copy identifiers, and trace a change across related events.

@@ -4,7 +4,7 @@ import type { Logger } from '@openldr/core';
 import type { InternalSchema } from '@openldr/db';
 
 export interface AuditEventInput {
-  actorType: 'user' | 'system';
+  actorType: 'user' | 'system' | 'cli';
   actorId?: string | null;
   actorName: string;
   action: string;
@@ -56,7 +56,7 @@ function toEvent(r: Row): AuditEvent {
   return {
     id: r.id,
     occurredAt: r.occurred_at instanceof Date ? r.occurred_at.toISOString() : String(r.occurred_at),
-    actorType: r.actor_type === 'user' ? 'user' : 'system',
+    actorType: r.actor_type === 'user' || r.actor_type === 'cli' ? r.actor_type : 'system',
     actorId: r.actor_id,
     actorName: r.actor_name,
     action: r.action,
