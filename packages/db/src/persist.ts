@@ -1,5 +1,5 @@
 import { type Logger, OpenLdrError, appError } from '@openldr/core';
-import { validateResource, validateBatch, type StrictnessLevel } from '@openldr/fhir';
+import { validateResource, validateBatch, type ValidateBatchOpts } from '@openldr/fhir';
 import type { FhirStore } from './fhir-store';
 import type { Provenance } from './provenance';
 
@@ -14,10 +14,7 @@ export interface PersistDeps {
   logger: Logger;
 }
 
-export interface PersistOpts {
-  level: StrictnessLevel;
-  resolveServiceRequest(id: string): Promise<boolean>;
-}
+export type PersistOpts = ValidateBatchOpts;
 
 // Projection is asynchronous (R2): persist writes the canonical resource + change_log (via
 // fhirStore.save) and returns immediately; the projection worker tails change_log and updates the
