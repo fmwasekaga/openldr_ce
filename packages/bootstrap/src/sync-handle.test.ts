@@ -28,8 +28,32 @@ async function seed(db: Db) {
     .execute();
 }
 
-const runningWorker = () => ({ isRunning: () => true, trigger: vi.fn() });
-const stoppedWorker = () => ({ isRunning: () => false, trigger: vi.fn() });
+// SyncRuntimeView.pushWorker()/pullWorker() are typed RuntimeWorker (start/stop/trigger/isRunning) —
+// include start/stop no-ops so these fakes satisfy the type, even though createSyncHandle itself only
+// ever calls isRunning()/trigger().
+const runningWorker = () => ({ isRunning: () => true, trigger: vi.fn(), start: vi.fn(), stop: vi.fn() });
+const stoppedWorker = () => ({ isRunning: () => false, trigger: vi.fn(), start: vi.fn(), stop: vi.fn() });
+
+/** Mirrors the live opts.runtime shape (SyncRuntimeView) as a plain stub for tests. */
+function fakeRuntime(init: {
+  enabled?: boolean;
+  mode?: 'push' | 'pull' | 'bidirectional';
+  centralUrl?: string;
+  siteId?: string;
+  pushWorker?: ReturnType<typeof runningWorker> | undefined;
+  pullWorker?: ReturnType<typeof runningWorker> | undefined;
+  retryQuarantine?: (t: string, id: string) => Promise<{ ok: boolean; error?: string }>;
+} = {}) {
+  return {
+    isEnabled: () => init.enabled ?? true,
+    mode: () => init.mode ?? 'bidirectional',
+    centralUrl: () => init.centralUrl ?? '',
+    siteId: () => init.siteId ?? '',
+    pushWorker: () => init.pushWorker,
+    pullWorker: () => init.pullWorker,
+    retryQuarantine: () => init.retryQuarantine,
+  };
+}
 
 describe('createSyncHandle.status', () => {
   it('reports both directions, cursors, running state, and pendingPush', async () => {
@@ -37,12 +61,13 @@ describe('createSyncHandle.status', () => {
     await seed(db);
     const handle = createSyncHandle({
       db,
-      enabled: true,
-      mode: 'bidirectional',
-      centralUrl: 'https://central.example',
-      siteId: 'lab-7',
-      pushWorker: runningWorker(),
-      pullWorker: runningWorker(),
+      runtime: fakeRuntime({
+        mode: 'bidirectional',
+        centralUrl: 'https://central.example',
+        siteId: 'lab-7',
+        pushWorker: runningWorker(),
+        pullWorker: runningWorker(),
+      }),
     });
 
     const s = await handle.status();
@@ -62,10 +87,7 @@ describe('createSyncHandle.status', () => {
     await seed(db);
     const handle = createSyncHandle({
       db,
-      enabled: false,
-      mode: 'bidirectional',
-      centralUrl: '',
-      siteId: '',
+      runtime: fakeRuntime({ enabled: false, mode: 'bidirectional' }),
     });
 
     const s = await handle.status();
@@ -80,11 +102,7 @@ describe('createSyncHandle.status', () => {
     await seed(db);
     const handle = createSyncHandle({
       db,
-      enabled: true,
-      mode: 'push',
-      centralUrl: 'https://c',
-      siteId: 's',
-      pushWorker: runningWorker(),
+      runtime: fakeRuntime({ mode: 'push', centralUrl: 'https://c', siteId: 's', pushWorker: runningWorker() }),
     });
 
     const s = await handle.status();
@@ -98,11 +116,7 @@ describe('createSyncHandle.status', () => {
     await seed(db);
     const handle = createSyncHandle({
       db,
-      enabled: true,
-      mode: 'push',
-      centralUrl: 'https://c',
-      siteId: 's',
-      pushWorker: stoppedWorker(),
+      runtime: fakeRuntime({ mode: 'push', centralUrl: 'https://c', siteId: 's', pushWorker: stoppedWorker() }),
     });
 
     const s = await handle.status();
@@ -113,16 +127,34 @@ describe('createSyncHandle.status', () => {
     const db = await makeMigratedDb(); // no seed → empty cursors + empty change_log
     const handle = createSyncHandle({
       db,
-      enabled: true,
-      mode: 'push',
-      centralUrl: 'https://c',
-      siteId: 's',
-      pushWorker: runningWorker(),
+      runtime: fakeRuntime({ mode: 'push', centralUrl: 'https://c', siteId: 's', pushWorker: runningWorker() }),
     });
 
     const s = await handle.status();
     expect(s.push).toEqual({ running: true, lastSeq: 0, lastSyncedAt: null });
     expect(s.pendingPush).toBe(0); // empty change_log
+  });
+
+  it('status() reflects the runtime LIVE (enabled flips without rebuilding the handle)', async () => {
+    let enabled = false;
+    let pw: ReturnType<typeof runningWorker> | undefined;
+    const runtime = {
+      isEnabled: () => enabled,
+      mode: () => 'push' as const,
+      centralUrl: () => 'u',
+      siteId: () => 's',
+      pushWorker: () => pw,
+      pullWorker: () => undefined,
+      retryQuarantine: () => undefined,
+    };
+    const db = await makeMigratedDb();
+    const handle = createSyncHandle({ db, runtime });
+    expect((await handle.status()).enabled).toBe(false);
+    enabled = true;
+    pw = runningWorker();
+    const s = await handle.status();
+    expect(s.enabled).toBe(true);
+    expect(s.push?.running).toBe(true);
   });
 });
 
@@ -133,12 +165,7 @@ describe('createSyncHandle.triggerNow', () => {
     const pull = runningWorker();
     const handle = createSyncHandle({
       db,
-      enabled: true,
-      mode: 'bidirectional',
-      centralUrl: '',
-      siteId: '',
-      pushWorker: push,
-      pullWorker: pull,
+      runtime: fakeRuntime({ mode: 'bidirectional', pushWorker: push, pullWorker: pull }),
     });
 
     handle.triggerNow();
@@ -151,11 +178,7 @@ describe('createSyncHandle.triggerNow', () => {
     const push = runningWorker();
     const handle = createSyncHandle({
       db,
-      enabled: true,
-      mode: 'push',
-      centralUrl: '',
-      siteId: '',
-      pushWorker: push,
+      runtime: fakeRuntime({ mode: 'push', pushWorker: push }),
     });
 
     handle.triggerNow();
@@ -166,10 +189,7 @@ describe('createSyncHandle.triggerNow', () => {
     const db = await makeMigratedDb();
     const handle = createSyncHandle({
       db,
-      enabled: false,
-      mode: 'bidirectional',
-      centralUrl: '',
-      siteId: '',
+      runtime: fakeRuntime({ enabled: false, mode: 'bidirectional' }),
     });
 
     expect(() => handle.triggerNow()).not.toThrow();
@@ -180,10 +200,9 @@ describe('createSyncHandle quarantine', () => {
   it('listQuarantine returns [] when no store; delegates when present', async () => {
     const db = await makeMigratedDb();
     const rows = [{ entityType: 'terminology_system', entityId: 'http://x', attempts: 3, status: 'quarantined' }] as any;
-    const base = { enabled: true, mode: 'pull' as const, centralUrl: '', siteId: '' };
-    const h1 = createSyncHandle({ db, ...base });
+    const h1 = createSyncHandle({ db, runtime: fakeRuntime({ mode: 'pull' }) });
     expect(await h1.listQuarantine()).toEqual([]);
-    const h2 = createSyncHandle({ db, ...base, quarantine: { list: async () => rows } as any });
+    const h2 = createSyncHandle({ db, runtime: fakeRuntime({ mode: 'pull' }), quarantine: { list: async () => rows } as any });
     expect(await h2.listQuarantine()).toEqual(rows);
   });
 
@@ -197,10 +216,7 @@ describe('createSyncHandle quarantine', () => {
 
     const handle = createSyncHandle({
       db,
-      enabled: false, // sync off this boot
-      mode: 'push',
-      centralUrl: '',
-      siteId: '',
+      runtime: fakeRuntime({ enabled: false, mode: 'push' }), // sync off this boot
       quarantine: store, // ...but the store is still wired
     });
     const rows = await handle.listQuarantine();
@@ -215,14 +231,13 @@ describe('createSyncHandle quarantine', () => {
 
   it('retryQuarantine errors when pull not enabled; delegates when wired', async () => {
     const db = await makeMigratedDb();
-    const base = { enabled: true, mode: 'pull' as const, centralUrl: '', siteId: '' };
-    const h1 = createSyncHandle({ db, ...base });
+    const h1 = createSyncHandle({ db, runtime: fakeRuntime({ mode: 'pull' }) });
     expect(await h1.retryQuarantine('terminology_system', 'http://x')).toEqual({
       ok: false,
       error: expect.stringContaining('not enabled'),
     });
     const retry = vi.fn(async () => ({ ok: true }));
-    const h2 = createSyncHandle({ db, ...base, retryQuarantine: retry });
+    const h2 = createSyncHandle({ db, runtime: fakeRuntime({ mode: 'pull', retryQuarantine: retry }) });
     expect(await h2.retryQuarantine('terminology_system', 'http://x')).toEqual({ ok: true });
     expect(retry).toHaveBeenCalledWith('terminology_system', 'http://x');
   });
@@ -250,10 +265,8 @@ describe('createSyncHandle divergences', () => {
 
     const handle = createSyncHandle({
       db,
-      enabled: false, // inert here: no divergence method reads enabled/mode (see scope note above)
-      mode: 'push',
-      centralUrl: '',
-      siteId: 'lab-a',
+      // inert here: no divergence method reads enabled/mode (see scope note above)
+      runtime: fakeRuntime({ enabled: false, mode: 'push', siteId: 'lab-a' }),
       divergences: store,
     });
 
@@ -271,7 +284,7 @@ describe('createSyncHandle divergences', () => {
 
   it('degrades to empty/undefined/no-op when no divergence store was provided', async () => {
     const db = await makeMigratedDb();
-    const handle = createSyncHandle({ db, enabled: false, mode: 'push', centralUrl: '', siteId: 'lab-a' });
+    const handle = createSyncHandle({ db, runtime: fakeRuntime({ enabled: false, mode: 'push', siteId: 'lab-a' }) });
     expect(await handle.listDivergences()).toEqual([]);
     expect(await handle.getDivergence('Observation', 'o1', 2)).toBeUndefined();
     await expect(handle.clearDivergence('Observation', 'o1', 2)).resolves.toBeUndefined();
