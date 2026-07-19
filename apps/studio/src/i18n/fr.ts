@@ -176,6 +176,8 @@ export const fr: EnShape = {
     errInvalid: 'Détails du site invalides ou manquants.',
     errNotConfigured: 'Le client d’administration du fournisseur d’identité n’est pas configuré.',
     errNotFound: 'Site introuvable.',
+    downloadCert: 'Télécharger le certificat central',
+    certDownloadedToast: 'Certificat central téléchargé',
   },
   settings: {
     title: 'Paramètres',

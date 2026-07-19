@@ -172,6 +172,8 @@ export const en = {
     errInvalid: 'Invalid or missing site details.',
     errNotConfigured: 'Identity provider admin client is not configured.',
     errNotFound: 'Site not found.',
+    downloadCert: 'Download central certificate',
+    certDownloadedToast: 'Central certificate downloaded',
   },
   settings: {
     title: 'Settings',

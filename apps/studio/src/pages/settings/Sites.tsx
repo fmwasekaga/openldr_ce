@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { StripedEmpty } from '@/components/ui/striped-empty';
 import { LoadingState } from '@/components/ui/spinner';
-import { fetchSites, enrollSite, rotateSite, revokeSite, type SyncSiteRow, type EnrollResult } from '@/api';
+import { fetchSites, enrollSite, rotateSite, revokeSite, downloadCentralCertificate, type SyncSiteRow, type EnrollResult } from '@/api';
 
 function formatDate(iso: string | null): string {
   if (!iso) return '-';
@@ -103,6 +103,11 @@ export function Sites() {
     );
   }, [t]);
 
+  const doDownloadCert = useCallback(async () => {
+    try { await downloadCentralCertificate(); toast.success(t('sites.certDownloadedToast')); }
+    catch (e) { showError(e); }
+  }, [t, showError]);
+
   return (
     <>
       <div className="flex min-h-0 flex-1 flex-col">
@@ -112,12 +117,13 @@ export function Sites() {
             <p className="text-sm text-muted-foreground">{t('sites.subtitle')}</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button size="sm" onClick={openEnroll}>{t('sites.enroll')}</Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={t('sites.actions')}><MoreHorizontal className="h-4 w-4" /></Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={openEnroll}>{t('sites.enroll')}</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => void doDownloadCert()}>{t('sites.downloadCert')}</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => { void load(); }}>{t('sites.refresh')}</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -222,7 +228,8 @@ export function Sites() {
               ) : null}
             </div>
           ) : null}
-          <div className="mt-5 flex justify-end">
+          <div className="mt-5 flex justify-end gap-2">
+            <Button variant="outline" onClick={() => void doDownloadCert()}>{t('sites.downloadCert')}</Button>
             <Button onClick={() => setReveal(null)}>{t('sites.close')}</Button>
           </div>
         </DialogContent>

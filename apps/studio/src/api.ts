@@ -445,6 +445,20 @@ export async function revokeSite(siteId: string): Promise<{ revoked: boolean }> 
   return res.json() as Promise<{ revoked: boolean }>;
 }
 
+export async function downloadCentralCertificate(): Promise<void> {
+  const res = await authFetch('/api/settings/sync/central-certificate');
+  if (!res.ok) throw Object.assign(new Error('cert download failed'), { status: res.status });
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'central-certificate.pem';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export type DangerAction = 'reset-dashboards' | 'factory-reset' | 'clear-audit';
 
 export const runDangerAction = (action: DangerAction): Promise<{ ok: boolean; action: string }> =>

@@ -176,6 +176,8 @@ export const pt: EnShape = {
     errInvalid: 'Detalhes do site inválidos ou em falta.',
     errNotConfigured: 'O cliente de administração do fornecedor de identidade não está configurado.',
     errNotFound: 'Site não encontrado.',
+    downloadCert: 'Transferir certificado central',
+    certDownloadedToast: 'Certificado central transferido',
   },
   settings: {
     title: 'Definições',
