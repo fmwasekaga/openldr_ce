@@ -18,7 +18,7 @@ import { runTargetStoreTest } from './target-store';
 import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, runTerminologyExpand, runTerminologyTranslate, runPublisherList, runPublisherCreate, runSystemList, runSystemCreate, runTermList, runValueSetList, runOntologyBuild, runOntologyRebuild, runOntologyList, runOntologyUnlink } from './terminology';
 import { runMarketVerify, runMarketInstall, runMarketList, runMarketRollback, runMarketEnable, runMarketDisable, runMarketRemove } from './market';
 import { runArtifactKeygen, runArtifactNew, runArtifactBuild, runArtifactPack, runArtifactSign, runArtifactTest, runArtifactPublish } from './artifact';
-import { runSettingsFlagsList, runSettingsFlagsSet, runSettingsDanger, runSettingsSyncShow, runSettingsSyncSet, runSettingsNumbersList, runSettingsNumbersSet } from './settings';
+import { runSettingsFlagsList, runSettingsFlagsSet, runSettingsDanger, runSettingsSyncShow, runSettingsSyncSet, runSettingsNumbersList, runSettingsNumbersSet, runSettingsValidationShow, runSettingsValidationSet } from './settings';
 import { runSyncStatus, runSyncNow, runSyncEnroll, runSyncList, runSyncRotate, runSyncRevoke, runSyncAmend, runSyncMergePatient, runSyncExport, runSyncImport, runSyncQuarantineList, runSyncQuarantineRetry, runSyncDivergenceList, runSyncDivergenceShow, runSyncDivergenceClear } from './sync';
 import { runErrorsList } from './errors';
 
@@ -147,6 +147,15 @@ sync.command('show').description('Show the current sync configuration').option('
 sync.command('set <field> <value>').description('Set a sync field: enabled|mode|centralUrl|siteId|oidcIssuer|clientId|clientSecret|intervalMinutes').option('--json', 'emit JSON', false)
   .action(async (field: string, value: string, opts: { json: boolean }) => {
     try { process.exitCode = await runSettingsSyncSet(field, value, opts); } catch (err) { process.stderr.write(`settings sync set failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+const validation = settings.command('validation').description('FHIR validation strictness (low|medium|high)');
+validation.command('show').description('Show the current validation strictness level').option('--json', 'emit JSON', false)
+  .action(async (opts: { json: boolean }) => {
+    try { process.exitCode = await runSettingsValidationShow(opts); } catch (err) { process.stderr.write(`settings validation show failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+validation.command('set <level>').description('Set the validation strictness level (low|medium|high)').option('--json', 'emit JSON', false)
+  .action(async (level: string, opts: { json: boolean }) => {
+    try { process.exitCode = await runSettingsValidationSet(level, opts); } catch (err) { process.stderr.write(`settings validation set failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
 settings.command('danger <action>')
   .description('Run a danger-zone action: reset-dashboards | clear-audit | factory-reset (internal DB only)')
