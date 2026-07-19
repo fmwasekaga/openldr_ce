@@ -28,6 +28,7 @@ export const DOMAINS: Readonly<Record<string, string>> = {
   AU: 'auth',
   DB: 'dashboards',
   SY: 'system',
+  VA: 'validation',
 };
 
 // Per-domain tables. Kept as flat literals so the whole vocabulary is greppable in one file.
@@ -46,6 +47,8 @@ const ENTRIES: readonly CatalogEntry[] = [
   { code: 'FM0001', domain: 'forms', httpStatus: 400, message: 'form validation failed' },
   { code: 'FM0002', domain: 'forms', httpStatus: 404, message: 'form not found' },
   { code: 'FM0003', domain: 'forms', httpStatus: 400, message: 'a required field is missing' },
+  // Validation (VA)
+  { code: 'VA0002', domain: 'validation', httpStatus: 422, message: 'clinical validation failed' },
   // Auth (AU)
   { code: 'AU0001', domain: 'auth', httpStatus: 401, message: 'your session has expired' },
   { code: 'AU0002', domain: 'auth', httpStatus: 401, message: 'authentication required' },

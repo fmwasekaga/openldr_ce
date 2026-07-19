@@ -79,6 +79,11 @@ export function registerErrorHandler(app: FastifyInstance<any, any, any, any>): 
     };
     if (status >= 500) req.log.error(line, message);
     else req.log.warn(line, message);
-    void reply.code(status).send({ error: message, code, correlationId });
+    void reply.code(status).send({
+      error: message,
+      code,
+      correlationId,
+      ...(details !== undefined ? { details } : {}),
+    });
   });
 }
