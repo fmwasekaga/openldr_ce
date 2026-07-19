@@ -446,23 +446,30 @@ export function General() {
         />
       )}
 
-      {isAdmin && pendingValidation && (
+      {isAdmin && pendingValidation && validationLevel && (() => {
+        // Warn/destructive by DIRECTION of change, not the absolute target level: a
+        // low→medium change RAISES strictness even though 'medium' !== 'high'. The dialog
+        // is only opened when pending !== current, so these are the two cases.
+        const RANK: Record<ValidationStrictness, number> = { low: 0, medium: 1, high: 2 };
+        const lowering = RANK[pendingValidation] < RANK[validationLevel];
+        return (
         <TypeToConfirmDialog
           open={pendingValidation !== null}
           onOpenChange={(o) => { if (!o) setPendingValidation(null); }}
           title={t('settings.general.danger.validation.dialogTitle', {
             level: t(`settings.general.danger.validation.levels.${pendingValidation}`),
           })}
-          body={<p>{t(pendingValidation === 'high'
-            ? 'settings.general.danger.validation.warningRaise'
-            : 'settings.general.danger.validation.warningLower')}</p>}
+          body={<p>{t(lowering
+            ? 'settings.general.danger.validation.warningLower'
+            : 'settings.general.danger.validation.warningRaise')}</p>}
           confirmPhrase={pendingValidation}
           confirmLabel={t('settings.general.danger.validation.apply')}
           cancelLabel={t('settings.general.danger.validation.cancel')}
-          destructive={pendingValidation !== 'high'}
+          destructive={lowering}
           onConfirm={() => void applyValidation(pendingValidation)}
         />
-      )}
+        );
+      })()}
     </div>
   );
 }
