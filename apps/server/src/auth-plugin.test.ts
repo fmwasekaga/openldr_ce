@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import Fastify from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { registerAuth } from './auth-plugin';
@@ -15,6 +15,7 @@ function ctx(opts: {
     cfg: { AUTH_DEV_BYPASS: opts.bypass ?? false, AUTH_DEV_USERNAME: 'dev-admin', AUTH_DEV_ROLES: 'lab_admin' },
     logger: { warn() {}, error() {}, info() {} },
     auth: { verifyToken: opts.verify ?? (async () => { throw new Error('bad'); }) },
+    audit: { record: vi.fn(async (e: unknown) => ({ ...(e as object), id: 'x', occurredAt: 't' })) },
     users: {
       syncFromClaims: async () => u,
       getByUsername: async () => undefined,
@@ -114,5 +115,30 @@ describe('registerAuth', () => {
     expect(ok.json().user.username).toBeTruthy();
     const nonSse = await app.inject({ method: 'GET', url: '/api/probe2?access_token=good' });
     expect(nonSse.statusCode).toBe(401); // query token not honoured off the SSE routes
+  });
+
+  it('records one throttled auth.failed on an invalid token', async () => {
+    const c = ctx({ verify: async () => { const e: any = new Error('bad'); e.code = 'ERR_JWS_SIGNATURE_VERIFICATION_FAILED'; throw e; } });
+    const app = await appWith(c);
+    await app.inject({ method: 'GET', url: '/api/probe', headers: { authorization: 'Bearer bad' } });
+    await app.inject({ method: 'GET', url: '/api/probe', headers: { authorization: 'Bearer bad' } });
+    const calls = (c.audit.record as any).mock.calls.filter((a: any[]) => a[0].action === 'auth.failed');
+    expect(calls.length).toBe(1);
+    expect(calls[0][0]).toMatchObject({ action: 'auth.failed', entityType: 'auth', metadata: expect.objectContaining({ reason: 'bad-signature' }) });
+  });
+
+  it('does NOT record auth.failed for a dev-bypass request', async () => {
+    const c = ctx({ bypass: true });
+    const app = await appWith(c);
+    await app.inject({ method: 'GET', url: '/api/probe' });
+    expect((c.audit.record as any).mock.calls.filter((a: any[]) => a[0].action === 'auth.failed')).toHaveLength(0);
+  });
+
+  it('never includes the token string in the audit row', async () => {
+    const c = ctx({ verify: async () => { throw new Error('bad'); } });
+    const app = await appWith(c);
+    await app.inject({ method: 'GET', url: '/api/probe', headers: { authorization: 'Bearer super-secret-token-value' } });
+    const calls = (c.audit.record as any).mock.calls;
+    expect(JSON.stringify(calls)).not.toContain('super-secret-token-value');
   });
 });
