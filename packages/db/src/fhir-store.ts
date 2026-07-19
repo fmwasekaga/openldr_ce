@@ -113,6 +113,8 @@ export const AMENDABLE_TYPES: ReadonlySet<string> = new Set(['Observation', 'Dia
 export interface FhirStore {
   save(resource: FhirResource, provenance?: Provenance): Promise<SavedRef>;
   get(resourceType: string, id: string): Promise<FhirResource | null>;
+  /** Cheap existence check for the latest version of a resource. */
+  exists(resourceType: string, id: string): Promise<boolean>;
   /** Like `get`, but also returns the row's stored provenance. The deferred projection
    *  needs it — `get` alone silently produced NULL source_system/batch_id in every
    *  projected row. Additive rather than a change to `get`, because
@@ -282,6 +284,16 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
         .where('id', '=', id)
         .executeTakeFirst();
       return row ? (row.resource as FhirResource) : null;
+    },
+
+    async exists(resourceType, id) {
+      const row = await db
+        .selectFrom('fhir.fhir_resources')
+        .select((eb) => eb.lit(1).as('one'))
+        .where('resource_type', '=', resourceType)
+        .where('id', '=', id)
+        .executeTakeFirst();
+      return !!row;
     },
 
     async getWithProvenance(resourceType, id) {
