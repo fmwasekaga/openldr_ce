@@ -43,6 +43,22 @@ rejected with `401`; an unknown path returns `404`.
 The request body is whatever your workflow expects — the bundled `lab-orders` sample validates
 the incoming order against a Form and persists the extracted FHIR resources.
 
+### Raw FHIR without a form
+
+The sample is form-based, but a webhook workflow does **not** have to use a form. To accept raw
+FHIR, build **Webhook → (a transform that expands the Bundle) → Persist / Store**:
+
+- The **Persist / Store** node persists **one FHIR resource per input item** — the same write path
+  the CLI uses, including the **validation strictness gate** (so at High a lab result still needs
+  its order; see the strictness note under [§2](#example-payloads)).
+- Because the node persists one resource per item, a **Bundle** must first be **expanded** into
+  individual resources — add a transform node that turns the Bundle's `entry[]` array into one
+  item per `entry.resource` before the Persist / Store node. You configure that mapping visually in
+  the builder and can preview it on sample input.
+
+If you just have a Bundle file and a source checkout, `openldr ingest bundle.json` (below) is the
+turnkey path — it applies the same converter + strictness gate without building a workflow.
+
 ## 2. Load a file with the CLI (source / developer installs)
 
 If you run OpenLDR from a source checkout, `pnpm openldr ingest <file>` reads a file, converts
@@ -69,7 +85,8 @@ did not recognise the file. Inspect or retry a batch with `pnpm openldr pipeline
 ### Example payloads
 
 **`bundle.json`** — the default `fhir-bundle` converter takes a FHIR `Bundle` (it reads each
-`entry.resource`) or a single bare resource. A minimal Bundle:
+`entry.resource`) or a single bare resource. A **clinically complete lab submission** — a patient,
+the **order** (`ServiceRequest`), and the **result** (`Observation`) linked back to that order:
 
 ```json
 {
@@ -87,9 +104,21 @@ did not recognise the file. Inspect or retry a batch with `pnpm openldr pipeline
     },
     {
       "resource": {
+        "resourceType": "ServiceRequest",
+        "id": "sr1",
+        "status": "active",
+        "intent": "order",
+        "subject": { "reference": "Patient/p1" },
+        "code": { "coding": [{ "system": "http://loinc.org", "code": "718-7", "display": "Hemoglobin" }] }
+      }
+    },
+    {
+      "resource": {
         "resourceType": "Observation",
         "id": "o1",
         "status": "final",
+        "category": [{ "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/observation-category", "code": "laboratory" }] }],
+        "basedOn": [{ "reference": "ServiceRequest/sr1" }],
         "subject": { "reference": "Patient/p1" },
         "code": { "coding": [{ "system": "http://loinc.org", "code": "718-7", "display": "Hemoglobin" }] },
         "valueQuantity": { "value": 13.5, "unit": "g/dL" }
@@ -101,6 +130,15 @@ did not recognise the file. Inspect or retry a batch with `pnpm openldr pipeline
 
 > A **bare JSON array** of resources is *not* a Bundle and will not persist — wrap resources in
 > a `Bundle` as above, or post a single resource object.
+
+> **Validation strictness.** Front-door pushes are validated at the configured level (**default
+> High**, in **Settings → Danger Zone → Data validation**, or `openldr settings validation`). At
+> High, a **laboratory result** (an `Observation` with `category` code `laboratory`, or a `LAB`
+> `DiagnosticReport`) **must reference its order** via `basedOn` — the `ServiceRequest` must be in
+> the same batch or already stored — or the **whole submission is rejected** with a `422` and an
+> `OperationOutcome` listing what's missing. That's why the example above includes the
+> `ServiceRequest` and links the `Observation` to it. Lower the level to `medium` (order present but
+> not resolved) or `low` (structure only) if you must, but High is the safe default for lab data.
 
 **`results.csv` + `mapping.json`** — the `tabular` plugin turns rows into FHIR. Its `--config`
 is a JSON file with an `output` (`fhir` or `rows`) and a `mapping` that tells the plugin which
