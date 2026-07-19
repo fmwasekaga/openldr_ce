@@ -128,3 +128,103 @@ describe('createAmendmentPullRunner', () => {
     expect(logger.error).toHaveBeenCalledTimes(1);
   });
 });
+
+// A fake SyncActivityRecorder that captures every record(entry) verbatim (attempt() is a no-op — the
+// amend runner never calls it; see the design note in amend-pull-worker.ts).
+function fakeActivity() {
+  const records: { event: string; records?: number; error?: string; metadata?: Record<string, unknown> }[] = [];
+  return {
+    recorder: {
+      attempt: () => {},
+      record: (e: { event: string; records?: number; error?: string; metadata?: Record<string, unknown> }) => {
+        records.push(e);
+      },
+    },
+    records,
+  };
+}
+
+describe('amend pull runner activity emission', () => {
+  it('emits one "diverged" row per diverged record, carrying resource identity', async () => {
+    const { recorder, records } = fakeActivity();
+    let cursor = 0;
+    const resp: AmendmentPullResponse = { records: [rec(7, 'd')], nextSeq: 7 };
+    const runner = createAmendmentPullRunner({
+      getToken: async () => 't',
+      postPull: async () => resp,
+      applyRecord: async () => 'diverged' as const,
+      readCursor: async () => cursor,
+      advanceCursor: async (s) => { cursor = s; },
+      logger: silent,
+      activity: recorder,
+    });
+    const r = await runner.runCycle();
+    expect(r.outcome).toBe('progressed');
+    const diverged = records.filter((e) => e.event === 'diverged');
+    expect(diverged).toHaveLength(1);
+    expect(diverged[0].metadata).toMatchObject({ resourceType: 'Observation', id: 'd', version: 2, seq: 7 });
+  });
+
+  it('emits one sanitized "failed" entry when postPull throws (no raw token in the entry)', async () => {
+    const { recorder, records } = fakeActivity();
+    const cursor = 3;
+    const runner = createAmendmentPullRunner({
+      getToken: async () => 't',
+      postPull: async () => {
+        throw new Error('boom Bearer secrettoken123');
+      },
+      applyRecord: async () => 'applied' as const,
+      readCursor: async () => cursor,
+      advanceCursor: async () => {},
+      logger: silent,
+      activity: recorder,
+    });
+    const r = await runner.runCycle();
+    expect(r.outcome).toBe('failed');
+    expect(records).toHaveLength(1);
+    expect(records[0].event).toBe('failed');
+    expect(records[0].error).toBeDefined();
+    expect(records[0].error).not.toContain('secrettoken123');
+  });
+
+  it('emits a "synced" entry carrying the applied count on a fully-applied window', async () => {
+    const { recorder, records } = fakeActivity();
+    let cursor = 0;
+    const resp: AmendmentPullResponse = { records: [rec(5, 'a'), rec(6, 'b')], nextSeq: 6 };
+    const runner = createAmendmentPullRunner({
+      getToken: async () => 't',
+      postPull: async () => resp,
+      applyRecord: async () => 'applied' as const,
+      readCursor: async () => cursor,
+      advanceCursor: async (s) => { cursor = s; },
+      logger: silent,
+      activity: recorder,
+    });
+    const r = await runner.runCycle();
+    expect(r.outcome).toBe('progressed');
+    const synced = records.filter((e) => e.event === 'synced');
+    expect(synced).toHaveLength(1);
+    expect(synced[0].records).toBe(2);
+  });
+
+  it('emits one "quarantined" entry per apply-throw, and still advances past it', async () => {
+    const { recorder, records } = fakeActivity();
+    let cursor = 0;
+    const resp: AmendmentPullResponse = { records: [rec(5, 'bad'), rec(6, 'good')], nextSeq: 6 };
+    const runner = createAmendmentPullRunner({
+      getToken: async () => 't',
+      postPull: async () => resp,
+      applyRecord: async (r) => { if (r.id === 'bad') throw new Error('boom'); return 'applied' as const; },
+      readCursor: async () => cursor,
+      advanceCursor: async (s) => { cursor = s; },
+      logger: silent,
+      activity: recorder,
+    });
+    const r = await runner.runCycle();
+    expect(r.outcome).toBe('progressed');
+    expect(cursor).toBe(6);
+    const quarantined = records.filter((e) => e.event === 'quarantined');
+    expect(quarantined).toHaveLength(1);
+    expect(quarantined[0].metadata).toMatchObject({ resourceType: 'Observation', id: 'bad', seq: 5 });
+  });
+});
