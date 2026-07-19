@@ -69,6 +69,15 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
     return { triggered: true };
   });
 
+  // Track A: recent sync activity feed (bounded, high-signal). Admin-only, user-authed. Optional
+  // ?direction=push|pull|amend filter. Populated by the sync runners, not by routes.
+  app.get('/api/settings/sync/activity', { preHandler: requireRole('lab_admin') }, async (req) => {
+    const q = req.query as { direction?: string };
+    const direction =
+      q.direction === 'push' || q.direction === 'pull' || q.direction === 'amend' ? q.direction : undefined;
+    return ctx.syncActivity.list({ direction, limit: 50 });
+  });
+
   // Sync S7-A: list quarantined poison-bulk records (lab_admin, user-authed).
   app.get('/api/settings/sync/quarantine', { preHandler: requireRole('lab_admin') }, async () => ctx.sync.listQuarantine());
 
