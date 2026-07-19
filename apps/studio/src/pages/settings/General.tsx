@@ -13,11 +13,12 @@ import { DangerConfirmDialog } from '@/terminology/DangerConfirmDialog';
 import { TypeToConfirmDialog } from '@/components/ui/type-to-confirm-dialog';
 import {
   fetchClientConfig, fetchFeatureFlags, setFeatureFlag, runDangerAction,
-  fetchSyncConfig, saveSyncConfig, fetchSyncStatus, triggerSyncNow,
+  fetchSyncConfig, saveSyncConfig, fetchSyncStatus, triggerSyncNow, fetchSyncActivity,
   fetchNumberSettings, setNumberSetting,
   getValidation, setValidation,
   type ClientConfig, type FeatureFlag, type DangerAction,
   type SyncConfigView, type SyncConfigInput, type SyncMode, type SyncStatus, type SyncDirectionStatus,
+  type SyncActivityRow,
   type NumberSetting, type ValidationStrictness,
 } from '@/api';
 
@@ -36,6 +37,7 @@ export function General() {
   // Write-only secret field: blank ⇒ leave the stored secret unchanged (omit from the PUT payload).
   const [secretInput, setSecretInput] = useState('');
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [syncActivity, setSyncActivity] = useState<SyncActivityRow[]>([]);
   const [syncSaving, setSyncSaving] = useState(false);
   const [syncNowBusy, setSyncNowBusy] = useState(false);
   const [numbers, setNumbers] = useState<NumberSetting[]>([]);
@@ -52,6 +54,7 @@ export function General() {
         setFlags(await fetchFeatureFlags());
         setSync(await fetchSyncConfig());
         setSyncStatus(await fetchSyncStatus());
+        setSyncActivity(await fetchSyncActivity());
         setNumbers(await fetchNumberSettings());
         setValidationLevel((await getValidation()).strictness);
       }
@@ -78,6 +81,7 @@ export function General() {
   const refreshSyncStatus = useCallback(async () => {
     try {
       setSyncStatus(await fetchSyncStatus());
+      setSyncActivity(await fetchSyncActivity());
     } catch {
       // Status is best-effort telemetry; a transient failure shouldn't surface a toast.
     }
@@ -187,6 +191,7 @@ export function General() {
     const state = dir.running ? t('settings.general.sync.running') : t('settings.general.sync.idle');
     const parts = [state, `seq ${dir.lastSeq}`];
     if (dir.lastSyncedAt) parts.push(new Date(dir.lastSyncedAt).toLocaleString());
+    if (dir.lastError) parts.push(`⚠ ${dir.lastError}`);
     return parts.join(' · ');
   };
 
@@ -375,6 +380,50 @@ export function General() {
               <dt className="text-muted-foreground">{t('settings.general.sync.pending')}</dt>
               <dd className="font-mono">{syncStatus?.pendingPush ?? 0}</dd>
             </dl>
+            <dl className="grid grid-cols-[6rem_1fr] gap-x-3 gap-y-1 text-xs">
+              <dt className="text-muted-foreground">{t('settings.general.sync.lastChecked')}</dt>
+              <dd className="font-mono">
+                {syncStatus?.push?.lastAttemptAt || syncStatus?.pull?.lastAttemptAt
+                  ? new Date((syncStatus?.push?.lastAttemptAt ?? syncStatus?.pull?.lastAttemptAt) as string).toLocaleString()
+                  : t('settings.general.sync.never')}
+              </dd>
+              <dt className="text-muted-foreground">{t('settings.general.sync.lastSuccess')}</dt>
+              <dd className="font-mono">
+                {syncStatus?.push?.lastSuccessAt || syncStatus?.pull?.lastSuccessAt
+                  ? new Date((syncStatus?.push?.lastSuccessAt ?? syncStatus?.pull?.lastSuccessAt) as string).toLocaleString()
+                  : t('settings.general.sync.never')}
+              </dd>
+            </dl>
+            <div className="flex flex-col gap-1">
+              <span className="font-medium">{t('settings.general.sync.activity')}</span>
+              {syncActivity.length === 0 ? (
+                <span className="text-xs text-muted-foreground">{t('settings.general.sync.noActivity')}</span>
+              ) : (
+                <ul className="flex max-h-48 flex-col gap-1 overflow-y-auto text-xs">
+                  {syncActivity.map((a) => (
+                    <li key={a.id} className="flex items-baseline justify-between gap-2 font-mono">
+                      <span>
+                        <span className="text-muted-foreground">{a.direction}</span>{' '}
+                        <span
+                          className={
+                            a.event === 'failed'
+                              ? 'text-destructive'
+                              : a.event === 'synced'
+                                ? 'text-emerald-600 dark:text-emerald-400'
+                                : 'text-amber-600 dark:text-amber-400'
+                          }
+                        >
+                          {t(`settings.general.sync.event.${a.event}`)}
+                        </span>
+                        {a.event === 'synced' ? ` (${a.records})` : ''}
+                        {a.error ? ` — ${a.error}` : ''}
+                      </span>
+                      <span className="shrink-0 text-muted-foreground">{new Date(a.occurredAt).toLocaleTimeString()}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
             <div className="flex justify-end">
               <Button variant="secondary" onClick={() => void doSyncNow()} disabled={syncNowBusy}>
                 {t('settings.general.sync.syncNow')}

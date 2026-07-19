@@ -1,6 +1,8 @@
 import type { ApplyResult, Logger } from '@openldr/db';
 import type { PullRequest, AmendmentPullResponse, SyncRecord } from './batch';
 import type { CycleResult } from './cycle-result';
+import type { SyncActivityRecorder } from './activity';
+import { sanitizeSyncError } from './activity';
 
 // Injected deps for the amendment pull runner (Sync S6a). Kept pure over its deps (fakeable in tests).
 // The bootstrap host wires applyRecord to fhirStore.applyRemote, postPull to POST
@@ -15,6 +17,8 @@ export interface AmendPullDeps {
   readCursor: () => Promise<number>; // change_cursors consumer 'sync-amend-pull'
   advanceCursor: (seq: number) => Promise<void>;
   logger: Logger;
+  /** Optional high-signal activity sink (Track A). Direction 'amend'. Absent = no emission. */
+  activity?: SyncActivityRecorder;
 }
 
 export interface AmendmentPullRunner {
@@ -31,12 +35,17 @@ export function createAmendmentPullRunner(deps: AmendPullDeps): AmendmentPullRun
   return {
     async runCycle(): Promise<CycleResult> {
       const cursor = await deps.readCursor();
+      // Mark a cycle attempt for the 'amend' direction's liveness. Harmless today (only push/pull
+      // liveness is surfaced on SyncStatus), but keeps every runner faithful to the recorder contract
+      // ("attempt() once per cycle") so amend liveness is correct if it is ever surfaced.
+      deps.activity?.attempt();
       let resp: AmendmentPullResponse;
       try {
         const token = await deps.getToken();
         resp = await deps.postPull({ fromSeq: cursor }, token);
       } catch (err) {
         deps.logger.warn({ err: (err as Error).message }, 'sync amend pull failed; cursor not advanced (will retry)');
+        deps.activity?.record({ event: 'failed', error: sanitizeSyncError(err), metadata: { seq: cursor } });
         return { outcome: 'failed', applied: 0 };
       }
       if (resp.records.length === 0) return { outcome: 'drained', applied: 0 };
@@ -47,14 +56,25 @@ export function createAmendmentPullRunner(deps: AmendPullDeps): AmendmentPullRun
       for (const rec of resp.records) {
         try {
           const result = await deps.applyRecord(rec);
-          if (result === 'diverged') diverged++;
-          else applied++;
+          if (result === 'diverged') {
+            diverged++;
+            deps.activity?.record({
+              event: 'diverged',
+              metadata: { resourceType: rec.resourceType, id: rec.id, version: rec.version, seq: rec.seq },
+            });
+          } else {
+            applied++;
+          }
           safeSeq = rec.seq;
         } catch (err) {
           deps.logger.warn(
             { err: (err as Error).message, resourceType: rec.resourceType, id: rec.id, seq: rec.seq },
             'sync amend pull: apply failed; skipping (quarantine)',
           );
+          deps.activity?.record({
+            event: 'quarantined',
+            metadata: { resourceType: rec.resourceType, id: rec.id, seq: rec.seq },
+          });
           safeSeq = rec.seq; // quarantined record is handled — safe to advance past it
         }
       }
@@ -80,11 +100,17 @@ export function createAmendmentPullRunner(deps: AmendPullDeps): AmendmentPullRun
           { cursor, safeSeq, nextSeq: resp.nextSeq, count: applied },
           'sync amend pull: window processed but cursor did not advance; not looping (will retry next tick)',
         );
+        deps.activity?.record({
+          event: 'failed',
+          error: 'sync amend pull: cursor did not advance',
+          metadata: { seq: cursor, nextSeq: resp.nextSeq },
+        });
         return { outcome: 'failed', applied };
       }
       // 'progressed' because the cursor genuinely advanced — 'applied' stays a REPORTING count only. A
       // window where every record diverges (excluded from `applied` at :49-50) or is quarantined still
       // reports 'progressed' here, because the WINDOW was processed, not because a count is non-zero.
+      if (applied > 0) deps.activity?.record({ event: 'synced', records: applied, metadata: { seq: target } });
       return { outcome: 'progressed', applied };
     },
   };

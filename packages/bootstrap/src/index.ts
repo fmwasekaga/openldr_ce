@@ -8,7 +8,7 @@ import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import type { Config } from '@openldr/config';
 import { createLogger, HealthRegistry, open, seal, parseSecretKey, redact, type Logger } from '@openldr/core';
 import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore } from '@openldr/db';
-import type { ExternalSchema, InternalSchema, Provenance } from '@openldr/db';
+import type { ExternalSchema, InternalSchema, Provenance, SyncActivityStore } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore, createUserProfileStore, type UserProfileStore } from '@openldr/users';
@@ -34,7 +34,7 @@ import { createReportScheduler, type ReportScheduler } from './report-scheduler'
 import { createPluginScheduleApi, createPluginScheduleRunner, type PluginScheduleRunner } from './plugin-schedule';
 import { createFormArtifactInstaller, type FormArtifactInstaller } from './form-artifact-install';
 import { type PluginRuntime } from '@openldr/plugins';
-import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore } from '@openldr/db';
+import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
 import { createSyncPushRunner, createSyncPullRunner, createAmendmentPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, combineCycleResults, type PushBatch, type PushResponse, type SyncConfig } from '@openldr/sync';
@@ -43,6 +43,7 @@ import { createSyncPullWorker } from './sync-pull-worker';
 import { createSyncHandle, type SyncHandle } from './sync-handle';
 import { createSyncRuntime, type SyncRuntime, type BuiltPush, type BuiltPull } from './sync-runtime';
 import { createRetryQuarantine } from './sync-retry-quarantine';
+import { createSyncActivityTracker } from './sync-activity-tracker';
 import { migrateLegacySyncConfig } from './sync-settings-migrate';
 import { encodePushBody, advertisesGzip } from './sync-gzip';
 import { migrateWorkflowSecrets } from './workflow-secret-migrate';
@@ -322,6 +323,9 @@ export interface AppContext {
   /** Sync status + trigger surface (Task 5). ALWAYS present: when sync is disabled, status()
    *  reports `enabled:false` with null directions and triggerNow() is a no-op. */
   sync: SyncHandle;
+  /** Track A: bounded, high-signal sync outcome feed. The `/api/settings/sync/activity` endpoint reads
+   *  it; the runners write it (via the in-memory tracker). */
+  syncActivity: SyncActivityStore;
   /** The re-runnable sync worker lifecycle. reconcile() re-reads config and rebuilds the workers,
    *  which is how a Settings toggle takes effect without a restart (Task 4 calls it). */
   syncRuntime: SyncRuntime;
@@ -799,6 +803,12 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     return { tokenProvider, postJson };
   };
 
+  // Track A — sync activity feed. A bounded, high-signal store of sync outcomes plus an in-memory
+  // per-direction liveness tracker. Built ONCE, shared by both runners (via forDirection) and the
+  // status handle (via summary). Emitting from the RUNNERS — not the routes — is the whole point.
+  const syncActivity = createSyncActivityStore(internal.db, { retentionPerDirection: 200 });
+  const syncActivityTracker = createSyncActivityTracker(syncActivity, logger);
+
   // PUSH direction (lab -> central). Runs for mode 'push' and 'bidirectional'.
   const buildPush = async (syncCfg: SyncConfig): Promise<BuiltPush> => {
     // Cadence is operator-configured (sync.interval_minutes); both directions share it.
@@ -841,6 +851,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
         readCursor: () => readChangeCursor(internal.db, 'sync-push'),
         advanceCursor: (seq) => advanceChangeCursor(internal.db, 'sync-push', seq),
         logger,
+        activity: syncActivityTracker.forDirection('push'),
       });
       // S7: a DEDICATED LISTEN client wakes the push drain the moment a resource is written, instead
       // of waiting up to sync.interval_minutes. Mirrors the projection worker's client (index.ts:704).
@@ -931,6 +942,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
             .then((r) => (r.status === 'quarantined' ? 'quarantine' : 'hold')),
         holdSuccess: (rec) => quarantine.clear(rec.entityType, rec.entityId),
         logger,
+        activity: syncActivityTracker.forDirection('pull'),
       });
       // Sync S6a: the amendment pull runner — a SECOND stream drained in the same host loop, over its own
       // 'sync-amend-pull' cursor. Wire = SyncRecord (same as push), applied via applyRemote (higher
@@ -943,6 +955,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
         readCursor: () => readChangeCursor(internal.db, 'sync-amend-pull'),
         advanceCursor: (seq) => advanceChangeCursor(internal.db, 'sync-amend-pull', seq),
         logger,
+        activity: syncActivityTracker.forDirection('amend'),
       });
       const worker = createSyncPullWorker({
         runner: {
@@ -991,6 +1004,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     runtime: syncRuntime,
     quarantine: syncQuarantine,
     divergences: syncDivergences,
+    activity: syncActivityTracker,
   });
 
   const pluginData = createPluginDataStore(internal.db);
@@ -1159,6 +1173,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     encryptSecret,
     decryptSecret: syncDecrypt,
     sync,
+    syncActivity,
     syncRuntime,
     cfg,
     async close() {

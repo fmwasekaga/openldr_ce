@@ -158,6 +158,16 @@ export interface AuditEventsTable {
   metadata: JSONColumnType<Record<string, unknown>> | null;
 }
 
+export interface SyncActivityTable {
+  id: string;
+  occurred_at: Generated<Date>;
+  direction: string;
+  event: string;
+  records: Generated<number>;
+  error: string | null;
+  metadata: JSONColumnType<Record<string, unknown>> | null;
+}
+
 export interface UsersTable {
   id: string;
   subject: string | null;
@@ -643,6 +653,7 @@ export interface InternalSchema {
   ingest_batches: IngestBatchesTable;
   plugins: PluginsTable;
   audit_events: AuditEventsTable;
+  sync_activity: SyncActivityTable;
   users: UsersTable;
   terminology_concepts: TerminologyConceptsTable;
   terminology_systems: TerminologySystemsTable;

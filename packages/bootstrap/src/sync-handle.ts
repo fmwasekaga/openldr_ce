@@ -4,6 +4,7 @@ import type {
   SyncDivergenceRow, SyncDivergenceSummary, SyncDivergenceStore,
 } from '@openldr/db';
 import type { SyncRuntime } from './sync-runtime';
+import type { DirectionLiveness, SyncActivityTracker } from './sync-activity-tracker';
 
 // Sync S4 (Task 5): a read/trigger handle over the two sync directions, always present on AppContext
 // (even when sync is disabled). status() reflects each worker's live isRunning() plus its cursor
@@ -20,6 +21,14 @@ export interface SyncDirectionStatus {
   lastSeq: number;
   /** When the cursor last advanced (ISO), or null if it never has. */
   lastSyncedAt: string | null;
+  /** When this direction last attempted a cycle (ISO, in-memory), or null if it never has. */
+  lastAttemptAt: string | null;
+  /** When this direction last succeeded (ISO, in-memory), or null if it never has. */
+  lastSuccessAt: string | null;
+  /** When this direction last failed (ISO, in-memory), or null if it never has. */
+  lastErrorAt: string | null;
+  /** The most recent failure message (in-memory), or null if none. */
+  lastError: string | null;
 }
 
 export interface SyncStatus {
@@ -65,6 +74,8 @@ export function createSyncHandle(opts: {
   /** Built UNCONDITIONALLY by the host (outside both sync gates): divergence rows are durable and must
    *  be listable on a push-only or sync-disabled node. */
   divergences?: SyncDivergenceStore;
+  /** Track A: per-direction liveness summary source (in-memory). Absent = liveness fields are null. */
+  activity?: Pick<SyncActivityTracker, 'summary'>;
 }): SyncHandle {
   const cursorRow = (consumer: string) =>
     opts.db
@@ -75,13 +86,15 @@ export function createSyncHandle(opts: {
 
   const toDir = (
     row: { last_seq: unknown; updated_at: unknown } | undefined,
-    w?: WorkerRef,
+    w: WorkerRef | undefined,
+    live: DirectionLiveness,
   ): SyncDirectionStatus | null =>
     w
       ? {
           running: w.isRunning(),
           lastSeq: Number(row?.last_seq ?? 0), // bigint reads back as string on real PG
           lastSyncedAt: row?.updated_at ? new Date(row.updated_at as string | number | Date).toISOString() : null,
+          ...live,
         }
       : null;
 
@@ -100,13 +113,16 @@ export function createSyncHandle(opts: {
           .executeTakeFirst();
         pendingPush = Math.max(0, Number(head?.m ?? 0) - Number(pushRow?.last_seq ?? 0));
       }
+      const emptyLive: DirectionLiveness = { lastAttemptAt: null, lastSuccessAt: null, lastErrorAt: null, lastError: null };
+      const pushLive = opts.activity?.summary('push') ?? emptyLive;
+      const pullLive = opts.activity?.summary('pull') ?? emptyLive;
       return {
         enabled: opts.runtime.isEnabled(),
         mode: opts.runtime.mode(),
         centralUrl: opts.runtime.centralUrl(),
         siteId: opts.runtime.siteId(),
-        push: toDir(pushRow, push),
-        pull: toDir(pullRow, pull),
+        push: toDir(pushRow, push, pushLive),
+        pull: toDir(pullRow, pull, pullLive),
         pendingPush,
       };
     },

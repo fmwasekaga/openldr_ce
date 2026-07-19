@@ -2,6 +2,8 @@ import type { FhirResource } from '@openldr/fhir';
 import { planProjection, type ChangeRow, type FetchSafeRows, type Gap, type Logger } from '@openldr/db';
 import type { PushBatch, PushResponse, SyncRecord } from './batch';
 import type { CycleResult } from './cycle-result';
+import type { SyncActivityRecorder } from './activity';
+import { sanitizeSyncError } from './activity';
 
 // The internal Kysely handle, derived from FetchSafeRows' first parameter (Kysely<InternalSchema>) so
 // this package needs no direct `kysely` dependency.
@@ -21,6 +23,8 @@ export interface PushDeps {
   advanceCursor: (seq: number) => Promise<void>;
   logger: Logger;
   batchSize?: number;
+  /** Optional high-signal activity sink (Track A). Absent = no emission (unit tests / offline collect). */
+  activity?: SyncActivityRecorder;
 }
 
 export interface SyncPushRunner {
@@ -118,6 +122,7 @@ export function createSyncPushRunner(deps: PushDeps): SyncPushRunner {
   return {
     async runCycle(): Promise<CycleResult> {
       const cursor = await deps.readCursor();
+      deps.activity?.attempt();
       // Compute the window's records via the shared safe-frontier collector (byte-identical to what an
       // S5 offline push bundle carries). It threads `pendingGaps` in + out of this stateful closure.
       const collected = await collectPushRecords(deps, cursor, pendingGaps);
@@ -149,6 +154,7 @@ export function createSyncPushRunner(deps: PushDeps): SyncPushRunner {
       } catch (err) {
         // Transport/HTTP/token failure: leave the cursor put so the same window retries next cycle.
         deps.logger.error({ err, fromSeq: cursor, count: records.length }, 'sync push failed; cursor not advanced (will retry)');
+        deps.activity?.record({ event: 'failed', error: sanitizeSyncError(err), metadata: { seq: cursor } });
         return { outcome: 'failed', applied: 0 };
       }
 
@@ -159,6 +165,10 @@ export function createSyncPushRunner(deps: PushDeps): SyncPushRunner {
           { id: rej.id, version: rej.version, seq: rej.seq, reason: rej.reason },
           'sync push record rejected by central (quarantined, skipping)',
         );
+        deps.activity?.record({
+          event: 'quarantined',
+          metadata: { seq: rej.seq, entityId: rej.id, version: rej.version, reason: rej.reason },
+        });
       }
 
       // Advance only as far as BOTH central acked AND the local safe frontier we actually pushed.
@@ -174,12 +184,21 @@ export function createSyncPushRunner(deps: PushDeps): SyncPushRunner {
           { ackSeq: resp.ackSeq, cursor, newCursor, count: records.length },
           'sync push: central acked at or behind the cursor; not advancing (will retry next tick)',
         );
+        deps.activity?.record({
+          event: 'failed',
+          error: 'central acked at or behind the push cursor',
+          metadata: { seq: cursor, ackSeq: resp.ackSeq },
+        });
         return { outcome: 'failed', applied: resp.applied };
       }
       await deps.advanceCursor(target);
 
       // Report the count central durably applied (not records.length), so a partially-rejected batch
       // reflects real work done.
+      if (resp.applied > 0) {
+        deps.activity?.record({ event: 'synced', records: resp.applied, metadata: { seq: target } });
+      }
+
       // 'progressed' because the WINDOW was processed and the cursor advanced — NOT because applied
       // is non-zero. A batch central rejected or diverged wholesale still progressed the cursor, and
       // a drain loop must go again.

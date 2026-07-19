@@ -7,7 +7,10 @@ import { registerSettingsRoutes } from './settings-routes';
 
 const SYNC_STATUS = {
   enabled: true, mode: 'push', centralUrl: 'https://central.example', siteId: 'lab-1',
-  push: { running: true, lastSeq: 7, lastSyncedAt: '2026-07-14T00:00:00.000Z' },
+  push: {
+    running: true, lastSeq: 7, lastSyncedAt: '2026-07-14T00:00:00.000Z',
+    lastAttemptAt: null, lastSuccessAt: null, lastErrorAt: null, lastError: null,
+  },
   pull: null, pendingPush: 3,
 };
 
@@ -32,6 +35,11 @@ function fakeCtx(syncEnabled = true) {
         triggerNow,
         listQuarantine: async () => [],
         retryQuarantine: async () => ({ ok: true }),
+      },
+      syncActivity: {
+        list: vi.fn(async (o?: { direction?: string; limit?: number }) => [
+          { id: '1', occurredAt: '2026-07-19T00:00:00.000Z', direction: o?.direction ?? 'push', event: 'synced', records: 5, error: null, metadata: { seq: 7 } },
+        ]),
       },
       __triggerNow: triggerNow,
       syncRuntime: { reconcile },
@@ -229,6 +237,23 @@ describe('settings routes', () => {
     expect(res.json()).toEqual({ triggered: false, reason: 'disabled' });
     expect((ctx as any).__triggerNow).not.toHaveBeenCalled();
     expect((ctx as any).__audit.some((e: any) => e.action === 'settings.sync.now')).toBe(false);
+  });
+
+  it('GET /api/settings/sync/activity returns rows for lab_admin and passes the direction filter', async () => {
+    const { ctx, deps } = fakeCtx();
+    const app = appWithUser(['lab_admin'], (a) => registerSettingsRoutes(a, ctx, deps));
+    const res = await app.inject({ method: 'GET', url: '/api/settings/sync/activity?direction=pull' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(Array.isArray(body)).toBe(true);
+    expect((ctx as any).syncActivity.list).toHaveBeenCalledWith({ direction: 'pull', limit: 50 });
+  });
+
+  it('GET /api/settings/sync/activity is 403 for non-admins', async () => {
+    const { ctx, deps } = fakeCtx();
+    const app = appWithUser(['lab_technician'], (a) => registerSettingsRoutes(a, ctx, deps));
+    const res = await app.inject({ method: 'GET', url: '/api/settings/sync/activity' });
+    expect(res.statusCode).toBe(403);
   });
 
   it('GET /api/settings/sync/quarantine lists quarantined items', async () => {

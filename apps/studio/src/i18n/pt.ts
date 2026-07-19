@@ -266,6 +266,13 @@ export const pt: EnShape = {
         notStarted: 'não iniciado',
         triggered: 'Sincronização iniciada',
         disabledToast: 'A sincronização está desativada — nada a iniciar',
+        lastSuccess: 'Último sucesso',
+        lastError: 'Último erro',
+        lastChecked: 'Última verificação',
+        never: 'nunca',
+        activity: 'Atividade recente',
+        noActivity: 'Ainda não há atividade de sincronização.',
+        event: { synced: 'sincronizado', failed: 'falha', quarantined: 'em quarentena', diverged: 'divergência' },
       },
       danger: {
         title: 'Zona de perigo',

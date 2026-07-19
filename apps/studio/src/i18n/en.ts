@@ -262,6 +262,13 @@ export const en = {
         notStarted: 'not started',
         triggered: 'Sync triggered',
         disabledToast: 'Sync is disabled — nothing to trigger',
+        lastSuccess: 'Last success',
+        lastError: 'Last error',
+        lastChecked: 'Last checked',
+        never: 'never',
+        activity: 'Recent activity',
+        noActivity: 'No sync activity yet.',
+        event: { synced: 'synced', failed: 'failed', quarantined: 'quarantined', diverged: 'diverged' },
       },
       danger: {
         title: 'Danger Zone',

@@ -26,6 +26,7 @@ export * from './report-store';
 export * from './sync-site-store';
 export * from './sync-quarantine-store';
 export * from './sync-divergence-store';
+export * from './sync-activity-store';
 export * from './sync-site-cursor-store';
 export * from './divergence-hash';
 export * from './marketplace-install-store';

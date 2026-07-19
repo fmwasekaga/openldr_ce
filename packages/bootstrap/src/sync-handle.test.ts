@@ -7,6 +7,10 @@ type Db = Awaited<ReturnType<typeof makeMigratedDb>>;
 
 const PUSH_DATE = new Date('2026-07-14T08:30:00.000Z');
 
+// Every SyncDirectionStatus now carries the four Track A liveness fields (Task 8). Tests that don't
+// wire an `activity` tracker get this all-null shape spread onto their expected cursor fields.
+const NO_LIVENESS = { lastAttemptAt: null, lastSuccessAt: null, lastErrorAt: null, lastError: null };
+
 async function seed(db: Db) {
   // Separate inserts: pg-mem rejects a multi-row insert that mixes an explicit value with a
   // column default (sync-pull's updated_at defaults to now()).
@@ -75,7 +79,7 @@ describe('createSyncHandle.status', () => {
     expect(s.mode).toBe('bidirectional');
     expect(s.centralUrl).toBe('https://central.example');
     expect(s.siteId).toBe('lab-7');
-    expect(s.push).toEqual({ running: true, lastSeq: 142, lastSyncedAt: PUSH_DATE.toISOString() });
+    expect(s.push).toEqual({ running: true, lastSeq: 142, lastSyncedAt: PUSH_DATE.toISOString(), ...NO_LIVENESS });
     expect(s.pull?.running).toBe(true);
     expect(s.pull?.lastSeq).toBe(88);
     expect(typeof s.pull?.lastSyncedAt).toBe('string'); // updated_at defaults to now() on insert
@@ -107,7 +111,7 @@ describe('createSyncHandle.status', () => {
 
     const s = await handle.status();
     expect(s.pull).toBeNull();
-    expect(s.push).toEqual({ running: true, lastSeq: 142, lastSyncedAt: PUSH_DATE.toISOString() });
+    expect(s.push).toEqual({ running: true, lastSeq: 142, lastSyncedAt: PUSH_DATE.toISOString(), ...NO_LIVENESS });
     expect(s.pendingPush).toBe(8);
   });
 
@@ -131,7 +135,7 @@ describe('createSyncHandle.status', () => {
     });
 
     const s = await handle.status();
-    expect(s.push).toEqual({ running: true, lastSeq: 0, lastSyncedAt: null });
+    expect(s.push).toEqual({ running: true, lastSeq: 0, lastSyncedAt: null, ...NO_LIVENESS });
     expect(s.pendingPush).toBe(0); // empty change_log
   });
 
@@ -155,6 +159,48 @@ describe('createSyncHandle.status', () => {
     const s = await handle.status();
     expect(s.enabled).toBe(true);
     expect(s.push?.running).toBe(true);
+  });
+});
+
+describe('createSyncHandle.status liveness (Track A)', () => {
+  it('folds the activity summary into each direction when an activity tracker is wired', async () => {
+    const db = await makeMigratedDb();
+    await seed(db);
+    const activity = {
+      summary: (d: 'push' | 'pull') =>
+        d === 'push'
+          ? { lastAttemptAt: '2026-07-19T00:00:00.000Z', lastSuccessAt: '2026-07-19T00:00:01.000Z', lastErrorAt: null, lastError: null }
+          : { lastAttemptAt: '2026-07-19T00:00:02.000Z', lastSuccessAt: null, lastErrorAt: '2026-07-19T00:00:03.000Z', lastError: 'boom' },
+    };
+    const handle = createSyncHandle({
+      db,
+      runtime: fakeRuntime({ mode: 'bidirectional', pushWorker: runningWorker(), pullWorker: runningWorker() }),
+      activity,
+    });
+
+    const s = await handle.status();
+    expect(s.push?.lastAttemptAt).toBe('2026-07-19T00:00:00.000Z');
+    expect(s.push?.lastSuccessAt).toBe('2026-07-19T00:00:01.000Z');
+    expect(s.push?.lastErrorAt).toBeNull();
+    expect(s.push?.lastError).toBeNull();
+    expect(s.pull?.lastAttemptAt).toBe('2026-07-19T00:00:02.000Z');
+    expect(s.pull?.lastSuccessAt).toBeNull();
+    expect(s.pull?.lastErrorAt).toBe('2026-07-19T00:00:03.000Z');
+    expect(s.pull?.lastError).toBe('boom');
+    // Cursor fields are unaffected by the liveness fold.
+    expect(s.push?.lastSeq).toBe(142);
+  });
+
+  it('reports all-null liveness when no activity tracker is wired', async () => {
+    const db = await makeMigratedDb();
+    await seed(db);
+    const handle = createSyncHandle({
+      db,
+      runtime: fakeRuntime({ mode: 'push', pushWorker: runningWorker() }),
+    });
+
+    const s = await handle.status();
+    expect(s.push).toMatchObject(NO_LIVENESS);
   });
 });
 
