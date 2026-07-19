@@ -283,7 +283,7 @@ describe('settings routes', () => {
     expect((ctx as any).__validationStrictnessSet).toHaveBeenCalledWith('medium', 'u1');
     const row = (ctx as any).__audit.find((e: any) => e.action === 'settings.validation_strictness');
     expect(row).toBeTruthy();
-    expect(row.entityType).toBe('setting');
+    expect(row.entityType).toBe('app_setting');
     expect(row.entityId).toBe('validation.strictness');
     expect(row.before).toEqual({ strictness: 'high' });
     expect(row.after).toEqual({ strictness: 'medium' });

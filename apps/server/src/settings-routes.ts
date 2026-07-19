@@ -331,7 +331,7 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
     const level = body.strictness as 'low' | 'medium' | 'high';
     await ctx.validationStrictness.set(level, req.user?.id ?? null);
     await recordAudit(ctx, req, {
-      action: 'settings.validation_strictness', entityType: 'setting', entityId: 'validation.strictness',
+      action: 'settings.validation_strictness', entityType: 'app_setting', entityId: 'validation.strictness',
       before: { strictness: before }, after: { strictness: level },
     });
     return { strictness: level };
