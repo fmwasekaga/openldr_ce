@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { persistResource, persistResources } from './persist';
 import type { FhirStore } from './fhir-store';
-import type { Logger } from '@openldr/core';
+import { AppError, type Logger } from '@openldr/core';
 
 const logger = { error: vi.fn(), info: vi.fn() } as unknown as Logger;
 
@@ -52,5 +52,35 @@ describe('persistResources (batched)', () => {
     const fhirStore = { save: vi.fn(async (r: any) => ({ id: r.id })) } as never;
     const logger = { error: vi.fn(), info: vi.fn() } as never;
     await expect(persistResources({ fhirStore, logger }, [{ nonsense: true }], {})).rejects.toBeTruthy();
+  });
+});
+
+function stubStore() {
+  const saved: unknown[] = [];
+  return {
+    saved,
+    store: {
+      save: vi.fn(async (r: unknown) => { saved.push(r); return { resourceType: (r as any).resourceType, id: (r as any).id, version: 1 }; }),
+      exists: vi.fn(async () => false),
+      get: vi.fn(), getWithProvenance: vi.fn(), applyRemote: vi.fn(),
+    } as any,
+  };
+}
+const gateLogger = { info() {}, warn() {}, error() {}, debug() {} } as any;
+const labObs = { resourceType: 'Observation', id: 'o1', status: 'final',
+  category: [{ coding: [{ code: 'laboratory' }] }], code: { text: 'Hb' }, subject: { reference: 'Patient/p1' } };
+const opts = (level: any) => ({ level, resolveServiceRequest: async () => false });
+
+describe('persistResources strictness gate', () => {
+  it('high: rejects a lab result with no order and saves NOTHING', async () => {
+    const { store, saved } = stubStore();
+    await expect(persistResources({ fhirStore: store, logger: gateLogger }, [labObs], {}, opts('high')))
+      .rejects.toBeInstanceOf(AppError);
+    expect(saved).toHaveLength(0);
+  });
+  it('low: persists it', async () => {
+    const { store, saved } = stubStore();
+    await persistResources({ fhirStore: store, logger: gateLogger }, [labObs], {}, opts('low'));
+    expect(saved).toHaveLength(1);
   });
 });
