@@ -1,7 +1,39 @@
 import { describe, it, expect } from 'vitest';
 import { gzipSync } from 'node:zlib';
-import { buildApp } from './app';
+import Fastify from 'fastify';
+import { buildApp, parseTrustProxy } from './app';
 import { ctxWith } from './test-helpers';
+
+describe('parseTrustProxy', () => {
+  it('maps the TRUST_PROXY env string to a Fastify trustProxy value', () => {
+    expect(parseTrustProxy(undefined)).toBe(false);
+    expect(parseTrustProxy('')).toBe(false);
+    expect(parseTrustProxy('  ')).toBe(false);
+    expect(parseTrustProxy('false')).toBe(false);
+    expect(parseTrustProxy('FALSE')).toBe(false);
+    expect(parseTrustProxy('true')).toBe(true);
+    expect(parseTrustProxy('1')).toBe(1);
+    expect(parseTrustProxy('2')).toBe(2);
+    expect(parseTrustProxy('10.0.0.0/8, 172.16.0.0/12')).toBe('10.0.0.0/8, 172.16.0.0/12');
+  });
+});
+
+describe('trustProxy drives req.ip from X-Forwarded-For', () => {
+  it('TRUST_PROXY=1 → req.ip is the real client from X-Forwarded-For', async () => {
+    const app = Fastify({ trustProxy: parseTrustProxy('1') });
+    app.get('/ip', async (req) => ({ ip: req.ip }));
+    const res = await app.inject({ method: 'GET', url: '/ip', headers: { 'x-forwarded-for': '203.0.113.7' } });
+    expect(res.json().ip).toBe('203.0.113.7');
+    await app.close();
+  });
+  it('unset → X-Forwarded-For is ignored (spoofing prevented)', async () => {
+    const app = Fastify({ trustProxy: parseTrustProxy(undefined) });
+    app.get('/ip', async (req) => ({ ip: req.ip }));
+    const res = await app.inject({ method: 'GET', url: '/ip', headers: { 'x-forwarded-for': '203.0.113.7' } });
+    expect(res.json().ip).not.toBe('203.0.113.7');
+    await app.close();
+  });
+});
 
 describe('GET /health', () => {
   it('returns 200 and overall up when all checks pass', async () => {

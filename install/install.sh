@@ -311,6 +311,9 @@ COMPOSE_PROJECT_NAME=$PROJECT_NAME
 TLS_MODE=self-signed
 PORT=3000
 NODE_ENV=production
+# One reverse-proxy hop (the gateway) fronts the app: trust its X-Forwarded-For so req.ip and the
+# auth.failed audit record the real client, not the gateway's container IP.
+TRUST_PROXY=1
 INTERNAL_DATABASE_URL=postgres://openldr:$PG_PW@postgres:5432/openldr
 $TARGET_DB_ENV_BLOCK
 POSTGRES_PASSWORD=$PG_PW
