@@ -54,6 +54,7 @@ export const shouldStartPull = (mode: SyncMode): boolean => mode !== 'push';
 import { createActivityService, type ActivityService } from './activity-service';
 import { createFeatureFlags, type FeatureFlags } from './feature-flags';
 import { createNumberSettings, type NumberSettings } from './number-settings';
+import { createValidationStrictness, type ValidationStrictness } from './validation-settings';
 export { createValidationStrictness, VALIDATION_STRICTNESS_KEY, type ValidationStrictness } from './validation-settings';
 import { createReportCategoriesService, type ReportCategoriesService } from './report-categories';
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
@@ -312,6 +313,9 @@ export interface AppContext {
   appSettings: AppSettingStore;
   featureFlags: FeatureFlags;
   numberSettings: NumberSettings;
+  /** Gates persistResources() strictness for the webhook (Persist Store node) and ingest paths
+   *  (Task 8). Reads the level fresh per persist call so runtime setting changes apply immediately. */
+  validationStrictness: ValidationStrictness;
   activity: ActivityService;
   /** Seal a plaintext secret for at-rest storage (AES-256-GCM under SECRETS_ENCRYPTION_KEY).
    *  Symmetric with {@link decryptSecret}; used by the sync settings route/CLI to write-encrypt
@@ -363,8 +367,14 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   // Canonical persist for the Persist Store workflow node — same wiring as ingest-context.
   const canonicalFhirStore = createFhirStore(internal.db);
   const workflowRelationalWriter = createRelationalWriter(externalDb, engine);
-  const workflowPersist = (resources: unknown[], prov: Provenance) =>
-    persistResources({ fhirStore: canonicalFhirStore, logger }, resources, prov);
+  // Gate enforcement is wired via `validationStrictness`, defined below alongside the rest of the
+  // app-settings-backed services — this closure isn't invoked until after bootstrap() returns, so
+  // the forward reference resolves by the time a caller actually persists.
+  const workflowPersist = async (resources: unknown[], prov: Provenance) =>
+    persistResources({ fhirStore: canonicalFhirStore, logger }, resources, prov, {
+      level: await validationStrictness.get(),
+      resolveServiceRequest: (id: string) => canonicalFhirStore.exists('ServiceRequest', id),
+    });
   const marketplaceForms = createFormArtifactInstaller({ forms, installStore: marketplaceInstalls, audit });
 
   // Seed a default marketplace registry from the legacy env vars the first time (table empty),
@@ -581,6 +591,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   const appSettings = createAppSettingsStore(internal.db, referenceCapture);
   const featureFlags = createFeatureFlags(appSettings);
   const numberSettings = createNumberSettings(appSettings);
+  const validationStrictness: ValidationStrictness = createValidationStrictness(appSettings);
   const reportCategories = createReportCategoriesService(appSettings);
   const connectorSqlRunner = createConnectorSqlRunner({ connectors: connectorStore, secretsKey: cfg.SECRETS_ENCRYPTION_KEY });
   const connectorMongoRunner = createConnectorMongoRunner({ connectors: connectorStore, secretsKey: cfg.SECRETS_ENCRYPTION_KEY });
@@ -1135,6 +1146,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     appSettings,
     featureFlags,
     numberSettings,
+    validationStrictness,
     activity,
     encryptSecret,
     decryptSecret: syncDecrypt,

@@ -8,11 +8,14 @@ import {
   createFhirStore,
   createMigrator,
   persistResources,
+  createAppSettingsStore,
+  referenceCapture,
   internalMigrations,
   externalMigrations,
   type ExternalSchema,
   type Provenance,
 } from '@openldr/db';
+import { createValidationStrictness } from './validation-settings';
 import {
   acceptPayload,
   handleIngestEvent,
@@ -59,7 +62,13 @@ export async function createIngestContext(cfg: Config): Promise<IngestContext> {
   const eventing = createEventBus({ url: cfg.INTERNAL_DATABASE_URL });
 
   const fhirStore = createFhirStore(internal.db);
-  const persist = (resources: unknown[], provenance: Provenance) => persistResources({ fhirStore, logger }, resources, provenance);
+  const appSettings = createAppSettingsStore(internal.db, referenceCapture);
+  const validationStrictness = createValidationStrictness(appSettings);
+  const persist = async (resources: unknown[], provenance: Provenance) =>
+    persistResources({ fhirStore, logger }, resources, provenance, {
+      level: await validationStrictness.get(),
+      resolveServiceRequest: (id: string) => fhirStore.exists('ServiceRequest', id),
+    });
   const converters = defaultConverters();
   const batches = createBatchStore(internal.db);
   const audit = createAuditStore(internal.db);
