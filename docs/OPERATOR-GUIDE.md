@@ -223,7 +223,7 @@ Flow:
 1. **On central**, enroll each lab. This mints a confidential `sync-<siteId>` client with a `site_id` mapper, generates a secret shown once, and records a registry row. Use **Sites** in the app (admin-only) or the CLI:
 
    ```bash
-   pnpm openldr sync enroll lab-ndola-01 --name "Ndola Central Hospital" --central-url https://central.example.org
+   pnpm openldr sync enroll lab-site-01 --name "Regional Reference Lab" --central-url https://central.example.org
    pnpm openldr sync list
    ```
 

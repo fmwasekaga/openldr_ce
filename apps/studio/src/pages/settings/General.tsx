@@ -284,7 +284,7 @@ export function General() {
             <Input
               className="w-96 shrink-0"
               value={sync.siteId}
-              placeholder="lab-ndola-01"
+              placeholder="lab-site-01"
               onChange={(e) => setSync({ ...sync, siteId: e.target.value })}
               aria-label={t('settings.general.sync.siteId.label')}
             />
@@ -304,9 +304,10 @@ export function General() {
             <Input
               className="w-96 shrink-0"
               value={sync.clientId}
-              placeholder="sync-lab-ndola-01"
+              placeholder="sync-lab-site-01"
               onChange={(e) => setSync({ ...sync, clientId: e.target.value })}
               aria-label={t('settings.general.sync.clientId.label')}
+              autoComplete="off"
             />
           </div>
           <div className="flex items-center justify-between gap-4">
@@ -318,6 +319,7 @@ export function General() {
               placeholder={sync.clientSecretSet ? t('settings.general.sync.clientSecretSet') : ''}
               onChange={(e) => setSecretInput(e.target.value)}
               aria-label={t('settings.general.sync.clientSecret.label')}
+              autoComplete="new-password"
             />
           </div>
           <div className="flex items-center justify-between gap-4">
