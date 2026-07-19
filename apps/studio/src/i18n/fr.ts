@@ -232,7 +232,7 @@ export const fr: EnShape = {
         },
       },
       sync: {
-        title: 'Synchronisation labo ⇄ central',
+        title: 'Synchronisation distribuée',
         saved: 'Paramètres de synchronisation enregistrés',
         saveFailed: "Impossible d'enregistrer : {{error}}",
         save: 'Enregistrer',

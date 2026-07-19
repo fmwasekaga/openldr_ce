@@ -232,7 +232,7 @@ export const pt: EnShape = {
         },
       },
       sync: {
-        title: 'Sincronização laboratório ⇄ central',
+        title: 'Sincronização distribuída',
         saved: 'Definições de sincronização guardadas',
         saveFailed: 'Não foi possível guardar: {{error}}',
         save: 'Guardar',
