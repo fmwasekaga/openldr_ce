@@ -112,14 +112,14 @@ pub fn map_message(segs: &[Segment], cfg: &Config, seq: usize) -> Vec<Value> {
         if cfg.ast_interp.contains(&interp) {
             let ab = if obs3_code.is_empty() { obs3_text.clone() } else { obs3_code.clone() };
             if ab.is_empty() { continue; }
-            out.push(fhir::observation_ast(&format!("hl7-ast-{key}-{obx_n}"), &pid_ref, &spec_ref, &ab, &interp));
+            out.push(fhir::observation_ast(&format!("hl7-ast-{key}-{obx_n}"), &pid_ref, &spec_ref, &ab, &interp, None));
         } else if cfg.organism_codes.contains(&obs3_code) && matches!(obx.value(2).as_str(), "CE" | "CWE" | "CF") {
             let org_code = obx.component(5, 1);
             let org_text = obx.component(5, 2);
             let code = if org_code.is_empty() { org_text.clone() } else { org_code };
             let text = if org_text.is_empty() { code.clone() } else { org_text };
             if code.is_empty() { continue; }
-            out.push(fhir::observation_organism(&format!("hl7-org-{key}-{obx_n}"), &pid_ref, &spec_ref, &code, &text));
+            out.push(fhir::observation_organism(&format!("hl7-org-{key}-{obx_n}"), &pid_ref, &spec_ref, &code, &text, None));
         }
     }
     out

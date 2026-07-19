@@ -97,6 +97,12 @@ pub fn map_isolates(conn: &Connection) -> rusqlite::Result<Vec<Value>> {
         out.push(pat);
         out.push(fhir::specimen(&sid, &patient_ref, spec_type.as_deref(), spec_date.as_deref(), origin));
 
+        // One order per isolate, so every lab result below can link back via `basedOn` — the
+        // validation gate rejects laboratory Observations with no linked ServiceRequest.
+        let sr_id = format!("whonet-sr-{patient_id}-{idx}");
+        let sr_ref = format!("ServiceRequest/{sr_id}");
+        out.push(fhir::service_request(&sr_id, &patient_ref, None, Some("AST panel"), "active"));
+
         if let Some(org) = organism.as_deref() {
             out.push(fhir::observation_organism(
                 &format!("whonet-org-{spec_num}"),
@@ -104,6 +110,7 @@ pub fn map_isolates(conn: &Connection) -> rusqlite::Result<Vec<Value>> {
                 &specimen_ref,
                 organism_code.as_deref().unwrap_or(org),
                 org,
+                Some(sr_ref.as_str()),
             ));
         }
 
@@ -119,6 +126,7 @@ pub fn map_isolates(conn: &Connection) -> rusqlite::Result<Vec<Value>> {
                         &specimen_ref,
                         ab,
                         v,
+                        Some(sr_ref.as_str()),
                     ));
                 }
             }
@@ -224,5 +232,31 @@ mod tests {
         assert!(res.iter().all(|r| r.get("resourceType").and_then(Value::as_str).is_some()));
         // A Patient resource should be present.
         assert!(res.iter().any(|r| r.get("resourceType") == Some(&Value::String("Patient".into()))));
+
+        // Each isolate gets its own order, so the validation gate (which rejects a laboratory
+        // Observation with no linked ServiceRequest) accepts the emitted results.
+        assert!(
+            res.iter().any(|r| r.get("resourceType") == Some(&Value::String("ServiceRequest".into()))),
+            "expected at least one ServiceRequest"
+        );
+
+        // Every Observation must link back to the order it fulfills.
+        let observations: Vec<&Value> = res
+            .iter()
+            .filter(|r| r.get("resourceType") == Some(&Value::String("Observation".into())))
+            .collect();
+        assert!(!observations.is_empty(), "expected at least one Observation");
+        for obs in observations {
+            let reference = obs
+                .get("basedOn")
+                .and_then(|b| b.get(0))
+                .and_then(|b| b.get("reference"))
+                .and_then(Value::as_str)
+                .unwrap_or_else(|| panic!("Observation missing basedOn[0].reference: {obs}"));
+            assert!(
+                reference.starts_with("ServiceRequest/"),
+                "expected basedOn reference to start with 'ServiceRequest/', got {reference}"
+            );
+        }
     }
 }
