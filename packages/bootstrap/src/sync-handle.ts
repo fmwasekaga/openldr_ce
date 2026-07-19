@@ -3,6 +3,7 @@ import type {
   InternalSchema, SyncQuarantineRow, SyncQuarantineStore,
   SyncDivergenceRow, SyncDivergenceSummary, SyncDivergenceStore,
 } from '@openldr/db';
+import type { SyncRuntime } from './sync-runtime';
 
 // Sync S4 (Task 5): a read/trigger handle over the two sync directions, always present on AppContext
 // (even when sync is disabled). status() reflects each worker's live isRunning() plus its cursor
@@ -51,16 +52,16 @@ interface WorkerRef {
   trigger(): void;
 }
 
+/** A read-only live view over the sync runtime — SyncRuntime satisfies this structurally. Reading
+ *  through these getters on every call (rather than capturing fixed values at construction) is what
+ *  lets a Settings toggle take effect on the SAME handle instance without a restart. */
+export type SyncRuntimeView = Pick<SyncRuntime,
+  'isEnabled' | 'mode' | 'centralUrl' | 'siteId' | 'pushWorker' | 'pullWorker' | 'retryQuarantine'>;
+
 export function createSyncHandle(opts: {
   db: Kysely<InternalSchema>;
-  enabled: boolean;
-  mode: SyncMode;
-  centralUrl: string;
-  siteId: string;
-  pushWorker?: WorkerRef;
-  pullWorker?: WorkerRef;
+  runtime: SyncRuntimeView;
   quarantine?: SyncQuarantineStore;
-  retryQuarantine?: (entityType: string, entityId: string) => Promise<{ ok: boolean; error?: string }>;
   /** Built UNCONDITIONALLY by the host (outside both sync gates): divergence rows are durable and must
    *  be listable on a push-only or sync-disabled node. */
   divergences?: SyncDivergenceStore;
@@ -86,11 +87,13 @@ export function createSyncHandle(opts: {
 
   return {
     async status(): Promise<SyncStatus> {
+      const push = opts.runtime.pushWorker();
+      const pull = opts.runtime.pullWorker();
       const [pushRow, pullRow] = await Promise.all([cursorRow('sync-push'), cursorRow('sync-pull')]);
       let pendingPush = 0;
       // Only a push-capable node has a backlog to report; a pull-only or disabled lab reports 0
       // without touching change_log.
-      if (opts.pushWorker) {
+      if (push) {
         const head = await opts.db
           .selectFrom('fhir.change_log')
           .select((eb) => eb.fn.max('seq').as('m'))
@@ -98,25 +101,26 @@ export function createSyncHandle(opts: {
         pendingPush = Math.max(0, Number(head?.m ?? 0) - Number(pushRow?.last_seq ?? 0));
       }
       return {
-        enabled: opts.enabled,
-        mode: opts.mode,
-        centralUrl: opts.centralUrl,
-        siteId: opts.siteId,
-        push: toDir(pushRow, opts.pushWorker),
-        pull: toDir(pullRow, opts.pullWorker),
+        enabled: opts.runtime.isEnabled(),
+        mode: opts.runtime.mode(),
+        centralUrl: opts.runtime.centralUrl(),
+        siteId: opts.runtime.siteId(),
+        push: toDir(pushRow, push),
+        pull: toDir(pullRow, pull),
         pendingPush,
       };
     },
     triggerNow(): void {
-      opts.pushWorker?.trigger();
-      opts.pullWorker?.trigger();
+      opts.runtime.pushWorker()?.trigger();
+      opts.runtime.pullWorker()?.trigger();
     },
     async listQuarantine(): Promise<SyncQuarantineRow[]> {
       return opts.quarantine ? opts.quarantine.list() : [];
     },
     async retryQuarantine(entityType: string, entityId: string): Promise<{ ok: boolean; error?: string }> {
-      if (!opts.retryQuarantine) return { ok: false, error: 'sync pull is not enabled on this node' };
-      return opts.retryQuarantine(entityType, entityId);
+      const fn = opts.runtime.retryQuarantine();
+      if (!fn) return { ok: false, error: 'sync pull is not enabled on this node' };
+      return fn(entityType, entityId);
     },
     async listDivergences(): Promise<SyncDivergenceSummary[]> {
       return opts.divergences ? opts.divergences.list() : [];
