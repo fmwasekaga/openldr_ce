@@ -1,10 +1,7 @@
+import type { CodeableConcept, Reference } from '../datatypes/complex';
 import type { OperationOutcomeIssue } from '../operation-outcome';
 import type { FhirResource } from '../validate';
 import { levelAtLeast, type ClinicalRule, type RuleContext } from './types';
-
-interface Coding { system?: string; code?: string }
-interface CodeableConcept { coding?: Coding[] }
-interface Reference { reference?: string; type?: string }
 
 function hasCategoryCode(resource: FhirResource, code: string): boolean {
   const cats = (resource as { category?: CodeableConcept[] }).category ?? [];

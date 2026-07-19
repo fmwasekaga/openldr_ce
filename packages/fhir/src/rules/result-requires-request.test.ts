@@ -34,4 +34,21 @@ describe('resultRequiresRequest', () => {
     expect(await resultRequiresRequest.check(obs, ctx('high', [sr]))).toHaveLength(0);       // in batch
     expect(await resultRequiresRequest.check(obs, ctx('high', [], true))).toHaveLength(0);    // in store
   });
+
+  it('appliesTo: a laboratory coding with only a code (no system) still matches', () => {
+    const obs = { resourceType: 'Observation', id: 'o2', status: 'final',
+      category: [{ coding: [{ code: 'laboratory' }] }], code: { text: 'Hb' } } as FhirResource;
+    expect(resultRequiresRequest.appliesTo(obs)).toBe(true);
+  });
+
+  it('medium: a basedOn referencing a non-ServiceRequest is ignored (treated as missing)', async () => {
+    const obs = labObs({ basedOn: [{ reference: 'Patient/p1' }] });
+    expect(await resultRequiresRequest.check(obs, ctx('medium'))).toHaveLength(1);
+  });
+
+  it('high: any resolvable basedOn passes even alongside a dangling one', async () => {
+    const obs = labObs({ basedOn: [{ reference: 'ServiceRequest/none' }, { reference: 'ServiceRequest/sr1' }] });
+    const sr: FhirResource = { resourceType: 'ServiceRequest', id: 'sr1', status: 'active' } as FhirResource;
+    expect(await resultRequiresRequest.check(obs, ctx('high', [sr]))).toHaveLength(0);
+  });
 });
