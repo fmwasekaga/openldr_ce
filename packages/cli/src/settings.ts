@@ -1,5 +1,6 @@
-import { createAppContext, dangerResetDashboards, dangerFactoryReset, dangerClearAudit, getSyncConfig, setSyncConfig } from '@openldr/bootstrap';
+import { createAppContext, dangerResetDashboards, dangerFactoryReset, dangerClearAudit, getSyncConfig, setSyncConfig, recordAuditEvent } from '@openldr/bootstrap';
 import { loadConfig, type SyncConfigView, type SyncConfigInput } from '@openldr/config';
+import { cliActor } from './cli-actor';
 
 interface JsonOpt { json: boolean }
 
@@ -27,7 +28,7 @@ export async function runSettingsFlagsSet(key: string, value: string, opts: Json
   try {
     const before = await ctx.featureFlags.get(key);
     await ctx.featureFlags.set(key, value === 'true', 'cli');
-    await ctx.audit.record({ actorType: 'system', actorName: 'cli', action: 'settings.flag.update', entityType: 'app_setting', entityId: key, metadata: { key, before, after: value === 'true' } });
+    await recordAuditEvent(ctx, cliActor(), { action: 'settings.flag.update', entityType: 'app_setting', entityId: key, metadata: { key, before, after: value === 'true' } });
     emit(opts.json, { ok: true, key, value: value === 'true' }, `set ${key} = ${value}`);
     return 0;
   } finally {
@@ -54,6 +55,7 @@ export async function runSettingsNumbersSet(key: string, value: string, opts: Js
   }
   const ctx = await createAppContext(loadConfig());
   try {
+    const before = await ctx.numberSettings.get(key).catch(() => null);
     let after: number;
     try {
       after = await ctx.numberSettings.set(key, n, 'cli');
@@ -61,7 +63,7 @@ export async function runSettingsNumbersSet(key: string, value: string, opts: Js
       process.stderr.write(`${e instanceof Error ? e.message : String(e)}\n`);
       return 1;
     }
-    await ctx.audit.record({ actorType: 'system', actorName: 'cli', action: 'settings.number.update', entityType: 'app_setting', entityId: key, metadata: { key, after } });
+    await recordAuditEvent(ctx, cliActor(), { action: 'settings.number.update', entityType: 'app_setting', entityId: key, metadata: { key, before, after } });
     emit(opts.json, { ok: true, key, value: after }, `set ${key} = ${after}`);
     return 0;
   } finally {
@@ -140,7 +142,7 @@ export async function runSettingsSyncSet(field: string, value: string, opts: Jso
       process.stderr.write(`invalid value: ${e instanceof Error ? e.message : String(e)}\n`);
       return 1;
     }
-    await ctx.audit.record({ actorType: 'system', actorName: 'cli', action: 'settings.sync.update', entityType: 'app_setting', entityId: 'sync.*', metadata: { field: f, before: current, after: saved } });
+    await recordAuditEvent(ctx, cliActor(), { action: 'settings.sync.update', entityType: 'app_setting', entityId: 'sync.*', metadata: { before: current, after: saved } });
     const shown = f === 'clientSecret'
       ? (saved.clientSecretSet ? '<set>' : '<unset>')
       : f === 'signingPrivateKey'
@@ -177,7 +179,7 @@ export async function runSettingsValidationSet(level: string, opts: JsonOpt): Pr
     const before = await ctx.validationStrictness.get();
     const after = level as ValidationLevel;
     await ctx.validationStrictness.set(after, 'cli');
-    await ctx.audit.record({ actorType: 'system', actorName: 'cli', action: 'settings.validation_strictness', entityType: 'app_setting', entityId: 'validation.strictness', metadata: { before, after } });
+    await recordAuditEvent(ctx, cliActor(), { action: 'settings.validation_strictness', entityType: 'app_setting', entityId: 'validation.strictness', before: { strictness: before }, after: { strictness: after } });
     emit(opts.json, { ok: true, strictness: after }, `set strictness = ${after}`);
     return 0;
   } finally {
@@ -204,7 +206,7 @@ export async function runSettingsDanger(action: string, opts: JsonOpt & { force:
   const ctx = await createAppContext(loadConfig());
   try {
     await entry.run(ctx);
-    await ctx.audit.record({ actorType: 'system', actorName: 'cli', action: `settings.danger.${action}`, entityType: 'app_settings', entityId: 'internal-db', metadata: { action } });
+    await recordAuditEvent(ctx, cliActor(), { action: `settings.danger.${action}`, entityType: 'app_settings', entityId: 'internal-db', metadata: { action, ok: true } });
     emit(opts.json, { ok: true, action }, entry.label);
     return 0;
   } finally {

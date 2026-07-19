@@ -1,6 +1,7 @@
-import { createDbContext, createAppContext, seedDatabase } from '@openldr/bootstrap';
+import { createDbContext, createAppContext, seedDatabase, recordAuditEvent } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import { redactError } from './redact-error';
+import { cliActor } from './cli-actor';
 
 interface JsonOpt {
   json: boolean;
@@ -54,7 +55,7 @@ export async function runDbReset(opts: JsonOpt & { force: boolean }): Promise<nu
     try {
       const appCtx = await createAppContext(loadConfig());
       try {
-        await appCtx.audit.record({ actorType: 'system', actorName: 'system', action: 'db.reset', entityType: 'database', entityId: 'internal+external' });
+        await recordAuditEvent(appCtx, cliActor(), { action: 'db.reset', entityType: 'database', entityId: 'internal+external', metadata: {} });
       } finally {
         await appCtx.close();
       }
