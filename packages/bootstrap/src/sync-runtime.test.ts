@@ -76,6 +76,21 @@ describe('SyncRuntime.reconcile', () => {
     expect(workers[1]!.started).toBe(1);
   });
 
+  it('a build failure rolls back: stops the push worker, enabled=false, rethrows', async () => {
+    const push = fakeWorker();
+    const { rt } = makeRuntime({
+      readConfig: vi.fn(async () => ({ mode: 'bidirectional', intervalMinutes: 1, centralUrl: 'u', siteId: 's' } as any)),
+      buildPush: vi.fn(async () => ({ worker: push, listenClient: undefined })),
+      buildPull: vi.fn(async () => { throw new Error('pull build boom'); }),
+    });
+    await expect(rt.reconcile()).rejects.toThrow('pull build boom');
+    expect(push.started).toBe(1);
+    expect(push.stopped).toBe(1);        // rolled back
+    expect(rt.isEnabled()).toBe(false);  // not left half-enabled
+    expect(rt.pushWorker()).toBeUndefined();
+    expect(rt.pullWorker()).toBeUndefined();
+  });
+
   it('concurrent reconciles serialize (no overlap)', async () => {
     let active = 0; let maxActive = 0;
     const readConfig = vi.fn(async () => { active++; maxActive = Math.max(maxActive, active); await Promise.resolve(); active--; return null as any; });

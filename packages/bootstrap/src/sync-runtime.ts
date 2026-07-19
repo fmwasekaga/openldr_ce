@@ -26,6 +26,8 @@ export interface SyncRuntimeDeps {
   buildPull: (cfg: SyncConfig) => Promise<BuiltPull>;
 }
 
+// Duplicated in index.ts INTENTIONALLY: importing that logic here would create a circular import
+// once index.ts imports this module.
 const shouldStartPush = (mode: SyncMode): boolean => mode !== 'pull';
 const shouldStartPull = (mode: SyncMode): boolean => mode !== 'push';
 
@@ -53,7 +55,7 @@ export function createSyncRuntime(deps: SyncRuntimeDeps): SyncRuntime {
   const teardown = async (): Promise<void> => {
     push?.worker.stop();
     pull?.worker.stop();
-    if (push?.listenClient) await push.listenClient.end().catch(() => undefined);
+    if (push?.listenClient) await push.listenClient.end().catch((err) => deps.logger.warn({ err }, 'sync: listen client end failed'));
     push = undefined;
     pull = undefined;
   };
@@ -62,9 +64,16 @@ export function createSyncRuntime(deps: SyncRuntimeDeps): SyncRuntime {
     await teardown();
     const cfg = await deps.readConfig();
     if (!cfg) { enabled = false; deps.logger.info('sync disabled (not configured)'); return; }
+    try {
+      if (shouldStartPush(cfg.mode)) { push = await deps.buildPush(cfg); push.worker.start(); }
+      if (shouldStartPull(cfg.mode)) { pull = await deps.buildPull(cfg); pull.worker.start(); }
+    } catch (err) {
+      // Partial build failure: never leave state claiming workers that aren't running.
+      await teardown();
+      enabled = false;
+      throw err;
+    }
     mode = cfg.mode; centralUrl = cfg.centralUrl; siteId = cfg.siteId; enabled = true;
-    if (shouldStartPush(cfg.mode)) { push = await deps.buildPush(cfg); push.worker.start(); }
-    if (shouldStartPull(cfg.mode)) { pull = await deps.buildPull(cfg); pull.worker.start(); }
     deps.logger.info(
       { mode: cfg.mode, intervalMinutes: cfg.intervalMinutes, centralUrl: cfg.centralUrl, siteId: cfg.siteId },
       'sync workers reconciled',
