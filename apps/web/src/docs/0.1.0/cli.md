@@ -93,10 +93,10 @@ Enroll a lab on the central server, then connect a lab to it:
 
 ```
 # On central: mint the lab's client + secret (printed once)
-pnpm openldr sync enroll lab-ndola-01 --central-url https://central.example.org
+pnpm openldr sync enroll lab-site-01 --central-url https://central.example.org
 
 # On the lab: apply the credentials, then check status
-pnpm openldr settings sync set clientId sync-lab-ndola-01
+pnpm openldr settings sync set clientId sync-lab-site-01
 pnpm openldr settings sync set mode bidirectional
 pnpm openldr settings sync set enabled true
 pnpm openldr sync status

@@ -141,7 +141,7 @@ export const en = {
     enrollTitle: 'Enroll a site',
     enrollDescription: 'Mints a sync client for a remote lab. The client secret is shown only once.',
     siteIdLabel: 'Site ID',
-    siteIdPlaceholder: 'e.g. ndola-central',
+    siteIdPlaceholder: 'e.g. lab-site-01',
     nameLabel: 'Name (optional)',
     namePlaceholder: 'Human-friendly label',
     centralUrlLabel: 'Central URL',

@@ -145,7 +145,7 @@ export const fr: EnShape = {
     enrollTitle: 'Inscrire un site',
     enrollDescription: 'Crée un client de synchronisation pour un laboratoire distant. Le secret client n’est affiché qu’une seule fois.',
     siteIdLabel: 'ID du site',
-    siteIdPlaceholder: 'ex. ndola-central',
+    siteIdPlaceholder: 'ex. lab-site-01',
     nameLabel: 'Nom (facultatif)',
     namePlaceholder: 'Libellé lisible',
     centralUrlLabel: 'URL centrale',

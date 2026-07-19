@@ -148,7 +148,7 @@ Enrollment requires the central Keycloak realm to grant the admin service accoun
 Enroll a lab on central, then hand the printed credentials to the lab operator:
 
 ```bash
-pnpm openldr sync enroll lab-ndola-01 --name "Ndola Central Hospital" --central-url https://central.example.org --json
+pnpm openldr sync enroll lab-site-01 --name "Regional Reference Lab" --central-url https://central.example.org --json
 pnpm openldr sync list --json
 ```
 

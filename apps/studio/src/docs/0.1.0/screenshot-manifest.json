@@ -779,13 +779,13 @@
         },
         {
           "action": "fillPlaceholder",
-          "placeholder": "e.g. ndola-central",
-          "value": "ndola-central"
+          "placeholder": "e.g. lab-site-01",
+          "value": "lab-site-01"
         },
         {
           "action": "fillPlaceholder",
           "placeholder": "Human-friendly label",
-          "value": "Ndola Central Hospital"
+          "value": "Regional Reference Lab"
         },
         {
           "action": "fillPlaceholder",
@@ -797,7 +797,7 @@
       "callouts": [
         {
           "number": 1,
-          "selector": "[role=\"dialog\"] input[placeholder=\"e.g. ndola-central\"]"
+          "selector": "[role=\"dialog\"] input[placeholder=\"e.g. lab-site-01\"]"
         },
         {
           "number": 2,
@@ -828,8 +828,8 @@
         },
         {
           "action": "fillPlaceholder",
-          "placeholder": "lab-ndola-01",
-          "value": "lab-ndola-01"
+          "placeholder": "lab-site-01",
+          "value": "lab-site-01"
         },
         {
           "action": "fillPlaceholder",
@@ -838,8 +838,8 @@
         },
         {
           "action": "fillPlaceholder",
-          "placeholder": "sync-lab-ndola-01",
-          "value": "sync-lab-ndola-01"
+          "placeholder": "sync-lab-site-01",
+          "value": "sync-lab-site-01"
         }
       ],
       "crop": "[data-testid=\"sync-card\"]"

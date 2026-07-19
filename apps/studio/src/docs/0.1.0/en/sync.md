@@ -32,7 +32,7 @@ Enrollment creates a confidential Keycloak client (`sync-<siteId>`) with a `site
 
    | Field | Notes |
    | --- | --- |
-   | Site ID | Stable identifier for the lab, e.g. `lab-ndola-01`. Lowercase letters, digits, and hyphens; 1–63 characters, not starting with a hyphen. Reused as the Keycloak client id and the registry key. |
+   | Site ID | Stable identifier for the lab, e.g. `lab-site-01`. Lowercase letters, digits, and hyphens; 1–63 characters, not starting with a hyphen. Reused as the Keycloak client id and the registry key. |
    | Name | Optional human-readable label. |
    | Central URL | The public base URL the lab will reach this central server on, e.g. `https://central.example.org`. Required. |
 
@@ -45,10 +45,10 @@ The site appears in the table with an **active** badge. From its row menu you ca
 Run these on the central server:
 
 ```
-openldr sync enroll lab-ndola-01 --name "Ndola Central Hospital" --central-url https://central.example.org
+openldr sync enroll lab-site-01 --name "Regional Reference Lab" --central-url https://central.example.org
 openldr sync list
-openldr sync rotate lab-ndola-01
-openldr sync revoke lab-ndola-01
+openldr sync rotate lab-site-01
+openldr sync revoke lab-site-01
 ```
 
 `sync enroll` prints the client id, client secret, site id, central URL, and OIDC issuer once, with a warning that the secret will not be shown again. `--central-url` is required. `sync list` shows enrolled sites and their status but never a secret. `sync rotate` prints a new secret once; `sync revoke` deletes the client and marks the row revoked, and is safe to re-run. Add `--json` to any of them for machine-readable output.
@@ -67,7 +67,7 @@ The lab operator takes the five values from enrollment — **client id**, **clie
    | Enabled | Master switch. Off keeps the workers dormant. |
    | Mode | **Push** (send operational data up only), **Pull** (receive reference config + terminology down only), or **Bidirectional** (both). |
    | Central URL | The central server's base URL from enrollment, e.g. `https://central.example.org`. |
-   | Site ID | This lab's site id, e.g. `lab-ndola-01`. |
+   | Site ID | This lab's site id, e.g. `lab-site-01`. |
    | OIDC issuer | The realm issuer from enrollment, e.g. `https://central.example.org/auth/realms/openldr`. |
    | Client ID | The minted client, `sync-<siteId>`. |
    | Client secret | The one-time secret from enrollment. Write-only and masked — leave it blank when editing other fields to keep the stored value. |
