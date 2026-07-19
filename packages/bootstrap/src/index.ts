@@ -38,9 +38,10 @@ import { createConnectorStore, createPluginDataStore, type PluginDataStore, type
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
 import { createSyncPushRunner, createSyncPullRunner, createAmendmentPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, combineCycleResults, type PushBatch, type PushResponse, type SyncConfig } from '@openldr/sync';
-import { createSyncPushWorker, type SyncPushWorker } from './sync-push-worker';
-import { createSyncPullWorker, type SyncPullWorker } from './sync-pull-worker';
+import { createSyncPushWorker } from './sync-push-worker';
+import { createSyncPullWorker } from './sync-pull-worker';
 import { createSyncHandle, type SyncHandle } from './sync-handle';
+import { createSyncRuntime, type SyncRuntime, type BuiltPush, type BuiltPull } from './sync-runtime';
 import { createRetryQuarantine } from './sync-retry-quarantine';
 import { migrateLegacySyncConfig } from './sync-settings-migrate';
 import { encodePushBody, advertisesGzip } from './sync-gzip';
@@ -326,6 +327,9 @@ export interface AppContext {
   /** Sync status + trigger surface (Task 5). ALWAYS present: when sync is disabled, status()
    *  reports `enabled:false` with null directions and triggerNow() is a no-op. */
   sync: SyncHandle;
+  /** The re-runnable sync worker lifecycle. reconcile() re-reads config and rebuilds the workers,
+   *  which is how a Settings toggle takes effect without a restart (Task 4 calls it). */
+  syncRuntime: SyncRuntime;
   cfg: Config;
   close(): Promise<void>;
 }
@@ -744,9 +748,6 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   // config-gated. readSyncConfig returns null for any install that hasn't enabled + fully configured
   // sync (the default), in which case NOTHING here starts and boot is unaffected. The client secret is
   // decrypted with the same SECRETS_ENCRYPTION_KEY / open() scheme the connector store uses.
-  let syncPushWorker: SyncPushWorker | undefined;
-  let syncPullWorker: SyncPullWorker | undefined;
-  let syncPushListenClient: pg.Client | undefined;
   // Sync S7-A: the quarantine store is built UNCONDITIONALLY — it only needs internal.db, and listing is
   // "just reads the table". A push-only node, a sync-disabled node, or a boot where readSyncConfig
   // degraded to disabled all still have durable quarantine rows from earlier boots, and an operator
@@ -762,7 +763,6 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   // divergence stores beside it: the rows are durable and a later retention slice must read them on
   // any node. Nothing trims against them yet — this slice only records.
   const syncSiteCursors = createSyncSiteCursorStore(internal.db);
-  let syncRetryQuarantine: ((entityType: string, entityId: string) => Promise<{ ok: boolean; error?: string }>) | undefined;
   const QUARANTINE_THRESHOLD = 3; // Sync S7-A: consecutive bulk-apply failures before quarantine
   const syncDecrypt = (blob: string): string => open(blob, parseSecretKey(cfg.SECRETS_ENCRYPTION_KEY ?? ''));
   // Symmetric seal/open pair exposed on AppContext so the sync settings route + CLI can write-encrypt
@@ -777,27 +777,20 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     logger.warn({ err: (err as Error).message }, 'legacy sync config migration failed');
     return false;
   });
-  let syncCfg: Awaited<ReturnType<typeof readSyncConfig>> = null;
-  try {
-    syncCfg = await readSyncConfig(appSettings, syncDecrypt, logger);
-  } catch (err) {
-    logger.warn({ err }, 'sync push worker: could not read sync config; sync disabled this boot');
-  }
-  if (syncCfg) {
-    // Cadence is operator-configured (sync.interval_minutes); both directions share it.
-    const intervalMs = syncCfg.intervalMinutes * 60_000;
-    // SHARED deps — built unconditionally so a pull-only OR push-only lab still has what it needs (both
-    // directions authenticate to central, so the token provider is never gated). Only the worker
-    // construct+start below is mode-gated.
+  // buildPush / buildPull (Task 3): construct — but do NOT start — the workers for a given config.
+  // The SyncRuntime calls .start() after each builder returns and owns their stop()/listen-client
+  // lifecycle, so these same closures rebuild the workers whenever reconcile() re-reads the config.
+  //
+  // makeShared builds the token provider + shared POST helper PER builder from the config. Two
+  // provider instances (one per direction) is a benign change from the old single-shared instance:
+  // each direction now caches its own client-credentials token instead of sharing one cache (both
+  // still authenticate to the same central with the same client credentials).
+  const makeShared = (syncCfg: SyncConfig) => {
     const tokenProvider = createSyncTokenProvider({
       issuerUrl: syncCfg.oidcIssuer,
       clientId: syncCfg.clientId,
       clientSecret: syncCfg.clientSecret,
     });
-    // Sync S7-B: learned from central's RFC 7694 Accept-Encoding advert on each push response. Starts
-    // false so the FIRST push is always plain — an old central never advertises and we never gzip it.
-    // In-memory by design: it re-learns on the next response after a restart.
-    let centralAcceptsGzip = false;
     // Shared POST helper: throws on non-2xx with the STATUS ONLY (never the bearer token).
     const postJson = async (url: string, body: unknown, token: string): Promise<unknown> => {
       const res = await fetch(url, {
@@ -808,9 +801,18 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       if (!res.ok) throw new Error(`central responded ${res.status}`); // status only — never the token
       return res.json();
     };
+    return { tokenProvider, postJson };
+  };
 
-    // PUSH direction (lab -> central). Runs for mode 'push' and 'bidirectional'.
-    if (shouldStartPush(syncCfg.mode)) {
+  // PUSH direction (lab -> central). Runs for mode 'push' and 'bidirectional'.
+  const buildPush = async (syncCfg: SyncConfig): Promise<BuiltPush> => {
+    // Cadence is operator-configured (sync.interval_minutes); both directions share it.
+    const intervalMs = syncCfg.intervalMinutes * 60_000;
+    const { tokenProvider } = makeShared(syncCfg);
+    // Sync S7-B: learned from central's RFC 7694 Accept-Encoding advert on each push response. Starts
+    // false so the FIRST push is always plain — an old central never advertises and we never gzip it.
+    // In-memory by design: it re-learns on the next response after a restart.
+    let centralAcceptsGzip = false;
       const syncPushRunner = createSyncPushRunner({
         internalDb: internal.db,
         fetchSafeRows: fetchSafeChangeRows,
@@ -859,19 +861,22 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
         pushListenConnected = false;
         logger.warn({ err: e }, 'sync push worker: LISTEN client failed to connect; falling back to interval-only polling');
       }
-      if (pushListenConnected) syncPushListenClient = pushListenClient;
-      syncPushWorker = createSyncPushWorker({
+      const listenClient = pushListenConnected ? pushListenClient : undefined;
+      const worker = createSyncPushWorker({
         runner: { runCycle: () => syncPushRunner.runCycle() },
         intervalMs,
-        listenClient: syncPushListenClient,
+        listenClient,
         logger,
       });
-      syncPushWorker.start();
-    }
+      // The runtime calls worker.start() — return it CONSTRUCTED-BUT-UNSTARTED.
+      return { worker, listenClient };
+  };
 
-    // PULL direction (central -> lab reference config + terminology). Runs for mode 'pull' and
-    // 'bidirectional'. A consumer of the change stream via its own 'sync-pull' cursor.
-    if (shouldStartPull(syncCfg.mode)) {
+  // PULL direction (central -> lab reference config + terminology). Runs for mode 'pull' and
+  // 'bidirectional'. A consumer of the change stream via its own 'sync-pull' cursor.
+  const buildPull = async (syncCfg: SyncConfig): Promise<BuiltPull> => {
+    const intervalMs = syncCfg.intervalMinutes * 60_000;
+    const { tokenProvider, postJson } = makeShared(syncCfg);
       // S3 terminology bulk-sync: a signalled terminology_system/concept_map record triggers a whole-system /
       // whole-map keyset drain + reconcile (all-or-nothing; THROWS on any failure so the runner holds the cursor).
       const termBulk = createTerminologyBulkSync({
@@ -910,8 +915,8 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       const quarantine = syncQuarantine;
       // Sync S7-A: targeted re-sync of a quarantined bulk entity, independent of the advanced cursor.
       // See sync-retry-quarantine.ts for the (test-pinned) refuse-untracked / replay-descriptor /
-      // clear-only-on-success contract.
-      syncRetryQuarantine = createRetryQuarantine({ quarantine, termBulk, threshold: QUARANTINE_THRESHOLD });
+      // clear-only-on-success contract. Rides on the PULL result (the runtime exposes it via retryQuarantine()).
+      const retryQuarantine = createRetryQuarantine({ quarantine, termBulk, threshold: QUARANTINE_THRESHOLD });
       const syncPullRunner = createSyncPullRunner({
         getToken: () => tokenProvider.getToken(), // SHARE the token provider instance
         applyRecord,
@@ -944,7 +949,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
         advanceCursor: (seq) => advanceChangeCursor(internal.db, 'sync-amend-pull', seq),
         logger,
       });
-      syncPullWorker = createSyncPullWorker({
+      const worker = createSyncPullWorker({
         runner: {
           // One host loop drains BOTH downward streams per cycle: reference config first, then
           // amendments. Each runner owns its cursor + failure model. combineCycleResults (S7) folds
@@ -959,30 +964,37 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
         intervalMs,
         logger,
       });
-      syncPullWorker.start();
-    }
+      // The runtime calls worker.start() — return it CONSTRUCTED-BUT-UNSTARTED, with the retry
+      // closure (the runtime exposes it via retryQuarantine()).
+      return { worker, retryQuarantine };
+  };
 
-    logger.info(
-      { mode: syncCfg.mode, intervalMinutes: syncCfg.intervalMinutes, centralUrl: syncCfg.centralUrl, siteId: syncCfg.siteId },
-      'sync workers started',
-    );
-  } else {
-    logger.info('sync disabled (not configured)');
-  }
+  // Sync (Task 3): the runtime drives worker construction from a freshly-read config on every
+  // reconcile(). readConfig degrades a transient app_settings read failure to "sync disabled" rather
+  // than aborting boot (preserving the pre-refactor try/catch); buildPush/buildPull do the mode-gated
+  // construction the old inline `if (syncCfg)` block used to. reconcile() starts whichever workers the
+  // mode calls for; stop() (in close() below) tears them down.
+  const syncRuntime = createSyncRuntime({
+    logger,
+    readConfig: async () => {
+      try {
+        return await readSyncConfig(appSettings, syncDecrypt, logger);
+      } catch (err) {
+        logger.warn({ err }, 'sync push worker: could not read sync config; sync disabled this boot');
+        return null;
+      }
+    },
+    buildPush,
+    buildPull,
+  });
+  await syncRuntime.reconcile(); // initial start (replaces the old inline if (syncCfg) block)
 
-  // Sync S4: expose a status/trigger handle over the (possibly undefined) workers. Constructed
-  // AFTER the mode gate so syncPushWorker/syncPullWorker are in their final state. Always present —
-  // a disabled node reports enabled:false + null directions and triggerNow() is a no-op.
+  // Sync S4: expose a status/trigger handle over the runtime. Always present — a disabled node
+  // reports enabled:false + null directions and triggerNow() is a no-op.
   const sync = createSyncHandle({
     db: internal.db,
-    enabled: !!syncCfg,
-    mode: syncCfg?.mode ?? 'bidirectional',
-    centralUrl: syncCfg?.centralUrl ?? '',
-    siteId: syncCfg?.siteId ?? '',
-    pushWorker: syncPushWorker,
-    pullWorker: syncPullWorker,
+    runtime: syncRuntime,
     quarantine: syncQuarantine,
-    retryQuarantine: syncRetryQuarantine,
     divergences: syncDivergences,
   });
 
@@ -1152,14 +1164,14 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     encryptSecret,
     decryptSecret: syncDecrypt,
     sync,
+    syncRuntime,
     cfg,
     async close() {
       await workflowListeners.stopAll();
-      syncPushWorker?.stop();
-      syncPullWorker?.stop();
+      // The runtime stops both workers and ends the push LISTEN client it owns.
+      await syncRuntime.stop();
       await projectionWorker.stop();
       if (projectionListenConnected) await projectionListenClient.end().catch(() => undefined);
-      if (syncPushListenClient) await syncPushListenClient.end().catch(() => undefined);
       await Promise.allSettled([eventing.close(), store.close(), internal.close()]);
     },
   };
