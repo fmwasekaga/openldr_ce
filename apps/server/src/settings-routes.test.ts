@@ -14,6 +14,7 @@ function fakeCtx(syncEnabled = true) {
   const audit: any[] = [];
   const ops = { resetDashboards: 0, factoryReset: 0, clearAudit: 0 };
   const triggerNow = vi.fn();
+  const reconcile = vi.fn(async () => {});
   let strictness: 'low' | 'medium' | 'high' = 'high';
   const validationStrictnessSet = vi.fn(async (level: 'low' | 'medium' | 'high', _actor: string | null) => { strictness = level; });
   return {
@@ -30,6 +31,8 @@ function fakeCtx(syncEnabled = true) {
         retryQuarantine: async () => ({ ok: true }),
       },
       __triggerNow: triggerNow,
+      syncRuntime: { reconcile },
+      __reconcile: reconcile,
       featureFlags: {
         get: async (id: string) => store.get(id) ?? false,
         all: async () => [{ id: 'dashboard.raw_sql', labelKey: 'l', descriptionKey: 'd', value: store.get('dashboard.raw_sql') ?? false }],
@@ -136,6 +139,8 @@ describe('settings routes', () => {
     const row = (ctx as any).__audit.find((e: any) => e.action === 'settings.sync.update');
     expect(row).toBeTruthy();
     expect(JSON.stringify(row.metadata)).not.toContain('super-secret');
+    // The live workers must reconcile so enable/disable/reconfigure takes effect without a restart.
+    expect((ctx as any).__reconcile).toHaveBeenCalledTimes(1);
   });
 
   it('PUT /api/settings/sync with enabled but missing oidcIssuer is 400', async () => {

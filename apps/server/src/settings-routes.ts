@@ -47,6 +47,11 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
       action: 'settings.sync.update', entityType: 'app_setting', entityId: 'sync.*',
       metadata: { before, after },
     });
+    // Apply the new config to the live workers so enable/disable/reconfigure takes effect without a
+    // restart. Best-effort: a reconcile failure must not fail the save (the config IS persisted; the
+    // next boot / next save reconciles). Logged for visibility.
+    try { await ctx.syncRuntime.reconcile(); }
+    catch (err) { ctx.logger.warn({ err }, 'sync: reconcile after settings save failed'); }
     return after;
   });
 
