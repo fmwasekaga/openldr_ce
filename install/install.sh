@@ -239,6 +239,20 @@ fi
 # first 24 alnum chars with cut — cut consumes all of its input, so no early
 # pipe close can SIGPIPE an upstream reader even under `set -o pipefail`.
 rand() { head -c 3072 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | cut -c1-24; }
+
+# Pin the openldr-admin service-account secret in the realm import to a per-install value. The
+# committed realm ships a well-known dev secret ("openldr-admin-dev-secret") that a real deployment
+# must not use; without a matching KEYCLOAK_ADMIN_CLIENT_SECRET in .env the server's identity-admin
+# actions (Distributed Sync site enrollment, password reset, force sign-out) fail with a 503. Generate
+# one — reusing the existing .env value on a re-run so the on-disk import stays consistent with what the
+# app authenticates with — substitute it into the realm import, and write it to .env below.
+if [ -f "$DIR/.env" ] && grep -q '^KEYCLOAK_ADMIN_CLIENT_SECRET=' "$DIR/.env"; then
+  KC_ADMIN_SECRET="$(grep '^KEYCLOAK_ADMIN_CLIENT_SECRET=' "$DIR/.env" | cut -d= -f2-)"
+else
+  KC_ADMIN_SECRET="$(rand)"
+fi
+sed "s|\"openldr-admin-dev-secret\"|\"$KC_ADMIN_SECRET\"|" "$REALM" > "$REALM.tmp" && mv "$REALM.tmp" "$REALM"
+
 if [ ! -f "$DIR/.env" ]; then
   PG_PW="$(rand)"; KC_PW="$(rand)"; S3_KEY="$(rand)"; S3_SECRET="$(rand)"
   if [ "$MSSQL_DEMO" -eq 1 ] && [ -z "$MSSQL_PASSWORD" ]; then MSSQL_PASSWORD="$(rand)Aa1!"; fi
@@ -314,7 +328,7 @@ KC_HOSTNAME=$ORIGIN/auth
 KEYCLOAK_ADMIN=admin
 KEYCLOAK_ADMIN_PASSWORD=$KC_PW
 KEYCLOAK_ADMIN_CLIENT_ID=openldr-admin
-KEYCLOAK_ADMIN_CLIENT_SECRET=openldr-admin-dev-secret
+KEYCLOAK_ADMIN_CLIENT_SECRET=$KC_ADMIN_SECRET
 TLS_CERT_PATH=/etc/openldr/tls-cert.pem
 SECRETS_ENCRYPTION_KEY=$SECRETS_KEY
 MIGRATE_ON_START=true
@@ -406,6 +420,7 @@ fi
 if [ "$HTTP_PORT" != "80" ] || [ "$HTTPS_PORT" != "443" ]; then
   echo "  Gateway ports: HTTP $HTTP_PORT / HTTPS $HTTPS_PORT"
 fi
+echo "  Distributed Sync: identity-admin client provisioned (unique secret in .env) — site enrollment is ready."
 echo ""
 echo "  Public domain + trusted TLS in one shot:"
 echo "    install.sh --server-name your.domain.com --letsencrypt you@email.com"

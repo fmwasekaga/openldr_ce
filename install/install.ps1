@@ -233,6 +233,22 @@ function Rand {
   $chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
   -join ($bytes | ForEach-Object { $chars[$_ % $chars.Length] })
 }
+
+# Pin the openldr-admin service-account secret in the realm import to a per-install value. The
+# committed realm ships a well-known dev secret ("openldr-admin-dev-secret") that a real deployment
+# must not use; without a matching KEYCLOAK_ADMIN_CLIENT_SECRET in .env the server's identity-admin
+# actions (Distributed Sync site enrollment, password reset, force sign-out) fail with a 503. Generate
+# one -- reusing the existing .env value on a re-run so the on-disk import stays consistent with what
+# the app authenticates with -- substitute it into the realm import, and write it to .env below.
+$kcAdminSecret = $null
+if ($envExists) {
+  $existingKcLine = (Select-String -Path $envPath -Pattern '^KEYCLOAK_ADMIN_CLIENT_SECRET=').Line
+  if ($existingKcLine) { $kcAdminSecret = $existingKcLine -replace '^KEYCLOAK_ADMIN_CLIENT_SECRET=', '' }
+}
+if (-not $kcAdminSecret) { $kcAdminSecret = Rand }
+$realmSecretContent = (Get-Content $realmPath -Raw) -replace 'openldr-admin-dev-secret', $kcAdminSecret
+Set-Content -Path $realmPath -Value $realmSecretContent -Encoding ascii
+
 if (-not $envExists) {
   $pg = Rand; $kc = Rand; $s3k = Rand; $s3s = Rand
   if ($MssqlDemo -and [string]::IsNullOrEmpty($MssqlPassword)) { $MssqlPassword = "$(Rand)Aa1!" }
@@ -313,7 +329,7 @@ KC_HOSTNAME=$Origin/auth
 KEYCLOAK_ADMIN=admin
 KEYCLOAK_ADMIN_PASSWORD=$kc
 KEYCLOAK_ADMIN_CLIENT_ID=openldr-admin
-KEYCLOAK_ADMIN_CLIENT_SECRET=openldr-admin-dev-secret
+KEYCLOAK_ADMIN_CLIENT_SECRET=$kcAdminSecret
 TLS_CERT_PATH=/etc/openldr/tls-cert.pem
 SECRETS_ENCRYPTION_KEY=$secretsKey
 MIGRATE_ON_START=true
@@ -398,6 +414,7 @@ if ($MysqlDemo) {
   if ($mysqlLine) { Write-Host "   MySQL (demo) root password: $($mysqlLine -replace '^MYSQL_PASSWORD=','')" }
 }
 if ($HttpPort -ne 80 -or $HttpsPort -ne 443) { Write-Host "   Gateway ports: HTTP $HttpPort / HTTPS $HttpsPort" }
+Write-Host "   Distributed Sync: identity-admin client provisioned (unique secret in .env) -- site enrollment is ready."
 Write-Host ""
 Write-Host "   For a public domain, install with: -ServerName your.domain.com"
 Write-Host "   For non-default ports, install with: -HttpPort 8080 -HttpsPort 8443"
