@@ -91,6 +91,19 @@ describe('SyncRuntime.reconcile', () => {
     expect(rt.pullWorker()).toBeUndefined();
   });
 
+  it('disabling resets mode/centralUrl/siteId to defaults (no stale values)', async () => {
+    let cfg: any = { mode: 'push', intervalMinutes: 1, centralUrl: 'https://c', siteId: 'lab-1' };
+    const { rt } = makeRuntime({ readConfig: vi.fn(async () => cfg) });
+    await rt.reconcile();
+    expect(rt.centralUrl()).toBe('https://c');
+    cfg = null;
+    await rt.reconcile();
+    expect(rt.isEnabled()).toBe(false);
+    expect(rt.mode()).toBe('bidirectional');
+    expect(rt.centralUrl()).toBe('');
+    expect(rt.siteId()).toBe('');
+  });
+
   it('concurrent reconciles serialize (no overlap)', async () => {
     let active = 0; let maxActive = 0;
     const readConfig = vi.fn(async () => { active++; maxActive = Math.max(maxActive, active); await Promise.resolve(); active--; return null as any; });

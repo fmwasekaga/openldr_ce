@@ -26,10 +26,12 @@ export interface SyncRuntimeDeps {
   buildPull: (cfg: SyncConfig) => Promise<BuiltPull>;
 }
 
-// Duplicated in index.ts INTENTIONALLY: importing that logic here would create a circular import
-// once index.ts imports this module.
-const shouldStartPush = (mode: SyncMode): boolean => mode !== 'pull';
-const shouldStartPull = (mode: SyncMode): boolean => mode !== 'push';
+// Which directions run for a given mode. Push runs for 'push' + 'bidirectional'; pull runs for
+// 'pull' + 'bidirectional'. doReconcile's worker gates below use these. This is the CANONICAL copy —
+// it lives here (not index.ts) because index.ts imports this module, so keeping the logic here avoids
+// a circular import. sync-mode-gating.test.ts imports these directly to pin the wiring.
+export const shouldStartPush = (mode: SyncMode): boolean => mode !== 'pull';
+export const shouldStartPull = (mode: SyncMode): boolean => mode !== 'push';
 
 export interface SyncRuntime {
   reconcile(): Promise<void>;
@@ -63,7 +65,7 @@ export function createSyncRuntime(deps: SyncRuntimeDeps): SyncRuntime {
   const doReconcile = async (): Promise<void> => {
     await teardown();
     const cfg = await deps.readConfig();
-    if (!cfg) { enabled = false; deps.logger.info('sync disabled (not configured)'); return; }
+    if (!cfg) { enabled = false; mode = 'bidirectional'; centralUrl = ''; siteId = ''; deps.logger.info('sync disabled (not configured)'); return; }
     try {
       if (shouldStartPush(cfg.mode)) { push = await deps.buildPush(cfg); push.worker.start(); }
       if (shouldStartPull(cfg.mode)) { pull = await deps.buildPull(cfg); pull.worker.start(); }

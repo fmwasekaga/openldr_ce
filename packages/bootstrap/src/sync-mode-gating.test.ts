@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { shouldStartPush, shouldStartPull } from './index';
+import { shouldStartPush, shouldStartPull } from './sync-runtime';
 
-// The if (syncCfg) block in makeAppContext gates each direction's worker construct+start behind these
-// predicates, so unit-testing them is a faithful assertion of the mode-gating wiring. bidirectional runs
-// both; push runs only push; pull runs only pull.
+// doReconcile in SyncRuntime gates each direction's worker construct+start behind these predicates,
+// so unit-testing them is a faithful assertion of the mode-gating wiring. bidirectional runs both;
+// push runs only push; pull runs only pull.
 describe('sync worker mode gating', () => {
   it("mode 'push' starts push only", () => {
     expect(shouldStartPush('push')).toBe(true);

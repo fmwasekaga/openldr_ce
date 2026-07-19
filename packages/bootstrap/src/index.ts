@@ -47,11 +47,6 @@ import { migrateLegacySyncConfig } from './sync-settings-migrate';
 import { encodePushBody, advertisesGzip } from './sync-gzip';
 import { migrateWorkflowSecrets } from './workflow-secret-migrate';
 
-// Which directions run for a given mode. Push runs for 'push' + 'bidirectional'; pull runs for
-// 'pull' + 'bidirectional'. The if (syncCfg) worker gates below use these so the wiring is unit-testable.
-type SyncMode = SyncConfig['mode'];
-export const shouldStartPush = (mode: SyncMode): boolean => mode !== 'pull';
-export const shouldStartPull = (mode: SyncMode): boolean => mode !== 'push';
 import { createActivityService, type ActivityService } from './activity-service';
 import { createFeatureFlags, type FeatureFlags } from './feature-flags';
 import { createNumberSettings, type NumberSettings } from './number-settings';
