@@ -198,25 +198,20 @@ export function DistributedSync() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden" data-testid="distributed-sync-page">
-      <div className="px-4 pt-4">
-        <h1 className="text-lg font-semibold">{t('settings.sync.heading')}</h1>
-        <p className="text-sm text-muted-foreground">{t('settings.sync.description')}</p>
-      </div>
-
       {loading ? (
         <LoadingState className="flex-1" label={t('common.loading')} />
       ) : error ? (
         <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-destructive">{error}</div>
       ) : sync ? (
         <Tabs defaultValue="settings" className="flex min-h-0 flex-1 flex-col">
-          <TabsList className="mx-4 mt-3">
+          <TabsList className="mx-4 mt-4">
             <TabsTrigger value="settings">{t('settings.sync.tabs.settings')}</TabsTrigger>
             <TabsTrigger value="activity">{t('settings.sync.tabs.activity')}</TabsTrigger>
           </TabsList>
 
           {/* ── Settings tab: the sync config form ───────────────────────────── */}
           <TabsContent value="settings" className="min-h-0 overflow-y-auto p-4">
-            <div className="flex max-w-3xl flex-col gap-4">
+            <div className="flex flex-col gap-4">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="text-sm font-medium">{t('settings.general.sync.enabled.label')}</div>
@@ -315,38 +310,34 @@ export function DistributedSync() {
 
           {/* ── Activity tab: live status + the recent-activity table ────────── */}
           <TabsContent value="activity" className="flex min-h-0 flex-col">
-            {/* Live status panel */}
-            <div className="mx-4 mt-4 flex flex-col gap-2 rounded-md border border-border bg-muted/40 p-3 text-sm">
-              <div className="flex items-center justify-between gap-4">
-                <span className="font-medium">{t('settings.general.sync.status')}</span>
-                <span className={`rounded px-2 py-0.5 text-xs ${syncStatus?.enabled ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-muted text-muted-foreground'}`}>
-                  {syncStatus?.enabled ? t('settings.general.sync.on') : t('settings.general.sync.off')}
-                </span>
-              </div>
-              <dl className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-1 text-xs">
-                <dt className="text-muted-foreground">{t('settings.general.sync.mode.push')}</dt>
-                <dd className="font-mono">{directionLine(syncStatus?.push ?? null)}</dd>
-                <dt className="text-muted-foreground">{t('settings.general.sync.mode.pull')}</dt>
-                <dd className="font-mono">{directionLine(syncStatus?.pull ?? null)}</dd>
-                <dt className="text-muted-foreground">{t('settings.general.sync.pending')}</dt>
-                <dd className="font-mono">{syncStatus?.pendingPush ?? 0}</dd>
-                <dt className="text-muted-foreground">{t('settings.general.sync.lastChecked')}</dt>
-                <dd className="font-mono">
+            {/* Compact status strip — keeps the vertical budget for the activity table below. */}
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-border px-4 py-2 text-xs">
+              <span className={`rounded px-2 py-0.5 ${syncStatus?.enabled ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-muted text-muted-foreground'}`}>
+                {syncStatus?.enabled ? t('settings.general.sync.on') : t('settings.general.sync.off')}
+              </span>
+              <span><span className="text-muted-foreground">{t('settings.general.sync.mode.push')}:</span> <span className="font-mono">{directionLine(syncStatus?.push ?? null)}</span></span>
+              <span><span className="text-muted-foreground">{t('settings.general.sync.mode.pull')}:</span> <span className="font-mono">{directionLine(syncStatus?.pull ?? null)}</span></span>
+              <span><span className="text-muted-foreground">{t('settings.general.sync.pending')}:</span> <span className="font-mono">{syncStatus?.pendingPush ?? 0}</span></span>
+              <span>
+                <span className="text-muted-foreground">{t('settings.general.sync.lastChecked')}:</span>{' '}
+                <span className="font-mono">
                   {syncStatus?.push?.lastAttemptAt || syncStatus?.pull?.lastAttemptAt
                     ? new Date((syncStatus?.push?.lastAttemptAt ?? syncStatus?.pull?.lastAttemptAt) as string).toLocaleString()
                     : t('settings.general.sync.never')}
-                </dd>
-                <dt className="text-muted-foreground">{t('settings.general.sync.lastSuccess')}</dt>
-                <dd className="font-mono">
+                </span>
+              </span>
+              <span>
+                <span className="text-muted-foreground">{t('settings.general.sync.lastSuccess')}:</span>{' '}
+                <span className="font-mono">
                   {syncStatus?.push?.lastSuccessAt || syncStatus?.pull?.lastSuccessAt
                     ? new Date((syncStatus?.push?.lastSuccessAt ?? syncStatus?.pull?.lastSuccessAt) as string).toLocaleString()
                     : t('settings.general.sync.never')}
-                </dd>
-              </dl>
+                </span>
+              </span>
             </div>
 
             {/* Recent activity toolbar */}
-            <div className="mt-4 flex items-center gap-2 border-b border-border px-4 py-2">
+            <div className="flex items-center gap-2 border-b border-border px-4 py-2">
               <Input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}

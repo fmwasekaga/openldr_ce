@@ -186,8 +186,6 @@ export const en = {
       marketplace: 'Marketplace',
     },
     sync: {
-      heading: 'Distributed sync',
-      description: 'Replication — change log',
       tabs: { settings: 'Settings', activity: 'Activity' },
       searchPlaceholder: 'Search activity…',
       newestFirst: 'Newest first.',

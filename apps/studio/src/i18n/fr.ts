@@ -190,8 +190,6 @@ export const fr: EnShape = {
       marketplace: 'Marketplace',
     },
     sync: {
-      heading: 'Synchronisation distribuée',
-      description: 'Réplication — journal des modifications',
       tabs: { settings: 'Paramètres', activity: 'Activité' },
       searchPlaceholder: 'Rechercher…',
       newestFirst: 'Plus récent d’abord.',
