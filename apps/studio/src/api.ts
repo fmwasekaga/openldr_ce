@@ -869,14 +869,14 @@ export interface TerminologyIngestJobView {
 /** Stream a distribution zip to the server with upload progress. Uses XHR (fetch has no upload
  *  progress). Auth mirrors authFetch: bearer from getAccessToken(). */
 export function uploadTerminologyDistribution(
-  codingSystemId: string, systemType: string, file: File, acceptLicense: boolean, version: string | null,
+  publisherId: string, systemType: string, file: File, acceptLicense: boolean, version: string | null,
   onProgress?: (fraction: number) => void,
 ): Promise<{ jobId: string }> {
   return new Promise((resolve, reject) => {
     const params = new URLSearchParams({ systemType, acceptLicense: String(acceptLicense) });
     if (version) params.set('version', version);
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', `/api/terminology/systems/${encodeURIComponent(codingSystemId)}/distribution?${params.toString()}`);
+    xhr.open('POST', `/api/terminology/publishers/${encodeURIComponent(publisherId)}/distribution?${params.toString()}`);
     xhr.setRequestHeader('content-type', 'application/octet-stream');
     const token = getAccessToken();
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
@@ -895,12 +895,12 @@ export function uploadTerminologyDistribution(
   });
 }
 
-export const getTerminologyIngestJob = (codingSystemId: string, systemType: string): Promise<TerminologyIngestJobView> =>
-  authFetch(`/api/terminology/systems/${encodeURIComponent(codingSystemId)}/distribution/job?systemType=${systemType}`)
+export const getTerminologyIngestJob = (publisherId: string, systemType: string): Promise<TerminologyIngestJobView> =>
+  authFetch(`/api/terminology/publishers/${encodeURIComponent(publisherId)}/distribution/job?systemType=${systemType}`)
     .then((r) => okJson<TerminologyIngestJobView>(r, 'get import job'));
 
-export const purgeTerminologyDistribution = (codingSystemId: string, systemType: string): Promise<void> =>
-  authFetch(`/api/terminology/systems/${encodeURIComponent(codingSystemId)}/distribution?systemType=${systemType}`, { method: 'DELETE' }).then(() => undefined);
+export const purgeTerminologyDistribution = (publisherId: string, systemType: string): Promise<void> =>
+  authFetch(`/api/terminology/publishers/${encodeURIComponent(publisherId)}/distribution?systemType=${systemType}`, { method: 'DELETE' }).then(() => undefined);
 
 // ── Terms + mappings (SP2) ───────────────────────────────────────────────────
 export type TermStatus = 'ACTIVE' | 'DRAFT' | 'DEPRECATED' | 'DISABLED';

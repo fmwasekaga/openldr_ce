@@ -17,11 +17,11 @@ describe('uploadTerminologyDistribution', () => {
   beforeEach(() => { FakeXHR.instances = []; (globalThis as any).XMLHttpRequest = FakeXHR as never; });
   it('POSTs the file as octet-stream with systemType + license query and resolves the jobId', async () => {
     const file = new File([new Uint8Array([1, 2, 3])], 'loinc.zip');
-    const res = await uploadTerminologyDistribution('cs1', 'loinc', file, true, '2.82');
+    const res = await uploadTerminologyDistribution('pub-loinc', 'loinc', file, true, '2.82');
     expect(res.jobId).toBe('tij_9');
     const xhr = FakeXHR.instances[0];
     expect(xhr.method).toBe('POST');
-    expect(xhr.url).toContain('/api/terminology/systems/cs1/distribution');
+    expect(xhr.url).toContain('/api/terminology/publishers/pub-loinc/distribution');
     expect(xhr.url).toContain('systemType=loinc');
     expect(xhr.url).toContain('acceptLicense=true');
     expect(xhr.url).toContain('version=2.82');
