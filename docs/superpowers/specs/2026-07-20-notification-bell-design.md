@@ -54,7 +54,7 @@ they live on `/activity`).
 | `sync_quarantined`| `sync_activity` where `event='quarantined'`                 | warning  | `/activity`               |
 | `plugin_crashed`  | `audit_events` where `action IN ('plugin.crash','system.crash','system.crash_loop')` | critical | `/activity` |
 | `auth_failed`     | `audit_events` where `action='auth.failed'`                 | warning  | `/audit`                  |
-| `site_changed`    | `audit_events` where `action IN ('settings.sync.enroll','settings.sync.rotate','settings.sync.revoke')` | info | `/settings/sites` |
+| `site_revoked`    | `audit_events` where `action='settings.sync.revoke'`        | warning  | `/settings/sites`         |
 
 Confirmed action/event strings (grep-verified, 2026-07-20):
 - `sync_activity.event`: `synced` | `failed` | `quarantined` | `diverged`
@@ -62,8 +62,9 @@ Confirmed action/event strings (grep-verified, 2026-07-20):
 - `auth.failed` / entityType `auth` (`apps/server/src/auth-plugin.ts:75`).
 - `plugin.crash` / `system.crash` / `system.crash_loop`
   (`packages/bootstrap/src/crash-audit.ts:38`).
-- `settings.sync.enroll` / `.rotate` / `.revoke`, entityType `sync_site`
-  (`apps/server/src/settings-routes.ts`).
+- `settings.sync.revoke`, entityType `sync_site`
+  (`apps/server/src/settings-routes.ts:313`). Only revoke notifies; enroll/rotate are
+  intentionally excluded as routine.
 
 Priority → tone (identical to corlix): `info`→`border-l-primary`,
 `warning`→`border-l-warning`, `critical`→`border-l-destructive`.
@@ -77,7 +78,7 @@ field renames:
 type NotificationPriority = 'info' | 'warning' | 'critical';
 type NotificationType =
   | 'sync_diverged' | 'sync_failed' | 'sync_quarantined'
-  | 'plugin_crashed' | 'auth_failed' | 'site_changed';
+  | 'plugin_crashed' | 'auth_failed' | 'site_revoked';
 
 interface Notification {
   id: string;            // `sync:{rowId}` | `audit:{rowId}` — stable, source-qualified
