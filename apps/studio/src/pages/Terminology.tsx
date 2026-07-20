@@ -131,6 +131,8 @@ export function Terminology(): JSX.Element {
   const [distImportSystem, setDistImportSystem] = useState<CodingSystem | null>(null);
   const [importJobs, setImportJobs] = useState<Record<string, TerminologyIngestJobView>>({});
   const importPollRef = useRef<Record<string, ReturnType<typeof setInterval>>>({});
+  // Guards the import-job poller's async continuations against setState after unmount.
+  const importPollMountedRef = useRef(true);
 
   // ── term dialog state (T12 will mount TermDialog consuming these) ────────────
   const [editingTerm, setEditingTerm] = useState<Term | null>(null);
@@ -165,8 +167,10 @@ export function Terminology(): JSX.Element {
     void reload();
   }, []);
 
-  // Stop polling any in-flight distribution import jobs on unmount.
+  // Stop polling any in-flight distribution import jobs on unmount, and make any already
+  // in-flight getTerminologyIngestJob request's continuation a no-op.
   useEffect(() => () => {
+    importPollMountedRef.current = false;
     Object.values(importPollRef.current).forEach(clearInterval);
   }, []);
 
@@ -366,13 +370,18 @@ export function Terminology(): JSX.Element {
     const poll = async (): Promise<void> => {
       try {
         const job = await getTerminologyIngestJob(codingSystemId, 'loinc');
+        if (!importPollMountedRef.current) return;
         setImportJobs((prev) => ({ ...prev, [codingSystemId]: job }));
         if (job.status === 'ready' || job.status === 'failed') {
           clearInterval(importPollRef.current[codingSystemId]);
           delete importPollRef.current[codingSystemId];
-          if (job.status === 'ready') await reload();
+          if (job.status === 'ready') {
+            await reload();
+            if (!importPollMountedRef.current) return;
+          }
         }
       } catch {
+        if (!importPollMountedRef.current) return;
         clearInterval(importPollRef.current[codingSystemId]);
         delete importPollRef.current[codingSystemId];
       }
