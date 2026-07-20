@@ -46,12 +46,16 @@
     "nodemailer": "^9.0.1",
     "pg": "^8.21.0",
     "ssh2-sftp-client": "^11.0.0",
+    "unzipper": "^0.12.3",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.5.7",
     "@types/nodemailer": "^8.0.1",
     "@types/pg": "^8.20.0",
+    "@types/unzipper": "^0.10.10",
+    "adm-zip": "^0.5.16",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   }
