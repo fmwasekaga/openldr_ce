@@ -1,4 +1,7 @@
 import { randomUUID } from 'node:crypto';
+import { tmpdir } from 'node:os';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { join } from 'node:path';
 import * as XLSX from 'xlsx';
 import pg from 'pg';
 import { Kysely, sql } from 'kysely';
@@ -34,7 +37,7 @@ import { createReportScheduler, type ReportScheduler } from './report-scheduler'
 import { createPluginScheduleApi, createPluginScheduleRunner, type PluginScheduleRunner } from './plugin-schedule';
 import { createFormArtifactInstaller, type FormArtifactInstaller } from './form-artifact-install';
 import { type PluginRuntime } from '@openldr/plugins';
-import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore } from '@openldr/db';
+import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
 import { createSyncPushRunner, createSyncPullRunner, createAmendmentPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, combineCycleResults, type PushBatch, type PushResponse, type SyncConfig } from '@openldr/sync';
@@ -73,7 +76,9 @@ import { createDhis2Orchestration } from './dhis2-orchestration';
 import { selectTargetStore } from './target-store';
 import { createPluginRegistry } from './plugin-registry';
 import { createProjectionWorker } from './projection-worker';
-import { buildOntologyDistribution, createOperations, importTerminologyResource, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type LoadResult, type OntologyBuildProgress, type OntologyManifest, type Operations } from '@openldr/terminology';
+import { buildOntologyDistribution, createOperations, importTerminologyResource, ingestDistribution, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type LoadResult, type OntologyBuildProgress, type OntologyManifest, type Operations } from '@openldr/terminology';
+import { createTerminologyIngestWorker } from './terminology-ingest-worker';
+import { downloadAndExtract } from './terminology-dist-extract';
 
 export class ReportNotFoundError extends Error {
   constructor(public readonly id: string) {
@@ -326,6 +331,10 @@ export interface AppContext {
   /** Track A: bounded, high-signal sync outcome feed. The `/api/settings/sync/activity` endpoint reads
    *  it; the runners write it (via the in-memory tracker). */
   syncActivity: SyncActivityStore;
+  /** Task 6: terminology distribution ingest job queue (upload → claim → ingest → audit →
+   *  retain-latest). The worker built alongside it (see `terminologyIngestWorker` in
+   *  `createAppContext`) polls this store; Task 7's routes read/enqueue against it. */
+  terminologyJobs: TerminologyIngestJobStore;
   /** The re-runnable sync worker lifecycle. reconcile() re-reads config and rebuilds the workers,
    *  which is how a Settings toggle takes effect without a restart (Task 4 calls it). */
   syncRuntime: SyncRuntime;
@@ -590,6 +599,45 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       resource: (json) => importTerminologyResource(json, loaderStore),
     },
   };
+
+  // Task 6: terminology distribution ingest — job store (queue/claim/progress/retain-latest) +
+  // the polling worker that drains it. `runIngest` streams+extracts the uploaded zip to a fresh
+  // scratch dir per job (cleaned up unconditionally, including on a mid-extract throw — see
+  // `downloadAndExtract`'s own note on why its returned `cleanup()` can't be relied on for that
+  // case) and hands the extracted dir to the orchestrator, which loads flat concepts before
+  // building the ontology tree over the same `terminology` context used by the admin routes.
+  const terminologyJobs = createTerminologyIngestJobStore(internal.db);
+  const terminologyWorkDirBase = cfg.TERMINOLOGY_WORK_DIR ?? tmpdir();
+  const terminologyIngestWorker = createTerminologyIngestWorker({
+    jobs: terminologyJobs,
+    blob,
+    audit,
+    workDirBase: terminologyWorkDirBase,
+    logger,
+    runIngest: async (job, onProgress) => {
+      const workDir = await mkdtemp(join(terminologyWorkDirBase, 'terminology-ingest-'));
+      try {
+        const { distDir } = await downloadAndExtract(blob, job.blobKey, workDir);
+        return await ingestDistribution({
+          systemType: job.systemType,
+          codingSystemId: job.codingSystemId,
+          distDir,
+          acceptLicense: true, // the API enforced acceptance at upload/enqueue time
+          onProgress,
+          deps: {
+            loadConcepts: async (_systemType, dir, opts) => {
+              const r = await terminology.loaders.loinc(dir, opts.acceptLicense);
+              return { conceptsLoaded: r.conceptsLoaded };
+            },
+            buildOntology: async (_systemType, codingSystemId, dir, onP) =>
+              terminology.ontology.build(codingSystemId, dir, (p) => onP({ phase: p.phase, processed: p.processed, total: p.total })),
+          },
+        });
+      } finally {
+        await rm(workDir, { recursive: true, force: true });
+      }
+    },
+  });
 
   const connectorStore = createConnectorStore(internal.db);
   const appSettings = createAppSettingsStore(internal.db, referenceCapture);
@@ -1175,12 +1223,14 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     sync,
     syncActivity,
     syncRuntime,
+    terminologyJobs,
     cfg,
     async close() {
       await workflowListeners.stopAll();
       // The runtime stops both workers and ends the push LISTEN client it owns.
       await syncRuntime.stop();
       await projectionWorker.stop();
+      await terminologyIngestWorker.stop();
       if (projectionListenConnected) await projectionListenClient.end().catch(() => undefined);
       await Promise.allSettled([eventing.close(), store.close(), internal.close()]);
     },
