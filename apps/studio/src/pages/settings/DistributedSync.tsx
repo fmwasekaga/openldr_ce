@@ -197,7 +197,7 @@ export function DistributedSync() {
   const pageRows = filtered.slice(page * pageSize, page * pageSize + pageSize);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden" data-testid="distributed-sync-page">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden" data-testid="distributed-sync-page">
       {loading ? (
         <LoadingState className="flex-1" label={t('common.loading')} />
       ) : error ? (
