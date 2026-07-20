@@ -38,4 +38,9 @@ describe('InstallBlock', () => {
       Object.defineProperty(navigator, 'clipboard', { value: original, configurable: true });
     }
   });
+
+  it('labels the install section for page navigation', () => {
+    render(<InstallBlock />, { wrapper: MemoryRouter });
+    expect(screen.getByRole('region', { name: /install openldr/i })).toHaveAttribute('id', 'install');
+  });
 });
