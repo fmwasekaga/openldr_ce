@@ -12,11 +12,12 @@ import {
   type NotificationType, type NotificationPriority,
 } from '@/api';
 
-// The 6 trigger types the server emits. New triggers land here + a matching
+// The trigger types the server emits. New triggers land here + a matching
 // `notifications.triggers.<type>` i18n key (Task 11).
 const TRIGGER_TYPES: NotificationType[] = [
   'sync_diverged', 'sync_failed', 'sync_quarantined',
   'plugin_crashed', 'auth_failed', 'site_revoked',
+  'terminology_import_done', 'terminology_import_failed',
 ];
 
 const PRIORITIES: NotificationPriority[] = ['info', 'warning', 'critical'];

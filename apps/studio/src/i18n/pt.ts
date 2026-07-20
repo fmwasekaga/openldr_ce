@@ -596,6 +596,8 @@ export const pt: EnShape = {
       plugin_crashed: 'Plugin falhou',
       auth_failed: 'Falha de autenticação',
       site_revoked: 'Acesso do site revogado',
+      terminology_import_done: 'Importação de terminologia concluída',
+      terminology_import_failed: 'Falha na importação de terminologia',
     },
     body: {
       sync_diverged: 'Sincronização divergente para {{entityId}}',
@@ -604,6 +606,8 @@ export const pt: EnShape = {
       plugin_crashed: 'O plugin {{entityId}} falhou',
       auth_failed: 'Falha de autenticação para {{entityId}}',
       site_revoked: 'O acesso do site {{entityId}} foi revogado',
+      terminology_import_done: '{{systemType}} importado ({{conceptsLoaded}} conceitos).',
+      terminology_import_failed: 'Falha na importação de {{systemType}}: {{error}}',
     },
     history: {
       viewAll: 'Ver tudo',

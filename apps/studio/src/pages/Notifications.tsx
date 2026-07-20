@@ -23,6 +23,7 @@ import { notifTitle, notifBody } from '@/shell/notif-text';
 const NOTIFICATION_TYPES: NotificationType[] = [
   'sync_diverged', 'sync_failed', 'sync_quarantined',
   'plugin_crashed', 'auth_failed', 'site_revoked',
+  'terminology_import_done', 'terminology_import_failed',
 ];
 
 const PRIORITIES: NotificationPriority[] = ['info', 'warning', 'critical'];
