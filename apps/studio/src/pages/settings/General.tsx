@@ -53,10 +53,17 @@ export function General() {
       if (isAdmin) {
         setFlags(await fetchFeatureFlags());
         setSync(await fetchSyncConfig());
-        setSyncStatus(await fetchSyncStatus());
-        setSyncActivity(await fetchSyncActivity());
         setNumbers(await fetchNumberSettings());
         setValidationLevel((await getValidation()).strictness);
+        // Sync status + activity are best-effort telemetry: a missing/unreadable
+        // sync_activity table (e.g. an unmigrated DB) must not surface a toast or abort
+        // the rest of the settings load. Mirrors refreshSyncStatus below.
+        try {
+          setSyncStatus(await fetchSyncStatus());
+          setSyncActivity(await fetchSyncActivity());
+        } catch {
+          // swallow — telemetry only
+        }
       }
     } catch (e) {
       toast.error(String(e instanceof Error ? e.message : e));
