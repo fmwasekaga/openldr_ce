@@ -25,6 +25,7 @@ import { registerWorkflowRoutes } from './workflows-routes';
 import { registerConnectorsRoutes } from './connectors-routes';
 import { registerSettingsRoutes } from './settings-routes';
 import { registerActivityRoutes } from './activity-routes';
+import { registerNotificationRoutes } from './notification-routes';
 import { registerPluginUiRoutes } from './plugin-ui-routes';
 import { registerQueryRoutes } from './query-routes';
 import { registerSyncRoutes } from './sync-routes';
@@ -173,6 +174,7 @@ export async function buildApp(ctx: AppContext) {
   });
   registerSettingsRoutes(app, ctx);
   registerActivityRoutes(app, ctx);
+  registerNotificationRoutes(app, ctx);
   registerSyncRoutes(app, ctx);
 
   // Serve the built SPA under /studio/* — the landing site owns /.
