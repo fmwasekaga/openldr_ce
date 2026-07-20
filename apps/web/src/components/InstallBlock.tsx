@@ -35,7 +35,7 @@ function CommandRow({ command }: { command: string }) {
   };
   return (
     <div className="flex items-center gap-2 rounded-md border border-border bg-card px-4 py-3 font-mono text-sm">
-      <code className="flex-1 overflow-x-auto whitespace-nowrap">{command}</code>
+      <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap">{command}</code>
       <Button variant="ghost" size="icon" aria-label="Copy command" onClick={copy}>
         {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
       </Button>
@@ -45,11 +45,22 @@ function CommandRow({ command }: { command: string }) {
 
 export function InstallBlock() {
   return (
-    <section id="install" className="mx-auto max-w-3xl px-6 py-16 text-center">
-      <h2 className="mb-2 text-2xl font-semibold">Install in one line</h2>
-      <p className="mb-6 text-muted-foreground">Requires Docker. Brings up the full stack locally.</p>
+    <section
+      id="install"
+      aria-labelledby="install-heading"
+      className="mx-auto max-w-4xl px-6 py-16"
+    >
+      <div className="mb-6 max-w-2xl">
+        <p className="text-xs font-semibold uppercase text-primary">Install</p>
+        <h2 id="install-heading" className="mt-2 text-2xl font-semibold">
+          Install OpenLDR in one line
+        </h2>
+        <p className="mt-3 text-sm text-muted-foreground">
+          Requires Docker. The installer brings up the full self-hosted stack locally.
+        </p>
+      </div>
       <Tabs defaultValue="unix" className="w-full">
-        <TabsList>
+        <TabsList className="max-w-full overflow-x-auto">
           <TabsTrigger value="unix">Linux / macOS</TabsTrigger>
           <TabsTrigger value="windows">Windows</TabsTrigger>
           <TabsTrigger value="wsl">Windows Server (WSL2)</TabsTrigger>

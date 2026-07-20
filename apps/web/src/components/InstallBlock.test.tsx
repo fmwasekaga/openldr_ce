@@ -38,4 +38,19 @@ describe('InstallBlock', () => {
       Object.defineProperty(navigator, 'clipboard', { value: original, configurable: true });
     }
   });
+
+  it('labels the install section for page navigation', () => {
+    render(<InstallBlock />, { wrapper: MemoryRouter });
+    expect(screen.getByRole('region', { name: /install openldr/i })).toHaveAttribute('id', 'install');
+  });
+
+  it('keeps the command area shrinkable so long commands scroll within the row', () => {
+    render(<InstallBlock />, { wrapper: MemoryRouter });
+    expect(screen.getByText(/curl -fsSL/)).toHaveClass('min-w-0');
+  });
+
+  it('keeps the install tab strip within the available width', () => {
+    render(<InstallBlock />, { wrapper: MemoryRouter });
+    expect(screen.getByRole('tablist')).toHaveClass('max-w-full', 'overflow-x-auto');
+  });
 });
