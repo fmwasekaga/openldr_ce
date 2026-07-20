@@ -85,6 +85,15 @@
 .doc-content th, .doc-content td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; font-size: 13px; }
 .doc-content th { background: var(--table-head); }
 .doc-content img { margin: 12px 0; }
+.doc-content > :first-child { margin-top: 0; }
+.doc-content h1:first-child { display: none; }
+.doc-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
 
 /* shadcn token bridge — map shadcn's expected vars onto the existing palette.
    These reference the existing theme vars, so they auto-switch with data-theme. */

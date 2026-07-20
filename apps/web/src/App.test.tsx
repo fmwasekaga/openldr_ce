@@ -18,4 +18,15 @@ describe('App routes', () => {
     expect(screen.getByRole('heading', { name: 'The pieces you need, shown directly.' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Install OpenLDR in one line/i })).toBeInTheDocument();
   });
+
+  it('renders public docs from the docs route', () => {
+    render(
+      <MemoryRouter initialEntries={['/docs/install']}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('navigation', { name: /public documentation/i })).toBeInTheDocument();
+    expect(screen.getByRole('article')).toBeInTheDocument();
+  });
 });
