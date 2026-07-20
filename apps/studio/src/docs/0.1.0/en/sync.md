@@ -4,7 +4,7 @@ Distributed sync links many labs to one **central** OpenLDR server over intermit
 
 ## Outcome
 
-On a **central** server you can enroll a lab — minting its Keycloak client and one-time secret — then list, rotate, or revoke sites. On a **lab** server you can paste those credentials into the Sync card, choose a direction, watch live per-direction status, and trigger a sync on demand.
+On a **central** server you can enroll a lab — minting its Keycloak client and one-time secret — then list, rotate, or revoke sites. On a **lab** server you can paste those credentials into the **Distributed sync** settings, choose a direction, watch live per-direction status, and trigger a sync on demand.
 
 ## How it flows
 
@@ -94,11 +94,11 @@ then restart central's gateway (`docker compose restart gateway`), re-download t
 
 ## On a lab — connect to central
 
-The lab operator takes the five values from enrollment — **client id**, **client secret**, **site id**, **central URL**, **OIDC issuer** — and enters them into the Sync card.
+The lab operator takes the five values from enrollment — **client id**, **client secret**, **site id**, **central URL**, **OIDC issuer** — and enters them on the **Distributed sync** page's **Settings** tab.
 
-![Distributed Sync card under Settings → General, with the live status panel](sync-settings-card.png)
+![The Distributed Sync page under Settings, on its Settings tab](sync-settings-card.png)
 
-1. Open **Settings → General** and find the **Distributed Sync** card (admin-only).
+1. Open **Settings → Distributed sync** (admin-only). It is its own Settings page with two tabs — **Settings** (the configuration form) and **Activity** (live status and the recent-activity log). Stay on **Settings**.
 2. Fill in the fields:
 
    | Field | Notes |
@@ -114,15 +114,16 @@ The lab operator takes the five values from enrollment — **client id**, **clie
 
 3. **Save**. When **Enabled** is on, the central URL, site id, OIDC issuer, and client id are all required. Saving takes effect immediately — toggling **Enabled**, switching mode, or changing any field starts, stops, or reconfigures the sync workers live, with **no server restart**.
 
-### Read the status panel
+### Watch activity
 
-Below the form, a live panel (polled every few seconds) shows:
+Switch to the **Activity** tab. A compact status strip (polled every few seconds) shows:
 
 - An **on/off** badge for the whole engine.
-- A **push** line and a **pull** line, each reading `running` or `idle`, the last synced sequence, and the last-synced time — or `not started` when that direction is disabled by the mode.
-- **Pending** — the count of local changes still waiting to push up.
+- A **push** and a **pull** entry, each reading `running` or `idle`, the last synced sequence, and the last-synced time — or `not started` when that direction is disabled by the mode.
+- **Pending push** — the count of local changes still waiting to push up.
+- **Last checked** and **Last success** timestamps.
 
-Use **Sync now** to trigger a pass immediately instead of waiting for the interval. It reports back whether a pass was triggered (and does nothing if sync is disabled).
+Below the strip, the **Recent activity** table lists each sync event newest-first — direction, event (`synced`, `failed`, `quarantined`, or `diverged`), record count, detail, and time. Click a row for the full error and metadata. Use **Sync now** to trigger a pass immediately instead of waiting for the interval; it reports whether a pass was triggered (and does nothing if sync is disabled).
 
 ### Using the CLI
 
@@ -139,7 +140,7 @@ openldr sync now
 
 ## Expected result
 
-Central shows the lab as **active** on the Sites page. On the lab, the status panel shows the enabled engine with a push and/or pull line advancing, and **Pending** trending toward zero as backlog clears. Central's mirror gains the lab's records (stamped with its site id); the lab receives central's forms, dashboards, reports, and terminology.
+Central shows the lab as **active** on the Sites page. On the lab, the **Activity** tab shows the enabled engine with a push and/or pull line advancing, and **Pending push** trending toward zero as backlog clears. Central's mirror gains the lab's records (stamped with its site id); the lab receives central's forms, dashboards, reports, and terminology.
 
 ## Troubleshooting
 
@@ -149,7 +150,7 @@ Central shows the lab as **active** on the Sites page. On the lab, the status pa
 - **Enroll fails with `fetch failed: connect ECONNREFUSED 127.0.0.1:443` (central):** the API is trying to reach Keycloak at the public URL, which from inside the container is the API itself. Set `OIDC_INTERNAL_ISSUER_URL` to the in-cluster realm base (e.g. `http://keycloak:8080/auth/realms/openldr`) so server-side token/admin calls use the internal address, and recreate the API.
 - **Lab sync fails with `self-signed certificate`:** the lab doesn't trust central's certificate. Download it from central's Sites page and install it on the lab — see [Trust central's certificate](#on-a-lab-trust-central-s-certificate).
 - **Lab sync fails with `ERR_TLS_CERT_ALTNAME_INVALID` (IP not in cert):** the certificate is trusted but doesn't list the address the lab connects to. Regenerate central's certificate with an **IP Subject Alternative Name** for that IP, re-download it, and reinstall it on the lab (same section).
-- **Lost client secret:** it is unrecoverable by design. **Rotate** the site (Sites page row menu, or `openldr sync rotate <siteId>`) to issue a new one, and paste it into the lab's Sync card.
+- **Lost client secret:** it is unrecoverable by design. **Rotate** the site (Sites page row menu, or `openldr sync rotate <siteId>`) to issue a new one, and paste it into the lab's **Distributed sync** Settings tab.
 - **Lab tokens rejected at central:** the site was revoked, or the client id / OIDC issuer on the lab does not match what central minted. Confirm the site is active in `openldr sync list` and that the issuer URL points at the central realm.
 - **A revoked lab needs to return:** re-enroll the same site id on central; it reactivates the registry row and issues a new secret.
 
