@@ -171,7 +171,7 @@ export interface SyncActivityTable {
 export interface NotificationReadsTable {
   user_id: string;
   notification_id: string;
-  read_at: unknown;
+  read_at: Generated<Date>;
 }
 
 export interface NotificationPrefsTable {
