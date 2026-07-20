@@ -18,6 +18,7 @@ import {
   listNotifications, markNotificationsRead,
   type Notification, type NotificationListParams, type NotificationPriority, type NotificationType,
 } from '@/api';
+import { notifTitle, notifBody } from '@/shell/notif-text';
 
 const NOTIFICATION_TYPES: NotificationType[] = [
   'sync_diverged', 'sync_failed', 'sync_quarantined',
@@ -137,8 +138,8 @@ export function Notifications() {
       labelKey: 'notifications.history.title',
       accessor: (n) => (
         <div className="flex flex-col">
-          <span className={cn('text-sm', !n.readAt && 'font-medium')}>{n.title}</span>
-          {n.body && <span className="text-xs text-muted-foreground line-clamp-1">{n.body}</span>}
+          <span className={cn('text-sm', !n.readAt && 'font-medium')}>{notifTitle(n, t)}</span>
+          {notifBody(n, t) && <span className="text-xs text-muted-foreground line-clamp-1">{notifBody(n, t)}</span>}
         </div>
       ),
       type: 'text',

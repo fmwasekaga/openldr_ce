@@ -19,7 +19,7 @@ describe('NotificationBell', () => {
       </MemoryRouter>,
     );
 
-    const button = await screen.findByRole('button', { name: 'notifications.ariaOpen' });
+    const button = await screen.findByRole('button', { name: 'Open notifications' });
     expect(button).toBeInTheDocument();
     expect(screen.queryByText('0')).not.toBeInTheDocument();
 

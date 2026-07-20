@@ -52,12 +52,16 @@ describe('Notifications page', () => {
     (listNotifications as ReturnType<typeof vi.fn>).mockImplementation(async () => EMPTY_RESULT);
     render(<MemoryRouter><Notifications /></MemoryRouter>);
     await waitFor(() => expect(listNotifications).toHaveBeenCalled());
-    expect(await screen.findByText('notifications.history.empty')).toBeInTheDocument();
+    expect(await screen.findByText('No notifications')).toBeInTheDocument();
   });
 
   it('marks a row read and navigates to its link on click', async () => {
     render(<MemoryRouter><Notifications /></MemoryRouter>);
-    fireEvent.click(await screen.findByText('Sync failed', {}, { timeout: 5000 }));
+    // Both the Type and Title columns resolve to the same trigger label ("Sync
+    // failed"), so this notification renders that text twice in the row; either
+    // cell click bubbles to the TableRow's onClick.
+    const [cell] = await screen.findAllByText('Sync failed', {}, { timeout: 5000 });
+    fireEvent.click(cell);
 
     await waitFor(() => expect(markNotificationsRead).toHaveBeenCalledWith(['n1']), { timeout: 5000 });
     expect(mockNavigate).toHaveBeenCalledWith('/settings/sync');

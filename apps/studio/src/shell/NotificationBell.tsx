@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useNotificationsStore } from "./notifications-store";
+import { notifTitle, notifBody } from "./notif-text";
 import { cn } from "@/lib/cn";
 
 function priorityTone(priority: Notification["priority"]): string {
@@ -143,15 +144,15 @@ export function NotificationBell(): JSX.Element {
                         !n.readAt && "font-medium",
                       )}
                     >
-                      {n.title}
+                      {notifTitle(n, t)}
                     </p>
                     <span className="shrink-0 text-[10px] text-muted-foreground">
                       {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}
                     </span>
                   </div>
-                  {n.body && (
+                  {notifBody(n, t) && (
                     <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
-                      {n.body}
+                      {notifBody(n, t)}
                     </p>
                   )}
                 </li>

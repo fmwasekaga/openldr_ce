@@ -86,7 +86,7 @@ export function NotificationPreferences() {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4" data-testid="notification-preferences-page">
       <div>
-        <h1 className="text-lg font-semibold">{t('notifications.preferencesTitle')}</h1>
+        <h1 className="text-lg font-semibold">{t('notifications.pageHeading')}</h1>
         <p className="text-sm text-muted-foreground">{t('notifications.preferencesHint')}</p>
       </div>
 

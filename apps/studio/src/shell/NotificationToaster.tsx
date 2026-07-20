@@ -1,8 +1,10 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { X, AlertCircle, AlertTriangle, Bell } from "lucide-react";
 import type { Notification } from "@/api";
 import { useNotificationsStore } from "./notifications-store";
+import { notifTitle, notifBody } from "./notif-text";
 import { cn } from "@/lib/cn";
 
 const TOAST_TIMEOUT_MS: Record<Notification["priority"], number> = {
@@ -24,6 +26,7 @@ interface VisibleToast {
  * for the pop-and-fade affordance.
  */
 export function NotificationToaster(): JSX.Element {
+  const { t } = useTranslation();
   const [visible, setVisible] = useState<VisibleToast[]>([]);
   const latest = useNotificationsStore((s) => s.latest);
   const clearLatest = useNotificationsStore((s) => s.clearLatest);
@@ -94,10 +97,10 @@ export function NotificationToaster(): JSX.Element {
               onClick={() => handleClick(n)}
               className="min-w-0 flex-1 cursor-pointer text-left"
             >
-              <p className="text-sm font-medium text-foreground">{n.title}</p>
-              {n.body && (
+              <p className="text-sm font-medium text-foreground">{notifTitle(n, t)}</p>
+              {notifBody(n, t) && (
                 <p className="mt-0.5 text-xs text-muted-foreground line-clamp-3">
-                  {n.body}
+                  {notifBody(n, t)}
                 </p>
               )}
             </button>
