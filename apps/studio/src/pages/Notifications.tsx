@@ -28,10 +28,10 @@ const PRIORITIES: NotificationPriority[] = ['info', 'warning', 'critical'];
 
 /**
  * Translate the data-table's generic FilterRule[] into the params
- * listNotifications() understands. The API (Task 5) only supports
- * unreadOnly/type/priority server-side filtering — no date range — so
- * created_at filter rules are accepted by the column config (for a
- * consistent toolbar) but intentionally have no effect here.
+ * listNotifications() understands. The API only supports unreadOnly/
+ * type/priority server-side filtering — no date range, no text search,
+ * no read-only filter — so the `created_at` and `title` columns are
+ * marked filterable: false and `status` only offers 'unread'.
  */
 function translateFilters(filters: FilterRule[]): NotificationListParams {
   const params: NotificationListParams = {};
@@ -79,7 +79,8 @@ export function Notifications() {
       ),
       type: 'date',
       defaultVisible: true,
-      filterable: true,
+      filterable: false,
+      sortable: false,
       headClassName: 'w-64',
     },
     {
@@ -90,6 +91,7 @@ export function Notifications() {
       enumOptions: NOTIFICATION_TYPES.map((v) => ({ value: v, labelKey: `notifications.triggers.${v}` })),
       defaultVisible: true,
       filterable: true,
+      sortable: false,
       headClassName: 'w-48',
     },
     {
@@ -110,6 +112,7 @@ export function Notifications() {
       })),
       defaultVisible: true,
       filterable: true,
+      sortable: false,
       headClassName: 'w-32',
     },
     {
@@ -123,10 +126,10 @@ export function Notifications() {
       type: 'enum',
       enumOptions: [
         { value: 'unread', labelKey: 'notifications.history.unread' },
-        { value: 'read', labelKey: 'notifications.history.read' },
       ],
       defaultVisible: true,
       filterable: true,
+      sortable: false,
       headClassName: 'w-24',
     },
     {
@@ -141,6 +144,7 @@ export function Notifications() {
       type: 'text',
       defaultVisible: true,
       filterable: false,
+      sortable: false,
     },
   ], [t]);
 
