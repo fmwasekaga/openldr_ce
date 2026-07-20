@@ -41,6 +41,7 @@ describe('DocsPage', () => {
       const adapters = document.getElementById('adapters');
       expect(adapters).not.toBeNull();
       if (!adapters) throw new Error('Adapters heading was not rendered');
+      expect(adapters).toHaveClass('scroll-mt-20');
       adapters.scrollIntoView = scrollIntoView;
       window.location.hash = '#/docs/environment';
 
@@ -51,5 +52,13 @@ describe('DocsPage', () => {
     } finally {
       window.location.hash = originalHash;
     }
+  });
+
+  it('deduplicates generated heading ids for repeated markdown headings', () => {
+    renderDocs('/docs/install');
+
+    expect(document.getElementById('demo-evaluation')).not.toBeNull();
+    expect(document.getElementById('demo-evaluation-1')).not.toBeNull();
+    expect(document.querySelectorAll('[id="demo-evaluation"]')).toHaveLength(1);
   });
 });

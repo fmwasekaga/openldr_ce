@@ -32,19 +32,26 @@ function textContent(children: ReactNode): string {
 // through scrollIntoView so they do not replace the route hash.
 function markdownComponents(): Components {
   let skippedFirstHeading = false;
+  const usedSlugs = new Map<string, number>();
+  const headingId = (children: ReactNode) => {
+    const base = slugify(textContent(children));
+    const count = usedSlugs.get(base) ?? 0;
+    usedSlugs.set(base, count + 1);
+    return count === 0 ? base : `${base}-${count}`;
+  };
   return {
     h1({ children }: ComponentProps<'h1'>) {
       if (!skippedFirstHeading) {
         skippedFirstHeading = true;
         return null;
       }
-      return <h1 id={slugify(textContent(children))}>{children}</h1>;
+      return <h1 id={headingId(children)} className="scroll-mt-20">{children}</h1>;
     },
     h2({ children }: ComponentProps<'h2'>) {
-      return <h2 id={slugify(textContent(children))}>{children}</h2>;
+      return <h2 id={headingId(children)} className="scroll-mt-20">{children}</h2>;
     },
     h3({ children }: ComponentProps<'h3'>) {
-      return <h3 id={slugify(textContent(children))}>{children}</h3>;
+      return <h3 id={headingId(children)} className="scroll-mt-20">{children}</h3>;
     },
     table({ children }: ComponentProps<'table'>) {
       return (
