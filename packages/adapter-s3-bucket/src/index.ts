@@ -4,10 +4,13 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
+import { Upload } from '@aws-sdk/lib-storage';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { probe } from '@openldr/core';
 import type { BlobStoragePort } from '@openldr/ports';
+import type { Readable } from 'node:stream';
 
 export interface S3BucketConfig {
   endpoint: string;
@@ -44,11 +47,29 @@ export function createS3Bucket(cfg: S3BucketConfig, deps: S3BucketDeps = {}): Bl
         new PutObjectCommand({ Bucket: cfg.bucket, Key: key, Body: body, ContentType: contentType }),
       );
     },
+    async putStream(key, body, contentType) {
+      // Upload handles multipart automatically for large bodies and a single PutObject for small ones,
+      // so the whole object is never buffered in memory.
+      const upload = new Upload({
+        client,
+        params: { Bucket: cfg.bucket, Key: key, Body: body, ContentType: contentType },
+      });
+      await upload.done();
+    },
     async get(key) {
       const res = await client.send(new GetObjectCommand({ Bucket: cfg.bucket, Key: key }));
       const bytes = await res.Body?.transformToByteArray();
       if (!bytes) throw new Error(`empty object: ${key}`);
       return bytes;
+    },
+    async getStream(key) {
+      const res = await client.send(new GetObjectCommand({ Bucket: cfg.bucket, Key: key }));
+      const stream = res.Body as Readable | undefined;
+      if (!stream) throw new Error(`empty object: ${key}`);
+      return stream;
+    },
+    async delete(key) {
+      await client.send(new DeleteObjectCommand({ Bucket: cfg.bucket, Key: key }));
     },
     async exists(key) {
       try {

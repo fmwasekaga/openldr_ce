@@ -376,6 +376,60 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
       return resource;
     } catch (e) { return mapErr(e, reply); }
   });
+
+  // ── Distribution upload / status / purge ────────────────────────────────
+  const UPLOAD = { preHandler: requireRole('lab_admin', 'lab_manager'), bodyLimit: 1_073_741_824 };
+  const SUPPORTED_SYSTEMS = new Set(['loinc']); // Slice 2 adds 'snomed','rxnorm'
+
+  app.post('/api/terminology/systems/:id/distribution', UPLOAD, async (req, reply) => {
+    const codingSystemId = (req.params as IdParam).id;
+    const q = req.query as { systemType?: string; acceptLicense?: string; version?: string };
+    const systemType = String(q.systemType ?? '');
+    if (!SUPPORTED_SYSTEMS.has(systemType)) { reply.code(400); return { error: `unsupported systemType: ${systemType || '(missing)'}` }; }
+    if (q.acceptLicense !== 'true') { reply.code(400); return { error: 'the distribution license must be accepted' }; }
+    if (await ctx.terminologyJobs.hasActive(systemType)) { reply.code(409); return { error: `an import for ${systemType} is already in progress` }; }
+    if (!isReadableBody(req.body)) { reply.code(400); return { error: 'expected a zip stream (application/octet-stream)' }; }
+
+    const key = `terminology-dist/${systemType}/${codingSystemId}-${Date.now()}.zip`;
+    try {
+      await ctx.blob.putStream(key, req.body as NodeJS.ReadableStream as never, 'application/zip');
+    } catch (e) { return mapErr(e, reply); }
+
+    const job = await ctx.terminologyJobs.enqueue({
+      systemType, codingSystemId, blobKey: key, version: q.version ?? null, createdBy: req.user?.id ?? null,
+    });
+    await recordAudit(ctx, req, { action: 'terminology.distribution.uploaded', entityType: 'coding_system', entityId: codingSystemId, before: null, after: null, metadata: { systemType, version: q.version ?? null, jobId: job.id } });
+    reply.code(201);
+    return { jobId: job.id };
+  });
+
+  // This route is systemType-scoped (one active/latest distribution job per system), not
+  // codingSystemId-scoped: `:id` is only the navigational coding-system context the UI is on,
+  // not the job lookup key. `latestForSystem` correctly ignores it.
+  app.get('/api/terminology/systems/:id/distribution/job', MANAGE, async (req, reply) => {
+    const q = req.query as { systemType?: string };
+    const systemType = String(q.systemType ?? 'loinc');
+    const job = await ctx.terminologyJobs.latestForSystem(systemType);
+    if (!job) { reply.code(404); return { error: 'no import job for this system' }; }
+    return { id: job.id, status: job.status, phase: job.phase, processed: job.processed, total: job.total, error: job.error, version: job.version, finishedAt: job.finishedAt };
+  });
+
+  // Same systemType-scoping as GET above: `:id` is navigational context, `latestForSystem`
+  // resolves the actual job/blob to purge. The audit entityId is taken from that resolved
+  // job (falling back to the path param only when no job was found) so the audit trail
+  // reflects what was actually deleted, not just what URL the operator was on.
+  app.delete('/api/terminology/systems/:id/distribution', MANAGE, async (req, reply) => {
+    const codingSystemId = (req.params as IdParam).id;
+    const q = req.query as { systemType?: string };
+    const systemType = String(q.systemType ?? 'loinc');
+    const job = await ctx.terminologyJobs.latestForSystem(systemType);
+    if (job?.blobKey) {
+      try { await ctx.blob.delete(job.blobKey); } catch (e) { return mapErr(e, reply); }
+    }
+    await recordAudit(ctx, req, { action: 'terminology.distribution.purged', entityType: 'coding_system', entityId: job?.codingSystemId ?? codingSystemId, before: null, after: null, metadata: { systemType, jobId: job?.id ?? null } });
+    reply.code(204);
+    return null;
+  });
 }
 
 function isReadableBody(body: unknown): body is NodeJS.ReadableStream {

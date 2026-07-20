@@ -600,6 +600,8 @@ export const en = {
       plugin_crashed: 'Plugin crashed',
       auth_failed: 'Authentication failure',
       site_revoked: 'Site access revoked',
+      terminology_import_done: 'Terminology import complete',
+      terminology_import_failed: 'Terminology import failed',
     },
     body: {
       sync_diverged: 'Sync diverged for {{entityId}}',
@@ -608,6 +610,8 @@ export const en = {
       plugin_crashed: 'Plugin {{entityId}} crashed',
       auth_failed: 'Authentication failed for {{entityId}}',
       site_revoked: 'Site {{entityId}} access was revoked',
+      terminology_import_done: '{{systemType}} imported ({{conceptsLoaded}} concepts).',
+      terminology_import_failed: '{{systemType}} import failed: {{error}}',
     },
     history: {
       viewAll: 'View all',

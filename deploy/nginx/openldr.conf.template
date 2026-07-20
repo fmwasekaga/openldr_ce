@@ -50,6 +50,10 @@ server {
     # prefix below for the bare case; everything under /studio/ hits the prefix and proxies through.
     location = /studio  { return 301 /studio/; }
     location /studio    { proxy_pass $upstream_studio$request_uri; }
+    # Terminology distribution uploads (LOINC/SNOMED zips) can run 100-500MB; the server-wide
+    # 50m cap above would 413 them before they reach the app. Scope the higher limit to this
+    # prefix only so other /api endpoints keep the tighter default.
+    location /api/terminology/ { client_max_body_size 1g; proxy_pass $upstream_api$request_uri; }
     location /api       { proxy_pass $upstream_api$request_uri; }
     location = /health  { proxy_pass $upstream_api/health; }
     location /auth      { proxy_pass $upstream_kc$request_uri; }

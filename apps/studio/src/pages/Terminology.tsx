@@ -10,7 +10,6 @@ import {
   deleteCodingSystem,
   deleteValueSet,
   duplicateValueSet,
-  importLoincDistribution,
   importTerms,
   importValueSet,
   listOntologyDistributions,
@@ -18,6 +17,9 @@ import {
   valueSetExportUrl,
   publisherDeletionImpact,
   systemDeletionImpact,
+  uploadTerminologyDistribution,
+  getTerminologyIngestJob,
+  purgeTerminologyDistribution,
   type Publisher,
   type CodingSystem,
   type Term,
@@ -25,6 +27,7 @@ import {
   type ValueSetCatalogImportResult,
   type ValueSetSummary,
   type OntologyDistribution,
+  type TerminologyIngestJobView,
 } from '../api';
 import { TermsTable } from '../terminology/TermsTable';
 import { publisherSections } from '../terminology/publisherSections';
@@ -124,7 +127,12 @@ export function Terminology(): JSX.Element {
   const [browseSystem, setBrowseSystem] = useState<CodingSystem | null>(null);
   const [distDialogSystem, setDistDialogSystem] = useState<CodingSystem | null>(null);
   const [termImportSystem, setTermImportSystem] = useState<CodingSystem | null>(null);
-  const [loincImportOpen, setLoincImportOpen] = useState(false);
+  const [distImportOpen, setDistImportOpen] = useState(false);
+  const [distImportSystem, setDistImportSystem] = useState<CodingSystem | null>(null);
+  const [importJobs, setImportJobs] = useState<Record<string, TerminologyIngestJobView>>({});
+  const importPollRef = useRef<Record<string, ReturnType<typeof setInterval>>>({});
+  // Guards the import-job poller's async continuations against setState after unmount.
+  const importPollMountedRef = useRef(true);
 
   // ── term dialog state (T12 will mount TermDialog consuming these) ────────────
   const [editingTerm, setEditingTerm] = useState<Term | null>(null);
@@ -159,6 +167,13 @@ export function Terminology(): JSX.Element {
     void reload();
   }, []);
 
+  // Stop polling any in-flight distribution import jobs on unmount, and make any already
+  // in-flight getTerminologyIngestJob request's continuation a no-op.
+  useEffect(() => () => {
+    importPollMountedRef.current = false;
+    Object.values(importPollRef.current).forEach(clearInterval);
+  }, []);
+
   // Default-select the first publisher once data arrives.
   useEffect(() => {
     if (selectedPublisherId === '' && publishers.length > 0) {
@@ -183,6 +198,8 @@ export function Terminology(): JSX.Element {
   const sections = publisherSections(publishers, codingSystems, valueSets);
   const activeSection = sections.find((s) => s.publisher.id === selectedPublisherId) ?? null;
   const selectedSystem = codingSystems.find((s) => s.id === selectedSystemId) ?? null;
+  const loincSystemInSection = activeSection?.systems.find(isLoincSystem) ?? null;
+  const activeImportJob = loincSystemInSection ? importJobs[loincSystemInSection.id] : null;
   const pagedSystems = activeSection
     ? activeSection.systems.slice(systemPage * systemPageSize, systemPage * systemPageSize + systemPageSize)
     : [];
@@ -341,10 +358,52 @@ export function Terminology(): JSX.Element {
     }
   };
 
-  const handleLoincImported = async (count: number): Promise<void> => {
-    setLoincImportOpen(false);
-    await reload();
-    setToast({ kind: 'ok', text: `Imported ${count} LOINC terms.` });
+  const openDistImport = (system: CodingSystem | null): void => {
+    if (!system) return;
+    setDistImportSystem(system);
+    setDistImportOpen(true);
+  };
+
+  const startPollingImportJob = (codingSystemId: string): void => {
+    const existing = importPollRef.current[codingSystemId];
+    if (existing) clearInterval(existing);
+    const poll = async (): Promise<void> => {
+      try {
+        const job = await getTerminologyIngestJob(codingSystemId, 'loinc');
+        if (!importPollMountedRef.current) return;
+        setImportJobs((prev) => ({ ...prev, [codingSystemId]: job }));
+        if (job.status === 'ready' || job.status === 'failed') {
+          clearInterval(importPollRef.current[codingSystemId]);
+          delete importPollRef.current[codingSystemId];
+          if (job.status === 'ready') {
+            await reload();
+            if (!importPollMountedRef.current) return;
+          }
+        }
+      } catch {
+        if (!importPollMountedRef.current) return;
+        clearInterval(importPollRef.current[codingSystemId]);
+        delete importPollRef.current[codingSystemId];
+      }
+    };
+    void poll();
+    importPollRef.current[codingSystemId] = setInterval(() => void poll(), 3000);
+  };
+
+  const handleDistributionQueued = (_jobId: string): void => {
+    setDistImportOpen(false);
+    setToast({ kind: 'ok', text: "Import started — you’ll be notified when it completes." });
+    if (distImportSystem) startPollingImportJob(distImportSystem.id);
+  };
+
+  const handlePurgeDistribution = async (system: CodingSystem | null): Promise<void> => {
+    if (!system) return;
+    try {
+      await purgeTerminologyDistribution(system.id, 'loinc');
+      setToast({ kind: 'ok', text: 'Stored distribution deleted.' });
+    } catch (e: unknown) {
+      setToast({ kind: 'error', text: e instanceof Error ? e.message : String(e) });
+    }
   };
 
   return (
@@ -412,6 +471,13 @@ export function Terminology(): JSX.Element {
                 {/* Breadcrumb */}
                 <div className="flex h-9 items-center gap-1 border-b border-border px-3 text-xs text-muted-foreground">
                   <span className="text-foreground">{activeSection.publisher.name}</span>
+                  {activeImportJob && (activeImportJob.status === 'queued' || activeImportJob.status === 'running') && (
+                    <Badge variant="outline" className="text-[9px] uppercase">
+                      {activeImportJob.status === 'queued'
+                        ? 'Import queued'
+                        : `Importing…${activeImportJob.total ? ` ${activeImportJob.processed}/${activeImportJob.total}` : ''}`}
+                    </Badge>
+                  )}
                   {selectedSystem && (
                     <>
                       <ChevronRight className="h-3 w-3" />
@@ -491,8 +557,11 @@ export function Terminology(): JSX.Element {
                       {isLoincPublisher(activeSection.publisher) && !selectedSystem && (
                         <>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => setLoincImportOpen(true)}>
-                            Import LOINC distribution...
+                          <DropdownMenuItem disabled={!loincSystemInSection} onClick={() => openDistImport(loincSystemInSection)}>
+                            Import distribution...
+                          </DropdownMenuItem>
+                          <DropdownMenuItem disabled={!loincSystemInSection} onClick={() => void handlePurgeDistribution(loincSystemInSection)}>
+                            Delete stored distribution
                           </DropdownMenuItem>
                         </>
                       )}
@@ -577,8 +646,11 @@ export function Terminology(): JSX.Element {
                             Import terms...
                           </DropdownMenuItem>
                           {(isLoincSystem(selectedSystem) || (!selectedSystem && isLoincPublisher(activeSection.publisher))) && (
-                            <DropdownMenuItem onClick={() => setLoincImportOpen(true)}>
-                              Import LOINC distribution...
+                            <DropdownMenuItem
+                              disabled={!(selectedSystem ?? loincSystemInSection)}
+                              onClick={() => openDistImport(selectedSystem ?? loincSystemInSection)}
+                            >
+                              Import distribution...
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuItem disabled={!selectedSystem} asChild>
@@ -694,8 +766,8 @@ export function Terminology(): JSX.Element {
                                       <a href={termsTemplateUrl(s.id)} download>Download terms template</a>
                                     </DropdownMenuItem>
                                     {isLoincSystem(s) && (
-                                      <DropdownMenuItem onClick={() => setLoincImportOpen(true)}>
-                                        Import LOINC distribution...
+                                      <DropdownMenuItem onClick={() => openDistImport(s)}>
+                                        Import distribution...
                                       </DropdownMenuItem>
                                     )}
                                     <DropdownMenuSeparator />
@@ -903,10 +975,12 @@ export function Terminology(): JSX.Element {
           onChanged={() => void reload()}
         />
 
-        <LoincImportDialog
-          open={loincImportOpen}
-          onOpenChange={setLoincImportOpen}
-          onImported={(count) => void handleLoincImported(count)}
+        <ImportDistributionDialog
+          open={distImportOpen}
+          onOpenChange={setDistImportOpen}
+          codingSystemId={distImportSystem?.id ?? ''}
+          systemType="loinc"
+          onQueued={(jobId) => handleDistributionQueued(jobId)}
         />
 
         {confirm && (
@@ -946,75 +1020,51 @@ export function Terminology(): JSX.Element {
   );
 }
 
-function LoincImportDialog({
-  open,
-  onOpenChange,
-  onImported,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onImported: (count: number) => void;
+function ImportDistributionDialog({ open, onOpenChange, codingSystemId, systemType, onQueued }: {
+  open: boolean; onOpenChange: (v: boolean) => void; codingSystemId: string; systemType: string; onQueued: (jobId: string) => void;
 }): JSX.Element {
-  const [path, setPath] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [version, setVersion] = useState('');
   const [accepted, setAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [pct, setPct] = useState(0);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (open) {
-      setPath('');
-      setAccepted(false);
-      setBusy(false);
-      setError(null);
-    }
-  }, [open]);
-
-  const canImport = path.trim().length > 0 && accepted && !busy;
-
+  useEffect(() => { if (open) { setFile(null); setVersion(''); setAccepted(false); setBusy(false); setPct(0); setError(null); } }, [open]);
+  const canImport = !!file && accepted && !busy;
   const handleImport = async (): Promise<void> => {
-    if (!canImport) return;
-    setBusy(true);
-    setError(null);
+    if (!canImport || !file) return;
+    setBusy(true); setError(null);
     try {
-      const result = await importLoincDistribution(path.trim(), accepted);
-      onImported(result.conceptsLoaded);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
+      const { jobId } = await uploadTerminologyDistribution(codingSystemId, systemType, file, accepted, version.trim() || null, setPct);
+      onQueued(jobId);
+    } catch (err: unknown) { setError(err instanceof Error ? err.message : String(err)); }
+    finally { setBusy(false); }
   };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent aria-describedby={undefined} className="w-full p-0 sm:max-w-lg">
         <div className="border-b border-border px-4 py-3">
-          <DialogTitle className="text-sm">Import LOINC distribution</DialogTitle>
+          <DialogTitle className="text-sm">Import distribution</DialogTitle>
           <DialogDescription className="mt-1 text-xs text-muted-foreground">
-            Import LOINC terms from an extracted server-side distribution folder.
+            Upload an extracted distribution packaged as a .zip. It is stored and imported in the background.
           </DialogDescription>
         </div>
         <div className="space-y-4 px-4 py-4">
           <div className="space-y-1.5">
-            <Label htmlFor="loincImportPath">Server path</Label>
-            <Input
-              id="loincImportPath"
-              value={path}
-              onChange={(e) => setPath(e.target.value)}
-              placeholder="D:\\Projects\\Repositories\\corlix\\fixtures\\Loinc\\2.82"
-              className="font-mono text-xs"
-            />
+            <Label htmlFor="distFile">Distribution .zip</Label>
+            <Input id="distFile" type="file" accept=".zip" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="distVersion">Version (optional)</Label>
+            <Input id="distVersion" value={version} onChange={(e) => setVersion(e.target.value)} placeholder="e.g. 2.82" />
           </div>
           <div className="flex items-start gap-2">
-            <Checkbox
-              id="loincLicenseAccepted"
-              checked={accepted}
-              onCheckedChange={(v) => setAccepted(v === true)}
-            />
-            <Label htmlFor="loincLicenseAccepted" className="text-xs leading-4">
-              I have accepted the LOINC license for this distribution.
+            <Checkbox id="distLicense" checked={accepted} onCheckedChange={(v) => setAccepted(v === true)} />
+            <Label htmlFor="distLicense" className="text-xs leading-4">
+              I have accepted the license for this distribution.
             </Label>
           </div>
+          {busy && <div className="text-xs text-muted-foreground">Uploading… {Math.round(pct * 100)}%</div>}
           {error && (
             <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
               {error}
@@ -1026,7 +1076,7 @@ function LoincImportDialog({
             Cancel
           </Button>
           <Button size="sm" onClick={() => void handleImport()} disabled={!canImport}>
-            {busy ? 'Importing...' : 'Import LOINC'}
+            {busy ? 'Uploading…' : 'Upload & import'}
           </Button>
         </div>
       </DialogContent>

@@ -6,7 +6,8 @@ import type { Logger } from '@openldr/core';
 export type NotificationPriority = 'info' | 'warning' | 'critical';
 export type NotificationType =
   | 'sync_diverged' | 'sync_failed' | 'sync_quarantined'
-  | 'plugin_crashed' | 'auth_failed' | 'site_revoked';
+  | 'plugin_crashed' | 'auth_failed' | 'site_revoked'
+  | 'terminology_import_done' | 'terminology_import_failed';
 
 export interface Notification {
   id: string;
@@ -59,6 +60,8 @@ const AUDIT_MAP: Record<string, { type: NotificationType; priority: Notification
   'system.crash': { type: 'plugin_crashed', priority: 'critical', linkTo: '/activity', title: 'System crash' },
   'system.crash_loop': { type: 'plugin_crashed', priority: 'critical', linkTo: '/activity', title: 'Crash loop detected' },
   'settings.sync.revoke': { type: 'site_revoked', priority: 'warning', linkTo: '/settings/sites', title: 'Site access revoked' },
+  'terminology.import.completed': { type: 'terminology_import_done', priority: 'info', linkTo: '/terminology', title: 'Terminology import complete' },
+  'terminology.import.failed': { type: 'terminology_import_failed', priority: 'warning', linkTo: '/terminology', title: 'Terminology import failed' },
 };
 
 export function auditRowToNotification(row: AuditEvent): Notification | null {
@@ -90,7 +93,7 @@ export interface NotificationCtx {
   logger: Logger;
 }
 
-const AUDIT_ACTIONS = ['auth.failed', 'plugin.crash', 'system.crash', 'system.crash_loop', 'settings.sync.revoke'];
+const AUDIT_ACTIONS = ['auth.failed', 'plugin.crash', 'system.crash', 'system.crash_loop', 'settings.sync.revoke', 'terminology.import.completed', 'terminology.import.failed'];
 const WINDOW_DAYS = 30;
 const CURSOR_ID = '__cursor__';
 const MIN_PRIORITY_TYPE = '__min_priority__';

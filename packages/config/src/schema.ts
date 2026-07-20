@@ -68,6 +68,9 @@ export const ConfigSchema = z
     S3_BUCKET: z.string().min(1),
     S3_FORCE_PATH_STYLE: envBoolean(true),
 
+    // Working dir for terminology distribution download + extraction (needs disk headroom for SNOMED).
+    TERMINOLOGY_WORK_DIR: z.string().optional(),
+
     // OIDC issuer (Keycloak realm base URL).
     OIDC_ISSUER_URL: z.string().url(),
     OIDC_WEB_CLIENT_ID: z.string().min(1).default('openldr-web'),

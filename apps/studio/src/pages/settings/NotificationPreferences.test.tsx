@@ -50,6 +50,8 @@ describe('NotificationPreferences page', () => {
         { type: 'plugin_crashed', enabled: true },
         { type: 'auth_failed', enabled: true },
         { type: 'site_revoked', enabled: true },
+        { type: 'terminology_import_done', enabled: true },
+        { type: 'terminology_import_failed', enabled: true },
       ],
       'info',
     ));

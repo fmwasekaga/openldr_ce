@@ -860,6 +860,48 @@ export const valueSetExportUrl = (id: string): string => `/api/terminology/value
 export const importLoincDistribution = (path: string, acceptLicense: boolean): Promise<TerminologyLoadResult> =>
   authFetch('/api/terminology/import/loinc', jbody({ path, acceptLicense }, 'POST')).then((r) => okJson<TerminologyLoadResult>(r, 'import LOINC distribution'));
 
+export interface TerminologyIngestJobView {
+  id: string; status: 'queued' | 'running' | 'ready' | 'failed';
+  phase: string | null; processed: number; total: number | null; error: string | null;
+  version: string | null; finishedAt: string | null;
+}
+
+/** Stream a distribution zip to the server with upload progress. Uses XHR (fetch has no upload
+ *  progress). Auth mirrors authFetch: bearer from getAccessToken(). */
+export function uploadTerminologyDistribution(
+  codingSystemId: string, systemType: string, file: File, acceptLicense: boolean, version: string | null,
+  onProgress?: (fraction: number) => void,
+): Promise<{ jobId: string }> {
+  return new Promise((resolve, reject) => {
+    const params = new URLSearchParams({ systemType, acceptLicense: String(acceptLicense) });
+    if (version) params.set('version', version);
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `/api/terminology/systems/${encodeURIComponent(codingSystemId)}/distribution?${params.toString()}`);
+    xhr.setRequestHeader('content-type', 'application/octet-stream');
+    const token = getAccessToken();
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total); };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try { resolve(JSON.parse(xhr.responseText)); } catch { resolve({ jobId: '' }); }
+      } else {
+        let msg = `upload failed (${xhr.status})`;
+        try { const j = JSON.parse(xhr.responseText); if (j?.error) msg = j.error; } catch { /* ignore */ }
+        reject(new Error(msg));
+      }
+    };
+    xhr.onerror = () => reject(new Error('network error during upload'));
+    xhr.send(file);
+  });
+}
+
+export const getTerminologyIngestJob = (codingSystemId: string, systemType: string): Promise<TerminologyIngestJobView> =>
+  authFetch(`/api/terminology/systems/${encodeURIComponent(codingSystemId)}/distribution/job?systemType=${systemType}`)
+    .then((r) => okJson<TerminologyIngestJobView>(r, 'get import job'));
+
+export const purgeTerminologyDistribution = (codingSystemId: string, systemType: string): Promise<void> =>
+  authFetch(`/api/terminology/systems/${encodeURIComponent(codingSystemId)}/distribution?systemType=${systemType}`, { method: 'DELETE' }).then(() => undefined);
+
 // ── Terms + mappings (SP2) ───────────────────────────────────────────────────
 export type TermStatus = 'ACTIVE' | 'DRAFT' | 'DEPRECATED' | 'DISABLED';
 export type MapType = 'SAME-AS' | 'NARROWER-THAN' | 'BROADER-THAN' | 'RELATED-TO' | 'UNMAPPED-FROM';
@@ -1491,7 +1533,8 @@ export const pluginBrokerCall = (id: string, op: PluginBrokerOp): Promise<Plugin
 export type NotificationPriority = 'info' | 'warning' | 'critical';
 export type NotificationType =
   | 'sync_diverged' | 'sync_failed' | 'sync_quarantined'
-  | 'plugin_crashed' | 'auth_failed' | 'site_revoked';
+  | 'plugin_crashed' | 'auth_failed' | 'site_revoked'
+  | 'terminology_import_done' | 'terminology_import_failed';
 
 export interface Notification {
   id: string;
