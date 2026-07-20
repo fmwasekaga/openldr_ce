@@ -1,4 +1,4 @@
-import { makeScreenshotMap, screenshotUrl } from './screenshots';
+import { makeScreenshotMap, PUBLIC_SCREENSHOT_NAMES, SCREENSHOTS, screenshotUrl } from './screenshots';
 
 describe('landing screenshots', () => {
   it('keys imported screenshot URLs by bare filename', () => {
@@ -15,5 +15,9 @@ describe('landing screenshots', () => {
 
   it('returns null for a screenshot name that is not available', () => {
     expect(screenshotUrl('missing-public-shot.png')).toBeNull();
+  });
+
+  it('includes only the curated public screenshots', () => {
+    expect(Object.keys(SCREENSHOTS).sort()).toEqual([...PUBLIC_SCREENSHOT_NAMES].sort());
   });
 });
