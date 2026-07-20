@@ -1246,6 +1246,12 @@ export * from './policy';
 export { wipeInternalDatabase, clearAuditAndRunHistory, listInternalDataTables, buildTruncateSql } from './danger';
 export { recordAuditEvent } from './record-audit';
 export type { AuditActor, AuditDetails } from './record-audit';
+export {
+  listNotifications, markNotificationsRead, markAllNotificationsRead,
+  getNotificationPrefs, saveNotificationPrefs,
+  syncRowToNotification, auditRowToNotification, passesPrefs, PRIORITY_RANK,
+} from './notifications';
+export type { Notification, NotificationType, NotificationPriority, NotificationPreference, NotificationCtx } from './notifications';
 
 /** Delete all dashboards and restore the built-in sample. Internal DB only. */
 export async function dangerResetDashboards(ctx: AppContext): Promise<void> {

@@ -19,6 +19,10 @@ import {
 import { cn } from '@/lib/cn';
 import { listPluginUis, type PluginUiEntry } from '@/api';
 import { pluginIcon } from '@/plugins/icons';
+import { NotificationBell } from './NotificationBell';
+import { NotificationToaster } from './NotificationToaster';
+
+const NOTIFICATION_ROLES = ['lab_admin', 'lab_manager', 'data_analyst', 'system_auditor'];
 
 const NAV: { to: string; labelKey: string; end: boolean; icon: LucideIcon; roles?: string[] }[] = [
   { to: '/', labelKey: 'nav.dashboard', end: true, icon: LayoutDashboard },
@@ -114,6 +118,7 @@ export function AppShell({
   return (
     <TooltipProvider delayDuration={300}>
     <div className="ui-scope flex h-screen overflow-hidden">
+      <NotificationToaster />
       <aside
         className={cn('flex flex-col border-r border-border transition-[width] duration-200', collapsed ? 'w-14' : 'w-60')}
         style={{ background: 'var(--sidebar)' }}
@@ -210,6 +215,7 @@ export function AppShell({
                 <TooltipContent side="bottom" className="max-w-xs">{t('a11y.devBypassTooltip')}</TooltipContent>
               </Tooltip>
             )}
+            {NOTIFICATION_ROLES.some((r) => hasRole(r)) && <NotificationBell />}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button

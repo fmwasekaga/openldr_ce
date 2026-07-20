@@ -6,10 +6,12 @@ import { AppShell } from './shell/AppShell';
 import { DashboardPage } from './dashboard/DashboardPage';
 import { Audit } from './pages/Audit';
 import { Activity } from './pages/Activity';
+import { Notifications } from './pages/Notifications';
 import { Users } from './pages/Users';
 import { Sites } from './pages/settings/Sites';
 import { SettingsShell } from '@/pages/settings/SettingsShell';
 import { General } from '@/pages/settings/General';
+import { NotificationPreferences } from '@/pages/settings/NotificationPreferences';
 import { DistributedSync } from '@/pages/settings/DistributedSync';
 import { Marketplace } from '@/pages/settings/Marketplace';
 import { Connectors } from '@/pages/settings/Connectors';
@@ -44,6 +46,7 @@ export function App() {
       <Route path="/settings" element={<RequireRole><SettingsShell /></RequireRole>}>
         <Route index element={<Navigate to="general" replace />} />
         <Route path="general" element={<RequireRole><General /></RequireRole>} />
+        <Route path="notifications" element={<RequireRole roles={['lab_admin', 'lab_manager', 'data_analyst', 'system_auditor']}><NotificationPreferences /></RequireRole>} />
         <Route path="sites" element={<RequireRole role="lab_admin"><Sites /></RequireRole>} />
         <Route path="sync" element={<RequireRole role="lab_admin"><DistributedSync /></RequireRole>} />
         <Route path="marketplace" element={<RequireRole role="lab_admin"><Marketplace /></RequireRole>} />
@@ -51,6 +54,7 @@ export function App() {
       </Route>
       <Route path="/audit" element={<Audit />} />
       <Route path="/activity" element={<Activity />} />
+      <Route path="/notifications" element={<Notifications />} />
       <Route path="/forms" element={<Forms />} />
       <Route path="/forms/new" element={<FormBuilderPage />} />
       <Route path="/forms/:id/builder" element={<FormBuilderPage />} />

@@ -58,6 +58,7 @@ import * as m056 from './056_sync_divergences';
 import * as m057 from './057_sync_site_cursors';
 import * as m058 from './058_drop_reported_pull_cursor';
 import * as m059 from './059_sync_activity';
+import * as m060 from './060_notifications';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -119,4 +120,5 @@ export const internalMigrations: Record<string, Migration> = {
   '057_sync_site_cursors': { up: m057.up, down: m057.down },
   '058_drop_reported_pull_cursor': { up: m058.up, down: m058.down },
   '059_sync_activity': { up: m059.up, down: m059.down },
+  '060_notifications': { up: m060.up, down: m060.down },
 };

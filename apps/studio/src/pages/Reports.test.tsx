@@ -28,6 +28,9 @@ vi.mock('../api', () => ({
   fetchReportRuns: vi.fn(async () => ({ runs: [], total: 0 })),
   downloadReportCsv: vi.fn(async () => {}),
   listPluginUis: vi.fn(async () => []),
+  listNotifications: vi.fn(async () => ({ notifications: [], unreadCount: 0, total: 0 })),
+  markNotificationsRead: vi.fn(async () => undefined),
+  markAllNotificationsRead: vi.fn(async () => undefined),
 }));
 vi.mock('../reports/PdfCanvasViewer', () => ({ PdfCanvasViewer: () => <div>pdf-viewer</div> }));
 vi.mock('@/auth/AuthProvider', () => ({
