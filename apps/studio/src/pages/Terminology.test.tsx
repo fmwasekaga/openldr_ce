@@ -183,7 +183,7 @@ describe('Terminology page', () => {
     expect(await screen.findByText('Imported 672 value set(s); skipped 0.')).toBeInTheDocument();
   });
 
-  it('shows "Import distribution..." on the LOINC row menu and uploads the selected file', async () => {
+  it('shows "Import distribution..." on the LOINC publisher menu and uploads the selected file', async () => {
     const uploadSpy = vi.spyOn(api, 'uploadTerminologyDistribution').mockResolvedValue({ jobId: 'tij_1' });
     vi.spyOn(api, 'getTerminologyIngestJob').mockResolvedValue({
       id: 'tij_1', status: 'queued', phase: null, processed: 0, total: null, error: null, version: null, finishedAt: null,
@@ -191,9 +191,9 @@ describe('Terminology page', () => {
 
     render(<MemoryRouter><Terminology /></MemoryRouter>);
 
-    const rowActions = (await screen.findAllByRole('button', { name: /actions/i }))[1];
-    fireEvent.pointerDown(rowActions, { button: 0, ctrlKey: false, pointerType: 'mouse' });
-    if (!screen.queryByText('Import distribution...')) fireEvent.keyDown(rowActions, { key: 'Enter' });
+    const pageActions = (await screen.findAllByRole('button', { name: /actions/i }))[0];
+    fireEvent.pointerDown(pageActions, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Import distribution...')) fireEvent.keyDown(pageActions, { key: 'Enter' });
     fireEvent.click(await screen.findByText('Import distribution...'));
 
     const file = new File([new Uint8Array([1, 2, 3])], 'loinc.zip');
@@ -201,24 +201,20 @@ describe('Terminology page', () => {
     fireEvent.click(await screen.findByLabelText('I have accepted the license for this distribution.'));
     fireEvent.click(await screen.findByRole('button', { name: 'Upload & import' }));
 
-    await waitFor(() => expect(uploadSpy).toHaveBeenCalledWith('cs1', 'loinc', file, true, null, expect.any(Function)));
+    await waitFor(() => expect(uploadSpy).toHaveBeenCalledWith('pub-loinc', 'loinc', file, true, null, expect.any(Function)));
     expect(await screen.findByText(/Import started/)).toBeInTheDocument();
   });
 
-  it('disables the publisher-level "Import distribution..." action when no LOINC code system exists yet', async () => {
+  it('enables the publisher-level "Import distribution..." even when no LOINC code system exists yet', async () => {
     vi.spyOn(api, 'listCodingSystems').mockResolvedValue([] as never);
-    const uploadSpy = vi.spyOn(api, 'uploadTerminologyDistribution');
-
+    vi.spyOn(api, 'uploadTerminologyDistribution').mockResolvedValue({ jobId: 'tij_1' });
     render(<MemoryRouter><Terminology /></MemoryRouter>);
-
     await screen.findByText(/No code systems or value sets yet/i);
     const actions = await screen.findByRole('button', { name: /actions/i });
     fireEvent.pointerDown(actions, { button: 0, ctrlKey: false, pointerType: 'mouse' });
     if (!screen.queryByText('Import distribution...')) fireEvent.keyDown(actions, { key: 'Enter' });
     fireEvent.click(await screen.findByText('Import distribution...'));
-
-    // No LOINC coding system id to target yet, so the item is disabled and the dialog never opens.
-    expect(screen.queryByLabelText('Distribution .zip')).not.toBeInTheDocument();
-    expect(uploadSpy).not.toHaveBeenCalled();
+    // Dialog opens now (no coding system required).
+    expect(await screen.findByLabelText('Distribution .zip')).toBeInTheDocument();
   });
 });
