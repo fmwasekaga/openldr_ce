@@ -22,6 +22,8 @@ import { pluginIcon } from '@/plugins/icons';
 import { NotificationBell } from './NotificationBell';
 import { NotificationToaster } from './NotificationToaster';
 
+const NOTIFICATION_ROLES = ['lab_admin', 'lab_manager', 'data_analyst', 'system_auditor'];
+
 const NAV: { to: string; labelKey: string; end: boolean; icon: LucideIcon; roles?: string[] }[] = [
   { to: '/', labelKey: 'nav.dashboard', end: true, icon: LayoutDashboard },
   { to: '/reports', labelKey: 'nav.reports', end: false, icon: FileText },
@@ -213,7 +215,7 @@ export function AppShell({
                 <TooltipContent side="bottom" className="max-w-xs">{t('a11y.devBypassTooltip')}</TooltipContent>
               </Tooltip>
             )}
-            <NotificationBell />
+            {NOTIFICATION_ROLES.some((r) => hasRole(r)) && <NotificationBell />}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button

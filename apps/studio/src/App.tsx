@@ -46,7 +46,7 @@ export function App() {
       <Route path="/settings" element={<RequireRole><SettingsShell /></RequireRole>}>
         <Route index element={<Navigate to="general" replace />} />
         <Route path="general" element={<RequireRole><General /></RequireRole>} />
-        <Route path="notifications" element={<RequireRole><NotificationPreferences /></RequireRole>} />
+        <Route path="notifications" element={<RequireRole roles={['lab_admin', 'lab_manager', 'data_analyst', 'system_auditor']}><NotificationPreferences /></RequireRole>} />
         <Route path="sites" element={<RequireRole role="lab_admin"><Sites /></RequireRole>} />
         <Route path="sync" element={<RequireRole role="lab_admin"><DistributedSync /></RequireRole>} />
         <Route path="marketplace" element={<RequireRole role="lab_admin"><Marketplace /></RequireRole>} />
