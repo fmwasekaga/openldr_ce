@@ -181,8 +181,23 @@ export const en = {
     subNav: {
       general: 'General',
       sites: 'Sites',
+      sync: 'Distributed sync',
       connectors: 'Connectors',
       marketplace: 'Marketplace',
+    },
+    sync: {
+      heading: 'Distributed sync',
+      description: 'Replication — change log',
+      tabs: { settings: 'Settings', activity: 'Activity' },
+      searchPlaceholder: 'Search activity…',
+      newestFirst: 'Newest first.',
+      refresh: 'Refresh',
+      openDetail: 'Open sync event',
+      detailTitle: 'Sync event',
+      metadata: 'Metadata',
+      count: '{{count}} events',
+      empty: 'No sync activity yet.',
+      cols: { direction: 'Direction', event: 'Event', records: 'Records', detail: 'Detail', time: 'Time' },
     },
     general: {
       heading: 'General',

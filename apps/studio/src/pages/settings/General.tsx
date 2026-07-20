@@ -13,12 +13,9 @@ import { DangerConfirmDialog } from '@/terminology/DangerConfirmDialog';
 import { TypeToConfirmDialog } from '@/components/ui/type-to-confirm-dialog';
 import {
   fetchClientConfig, fetchFeatureFlags, setFeatureFlag, runDangerAction,
-  fetchSyncConfig, saveSyncConfig, fetchSyncStatus, triggerSyncNow, fetchSyncActivity,
   fetchNumberSettings, setNumberSetting,
   getValidation, setValidation,
   type ClientConfig, type FeatureFlag, type DangerAction,
-  type SyncConfigView, type SyncConfigInput, type SyncMode, type SyncStatus, type SyncDirectionStatus,
-  type SyncActivityRow,
   type NumberSetting, type ValidationStrictness,
 } from '@/api';
 
@@ -33,13 +30,6 @@ export function General() {
   const [busyFlag, setBusyFlag] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingDanger>(null);
   const [dangerBusy, setDangerBusy] = useState(false);
-  const [sync, setSync] = useState<SyncConfigView | null>(null);
-  // Write-only secret field: blank ⇒ leave the stored secret unchanged (omit from the PUT payload).
-  const [secretInput, setSecretInput] = useState('');
-  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
-  const [syncActivity, setSyncActivity] = useState<SyncActivityRow[]>([]);
-  const [syncSaving, setSyncSaving] = useState(false);
-  const [syncNowBusy, setSyncNowBusy] = useState(false);
   const [numbers, setNumbers] = useState<NumberSetting[]>([]);
   const [busyNumber, setBusyNumber] = useState<string | null>(null);
   const [validationLevel, setValidationLevel] = useState<ValidationStrictness | null>(null);
@@ -52,18 +42,8 @@ export function General() {
       setConfig(cfg);
       if (isAdmin) {
         setFlags(await fetchFeatureFlags());
-        setSync(await fetchSyncConfig());
         setNumbers(await fetchNumberSettings());
         setValidationLevel((await getValidation()).strictness);
-        // Sync status + activity are best-effort telemetry: a missing/unreadable
-        // sync_activity table (e.g. an unmigrated DB) must not surface a toast or abort
-        // the rest of the settings load. Mirrors refreshSyncStatus below.
-        try {
-          setSyncStatus(await fetchSyncStatus());
-          setSyncActivity(await fetchSyncActivity());
-        } catch {
-          // swallow — telemetry only
-        }
       }
     } catch (e) {
       toast.error(String(e instanceof Error ? e.message : e));
@@ -85,63 +65,7 @@ export function General() {
     }
   }, [t]);
 
-  const refreshSyncStatus = useCallback(async () => {
-    try {
-      setSyncStatus(await fetchSyncStatus());
-      setSyncActivity(await fetchSyncActivity());
-    } catch {
-      // Status is best-effort telemetry; a transient failure shouldn't surface a toast.
-    }
-  }, []);
-
-  const saveSync = useCallback(async () => {
-    if (!sync) return;
-    setSyncSaving(true);
-    try {
-      const input: SyncConfigInput = {
-        enabled: sync.enabled,
-        mode: sync.mode,
-        centralUrl: sync.centralUrl,
-        siteId: sync.siteId,
-        oidcIssuer: sync.oidcIssuer,
-        clientId: sync.clientId,
-        intervalMinutes: sync.intervalMinutes,
-        // Only send the secret when the operator typed a new one; blank ⇒ preserve the stored value.
-        ...(secretInput ? { clientSecret: secretInput } : {}),
-      };
-      setSync(await saveSyncConfig(input));
-      setSecretInput('');
-      toast.success(t('settings.general.sync.saved'));
-      await refreshSyncStatus();
-    } catch (e) {
-      toast.error(t('settings.general.sync.saveFailed', { error: e instanceof Error ? e.message : String(e) }));
-    } finally {
-      setSyncSaving(false);
-    }
-  }, [sync, secretInput, t, refreshSyncStatus]);
-
-  const doSyncNow = useCallback(async () => {
-    setSyncNowBusy(true);
-    try {
-      const res = await triggerSyncNow();
-      if (res.triggered) toast.success(t('settings.general.sync.triggered'));
-      else toast.info(t('settings.general.sync.disabledToast'));
-      await refreshSyncStatus();
-    } catch (e) {
-      toast.error(t('settings.general.sync.saveFailed', { error: e instanceof Error ? e.message : String(e) }));
-    } finally {
-      setSyncNowBusy(false);
-    }
-  }, [t, refreshSyncStatus]);
-
   useEffect(() => { void load(); }, [load]);
-
-  // Poll live sync status while the card is mounted (admin + config loaded). Cleared on unmount.
-  useEffect(() => {
-    if (!isAdmin || !sync) return;
-    const id = setInterval(() => { void refreshSyncStatus(); }, 10_000);
-    return () => clearInterval(id);
-  }, [isAdmin, sync, refreshSyncStatus]);
 
   const onToggle = useCallback(async (flag: FeatureFlag, value: boolean) => {
     setBusyFlag(flag.id);
@@ -190,16 +114,6 @@ export function General() {
     'reset-dashboards': { key: 'resetDashboards' },
     'clear-audit': { key: 'clearAudit' },
     'factory-reset': { key: 'factoryReset' },
-  };
-
-  // One-line summary of a sync direction: "not started", or "running/idle · seq N · <time>".
-  const directionLine = (dir: SyncDirectionStatus | null): string => {
-    if (!dir) return t('settings.general.sync.notStarted');
-    const state = dir.running ? t('settings.general.sync.running') : t('settings.general.sync.idle');
-    const parts = [state, `seq ${dir.lastSeq}`];
-    if (dir.lastSyncedAt) parts.push(new Date(dir.lastSyncedAt).toLocaleString());
-    if (dir.lastError) parts.push(`⚠ ${dir.lastError}`);
-    return parts.join(' · ');
   };
 
   return (
@@ -268,175 +182,6 @@ export function General() {
               />
             </div>
           ))}
-        </CardContent>
-      </Card>
-      )}
-
-      {/* Distributed Sync (lab ⇄ central) — admin only. Config form + live status + manual trigger. */}
-      {isAdmin && sync && (
-      <Card data-testid="sync-card">
-        <CardHeader><CardTitle>{t('settings.general.sync.title')}</CardTitle></CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="text-sm font-medium">{t('settings.general.sync.enabled.label')}</div>
-              <div className="text-xs text-muted-foreground">{t('settings.general.sync.enabled.description')}</div>
-            </div>
-            <Switch
-              checked={sync.enabled}
-              onCheckedChange={(v) => setSync({ ...sync, enabled: v })}
-              aria-label={t('settings.general.sync.enabled.label')}
-            />
-          </div>
-          <div className="flex items-center justify-between gap-4">
-            <div className="text-sm font-medium">{t('settings.general.sync.mode.label')}</div>
-            <Select value={sync.mode} onValueChange={(v) => setSync({ ...sync, mode: v as SyncMode })}>
-              <SelectTrigger className="w-96 shrink-0" aria-label={t('settings.general.sync.mode.label')}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {(['push', 'pull', 'bidirectional'] as const).map((m) => (
-                  <SelectItem key={m} value={m}>{t(`settings.general.sync.mode.${m}`)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-center justify-between gap-4">
-            <div className="text-sm font-medium">{t('settings.general.sync.centralUrl.label')}</div>
-            <Input
-              className="w-96 shrink-0"
-              value={sync.centralUrl}
-              placeholder="https://central.example.org"
-              onChange={(e) => setSync({ ...sync, centralUrl: e.target.value })}
-              aria-label={t('settings.general.sync.centralUrl.label')}
-            />
-          </div>
-          <div className="flex items-center justify-between gap-4">
-            <div className="text-sm font-medium">{t('settings.general.sync.siteId.label')}</div>
-            <Input
-              className="w-96 shrink-0"
-              value={sync.siteId}
-              placeholder="lab-site-01"
-              onChange={(e) => setSync({ ...sync, siteId: e.target.value })}
-              aria-label={t('settings.general.sync.siteId.label')}
-            />
-          </div>
-          <div className="flex items-center justify-between gap-4">
-            <div className="text-sm font-medium">{t('settings.general.sync.oidcIssuer.label')}</div>
-            <Input
-              className="w-96 shrink-0"
-              value={sync.oidcIssuer}
-              placeholder="https://central.example.org/auth/realms/openldr"
-              onChange={(e) => setSync({ ...sync, oidcIssuer: e.target.value })}
-              aria-label={t('settings.general.sync.oidcIssuer.label')}
-            />
-          </div>
-          <div className="flex items-center justify-between gap-4">
-            <div className="text-sm font-medium">{t('settings.general.sync.clientId.label')}</div>
-            <Input
-              className="w-96 shrink-0"
-              value={sync.clientId}
-              placeholder="sync-lab-site-01"
-              onChange={(e) => setSync({ ...sync, clientId: e.target.value })}
-              aria-label={t('settings.general.sync.clientId.label')}
-              autoComplete="off"
-            />
-          </div>
-          <div className="flex items-center justify-between gap-4">
-            <div className="text-sm font-medium">{t('settings.general.sync.clientSecret.label')}</div>
-            <Input
-              type="password"
-              className="w-96 shrink-0"
-              value={secretInput}
-              placeholder={sync.clientSecretSet ? t('settings.general.sync.clientSecretSet') : ''}
-              onChange={(e) => setSecretInput(e.target.value)}
-              aria-label={t('settings.general.sync.clientSecret.label')}
-              autoComplete="new-password"
-            />
-          </div>
-          <div className="flex items-center justify-between gap-4">
-            <div className="text-sm font-medium">{t('settings.general.sync.intervalMinutes.label')}</div>
-            <Input
-              type="number"
-              min={1}
-              className="w-96 shrink-0"
-              value={sync.intervalMinutes}
-              onChange={(e) => setSync({ ...sync, intervalMinutes: Number(e.target.value) })}
-              aria-label={t('settings.general.sync.intervalMinutes.label')}
-            />
-          </div>
-          <div className="flex justify-end">
-            <Button onClick={() => void saveSync()} disabled={syncSaving}>
-              {t('settings.general.sync.save')}
-            </Button>
-          </div>
-
-          {/* Live status panel */}
-          <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/40 p-3 text-sm">
-            <div className="flex items-center justify-between gap-4">
-              <span className="font-medium">{t('settings.general.sync.status')}</span>
-              <span className={`rounded px-2 py-0.5 text-xs ${syncStatus?.enabled ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-muted text-muted-foreground'}`}>
-                {syncStatus?.enabled ? t('settings.general.sync.on') : t('settings.general.sync.off')}
-              </span>
-            </div>
-            <dl className="grid grid-cols-[6rem_1fr] gap-x-3 gap-y-1 text-xs">
-              <dt className="text-muted-foreground">{t('settings.general.sync.mode.push')}</dt>
-              <dd className="font-mono">{directionLine(syncStatus?.push ?? null)}</dd>
-              <dt className="text-muted-foreground">{t('settings.general.sync.mode.pull')}</dt>
-              <dd className="font-mono">{directionLine(syncStatus?.pull ?? null)}</dd>
-              <dt className="text-muted-foreground">{t('settings.general.sync.pending')}</dt>
-              <dd className="font-mono">{syncStatus?.pendingPush ?? 0}</dd>
-            </dl>
-            <dl className="grid grid-cols-[6rem_1fr] gap-x-3 gap-y-1 text-xs">
-              <dt className="text-muted-foreground">{t('settings.general.sync.lastChecked')}</dt>
-              <dd className="font-mono">
-                {syncStatus?.push?.lastAttemptAt || syncStatus?.pull?.lastAttemptAt
-                  ? new Date((syncStatus?.push?.lastAttemptAt ?? syncStatus?.pull?.lastAttemptAt) as string).toLocaleString()
-                  : t('settings.general.sync.never')}
-              </dd>
-              <dt className="text-muted-foreground">{t('settings.general.sync.lastSuccess')}</dt>
-              <dd className="font-mono">
-                {syncStatus?.push?.lastSuccessAt || syncStatus?.pull?.lastSuccessAt
-                  ? new Date((syncStatus?.push?.lastSuccessAt ?? syncStatus?.pull?.lastSuccessAt) as string).toLocaleString()
-                  : t('settings.general.sync.never')}
-              </dd>
-            </dl>
-            <div className="flex flex-col gap-1">
-              <span className="font-medium">{t('settings.general.sync.activity')}</span>
-              {syncActivity.length === 0 ? (
-                <span className="text-xs text-muted-foreground">{t('settings.general.sync.noActivity')}</span>
-              ) : (
-                <ul className="flex max-h-48 flex-col gap-1 overflow-y-auto text-xs">
-                  {syncActivity.map((a) => (
-                    <li key={a.id} className="flex items-baseline justify-between gap-2 font-mono">
-                      <span>
-                        <span className="text-muted-foreground">{a.direction}</span>{' '}
-                        <span
-                          className={
-                            a.event === 'failed'
-                              ? 'text-destructive'
-                              : a.event === 'synced'
-                                ? 'text-emerald-600 dark:text-emerald-400'
-                                : 'text-amber-600 dark:text-amber-400'
-                          }
-                        >
-                          {t(`settings.general.sync.event.${a.event}`)}
-                        </span>
-                        {a.event === 'synced' ? ` (${a.records})` : ''}
-                        {a.error ? ` — ${a.error}` : ''}
-                      </span>
-                      <span className="shrink-0 text-muted-foreground">{new Date(a.occurredAt).toLocaleTimeString()}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div className="flex justify-end">
-              <Button variant="secondary" onClick={() => void doSyncNow()} disabled={syncNowBusy}>
-                {t('settings.general.sync.syncNow')}
-              </Button>
-            </div>
-          </div>
         </CardContent>
       </Card>
       )}

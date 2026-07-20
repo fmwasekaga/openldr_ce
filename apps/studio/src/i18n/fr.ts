@@ -185,8 +185,23 @@ export const fr: EnShape = {
     subNav: {
       general: 'Général',
       sites: 'Sites',
+      sync: 'Synchronisation distribuée',
       connectors: 'Connecteurs',
       marketplace: 'Marketplace',
+    },
+    sync: {
+      heading: 'Synchronisation distribuée',
+      description: 'Réplication — journal des modifications',
+      tabs: { settings: 'Paramètres', activity: 'Activité' },
+      searchPlaceholder: 'Rechercher…',
+      newestFirst: 'Plus récent d’abord.',
+      refresh: 'Actualiser',
+      openDetail: 'Ouvrir l’événement de synchronisation',
+      detailTitle: 'Événement de synchronisation',
+      metadata: 'Métadonnées',
+      count: '{{count}} événements',
+      empty: 'Aucune activité de synchronisation.',
+      cols: { direction: 'Direction', event: 'Événement', records: 'Enregistrements', detail: 'Détail', time: 'Heure' },
     },
     general: {
       heading: 'Général',

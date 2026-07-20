@@ -10,6 +10,7 @@ import { Users } from './pages/Users';
 import { Sites } from './pages/settings/Sites';
 import { SettingsShell } from '@/pages/settings/SettingsShell';
 import { General } from '@/pages/settings/General';
+import { DistributedSync } from '@/pages/settings/DistributedSync';
 import { Marketplace } from '@/pages/settings/Marketplace';
 import { Connectors } from '@/pages/settings/Connectors';
 import { Forms } from './pages/Forms';
@@ -44,6 +45,7 @@ export function App() {
         <Route index element={<Navigate to="general" replace />} />
         <Route path="general" element={<RequireRole><General /></RequireRole>} />
         <Route path="sites" element={<RequireRole role="lab_admin"><Sites /></RequireRole>} />
+        <Route path="sync" element={<RequireRole role="lab_admin"><DistributedSync /></RequireRole>} />
         <Route path="marketplace" element={<RequireRole role="lab_admin"><Marketplace /></RequireRole>} />
         <Route path="connectors" element={<RequireRole role="lab_admin"><Connectors /></RequireRole>} />
       </Route>
