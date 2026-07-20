@@ -14,5 +14,7 @@ const CANONICAL_SYSTEM_URL: Record<SupportedSystemType, string> = {
 };
 
 export function canonicalSystemUrl(systemType: string): string | null {
-  return (CANONICAL_SYSTEM_URL as Record<string, string>)[systemType] ?? null;
+  return Object.hasOwn(CANONICAL_SYSTEM_URL, systemType)
+    ? (CANONICAL_SYSTEM_URL as Record<string, string>)[systemType]
+    : null;
 }

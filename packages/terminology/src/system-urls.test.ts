@@ -15,4 +15,9 @@ describe('canonicalSystemUrl', () => {
     expect(canonicalSystemUrl('nope')).toBeNull();
     expect(canonicalSystemUrl('')).toBeNull();
   });
+  it('returns null for inherited Object.prototype keys (no prototype leakage)', () => {
+    expect(canonicalSystemUrl('toString')).toBeNull();
+    expect(canonicalSystemUrl('constructor')).toBeNull();
+    expect(canonicalSystemUrl('hasOwnProperty')).toBeNull();
+  });
 });
