@@ -403,6 +403,9 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
     return { jobId: job.id };
   });
 
+  // This route is systemType-scoped (one active/latest distribution job per system), not
+  // codingSystemId-scoped: `:id` is only the navigational coding-system context the UI is on,
+  // not the job lookup key. `latestForSystem` correctly ignores it.
   app.get('/api/terminology/systems/:id/distribution/job', MANAGE, async (req, reply) => {
     const q = req.query as { systemType?: string };
     const systemType = String(q.systemType ?? 'loinc');
@@ -411,6 +414,10 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
     return { id: job.id, status: job.status, phase: job.phase, processed: job.processed, total: job.total, error: job.error, version: job.version, finishedAt: job.finishedAt };
   });
 
+  // Same systemType-scoping as GET above: `:id` is navigational context, `latestForSystem`
+  // resolves the actual job/blob to purge. The audit entityId is taken from that resolved
+  // job (falling back to the path param only when no job was found) so the audit trail
+  // reflects what was actually deleted, not just what URL the operator was on.
   app.delete('/api/terminology/systems/:id/distribution', MANAGE, async (req, reply) => {
     const codingSystemId = (req.params as IdParam).id;
     const q = req.query as { systemType?: string };
@@ -419,7 +426,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
     if (job?.blobKey) {
       try { await ctx.blob.delete(job.blobKey); } catch (e) { return mapErr(e, reply); }
     }
-    await recordAudit(ctx, req, { action: 'terminology.distribution.purged', entityType: 'coding_system', entityId: codingSystemId, before: null, after: null, metadata: { systemType } });
+    await recordAudit(ctx, req, { action: 'terminology.distribution.purged', entityType: 'coding_system', entityId: job?.codingSystemId ?? codingSystemId, before: null, after: null, metadata: { systemType, jobId: job?.id ?? null } });
     reply.code(204);
     return null;
   });
