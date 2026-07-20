@@ -159,6 +159,21 @@ describe('sync settings (discrete keys)', () => {
     expect(view.signingKeySet).toBe(true);
   });
 
+  it('preserves the pinned central public key when centralPublicKey is absent (unrelated save)', async () => {
+    const store = fakeStore({ 'sync.central_public_key': 'pinned-pub-der-hex' });
+    // A Studio settings save whose input omits centralPublicKey must NOT wipe the enrollment-pinned key.
+    const view = await setSyncConfig(store, fullInput, 'tester', encrypt);
+    expect(store.data.get('sync.central_public_key')).toBe('pinned-pub-der-hex');
+    expect(view.centralPublicKey).toBe('pinned-pub-der-hex');
+  });
+
+  it('clears the central public key when centralPublicKey is explicitly blank', async () => {
+    const store = fakeStore({ 'sync.central_public_key': 'pinned-pub-der-hex' });
+    const view = await setSyncConfig(store, { ...fullInput, centralPublicKey: '' }, 'tester', encrypt);
+    expect(store.data.get('sync.central_public_key')).toBe('');
+    expect(view.centralPublicKey).toBe('');
+  });
+
   it('readSigningKeys decrypts the private key + returns public key/site id', async () => {
     const decrypt = (blob: string) => blob.replace(/^enc:/, '');
     const store = fakeStore({

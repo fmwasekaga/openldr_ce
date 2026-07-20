@@ -419,14 +419,30 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
           .values({ resource_type: resourceType, id, version, op, resource: content })
           .execute();
 
-        if (op === 'upsert') {
-          // Atomic monotonic guard: on a first apply the plain INSERT lands; on conflict we advance the
-          // canonical row ONLY when the stored version is strictly less than the incoming version. The
-          // WHERE qualifies the EXISTING (target) row — Postgres exposes it under the unqualified relation
-          // name in ON CONFLICT DO UPDATE, so `sql.ref('fhir_resources.version')` renders that reference.
-          // This replaces a read-then-branch (which could regress the row under concurrent same-id applies)
-          // with a single race-free statement. History above stays unconditional (append-only); an
-          // out-of-order OLDER version is recorded there but its WHERE fails, leaving the newer row intact.
+        // Monotonic canonical write: only touch fhir_resources when the incoming version is the NEWEST one
+        // ever applied for this resource, tombstones included. We just appended this version to
+        // resource_history above, so a strictly-greater history version means a newer upsert OR delete has
+        // already landed. Gating on that closes two out-of-order holes a per-statement guard alone cannot:
+        //   (1) a late older DELETE arriving after a newer upsert is canonical — the delete would otherwise
+        //       remove newer clinical data (there IS a row, so a plain delete succeeds); and
+        //   (2) a late older UPSERT arriving after a newer delete — it would otherwise RESURRECT the row,
+        //       because no conflict row exists for an ON CONFLICT guard to reject.
+        // History and change_log stay unconditional (append-only): the stale op is still recorded and still
+        // emits to the sync/projection stream; only the canonical read model is protected.
+        const newest = await trx
+          .selectFrom('fhir.resource_history')
+          .select(({ fn }) => fn.max('version').as('maxVersion'))
+          .where('resource_type', '=', resourceType)
+          .where('id', '=', id)
+          .executeTakeFirst();
+        const isNewest = newest?.maxVersion == null || Number(newest.maxVersion) <= version;
+
+        if (isNewest && op === 'upsert') {
+          // Atomic monotonic guard (belt-and-suspenders under concurrent same-id applies): on a first apply
+          // the plain INSERT lands; on conflict we advance the canonical row ONLY when the stored version is
+          // strictly less than the incoming version. The WHERE qualifies the EXISTING (target) row — Postgres
+          // exposes it under the unqualified relation name in ON CONFLICT DO UPDATE, so
+          // `sql.ref('fhir_resources.version')` renders that reference.
           await trx
             .insertInto('fhir.fhir_resources')
             .values({ resource_type: resourceType, id, version, version_id: String(version), resource: content! })
@@ -442,7 +458,7 @@ export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
                 .where(sql.ref('fhir_resources.version'), '<', version),
             )
             .execute();
-        } else {
+        } else if (isNewest && op === 'delete') {
           await trx.deleteFrom('fhir.fhir_resources').where('resource_type', '=', resourceType).where('id', '=', id).execute();
         }
 

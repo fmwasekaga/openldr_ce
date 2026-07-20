@@ -34,12 +34,32 @@ function fakeCtx() {
   return { ctx, auditEvents };
 }
 
-function appWith(ctx: AppContext) {
+function appWith(ctx: AppContext, roles: string[] = ['lab_admin']) {
   const app = Fastify();
-  app.addHook('onRequest', async (req) => { req.user = { id: 'admin1', username: 'admin', displayName: null, roles: ['lab_admin'] }; });
+  app.addHook('onRequest', async (req) => { req.user = { id: 'admin1', username: 'admin', displayName: null, roles }; });
   registerTerminologyAdminRoutes(app, ctx);
   return app;
 }
+
+describe('terminology admin RBAC', () => {
+  it('a lab_technician cannot mutate terminology (create/import) — 403', async () => {
+    const { ctx } = fakeCtx();
+    const app = appWith(ctx, ['lab_technician']);
+    expect((await app.inject({ method: 'POST', url: '/api/terminology/publishers', payload: { name: 'P', role: 'local' } })).statusCode).toBe(403);
+    expect((await app.inject({ method: 'POST', url: '/api/terminology/import/loinc', payload: { path: '/x', acceptLicense: true } })).statusCode).toBe(403);
+    expect((await app.inject({ method: 'DELETE', url: '/api/terminology/systems/sys9' })).statusCode).toBe(403);
+  });
+
+  it('read-only terminology GETs are NOT role-gated (a lab_technician is not rejected)', async () => {
+    const { ctx } = fakeCtx();
+    const app = appWith(ctx, ['lab_technician']);
+    // The handler runs (no 401/403 from the guard); the fake ctx's list is not fully stubbed, so the
+    // status itself is not asserted — only that RBAC did not block the read.
+    const res = await app.inject({ method: 'GET', url: '/api/terminology/publishers' });
+    expect(res.statusCode).not.toBe(401);
+    expect(res.statusCode).not.toBe(403);
+  });
+});
 
 describe('terminology admin audit', () => {
   it('audits publisher create with the request actor', async () => {

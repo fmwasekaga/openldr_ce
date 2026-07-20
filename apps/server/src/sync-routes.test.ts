@@ -11,10 +11,20 @@ function rec(id: string, version: number, seq: number, siteId = SITE) {
   return { resourceType: 'Patient', id, version, seq, op: 'upsert' as const, siteId, resource: { resourceType: 'Patient', id } };
 }
 
+// A syncSites.get stand-in. Default: the SITE is enrolled + active. `site` overrides the returned row
+// (undefined models an unknown site); a function lets a test throw to exercise the fail-closed path.
+function fakeSyncSites(site?: any) {
+  const active = { siteId: SITE, name: null, clientId: `sync-${SITE}`, enrolledAt: '', enrolledBy: null, status: 'active', signingPublicKey: null };
+  return {
+    get: typeof site === 'function' ? site : async () => (site === undefined ? active : site),
+  };
+}
+
 // Fake ctx: verifyToken resolves/rejects on demand; applyRemote is scripted per-id or default.
 function fakeCtx(opts: {
   verify?: (token: string) => Promise<Record<string, unknown>>;
   apply?: (record: any) => Promise<'applied' | 'skipped' | 'diverged'>;
+  site?: any;
 }) {
   const calls: { apply: any[] } = { apply: [] };
   const ctx = {
@@ -23,6 +33,7 @@ function fakeCtx(opts: {
       verifyToken:
         opts.verify ?? (async () => ({ sub: 'client-1', site_id: SITE })),
     },
+    syncSites: fakeSyncSites(opts.site),
     fhirStore: {
       applyRemote: async (record: any) => {
         calls.apply.push(record);
@@ -59,6 +70,36 @@ describe('sync routes — POST /api/sync/push', () => {
     const { ctx } = fakeCtx({ verify: async () => ({ sub: 'client-1' }) });
     const res = await appWith(ctx).inject({ method: 'POST', url: '/api/sync/push', headers: AUTH, payload: { fromSeq: 0, records: [rec('p1', 1, 1)] } });
     expect(res.statusCode).toBe(403);
+  });
+
+  it('403 when the site is revoked (token still valid, but enrollment is not active)', async () => {
+    // A token minted before revocation stays valid; the enrollment check must still reject it.
+    const { ctx, calls } = fakeCtx({ site: { siteId: SITE, clientId: `sync-${SITE}`, status: 'revoked' } });
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/sync/push', headers: AUTH, payload: { fromSeq: 0, records: [rec('p1', 1, 1)] } });
+    expect(res.statusCode).toBe(403);
+    expect(calls.apply.length).toBe(0);
+  });
+
+  it('403 when the site is unknown (valid token, no enrollment row)', async () => {
+    const { ctx, calls } = fakeCtx({ site: null });
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/sync/push', headers: AUTH, payload: { fromSeq: 0, records: [rec('p1', 1, 1)] } });
+    expect(res.statusCode).toBe(403);
+    expect(calls.apply.length).toBe(0);
+  });
+
+  it('403 when the token client (azp) does not match the enrolled site client', async () => {
+    const { ctx } = fakeCtx({
+      verify: async () => ({ sub: 'client-1', site_id: SITE, azp: 'sync-other' }),
+      site: { siteId: SITE, clientId: `sync-${SITE}`, status: 'active' },
+    });
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/sync/push', headers: AUTH, payload: { fromSeq: 0, records: [rec('p1', 1, 1)] } });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('503 (fail closed) when the enrollment registry lookup throws', async () => {
+    const { ctx } = fakeCtx({ site: async () => { throw new Error('registry down'); } });
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/sync/push', headers: AUTH, payload: { fromSeq: 0, records: [rec('p1', 1, 1)] } });
+    expect(res.statusCode).toBe(503);
   });
 
   it('400 when records is not an array', async () => {
@@ -323,6 +364,7 @@ function fakePullCtx(opts: {
   const ctx = {
     logger: { warn: () => {}, error: () => {} },
     auth: { verifyToken: opts.verify ?? (async () => ({ sub: 'client-1', site_id: SITE })) },
+    syncSites: fakeSyncSites(),
     internalDb: fakeInternalDb({
       reference_change_log: opts.log ?? [],
       form_definitions: opts.forms ?? [],
@@ -665,6 +707,7 @@ function fakeTermCtx(opts: {
   return {
     logger: { warn: () => {}, error: () => {} },
     auth: { verifyToken: opts.verify ?? (async () => ({ sub: 'client-1', site_id: SITE })) },
+    syncSites: fakeSyncSites(),
     internalDb: fakeInternalDb({
       terminology_concepts: opts.concepts ?? [],
       concept_map_elements: opts.mapElements ?? [],
@@ -838,6 +881,7 @@ function fakeAmendCtx(
   return {
     logger: { warn: () => {}, error: () => {}, info: () => {} },
     auth: { verifyToken: opts.verify ?? (async () => ({ sub: 'client-1', site_id: 'lab-a' })) },
+    syncSites: fakeSyncSites(),
     internalDb: db,
     syncSiteCursors: {
       report:

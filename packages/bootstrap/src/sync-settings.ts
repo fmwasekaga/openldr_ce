@@ -64,8 +64,12 @@ export async function setSyncConfig(
   await store.set(K.oidcIssuer, c.oidcIssuer, actor);
   await store.set(K.clientId, c.clientId, actor);
   await store.set(K.interval, String(c.intervalMinutes), actor);
-  // Central's public key is not a secret — always persisted (plaintext), like oidcIssuer.
-  await store.set(K.centralPublicKey, c.centralPublicKey, actor);
+  // Central's public key is not a secret (plaintext), but it is only written when the field is
+  // PRESENT. An absent field (e.g. a Studio settings save whose input contract omits it) preserves
+  // the enrollment-pinned key rather than wiping it; an explicit '' still clears it.
+  if (typeof c.centralPublicKey === 'string') {
+    await store.set(K.centralPublicKey, c.centralPublicKey, actor);
+  }
   // Write-only: only persist the secret when one is actually supplied so a blank submit / a
   // single-field patch preserves the existing encrypted value.
   if (typeof c.clientSecret === 'string' && c.clientSecret.length > 0) {

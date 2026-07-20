@@ -33,39 +33,48 @@ function fakeCtx(cfg: { DASHBOARD_SQL_ENABLED?: boolean } = {}) {
 const sqlWidget = { id: 'w1', type: 'kpi', title: 'K', refreshIntervalSec: 0, visual: {}, query: { mode: 'sql', sql: 'select 1 as value' } };
 const dashWithSql = { id: 'd1', name: 'M', layout: [], widgets: [sqlWidget], filters: [], refreshIntervalSec: 0, isDefault: false, ownerId: null };
 
+// Dashboard routes are RBAC-gated (VIEW: reporting roles; MANAGE: admin/manager). Inject an authorized
+// actor so tests exercise the handlers, not the role guard. `id:'admin1'` matches the audit assertion.
+function appWith(ctx: any = fakeCtx(), roles: string[] = ['lab_admin']) {
+  const app = Fastify();
+  app.addHook('onRequest', async (req: any) => { req.user = { id: 'admin1', username: 'admin', displayName: null, roles }; });
+  registerDashboardRoutes(app, ctx);
+  return app;
+}
+
 describe('dashboard routes', () => {
   it('lists models', async () => {
-    const app = Fastify(); registerDashboardRoutes(app, fakeCtx());
+    const app = appWith(fakeCtx());
     const res = await app.inject({ method: 'GET', url: '/api/dashboards/models' });
     expect(res.statusCode).toBe(200);
     expect(res.json()[0].id).toBe('service_requests');
   });
   it('runs a builder query', async () => {
-    const app = Fastify(); registerDashboardRoutes(app, fakeCtx());
+    const app = appWith(fakeCtx());
     const res = await app.inject({ method: 'POST', url: '/api/dashboards/query', payload: { mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count' }, filters: [] } });
     expect(res.statusCode).toBe(200);
   });
   it('rejects a disabled sql query with 400', async () => {
-    const app = Fastify(); registerDashboardRoutes(app, fakeCtx());
+    const app = appWith(fakeCtx());
     const res = await app.inject({ method: 'POST', url: '/api/dashboards/query', payload: { mode: 'sql', sql: 'select 1' } });
     expect(res.statusCode).toBe(400);
   });
   it('creates and lists a dashboard', async () => {
-    const app = Fastify(); registerDashboardRoutes(app, fakeCtx());
+    const app = appWith(fakeCtx());
     await app.inject({ method: 'POST', url: '/api/dashboards', payload: { id: 'd1', name: 'M', layout: [], widgets: [], filters: [], refreshIntervalSec: 0, isDefault: false, ownerId: null } });
     const res = await app.inject({ method: 'GET', url: '/api/dashboards' });
     expect(res.json().length).toBe(1);
   });
 
   it('authoring gate: rejects creating a dashboard with an sql widget when the flag is off', async () => {
-    const app = Fastify(); registerDashboardRoutes(app, fakeCtx({ DASHBOARD_SQL_ENABLED: false }));
+    const app = appWith(fakeCtx({ DASHBOARD_SQL_ENABLED: false }));
     const res = await app.inject({ method: 'POST', url: '/api/dashboards', payload: dashWithSql });
     expect(res.statusCode).toBe(400);
     expect(res.json().error).toMatch(/raw SQL widgets are disabled/);
   });
 
   it('authoring gate: rejects updating a dashboard to add a NEW sql widget when the flag is off', async () => {
-    const app = Fastify(); registerDashboardRoutes(app, fakeCtx({ DASHBOARD_SQL_ENABLED: false }));
+    const app = appWith(fakeCtx({ DASHBOARD_SQL_ENABLED: false }));
     const res = await app.inject({ method: 'PUT', url: '/api/dashboards/d1', payload: dashWithSql });
     expect(res.statusCode).toBe(400);
   });
@@ -74,7 +83,7 @@ describe('dashboard routes', () => {
     const ctx = fakeCtx({ DASHBOARD_SQL_ENABLED: false });
     // Seed the store directly (bypasses the authoring route, like the server-seeded sample).
     await ctx.dashboards.store.create(dashWithSql);
-    const app = Fastify(); registerDashboardRoutes(app, ctx);
+    const app = appWith(ctx);
     // Same SQL, but the widget's chart type changed and layout was edited — must save.
     const edited = { ...dashWithSql, layout: [{ i: 'w1', x: 1, y: 1, w: 4, h: 3 }], widgets: [{ ...sqlWidget, type: 'bar-chart', visual: { xAxisKey: 'a' } }] };
     const res = await app.inject({ method: 'PUT', url: '/api/dashboards/d1', payload: edited });
@@ -84,7 +93,7 @@ describe('dashboard routes', () => {
   it('authoring gate: rejects updating an existing sql dashboard when a widget’s sql is CHANGED when the flag is off', async () => {
     const ctx = fakeCtx({ DASHBOARD_SQL_ENABLED: false });
     await ctx.dashboards.store.create(dashWithSql);
-    const app = Fastify(); registerDashboardRoutes(app, ctx);
+    const app = appWith(ctx);
     const changed = { ...dashWithSql, widgets: [{ ...sqlWidget, query: { mode: 'sql', sql: 'select 2 as value' } }] };
     const res = await app.inject({ method: 'PUT', url: '/api/dashboards/d1', payload: changed });
     expect(res.statusCode).toBe(400);
@@ -92,16 +101,25 @@ describe('dashboard routes', () => {
   });
 
   it('authoring gate: allows persisting an sql widget when the flag is on', async () => {
-    const app = Fastify(); registerDashboardRoutes(app, fakeCtx({ DASHBOARD_SQL_ENABLED: true }));
+    const app = appWith(fakeCtx({ DASHBOARD_SQL_ENABLED: true }));
     const res = await app.inject({ method: 'POST', url: '/api/dashboards', payload: dashWithSql });
     expect(res.statusCode).toBe(200);
   });
 
+  it('RBAC: a lab_technician cannot author dashboards but a data_analyst may view/query', async () => {
+    // Writes are MANAGE (admin/manager); a technician is rejected.
+    const tech = appWith(fakeCtx(), ['lab_technician']);
+    expect((await tech.inject({ method: 'POST', url: '/api/dashboards', payload: { id: 'd1', name: 'M', layout: [], widgets: [], filters: [], refreshIntervalSec: 0, isDefault: false, ownerId: null } })).statusCode).toBe(403);
+    expect((await tech.inject({ method: 'GET', url: '/api/dashboards' })).statusCode).toBe(403);
+    // Reads/query are VIEW (reporting roles); a data_analyst is allowed.
+    const analyst = appWith(fakeCtx(), ['data_analyst']);
+    expect((await analyst.inject({ method: 'GET', url: '/api/dashboards' })).statusCode).toBe(200);
+    expect((await analyst.inject({ method: 'POST', url: '/api/dashboards/query', payload: { mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count' }, filters: [] } })).statusCode).toBe(200);
+  });
+
   it('audits create/update/delete with the request actor', async () => {
-    const app = Fastify();
-    app.addHook('onRequest', async (req: any) => { req.user = { id: 'admin1', username: 'admin', displayName: null, roles: ['lab_admin'] }; });
     const ctx = fakeCtx();
-    registerDashboardRoutes(app, ctx);
+    const app = appWith(ctx);
     const d = { id: 'd1', name: 'M', layout: [], widgets: [], filters: [], refreshIntervalSec: 0, isDefault: false, ownerId: null };
     await app.inject({ method: 'POST', url: '/api/dashboards', payload: d });
     await app.inject({ method: 'PUT', url: '/api/dashboards/d1', payload: d });

@@ -148,6 +148,9 @@ export function DistributedSync() {
         intervalMinutes: sync.intervalMinutes,
         // Only send the secret when the operator typed a new one; blank ⇒ preserve the stored value.
         ...(secretInput ? { clientSecret: secretInput } : {}),
+        // Round-trip the enrollment-pinned central public key so an unrelated settings save never
+        // wipes it. (The server also preserves it when the field is absent, as defense in depth.)
+        ...(sync.centralPublicKey ? { centralPublicKey: sync.centralPublicKey } : {}),
       };
       setSync(await saveSyncConfig(input));
       setSecretInput('');
@@ -377,8 +380,18 @@ export function DistributedSync() {
                     {pageRows.map((a) => (
                       <TableRow
                         key={a.id}
-                        className="cursor-pointer transition-colors hover:bg-[rgba(70,130,180,0.08)]"
+                        role="button"
+                        tabIndex={0}
+                        aria-label={t('settings.sync.openDetail')}
+                        className="cursor-pointer transition-colors hover:bg-[rgba(70,130,180,0.08)] focus-visible:bg-[rgba(70,130,180,0.08)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                         onClick={() => setSelected(a)}
+                        onKeyDown={(e) => {
+                          // Keyboard parity with the click handler: Enter/Space open the detail sheet.
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setSelected(a);
+                          }
+                        }}
                         title={t('settings.sync.openDetail')}
                       >
                         <TableCell className="font-mono text-xs text-muted-foreground">{a.direction}</TableCell>

@@ -12,6 +12,8 @@ export const fr: EnShape = {
     saving: 'Enregistrement…',
     signIn: 'Se connecter',
     signOut: 'Se déconnecter',
+    openUserMenu: 'Ouvrir le menu utilisateur',
+    openUserMenuFor: 'Ouvrir le menu utilisateur pour {{username}}',
     signingIn: 'Connexion…',
     callbackError: 'Échec de la connexion. Veuillez réessayer.',
     configUnreachable: 'Impossible de joindre le serveur. Veuillez recharger.',

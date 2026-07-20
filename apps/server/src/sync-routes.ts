@@ -33,6 +33,31 @@ async function sitePrincipal(
     await reply.code(403).send({ error: 'token missing site_id claim' });
     return;
   }
+  // Require an ACTIVE enrolled site — a valid token is necessary but not sufficient. Revocation deletes
+  // the Keycloak client and marks the registry row 'revoked', but a token minted BEFORE revocation stays
+  // usable until it expires; without this check a revoked (or entirely unknown) site could keep calling
+  // /api/sync/* until then. Fail closed: a registry lookup error rejects rather than admits.
+  let site: Awaited<ReturnType<typeof ctx.syncSites.get>>;
+  try {
+    site = await ctx.syncSites.get(siteId);
+  } catch (err) {
+    ctx.logger.error({ err, siteId }, 'sync auth: enrolled-site lookup failed');
+    await reply.code(503).send({ error: 'enrollment registry unavailable' });
+    return;
+  }
+  if (!site || site.status !== 'active') {
+    await reply.code(403).send({ error: 'site not enrolled or revoked' });
+    return;
+  }
+  // Defense in depth: when the token carries an authorized-party / client claim, it must match the
+  // site's enrolled sync client. This rejects a token issued to a different client that merely carries
+  // the same site_id. Tolerant of tokens without the claim (older/other issuer shapes).
+  const azp = typeof claims['azp'] === 'string' ? (claims['azp'] as string)
+    : typeof claims['client_id'] === 'string' ? (claims['client_id'] as string) : '';
+  if (azp && azp !== site.clientId) {
+    await reply.code(403).send({ error: 'token client does not match enrolled site' });
+    return;
+  }
   return { siteId };
 }
 

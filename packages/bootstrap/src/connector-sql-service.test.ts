@@ -21,7 +21,7 @@ describe('createConnectorSqlRunner', () => {
     let closed = false;
     const createDb = vi.fn(() => ({ query: async () => { throw new Error('boom'); }, close: async () => { closed = true; } }));
     const run = createConnectorSqlRunner({ connectors: connectorsFake({ type: 'postgres', enabled: true }), secretsKey: 'k', createDb });
-    await expect(run({ connectorId: 'h1', sql: 'x' })).rejects.toThrow('boom');
+    await expect(run({ connectorId: 'h1', sql: 'select 1' })).rejects.toThrow('boom');
     expect(closed).toBe(true);
   });
   it('throws for a missing/disabled connector', async () => {
@@ -95,7 +95,7 @@ describe('createConnectorSqlRunner', () => {
     expect(res.rows).toEqual([{ n: 1 }]);
   });
 
-  it('runs raw SQL unwrapped when rowCap is omitted (workflow node path)', async () => {
+  it('applies a default row cap when rowCap is omitted (workflow node path)', async () => {
     const seen: string[] = [];
     const run = createConnectorSqlRunner({
       connectors: connectorsFake({ type: 'postgres', enabled: true }),
@@ -103,6 +103,27 @@ describe('createConnectorSqlRunner', () => {
       createDb: () => ({ query: async (s: string) => { seen.push(s); return { rows: [] }; }, close: async () => {} }) as never,
     });
     await run({ connectorId: 'c1', sql: 'select 1' });
-    expect(seen[0]).toBe('select 1');
+    // No caller-supplied cap → the shared default (10000) bounds the scan instead of running unwrapped.
+    expect(seen[0]).toBe('select * from (select 1) as _q limit 10000 offset 0');
+  });
+
+  it('rejects non-SELECT SQL at the runner boundary (DML/DDL, multi-statement, SELECT…INTO)', async () => {
+    const createDb = vi.fn();
+    const run = createConnectorSqlRunner({
+      connectors: connectorsFake({ type: 'postgres', enabled: true }),
+      secretsKey: 'k',
+      createDb,
+    });
+    for (const bad of [
+      'delete from t',
+      'update t set x = 1',
+      'drop table t',
+      'select 1; drop table t',
+      'select * into other from t',
+    ]) {
+      await expect(run({ connectorId: 'c1', sql: bad })).rejects.toThrow();
+    }
+    // Rejected before any connection is opened — credentials are never decrypted for a write attempt.
+    expect(createDb).not.toHaveBeenCalled();
   });
 });

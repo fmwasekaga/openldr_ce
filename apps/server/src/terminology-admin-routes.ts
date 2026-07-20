@@ -4,7 +4,13 @@ import type { AppContext } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
 import { z } from 'zod';
 import { recordAudit } from './audit-helper';
+import { requireRole } from './rbac';
 import { isFhirValueSetCatalog, parseTerminologyTerms, parseTerminologyTermsStream, terminologyImportTemplate } from '@openldr/terminology';
+
+// Mutations, imports, and server-side loader paths (e.g. LOINC import) alter shared terminology
+// configuration for the whole install, so they are gated to admin/manager roles. Read-only GETs stay
+// available to any authenticated user because terminology lookups are used broadly across the app.
+const MANAGE = { preHandler: requireRole('lab_admin', 'lab_manager') };
 
 const publisherInput = z.object({
   name: z.string().min(1),
@@ -43,7 +49,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
   });
 
   app.get('/api/terminology/publishers', async () => admin.publishers.list());
-  app.post('/api/terminology/publishers', async (req, reply) => {
+  app.post('/api/terminology/publishers', MANAGE, async (req, reply) => {
     const parsed = publisherInput.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
     try {
@@ -53,7 +59,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
       return created;
     } catch (e) { return mapErr(e, reply); }
   });
-  app.put('/api/terminology/publishers/:id', async (req, reply) => {
+  app.put('/api/terminology/publishers/:id', MANAGE, async (req, reply) => {
     const parsed = publisherInput.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
     try {
@@ -63,7 +69,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
     }
     catch (e) { return mapErr(e, reply); }
   });
-  app.delete('/api/terminology/publishers/:id', async (req, reply) => {
+  app.delete('/api/terminology/publishers/:id', MANAGE, async (req, reply) => {
     try {
       await admin.publishers.delete((req.params as IdParam).id);
       await recordAudit(ctx, req, { action: 'publisher.delete', entityType: 'publisher', entityId: (req.params as IdParam).id, before: null, after: null });
@@ -80,7 +86,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
     const { publisher } = req.query as { publisher?: string };
     return admin.codingSystems.list(publisher);
   });
-  app.post('/api/terminology/systems', async (req, reply) => {
+  app.post('/api/terminology/systems', MANAGE, async (req, reply) => {
     const parsed = systemInput.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
     try {
@@ -90,7 +96,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
     }
     catch (e) { return mapErr(e, reply); }
   });
-  app.put('/api/terminology/systems/:id', async (req, reply) => {
+  app.put('/api/terminology/systems/:id', MANAGE, async (req, reply) => {
     const parsed = systemInput.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
     try {
@@ -100,7 +106,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
     }
     catch (e) { return mapErr(e, reply); }
   });
-  app.delete('/api/terminology/systems/:id', async (req, reply) => {
+  app.delete('/api/terminology/systems/:id', MANAGE, async (req, reply) => {
     try {
       await admin.codingSystems.delete((req.params as IdParam).id);
       await recordAudit(ctx, req, { action: 'coding_system.delete', entityType: 'coding_system', entityId: (req.params as IdParam).id, before: null, after: null });
@@ -114,7 +120,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
   });
 
   // ── Terms ────────────────────────────────────────────────────────────────
-  app.post('/api/terminology/import/loinc', async (req, reply) => {
+  app.post('/api/terminology/import/loinc', MANAGE, async (req, reply) => {
     const parsed = loincImportInput.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
     if (!parsed.data.acceptLicense) {
@@ -163,7 +169,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
       return await admin.terms.search(url, { query: q, statuses: status ? [status] : undefined, limit: Number(limit ?? 50), offset: Number(offset ?? 0) });
     } catch (e) { return mapErr(e, reply); }
   });
-  app.post('/api/terminology/systems/:id/terms', async (req, reply) => {
+  app.post('/api/terminology/systems/:id/terms', MANAGE, async (req, reply) => {
     const parsed = termInput.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
     try {
@@ -174,7 +180,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
       return created;
     } catch (e) { return mapErr(e, reply); }
   });
-  app.put('/api/terminology/systems/:id/terms/:code', async (req, reply) => {
+  app.put('/api/terminology/systems/:id/terms/:code', MANAGE, async (req, reply) => {
     const parsed = termInput.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
     try {
@@ -185,7 +191,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
       return updated;
     } catch (e) { return mapErr(e, reply); }
   });
-  app.delete('/api/terminology/systems/:id/terms/:code', async (req, reply) => {
+  app.delete('/api/terminology/systems/:id/terms/:code', MANAGE, async (req, reply) => {
     try {
       const url = await systemUrl((req.params as IdParam).id);
       const code = decodeURIComponent((req.params as { id: string; code: string }).code);
@@ -194,7 +200,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
       reply.code(204); return null;
     } catch (e) { return mapErr(e, reply); }
   });
-  app.post('/api/terminology/systems/:id/terms/import', async (req, reply) => {
+  app.post('/api/terminology/systems/:id/terms/import', MANAGE, async (req, reply) => {
     try {
       const system = await systemInfo((req.params as IdParam).id);
       let result: { imported: number };
@@ -239,7 +245,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
       return { outgoing, reverse };
     } catch (e) { return mapErr(e, reply); }
   });
-  app.post('/api/terminology/terms/:system/:code/mappings', async (req, reply) => {
+  app.post('/api/terminology/terms/:system/:code/mappings', MANAGE, async (req, reply) => {
     const parsed = mappingInput.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
     try {
@@ -251,7 +257,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
       return created;
     } catch (e) { return mapErr(e, reply); }
   });
-  app.put('/api/terminology/mappings/:id', async (req, reply) => {
+  app.put('/api/terminology/mappings/:id', MANAGE, async (req, reply) => {
     const parsed = mappingUpdateInput.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
     try {
@@ -261,7 +267,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
     }
     catch (e) { return mapErr(e, reply); }
   });
-  app.delete('/api/terminology/mappings/:id', async (req, reply) => {
+  app.delete('/api/terminology/mappings/:id', MANAGE, async (req, reply) => {
     try {
       await admin.termMappings.delete((req.params as IdParam).id);
       await recordAudit(ctx, req, { action: 'term_mapping.delete', entityType: 'term_mapping', entityId: (req.params as IdParam).id, before: null, after: null });
@@ -295,7 +301,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
     const { publisherId } = req.query as { publisherId?: string };
     return admin.valueSets.list(publisherId);
   });
-  app.post('/api/terminology/valuesets', async (req, reply) => {
+  app.post('/api/terminology/valuesets', MANAGE, async (req, reply) => {
     const parsed = valueSetInput.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
     try {
@@ -309,7 +315,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
     try { return await admin.valueSets.get((req.params as IdParam).id); }
     catch (e) { return mapErr(e, reply); }
   });
-  app.put('/api/terminology/valuesets/:id', async (req, reply) => {
+  app.put('/api/terminology/valuesets/:id', MANAGE, async (req, reply) => {
     const parsed = valueSetInput.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
     try {
@@ -321,7 +327,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
     }
     catch (e) { return mapErr(e, reply); }
   });
-  app.delete('/api/terminology/valuesets/:id', async (req, reply) => {
+  app.delete('/api/terminology/valuesets/:id', MANAGE, async (req, reply) => {
     try {
       const id = (req.params as IdParam).id;
       const before = await admin.valueSets.get(id).catch(() => null);
@@ -331,7 +337,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
     }
     catch (e) { return mapErr(e, reply); }
   });
-  app.post('/api/terminology/valuesets/:id/duplicate', async (req, reply) => {
+  app.post('/api/terminology/valuesets/:id/duplicate', MANAGE, async (req, reply) => {
     try {
       const id = (req.params as IdParam).id;
       const dup = await admin.valueSets.duplicate(id);
@@ -346,7 +352,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
       return await admin.valueSets.expand((req.params as IdParam).id, activeOnly !== 'false');
     } catch (e) { return mapErr(e, reply); }
   });
-  app.post('/api/terminology/valuesets/import', async (req, reply) => {
+  app.post('/api/terminology/valuesets/import', MANAGE, async (req, reply) => {
     try {
       const resource = await parseJsonUpload(req.body);
       if (isFhirValueSetCatalog(resource)) {

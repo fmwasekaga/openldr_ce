@@ -11,6 +11,28 @@ export const SYNC_CONFIG_KEY = 'sync.config';
 export const SyncModeSchema = z.enum(['push', 'pull', 'bidirectional']);
 export type SyncMode = z.infer<typeof SyncModeSchema>;
 
+/** Local loopback hosts for which plaintext http:// is always tolerated (dev/test). */
+function isLoopbackHttp(url: string): boolean {
+  return /^http:\/\/(localhost|127\.0\.0\.1|\[::1\]|\[0:0:0:0:0:0:0:1\])(:\d+)?(\/|$)/i.test(url);
+}
+
+/**
+ * Enabled sync posts the client secret to the token endpoint and ships bearer-authenticated FHIR /
+ * reference deltas (PHI-adjacent) to central — so plaintext http:// would expose credentials and
+ * clinical data on the wire. When sync is ENABLED we therefore require https:// for `centralUrl` and
+ * `oidcIssuer`, with two carve-outs: (1) loopback hosts (localhost/127.0.0.1/[::1]) for dev/test, and
+ * (2) an explicit, deliberately-loud override — env `SYNC_ALLOW_INSECURE_TRANSPORT=true` — for trusted
+ * LAN bring-up. Everything else (http:// to a routable host, with no override) is rejected. A disabled
+ * config is not transport-checked (only the http(s) format check applies) so a placeholder can be saved.
+ */
+export function isInsecureTransportAllowed(): boolean {
+  return String(process.env.SYNC_ALLOW_INSECURE_TRANSPORT ?? '').trim().toLowerCase() === 'true';
+}
+
+function requireSecureUrl(url: string): boolean {
+  return /^https:\/\//i.test(url) || isLoopbackHttp(url) || isInsecureTransportAllowed();
+}
+
 /**
  * @deprecated Legacy single-blob shape (app_settings key `sync.config`). S4 moved the operator
  * surface onto the six discrete `sync.*` keys the workers actually read; this schema is retained
@@ -74,10 +96,13 @@ export const SyncConfigInputSchema = z
     intervalMinutes: z.number().int().positive().max(1440).default(15),
     // Lab-side enrollment keys (S5). `signingPrivateKey` is the lab's OWN signing key (DER hex),
     // handled like clientSecret: optional & WRITE-ONLY — a blank/absent value leaves the stored
-    // (encrypted) key unchanged. `centralPublicKey` is central's public key (DER hex): plaintext,
-    // readable (a public key is not a secret).
+    // (encrypted) key unchanged. `centralPublicKey` is central's public key (DER hex): plaintext and
+    // readable (a public key is not a secret), but OPTIONAL so an ABSENT field preserves the stored
+    // pinned key. Without this, a client whose input contract omits the field (e.g. a Studio settings
+    // save) would default it to '' and wipe the enrollment-pinned key, breaking later offline pull
+    // bundle verification. An explicit '' still clears it.
     signingPrivateKey: z.string().optional(),
-    centralPublicKey: z.string().default(''),
+    centralPublicKey: z.string().optional(),
   })
   .superRefine((c, ctx) => {
     if (c.centralUrl && !/^https?:\/\//i.test(c.centralUrl))
@@ -93,6 +118,13 @@ export const SyncConfigInputSchema = z
       ] as const) {
         if (!v) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [f], message: `${f} is required when sync is enabled` });
       }
+      // Enabled sync carries credentials + PHI-adjacent deltas: require https:// (loopback and an
+      // explicit SYNC_ALLOW_INSECURE_TRANSPORT=true override excepted — see requireSecureUrl).
+      const insecureMsg = ' requires https:// when sync is enabled (set SYNC_ALLOW_INSECURE_TRANSPORT=true only for trusted-LAN bring-up)';
+      if (c.centralUrl && /^https?:\/\//i.test(c.centralUrl) && !requireSecureUrl(c.centralUrl))
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['centralUrl'], message: `centralUrl${insecureMsg}` });
+      if (c.oidcIssuer && /^https?:\/\//i.test(c.oidcIssuer) && !requireSecureUrl(c.oidcIssuer))
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['oidcIssuer'], message: `oidcIssuer${insecureMsg}` });
     }
   });
 export type SyncConfigInput = z.infer<typeof SyncConfigInputSchema>;

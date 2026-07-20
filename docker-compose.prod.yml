@@ -64,7 +64,9 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: openldr
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-openldr}
+      # Fail closed: no weak compose-level fallback. `pnpm run init` generates this into .env.prod; a
+      # manual deploy must set it before `up` or compose refuses to start.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env.prod}
       POSTGRES_DB: openldr
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U openldr"]
@@ -74,14 +76,17 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./scripts/init-target-db.sql:/docker-entrypoint-initdb.d/10-init-target-db.sql:ro
+      # Keycloak's database lives in THIS Postgres too (no second Postgres). Created on first init.
+      - ./scripts/init-keycloak-db.sql:/docker-entrypoint-initdb.d/20-init-keycloak-db.sql:ro
     restart: unless-stopped
 
   minio:
     image: minio/minio:latest
     command: server /data --console-address ':9001'
     environment:
-      MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY:-minioadmin}
+      # Fail closed: no baked-in minioadmin/minioadmin fallback (see postgres above).
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID:?S3_ACCESS_KEY_ID must be set in .env.prod}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY:?S3_SECRET_ACCESS_KEY must be set in .env.prod}
     volumes:
       - miniodata:/data
     restart: unless-stopped
@@ -91,19 +96,32 @@ services:
     depends_on: ["minio"]
     entrypoint: >
       /bin/sh -c "
-      until mc alias set local http://minio:9000 ${S3_ACCESS_KEY_ID:-minioadmin} ${S3_SECRET_ACCESS_KEY:-minioadmin}; do echo 'waiting for minio'; sleep 2; done &&
+      until mc alias set local http://minio:9000 ${S3_ACCESS_KEY_ID:?S3_ACCESS_KEY_ID must be set in .env.prod} ${S3_SECRET_ACCESS_KEY:?S3_SECRET_ACCESS_KEY must be set in .env.prod}; do echo 'waiting for minio'; sleep 2; done &&
       mc mb --ignore-existing local/${S3_BUCKET:-openldr} &&
       echo 'bucket ready'"
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
-    command: start-dev --import-realm --http-relative-path=/auth
+    # Production mode (`start`, not `start-dev`): persistent Postgres store instead of the throwaway H2
+    # dev database. The stock image isn't pre-built for a specific DB vendor, so `start` (without
+    # `--optimized`) auto-runs the build for KC_DB=postgres on boot. --import-realm still applies on the
+    # first boot into an empty keycloak database.
+    command: start --import-realm --http-relative-path=/auth
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      # Fail closed: no baked-in admin/admin fallback for the master-realm bootstrap password.
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD must be set in .env.prod}
+      # Reuse the shared internal Postgres (service `postgres`), DB `keycloak`, as the openldr role.
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: openldr
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env.prod}
       KC_HOSTNAME: ${KC_HOSTNAME:-https://localhost/auth}
       KC_HTTP_ENABLED: "true"
       KC_PROXY_HEADERS: xforwarded
+    depends_on:
+      # Wait for Postgres to be healthy so the keycloak database (created by the first-init script) exists.
+      postgres: { condition: service_healthy }
     volumes:
       - ./infra/keycloak/openldr-realm.json:/opt/keycloak/data/import/openldr-realm.json:ro
     expose: ["8080"]

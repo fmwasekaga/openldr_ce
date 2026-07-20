@@ -214,6 +214,7 @@ fetch() { curl -fsSL "$REPO_RAW/$1" -o "$2" || err "failed to download $1"; }
 fetch "deploy/install/docker-compose.yml" "$DIR/docker-compose.yml"
 fetch "infra/keycloak/openldr-realm.json" "$DIR/config/keycloak/openldr-realm.json"
 fetch "scripts/init-target-db.sql" "$DIR/config/init-target-db.sql"
+fetch "scripts/init-keycloak-db.sql" "$DIR/config/init-keycloak-db.sql"
 fetch "deploy/install/renew-cert.sh" "$DIR/renew-cert.sh"
 chmod +x "$DIR/renew-cert.sh" 2>/dev/null || true
 if [ "$MSSQL_DEMO" -eq 1 ]; then
@@ -252,6 +253,18 @@ else
   KC_ADMIN_SECRET="$(rand)"
 fi
 sed "s|\"openldr-admin-dev-secret\"|\"$KC_ADMIN_SECRET\"|" "$REALM" > "$REALM.tmp" && mv "$REALM.tmp" "$REALM"
+
+# Same per-install treatment for the seeded human `labadmin` user. The committed realm ships the
+# well-known "labadmin" password (marked temporary → forced change on first login); a real deployment
+# must not import that guessable credential. Generate a per-install password — reusing the existing
+# .env value on a re-run so the on-disk import stays consistent — substitute it into the CREDENTIAL
+# value (the "username": "labadmin" line does not match this pattern), and surface it below.
+if [ -f "$DIR/.env" ] && grep -q '^INITIAL_LAB_ADMIN_PASSWORD=' "$DIR/.env"; then
+  LABADMIN_PW="$(grep '^INITIAL_LAB_ADMIN_PASSWORD=' "$DIR/.env" | cut -d= -f2-)"
+else
+  LABADMIN_PW="$(rand)"
+fi
+sed "s|\"value\": \"labadmin\"|\"value\": \"$LABADMIN_PW\"|" "$REALM" > "$REALM.tmp" && mv "$REALM.tmp" "$REALM"
 
 if [ ! -f "$DIR/.env" ]; then
   PG_PW="$(rand)"; KC_PW="$(rand)"; S3_KEY="$(rand)"; S3_SECRET="$(rand)"
@@ -332,6 +345,7 @@ KEYCLOAK_ADMIN=admin
 KEYCLOAK_ADMIN_PASSWORD=$KC_PW
 KEYCLOAK_ADMIN_CLIENT_ID=openldr-admin
 KEYCLOAK_ADMIN_CLIENT_SECRET=$KC_ADMIN_SECRET
+INITIAL_LAB_ADMIN_PASSWORD=$LABADMIN_PW
 TLS_CERT_PATH=/etc/openldr/tls-cert.pem
 SECRETS_ENCRYPTION_KEY=$SECRETS_KEY
 MIGRATE_ON_START=true
@@ -413,6 +427,7 @@ fi
 echo ""
 echo "✓ OpenLDR is starting. Open $ORIGIN"
 echo "  Keycloak admin password: $(grep '^KEYCLOAK_ADMIN_PASSWORD=' .env | cut -d= -f2)"
+echo "  App sign-in: labadmin / $(grep '^INITIAL_LAB_ADMIN_PASSWORD=' .env | cut -d= -f2-)  (change it on first login)"
 if [ "$MSSQL_DEMO" -eq 1 ]; then
   echo "  MSSQL (demo) SA password: $(grep '^MSSQL_PASSWORD=' .env | cut -d= -f2-)"
   echo "  ⚠ The demo SQL Server container is for evaluation only — not licensed for production."

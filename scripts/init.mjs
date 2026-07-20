@@ -7,6 +7,7 @@ import { isPortFree } from './init/port-check.mjs';
 import { computeEnv } from './init/config-compute.mjs';
 import { mergeEnv } from './init/env-merge.mjs';
 import { renderRealm } from './init/realm-render.mjs';
+import { ensureStackSecrets, patchRealmSecrets } from './init/secrets.mjs';
 import { planCerts } from './init/certs.mjs';
 import { launchStack } from './init/launch.mjs';
 import { healthUrl, pollHealth } from './init/verify.mjs';
@@ -59,13 +60,22 @@ async function main() {
       ? envText.replace(/^#?\s*SECRETS_ENCRYPTION_KEY=.*/m, `SECRETS_ENCRYPTION_KEY=${key}`)
       : `${envText}\nSECRETS_ENCRYPTION_KEY=${key}\n`;
   }
+  // Replace the committed weak defaults (DB / MinIO / Keycloak admin + service-account) with generated
+  // per-install secrets, keep the postgres URLs in sync, and mint a one-time labadmin password. Idempotent
+  // — a re-run never rotates an already-generated secret. The realm import is then patched with the same
+  // admin client secret + labadmin password so a wizard install never imports a guessable admin credential.
+  const secrets = ensureStackSecrets(envText);
+  envText = secrets.envText;
   writeFileSync('.env.prod', mergeEnv(envText, env));
 
   // rendered realm import
   mkdirSync('deploy/nginx/certs', { recursive: true });
   writeFileSync(
     'infra/keycloak/openldr-realm.json',
-    renderRealm(readFileSync('infra/keycloak/openldr-realm.json.template', 'utf8'), env.PUBLIC_ORIGIN),
+    patchRealmSecrets(
+      renderRealm(readFileSync('infra/keycloak/openldr-realm.json.template', 'utf8'), env.PUBLIC_ORIGIN),
+      secrets,
+    ),
   );
 
   // certs
@@ -91,6 +101,9 @@ async function main() {
   console.log(ok
     ? `\n✅ up.\n  landing: ${env.PUBLIC_ORIGIN}/\n  studio:  ${env.PUBLIC_ORIGIN}/studio\n  keycloak admin: ${env.PUBLIC_ORIGIN}/auth/admin`
     : '\n⚠ health did not go green in time — check `docker compose -f docker-compose.prod.yml logs`.');
+  // Surface the seeded lab-admin credential once. It is forced-temporary in the realm import, so the
+  // operator must set a new password on first sign-in. It is also stored in .env.prod for reference.
+  console.log(`\n  Initial lab admin sign-in: labadmin / ${secrets.labAdminPassword}  (you must change it on first login)`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

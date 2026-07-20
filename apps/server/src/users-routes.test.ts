@@ -415,6 +415,9 @@ describe('users routes — composed directory + profiles', () => {
     expect((await app.inject({ method: 'POST', url: '/api/users', payload: { username: 'x' } })).statusCode).toBe(403);
     expect((await app.inject({ method: 'PUT', url: '/api/users/x', payload: {} })).statusCode).toBe(403);
     expect((await app.inject({ method: 'POST', url: '/api/users/x/status', payload: { enabled: true } })).statusCode).toBe(403);
+    // Directory reads are admin-only too (the UI hides /users, but the API must enforce it).
+    expect((await app.inject({ method: 'GET', url: '/api/users' })).statusCode).toBe(403);
+    expect((await app.inject({ method: 'GET', url: '/api/users/x' })).statusCode).toBe(403);
   });
 });
 

@@ -1,9 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
+import { requireRole } from './rbac';
+
+// Audit metadata exposes who did what across the install; restrict reads to admins and auditors.
+const VIEW = { preHandler: requireRole('lab_admin', 'system_auditor') };
 
 export function registerAuditRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
-  app.get('/api/audit', async (req, reply) => {
+  app.get('/api/audit', VIEW, async (req, reply) => {
     try {
       const q = req.query as Record<string, string>;
       const filter = {
@@ -24,7 +28,7 @@ export function registerAuditRoutes(app: FastifyInstance<any, any, any, any>, ct
     }
   });
 
-  app.get('/api/audit/:id', async (req, reply) => {
+  app.get('/api/audit/:id', VIEW, async (req, reply) => {
     const ev = await ctx.audit.get((req.params as { id: string }).id);
     if (!ev) {
       reply.code(404);

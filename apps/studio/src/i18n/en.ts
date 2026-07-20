@@ -10,6 +10,8 @@ export const en = {
     saving: 'Saving…',
     signIn: 'Sign in',
     signOut: 'Sign out',
+    openUserMenu: 'Open user menu',
+    openUserMenuFor: 'Open user menu for {{username}}',
     signingIn: 'Signing in…',
     callbackError: 'Sign-in failed. Please try again.',
     configUnreachable: 'Cannot reach the server. Please reload.',

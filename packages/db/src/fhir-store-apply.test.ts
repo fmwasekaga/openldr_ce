@@ -130,6 +130,54 @@ describe('fhir-store applyRemote', () => {
     await db.destroy();
   });
 
+  it('out-of-order: newer upsert (v5) then older delete (v3) → canonical row survives at v5', async () => {
+    const db = await makeMigratedDb();
+    const store = createFhirStore(db as any);
+
+    expect(await store.applyRemote(upsert('p1', 5, 'lab-A', 'Newer'))).toBe('applied');
+    // A late older delete must be recorded in history yet MUST NOT remove the newer canonical row.
+    expect(await store.applyRemote({ resourceType: 'Patient', id: 'p1', version: 3, op: 'delete', siteId: 'lab-A' })).toBe(
+      'applied',
+    );
+
+    const canon = await db
+      .selectFrom('fhir.fhir_resources')
+      .select(['version', 'resource'])
+      .where('id', '=', 'p1')
+      .executeTakeFirstOrThrow();
+    expect(Number(canon.version)).toBe(5);
+    expect((canon.resource as any).name[0].family).toBe('Newer');
+    expect(await store.get('Patient', 'p1')).not.toBeNull();
+
+    const hist = await db.selectFrom('fhir.resource_history').select('version').where('id', '=', 'p1').orderBy('version').execute();
+    expect(hist.map((h: any) => Number(h.version))).toEqual([3, 5]);
+
+    await db.destroy();
+  });
+
+  it('out-of-order: newer delete (v5) then older upsert (v3) → resource stays deleted (no resurrection)', async () => {
+    const db = await makeMigratedDb();
+    const store = createFhirStore(db as any);
+
+    expect(await store.applyRemote(upsert('p1', 1, 'lab-A', 'Original'))).toBe('applied');
+    expect(await store.applyRemote({ resourceType: 'Patient', id: 'p1', version: 5, op: 'delete', siteId: 'lab-A' })).toBe(
+      'applied',
+    );
+    expect(await store.get('Patient', 'p1')).toBeNull();
+
+    // A late older upsert must be recorded in history yet MUST NOT resurrect the deleted canonical row.
+    expect(await store.applyRemote(upsert('p1', 3, 'lab-A', 'Stale'))).toBe('applied');
+    expect(await store.get('Patient', 'p1')).toBeNull();
+
+    const canon = await db.selectFrom('fhir.fhir_resources').select('version').where('id', '=', 'p1').executeTakeFirst();
+    expect(canon).toBeUndefined();
+
+    const hist = await db.selectFrom('fhir.resource_history').select('version').where('id', '=', 'p1').orderBy('version').execute();
+    expect(hist.map((h: any) => Number(h.version))).toEqual([1, 3, 5]);
+
+    await db.destroy();
+  });
+
   it('op:upsert with no resource → rejects (and writes nothing)', async () => {
     const db = await makeMigratedDb();
     const store = createFhirStore(db as any);

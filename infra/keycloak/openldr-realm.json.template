@@ -65,7 +65,7 @@
       "email": "labadmin@openldr.local",
       "firstName": "Lab",
       "lastName": "Admin",
-      "credentials": [{ "type": "password", "value": "labadmin", "temporary": false }],
+      "credentials": [{ "type": "password", "value": "labadmin", "temporary": true }],
       "realmRoles": ["lab_admin"]
     },
     {

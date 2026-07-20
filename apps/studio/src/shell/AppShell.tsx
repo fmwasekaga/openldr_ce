@@ -97,6 +97,7 @@ export function AppShell({
     <DropdownMenuTrigger asChild>
       <button
         type="button"
+        aria-label={user?.username ? t('common.openUserMenuFor', { username: user.username }) : t('common.openUserMenu')}
         className={cn(
           'flex w-full items-center gap-2 rounded-md p-1 text-left transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           collapsed && 'justify-center',

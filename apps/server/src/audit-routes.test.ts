@@ -27,10 +27,17 @@ function fakeCtx() {
   } as AppContext;
 }
 
+// Audit reads are RBAC-gated (lab_admin / system_auditor). Inject an authorized actor by default.
+function appWith(ctx: AppContext = fakeCtx(), roles: string[] = ['system_auditor']) {
+  const app = Fastify();
+  app.addHook('onRequest', async (req: any) => { req.user = { id: 'auditor', username: 'auditor', displayName: null, roles }; });
+  registerAuditRoutes(app, ctx);
+  return app;
+}
+
 describe('audit routes', () => {
   it('returns paged events with a total and narrows by filter', async () => {
-    const app = Fastify();
-    registerAuditRoutes(app, fakeCtx());
+    const app = appWith();
 
     const all = await app.inject({ method: 'GET', url: '/api/audit?limit=1&offset=1' });
     expect(all.statusCode).toBe(200);
@@ -42,8 +49,7 @@ describe('audit routes', () => {
   });
 
   it('returns an event by id and 404 for a missing event', async () => {
-    const app = Fastify();
-    registerAuditRoutes(app, fakeCtx());
+    const app = appWith();
 
     const found = await app.inject({ method: 'GET', url: '/api/audit/a1' });
     expect(found.statusCode).toBe(200);
@@ -52,5 +58,16 @@ describe('audit routes', () => {
     const missing = await app.inject({ method: 'GET', url: '/api/audit/nope' });
     expect(missing.statusCode).toBe(404);
     expect(missing.json()).toEqual({ error: 'not found' });
+  });
+
+  it('lab_admin may also read the audit log', async () => {
+    const app = appWith(fakeCtx(), ['lab_admin']);
+    expect((await app.inject({ method: 'GET', url: '/api/audit' })).statusCode).toBe(200);
+  });
+
+  it('a non-privileged role (lab_technician) is rejected with 403', async () => {
+    const app = appWith(fakeCtx(), ['lab_technician']);
+    expect((await app.inject({ method: 'GET', url: '/api/audit' })).statusCode).toBe(403);
+    expect((await app.inject({ method: 'GET', url: '/api/audit/a1' })).statusCode).toBe(403);
   });
 });

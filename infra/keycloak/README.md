@@ -1,7 +1,16 @@
 # Keycloak realm: `openldr`
 
-`docker-compose.yml` runs Keycloak 26 (`start-dev --import-realm`) and imports
-`openldr-realm.json` on first boot into the `openldr` realm.
+`docker-compose.yml` (local dev) runs Keycloak 26 (`start-dev --import-realm`) on the throwaway H2
+database and imports `openldr-realm.json` on first boot into the `openldr` realm.
+
+**Production** (`docker-compose.prod.yml` / the installers) instead runs `start --import-realm`
+(production mode) and persists to a **`keycloak` database inside the same internal Postgres** the app
+uses — there is no second Postgres. That database is created on first Postgres init by
+`scripts/init-keycloak-db.sql` (alongside `openldr_target`), and Keycloak connects as the `openldr` role
+with `POSTGRES_PASSWORD` (`KC_DB`/`KC_DB_URL`/`KC_DB_USERNAME`/`KC_DB_PASSWORD`). Upgrading a stack whose
+Postgres volume predates this change? The first-init script won't re-run, so create the DB once by hand:
+`docker compose exec postgres psql -U openldr -d openldr -c 'CREATE DATABASE keycloak OWNER openldr;'`
+then restart Keycloak. The stock image auto-builds for Postgres on the first `start` (no `--optimized`).
 
 ## Bring it up
 
@@ -18,7 +27,10 @@
 - `openldr-admin` — confidential service-account client (client_credentials) granted
   `realm-management` roles `manage-users`/`view-users`/`query-users`/`view-realm`. Used by
   the server's identity-admin actions (password reset / force sign-out / user directory).
-- `labadmin` / `labadmin` — a seed user holding `lab_admin`.
+- `labadmin` / `labadmin` — a seed user holding `lab_admin`. The password is marked **temporary**, so
+  the first sign-in forces a password change. The installers (`install.sh` / `install.ps1`) and the
+  `pnpm run init` wizard replace it with a generated per-install password (surfaced once at the end of
+  the run) before the realm is imported.
 
 The matching app env lives in `.env.example` (`OIDC_ISSUER_URL`, `OIDC_AUDIENCE`,
 `KEYCLOAK_ADMIN_CLIENT_ID`, `KEYCLOAK_ADMIN_CLIENT_SECRET`).
@@ -26,9 +38,12 @@ The matching app env lives in `.env.example` (`OIDC_ISSUER_URL`, `OIDC_AUDIENCE`
 ## ⚠️ Dev-only secrets
 
 `openldr-admin`'s secret and `labadmin`'s password in `openldr-realm.json` are
-**development values committed for convenience**. In any real deployment, rotate the
-service-account secret (Keycloak admin console → Clients → openldr-admin → Credentials)
-and set `KEYCLOAK_ADMIN_CLIENT_SECRET` from a secret store; never reuse the committed value.
+**development values committed for convenience**. The installers and `pnpm run init` rotate BOTH to
+per-install values before importing the realm, and `labadmin`'s password is marked temporary so it must
+be changed on first login. If you import this realm **manually** (raw `docker compose up` with the
+committed file), rotate the service-account secret (Keycloak admin console → Clients → openldr-admin →
+Credentials), set `KEYCLOAK_ADMIN_CLIENT_SECRET` from a secret store, and change `labadmin`'s password;
+never reuse the committed values.
 
 ## Regenerating the export
 

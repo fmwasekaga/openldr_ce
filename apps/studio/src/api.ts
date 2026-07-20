@@ -358,8 +358,13 @@ export interface SyncConfigView {
   clientId: string;
   clientSecretSet: boolean;
   intervalMinutes: number;
+  /** Whether a lab signing private key is stored (S5). Write-only: the value is never returned. */
+  signingKeySet: boolean;
+  /** Central's public key (DER hex), readable — a public key is not a secret (S5). */
+  centralPublicKey: string;
 }
-/** PUT /api/settings/sync — `clientSecret` is WRITE-ONLY: omit it to preserve the stored value. */
+/** PUT /api/settings/sync — `clientSecret` is WRITE-ONLY: omit it to preserve the stored value.
+ *  `centralPublicKey` is OPTIONAL: omit it to preserve the enrollment-pinned key. */
 export interface SyncConfigInput {
   enabled: boolean;
   mode: SyncMode;
@@ -369,6 +374,7 @@ export interface SyncConfigInput {
   clientId: string;
   clientSecret?: string;
   intervalMinutes: number;
+  centralPublicKey?: string;
 }
 export interface SyncDirectionStatus {
   running: boolean;

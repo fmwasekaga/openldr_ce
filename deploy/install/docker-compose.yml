@@ -51,6 +51,8 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./config/init-target-db.sql:/docker-entrypoint-initdb.d/10-init-target-db.sql:ro
+      # Keycloak's database lives in THIS Postgres too (no second Postgres). Created on first init.
+      - ./config/init-keycloak-db.sql:/docker-entrypoint-initdb.d/20-init-keycloak-db.sql:ro
     restart: unless-stopped
 
   minio:
@@ -74,13 +76,25 @@ services:
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
-    command: start-dev --import-realm --http-relative-path=/auth
+    # Production mode (`start`, not `start-dev`): persistent Postgres store instead of the throwaway H2
+    # dev database. The stock image isn't pre-built for a specific DB vendor, so `start` (without
+    # `--optimized`) auto-runs the build for KC_DB=postgres on boot. --import-realm still applies on the
+    # first boot into an empty keycloak database.
+    command: start --import-realm --http-relative-path=/auth
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      # Reuse the shared internal Postgres (service `postgres`), DB `keycloak`, as the openldr role.
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: openldr
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-openldr}
       KC_HOSTNAME: ${KC_HOSTNAME:-https://localhost/auth}
       KC_HTTP_ENABLED: "true"
       KC_PROXY_HEADERS: xforwarded
+    depends_on:
+      # Wait for Postgres to be healthy so the keycloak database (created by the first-init script) exists.
+      postgres: { condition: service_healthy }
     volumes:
       - ./config/keycloak/openldr-realm.json:/opt/keycloak/data/import/openldr-realm.json:ro
     expose: ["8080"]

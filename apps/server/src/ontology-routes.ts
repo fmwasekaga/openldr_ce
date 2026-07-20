@@ -2,6 +2,12 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
 import { recordAudit } from './audit-helper';
+import { requireRole } from './rbac';
+
+// Deleting a distribution and building/rebuilding ontology indexes mutate shared, install-wide
+// terminology state (and drive server-side loader paths), so they are admin/manager gated. Read-only
+// tree/search/lookup GETs stay open to any authenticated user.
+const MANAGE = { preHandler: requireRole('lab_admin', 'lab_manager') };
 
 export function registerOntologyRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
   const ontology = ctx.terminology.ontology;
@@ -10,7 +16,7 @@ export function registerOntologyRoutes(app: FastifyInstance<any, any, any, any>,
 
   app.get('/api/terminology/ontology/distributions', async () => ontology.listDistributions());
   app.get('/api/terminology/ontology/distributions/:id', async (req) => ontology.getDistribution((req.params as IdParam).id));
-  app.delete('/api/terminology/ontology/distributions/:id', async (req, reply) => {
+  app.delete('/api/terminology/ontology/distributions/:id', MANAGE, async (req, reply) => {
     const id = (req.params as IdParam).id;
     try {
       const before = await ontology.getDistribution(id).catch(() => null);
@@ -71,13 +77,13 @@ export function registerOntologyRoutes(app: FastifyInstance<any, any, any, any>,
     }
   }
 
-  app.get('/api/terminology/ontology/:id/build', async (req, reply) =>
+  app.get('/api/terminology/ontology/:id/build', MANAGE, async (req, reply) =>
     sse(req, reply, (id, path, onProgress) => {
       if (!path) throw new Error('A server-side distribution path is required.');
       return ontology.build(id, path, onProgress as never);
     }),
   );
-  app.get('/api/terminology/ontology/:id/rebuild', async (req, reply) =>
+  app.get('/api/terminology/ontology/:id/rebuild', MANAGE, async (req, reply) =>
     sse(req, reply, (id, _path, onProgress) => ontology.rebuild(id, onProgress as never)),
   );
 }

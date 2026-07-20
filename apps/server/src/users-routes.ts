@@ -114,7 +114,7 @@ export function registerUsersRoutes(app: FastifyInstance<any, any, any, any>, ct
   // ------------------------------------------------------------------
   // GET /api/users — composes directory + profiles; falls back to local
   // ------------------------------------------------------------------
-  app.get('/api/users', async () => {
+  app.get('/api/users', { preHandler: requireRole('lab_admin') }, async () => {
     try {
       const users = await ctx.auth.directory.list();
       const profiles = await ctx.userProfiles.list(users.map((u) => u.id));
@@ -130,7 +130,7 @@ export function registerUsersRoutes(app: FastifyInstance<any, any, any, any>, ct
   // ------------------------------------------------------------------
   // GET /api/users/:id
   // ------------------------------------------------------------------
-  app.get('/api/users/:id', async (req, reply) => {
+  app.get('/api/users/:id', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
     const id = (req.params as { id: string }).id;
     try {
       const du = await ctx.auth.directory.get(id);

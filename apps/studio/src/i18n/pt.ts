@@ -12,6 +12,8 @@ export const pt: EnShape = {
     saving: 'A guardar…',
     signIn: 'Iniciar sessão',
     signOut: 'Terminar sessão',
+    openUserMenu: 'Abrir o menu do utilizador',
+    openUserMenuFor: 'Abrir o menu do utilizador para {{username}}',
     signingIn: 'A iniciar sessão…',
     callbackError: 'Falha no início de sessão. Por favor tente novamente.',
     configUnreachable: 'Não foi possível contactar o servidor. Por favor recarregue.',

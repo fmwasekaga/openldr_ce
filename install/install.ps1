@@ -203,6 +203,7 @@ function Fetch($rel, $out) { Invoke-WebRequest -UseBasicParsing "$RepoRaw/$rel" 
 Fetch "deploy/install/docker-compose.yml" "$Dir/docker-compose.yml"
 Fetch "infra/keycloak/openldr-realm.json" "$Dir/config/keycloak/openldr-realm.json"
 Fetch "scripts/init-target-db.sql" "$Dir/config/init-target-db.sql"
+Fetch "scripts/init-keycloak-db.sql" "$Dir/config/init-keycloak-db.sql"
 if ($MssqlDemo) {
   Fetch "deploy/install/docker-compose.mssql.yml" "$Dir/docker-compose.mssql.yml"
   Fetch "scripts/init-target-db-mssql.sql" "$Dir/config/init-target-db-mssql.sql"
@@ -248,6 +249,20 @@ if ($envExists) {
 if (-not $kcAdminSecret) { $kcAdminSecret = Rand }
 $realmSecretContent = (Get-Content $realmPath -Raw) -replace 'openldr-admin-dev-secret', $kcAdminSecret
 Set-Content -Path $realmPath -Value $realmSecretContent -Encoding ascii
+
+# Same per-install treatment for the seeded human `labadmin` user. The committed realm ships the
+# well-known "labadmin" password (marked temporary -> forced change on first login); a real deployment
+# must not import that guessable credential. Generate a per-install password -- reusing the existing
+# .env value on a re-run so the on-disk import stays consistent -- substitute it into the CREDENTIAL
+# value (the "username": "labadmin" line does not match this pattern), and surface it below.
+$labAdminPw = $null
+if ($envExists) {
+  $existingLabLine = (Select-String -Path $envPath -Pattern '^INITIAL_LAB_ADMIN_PASSWORD=').Line
+  if ($existingLabLine) { $labAdminPw = $existingLabLine -replace '^INITIAL_LAB_ADMIN_PASSWORD=', '' }
+}
+if (-not $labAdminPw) { $labAdminPw = Rand }
+$realmLabContent = (Get-Content $realmPath -Raw) -replace '"value": "labadmin"', "`"value`": `"$labAdminPw`""
+Set-Content -Path $realmPath -Value $realmLabContent -Encoding ascii
 
 if (-not $envExists) {
   $pg = Rand; $kc = Rand; $s3k = Rand; $s3s = Rand
@@ -333,6 +348,7 @@ KEYCLOAK_ADMIN=admin
 KEYCLOAK_ADMIN_PASSWORD=$kc
 KEYCLOAK_ADMIN_CLIENT_ID=openldr-admin
 KEYCLOAK_ADMIN_CLIENT_SECRET=$kcAdminSecret
+INITIAL_LAB_ADMIN_PASSWORD=$labAdminPw
 TLS_CERT_PATH=/etc/openldr/tls-cert.pem
 SECRETS_ENCRYPTION_KEY=$secretsKey
 MIGRATE_ON_START=true
@@ -407,6 +423,8 @@ Write-Host ""
 Write-Host "OK OpenLDR is starting. Open $Origin"
 $kcLine = (Select-String -Path $envPath -Pattern '^KEYCLOAK_ADMIN_PASSWORD=').Line
 if ($kcLine) { Write-Host "   Keycloak admin password: $($kcLine -replace '^KEYCLOAK_ADMIN_PASSWORD=','')" }
+$labLine = (Select-String -Path $envPath -Pattern '^INITIAL_LAB_ADMIN_PASSWORD=').Line
+if ($labLine) { Write-Host "   App sign-in: labadmin / $($labLine -replace '^INITIAL_LAB_ADMIN_PASSWORD=','')  (change it on first login)" }
 if ($MssqlDemo) {
   $mssqlLine = (Select-String -Path $envPath -Pattern '^MSSQL_PASSWORD=').Line
   if ($mssqlLine) { Write-Host "   MSSQL (demo) SA password: $($mssqlLine -replace '^MSSQL_PASSWORD=','')" }
