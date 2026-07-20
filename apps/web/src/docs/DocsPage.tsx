@@ -1,4 +1,4 @@
-import { useState, type ComponentProps } from 'react';
+import { useState, type ComponentProps, type ReactNode } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -17,28 +17,70 @@ import {
   docBody,
 } from './content';
 
-// The app runs under a HashRouter, so a raw <a href="/docs/..."> triggers a
-// full-page load that drops back to the landing route. Render internal links as
-// react-router <Link>s (hash-aware client navigation); leave external links alone.
-const MARKDOWN_COMPONENTS: Components = {
-  table({ children }: ComponentProps<'table'>) {
-    return (
-      <div className="max-w-full overflow-x-auto">
-        <table>{children}</table>
-      </div>
-    );
-  },
-  a({ href, children }: ComponentProps<'a'>) {
-    if (href && href.startsWith('/')) {
-      return <Link to={href}>{children}</Link>;
-    }
-    return (
-      <a href={href} target="_blank" rel="noreferrer noopener">
-        {children}
-      </a>
-    );
-  },
-};
+function slugify(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+function textContent(children: ReactNode): string {
+  if (Array.isArray(children)) return children.map(textContent).join('');
+  if (typeof children === 'string' || typeof children === 'number') return String(children);
+  return '';
+}
+
+// The app runs under a HashRouter, so raw docs links can collide with client
+// routing. Render internal page links through react-router and same-page anchors
+// through scrollIntoView so they do not replace the route hash.
+function markdownComponents(): Components {
+  let skippedFirstHeading = false;
+  return {
+    h1({ children }: ComponentProps<'h1'>) {
+      if (!skippedFirstHeading) {
+        skippedFirstHeading = true;
+        return null;
+      }
+      return <h1 id={slugify(textContent(children))}>{children}</h1>;
+    },
+    h2({ children }: ComponentProps<'h2'>) {
+      return <h2 id={slugify(textContent(children))}>{children}</h2>;
+    },
+    h3({ children }: ComponentProps<'h3'>) {
+      return <h3 id={slugify(textContent(children))}>{children}</h3>;
+    },
+    table({ children }: ComponentProps<'table'>) {
+      return (
+        <div className="max-w-full overflow-x-auto">
+          <table>{children}</table>
+        </div>
+      );
+    },
+    a({ href, children }: ComponentProps<'a'>) {
+      if (href?.startsWith('#')) {
+        return (
+          <a
+            href={href}
+            onClick={(event) => {
+              event.preventDefault();
+              document.getElementById(href.slice(1))?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start',
+              });
+            }}
+          >
+            {children}
+          </a>
+        );
+      }
+      if (href && href.startsWith('/')) {
+        return <Link to={href}>{children}</Link>;
+      }
+      return (
+        <a href={href} target="_blank" rel="noreferrer noopener">
+          {children}
+        </a>
+      );
+    },
+  };
+}
 
 function NavLink({ slug, active, nested }: { slug: string; active: string; nested?: boolean }) {
   const isActive = slug === active;
@@ -109,9 +151,11 @@ export function DocsPage() {
         {body == null ? (
           <p className="text-muted-foreground">This page is not available for version {version}.</p>
         ) : (
-          <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
-            {body}
-          </ReactMarkdown>
+          <div className="doc-markdown">
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents()}>
+              {body}
+            </ReactMarkdown>
+          </div>
         )}
       </article>
     </div>

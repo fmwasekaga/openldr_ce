@@ -86,7 +86,6 @@
 .doc-content th { background: var(--table-head); }
 .doc-content img { margin: 12px 0; }
 .doc-content > :first-child { margin-top: 0; }
-.doc-content h1:first-child { display: none; }
 .doc-content img {
   display: block;
   max-width: 100%;

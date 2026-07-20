@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { DocsPage } from './DocsPage';
 
@@ -22,6 +22,7 @@ describe('DocsPage', () => {
     expect(screen.getByRole('article')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Install' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('table').parentElement).toHaveClass('overflow-x-auto');
+    expect(screen.getAllByRole('heading', { name: 'Install' })).toHaveLength(1);
   });
 
   it('falls back to getting started when the route slug is unknown', () => {
@@ -29,5 +30,26 @@ describe('DocsPage', () => {
 
     expect(screen.getByRole('link', { name: 'Getting started' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('article')).toBeInTheDocument();
+  });
+
+  it('scrolls same-page markdown anchor links without replacing the router hash', () => {
+    const originalHash = window.location.hash;
+    const scrollIntoView = vi.fn();
+
+    try {
+      renderDocs('/docs/environment');
+      const adapters = document.getElementById('adapters');
+      expect(adapters).not.toBeNull();
+      if (!adapters) throw new Error('Adapters heading was not rendered');
+      adapters.scrollIntoView = scrollIntoView;
+      window.location.hash = '#/docs/environment';
+
+      fireEvent.click(screen.getByRole('link', { name: 'Adapters' }));
+
+      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
+      expect(window.location.hash).toBe('#/docs/environment');
+    } finally {
+      window.location.hash = originalHash;
+    }
   });
 });
