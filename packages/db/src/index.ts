@@ -52,3 +52,4 @@ export {
   type ReportScheduleStore,
 } from './report-schedule-store';
 export * from './projection';
+export * from './terminology-ingest-job-store';

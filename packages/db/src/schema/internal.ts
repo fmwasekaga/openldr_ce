@@ -652,6 +652,30 @@ export interface WorkflowSecretsTable {
   created_at: Generated<Date>;
 }
 
+// Terminology distribution ingest jobs: background jobs that stream a blob upload
+// (loaded via Task 1's streaming blob methods) into a coding system's concepts.
+// At most one active (queued|running) job per system_type is enforced by a unique
+// index on `active_key` in the migration, plus a store-level `hasActive` guard in `enqueue`.
+export interface TerminologyIngestJobsTable {
+  id: string;
+  system_type: string;
+  coding_system_id: string;
+  blob_key: string;
+  version: string | null;
+  status: string;
+  phase: string | null;
+  processed: Generated<string>; // bigint → string on read
+  total: string | null;
+  error: string | null;
+  created_by: string | null;
+  created_at: Generated<Date>;
+  started_at: Date | null;
+  finished_at: Date | null;
+  // Mirrors `system_type` while the job is queued|running, NULL once finished; backs the
+  // "one active job per system" unique index. See the 061 migration for why.
+  active_key: string | null;
+}
+
 export interface InternalSchema {
   'fhir.fhir_resources': FhirResourcesTable;
   'fhir.resource_history': ResourceHistoryTable;
@@ -711,4 +735,5 @@ export interface InternalSchema {
   reports: ReportsTable;
   sync_sites: SyncSitesTable;
   workflow_secrets: WorkflowSecretsTable;
+  terminology_ingest_jobs: TerminologyIngestJobsTable;
 }
