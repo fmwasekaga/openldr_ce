@@ -812,13 +812,13 @@
     {
       "name": "sync-settings-card.png",
       "guide": "sync",
-      "route": "/studio/settings/general",
-      "purpose": "Show the lab Distributed Sync configuration card and status panel",
+      "route": "/studio/settings/sync",
+      "purpose": "Show the lab Distributed Sync configuration form on its Settings tab",
       "fixture": "base",
       "theme": "dark",
       "ready": {
         "kind": "selector",
-        "value": "[data-testid=\"sync-card\"]"
+        "value": "[data-testid=\"sync-settings-form\"]"
       },
       "steps": [
         {
@@ -842,7 +842,7 @@
           "value": "sync-lab-site-01"
         }
       ],
-      "crop": "[data-testid=\"sync-card\"]"
+      "crop": "[data-testid=\"sync-settings-form\"]"
     }
   ]
 }
