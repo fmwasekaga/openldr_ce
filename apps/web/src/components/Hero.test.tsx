@@ -18,6 +18,7 @@ describe('Hero', () => {
   });
 
   it('scrolls to install without changing the hash when Get started is clicked', () => {
+    const originalHash = window.location.hash;
     const scrollIntoView = vi.fn();
     const install = document.createElement('section');
     install.id = 'install';
@@ -25,12 +26,15 @@ describe('Hero', () => {
     document.body.append(install);
     window.location.hash = '#/';
 
-    render(<Hero />, { wrapper: MemoryRouter });
-    fireEvent.click(screen.getByRole('button', { name: /get started/i }));
+    try {
+      render(<Hero />, { wrapper: MemoryRouter });
+      fireEvent.click(screen.getByRole('button', { name: /get started/i }));
 
-    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
-    expect(window.location.hash).toBe('#/');
-
-    install.remove();
+      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
+      expect(window.location.hash).toBe('#/');
+    } finally {
+      window.location.hash = originalHash;
+      install.remove();
+    }
   });
 });
