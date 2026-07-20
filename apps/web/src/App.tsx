@@ -1,7 +1,6 @@
 import { Routes, Route, Link } from 'react-router-dom';
 import { Hero } from '@/components/Hero';
 import { InstallBlock } from '@/components/InstallBlock';
-import { FeatureWalkthrough } from '@/components/FeatureWalkthrough';
 import { Footer } from '@/components/Footer';
 import { DocsPage } from '@/docs/DocsPage';
 
@@ -9,7 +8,6 @@ function Landing() {
   return (
     <>
       <Hero />
-      <FeatureWalkthrough />
       <InstallBlock />
     </>
   );

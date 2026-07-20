@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { InstallBlock } from './InstallBlock';
 
@@ -33,7 +33,7 @@ describe('InstallBlock', () => {
     try {
       render(<InstallBlock />, { wrapper: MemoryRouter });
       fireEvent.click(screen.getByRole('button', { name: /copy/i }));
-      expect(writeText).toHaveBeenCalledWith(expect.stringContaining('install.sh'));
+      await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('install.sh')));
     } finally {
       Object.defineProperty(navigator, 'clipboard', { value: original, configurable: true });
     }
@@ -41,7 +41,9 @@ describe('InstallBlock', () => {
 
   it('labels the install section for page navigation', () => {
     render(<InstallBlock />, { wrapper: MemoryRouter });
-    expect(screen.getByRole('region', { name: /install openldr/i })).toHaveAttribute('id', 'install');
+    expect(screen.getByRole('region', { name: /openldr installation/i })).toHaveAttribute('id', 'install');
+    expect(screen.queryByText('Install')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /install openldr in one line/i })).not.toBeInTheDocument();
   });
 
   it('keeps the command area shrinkable so long commands scroll within the row', () => {
@@ -49,8 +51,11 @@ describe('InstallBlock', () => {
     expect(screen.getByText(/curl -fsSL/)).toHaveClass('min-w-0');
   });
 
-  it('keeps the install tab strip within the available width', () => {
+  it('renders the command tabs inside a centered install panel', () => {
     render(<InstallBlock />, { wrapper: MemoryRouter });
-    expect(screen.getByRole('tablist')).toHaveClass('max-w-full', 'overflow-x-auto');
+    expect(screen.getByRole('region', { name: /openldr installation/i })).toHaveClass('text-center');
+    expect(screen.getByLabelText(/openldr install command/i)).toContainElement(screen.getByRole('tablist'));
+    expect(screen.getByLabelText(/openldr install command/i)).toHaveClass('mx-auto', 'max-w-4xl');
+    expect(screen.getByRole('tablist')).toHaveClass('border-b', 'px-4');
   });
 });

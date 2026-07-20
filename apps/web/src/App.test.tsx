@@ -15,8 +15,9 @@ describe('App routes', () => {
     );
 
     expect(screen.getByRole('heading', { name: 'OpenLDR' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'The pieces you need, shown directly.' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Install OpenLDR in one line/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/openldr install command/i)).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Install OpenLDR in one line/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'The pieces you need, shown directly.' })).not.toBeInTheDocument();
   });
 
   it('renders public docs from the docs route', () => {

@@ -14,82 +14,112 @@ const COMMANDS: Record<string, string> = {
   wsl: `curl -fsSL ${BASE}/install.sh | bash`,
 };
 
-function CommandRow({ command }: { command: string }) {
+function CopyCommandButton({ command }: { command: string }) {
   const [copied, setCopied] = useState(false);
   const resetTimer = useRef<ReturnType<typeof setTimeout>>();
-  // Clear a pending "copied" reset if the row unmounts (avoids a state update
-  // after unmount).
+
   useEffect(() => () => clearTimeout(resetTimer.current), []);
+
   const copy = async () => {
-    // navigator.clipboard is undefined in non-secure contexts (plain http://,
-    // some webviews). Fail silently rather than throwing an unhandled rejection.
     if (!navigator.clipboard?.writeText) return;
+
     try {
       await navigator.clipboard.writeText(command);
     } catch {
       return;
     }
+
     setCopied(true);
     clearTimeout(resetTimer.current);
     resetTimer.current = setTimeout(() => setCopied(false), 1500);
   };
+
   return (
-    <div className="flex items-center gap-2 rounded-md border border-border bg-card px-4 py-3 font-mono text-sm">
+    <Button variant="ghost" size="icon" aria-label="Copy command" onClick={copy}>
+      {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+    </Button>
+  );
+}
+
+function CommandRow({ command }: { command: string }) {
+  return (
+    <div className="flex items-center gap-3 font-mono text-sm sm:text-base">
+      <span className="text-muted-foreground">$</span>
       <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap">{command}</code>
-      <Button variant="ghost" size="icon" aria-label="Copy command" onClick={copy}>
-        {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-      </Button>
     </div>
   );
 }
 
 export function InstallBlock() {
+  const [activeCommand, setActiveCommand] = useState('unix');
+
   return (
     <section
       id="install"
-      aria-labelledby="install-heading"
-      className="mx-auto max-w-4xl px-6 py-16"
+      aria-label="OpenLDR installation"
+      className="mx-auto max-w-5xl px-6 py-20 text-center"
     >
-      <div className="mb-6 max-w-2xl">
-        <p className="text-xs font-semibold uppercase text-primary">Install</p>
-        <h2 id="install-heading" className="mt-2 text-2xl font-semibold">
-          Install OpenLDR in one line
-        </h2>
-        <p className="mt-3 text-sm text-muted-foreground">
+      <div className="mx-auto max-w-2xl">
+        <p className="text-base leading-7 text-muted-foreground">
           Requires Docker. The installer brings up the full self-hosted stack locally.
         </p>
       </div>
-      <Tabs defaultValue="unix" className="w-full">
-        <TabsList className="max-w-full overflow-x-auto">
-          <TabsTrigger value="unix">Linux / macOS</TabsTrigger>
-          <TabsTrigger value="windows">Windows</TabsTrigger>
-          <TabsTrigger value="wsl">Windows Server (WSL2)</TabsTrigger>
-        </TabsList>
-        <TabsContent value="unix">
-          <CommandRow command={COMMANDS.unix} />
-          <p className="mt-2 text-left text-sm text-muted-foreground">
-            Any Linux distribution or macOS with Docker installed.
-          </p>
-        </TabsContent>
-        <TabsContent value="windows">
-          <CommandRow command={COMMANDS.windows} />
-          <p className="mt-2 text-left text-sm text-muted-foreground">
-            Windows 10/11 with Docker Desktop — run it in PowerShell.
-          </p>
-        </TabsContent>
-        <TabsContent value="wsl">
-          <CommandRow command={COMMANDS.wsl} />
-          <p className="mt-2 text-left text-sm text-muted-foreground">
-            Windows Server can&apos;t run these Linux images natively — install Docker CE
-            inside a WSL2 Ubuntu distro and run the command above there (it&apos;s Linux).
-            New to this?{' '}
-            <Link to="/docs/windows-server" className="text-foreground underline underline-offset-4">
-              Windows Server (WSL2) setup guide
-            </Link>
-            .
-          </p>
-        </TabsContent>
-      </Tabs>
+
+      <div
+        aria-label="OpenLDR install command"
+        className="mx-auto mt-8 max-w-4xl overflow-hidden rounded-lg border border-border bg-card text-left shadow-sm"
+      >
+        <Tabs value={activeCommand} onValueChange={setActiveCommand} className="relative w-full">
+          <TabsList className="h-auto w-full max-w-full overflow-x-auto border-b border-border px-4 py-3 pr-16">
+            <TabsTrigger
+              value="unix"
+              className="rounded-md border-b-0 px-3 data-[state=active]:border-b-0 data-[state=active]:bg-background"
+            >
+              Linux / macOS
+            </TabsTrigger>
+            <TabsTrigger
+              value="windows"
+              className="rounded-md border-b-0 px-3 data-[state=active]:border-b-0 data-[state=active]:bg-background"
+            >
+              Windows
+            </TabsTrigger>
+            <TabsTrigger
+              value="wsl"
+              className="rounded-md border-b-0 px-3 data-[state=active]:border-b-0 data-[state=active]:bg-background"
+            >
+              Windows Server (WSL2)
+            </TabsTrigger>
+          </TabsList>
+          <div className="absolute right-4 top-2.5">
+            <CopyCommandButton command={COMMANDS[activeCommand]} />
+          </div>
+
+          <TabsContent value="unix" className="px-5 py-6">
+            <CommandRow command={COMMANDS.unix} />
+            <p className="mt-4 text-sm text-muted-foreground">
+              Any Linux distribution or macOS with Docker installed.
+            </p>
+          </TabsContent>
+          <TabsContent value="windows" className="px-5 py-6">
+            <CommandRow command={COMMANDS.windows} />
+            <p className="mt-4 text-sm text-muted-foreground">
+              Windows 10/11 with Docker Desktop - run it in PowerShell.
+            </p>
+          </TabsContent>
+          <TabsContent value="wsl" className="px-5 py-6">
+            <CommandRow command={COMMANDS.wsl} />
+            <p className="mt-4 text-sm text-muted-foreground">
+              Windows Server can&apos;t run these Linux images natively - install Docker CE
+              inside a WSL2 Ubuntu distro and run the command above there (it&apos;s Linux).
+              New to this?{' '}
+              <Link to="/docs/windows-server" className="text-foreground underline underline-offset-4">
+                Windows Server (WSL2) setup guide
+              </Link>
+              .
+            </p>
+          </TabsContent>
+        </Tabs>
+      </div>
     </section>
   );
 }

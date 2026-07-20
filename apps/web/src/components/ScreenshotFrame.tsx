@@ -1,8 +1,8 @@
-import { screenshotUrl, type PublicScreenshotName } from '@/landing/screenshots';
+import { screenshotUrl } from '@/landing/screenshots';
 import { cn } from '@/lib/cn';
 
 export interface ScreenshotFrameProps {
-  name: PublicScreenshotName;
+  name: string;
   alt: string;
   caption?: string;
   priority?: boolean;
