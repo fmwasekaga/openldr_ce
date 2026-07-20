@@ -34,7 +34,7 @@ export function ScreenshotFrame({
   }
 
   return (
-    <figure className={cn('w-full', className)}>
+    <figure className={cn('m-0 w-full', className)}>
       <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
         <img
           src={url}

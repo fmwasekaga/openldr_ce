@@ -35,7 +35,7 @@ function CommandRow({ command }: { command: string }) {
   };
   return (
     <div className="flex items-center gap-2 rounded-md border border-border bg-card px-4 py-3 font-mono text-sm">
-      <code className="flex-1 overflow-x-auto whitespace-nowrap">{command}</code>
+      <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap">{command}</code>
       <Button variant="ghost" size="icon" aria-label="Copy command" onClick={copy}>
         {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
       </Button>
@@ -60,7 +60,7 @@ export function InstallBlock() {
         </p>
       </div>
       <Tabs defaultValue="unix" className="w-full">
-        <TabsList>
+        <TabsList className="max-w-full overflow-x-auto">
           <TabsTrigger value="unix">Linux / macOS</TabsTrigger>
           <TabsTrigger value="windows">Windows</TabsTrigger>
           <TabsTrigger value="wsl">Windows Server (WSL2)</TabsTrigger>

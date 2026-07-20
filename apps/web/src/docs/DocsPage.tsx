@@ -21,6 +21,13 @@ import {
 // full-page load that drops back to the landing route. Render internal links as
 // react-router <Link>s (hash-aware client navigation); leave external links alone.
 const MARKDOWN_COMPONENTS: Components = {
+  table({ children }: ComponentProps<'table'>) {
+    return (
+      <div className="max-w-full overflow-x-auto">
+        <table>{children}</table>
+      </div>
+    );
+  },
   a({ href, children }: ComponentProps<'a'>) {
     if (href && href.startsWith('/')) {
       return <Link to={href}>{children}</Link>;

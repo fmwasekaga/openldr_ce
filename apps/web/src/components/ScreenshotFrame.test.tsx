@@ -20,6 +20,7 @@ describe('ScreenshotFrame', () => {
     expect(image).toHaveAttribute('src', '/assets/dashboard.png');
     expect(image).toHaveAttribute('loading', 'eager');
     expect(screen.getByText('Dashboard overview')).toBeInTheDocument();
+    expect(image.closest('figure')).toHaveClass('m-0');
   });
 
   it('renders a quiet unavailable state when the screenshot URL is absent', () => {
