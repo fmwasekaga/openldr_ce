@@ -17,6 +17,9 @@ vi.mock('@/api', () => ({
     runIds: ['run-1'],
   })),
   listPluginUis: vi.fn(async () => []),
+  listNotifications: vi.fn(async () => ({ notifications: [], unreadCount: 0, total: 0 })),
+  markNotificationsRead: vi.fn(async () => undefined),
+  markAllNotificationsRead: vi.fn(async () => undefined),
 }));
 vi.mock('@/auth/AuthProvider', () => ({
   useAuth: () => ({ user: { id: 'me', username: 'me', displayName: null, roles: ['lab_admin'] }, loading: false, hasRole: () => true }),

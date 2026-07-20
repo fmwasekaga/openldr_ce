@@ -19,6 +19,7 @@ import {
 import { cn } from '@/lib/cn';
 import { listPluginUis, type PluginUiEntry } from '@/api';
 import { pluginIcon } from '@/plugins/icons';
+import { NotificationBell } from './NotificationBell';
 
 const NAV: { to: string; labelKey: string; end: boolean; icon: LucideIcon; roles?: string[] }[] = [
   { to: '/', labelKey: 'nav.dashboard', end: true, icon: LayoutDashboard },
@@ -210,6 +211,7 @@ export function AppShell({
                 <TooltipContent side="bottom" className="max-w-xs">{t('a11y.devBypassTooltip')}</TooltipContent>
               </Tooltip>
             )}
+            <NotificationBell />
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
