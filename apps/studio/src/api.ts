@@ -1479,3 +1479,64 @@ export const pluginUiAssetUrl = (id: string): string => `/api/plugins/${encodeUR
 export const pluginBrokerCall = (id: string, op: PluginBrokerOp): Promise<PluginRpcResult> =>
   authFetch(`/api/plugins/${encodeURIComponent(id)}/broker`, jbody({ op }, 'POST'))
     .then((r) => okJson<PluginRpcResult>(r, 'plugin broker call'));
+
+// ── Notifications (bell) ────────────────────────────────────────────────────
+
+export type NotificationPriority = 'info' | 'warning' | 'critical';
+export type NotificationType =
+  | 'sync_diverged' | 'sync_failed' | 'sync_quarantined'
+  | 'plugin_crashed' | 'auth_failed' | 'site_revoked';
+
+export interface Notification {
+  id: string;
+  type: NotificationType;
+  priority: NotificationPriority;
+  title: string;
+  body: string | null;
+  linkTo: string | null;
+  createdAt: string;
+  readAt: string | null;
+  metadata: Record<string, unknown> | null;
+}
+
+export interface NotificationListParams {
+  limit?: number; offset?: number; unreadOnly?: boolean; type?: string; priority?: string;
+}
+
+export async function listNotifications(
+  params: NotificationListParams = {},
+): Promise<{ notifications: Notification[]; unreadCount: number; total: number }> {
+  const qs = new URLSearchParams();
+  if (params.limit != null) qs.set('limit', String(params.limit));
+  if (params.offset != null) qs.set('offset', String(params.offset));
+  if (params.unreadOnly) qs.set('unreadOnly', 'true');
+  if (params.type) qs.set('type', params.type);
+  if (params.priority) qs.set('priority', params.priority);
+  const res = await authFetch(`/api/notifications?${qs.toString()}`);
+  if (!res.ok) throw new Error(`notifications list failed: ${res.status}`);
+  return res.json() as Promise<{ notifications: Notification[]; unreadCount: number; total: number }>;
+}
+
+export async function markNotificationsRead(ids: string[]): Promise<void> {
+  await authFetch('/api/notifications/read', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }),
+  });
+}
+
+export async function markAllNotificationsRead(): Promise<void> {
+  await authFetch('/api/notifications/read-all', { method: 'POST' });
+}
+
+export async function getNotificationPrefs(): Promise<{ disabled: string[]; minPriority: NotificationPriority }> {
+  const res = await authFetch('/api/notifications/preferences');
+  if (!res.ok) return { disabled: [], minPriority: 'info' };
+  return res.json() as Promise<{ disabled: string[]; minPriority: NotificationPriority }>;
+}
+
+export async function saveNotificationPrefs(
+  prefs: { type: string; enabled: boolean }[], minPriority?: NotificationPriority,
+): Promise<void> {
+  await authFetch('/api/notifications/preferences', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prefs, minPriority }),
+  });
+}
