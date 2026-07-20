@@ -54,6 +54,18 @@ describe('auditRowToNotification', () => {
     expect(auditRowToNotification({ ...base, action: 'settings.sync.enroll' })).toBeNull();
     expect(auditRowToNotification({ ...base, action: 'report.run' })).toBeNull();
   });
+
+  it('maps terminology.import.completed to a notification', () => {
+    const n = auditRowToNotification({ id: 'a1', occurredAt: '2026-07-20T00:00:00.000Z', actorType: 'system', actorId: null, actorName: 'System', action: 'terminology.import.completed', entityType: 'coding_system', entityId: 'http://loinc.org', metadata: { systemType: 'loinc', conceptsLoaded: 42 } } as never);
+    expect(n?.type).toBe('terminology_import_done');
+    expect(n?.priority).toBe('info');
+  });
+
+  it('maps terminology.import.failed to a warning notification', () => {
+    const n = auditRowToNotification({ id: 'a2', occurredAt: '2026-07-20T00:00:00.000Z', actorType: 'system', actorId: null, actorName: 'System', action: 'terminology.import.failed', entityType: 'coding_system', entityId: 'http://loinc.org', metadata: { error: 'boom' } } as never);
+    expect(n?.type).toBe('terminology_import_failed');
+    expect(n?.priority).toBe('warning');
+  });
 });
 
 describe('passesPrefs', () => {
