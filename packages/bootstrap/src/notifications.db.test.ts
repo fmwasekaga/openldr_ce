@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import type { Kysely } from 'kysely';
 import { makeMigratedDb } from '@openldr/db/testing';
 import { createSyncActivityStore } from '@openldr/db';
@@ -88,5 +89,50 @@ describe('notifications DB store', () => {
     expect(total).toBe(0);
     expect(unreadCount).toBe(0);
     expect(notifications).toEqual([]);
+  });
+
+  it('excludes sync_activity rows older than the 30-day window, includes an in-window row', async () => {
+    // Older than the window: seeded by inserting straight into the table, since the store always
+    // stamps occurred_at via now().
+    const oldDate = new Date(Date.now() - 40 * 86_400_000);
+    await ctx.internalDb
+      .insertInto('sync_activity')
+      .values({
+        id: randomUUID(),
+        occurred_at: oldDate,
+        direction: 'push',
+        event: 'failed',
+        records: 0,
+        error: 'stale beyond window',
+        metadata: null,
+      })
+      .execute();
+    // Inside the window: a fresh row via the normal store path (occurred_at = now()).
+    await ctx.syncActivity.record({ direction: 'push', event: 'quarantined', records: 1 });
+
+    const { notifications } = await listNotifications(ctx, 'user1', {});
+    expect(notifications.some((n) => n.body === 'stale beyond window')).toBe(false);
+    expect(notifications.some((n) => n.type === 'sync_quarantined')).toBe(true);
+  });
+
+  it('markNotificationsRead sets readAt to the actual mark-read timestamp, not createdAt', async () => {
+    const before = await listNotifications(ctx, 'user1', {});
+    const failed = before.notifications.find((n) => n.type === 'sync_failed');
+    expect(failed).toBeTruthy();
+    expect(failed!.readAt).toBeNull();
+
+    const beforeMark = Date.now();
+    await markNotificationsRead(ctx, 'user1', [failed!.id]);
+    const afterMark = Date.now();
+
+    const after = await listNotifications(ctx, 'user1', {});
+    const stillFailed = after.notifications.find((n) => n.id === failed!.id);
+    expect(stillFailed).toBeTruthy();
+    expect(stillFailed!.readAt).not.toBeNull();
+    // The bug this guards against: readAt falling back to createdAt instead of the real mark-read time.
+    expect(stillFailed!.readAt).not.toBe(stillFailed!.createdAt);
+    const readAtMs = new Date(stillFailed!.readAt!).getTime();
+    expect(readAtMs).toBeGreaterThanOrEqual(beforeMark - 1000);
+    expect(readAtMs).toBeLessThanOrEqual(afterMark + 1000);
   });
 });

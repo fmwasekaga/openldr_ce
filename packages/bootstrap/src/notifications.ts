@@ -124,15 +124,15 @@ async function gather(ctx: NotificationCtx): Promise<Notification[]> {
   return out;
 }
 
-async function readState(ctx: NotificationCtx, userId: string): Promise<{ cursor: string | null; ids: Set<string> }> {
+async function readState(ctx: NotificationCtx, userId: string): Promise<{ cursor: string | null; ids: Map<string, string> }> {
   const rows = await ctx.internalDb.selectFrom('notification_reads')
     .select(['notification_id', 'read_at']).where('user_id', '=', userId).execute();
   let cursor: string | null = null;
-  const ids = new Set<string>();
+  const ids = new Map<string, string>();
   for (const r of rows) {
     const readAt = r.read_at instanceof Date ? r.read_at.toISOString() : String(r.read_at);
     if (r.notification_id === CURSOR_ID) cursor = readAt;
-    else ids.add(r.notification_id);
+    else ids.set(r.notification_id, readAt);
   }
   return { cursor, ids };
 }
@@ -162,9 +162,10 @@ export async function listNotifications(
   const visible = all.filter((n) => passesPrefs(n, disabled, prefs.minPriority));
   // apply read-state
   const withRead = visible.map((n) => {
-    const readByCursor = reads.cursor != null && n.createdAt <= reads.cursor;
-    const readById = reads.ids.has(n.id);
-    return readById || readByCursor ? { ...n, readAt: reads.cursor ?? n.createdAt } : n;
+    const readByIdAt = reads.ids.get(n.id);
+    if (readByIdAt) return { ...n, readAt: readByIdAt };
+    if (reads.cursor != null && n.createdAt <= reads.cursor) return { ...n, readAt: reads.cursor };
+    return n;
   });
   const unreadCount = withRead.filter((n) => !n.readAt).length;
   let filtered = withRead;
