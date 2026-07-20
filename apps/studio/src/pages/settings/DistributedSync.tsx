@@ -204,7 +204,7 @@ export function DistributedSync() {
         <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-destructive">{error}</div>
       ) : sync ? (
         <Tabs defaultValue="settings" className="flex min-h-0 flex-1 flex-col">
-          <TabsList className="mx-4 mt-4">
+          <TabsList className="mt-4 px-4">
             <TabsTrigger value="settings">{t('settings.sync.tabs.settings')}</TabsTrigger>
             <TabsTrigger value="activity">{t('settings.sync.tabs.activity')}</TabsTrigger>
           </TabsList>
