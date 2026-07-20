@@ -47,4 +47,22 @@ describe('terminology ingest job store', () => {
     expect(await store.latestForSystem('loinc')).toMatchObject({ id: a.id, status: 'ready' });
     await db.destroy();
   });
+
+  it('latestReadyForSystem returns the newest ready job, not a later running job', async () => {
+    const db = await makeMigratedDb();
+    const store = createTerminologyIngestJobStore(db as never);
+    // First job: enqueue, claim, and finish to 'ready'.
+    const first = await store.enqueue({ systemType: 'loinc', codingSystemId: 'cs1', blobKey: 'terminology-dist/loinc/j1.zip', version: '2.82', createdBy: null });
+    await store.claimNext();
+    await store.finish(first.id, 'ready', null);
+    // Second job for the same system: enqueue (queued) — the one-active-per-system rule allows
+    // this now that the first job is no longer active.
+    const second = await store.enqueue({ systemType: 'loinc', codingSystemId: 'cs1', blobKey: 'terminology-dist/loinc/j2.zip', version: '2.83', createdBy: null });
+    await store.claimNext(); // moves `second` to 'running'
+    const ready = await store.latestReadyForSystem('loinc');
+    expect(ready?.id).toBe(first.id);
+    expect(ready?.status).toBe('ready');
+    expect(ready?.id).not.toBe(second.id);
+    await db.destroy();
+  });
 });

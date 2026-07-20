@@ -16,6 +16,7 @@ function deps(over: Partial<any> = {}) {
         updateProgress: vi.fn(async (_id, p) => { state.progress.push(p); }),
         finish: vi.fn(async (id, s, e) => { state.finished.push({ id, s, e }); }),
         latestForSystem: vi.fn(async () => ({ id: 'j0', blobKey: 'terminology-dist/loinc/j0.zip', status: 'ready' })),
+        latestReadyForSystem: vi.fn(async () => ({ id: 'j0', blobKey: 'terminology-dist/loinc/j0.zip', status: 'ready' })),
         get: vi.fn(), enqueue: vi.fn(), hasActive: vi.fn(),
       },
       blob: { getStream: vi.fn(), delete: vi.fn(async (k: string) => { state.deleted.push(k); }) },
@@ -52,7 +53,7 @@ describe('terminology ingest worker', () => {
   });
 
   it('does nothing when no job is queued', async () => {
-    const { d } = deps({ jobs: { claimNext: vi.fn(async () => null), updateProgress: vi.fn(), finish: vi.fn(), latestForSystem: vi.fn(), get: vi.fn(), enqueue: vi.fn(), hasActive: vi.fn() } });
+    const { d } = deps({ jobs: { claimNext: vi.fn(async () => null), updateProgress: vi.fn(), finish: vi.fn(), latestForSystem: vi.fn(), latestReadyForSystem: vi.fn(), get: vi.fn(), enqueue: vi.fn(), hasActive: vi.fn() } });
     const w = createTerminologyIngestWorker(d as never);
     await w.tickOnce();
     expect(d.runIngest).not.toHaveBeenCalled();

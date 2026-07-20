@@ -26,7 +26,10 @@ export function createTerminologyIngestWorker(deps: TerminologyIngestWorkerDeps)
 
   async function processJob(job: TerminologyIngestJob): Promise<void> {
     // Capture the prior retained blob BEFORE finishing, so we can delete it only on success.
-    const prior = await deps.jobs.latestForSystem(job.systemType).catch(() => null);
+    // Use latestReadyForSystem (not latestForSystem) so this naturally excludes the current job
+    // itself — which is still 'running' at this point, not 'ready' — instead of relying on the
+    // status guard below to filter it out after the fact.
+    const prior = await deps.jobs.latestReadyForSystem(job.systemType).catch(() => null);
     try {
       const { conceptsLoaded } = await deps.runIngest(job, (p) => {
         void deps.jobs.updateProgress(job.id, p).catch((err) => deps.logger.error({ err, jobId: job.id }, 'ingest progress write failed'));
