@@ -168,6 +168,19 @@ export interface SyncActivityTable {
   metadata: JSONColumnType<Record<string, unknown>> | null;
 }
 
+export interface NotificationReadsTable {
+  user_id: string;
+  notification_id: string;
+  read_at: unknown;
+}
+
+export interface NotificationPrefsTable {
+  user_id: string;
+  type: string;
+  enabled: boolean | null;
+  value: string | null;
+}
+
 export interface UsersTable {
   id: string;
   subject: string | null;
@@ -654,6 +667,8 @@ export interface InternalSchema {
   plugins: PluginsTable;
   audit_events: AuditEventsTable;
   sync_activity: SyncActivityTable;
+  notification_reads: NotificationReadsTable;
+  notification_prefs: NotificationPrefsTable;
   users: UsersTable;
   terminology_concepts: TerminologyConceptsTable;
   terminology_systems: TerminologySystemsTable;
