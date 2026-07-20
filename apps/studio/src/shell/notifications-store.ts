@@ -4,7 +4,6 @@ import type { Notification } from '@/api'
 interface NotificationsState {
   notifications: Notification[]
   unreadCount: number
-  isLoading: boolean
   // A single freshly-arrived notification held here so the <Toaster />
   // component can observe it. Set to null once the toast has been shown.
   latest: Notification | null
@@ -14,13 +13,11 @@ interface NotificationsState {
   markRead: (ids: string[]) => void
   markAllRead: () => void
   clearLatest: () => void
-  setLoading: (loading: boolean) => void
 }
 
 export const useNotificationsStore = create<NotificationsState>()((set) => ({
   notifications: [],
   unreadCount: 0,
-  isLoading: false,
   latest: null,
 
   setAll: (notifications, unreadCount) => set({ notifications, unreadCount }),
@@ -57,5 +54,4 @@ export const useNotificationsStore = create<NotificationsState>()((set) => ({
   markAllRead: () => set({ notifications: [], unreadCount: 0 }),
 
   clearLatest: () => set({ latest: null }),
-  setLoading: (isLoading) => set({ isLoading }),
 }))

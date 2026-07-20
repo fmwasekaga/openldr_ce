@@ -16,9 +16,11 @@ export function registerNotificationRoutes(app: FastifyInstance<any, any, any, a
   app.get('/api/notifications', VIEW, async (req) => {
     const q = req.query as Record<string, string>;
     try {
+      const limit = Math.min(Math.max(Number(q.limit ?? 50) || 50, 1), 200);
+      const offset = Math.max(Number(q.offset ?? 0) || 0, 0);
       return await listNotifications(ctx, userId(req), {
-        limit: q.limit ? Number(q.limit) : 50,
-        offset: q.offset ? Number(q.offset) : 0,
+        limit,
+        offset,
         unreadOnly: q.unreadOnly === 'true',
         type: q.type || undefined,
         priority: q.priority || undefined,

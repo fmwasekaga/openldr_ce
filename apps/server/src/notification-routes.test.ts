@@ -59,6 +59,18 @@ describe('notification routes', () => {
     expect(body.notifications[0].type).toBe('sync_failed');
   });
 
+  it('GET /api/notifications?limit=abc clamps to a normal feed instead of an errored/empty one', async () => {
+    const ctx = await buildCtx();
+    await ctx.syncActivity.record({ direction: 'push', event: 'failed', error: 'central unreachable' });
+    const app = appWithUser(['data_analyst'], ctx);
+
+    const res = await app.inject({ method: 'GET', url: '/api/notifications?limit=abc' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.notifications).toHaveLength(1);
+    expect(body.total).toBe(1);
+  });
+
   it('POST /api/notifications/read marks an id read, dropping it from unreadOnly', async () => {
     const ctx = await buildCtx();
     await ctx.syncActivity.record({ direction: 'push', event: 'failed', error: 'central unreachable' });

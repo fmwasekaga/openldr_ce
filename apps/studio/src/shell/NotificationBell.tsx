@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Bell } from "lucide-react";
@@ -35,9 +35,18 @@ export function NotificationBell(): JSX.Element {
     notifications,
     unreadCount,
     setAll,
+    prepend,
     markRead,
     markAllRead,
   } = useNotificationsStore();
+
+  // Ids seen on the previous successful poll. Used to detect newly-arrived notifications so we
+  // can toast them (see prepend below) without re-toasting the initial page load's backlog.
+  const seenIds = useRef<Set<string>>(new Set());
+  // Whether a poll has already completed once. Tracked separately from seenIds.size, since a
+  // legitimately-empty first poll (no unread notifications yet) must still count as "the first
+  // load" even though the resulting id set is also empty.
+  const hasLoadedOnce = useRef(false);
 
   // Initial load + polling. Electron's IPC push (window.api.notifications.onNew)
   // has no HTTP equivalent, so we poll on an interval and refresh on focus/visibility.
@@ -45,7 +54,18 @@ export function NotificationBell(): JSX.Element {
     let cancelled = false;
     const load = () => {
       void listNotifications({ limit: 50, unreadOnly: true }).then((res) => {
-        if (!cancelled) setAll(res.notifications ?? [], res.unreadCount ?? 0);
+        if (cancelled) return;
+        const list = res.notifications ?? [];
+        if (hasLoadedOnce.current) {
+          for (const n of list) {
+            if (!seenIds.current.has(n.id)) prepend(n);
+          }
+        }
+        // Reconcile the authoritative list + count. setAll doesn't touch `latest`, so any
+        // toast triggered by prepend above still fires.
+        setAll(list, res.unreadCount ?? 0);
+        seenIds.current = new Set(list.map((n) => n.id));
+        hasLoadedOnce.current = true;
       }).catch(() => { /* keep last-known feed */ });
     };
     load();
@@ -54,7 +74,7 @@ export function NotificationBell(): JSX.Element {
     window.addEventListener('focus', load);
     document.addEventListener('visibilitychange', onVis);
     return () => { cancelled = true; clearInterval(interval); window.removeEventListener('focus', load); document.removeEventListener('visibilitychange', onVis); };
-  }, [setAll]);
+  }, [setAll, prepend]);
 
   const handleOpen = async (n: Notification): Promise<void> => {
     if (!n.readAt) {

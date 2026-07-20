@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { listNotifications, markNotificationsRead } from './api';
+import { listNotifications, markNotificationsRead, saveNotificationPrefs } from './api';
 
 describe('notifications api client', () => {
   beforeEach(() => {
@@ -19,5 +19,11 @@ describe('notifications api client', () => {
     expect(fetch).toHaveBeenCalledWith('/api/notifications/read', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: ['x'] }),
     });
+  });
+
+  it('saveNotificationPrefs rejects when the server responds non-ok, instead of resolving as success', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers: { 'content-type': 'application/json' } })));
+
+    await expect(saveNotificationPrefs([{ type: 'sync_failed', enabled: false }], 'warning')).rejects.toThrow('save preferences failed: 403');
   });
 });

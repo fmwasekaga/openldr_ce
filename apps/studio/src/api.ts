@@ -1536,7 +1536,8 @@ export async function getNotificationPrefs(): Promise<{ disabled: string[]; minP
 export async function saveNotificationPrefs(
   prefs: { type: string; enabled: boolean }[], minPriority?: NotificationPriority,
 ): Promise<void> {
-  await authFetch('/api/notifications/preferences', {
+  const res = await authFetch('/api/notifications/preferences', {
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prefs, minPriority }),
   });
+  if (!res.ok) throw new Error('save preferences failed: ' + res.status);
 }
