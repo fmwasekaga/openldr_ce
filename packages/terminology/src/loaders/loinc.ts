@@ -5,7 +5,7 @@ import type { ConceptRecord } from '@openldr/db';
 import { OpenLdrError } from '@openldr/core';
 import type { LoaderStore, LoadResult } from './generic';
 
-const LOINC_SYSTEM = 'http://loinc.org';
+export const LOINC_SYSTEM = 'http://loinc.org';
 
 function resolveLoincCsvPath(loincPath: string): string {
   const direct = join(loincPath, 'Loinc.csv');
