@@ -6,7 +6,7 @@ import './auth-plugin';
 
 function fakeCtx() {
   const auditEvents: Array<{ action: string; entityType: string; entityId: string; actorId: string | null; before?: unknown; after?: unknown; metadata?: unknown }> = [];
-  const ctxState = { active: false, enqueued: [] as any[], latest: null as any, put: [] as string[], deleted: [] as string[] };
+  const ctxState = { active: false, enqueued: [] as any[], latest: null as any, put: [] as string[], deleted: [] as string[], codingSystem: null as any, upserts: [] as any[] };
   const admin = {
     publishers: {
       create: async (d: any) => ({ id: 'pub1', ...d }),
@@ -18,6 +18,8 @@ function fakeCtx() {
       create: async (d: any) => ({ id: 'sys1', ...d }),
       update: async (id: string, d: any) => ({ id, ...d }),
       delete: async () => {},
+      getByUrl: async (_url: string) => ctxState.codingSystem,
+      upsertByUrl: async (input: any) => { ctxState.codingSystem = { id: 'cs-url-LOINC', url: input.url, systemCode: input.systemCode, systemName: input.systemName, publisherId: input.publisherId, systemVersion: input.systemVersion ?? null, active: true, seeded: true, description: null }; ctxState.upserts.push(input); },
     },
     valueSets: {
       get: async (id: string) => ({ id, url: 'u' }),
@@ -118,60 +120,70 @@ describe('terminology admin audit', () => {
   });
 });
 
-describe('terminology distribution upload/status/purge', () => {
-  it('streams the zip to the blob and enqueues a job (201)', async () => {
+describe('terminology distribution upload/status/purge (publisher-scoped)', () => {
+  it('resolve-or-CREATES the coding system then enqueues (201) when none exists', async () => {
     const { ctx, ctxState } = fakeCtx();
+    ctxState.codingSystem = null;
     const app = appWith(ctx);
     const res = await app.inject({
-      method: 'POST', url: '/api/terminology/systems/cs1/distribution?systemType=loinc&acceptLicense=true&version=2.82',
+      method: 'POST', url: '/api/terminology/publishers/pub-loinc/distribution?systemType=loinc&acceptLicense=true&version=2.82',
       headers: { 'content-type': 'application/octet-stream' }, payload: Buffer.from('PK-fake-zip'),
     });
     expect(res.statusCode).toBe(201);
-    expect(ctxState.put.length).toBe(1);
-    expect(ctxState.enqueued[0]).toMatchObject({ systemType: 'loinc', codingSystemId: 'cs1', version: '2.82' });
+    expect(ctxState.upserts[0]).toMatchObject({ url: 'http://loinc.org', systemCode: 'LOINC', publisherId: 'pub-loinc' });
+    expect(ctxState.enqueued[0]).toMatchObject({ systemType: 'loinc', codingSystemId: 'cs-url-LOINC', version: '2.82' });
     expect(res.json().jobId).toBe('tij_1');
+  });
+
+  it('REUSES an existing coding system (no upsert) and enqueues', async () => {
+    const { ctx, ctxState } = fakeCtx();
+    ctxState.codingSystem = { id: 'cs-existing', url: 'http://loinc.org', systemCode: 'LOINC' };
+    const app = appWith(ctx);
+    const res = await app.inject({ method: 'POST', url: '/api/terminology/publishers/pub-loinc/distribution?systemType=loinc&acceptLicense=true', headers: { 'content-type': 'application/octet-stream' }, payload: Buffer.from('x') });
+    expect(res.statusCode).toBe(201);
+    expect(ctxState.upserts.length).toBe(0);
+    expect(ctxState.enqueued[0].codingSystemId).toBe('cs-existing');
   });
 
   it('rejects a missing license (400) and never stores', async () => {
     const { ctx, ctxState } = fakeCtx();
-    const app = appWith(ctx);
-    const res = await app.inject({ method: 'POST', url: '/api/terminology/systems/cs1/distribution?systemType=loinc&acceptLicense=false', headers: { 'content-type': 'application/octet-stream' }, payload: Buffer.from('x') });
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/terminology/publishers/pub-loinc/distribution?systemType=loinc&acceptLicense=false', headers: { 'content-type': 'application/octet-stream' }, payload: Buffer.from('x') });
     expect(res.statusCode).toBe(400);
     expect(ctxState.put.length).toBe(0);
   });
 
-  it('rejects a non-loinc systemType (400) in this release', async () => {
+  it('rejects a non-loinc systemType (400)', async () => {
     const { ctx } = fakeCtx();
-    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/terminology/systems/cs1/distribution?systemType=snomed&acceptLicense=true', headers: { 'content-type': 'application/octet-stream' }, payload: Buffer.from('x') });
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/terminology/publishers/pub-snomed-ct/distribution?systemType=snomed&acceptLicense=true', headers: { 'content-type': 'application/octet-stream' }, payload: Buffer.from('x') });
     expect(res.statusCode).toBe(400);
   });
 
   it('rejects when a job is already active (409)', async () => {
     const { ctx, ctxState } = fakeCtx();
     ctxState.active = true;
-    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/terminology/systems/cs1/distribution?systemType=loinc&acceptLicense=true', headers: { 'content-type': 'application/octet-stream' }, payload: Buffer.from('x') });
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/terminology/publishers/pub-loinc/distribution?systemType=loinc&acceptLicense=true', headers: { 'content-type': 'application/octet-stream' }, payload: Buffer.from('x') });
     expect(res.statusCode).toBe(409);
   });
 
   it('GET job returns the latest job', async () => {
     const { ctx, ctxState } = fakeCtx();
     ctxState.latest = { id: 'tij_1', status: 'ready', phase: null, processed: 5, total: 5, error: null, version: '2.82', finishedAt: 'now' };
-    const res = await appWith(ctx).inject({ method: 'GET', url: '/api/terminology/systems/cs1/distribution/job' });
+    const res = await appWith(ctx).inject({ method: 'GET', url: '/api/terminology/publishers/pub-loinc/distribution/job?systemType=loinc' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ status: 'ready', processed: 5 });
   });
 
   it('DELETE purges the retained blob', async () => {
     const { ctx, ctxState } = fakeCtx();
-    ctxState.latest = { id: 'tij_1', status: 'ready', blobKey: 'terminology-dist/loinc/tij_1.zip' };
-    const res = await appWith(ctx).inject({ method: 'DELETE', url: '/api/terminology/systems/cs1/distribution' });
+    ctxState.latest = { id: 'tij_1', status: 'ready', blobKey: 'terminology-dist/loinc/tij_1.zip', codingSystemId: 'cs-existing' };
+    const res = await appWith(ctx).inject({ method: 'DELETE', url: '/api/terminology/publishers/pub-loinc/distribution?systemType=loinc' });
     expect(res.statusCode).toBe(204);
     expect(ctxState.deleted).toEqual(['terminology-dist/loinc/tij_1.zip']);
   });
 
   it('a lab_technician is rejected (403) on upload', async () => {
     const { ctx } = fakeCtx();
-    const res = await appWith(ctx, ['lab_technician']).inject({ method: 'POST', url: '/api/terminology/systems/cs1/distribution?systemType=loinc&acceptLicense=true', headers: { 'content-type': 'application/octet-stream' }, payload: Buffer.from('x') });
+    const res = await appWith(ctx, ['lab_technician']).inject({ method: 'POST', url: '/api/terminology/publishers/pub-loinc/distribution?systemType=loinc&acceptLicense=true', headers: { 'content-type': 'application/octet-stream' }, payload: Buffer.from('x') });
     expect(res.statusCode).toBe(403);
   });
 });

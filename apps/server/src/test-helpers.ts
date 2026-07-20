@@ -87,6 +87,7 @@ function buildFakeAdmin(): FakeAdmin {
       },
       async deletionImpact() { return { termCount: 0, mappingCount: 0 }; },
       async upsertByUrl() { /* no-op in fake */ },
+      async getByUrl(url) { return systems.find((s) => s.url === url) ?? null; },
     },
     terms: {
       async search(systemUrl, q) {
