@@ -6,6 +6,7 @@ import { AppShell } from './shell/AppShell';
 import { DashboardPage } from './dashboard/DashboardPage';
 import { Audit } from './pages/Audit';
 import { Activity } from './pages/Activity';
+import { Notifications } from './pages/Notifications';
 import { Users } from './pages/Users';
 import { Sites } from './pages/settings/Sites';
 import { SettingsShell } from '@/pages/settings/SettingsShell';
@@ -51,6 +52,7 @@ export function App() {
       </Route>
       <Route path="/audit" element={<Audit />} />
       <Route path="/activity" element={<Activity />} />
+      <Route path="/notifications" element={<Notifications />} />
       <Route path="/forms" element={<Forms />} />
       <Route path="/forms/new" element={<FormBuilderPage />} />
       <Route path="/forms/:id/builder" element={<FormBuilderPage />} />
