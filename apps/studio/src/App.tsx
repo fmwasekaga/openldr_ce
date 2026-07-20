@@ -11,6 +11,7 @@ import { Users } from './pages/Users';
 import { Sites } from './pages/settings/Sites';
 import { SettingsShell } from '@/pages/settings/SettingsShell';
 import { General } from '@/pages/settings/General';
+import { NotificationPreferences } from '@/pages/settings/NotificationPreferences';
 import { DistributedSync } from '@/pages/settings/DistributedSync';
 import { Marketplace } from '@/pages/settings/Marketplace';
 import { Connectors } from '@/pages/settings/Connectors';
@@ -45,6 +46,7 @@ export function App() {
       <Route path="/settings" element={<RequireRole><SettingsShell /></RequireRole>}>
         <Route index element={<Navigate to="general" replace />} />
         <Route path="general" element={<RequireRole><General /></RequireRole>} />
+        <Route path="notifications" element={<RequireRole><NotificationPreferences /></RequireRole>} />
         <Route path="sites" element={<RequireRole role="lab_admin"><Sites /></RequireRole>} />
         <Route path="sync" element={<RequireRole role="lab_admin"><DistributedSync /></RequireRole>} />
         <Route path="marketplace" element={<RequireRole role="lab_admin"><Marketplace /></RequireRole>} />

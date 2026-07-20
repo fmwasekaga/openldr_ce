@@ -13,6 +13,7 @@ interface SubNavItem {
 
 const SUB_NAV: SubNavItem[] = [
   { labelKey: 'settings.subNav.general', to: '/settings/general' },
+  { labelKey: 'settings.subNav.notifications', to: '/settings/notifications' },
   { labelKey: 'settings.subNav.sites', to: '/settings/sites', roles: ['lab_admin'] },
   { labelKey: 'settings.subNav.sync', to: '/settings/sync', roles: ['lab_admin'] },
   { labelKey: 'settings.subNav.connectors', to: '/settings/connectors', roles: ['lab_admin'] },
