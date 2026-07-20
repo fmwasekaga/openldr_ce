@@ -17,6 +17,7 @@ describe('ingestDistribution (loinc)', () => {
     expect(deps.buildOntology).toHaveBeenCalledWith('loinc', 'cs1', '/tmp/dist', expect.any(Function));
     expect(phases).toContain('concepts');
     expect(phases).toContain('ontology:tree');
+    expect(deps.loadConcepts.mock.invocationCallOrder[0]).toBeLessThan(deps.buildOntology.mock.invocationCallOrder[0]);
   });
 
   it('rejects a non-loinc system in slice 1', async () => {
