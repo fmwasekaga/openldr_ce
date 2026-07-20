@@ -135,6 +135,7 @@ export interface TerminologyAdminStore {
     delete(id: string): Promise<void>;
     deletionImpact(id: string): Promise<{ termCount: number; mappingCount: number }>;
     upsertByUrl(input: { url: string; systemCode: string; systemName: string; systemVersion?: string | null; publisherId: string | null }): Promise<void>;
+    getByUrl(url: string): Promise<CodingSystem | null>;
   };
   terms: {
     search(systemUrl: string, q: { query?: string; statuses?: string[]; limit: number; offset: number }): Promise<{ rows: Term[]; total: number }>;
@@ -451,6 +452,10 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
           const row = await trx.selectFrom('coding_systems').selectAll().where('url', '=', input.url).executeTakeFirstOrThrow();
           if (capture) await capture.record(trx, 'coding_system', row.id, 'upsert', csContentHash(row));
         });
+      },
+      async getByUrl(url) {
+        const r = await db.selectFrom('coding_systems').selectAll().where('url', '=', url).executeTakeFirst();
+        return r ? csRow(r) : null;
       },
     },
     terms: {

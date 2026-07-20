@@ -84,6 +84,17 @@ describe('terminology admin store', () => {
     expect(rows[0].systemName).toBe('LOINC v2');
   });
 
+  describe('codingSystems.getByUrl', () => {
+    it('returns the coding system for a known url, null when absent', async () => {
+      const { s } = await store();
+      expect(await s.codingSystems.getByUrl('http://loinc.org')).toBeNull();
+      await s.codingSystems.upsertByUrl({ url: 'http://loinc.org', systemCode: 'LOINC', systemName: 'LOINC', systemVersion: null, publisherId: 'pub-loinc' });
+      const cs = await s.codingSystems.getByUrl('http://loinc.org');
+      expect(cs?.url).toBe('http://loinc.org');
+      expect(cs?.systemCode).toBe('LOINC');
+    });
+  });
+
   describe('terms', () => {
     it('creates a term with structured properties and reads them back', async () => {
       const { s } = await store();
