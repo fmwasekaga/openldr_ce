@@ -4,6 +4,10 @@ import { Button } from '@/components/ui/button';
 import { ScreenshotFrame } from './ScreenshotFrame';
 
 export function Hero() {
+  const scrollToInstall = () => {
+    document.getElementById('install')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   return (
     <section className="mx-auto grid max-w-6xl items-center gap-8 px-6 py-16 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.25fr)] lg:py-20">
       <div>
@@ -13,11 +17,9 @@ export function Hero() {
           Self-hosted laboratory data ingestion, workflows, forms, reports, and distributed sync for teams that need operational control.
         </p>
         <div className="mt-7 flex flex-wrap items-center gap-3">
-          <Button asChild>
-            <a href="#install">
-              Get started
-              <ArrowRight className="h-4 w-4" />
-            </a>
+          <Button onClick={scrollToInstall}>
+            Get started
+            <ArrowRight className="h-4 w-4" />
           </Button>
           <Button asChild variant="secondary">
             <Link to="/docs">

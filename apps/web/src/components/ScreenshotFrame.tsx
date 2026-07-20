@@ -40,7 +40,7 @@ export function ScreenshotFrame({
           src={url}
           alt={alt}
           loading={priority ? 'eager' : 'lazy'}
-          className="block aspect-[16/10] w-full object-cover object-top"
+          className="block aspect-[16/10] w-full object-contain"
         />
       </div>
       {caption ? <figcaption className="mt-2 text-xs text-muted-foreground">{caption}</figcaption> : null}

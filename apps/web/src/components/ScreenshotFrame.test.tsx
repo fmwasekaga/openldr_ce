@@ -19,6 +19,8 @@ describe('ScreenshotFrame', () => {
     const image = screen.getByRole('img', { name: 'OpenLDR dashboard overview' });
     expect(image).toHaveAttribute('src', '/assets/dashboard.png');
     expect(image).toHaveAttribute('loading', 'eager');
+    expect(image).toHaveClass('object-contain');
+    expect(image).not.toHaveClass('object-cover');
     expect(screen.getByText('Dashboard overview')).toBeInTheDocument();
     expect(image.closest('figure')).toHaveClass('m-0');
   });
