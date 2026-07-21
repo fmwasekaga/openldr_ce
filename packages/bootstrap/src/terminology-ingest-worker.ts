@@ -44,6 +44,12 @@ export function createTerminologyIngestWorker(deps: TerminologyIngestWorkerDeps)
     }
   }
 
+  // Crash recovery: any job still 'running' at startup is orphaned (single worker), so fail it.
+  // Best-effort and non-blocking — a failure here must never prevent the worker from starting.
+  void deps.jobs.failStaleRunning('interrupted — the server restarted before the import finished')
+    .then((n) => { if (n > 0) deps.logger.info({ count: n }, 'reset orphaned terminology ingest jobs at startup'); })
+    .catch((err) => deps.logger.error({ err }, 'terminology ingest crash-recovery failed'));
+
   const timer = setInterval(() => { if (!stopped) void tickOnce(); }, intervalMs);
 
   return {
