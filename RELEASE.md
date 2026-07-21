@@ -18,7 +18,7 @@ publish script (its default registry is the org namespace above):
 
 ```
 echo "$GHCR_TOKEN" | docker login ghcr.io -u <your-github-username> --password-stdin
-pnpm run publish:images                 # builds + pushes all four, tags :latest + :<package.json version>
+pnpm run publish:images                 # builds + pushes all five, tags :latest + :<package.json version>
 # variations:
 # ./scripts/build-and-push.sh --tag rc1              # pin a tag
 # ./scripts/build-and-push.sh --no-push              # build + load locally, don't push
