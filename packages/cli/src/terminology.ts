@@ -4,7 +4,7 @@ import { loadConfig } from '@openldr/config';
 import { createTerminologyContext, resolveCodingSystemId, createRunIngest, runIngestJob, recordAuditEvent } from '@openldr/bootstrap';
 import { cliActor } from './cli-actor';
 import { redactError } from './redact-error';
-import { validateDistributionImportArgs } from './distribution-args';
+import { validateDistributionImportArgs, isActiveJobConflict } from './distribution-args';
 
 function out(json: boolean, obj: unknown, human: string): void {
   process.stdout.write((json ? JSON.stringify(obj, null, 2) : human) + '\n');
@@ -216,10 +216,16 @@ export async function runDistributionImport(system: string, opts: { file?: strin
     let job;
     try {
       job = await ctx.jobs.insertRunning({ systemType: system, codingSystemId, blobKey: key, version: opts.version ?? null, createdBy: 'cli' });
-    } catch {
-      // one-active-per-system guard tripped — clean up the just-uploaded blob and bail
+    } catch (err) {
+      // No job row was created, so clean up the just-uploaded blob either way. Only a genuine
+      // one-active-per-system conflict is reported as "already in progress"; a transient DB error
+      // is surfaced truthfully so the operator isn't told to wait for an import that isn't running.
       await ctx.blob.delete(key).catch(() => {});
-      process.stderr.write(`an import for ${system} is already in progress\n`);
+      if (isActiveJobConflict(err)) {
+        process.stderr.write(`an import for ${system} is already in progress\n`);
+      } else {
+        process.stderr.write(`terminology distribution import failed: ${redactError(err)}\n`);
+      }
       return 1;
     }
     const runIngest = createRunIngest({ blob: ctx.blob, terminology: ctx, workDirBase: cfg.TERMINOLOGY_WORK_DIR ?? tmpdir() });
