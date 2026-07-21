@@ -7,6 +7,7 @@
 #        --letsencrypt <email> (issue a trusted Let's Encrypt cert for --server-name),
 #        --staging (use the LE staging CA — for testing, avoids rate limits),
 #        --no-start (scaffold + config only), --no-pull (skip image pull).
+#        --ready-timeout <seconds> (default 180; 0 disables the post-start readiness wait),
 #        --target-db postgres|mssql|mysql (default postgres — selects the external analytics/target DB),
 #        --mssql-demo (spin up a bundled MSSQL container for evaluation; implies --target-db mssql),
 #        --mssql-host/--mssql-port/--mssql-database/--mssql-user/--mssql-password (BYO MSSQL
@@ -30,6 +31,7 @@ LE_EMAIL=""
 LE_STAGING=""
 NO_START=0
 NO_PULL=0
+READY_TIMEOUT=180
 TARGET_DB="postgres"
 MSSQL_DEMO=0
 MSSQL_HOST=""
@@ -58,6 +60,7 @@ while [ $# -gt 0 ]; do
     --staging) LE_STAGING=1; shift ;;
     --no-start) NO_START=1; shift ;;
     --no-pull) NO_PULL=1; shift ;;
+    --ready-timeout) READY_TIMEOUT="$2"; shift 2 ;;
     --target-db) TARGET_DB="$2"; shift 2 ;;
     --mssql-demo) MSSQL_DEMO=1; TARGET_DB="mssql"; shift ;;
     --mssql-host) MSSQL_HOST="$2"; shift 2 ;;
@@ -117,6 +120,9 @@ err() { echo "✗ $1" >&2; exit 1; }
 if [ "$TARGET_DB" != "postgres" ] && [ "$TARGET_DB" != "mssql" ] && [ "$TARGET_DB" != "mysql" ]; then
   echo "✗ --target-db must be 'postgres', 'mssql', or 'mysql' (got '$TARGET_DB')" >&2; exit 2
 fi
+case "$READY_TIMEOUT" in
+  ''|*[!0-9]*) echo "✗ --ready-timeout must be a non-negative integer (got '$READY_TIMEOUT')" >&2; exit 2 ;;
+esac
 
 for bv in "mssql-encrypt=$MSSQL_ENCRYPT" "mssql-trust-cert=$MSSQL_TRUST_CERT" "mysql-ssl=$MYSQL_SSL"; do
   bname="${bv%%=*}"; bval="${bv#*=}"
@@ -394,6 +400,44 @@ COMPOSE_FILES="-f docker-compose.yml"
 [ "$NO_PULL" -eq 1 ] || docker compose $COMPOSE_FILES pull
 docker compose $COMPOSE_FILES up -d
 
+# Readiness gate: poll the full user path over the local gateway until every service a first
+# visit touches is serving, so we only hand over a URL that actually works. Probes loopback
+# (127.0.0.1) so external DNS / a not-yet-resolving --server-name can't cause a false timeout.
+# Non-fatal: on timeout we warn and leave the stack up (exit 0), like the Let's Encrypt path.
+ready_check() { curl -fsSk -o /dev/null "https://127.0.0.1:$HTTPS_PORT$1" 2>/dev/null; }
+READY_OK=0
+if [ "$READY_TIMEOUT" -gt 0 ]; then
+  echo ""
+  echo "→ Waiting for services to be ready (up to ${READY_TIMEOUT}s)..."
+  ok_gw=0; ok_studio=0; ok_api=0; ok_kc=0
+  deadline=$(( $(date +%s) + READY_TIMEOUT ))
+  while : ; do
+    if [ "$ok_gw" -eq 0 ] && ready_check "/"; then ok_gw=1; echo "  ✓ gateway (TLS)"; fi
+    if [ "$ok_studio" -eq 0 ] && ready_check "/studio/"; then ok_studio=1; echo "  ✓ studio"; fi
+    if [ "$ok_api" -eq 0 ] && ready_check "/health"; then ok_api=1; echo "  ✓ api"; fi
+    if [ "$ok_kc" -eq 0 ] && ready_check "/auth/realms/openldr/.well-known/openid-configuration"; then ok_kc=1; echo "  ✓ keycloak realm"; fi
+    if [ "$ok_gw" -eq 1 ] && [ "$ok_studio" -eq 1 ] && [ "$ok_api" -eq 1 ] && [ "$ok_kc" -eq 1 ]; then
+      READY_OK=1; break
+    fi
+    if [ "$(date +%s)" -ge "$deadline" ]; then break; fi
+    remain=""
+    [ "$ok_gw" -eq 0 ] && remain="${remain}gateway (TLS), "
+    [ "$ok_studio" -eq 0 ] && remain="${remain}studio, "
+    [ "$ok_api" -eq 0 ] && remain="${remain}api, "
+    [ "$ok_kc" -eq 0 ] && remain="${remain}keycloak realm, "
+    echo "  … waiting for: ${remain%, }"
+    sleep 3
+  done
+  if [ "$READY_OK" -eq 0 ]; then
+    echo ""
+    [ "$ok_gw" -eq 0 ] && echo "  ! gateway (TLS) still starting"
+    [ "$ok_studio" -eq 0 ] && echo "  ! studio still starting"
+    [ "$ok_api" -eq 0 ] && echo "  ! api still starting"
+    [ "$ok_kc" -eq 0 ] && echo "  ! keycloak realm still starting"
+    echo "  Give it another minute, or inspect: docker compose logs -f keycloak"
+  fi
+fi
+
 # Let's Encrypt: the stack is up (nginx serving the http-01 webroot on :80). Issue a trusted cert,
 # install it where the gateway reads it, reload, and wire up auto-renewal. Non-fatal: on failure the
 # stack stays up on the self-signed cert.
@@ -425,7 +469,11 @@ if [ -n "$LE_EMAIL" ]; then
 fi
 
 echo ""
-echo "✓ OpenLDR is starting. Open $ORIGIN"
+if [ "$READY_OK" -eq 1 ]; then
+  echo "✓ OpenLDR is ready. Open $ORIGIN"
+else
+  echo "✓ OpenLDR is starting. Open $ORIGIN"
+fi
 echo "  Keycloak admin password: $(grep '^KEYCLOAK_ADMIN_PASSWORD=' .env | cut -d= -f2)"
 echo "  App sign-in: labadmin / $(grep '^INITIAL_LAB_ADMIN_PASSWORD=' .env | cut -d= -f2-)  (change it on first login)"
 if [ "$MSSQL_DEMO" -eq 1 ]; then
