@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
-import { Library, MoreHorizontal, ChevronRight } from 'lucide-react';
+import { Library, MoreHorizontal, ChevronRight, Plus } from 'lucide-react';
 import { AppShell } from '../shell/AppShell';
 import {
   listPublishers,
@@ -1066,6 +1066,15 @@ export function Terminology(): JSX.Element {
   );
 }
 
+function humanSize(n: number): string {
+  if (n < 1024) return `${n} B`;
+  const u = ['KB', 'MB', 'GB'];
+  let v = n / 1024;
+  let i = 0;
+  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+  return `${v.toFixed(1)} ${u[i]}`;
+}
+
 function ImportDistributionDialog({ open, onOpenChange, publisherId, systemType, onQueued }: {
   open: boolean; onOpenChange: (v: boolean) => void; publisherId: string; systemType: string; onQueued: (jobId: string) => void;
 }): JSX.Element {
@@ -1075,6 +1084,8 @@ function ImportDistributionDialog({ open, onOpenChange, publisherId, systemType,
   const [busy, setBusy] = useState(false);
   const [pct, setPct] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
   useEffect(() => { if (open) { setFile(null); setVersion(''); setAccepted(false); setBusy(false); setPct(0); setError(null); } }, [open]);
   const canImport = !!file && accepted && !busy;
   const handleImport = async (): Promise<void> => {
@@ -1098,7 +1109,39 @@ function ImportDistributionDialog({ open, onOpenChange, publisherId, systemType,
         <div className="space-y-4 px-4 py-4">
           <div className="space-y-1.5">
             <Label htmlFor="distFile">Distribution .zip</Label>
-            <Input id="distFile" type="file" accept=".zip" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => inputRef.current?.click()}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click(); }}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOver(false);
+                const f = e.dataTransfer.files?.[0];
+                if (f) setFile(f);
+              }}
+              className={`flex flex-col items-center justify-center gap-1 rounded-md border border-dashed px-4 py-6 text-center text-xs
+                ${dragOver ? 'border-primary bg-primary/5' : 'border-border'} cursor-pointer`}
+            >
+              <Plus className="h-5 w-5 text-muted-foreground" aria-hidden />
+              {file ? (
+                <span className="text-foreground">
+                  {file.name} <span className="text-muted-foreground">({humanSize(file.size)})</span>
+                </span>
+              ) : (
+                <span className="text-muted-foreground">Drag a distribution .zip here, or click to browse</span>
+              )}
+              <input
+                ref={inputRef}
+                id="distFile"
+                type="file"
+                accept=".zip"
+                className="sr-only"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              />
+            </div>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="distVersion">Version (optional)</Label>
@@ -1110,7 +1153,14 @@ function ImportDistributionDialog({ open, onOpenChange, publisherId, systemType,
               I have accepted the license for this distribution.
             </Label>
           </div>
-          {busy && <div className="text-xs text-muted-foreground">Uploading… {Math.round(pct * 100)}%</div>}
+          {busy && (
+            <div className="space-y-1">
+              <div className="h-1.5 w-full overflow-hidden rounded bg-muted">
+                <div className="h-full bg-primary transition-[width]" style={{ width: `${Math.round(pct * 100)}%` }} />
+              </div>
+              <div className="text-xs text-muted-foreground">Uploading… {Math.round(pct * 100)}%</div>
+            </div>
+          )}
           {error && (
             <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
               {error}

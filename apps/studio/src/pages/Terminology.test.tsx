@@ -205,6 +205,56 @@ describe('Terminology page', () => {
     expect(await screen.findByText(/Import started/)).toBeInTheDocument();
   });
 
+  it('renders a dropzone with browse copy and shows the chosen file name + size (not a bare file input label)', async () => {
+    vi.spyOn(api, 'uploadTerminologyDistribution').mockResolvedValue({ jobId: 'tij_1' });
+    render(<MemoryRouter><Terminology /></MemoryRouter>);
+
+    const pageActions = (await screen.findAllByRole('button', { name: /actions/i }))[0];
+    fireEvent.pointerDown(pageActions, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Import distribution...')) fireEvent.keyDown(pageActions, { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Import distribution...'));
+
+    // The dropzone shows browse copy up front, no file name/size is visible yet.
+    expect(await screen.findByText(/Drag a distribution \.zip here, or click to browse/i)).toBeInTheDocument();
+    expect(screen.queryByText('loinc.zip')).not.toBeInTheDocument();
+
+    const file = new File([new Uint8Array(2048)], 'loinc.zip');
+    fireEvent.change(await screen.findByLabelText('Distribution .zip'), { target: { files: [file] } });
+
+    // Once a file is chosen, the browse copy is replaced by the file's name + human-readable size.
+    expect(await screen.findByText('loinc.zip')).toBeInTheDocument();
+    expect(await screen.findByText(/2\.0 KB/)).toBeInTheDocument();
+    expect(screen.queryByText(/Drag a distribution \.zip here, or click to browse/i)).not.toBeInTheDocument();
+  });
+
+  it('shows a live progress bar (not just text) while the upload is in flight', async () => {
+    vi.spyOn(api, 'uploadTerminologyDistribution').mockImplementation(
+      (_publisherId, _systemType, _file, _accept, _version, onProgress) => {
+        onProgress?.(0.5);
+        return new Promise(() => { /* never resolves; keeps the dialog "busy" for the assertion */ });
+      },
+    );
+
+    render(<MemoryRouter><Terminology /></MemoryRouter>);
+
+    const pageActions = (await screen.findAllByRole('button', { name: /actions/i }))[0];
+    fireEvent.pointerDown(pageActions, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Import distribution...')) fireEvent.keyDown(pageActions, { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Import distribution...'));
+
+    const file = new File([new Uint8Array([1, 2, 3])], 'loinc.zip');
+    fireEvent.change(await screen.findByLabelText('Distribution .zip'), { target: { files: [file] } });
+    fireEvent.click(await screen.findByLabelText('I have accepted the license for this distribution.'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Upload & import' }));
+
+    expect(await screen.findByText('Uploading… 50%')).toBeInTheDocument();
+    await waitFor(() => {
+      const fill = document.body.querySelector('.bg-muted > .bg-primary') as HTMLElement | null;
+      expect(fill).not.toBeNull();
+      expect(fill?.style.width).toBe('50%');
+    });
+  });
+
   it('enables the publisher-level "Import distribution..." even when no LOINC code system exists yet', async () => {
     vi.spyOn(api, 'listCodingSystems').mockResolvedValue([] as never);
     vi.spyOn(api, 'uploadTerminologyDistribution').mockResolvedValue({ jobId: 'tij_1' });
