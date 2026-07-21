@@ -76,7 +76,14 @@ button[data-password-toggle]::before {
   -webkit-mask:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M1%2012s4-7%2011-7%2011%207%2011%207-4%207-11%207-11-7-11-7z'/%3E%3Ccircle%20cx='12'%20cy='12'%20r='3'/%3E%3C/svg%3E") no-repeat center / 18px 18px;
           mask:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M1%2012s4-7%2011-7%2011%207%2011%207-4%207-11%207-11-7-11-7z'/%3E%3Ccircle%20cx='12'%20cy='12'%20r='3'/%3E%3C/svg%3E") no-repeat center / 18px 18px;
 }
-button[data-password-toggle]:hover::before { background-color:var(--ldr-text); }
+button[data-password-toggle]:hover::before { background-color:var(--ldr-link); }
+/* Revealed (active) state: the base script flips the input to type=text — swap to an eye-off icon
+   in the accent color so it's clear the password is currently shown. */
+div:has(> button[data-password-toggle]):has(input[type="text"]) button[data-password-toggle]::before {
+  background-color:var(--ldr-link);
+  -webkit-mask-image:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M17.94%2017.94A10.07%2010.07%200%200%201%2012%2020c-7%200-11-8-11-8a18.45%2018.45%200%200%201%205.06-5.94M9.9%204.24A9.12%209.12%200%200%201%2012%204c7%200%2011%208%2011%208a18.5%2018.5%200%200%201-2.16%203.19m-6.72-1.07a3%203%200%201%201-4.24-4.24'/%3E%3Cline%20x1='1'%20y1='1'%20x2='23'%20y2='23'/%3E%3C/svg%3E");
+          mask-image:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M17.94%2017.94A10.07%2010.07%200%200%201%2012%2020c-7%200-11-8-11-8a18.45%2018.45%200%200%201%205.06-5.94M9.9%204.24A9.12%209.12%200%200%201%2012%204c7%200%2011%208%2011%208a18.5%2018.5%200%200%201-2.16%203.19m-6.72-1.07a3%203%200%201%201-4.24-4.24'/%3E%3Cline%20x1='1'%20y1='1'%20x2='23'%20y2='23'/%3E%3C/svg%3E");
+}
 .ldr-alert, div[class*="alert-"] {
   border-radius:6px; padding:8px 10px; font-size:12px; margin-bottom:14px;
   border:1px solid transparent;
