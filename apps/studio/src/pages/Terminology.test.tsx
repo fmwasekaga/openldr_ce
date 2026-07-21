@@ -218,6 +218,30 @@ describe('Terminology page', () => {
     expect(await screen.findByLabelText('Distribution .zip')).toBeInTheDocument();
   });
 
+  it('resumes polling an in-flight distribution import on mount, and refreshes when it completes', async () => {
+    // Only one distribution-capable publisher, to keep the mount-resume call sequence unambiguous.
+    vi.spyOn(api, 'listPublishers').mockResolvedValue([pub('pub-loinc', 'LOINC')] as never);
+    const distSpy = vi.spyOn(api, 'listOntologyDistributions').mockReset().mockResolvedValue([]);
+    const getJob = vi.spyOn(api, 'getTerminologyIngestJob').mockReset();
+    // First call (mount-resume check) finds the job still running; every call after that
+    // (the resumed poll's checks) reports it as ready.
+    getJob.mockResolvedValueOnce({
+      id: 'tij_1', status: 'running', phase: null, processed: 10, total: 100, error: null, version: null, finishedAt: null,
+    });
+    getJob.mockResolvedValue({
+      id: 'tij_1', status: 'ready', phase: null, processed: 100, total: 100, error: null, version: null, finishedAt: null,
+    });
+
+    render(<MemoryRouter><Terminology /></MemoryRouter>);
+
+    // Mount resumed polling for the still-in-flight LOINC import (no import was queued this session).
+    await waitFor(() => expect(getJob).toHaveBeenCalledWith('pub-loinc', 'loinc'));
+
+    // The resumed poll's next check sees 'ready' and reload() refetches distributions again,
+    // so the ontology menu un-stales itself even though the page was freshly mounted.
+    await waitFor(() => expect(distSpy.mock.calls.length).toBeGreaterThan(1));
+  });
+
   it('shows "Import distribution..." on the SNOMED CT publisher menu and uploads with systemType=snomed', async () => {
     const uploadSpy = vi.spyOn(api, 'uploadTerminologyDistribution').mockResolvedValue({ jobId: 'tij_1' });
     vi.spyOn(api, 'getTerminologyIngestJob').mockResolvedValue({

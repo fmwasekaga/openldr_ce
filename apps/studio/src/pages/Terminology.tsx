@@ -391,6 +391,29 @@ export function Terminology(): JSX.Element {
     importPollRef.current[publisherId] = setInterval(() => void poll(), 3000);
   };
 
+  // Resume polling any distribution import still in-flight when the page (re)mounts, so its completion
+  // refreshes the ontology menu (via reload()) even if the import outlived the session that started it.
+  useEffect(() => {
+    if (publishers.length === 0) return;
+    let cancelled = false;
+    void (async () => {
+      for (const pub of publishers) {
+        const systemType = publisherSystemType(pub);
+        if (!systemType) continue;
+        if (importPollRef.current[pub.id]) continue; // already polling this publisher
+        try {
+          const job = await getTerminologyIngestJob(pub.id, systemType);
+          if (cancelled || !importPollMountedRef.current) return;
+          if (job.status === 'queued' || job.status === 'running') {
+            setImportJobs((prev) => ({ ...prev, [pub.id]: job }));
+            startPollingImportJob(pub.id, systemType);
+          }
+        } catch { /* no job for this system → nothing to resume */ }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [publishers]);
+
   const handleDistributionQueued = (_jobId: string): void => {
     setDistImportOpen(false);
     setToast({ kind: 'ok', text: "Import started — you’ll be notified when it completes." });
