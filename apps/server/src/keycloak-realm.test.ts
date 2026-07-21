@@ -11,6 +11,7 @@ interface RealmClient { clientId: string; publicClient?: boolean; serviceAccount
 interface RealmUser { username: string; realmRoles?: string[]; credentials?: { type: string }[]; serviceAccountClientId?: string }
 interface Realm {
   realm: string; enabled: boolean;
+  loginTheme?: string;
   roles: { realm: RealmRole[] };
   clients: RealmClient[];
   users: RealmUser[];
@@ -24,6 +25,10 @@ describe('openldr realm export', () => {
   it('declares the openldr realm, enabled', () => {
     expect(realm.realm).toBe('openldr');
     expect(realm.enabled).toBe(true);
+  });
+
+  it('selects the openldr login theme', () => {
+    expect(realm.loginTheme).toBe('openldr');
   });
 
   it('defines all app realm roles', () => {

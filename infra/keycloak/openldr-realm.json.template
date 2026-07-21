@@ -1,6 +1,7 @@
 {
   "realm": "openldr",
   "enabled": true,
+  "loginTheme": "openldr",
   "sslRequired": "external",
   "registrationAllowed": false,
   "loginWithEmailAllowed": true,
