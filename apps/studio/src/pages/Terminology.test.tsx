@@ -217,4 +217,29 @@ describe('Terminology page', () => {
     // Dialog opens now (no coding system required).
     expect(await screen.findByLabelText('Distribution .zip')).toBeInTheDocument();
   });
+
+  it('shows "Import distribution..." on the SNOMED CT publisher menu and uploads with systemType=snomed', async () => {
+    const uploadSpy = vi.spyOn(api, 'uploadTerminologyDistribution').mockResolvedValue({ jobId: 'tij_1' });
+    vi.spyOn(api, 'getTerminologyIngestJob').mockResolvedValue({
+      id: 'tij_1', status: 'queued', phase: null, processed: 0, total: null, error: null, version: null, finishedAt: null,
+    });
+
+    render(<MemoryRouter><Terminology /></MemoryRouter>);
+
+    fireEvent.click(await screen.findByText('SNOMED CT'));
+    await screen.findByText(/No code systems or value sets yet/i);
+
+    const actions = await screen.findByRole('button', { name: /actions/i });
+    fireEvent.pointerDown(actions, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Import distribution...')) fireEvent.keyDown(actions, { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Import distribution...'));
+
+    const file = new File([new Uint8Array([1, 2, 3])], 'snomed.zip');
+    fireEvent.change(await screen.findByLabelText('Distribution .zip'), { target: { files: [file] } });
+    fireEvent.click(await screen.findByLabelText('I have accepted the license for this distribution.'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Upload & import' }));
+
+    await waitFor(() => expect(uploadSpy).toHaveBeenCalledWith('pub-snomed-ct', 'snomed', file, true, null, expect.any(Function)));
+    expect(await screen.findByText(/Import started/)).toBeInTheDocument();
+  });
 });

@@ -59,4 +59,13 @@ describe('buildOntologyDistribution', () => {
     );
     expect(state.status).toBe('error');
   });
+
+  it('rejects when the detected adapter type does not match the expected systemType', async () => {
+    const { store, state } = fakeStore();
+    const snomedFixture = join(__dirname, 'adapters', '__fixtures__', 'snomed');
+    await expect(
+      buildOntologyDistribution('cs1', snomedFixture, store, () => {}, { expectedType: 'rxnorm' }),
+    ).rejects.toThrow(/rxnorm.*expected|does not match/i);
+    expect(state.status).toBe('error');
+  });
 });

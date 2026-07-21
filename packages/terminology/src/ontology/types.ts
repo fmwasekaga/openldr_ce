@@ -1,5 +1,9 @@
+import type { ConceptRecord } from '@openldr/db';
+
 export type OntologyType = 'loinc' | 'snomed' | 'rxnorm';
 export type OntologyIndexStatus = 'none' | 'building' | 'ready' | 'stale' | 'error';
+
+export type ConceptSink = (rows: ConceptRecord[]) => Promise<void>;
 
 export interface OntologyNode {
   code: string;
@@ -81,6 +85,7 @@ export interface OntologyAdapter {
     dist: DetectedDistribution,
     writer: IndexWriter,
     onProgress: (progress: Omit<OntologyBuildProgress, 'codingSystemId'>) => void,
+    conceptSink?: ConceptSink,
   ): void | Promise<void>;
 }
 

@@ -76,8 +76,12 @@ function roleLabel(role: string): string {
   return 'External';
 }
 
-function isLoincPublisher(publisher: Publisher | null | undefined): boolean {
-  return publisher?.name.toUpperCase() === 'LOINC';
+function publisherSystemType(publisher: Publisher | null | undefined): 'loinc' | 'snomed' | 'rxnorm' | null {
+  if (!publisher) return null;
+  if (publisher.id === 'pub-loinc') return 'loinc';
+  if (publisher.id === 'pub-snomed-ct') return 'snomed';
+  if (publisher.id === 'pub-rxnorm') return 'rxnorm';
+  return null;
 }
 
 function isValueSetCatalogImportResult(value: ValueSet | ValueSetCatalogImportResult): value is ValueSetCatalogImportResult {
@@ -125,6 +129,7 @@ export function Terminology(): JSX.Element {
   const [termImportSystem, setTermImportSystem] = useState<CodingSystem | null>(null);
   const [distImportOpen, setDistImportOpen] = useState(false);
   const [distImportPublisherId, setDistImportPublisherId] = useState<string | null>(null);
+  const [distImportSystemType, setDistImportSystemType] = useState<'loinc' | 'snomed' | 'rxnorm'>('loinc');
   const [importJobs, setImportJobs] = useState<Record<string, TerminologyIngestJobView>>({});
   const importPollRef = useRef<Record<string, ReturnType<typeof setInterval>>>({});
   // Guards the import-job poller's async continuations against setState after unmount.
@@ -353,18 +358,19 @@ export function Terminology(): JSX.Element {
     }
   };
 
-  const openDistImport = (publisherId: string | null): void => {
-    if (!publisherId) return;
+  const openDistImport = (publisherId: string | null, systemType: 'loinc' | 'snomed' | 'rxnorm' | null): void => {
+    if (!publisherId || !systemType) return;
     setDistImportPublisherId(publisherId);
+    setDistImportSystemType(systemType);
     setDistImportOpen(true);
   };
 
-  const startPollingImportJob = (publisherId: string): void => {
+  const startPollingImportJob = (publisherId: string, systemType: 'loinc' | 'snomed' | 'rxnorm'): void => {
     const existing = importPollRef.current[publisherId];
     if (existing) clearInterval(existing);
     const poll = async (): Promise<void> => {
       try {
-        const job = await getTerminologyIngestJob(publisherId, 'loinc');
+        const job = await getTerminologyIngestJob(publisherId, systemType);
         if (!importPollMountedRef.current) return;
         setImportJobs((prev) => ({ ...prev, [publisherId]: job }));
         if (job.status === 'ready' || job.status === 'failed') {
@@ -388,13 +394,13 @@ export function Terminology(): JSX.Element {
   const handleDistributionQueued = (_jobId: string): void => {
     setDistImportOpen(false);
     setToast({ kind: 'ok', text: "Import started — you’ll be notified when it completes." });
-    if (distImportPublisherId) startPollingImportJob(distImportPublisherId);
+    if (distImportPublisherId) startPollingImportJob(distImportPublisherId, distImportSystemType);
   };
 
-  const handlePurgeDistribution = async (publisherId: string | null): Promise<void> => {
-    if (!publisherId) return;
+  const handlePurgeDistribution = async (publisherId: string | null, systemType: 'loinc' | 'snomed' | 'rxnorm' | null): Promise<void> => {
+    if (!publisherId || !systemType) return;
     try {
-      await purgeTerminologyDistribution(publisherId, 'loinc');
+      await purgeTerminologyDistribution(publisherId, systemType);
       setToast({ kind: 'ok', text: 'Stored distribution deleted.' });
     } catch (e: unknown) {
       setToast({ kind: 'error', text: e instanceof Error ? e.message : String(e) });
@@ -549,17 +555,20 @@ export function Terminology(): JSX.Element {
                         </DropdownMenuSubContent>
                       </DropdownMenuSub>
 
-                      {isLoincPublisher(activeSection.publisher) && !selectedSystem && (
-                        <>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => openDistImport(activeSection.publisher.id)}>
-                            Import distribution...
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => void handlePurgeDistribution(activeSection.publisher.id)}>
-                            Delete stored distribution
-                          </DropdownMenuItem>
-                        </>
-                      )}
+                      {publisherSystemType(activeSection.publisher) && !selectedSystem && (() => {
+                        const st = publisherSystemType(activeSection.publisher)!;
+                        return (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => openDistImport(activeSection.publisher.id, st)}>
+                              Import distribution...
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => void handlePurgeDistribution(activeSection.publisher.id, st)}>
+                              Delete stored distribution
+                            </DropdownMenuItem>
+                          </>
+                        );
+                      })()}
 
                       {/* Code system sub-menu */}
                       <DropdownMenuSub>
@@ -961,7 +970,7 @@ export function Terminology(): JSX.Element {
           open={distImportOpen}
           onOpenChange={setDistImportOpen}
           publisherId={distImportPublisherId ?? ''}
-          systemType="loinc"
+          systemType={distImportSystemType}
           onQueued={(jobId) => handleDistributionQueued(jobId)}
         />
 

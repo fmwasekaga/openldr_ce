@@ -1,5 +1,5 @@
 import { detectAdapter } from './adapters/index';
-import { INDEX_SCHEMA_VERSION, type IndexWriter, type OntologyBuildProgress, type PanelMember } from './types';
+import { INDEX_SCHEMA_VERSION, type ConceptSink, type IndexWriter, type OntologyBuildProgress, type OntologyType, type PanelMember } from './types';
 
 export interface NodeRow {
   code: string;
@@ -82,6 +82,7 @@ export async function buildOntologyDistribution(
   sourcePath: string,
   store: OntologyIndexStore,
   onProgress: (progress: OntologyBuildProgress) => void,
+  opts?: { conceptSink?: ConceptSink; expectedType?: OntologyType },
 ): Promise<void> {
   const detected = detectAdapter(sourcePath);
   if (!detected) {
@@ -90,11 +91,16 @@ export async function buildOntologyDistribution(
     throw err;
   }
   const { adapter, dist } = detected;
+  if (opts?.expectedType && adapter.type !== opts.expectedType) {
+    const err = new Error(`distribution is a ${adapter.type} distribution but ${opts.expectedType} was expected`);
+    await store.failBuild(systemId, adapter.type, sourcePath, err.message);
+    throw err;
+  }
   await store.beginBuild(systemId, adapter.type, sourcePath);
   try {
     await store.clearIndex(systemId);
     const writer = new BufferedWriter();
-    await adapter.buildIndex(dist, writer, (progress) => onProgress({ ...progress, codingSystemId: systemId }));
+    await adapter.buildIndex(dist, writer, (progress) => onProgress({ ...progress, codingSystemId: systemId }), opts?.conceptSink);
     await flushChunked(writer.nodes, (chunk) => store.bulkInsertNodes(systemId, chunk));
     await flushChunked(writer.edges, (chunk) => store.bulkInsertEdges(systemId, chunk));
     await flushChunked(writer.panels, (chunk) => store.bulkInsertPanelMembers(systemId, chunk));

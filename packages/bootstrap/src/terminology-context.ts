@@ -2,7 +2,7 @@ import { Kysely } from 'kysely';
 import type { Config } from '@openldr/config';
 import { redact, createLogger, type Logger } from '@openldr/core';
 import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, referenceCapture, markTerminologyChanged, type TerminologyAdminStore, type InternalSchema, type OntologyStore, resolveSeedPublisherId, deriveSystemCode } from '@openldr/db';
-import { buildOntologyDistribution, createOperations, type Operations, type LoaderStore, loadLoinc, loadWhonetAmr, importTerminologyResource, stalenessReason, type LoadResult, type OntologyBuildProgress, type OntologyManifest } from '@openldr/terminology';
+import { buildOntologyDistribution, canonicalSystemUrl, createOperations, type Operations, type LoaderStore, loadLoinc, loadWhonetAmr, importTerminologyResource, stalenessReason, type LoadResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType } from '@openldr/terminology';
 import { createAuditStore, type AuditStore } from '@openldr/audit';
 
 function createOntologyApi(ontologyStore: OntologyStore) {
@@ -40,6 +40,7 @@ export interface TerminologyContext {
     amr(sqlitePath: string): Promise<LoadResult[]>;
     resource(json: unknown): Promise<LoadResult>;
   };
+  ingestOntologyWithConcepts(systemType: string, systemId: string, dir: string, onProgress: (p: { phase: string; processed: number; total: number | null }) => void): Promise<{ conceptsLoaded: number }>;
   audit: AuditStore;
   logger: Logger;
   close(): Promise<void>;
@@ -68,7 +69,8 @@ export async function createTerminologyContext(cfg: Config): Promise<Terminology
   // (publishers / coding_systems / term_mappings) also lands rows in reference_change_log.
   // Inert on a lab (labs serve no pull); consistent with S2's capture-on-every-instance decision.
   const admin = createTerminologyAdminStore(db, projection, referenceCapture);
-  const ontology = createOntologyApi(createOntologyStore(db));
+  const ontologyStore = createOntologyStore(db);
+  const ontology = createOntologyApi(ontologyStore);
   const loaderStore: LoaderStore = {
     upsertConcepts: (r) => store.upsertConcepts(r),
     upsertMapElements: (r) => store.upsertMapElements(r),
@@ -112,6 +114,25 @@ export async function createTerminologyContext(cfg: Config): Promise<Terminology
       loinc: (dir, acceptLicense) => loadLoinc(dir, { acceptLicense }, loaderStore),
       amr: (p) => loadWhonetAmr(p, loaderStore),
       resource: (json) => importTerminologyResource(json, loaderStore),
+    },
+    async ingestOntologyWithConcepts(systemType, systemId, dir, onProgress) {
+      const url = canonicalSystemUrl(systemType);
+      if (!url) throw new Error(`unsupported system type: ${systemType}`);
+      let conceptsLoaded = 0;
+      const conceptSink = async (rows: Parameters<LoaderStore['upsertConcepts']>[0]) => {
+        await loaderStore.upsertConcepts(rows);
+        conceptsLoaded += rows.length;
+      };
+      await buildOntologyDistribution(
+        systemId, dir, ontologyStore,
+        (p) => onProgress({ phase: p.phase, processed: p.processed, total: p.total }),
+        { conceptSink, expectedType: systemType as OntologyType },
+      );
+      // Registration tail — same as loadLoinc: make the terms queryable + fire the sync signal.
+      const ref = await loaderStore.saveResource({ resourceType: 'CodeSystem', url, name: deriveSystemCode(url), status: 'active', content: 'not-present' });
+      await loaderStore.saveSystem(url, null, 'CodeSystem', ref.id);
+      await loaderStore.markSystemChanged(url);
+      return { conceptsLoaded };
     },
     audit,
     logger,
