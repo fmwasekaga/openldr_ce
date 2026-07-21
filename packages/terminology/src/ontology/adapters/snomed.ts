@@ -1,7 +1,9 @@
 import { createReadStream, existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
-import { ROOT_CODE, type DetectedDistribution, type FileStat, type IndexWriter, type OntologyAdapter } from '../types';
+import type { ConceptRecord } from '@openldr/db';
+import { canonicalSystemUrl } from '../../system-urls';
+import { ROOT_CODE, type ConceptSink, type DetectedDistribution, type FileStat, type IndexWriter, type OntologyAdapter } from '../types';
 
 const IS_A = '116680003';
 const FSN = '900000000000003001';
@@ -26,6 +28,12 @@ async function streamLines(path: string, onRow: (cols: string[]) => void): Promi
   }
 }
 
+/** Trailing `(...)` semantic tag of an FSN, e.g. "Foo (disorder)" -> "disorder"; else null. */
+export function parseSemanticTag(fsn: string): string | null {
+  const m = /\(([^)]+)\)\s*$/.exec(fsn);
+  return m ? m[1]! : null;
+}
+
 export const snomedAdapter: OntologyAdapter = {
   type: 'snomed',
 
@@ -41,7 +49,7 @@ export const snomedAdapter: OntologyAdapter = {
     return { type: 'snomed', folderPath, files: { description: desc, relationship: rel }, fileStats: stats };
   },
 
-  async buildIndex(dist, writer: IndexWriter, onProgress): Promise<void> {
+  async buildIndex(dist, writer: IndexWriter, onProgress, conceptSink?: ConceptSink): Promise<void> {
     // Pass 1: FSN names (active, typeId=FSN). Keep the first active FSN per concept.
     // Description cols: 0 id, 1 effectiveTime, 2 active, 4 conceptId, 6 typeId, 7 term
     const names = new Map<string, string>();
@@ -53,6 +61,19 @@ export const snomedAdapter: OntologyAdapter = {
       if (!names.has(conceptId)) names.set(conceptId, cols[7] ?? conceptId);
       if (++dCount % 50000 === 0) onProgress({ phase: 'descriptions', processed: dCount, total: null });
     });
+
+    if (conceptSink) {
+      const url = canonicalSystemUrl('snomed')!;
+      let batch: ConceptRecord[] = [];
+      for (const [code, fsn] of names) {
+        batch.push({ system: url, code, display: fsn, status: 'active', properties: { semanticTag: parseSemanticTag(fsn), fsn } });
+        if (batch.length >= 1000) {
+          await conceptSink(batch);
+          batch = [];
+        }
+      }
+      if (batch.length) await conceptSink(batch);
+    }
 
     // Pass 2: active IS-A edges. child=sourceId(4), parent=destinationId(5).
     const edges: Array<{ child: string; parent: string }> = [];
