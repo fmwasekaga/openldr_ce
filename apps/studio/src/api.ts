@@ -903,6 +903,13 @@ export const getTerminologyIngestJob = (publisherId: string, systemType: string)
 export const purgeTerminologyDistribution = (publisherId: string, systemType: string): Promise<void> =>
   authFetch(`/api/terminology/publishers/${encodeURIComponent(publisherId)}/distribution?systemType=${systemType}`, { method: 'DELETE' }).then(() => undefined);
 
+/** Rebuild an upload-managed coding system by re-ingesting its retained distribution zip from the
+ *  blob store (concepts + ontology). Returns the queued job id; progress flows through the same
+ *  job-status poll + bell as an upload. */
+export const reingestTerminologyDistribution = (codingSystemId: string): Promise<{ jobId: string }> =>
+  authFetch(`/api/terminology/systems/${encodeURIComponent(codingSystemId)}/distribution/reingest`, { method: 'POST' })
+    .then((r) => okJson<{ jobId: string }>(r, 'rebuild distribution'));
+
 // ── Terms + mappings (SP2) ───────────────────────────────────────────────────
 export type TermStatus = 'ACTIVE' | 'DRAFT' | 'DEPRECATED' | 'DISABLED';
 export type MapType = 'SAME-AS' | 'NARROWER-THAN' | 'BROADER-THAN' | 'RELATED-TO' | 'UNMAPPED-FROM';

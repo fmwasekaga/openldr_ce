@@ -982,6 +982,14 @@ export function Terminology(): JSX.Element {
           codingSystemId={distDialogSystem?.id ?? ''}
           systemName={distDialogSystem?.systemName ?? ''}
           onChanged={() => void reload()}
+          systemType={activeSection ? publisherSystemType(activeSection.publisher) : null}
+          onReingestQueued={() => {
+            const st = activeSection ? publisherSystemType(activeSection.publisher) : null;
+            if (activeSection && st) {
+              startPollingImportJob(activeSection.publisher.id, st);
+              toast.success('Rebuild started — you’ll be notified when it completes.');
+            }
+          }}
         />
 
         <ImportDistributionDialog

@@ -3,6 +3,7 @@ import { AlertTriangle, FolderInput, Loader2, RefreshCw, Trash2 } from 'lucide-r
 import {
   buildOntology,
   getOntologyDistribution,
+  reingestTerminologyDistribution,
   unlinkOntologyDistribution,
   type OntologyBuildProgress,
   type OntologyDistribution,
@@ -25,6 +26,11 @@ interface OntologyDistributionDialogProps {
   codingSystemId: string;
   systemName: string;
   onChanged?: () => void;
+  /** Non-null for upload-managed systems (LOINC/SNOMED/RxNorm). In that mode the dialog rebuilds by
+   *  re-ingesting the retained distribution zip instead of exposing the legacy server-path build. */
+  systemType?: 'loinc' | 'snomed' | 'rxnorm' | null;
+  /** Called with the queued job id after a re-ingest is started, so the page can poll + notify. */
+  onReingestQueued?: (jobId: string) => void;
 }
 
 type DistState = (OntologyDistribution & { stale: boolean }) | null;
@@ -45,7 +51,10 @@ export function OntologyDistributionDialog({
   codingSystemId,
   systemName,
   onChanged,
+  systemType,
+  onReingestQueued,
 }: OntologyDistributionDialogProps): JSX.Element {
+  const uploadManaged = !!systemType;
   const [dist, setDist] = useState<DistState>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -98,6 +107,22 @@ export function OntologyDistributionDialog({
     },
     [codingSystemId, onChanged, reload, sourcePath],
   );
+
+  // Upload-managed rebuild: re-ingest the retained zip from the blob store. Hands off to the page's
+  // job poll + bell (like an upload), so the dialog just kicks it off and closes.
+  const handleReingest = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const { jobId } = await reingestTerminologyDistribution(codingSystemId);
+      onReingestQueued?.(jobId);
+      onOpenChange(false);
+    } catch (e) {
+      setError(String(e instanceof Error ? e.message : e));
+    } finally {
+      setBusy(false);
+    }
+  }, [codingSystemId, onOpenChange, onReingestQueued]);
 
   const handleUnlink = useCallback(async () => {
     setBusy(true);
@@ -165,36 +190,51 @@ export function OntologyDistributionDialog({
                   <dd className="font-mono text-foreground">{dist.edgeCount ?? '-'}</dd>
                   <dt className="text-muted-foreground">Built at</dt>
                   <dd className="text-foreground">{formatDate(dist.builtAt)}</dd>
-                  <dt className="text-muted-foreground">Source path</dt>
-                  <dd className="break-all font-mono text-foreground">{dist.sourcePath}</dd>
+                  {/* Source path is an ephemeral extraction dir for uploads — meaningless to show. */}
+                  {!uploadManaged && (
+                    <>
+                      <dt className="text-muted-foreground">Source path</dt>
+                      <dd className="break-all font-mono text-foreground">{dist.sourcePath}</dd>
+                    </>
+                  )}
                 </dl>
               )}
 
-              <div className="space-y-2">
-                <Label htmlFor="ontologySourcePath" className="text-xs">
-                  Server path
-                </Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="ontologySourcePath"
-                    aria-label="Server path"
-                    value={sourcePath}
-                    onChange={(e) => setSourcePath(e.target.value)}
-                    placeholder="D:\\terminology\\loinc"
-                    className="h-8 text-xs font-mono"
-                    disabled={busy}
-                  />
-                  <Button
-                    size="sm"
-                    className="h-8 gap-2 text-xs"
-                    disabled={busy || !canBuild}
-                    onClick={() => void runBuild('build')}
-                  >
-                    <FolderInput className="h-3.5 w-3.5" />
-                    Build
-                  </Button>
+              {/* Legacy server-filesystem build — only for systems NOT managed by an upload (manual /
+                  CLI / bind-mounted deployments). Upload-managed systems rebuild from the retained zip. */}
+              {!uploadManaged && (
+                <div className="space-y-2">
+                  <Label htmlFor="ontologySourcePath" className="text-xs">
+                    Server path
+                  </Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="ontologySourcePath"
+                      aria-label="Server path"
+                      value={sourcePath}
+                      onChange={(e) => setSourcePath(e.target.value)}
+                      placeholder="D:\\terminology\\loinc"
+                      className="h-8 text-xs font-mono"
+                      disabled={busy}
+                    />
+                    <Button
+                      size="sm"
+                      className="h-8 gap-2 text-xs"
+                      disabled={busy || !canBuild}
+                      onClick={() => void runBuild('build')}
+                    >
+                      <FolderInput className="h-3.5 w-3.5" />
+                      Build
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              )}
+              {uploadManaged && (status === 'none' || dist === null) && (
+                <p className="text-xs text-muted-foreground">
+                  No ontology index yet. Use <span className="font-medium text-foreground">Rebuild</span> to
+                  build it from the stored distribution, or re-upload the distribution.
+                </p>
+              )}
 
               {busy && progress && (
                 <div className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-primary">
@@ -220,13 +260,13 @@ export function OntologyDistributionDialog({
                 Close
               </Button>
               <div className="flex justify-end gap-2">
-                {canRebuild && (
+                {(uploadManaged || canRebuild) && (
                   <Button
                     variant="outline"
                     size="sm"
                     className="h-8 gap-2 text-xs"
                     disabled={busy}
-                    onClick={() => void runBuild('rebuild')}
+                    onClick={() => void (uploadManaged ? handleReingest() : runBuild('rebuild'))}
                   >
                     <RefreshCw className="h-3.5 w-3.5" />
                     Rebuild
