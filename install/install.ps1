@@ -7,6 +7,7 @@
 #   -HttpPort <n>       gateway HTTP port (default 80)
 #   -HttpsPort <n>      gateway HTTPS port (default 443)
 #   -NoStart / -NoPull
+#   -ReadyTimeout <n>   post-start readiness wait in seconds (default 180; 0 disables)
 #   -TargetDb postgres|mssql|mysql (default postgres  -  selects the external analytics/target DB)
 #   -MssqlDemo (spin up a bundled MSSQL container for evaluation; implies -TargetDb mssql)
 #   -MssqlHost/-MssqlPort/-MssqlDatabase/-MssqlUser/-MssqlPassword (BYO MSSQL connection  -
@@ -25,6 +26,7 @@ param(
   [string]$Letsencrypt = "",
   [int]$HttpPort = 80,
   [int]$HttpsPort = 443,
+  [int]$ReadyTimeout = 180,
   [switch]$NoStart,
   [switch]$NoPull,
   [ValidateSet('postgres','mssql','mysql')]
@@ -419,8 +421,51 @@ try {
   Write-Host "-> Starting the stack..."
   Invoke-NativeProcessChecked "docker" (@("compose") + $ComposeFiles + @("up", "-d")) "docker compose up failed"
 } finally { Pop-Location }
+
+# Readiness gate: poll the full user path over the local gateway until every service a first
+# visit touches is serving, so we only hand over a URL that actually works. Uses curl.exe (NOT
+# the PowerShell `curl`->Invoke-WebRequest alias) because Windows PowerShell 5.1 has no
+# -SkipCertificateCheck; curl.exe -k accepts the self-signed cert. Probes loopback (127.0.0.1)
+# so external DNS can't cause a false timeout. Non-fatal: on timeout we warn and leave the stack up.
+$ReadyOk = $false
+if ($ReadyTimeout -gt 0) {
+  Write-Host ""
+  Write-Host "-> Waiting for services to be ready (up to ${ReadyTimeout}s)..."
+  $readyBase = "https://127.0.0.1:$HttpsPort"
+  $checks = @(
+    @{ Label = "gateway (TLS)";  Path = "/";                                                          Ok = $false },
+    @{ Label = "studio";         Path = "/studio/";                                                    Ok = $false },
+    @{ Label = "api";            Path = "/health";                                                     Ok = $false },
+    @{ Label = "keycloak realm"; Path = "/auth/realms/openldr/.well-known/openid-configuration";       Ok = $false }
+  )
+  $deadline = (Get-Date).AddSeconds($ReadyTimeout)
+  $prevEAP = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+  try {
+    while ($true) {
+      foreach ($c in $checks) {
+        if (-not $c.Ok) {
+          # -s keeps curl silent even on connection-refused, so nothing hits PowerShell's
+          # error stream (avoids a NativeCommandError under ErrorActionPreference).
+          & curl.exe -f -s -k -o NUL "$readyBase$($c.Path)"
+          if ($LASTEXITCODE -eq 0) { $c.Ok = $true; Write-Host "   OK $($c.Label)" }
+        }
+      }
+      if (-not ($checks | Where-Object { -not $_.Ok })) { $ReadyOk = $true; break }
+      if ((Get-Date) -ge $deadline) { break }
+      $remain = ($checks | Where-Object { -not $_.Ok } | ForEach-Object { $_.Label }) -join ", "
+      Write-Host "   ... waiting for: $remain"
+      Start-Sleep -Seconds 3
+    }
+  } finally { $ErrorActionPreference = $prevEAP }
+  if (-not $ReadyOk) {
+    Write-Host ""
+    foreach ($c in ($checks | Where-Object { -not $_.Ok })) { Write-Host "   ! $($c.Label) still starting" }
+    Write-Host "   Give it another minute, or inspect: docker compose logs -f keycloak"
+  }
+}
 Write-Host ""
-Write-Host "OK OpenLDR is starting. Open $Origin"
+if ($ReadyOk) { Write-Host "OK OpenLDR is ready. Open $Origin" }
+else { Write-Host "OK OpenLDR is starting. Open $Origin" }
 $kcLine = (Select-String -Path $envPath -Pattern '^KEYCLOAK_ADMIN_PASSWORD=').Line
 if ($kcLine) { Write-Host "   Keycloak admin password: $($kcLine -replace '^KEYCLOAK_ADMIN_PASSWORD=','')" }
 $labLine = (Select-String -Path $envPath -Pattern '^INITIAL_LAB_ADMIN_PASSWORD=').Line
