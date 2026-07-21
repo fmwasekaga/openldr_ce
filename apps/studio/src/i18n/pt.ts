@@ -109,8 +109,13 @@ export const pt: EnShape = {
     newPasswordPlaceholder: 'Introduzir nova palavra-passe',
     confirmPassword: 'Confirmar palavra-passe',
     copyPassword: 'Copiar palavra-passe',
+    showPassword: 'Mostrar palavra-passe',
+    hidePassword: 'Ocultar palavra-passe',
+    generatePassword: 'Gerar',
+    requireChangeLabel: 'Exigir alteração da palavra-passe no próximo início de sessão',
     resetPasswordHint:
       'Partilhe esta palavra-passe temporária de forma segura; o utilizador deve alterá-la no próximo início de sessão.',
+    resetPasswordHintPermanent: 'O utilizador pode iniciar sessão diretamente com esta palavra-passe.',
     resetPasswordButton: 'Repor palavra-passe',
     passwordRequired: 'A palavra-passe é obrigatória.',
     passwordMismatch: 'As palavras-passe não coincidem.',

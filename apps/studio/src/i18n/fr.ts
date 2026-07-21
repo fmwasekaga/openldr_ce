@@ -109,8 +109,13 @@ export const fr: EnShape = {
     newPasswordPlaceholder: 'Saisir un nouveau mot de passe',
     confirmPassword: 'Confirmer le mot de passe',
     copyPassword: 'Copier le mot de passe',
+    showPassword: 'Afficher le mot de passe',
+    hidePassword: 'Masquer le mot de passe',
+    generatePassword: 'Générer',
+    requireChangeLabel: 'Exiger le changement du mot de passe à la prochaine connexion',
     resetPasswordHint:
       'Partagez ce mot de passe temporaire de manière sécurisée ; l\'utilisateur doit le modifier à sa prochaine connexion.',
+    resetPasswordHintPermanent: 'L\'utilisateur peut se connecter directement avec ce mot de passe.',
     resetPasswordButton: 'Réinitialiser le mot de passe',
     passwordRequired: 'Le mot de passe est requis.',
     passwordMismatch: 'Les mots de passe ne correspondent pas.',
