@@ -20,7 +20,7 @@ JWKS URL (`http://keycloak:8080/auth/...`) so it never depends on the gateway's 
 
 ## Images
 
-OpenLDR CE ships four independently-versioned images on GHCR (GitHub Container Registry):
+OpenLDR CE ships five independently-versioned images on GHCR (GitHub Container Registry):
 
 | Image | Contents |
 |-------|----------|
@@ -28,8 +28,14 @@ OpenLDR CE ships four independently-versioned images on GHCR (GitHub Container R
 | `ghcr.io/open-laboratory-data-repository/openldr-studio` | studio SPA (static nginx, served under `/studio/`) |
 | `ghcr.io/open-laboratory-data-repository/openldr-web` | public landing site |
 | `ghcr.io/open-laboratory-data-repository/openldr-gateway` | nginx reverse proxy (routes `/`→web, `/studio`→studio, `/api`+`/health`→api, `/auth`→keycloak) |
+| `ghcr.io/open-laboratory-data-repository/openldr-keycloak` | Keycloak 26 with the OpenLDR-branded login theme baked in |
 
-Postgres, MinIO, and Keycloak use their stock upstream images.
+Postgres and MinIO use their stock upstream images.
+
+> **Upgrading an existing deployment:** the login theme is selected by the realm's `loginTheme`, which
+> Keycloak only applies when it **imports** the realm (`--import-realm` skips an already-imported realm).
+> After upgrading to the `openldr-keycloak` image over an existing Keycloak database, enable it once in the
+> admin console: Realm settings → Themes → Login theme → `openldr`. Fresh installs pick it up automatically.
 
 ### Publishing (maintainers)
 

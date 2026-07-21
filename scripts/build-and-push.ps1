@@ -26,5 +26,6 @@ Write-Host "Registry=$Registry Tag=$Tag(+$Version) Platform=$Platform NoPush=$No
 Build-One "openldr-api"     "apps/server/Dockerfile" "."
 Build-One "openldr-studio"  "apps/studio/Dockerfile" "."
 Build-One "openldr-web"     "apps/web/Dockerfile"    "."
-Build-One "openldr-gateway" "deploy/nginx/Dockerfile" "deploy/nginx"
-Write-Host "Done. Images: $Registry/openldr-{api,studio,web,gateway}:{$Tag,$Version}"
+Build-One "openldr-gateway"  "deploy/nginx/Dockerfile"     "deploy/nginx"
+Build-One "openldr-keycloak" "deploy/keycloak/Dockerfile"  "deploy/keycloak"
+Write-Host "Done. Images: $Registry/openldr-{api,studio,web,gateway,keycloak}:{$Tag,$Version}"
