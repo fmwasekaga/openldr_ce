@@ -78,20 +78,6 @@ services:
       mc mb --ignore-existing local/${S3_BUCKET:-openldr} &&
       echo 'bucket ready'"
 
-  # Renders the themed login page once, after Keycloak is healthy, so the first real user never
-  # pays the cold FreeMarker compile. Best-effort — never fails the stack. Internal back-channel;
-  # redirect_uri http://localhost/* is registered in the base realm, so Keycloak returns the login
-  # page (200) and compiles the theme rather than an invalid_redirect error.
-  keycloak-warmup:
-    image: curlimages/curl:latest
-    depends_on:
-      keycloak: { condition: service_healthy }
-    entrypoint:
-      - sh
-      - -c
-      - "curl -fsS -o /dev/null 'http://keycloak:8080/auth/realms/openldr/protocol/openid-connect/auth?client_id=openldr-web&response_type=code&scope=openid&redirect_uri=http%3A%2F%2Flocalhost%2Fstudio' || true; echo 'login theme warmed'"
-    restart: "no"
-
   keycloak:
     image: ghcr.io/open-laboratory-data-repository/openldr-keycloak:${OPENLDR_VERSION:-latest}
     # Production mode (`start`, not `start-dev`): persistent Postgres store instead of the throwaway H2
