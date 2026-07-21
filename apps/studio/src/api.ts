@@ -1534,7 +1534,7 @@ export const pluginBrokerCall = (id: string, op: PluginBrokerOp): Promise<Plugin
 export type NotificationPriority = 'info' | 'warning' | 'critical';
 export type NotificationType =
   | 'sync_diverged' | 'sync_failed' | 'sync_quarantined'
-  | 'plugin_crashed' | 'auth_failed' | 'site_revoked'
+  | 'plugin_crashed' | 'system_crashed' | 'auth_failed' | 'site_revoked'
   | 'terminology_import_done' | 'terminology_import_failed';
 
 export interface Notification {

@@ -50,9 +50,11 @@ describe('auditRowToNotification', () => {
     expect(auditRowToNotification({ ...base, action: 'plugin.crash', entityType: 'plugin' })!).toMatchObject({ type: 'plugin_crashed', priority: 'critical', linkTo: '/activity' });
   });
 
-  it('maps system.crash and system.crash_loop → plugin_crashed/critical', () => {
-    expect(auditRowToNotification({ ...base, action: 'system.crash' })!.priority).toBe('critical');
-    expect(auditRowToNotification({ ...base, action: 'system.crash_loop' })!.type).toBe('plugin_crashed');
+  it('maps system.crash and system.crash_loop → system_crashed/critical (not plugin_crashed)', () => {
+    const crash = auditRowToNotification({ ...base, action: 'system.crash' })!;
+    expect(crash.priority).toBe('critical');
+    expect(crash.type).toBe('system_crashed');
+    expect(auditRowToNotification({ ...base, action: 'system.crash_loop' })!.type).toBe('system_crashed');
   });
 
   it('maps settings.sync.revoke → site_revoked/warning → /settings/sites', () => {

@@ -6,7 +6,7 @@ import type { Logger } from '@openldr/core';
 export type NotificationPriority = 'info' | 'warning' | 'critical';
 export type NotificationType =
   | 'sync_diverged' | 'sync_failed' | 'sync_quarantined'
-  | 'plugin_crashed' | 'auth_failed' | 'site_revoked'
+  | 'plugin_crashed' | 'system_crashed' | 'auth_failed' | 'site_revoked'
   | 'terminology_import_done' | 'terminology_import_failed';
 
 export interface Notification {
@@ -57,8 +57,10 @@ export function syncRowToNotification(row: SyncActivityRow): Notification | null
 const AUDIT_MAP: Record<string, { type: NotificationType; priority: NotificationPriority; linkTo: string; title: string } | undefined> = {
   'auth.failed': { type: 'auth_failed', priority: 'warning', linkTo: '/audit', title: 'Authentication failure' },
   'plugin.crash': { type: 'plugin_crashed', priority: 'critical', linkTo: '/activity', title: 'Plugin crashed' },
-  'system.crash': { type: 'plugin_crashed', priority: 'critical', linkTo: '/activity', title: 'System crash' },
-  'system.crash_loop': { type: 'plugin_crashed', priority: 'critical', linkTo: '/activity', title: 'Crash loop detected' },
+  // System/API-process crashes are NOT plugin crashes — give them their own type so the client
+  // doesn't label them "Plugin crashed".
+  'system.crash': { type: 'system_crashed', priority: 'critical', linkTo: '/activity', title: 'System crash' },
+  'system.crash_loop': { type: 'system_crashed', priority: 'critical', linkTo: '/activity', title: 'Crash loop detected' },
   'settings.sync.revoke': { type: 'site_revoked', priority: 'warning', linkTo: '/settings/sites', title: 'Site access revoked' },
   'terminology.import.completed': { type: 'terminology_import_done', priority: 'info', linkTo: '/terminology', title: 'Terminology import complete' },
   'terminology.import.failed': { type: 'terminology_import_failed', priority: 'warning', linkTo: '/terminology', title: 'Terminology import failed' },

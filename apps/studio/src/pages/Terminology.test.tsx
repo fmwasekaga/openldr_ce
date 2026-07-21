@@ -331,9 +331,11 @@ describe('Terminology page', () => {
 
     render(<MemoryRouter><Terminology /></MemoryRouter>);
 
-    const pageActions = (await screen.findAllByRole('button', { name: /actions/i }))[0];
-    fireEvent.pointerDown(pageActions, { button: 0, ctrlKey: false, pointerType: 'mouse' });
-    if (!screen.queryByText('Delete stored distribution')) fireEvent.keyDown(pageActions, { key: 'Enter' });
+    // "Delete stored distribution" now lives on the system row's own ⋯ menu (not the section header).
+    const allActions = await screen.findAllByRole('button', { name: /actions/i });
+    const rowActions = allActions[allActions.length - 1];
+    fireEvent.pointerDown(rowActions, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Delete stored distribution')) fireEvent.keyDown(rowActions, { key: 'Enter' });
     fireEvent.click(await screen.findByText('Delete stored distribution'));
 
     // Confirm dialog is up; the destructive action must NOT have fired yet.

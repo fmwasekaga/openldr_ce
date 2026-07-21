@@ -16,7 +16,7 @@ import {
 // `notifications.triggers.<type>` i18n key (Task 11).
 const TRIGGER_TYPES: NotificationType[] = [
   'sync_diverged', 'sync_failed', 'sync_quarantined',
-  'plugin_crashed', 'auth_failed', 'site_revoked',
+  'plugin_crashed', 'system_crashed', 'auth_failed', 'site_revoked',
   'terminology_import_done', 'terminology_import_failed',
 ];
 
