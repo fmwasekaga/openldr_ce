@@ -1,8 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { toast } from 'sonner';
 import { Terminology } from './Terminology';
 import * as api from '../api';
+
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() }, Toaster: () => null }));
 
 vi.mock('../terminology/ontology/OntologyPickerDialog', () => ({
   OntologyPickerDialog: ({ open, systemName }: { open: boolean; systemName: string }) =>
@@ -37,6 +40,8 @@ const sys = (id: string, code: string, pubId: string) => ({
 
 describe('Terminology page', () => {
   beforeEach(() => {
+    vi.mocked(toast.success).mockClear();
+    vi.mocked(toast.error).mockClear();
     vi.spyOn(api, 'listPublishers').mockResolvedValue([
       pub('pub-loinc', 'LOINC'),
       pub('pub-snomed-ct', 'SNOMED CT'),
@@ -159,7 +164,8 @@ describe('Terminology page', () => {
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => expect(importSpy).toHaveBeenCalledWith('cs1', file));
-    expect(await screen.findByText('Imported 1 term(s) into LOINC.')).toBeInTheDocument();
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Imported 1 term(s) into LOINC.'));
+    expect(screen.queryByText('Imported 1 term(s) into LOINC.')).not.toBeInTheDocument();
   });
 
   it('imports a gzipped FHIR ValueSet catalog from the page actions', async () => {
@@ -180,7 +186,8 @@ describe('Terminology page', () => {
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => expect(importSpy).toHaveBeenCalledWith(file));
-    expect(await screen.findByText('Imported 672 value set(s); skipped 0.')).toBeInTheDocument();
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Imported 672 value set(s); skipped 0.'));
+    expect(screen.queryByText('Imported 672 value set(s); skipped 0.')).not.toBeInTheDocument();
   });
 
   it('shows "Import distribution..." on the LOINC publisher menu and uploads the selected file', async () => {
@@ -202,7 +209,8 @@ describe('Terminology page', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Upload & import' }));
 
     await waitFor(() => expect(uploadSpy).toHaveBeenCalledWith('pub-loinc', 'loinc', file, true, null, expect.any(Function)));
-    expect(await screen.findByText(/Import started/)).toBeInTheDocument();
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/Import started/)));
+    expect(screen.queryByText(/Import started/)).not.toBeInTheDocument();
   });
 
   it('renders a dropzone with browse copy and shows the chosen file name + size (not a bare file input label)', async () => {
@@ -314,7 +322,8 @@ describe('Terminology page', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Upload & import' }));
 
     await waitFor(() => expect(uploadSpy).toHaveBeenCalledWith('pub-snomed-ct', 'snomed', file, true, null, expect.any(Function)));
-    expect(await screen.findByText(/Import started/)).toBeInTheDocument();
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/Import started/)));
+    expect(screen.queryByText(/Import started/)).not.toBeInTheDocument();
   });
 
   it('confirms before deleting a stored distribution, and only purges after typing the name + confirming', async () => {
@@ -341,6 +350,33 @@ describe('Terminology page', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
 
     await waitFor(() => expect(purgeSpy).toHaveBeenCalledWith('pub-loinc', 'loinc'));
-    expect(await screen.findByText('Stored distribution deleted.')).toBeInTheDocument();
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Stored distribution deleted.'));
+    expect(screen.queryByText('Stored distribution deleted.')).not.toBeInTheDocument();
+  });
+
+  it('starting a distribution import fires exactly one start toast and renders no inline banner', async () => {
+    const uploadSpy = vi.spyOn(api, 'uploadTerminologyDistribution').mockResolvedValue({ jobId: 'tij_1' });
+    vi.spyOn(api, 'getTerminologyIngestJob').mockResolvedValue({
+      id: 'tij_1', status: 'queued', phase: null, processed: 0, total: null, error: null, version: null, finishedAt: null,
+    });
+
+    render(<MemoryRouter><Terminology /></MemoryRouter>);
+
+    const pageActions = (await screen.findAllByRole('button', { name: /actions/i }))[0];
+    fireEvent.pointerDown(pageActions, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Import distribution...')) fireEvent.keyDown(pageActions, { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Import distribution...'));
+
+    const file = new File([new Uint8Array([1, 2, 3])], 'loinc.zip');
+    fireEvent.change(await screen.findByLabelText('Distribution .zip'), { target: { files: [file] } });
+    fireEvent.click(await screen.findByLabelText('I have accepted the license for this distribution.'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Upload & import' }));
+
+    await waitFor(() => expect(uploadSpy).toHaveBeenCalled());
+    await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1));
+    expect(toast.success).toHaveBeenCalledWith("Import started — you’ll be notified when it completes.");
+    expect(toast.error).not.toHaveBeenCalled();
+    // No inline banner — the message only ever reaches the mocked sonner toast, never the DOM.
+    expect(screen.queryByText(/Import started/)).not.toBeInTheDocument();
   });
 });

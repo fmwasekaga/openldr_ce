@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { Library, MoreHorizontal, ChevronRight, Plus } from 'lucide-react';
+import { toast } from 'sonner';
 import { AppShell } from '../shell/AppShell';
 import {
   listPublishers,
@@ -147,9 +148,6 @@ export function Terminology(): JSX.Element {
   // ── danger confirm ──────────────────────────────────────────────────────────
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
 
-  // ── toast ───────────────────────────────────────────────────────────────────
-  const [toast, setToast] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
-
   // ── load ────────────────────────────────────────────────────────────────────
   // Stable across renders in practice — only calls module-level API fns + setState.
   const reload = (): Promise<void> =>
@@ -192,7 +190,6 @@ export function Terminology(): JSX.Element {
     setPaneTab('systems');
     setVsSearch('');
     setVsSystem('__all__');
-    setToast(null);
   }, [selectedPublisherId]);
 
   // ── derived ─────────────────────────────────────────────────────────────────
@@ -233,15 +230,15 @@ export function Terminology(): JSX.Element {
             setConfirm(null);
             setSelectedPublisherId('');
             await reload();
-            setToast({ kind: 'ok', text: `Deleted publisher "${pub.name}".` });
+            toast.success(`Deleted publisher "${pub.name}".`);
           } catch (e: unknown) {
             setConfirm(null);
-            setToast({ kind: 'error', text: e instanceof Error ? e.message : String(e) });
+            toast.error(e instanceof Error ? e.message : String(e));
           }
         },
       });
     } catch (e: unknown) {
-      setToast({ kind: 'error', text: e instanceof Error ? e.message : String(e) });
+      toast.error(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -264,15 +261,15 @@ export function Terminology(): JSX.Element {
             setConfirm(null);
             setSelectedSystemId('');
             await reload();
-            setToast({ kind: 'ok', text: `Deleted coding system ${sys.systemCode}.` });
+            toast.success(`Deleted coding system ${sys.systemCode}.`);
           } catch (e: unknown) {
             setConfirm(null);
-            setToast({ kind: 'error', text: e instanceof Error ? e.message : String(e) });
+            toast.error(e instanceof Error ? e.message : String(e));
           }
         },
       });
     } catch (e: unknown) {
-      setToast({ kind: 'error', text: e instanceof Error ? e.message : String(e) });
+      toast.error(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -282,7 +279,7 @@ export function Terminology(): JSX.Element {
       setEditingValueSet(await getValueSet(id));
       setValueSetEditorOpen(true);
     } catch (e: unknown) {
-      setToast({ kind: 'error', text: e instanceof Error ? e.message : String(e) });
+      toast.error(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -293,7 +290,7 @@ export function Terminology(): JSX.Element {
       setEditingValueSet(dup);
       setValueSetEditorOpen(true);
     } catch (e: unknown) {
-      setToast({ kind: 'error', text: e instanceof Error ? e.message : String(e) });
+      toast.error(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -308,10 +305,10 @@ export function Terminology(): JSX.Element {
           await deleteValueSet(vs.id);
           setConfirm(null);
           await reload();
-          setToast({ kind: 'ok', text: 'Value set deleted.' });
+          toast.success('Value set deleted.');
         } catch (e: unknown) {
           setConfirm(null);
-          setToast({ kind: 'error', text: e instanceof Error ? e.message : String(e) });
+          toast.error(e instanceof Error ? e.message : String(e));
         }
       },
     });
@@ -324,14 +321,13 @@ export function Terminology(): JSX.Element {
     try {
       const saved = await importValueSet(file);
       await reload();
-      setToast({
-        kind: 'ok',
-        text: isValueSetCatalogImportResult(saved)
+      toast.success(
+        isValueSetCatalogImportResult(saved)
           ? `Imported ${saved.imported} value set(s); skipped ${saved.skipped}.`
           : `Imported value set "${saved.title ?? saved.url}".`,
-      });
+      );
     } catch (err: unknown) {
-      setToast({ kind: 'error', text: err instanceof Error ? err.message : String(err) });
+      toast.error(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -351,10 +347,10 @@ export function Terminology(): JSX.Element {
       setTermImportSystem(null);
       setTermsReloadKey((k) => k + 1);
       await reload();
-      setToast({ kind: 'ok', text: `Imported ${result.imported} term(s) into ${system.systemName}.` });
+      toast.success(`Imported ${result.imported} term(s) into ${system.systemName}.`);
     } catch (err: unknown) {
       setTermImportSystem(null);
-      setToast({ kind: 'error', text: err instanceof Error ? err.message : String(err) });
+      toast.error(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -416,7 +412,7 @@ export function Terminology(): JSX.Element {
 
   const handleDistributionQueued = (_jobId: string): void => {
     setDistImportOpen(false);
-    setToast({ kind: 'ok', text: "Import started — you’ll be notified when it completes." });
+    toast.success("Import started — you’ll be notified when it completes.");
     if (distImportPublisherId) startPollingImportJob(distImportPublisherId, distImportSystemType);
   };
 
@@ -440,10 +436,10 @@ export function Terminology(): JSX.Element {
         try {
           await purgeTerminologyDistribution(publisherId, systemType);
           setConfirm(null);
-          setToast({ kind: 'ok', text: 'Stored distribution deleted.' });
+          toast.success('Stored distribution deleted.');
         } catch (e: unknown) {
           setConfirm(null);
-          setToast({ kind: 'error', text: e instanceof Error ? e.message : String(e) });
+          toast.error(e instanceof Error ? e.message : String(e));
         }
       },
     });
@@ -728,19 +724,6 @@ export function Terminology(): JSX.Element {
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
-
-                {/* Toast strip */}
-                {toast && (
-                  <div
-                    className={
-                      toast.kind === 'ok'
-                        ? 'mx-3 mt-2 rounded-md border border-green-500/40 bg-green-500/10 px-3 py-2 text-xs text-green-700 dark:text-green-400'
-                        : 'mx-3 mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive'
-                    }
-                  >
-                    {toast.text}
-                  </div>
-                )}
 
                 {/* Empty publisher hint */}
                 {!selectedSystemId && activeSection.systems.length === 0 && activeSection.valueSets.length === 0 && (
