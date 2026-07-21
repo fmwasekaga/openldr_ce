@@ -163,7 +163,10 @@ export function OntologyDistributionDialog({
           ) : (
             <>
             <div className="flex flex-col gap-4 px-6 py-5">
-              {dist?.stale && status !== 'error' && (
+              {/* Staleness is judged by whether the source files on disk changed. Upload-managed
+                  systems have no persistent source (the extraction dir is deleted after ingest) and
+                  always ingest concepts + ontology together, so the check is a false positive there. */}
+              {!uploadManaged && dist?.stale && status !== 'error' && (
                 <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>This ontology index may be stale. Rebuild it before relying on browse results.</span>
