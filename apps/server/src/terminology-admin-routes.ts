@@ -1,12 +1,11 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { gunzipSync } from 'node:zlib';
-import type { AppContext } from '@openldr/bootstrap';
+import { resolveCodingSystemId, type AppContext } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
 import { z } from 'zod';
 import { recordAudit } from './audit-helper';
 import { requireRole } from './rbac';
 import { canonicalSystemUrl, isFhirValueSetCatalog, parseTerminologyTerms, parseTerminologyTermsStream, terminologyImportTemplate } from '@openldr/terminology';
-import { deriveSystemCode, resolveSeedPublisherId } from '@openldr/db';
 
 // Mutations, imports, and server-side loader paths (e.g. LOINC import) alter shared terminology
 // configuration for the whole install, so they are gated to admin/manager roles. Read-only GETs stay
@@ -27,11 +26,6 @@ const systemInput = z.object({
   active: z.boolean(),
   publisherId: z.string().nullish(),
 });
-const loincImportInput = z.object({
-  path: z.string().min(1),
-  acceptLicense: z.boolean(),
-});
-
 export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
   const admin = ctx.terminology.admin;
   type IdParam = { id: string };
@@ -121,20 +115,6 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
   });
 
   // ── Terms ────────────────────────────────────────────────────────────────
-  app.post('/api/terminology/import/loinc', MANAGE, async (req, reply) => {
-    const parsed = loincImportInput.safeParse(req.body);
-    if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
-    if (!parsed.data.acceptLicense) {
-      reply.code(400);
-      return { error: 'LOINC import requires accepting the LOINC license.' };
-    }
-    try {
-      const result = await ctx.terminology.loaders.loinc(parsed.data.path, parsed.data.acceptLicense);
-      await recordAudit(ctx, req, { action: 'coding_system.import', entityType: 'coding_system', entityId: 'loinc', before: null, after: null, metadata: { source: 'loinc', result } });
-      return result;
-    } catch (e) { return mapErr(e, reply); }
-  });
-
   const termInput = z.object({
     code: z.string().min(1), display: z.string().min(1),
     status: z.enum(['ACTIVE', 'DRAFT', 'DEPRECATED', 'DISABLED']),
@@ -382,21 +362,6 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
   const UPLOAD = { preHandler: requireRole('lab_admin', 'lab_manager'), bodyLimit: 1_073_741_824 };
   const SUPPORTED_SYSTEMS = new Set(['loinc', 'snomed', 'rxnorm']);
 
-  // Resolve the coding system for a systemType by its loader-backed canonical URL, creating it if
-  // absent with the SAME values loadLoinc's saveSystem uses (so it is one row, not a duplicate).
-  async function resolveCodingSystemId(systemType: string, version: string | null): Promise<string> {
-    const url = canonicalSystemUrl(systemType)!; // callers validate systemType is supported → non-null
-    let cs = await admin.codingSystems.getByUrl(url);
-    if (!cs) {
-      await admin.codingSystems.upsertByUrl({
-        url, systemCode: deriveSystemCode(url), systemName: deriveSystemCode(url),
-        systemVersion: version, publisherId: resolveSeedPublisherId(url),
-      });
-      cs = await admin.codingSystems.getByUrl(url);
-    }
-    return cs!.id;
-  }
-
   app.post('/api/terminology/publishers/:publisherId/distribution', UPLOAD, async (req, reply) => {
     const publisherId = (req.params as { publisherId: string }).publisherId;
     const q = req.query as { systemType?: string; acceptLicense?: string; version?: string };
@@ -407,7 +372,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
     if (!isReadableBody(req.body)) { reply.code(400); return { error: 'expected a zip stream (application/octet-stream)' }; }
 
     let codingSystemId: string;
-    try { codingSystemId = await resolveCodingSystemId(systemType, q.version ?? null); }
+    try { codingSystemId = await resolveCodingSystemId(admin, systemType, q.version ?? null); }
     catch (e) { return mapErr(e, reply); }
 
     const key = `terminology-dist/${systemType}/${codingSystemId}-${Date.now()}.zip`;

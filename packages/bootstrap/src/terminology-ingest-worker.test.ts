@@ -18,6 +18,7 @@ function deps(over: Partial<any> = {}) {
         latestForSystem: vi.fn(async () => ({ id: 'j0', blobKey: 'terminology-dist/loinc/j0.zip', status: 'ready' })),
         latestReadyForSystem: vi.fn(async () => ({ id: 'j0', blobKey: 'terminology-dist/loinc/j0.zip', status: 'ready' })),
         get: vi.fn(), enqueue: vi.fn(), hasActive: vi.fn(),
+        failStaleRunning: vi.fn(async () => 0),
       },
       blob: { getStream: vi.fn(), delete: vi.fn(async (k: string) => { state.deleted.push(k); }) },
       runIngest: vi.fn(async (_j, onP) => { onP({ phase: 'concepts', processed: 5, total: 5 }); return { conceptsLoaded: 5 }; }),
@@ -53,10 +54,23 @@ describe('terminology ingest worker', () => {
   });
 
   it('does nothing when no job is queued', async () => {
-    const { d } = deps({ jobs: { claimNext: vi.fn(async () => null), updateProgress: vi.fn(), finish: vi.fn(), latestForSystem: vi.fn(), latestReadyForSystem: vi.fn(), get: vi.fn(), enqueue: vi.fn(), hasActive: vi.fn() } });
+    const { d } = deps({ jobs: { claimNext: vi.fn(async () => null), updateProgress: vi.fn(), finish: vi.fn(), latestForSystem: vi.fn(), latestReadyForSystem: vi.fn(), get: vi.fn(), enqueue: vi.fn(), hasActive: vi.fn(), failStaleRunning: vi.fn(async () => 0) } });
     const w = createTerminologyIngestWorker(d as never);
     await w.tickOnce();
     expect(d.runIngest).not.toHaveBeenCalled();
+    await w.stop();
+  });
+
+  it('fails orphaned running jobs once at startup', async () => {
+    const { d } = deps();
+    const failStaleRunning = vi.fn(async () => 2);
+    const info = vi.fn();
+    d.jobs.failStaleRunning = failStaleRunning;
+    d.logger = { info, error() {} };
+    const w = createTerminologyIngestWorker(d as never);
+    await new Promise((r) => setTimeout(r, 0)); // let the fire-and-forget startup promise settle
+    expect(failStaleRunning).toHaveBeenCalledWith('interrupted — the server restarted before the import finished');
+    expect(info).toHaveBeenCalled();
     await w.stop();
   });
 });

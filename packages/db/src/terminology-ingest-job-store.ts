@@ -23,6 +23,7 @@ export interface TerminologyIngestJob {
 
 export interface TerminologyIngestJobStore {
   enqueue(input: { systemType: string; codingSystemId: string; blobKey: string; version: string | null; createdBy: string | null }): Promise<TerminologyIngestJob>;
+  insertRunning(input: { systemType: string; codingSystemId: string; blobKey: string; version: string | null; createdBy: string | null }): Promise<TerminologyIngestJob>;
   claimNext(): Promise<TerminologyIngestJob | null>;
   updateProgress(id: string, p: { phase: string; processed: number; total: number | null }): Promise<void>;
   finish(id: string, status: 'ready' | 'failed', error: string | null): Promise<void>;
@@ -30,6 +31,7 @@ export interface TerminologyIngestJobStore {
   latestForSystem(systemType: string): Promise<TerminologyIngestJob | null>;
   latestReadyForSystem(systemType: string): Promise<TerminologyIngestJob | null>;
   hasActive(systemType: string): Promise<boolean>;
+  failStaleRunning(error: string): Promise<number>;
 }
 
 type Row = {
@@ -64,6 +66,24 @@ export function createTerminologyIngestJobStore(db: Kysely<InternalSchema>): Ter
           id, system_type: input.systemType, coding_system_id: input.codingSystemId, blob_key: input.blobKey,
           version: input.version, status: 'queued', created_by: input.createdBy,
           // Marks this row "active" for the one-active-job-per-system unique index (see 061 migration).
+          active_key: input.systemType,
+        } as never)
+        .execute();
+      const row = await db.selectFrom('terminology_ingest_jobs').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
+      return toJob(row as never);
+    },
+    async insertRunning(input) {
+      // Insert a job already claimed by this process (status 'running'), so a live server worker —
+      // which only claims 'queued' — never races an inline CLI ingest. The one-active-per-system
+      // guard (hasActive + the active_key unique index) still rejects a concurrent second import.
+      if (await store.hasActive(input.systemType)) {
+        throw new Error(`A terminology ingest job is already active for system "${input.systemType}"`);
+      }
+      const id = `tij_${randomUUID().slice(0, 8)}`;
+      await db.insertInto('terminology_ingest_jobs')
+        .values({
+          id, system_type: input.systemType, coding_system_id: input.codingSystemId, blob_key: input.blobKey,
+          version: input.version, status: 'running', started_at: sql`now()` as never, created_by: input.createdBy,
           active_key: input.systemType,
         } as never)
         .execute();
@@ -120,6 +140,17 @@ export function createTerminologyIngestJobStore(db: Kysely<InternalSchema>): Ter
       const r = await db.selectFrom('terminology_ingest_jobs').select('id')
         .where('system_type', '=', systemType).where('status', 'in', ['queued', 'running']).executeTakeFirst();
       return !!r;
+    },
+    async failStaleRunning(error) {
+      // Crash recovery: on a single-worker install any job left 'running' is orphaned. Fail it and
+      // clear active_key so its one-active slot frees up. Returns how many were reset.
+      const rows = await sql<{ id: string }>`
+        update terminology_ingest_jobs
+        set status = 'failed', error = ${error}, finished_at = now(), active_key = null
+        where status = 'running'
+        returning id
+      `.execute(db);
+      return rows.rows.length;
     },
   };
   return store;

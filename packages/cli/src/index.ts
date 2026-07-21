@@ -15,7 +15,7 @@ import { runAuditList } from './audit';
 import { runUserList, runUsersList, runUserShow, runUserCreate, runUserSetRole, runUserSetStatus } from './user';
 import { runExport } from './export';
 import { runTargetStoreTest } from './target-store';
-import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, runTerminologyExpand, runTerminologyTranslate, runPublisherList, runPublisherCreate, runSystemList, runSystemCreate, runTermList, runValueSetList, runOntologyBuild, runOntologyRebuild, runOntologyList, runOntologyUnlink } from './terminology';
+import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, runTerminologyExpand, runTerminologyTranslate, runPublisherList, runPublisherCreate, runSystemList, runSystemCreate, runTermList, runValueSetList, runOntologyBuild, runOntologyRebuild, runOntologyList, runOntologyUnlink, runDistributionImport, runDistributionPurge } from './terminology';
 import { runMarketVerify, runMarketInstall, runMarketList, runMarketRollback, runMarketEnable, runMarketDisable, runMarketRemove } from './market';
 import { runArtifactKeygen, runArtifactNew, runArtifactBuild, runArtifactPack, runArtifactSign, runArtifactTest, runArtifactPublish } from './artifact';
 import { runSettingsFlagsList, runSettingsFlagsSet, runSettingsDanger, runSettingsSyncShow, runSettingsSyncSet, runSettingsNumbersList, runSettingsNumbersSet, runSettingsValidationShow, runSettingsValidationSet } from './settings';
@@ -300,6 +300,21 @@ const tvs = term.command('valueset').description('Manage value sets');
 tvs.command('list').description('List value sets').option('--publisher <id>', 'filter by publisher id').option('--json', 'output JSON', false)
   .action(async (opts: { publisher?: string; json: boolean }) => {
     try { process.exitCode = await runValueSetList(opts); } catch (err) { process.stderr.write(`terminology valueset list failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+
+const tdist = term.command('distribution').description('Import/purge terminology distributions (zip → flat terms + ontology)');
+tdist.command('import <system>').description('import a loinc|snomed|rxnorm distribution zip inline')
+  .requiredOption('--file <path>', 'path to the distribution .zip')
+  .option('--accept-license', 'accept the distribution license', false)
+  .option('--version <v>', 'distribution version')
+  .option('--json', 'emit JSON', false)
+  .action(async (system: string, opts: { file: string; acceptLicense: boolean; version?: string; json: boolean }) => {
+    process.exitCode = await runDistributionImport(system, opts);
+  });
+tdist.command('purge <system>').description('delete the retained distribution zip for a system')
+  .option('--json', 'emit JSON', false)
+  .action(async (system: string, opts: { json: boolean }) => {
+    process.exitCode = await runDistributionPurge(system, opts);
   });
 
 const tont = term.command('ontology').description('Manage ontology indexes');

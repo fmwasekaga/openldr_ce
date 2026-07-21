@@ -1,13 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { join } from 'node:path';
 import * as XLSX from 'xlsx';
 import pg from 'pg';
 import { Kysely, sql } from 'kysely';
 import { createAuth } from '@openldr/adapter-auth';
 import { createEventBus } from '@openldr/adapter-event-bus';
 import { createS3Bucket } from '@openldr/adapter-s3-bucket';
+import { toS3BucketConfig } from './s3-config';
 import type { Config } from '@openldr/config';
 import { createLogger, HealthRegistry, open, seal, parseSecretKey, redact, type Logger } from '@openldr/core';
 import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore } from '@openldr/db';
@@ -76,9 +75,9 @@ import { createDhis2Orchestration } from './dhis2-orchestration';
 import { selectTargetStore } from './target-store';
 import { createPluginRegistry } from './plugin-registry';
 import { createProjectionWorker } from './projection-worker';
-import { buildOntologyDistribution, canonicalSystemUrl, createOperations, importTerminologyResource, ingestDistribution, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type LoadResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType, type Operations } from '@openldr/terminology';
+import { buildOntologyDistribution, canonicalSystemUrl, createOperations, importTerminologyResource, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type LoadResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType, type Operations } from '@openldr/terminology';
 import { createTerminologyIngestWorker } from './terminology-ingest-worker';
-import { downloadAndExtract } from './terminology-dist-extract';
+import { createRunIngest } from './terminology-ingest-shared';
 
 export class ReportNotFoundError extends Error {
   constructor(public readonly id: string) {
@@ -354,14 +353,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     adminClientId: cfg.KEYCLOAK_ADMIN_CLIENT_ID,
     adminClientSecret: cfg.KEYCLOAK_ADMIN_CLIENT_SECRET,
   });
-  const blob = createS3Bucket({
-    endpoint: cfg.S3_ENDPOINT,
-    region: cfg.S3_REGION,
-    accessKeyId: cfg.S3_ACCESS_KEY_ID,
-    secretAccessKey: cfg.S3_SECRET_ACCESS_KEY,
-    bucket: cfg.S3_BUCKET,
-    forcePathStyle: cfg.S3_FORCE_PATH_STYLE,
-  });
+  const blob = createS3Bucket(toS3BucketConfig(cfg));
   const eventing = createEventBus({ url: cfg.INTERNAL_DATABASE_URL });
   const { store, engine } = selectTargetStore(cfg);
   const externalDb = store.db as unknown as Kysely<ExternalSchema>;
@@ -635,31 +627,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     audit,
     workDirBase: terminologyWorkDirBase,
     logger,
-    runIngest: async (job, onProgress) => {
-      const workDir = await mkdtemp(join(terminologyWorkDirBase, 'terminology-ingest-'));
-      try {
-        const { distDir } = await downloadAndExtract(blob, job.blobKey, workDir);
-        return await ingestDistribution({
-          systemType: job.systemType,
-          codingSystemId: job.codingSystemId,
-          distDir,
-          acceptLicense: true, // the API enforced acceptance at upload/enqueue time
-          onProgress,
-          deps: {
-            loadConcepts: async (_systemType, dir, opts) => {
-              const r = await terminology.loaders.loinc(dir, opts.acceptLicense);
-              return { conceptsLoaded: r.conceptsLoaded };
-            },
-            buildOntology: async (_systemType, codingSystemId, dir, onP) =>
-              terminology.ontology.build(codingSystemId, dir, (p) => onP({ phase: p.phase, processed: p.processed, total: p.total })),
-            buildOntologyWithConcepts: async (systemType, codingSystemId, dir, onP) =>
-              terminology.ingestOntologyWithConcepts(systemType, codingSystemId, dir, onP),
-          },
-        });
-      } finally {
-        await rm(workDir, { recursive: true, force: true });
-      }
-    },
+    runIngest: createRunIngest({ blob, terminology, workDirBase: terminologyWorkDirBase }),
   });
 
   const connectorStore = createConnectorStore(internal.db);
@@ -1311,6 +1279,8 @@ export { testConnector } from './connector-test';
 export * from './ingest-context';
 export * from './target-store';
 export * from './terminology-context';
+export * from './s3-config';
+export * from './terminology-ingest-shared';
 export * from './terminology-ingest-worker';
 export * from './seed';
 export * from './plugin-broker';
