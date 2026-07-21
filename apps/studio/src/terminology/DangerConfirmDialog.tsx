@@ -11,6 +11,7 @@ import {
 } from '../components/ui/alert-dialog';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { Spinner } from '../components/ui/spinner';
 
 interface Props {
   open: boolean;
@@ -22,7 +23,8 @@ interface Props {
   confirmLabel: string;
   /** Blast-radius summary (counts, warnings) rendered above the input. */
   summary: ReactNode;
-  onConfirm: () => void;
+  /** May be async — the dialog shows a busy state and stays open until it settles. */
+  onConfirm: () => void | Promise<void>;
 }
 
 /**
@@ -40,17 +42,20 @@ export function DangerConfirmDialog({
   onConfirm,
 }: Props): JSX.Element {
   const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  // Reset input whenever the dialog opens.
+  // Reset input + busy whenever the dialog opens.
   useEffect(() => {
-    if (open) setTyped('');
+    if (open) { setTyped(''); setBusy(false); }
   }, [open]);
 
   const matches =
     typed.trim() === confirmName.trim() && confirmName.trim().length > 0;
 
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
+    // While the destructive action is running, block dismissal (backdrop/Esc) so it can't be
+    // interrupted; the parent closes the dialog by flipping `open` once onConfirm settles.
+    <AlertDialog open={open} onOpenChange={(o) => { if (!busy) onOpenChange(o); }}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
@@ -74,17 +79,25 @@ export function DangerConfirmDialog({
             className="h-9 text-sm"
             autoComplete="off"
             autoFocus
+            disabled={busy}
           />
         </div>
 
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
           <AlertDialogAction
-            disabled={!matches}
-            onClick={onConfirm}
+            disabled={!matches || busy}
+            // preventDefault so the dialog does not auto-close on click; we keep it open (with a
+            // busy spinner) until the async onConfirm settles, then the parent flips `open`.
+            onClick={(e) => {
+              e.preventDefault();
+              setBusy(true);
+              void Promise.resolve(onConfirm()).finally(() => setBusy(false));
+            }}
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
-            {confirmLabel}
+            {busy && <Spinner className="mr-2 text-destructive-foreground" />}
+            {busy ? `${confirmLabel}…` : confirmLabel}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
