@@ -198,79 +198,143 @@ git commit -m "fix(terminology): extract distributions via random-access unzip (
 
 ---
 
-## Task 2: Enrich the coding-system delete conflict message
+## Task 2: Delete an uploaded coding system (cascade) + protect true seeds
+
+**REVISED after live investigation (the original "enrich the 409 message" was based on a wrong root cause).** Facts verified against the code + live DB:
+- The delete-409 is the `seeded` guard: `codingSystems.delete(id)` does `if (row.seeded) throw new TerminologyAdminError('cannot delete a seeded code system', 'conflict')` (`terminology-admin-store.ts:423`).
+- `upsertByUrl` — the resolve-or-create every upload uses — sets **`seeded: true`** (`:446`). So EVERY uploaded distribution's coding system is `seeded` and undeletable. Live DB: `cs-url-LOINC`, `cs-url-RXNORM`, SNOMED all `seeded=t`.
+- The client `deleteCodingSystem` (`api.ts:802`) throws `"delete system failed: ${status}"`, **discarding the server message** — hence the bare `409`.
+
+**Decision (user):** make **upload-created** systems deletable — a coding system is upload-created iff it has a `terminology_ingest_jobs` row for its id. Deleting one cascades: ontology + concepts + ingest-job rows + the coding-system row + the stored zip(s). **Migration-seeded system systems** (FHIR/UCUM etc., which have NO ingest job) stay protected with a clear message. The route orchestrates because the blob store lives above the db layer; it reuses `ctx.terminology.ontology.unlink(id)` (tears down all ontology tables + the distribution row).
 
 **Files:**
-- Modify: `packages/db/src/terminology-admin-store.ts` (the `codingSystems.delete(id)` impl)
+- Modify: `packages/db/src/terminology-ingest-job-store.ts` (+ interface: `listForCodingSystem`)
+- Modify: `packages/db/src/terminology-ingest-job-store.test.ts`
+- Modify: `apps/server/src/test-helpers.ts` (fake `terminologyJobs` gains `listForCodingSystem`)
+- Modify: `packages/db/src/terminology-admin-store.ts` (`codingSystems.delete(id, opts?)` — policy + cascade)
 - Modify: `packages/db/src/terminology-admin-store.test.ts`
+- Modify: `apps/server/src/terminology-admin-routes.ts` (DELETE `/systems/:id` orchestration)
+- Modify: `apps/server/src/terminology-admin-routes.test.ts`
 
 **Interfaces:**
-- `codingSystems.delete(id)` still returns `Promise<void>`; on a blocked delete it throws `TerminologyAdminError(message, 'conflict')` with an enriched, actionable `message`.
+- Produces `TerminologyIngestJobStore.listForCodingSystem(codingSystemId: string): Promise<TerminologyIngestJob[]>` (newest first).
+- Changes `admin.codingSystems.delete(id: string, opts?: { cascade?: boolean }): Promise<void>` — default behaviour is unchanged (block seeded, delete row only); `cascade: true` runs the policy + cascade below. Existing single-arg callers keep working.
+- Policy (inside `delete`): block **only** when `row.seeded && jobCount === 0` (a true system seed with no distribution) → `TerminologyAdminError('This is a system-managed coding system and cannot be deleted.', 'conflict')`. Otherwise proceed.
 
-- [ ] **Step 1: Read the current guard.** Open `packages/db/src/terminology-admin-store.ts`, find `codingSystems: { … delete(id) { … } }`. Identify what it currently checks before deleting (concept rows and/or a linked ontology distribution) and the current throw. If it currently deletes without counting, add the counts.
-
-- [ ] **Step 2: Write the failing test** — add to `packages/db/src/terminology-admin-store.test.ts` (match the file's existing `makeMigratedDb()` setup pattern)
+- [ ] **Step 1: jobs store `listForCodingSystem` — failing test** in `packages/db/src/terminology-ingest-job-store.test.ts` (uses the file's `makeMigratedDb()` + `await db.destroy()` pattern)
 
 ```ts
-it('codingSystems.delete throws an actionable conflict message when the system has concepts', async () => {
+it('listForCodingSystem returns all jobs for a coding system, newest first', async () => {
   const db = await makeMigratedDb();
-  const admin = createTerminologyAdminStore(db as never, /* projection */ fakeProjection(), /* capture */ undefined as never);
-  const cs = await admin.codingSystems.upsertByUrl({ url: 'http://x.test', systemCode: 'X', systemName: 'X', systemVersion: null, publisherId: null });
-  // seed one concept for this system's url (match how the store counts — via terminology_concepts.system)
-  await db.insertInto('terminology_concepts').values({ system: 'http://x.test', code: 'a', display: 'A', status: 'ACTIVE' } as never).execute();
-  const id = (await admin.codingSystems.getByUrl('http://x.test'))!.id;
-  await expect(admin.codingSystems.delete(id)).rejects.toThrow(/cannot delete .*concept|delete the .*distribution first/i);
+  const store = createTerminologyIngestJobStore(db as never);
+  await store.enqueue({ systemType: 'loinc', codingSystemId: 'cs-x', blobKey: 'k/a.zip', version: null, createdBy: null });
+  const forX = await store.listForCodingSystem('cs-x');
+  expect(forX).toHaveLength(1);
+  expect(forX[0].blobKey).toBe('k/a.zip');
+  expect(await store.listForCodingSystem('cs-none')).toEqual([]);
   await db.destroy();
 });
 ```
 
-> Adapt `fakeProjection()`/constructor args to the file's existing test helpers (the file already constructs the admin store in other tests — reuse that exact call). Adapt the concept-seeding to how the store actually counts (by `system` url or by coding_system_id) — read the guard in Step 1 to match.
+- [ ] **Step 2: Run → fail.** `cd packages/db && npx vitest run src/terminology-ingest-job-store.test.ts` — FAIL (`listForCodingSystem` not a function).
 
-- [ ] **Step 3: Run test to verify it fails**
-
-Run: `cd packages/db && npx vitest run src/terminology-admin-store.test.ts`
-Expected: FAIL — the current message doesn't match the actionable pattern.
-
-- [ ] **Step 4: Enrich the guard** — in `codingSystems.delete(id)`
-
-Before deleting, resolve the system's `url`/code, count its concepts, and check for a linked ontology distribution (query `ontology_distributions` by `coding_system_id = id`). When either is non-empty, throw:
+- [ ] **Step 3: Add `listForCodingSystem`** to `packages/db/src/terminology-ingest-job-store.ts` — interface after `latestForSystem`, impl next to it:
 
 ```ts
-// inside delete(id), after loading the system row (call it `sys`):
-const conceptCount = Number(
-  (await db.selectFrom('terminology_concepts').select(({ fn }) => fn.countAll<string>().as('n'))
-    .where('system', '=', sys.url).executeTakeFirst())?.n ?? 0,
-);
-const hasOntology = !!(await db.selectFrom('ontology_distributions').select('coding_system_id')
-  .where('coding_system_id', '=', id).executeTakeFirst());
-if (conceptCount > 0 || hasOntology) {
-  const parts: string[] = [];
-  if (conceptCount > 0) parts.push(`${conceptCount} concept(s)`);
-  if (hasOntology) parts.push('a linked ontology distribution');
-  throw new TerminologyAdminError(
-    `Cannot delete coding system ${sys.systemCode}: it has ${parts.join(' and ')}. Delete the stored distribution first.`,
-    'conflict',
-  );
-}
+    async listForCodingSystem(codingSystemId) {
+      const rows = await db.selectFrom('terminology_ingest_jobs').selectAll()
+        .where('coding_system_id', '=', codingSystemId).orderBy('created_at', 'desc').execute();
+      return rows.map((r) => toJob(r as never));
+    },
+```
+Interface line: `listForCodingSystem(codingSystemId: string): Promise<TerminologyIngestJob[]>;`. Add the stub `listForCodingSystem: async () => [],` to the `terminologyJobs` fake in `apps/server/src/test-helpers.ts`.
+
+- [ ] **Step 4: Run → pass** the store test; **typecheck** `@openldr/db` + `@openldr/server`.
+
+- [ ] **Step 5: admin `delete(id, opts)` cascade — failing test** in `packages/db/src/terminology-admin-store.test.ts` (reuse the file's real store construction — `createTerminologyAdminStore(db)` or `(db, undefined, referenceCapture)`; there is NO `fakeProjection`)
+
+```ts
+it('delete(id,{cascade}) removes an upload-created system + its concepts; protects a true seed', async () => {
+  const db = await makeMigratedDb();
+  const s = createTerminologyAdminStore(db);
+  // upsertByUrl marks seeded=true (mirrors an uploaded system); give it a concept + an ingest job
+  await s.codingSystems.upsertByUrl({ url: 'http://x.test', systemCode: 'X', systemName: 'X', systemVersion: null, publisherId: null });
+  const id = (await s.codingSystems.getByUrl('http://x.test'))!.id;
+  await db.insertInto('terminology_concepts').values({ system: 'http://x.test', code: 'a', display: 'A', status: 'ACTIVE' } as never).execute();
+  await db.insertInto('terminology_ingest_jobs').values({ id: 'j1', system_type: 'loinc', coding_system_id: id, blob_key: 'k/a.zip', version: null, status: 'ready', active_key: null } as never).execute();
+  // upload-created (has a job) → cascade delete succeeds and removes concepts
+  await s.codingSystems.delete(id, { cascade: true });
+  expect(await s.codingSystems.getByUrl('http://x.test')).toBeNull();
+  const remaining = await db.selectFrom('terminology_concepts').selectAll().where('system','=','http://x.test').execute();
+  expect(remaining).toHaveLength(0);
+
+  // a true seed (seeded, NO ingest job) is protected
+  await s.codingSystems.upsertByUrl({ url: 'http://seed.test', systemCode: 'SD', systemName: 'SD', systemVersion: null, publisherId: null });
+  const seedId = (await s.codingSystems.getByUrl('http://seed.test'))!.id;
+  await expect(s.codingSystems.delete(seedId, { cascade: true })).rejects.toThrow(/system-managed coding system/i);
+  await db.destroy();
+});
 ```
 
-> Match `sys.url` / `sys.systemCode` to the actual row shape the store loads. If the store already loads the row for a not-found check, reuse it; otherwise select it first (throw `'not-found'` if absent, preserving existing behaviour).
+> Match the concept/job insert column names to the actual schema (read the migrations if a column is rejected). `upsertByUrl` sets `seeded:true`, which is why both test systems are seeded; the difference is the presence of an ingest job.
 
-- [ ] **Step 5: Run test to verify it passes**
+- [ ] **Step 6: Run → fail.** `cd packages/db && npx vitest run src/terminology-admin-store.test.ts` — FAIL (`delete` ignores `opts`; seeded guard throws for the upload-created one too).
 
-Run: `cd packages/db && npx vitest run src/terminology-admin-store.test.ts`
-Expected: PASS.
+- [ ] **Step 7: Rewrite `codingSystems.delete`** in `packages/db/src/terminology-admin-store.ts` (replace the current `async delete(id) { … }` at ~420):
 
-- [ ] **Step 6: Typecheck db + server**
+```ts
+      async delete(id, opts) {
+        const row = await db.selectFrom('coding_systems').select(['seeded', 'url']).where('id', '=', id).executeTakeFirst();
+        if (!row) throw new TerminologyAdminError(`coding system not found: ${id}`, 'not-found');
+        const jobCount = Number(
+          (await db.selectFrom('terminology_ingest_jobs').select((eb) => eb.fn.countAll<number>().as('n'))
+            .where('coding_system_id', '=', id).executeTakeFirst())?.n ?? 0,
+        );
+        // A true system seed (seeded, no uploaded distribution) is never deletable. An upload-created
+        // system (seeded but with an ingest job) is deletable via cascade.
+        if (row.seeded && jobCount === 0) {
+          throw new TerminologyAdminError('This is a system-managed coding system and cannot be deleted.', 'conflict');
+        }
+        await db.transaction().execute(async (trx) => {
+          if (opts?.cascade) {
+            if (row.url) await trx.deleteFrom('terminology_concepts').where('system', '=', row.url).execute();
+            await trx.deleteFrom('terminology_ingest_jobs').where('coding_system_id', '=', id).execute();
+          }
+          await trx.deleteFrom('coding_systems').where('id', '=', id).execute();
+          if (capture) await capture.record(trx, 'coding_system', id, 'delete', null);
+        });
+      },
+```
+Update the interface signature (`ManagedStore`/type for codingSystems): `delete(id: string, opts?: { cascade?: boolean }): Promise<void>;`.
 
-Run: `pnpm --filter @openldr/db typecheck && pnpm --filter @openldr/server typecheck`
-Expected: clean.
+- [ ] **Step 8: Run → pass** the admin-store test; **typecheck** `@openldr/db` + `@openldr/server`.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 9: Rewrite the DELETE route** — `apps/server/src/terminology-admin-routes.ts` (~104-111):
+
+```ts
+  app.delete('/api/terminology/systems/:id', MANAGE, async (req, reply) => {
+    const id = (req.params as IdParam).id;
+    try {
+      const jobs = await ctx.terminologyJobs.listForCodingSystem(id);   // capture blob keys before deleting rows
+      await admin.codingSystems.delete(id, { cascade: true });          // policy + cascade (concepts + job rows + system row); throws 'conflict' if protected
+      await ctx.terminology.ontology.unlink(id).catch(() => {});        // ontology teardown (no-op if none)
+      for (const j of jobs) { try { await ctx.blob.delete(j.blobKey); } catch { /* best-effort blob cleanup */ } }
+      await recordAudit(ctx, req, { action: 'coding_system.delete', entityType: 'coding_system', entityId: id, before: null, after: null });
+      reply.code(204); return null;
+    } catch (e) { return mapErr(e, reply); }
+  });
+```
+
+- [ ] **Step 10: Route test** — in `apps/server/src/terminology-admin-routes.test.ts`, add/adjust a test: deleting an upload-created system (fake `terminologyJobs.listForCodingSystem` returns one job) returns 204 and calls `blob.delete` with its key; a protected seed returns 409 with the "system-managed" message. Match the file's existing app-injection + fake-ctx pattern.
+
+- [ ] **Step 11: Typecheck + tests + commit**
+
+Run: `pnpm --filter @openldr/db typecheck && pnpm --filter @openldr/server typecheck && cd packages/db && npx vitest run src/terminology-ingest-job-store.test.ts src/terminology-admin-store.test.ts && cd ../../apps/server && npx vitest run src/terminology-admin-routes.test.ts`
+Expected: clean + PASS.
 
 ```bash
-git add packages/db/src/terminology-admin-store.ts packages/db/src/terminology-admin-store.test.ts
-git commit -m "feat(terminology): actionable reason when a coding-system delete is blocked"
+git add packages/db/src/terminology-ingest-job-store.ts packages/db/src/terminology-ingest-job-store.test.ts packages/db/src/terminology-admin-store.ts packages/db/src/terminology-admin-store.test.ts apps/server/src/terminology-admin-routes.ts apps/server/src/terminology-admin-routes.test.ts apps/server/src/test-helpers.ts
+git commit -m "feat(terminology): delete upload-created coding systems (cascade); protect true seeds"
 ```
 
 ---
@@ -374,7 +438,20 @@ const handleDistributionPurge = (publisherId: string, systemType: string, label:
 
 - [ ] **Step 2: Move destructive items into a danger section.** For each menu that contains a destructive action — publisher (`handlePublisherDelete`, ~549), stored distribution (~567), code system (`handleSystemDelete`, ~619 and ~778) — ensure the destructive item is the **last** item, preceded by a `<DropdownMenuSeparator />`, and styled `className="text-destructive focus:text-destructive"`. The code-system Delete (~617) already has this class; extend the same treatment to "Delete stored distribution" and "Delete publisher", and reorder so each sits at the bottom of its menu.
 
-- [ ] **Step 3: Surface the enriched delete message.** `handleSystemDelete` already shows the server `error`. Confirm it renders the server message text (from Task 2) rather than a bare status — the client already receives `{ error }` and should display it. No 409-specific handling needed beyond showing the message.
+- [ ] **Step 3: Surface the server message on delete failure.** `deleteCodingSystem` in `apps/studio/src/api.ts:802` currently throws `"delete system failed: ${r.status}"`, discarding the server's `{ error }` body — that's why the user saw a bare `409`. Change it to read the JSON error and throw it (mirror the other mutations):
+
+```ts
+export async function deleteCodingSystem(id: string): Promise<void> {
+  const r = await authFetch(`/api/terminology/systems/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  if (!r.ok && r.status !== 204) {
+    let msg = `delete system failed: ${r.status}`;
+    try { const j = await r.json(); if (j?.error) msg = j.error; } catch { /* keep status fallback */ }
+    throw new Error(msg);
+  }
+}
+```
+
+So a protected true-seed now shows "This is a system-managed coding system and cannot be deleted." and an upload-created system deletes successfully (Task 2's cascade). `handleSystemDelete` already renders the thrown message.
 
 - [ ] **Step 4: Write/adjust the test.** Add a test that clicking "Delete stored distribution" opens the confirm dialog and does NOT call `purgeTerminologyDistribution` until confirm is clicked:
 
