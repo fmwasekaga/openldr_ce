@@ -1,5 +1,27 @@
+import { readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { detectAdapter } from './adapters/index';
 import { INDEX_SCHEMA_VERSION, type ConceptSink, type IndexWriter, type OntologyBuildProgress, type OntologyType, type PanelMember } from './types';
+
+// Real distributions often wrap their content in a single top-level folder — e.g. a SNOMED CT RF2
+// release zips everything under `SnomedCT_..._<timestamp>/`, so the `Snapshot/Terminology` files an
+// adapter looks for sit one level below the extracted root. When no adapter detects a distribution
+// at `dir`, descend through single-subdirectory wrappers (a few levels, defensively) before giving
+// up. A folder with the content at its top (multiple entries, e.g. LoincTable/ + AccessoryFiles/)
+// detects immediately and never descends.
+export function resolveDistributionRoot(dir: string): string {
+  let root = dir;
+  for (let depth = 0; depth < 4; depth++) {
+    if (detectAdapter(root)) return root;
+    let subdirs: string[];
+    try {
+      subdirs = readdirSync(root, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+    } catch { break; }
+    if (subdirs.length !== 1) break;
+    root = join(root, subdirs[0]);
+  }
+  return root;
+}
 
 export interface NodeRow {
   code: string;
@@ -84,19 +106,21 @@ export async function buildOntologyDistribution(
   onProgress: (progress: OntologyBuildProgress) => void,
   opts?: { conceptSink?: ConceptSink; expectedType?: OntologyType },
 ): Promise<void> {
-  const detected = detectAdapter(sourcePath);
+  // Unwrap a single top-level release folder (e.g. SNOMED RF2) so detection finds the content.
+  const root = resolveDistributionRoot(sourcePath);
+  const detected = detectAdapter(root);
   if (!detected) {
     const err = new Error('No LOINC / SNOMED CT / RxNorm distribution found in that folder.');
-    await store.failBuild(systemId, 'unknown', sourcePath, err.message);
+    await store.failBuild(systemId, 'unknown', root, err.message);
     throw err;
   }
   const { adapter, dist } = detected;
   if (opts?.expectedType && adapter.type !== opts.expectedType) {
     const err = new Error(`distribution is a ${adapter.type} distribution but ${opts.expectedType} was expected`);
-    await store.failBuild(systemId, adapter.type, sourcePath, err.message);
+    await store.failBuild(systemId, adapter.type, root, err.message);
     throw err;
   }
-  await store.beginBuild(systemId, adapter.type, sourcePath);
+  await store.beginBuild(systemId, adapter.type, root);
   try {
     await store.clearIndex(systemId);
     const writer = new BufferedWriter();
@@ -108,13 +132,13 @@ export async function buildOntologyDistribution(
     await flushChunked(writer.specimens, (chunk) => store.bulkInsertSpecimens(systemId, chunk));
     await store.finishBuild(systemId, {
       ontologyType: adapter.type,
-      sourcePath,
+      sourcePath: root,
       nodeCount: writer.nodes.length,
       edgeCount: writer.edges.length,
-      manifest: { schemaVersion: INDEX_SCHEMA_VERSION, ontologyType: adapter.type, sourcePath, fileStats: dist.fileStats },
+      manifest: { schemaVersion: INDEX_SCHEMA_VERSION, ontologyType: adapter.type, sourcePath: root, fileStats: dist.fileStats },
     });
   } catch (err) {
-    await store.failBuild(systemId, adapter.type, sourcePath, (err as Error).message);
+    await store.failBuild(systemId, adapter.type, root, (err as Error).message);
     throw err;
   }
 }

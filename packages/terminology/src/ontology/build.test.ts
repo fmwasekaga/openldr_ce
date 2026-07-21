@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { join } from 'node:path';
-import { buildOntologyDistribution, type OntologyIndexStore } from './build';
+import { mkdtemp, cp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { buildOntologyDistribution, resolveDistributionRoot, type OntologyIndexStore } from './build';
 
 function fakeStore() {
   const state: {
@@ -67,5 +69,20 @@ describe('buildOntologyDistribution', () => {
       buildOntologyDistribution('cs1', snomedFixture, store, () => {}, { expectedType: 'rxnorm' }),
     ).rejects.toThrow(/rxnorm.*expected|does not match/i);
     expect(state.status).toBe('error');
+  });
+
+  it('unwraps a single top-level release folder (real SNOMED RF2 zips wrap under SnomedCT_.../)', async () => {
+    // Real distributions nest content under one release folder; the extracted root has just that dir.
+    const wrap = await mkdtemp(join(tmpdir(), 'wrap-'));
+    const inner = join(wrap, 'SnomedCT_InternationalRF2_PRODUCTION_20260601T120000Z');
+    await cp(join(__dirname, 'adapters', '__fixtures__', 'snomed'), inner, { recursive: true });
+
+    expect(resolveDistributionRoot(wrap)).toBe(inner);          // descends into the wrapper
+    expect(resolveDistributionRoot(inner)).toBe(inner);         // already at the root → unchanged
+
+    const { store, state } = fakeStore();
+    await buildOntologyDistribution('cs-sct', wrap, store, () => {}, { expectedType: 'snomed' });
+    expect(state.status).toBe('ready');                          // builds through the wrapper
+    expect(state.built?.manifest.ontologyType).toBe('snomed');
   });
 });
