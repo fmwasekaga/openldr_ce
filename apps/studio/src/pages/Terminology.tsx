@@ -420,14 +420,33 @@ export function Terminology(): JSX.Element {
     if (distImportPublisherId) startPollingImportJob(distImportPublisherId, distImportSystemType);
   };
 
-  const handlePurgeDistribution = async (publisherId: string | null, systemType: 'loinc' | 'snomed' | 'rxnorm' | null): Promise<void> => {
+  const handlePurgeDistribution = (
+    publisherId: string | null,
+    systemType: 'loinc' | 'snomed' | 'rxnorm' | null,
+    label: string,
+  ): void => {
     if (!publisherId || !systemType) return;
-    try {
-      await purgeTerminologyDistribution(publisherId, systemType);
-      setToast({ kind: 'ok', text: 'Stored distribution deleted.' });
-    } catch (e: unknown) {
-      setToast({ kind: 'error', text: e instanceof Error ? e.message : String(e) });
-    }
+    setConfirm({
+      title: 'Delete stored distribution',
+      confirmName: label,
+      confirmLabel: 'Delete',
+      summary: (
+        <span>
+          Deletes the retained <b>{label}</b> distribution .zip. Already-ingested terms and ontology are{' '}
+          <b>not</b> affected.
+        </span>
+      ),
+      onConfirm: async () => {
+        try {
+          await purgeTerminologyDistribution(publisherId, systemType);
+          setConfirm(null);
+          setToast({ kind: 'ok', text: 'Stored distribution deleted.' });
+        } catch (e: unknown) {
+          setConfirm(null);
+          setToast({ kind: 'error', text: e instanceof Error ? e.message : String(e) });
+        }
+      },
+    });
   };
 
   return (
@@ -586,9 +605,6 @@ export function Terminology(): JSX.Element {
                             <DropdownMenuItem onClick={() => openDistImport(activeSection.publisher.id, st)}>
                               Import distribution...
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => void handlePurgeDistribution(activeSection.publisher.id, st)}>
-                              Delete stored distribution
-                            </DropdownMenuItem>
                           </>
                         );
                       })()}
@@ -693,6 +709,22 @@ export function Terminology(): JSX.Element {
                           <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>Import...</DropdownMenuItem>
                         </DropdownMenuSubContent>
                       </DropdownMenuSub>
+
+                      {/* Danger zone */}
+                      {publisherSystemType(activeSection.publisher) && !selectedSystem && (() => {
+                        const st = publisherSystemType(activeSection.publisher)!;
+                        return (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => handlePurgeDistribution(activeSection.publisher.id, st, activeSection.publisher.name)}
+                            >
+                              Delete stored distribution
+                            </DropdownMenuItem>
+                          </>
+                        );
+                      })()}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>

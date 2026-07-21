@@ -266,4 +266,31 @@ describe('Terminology page', () => {
     await waitFor(() => expect(uploadSpy).toHaveBeenCalledWith('pub-snomed-ct', 'snomed', file, true, null, expect.any(Function)));
     expect(await screen.findByText(/Import started/)).toBeInTheDocument();
   });
+
+  it('confirms before deleting a stored distribution, and only purges after typing the name + confirming', async () => {
+    const purgeSpy = vi.spyOn(api, 'purgeTerminologyDistribution').mockResolvedValue(undefined as never);
+
+    render(<MemoryRouter><Terminology /></MemoryRouter>);
+
+    const pageActions = (await screen.findAllByRole('button', { name: /actions/i }))[0];
+    fireEvent.pointerDown(pageActions, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Delete stored distribution')) fireEvent.keyDown(pageActions, { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Delete stored distribution'));
+
+    // Confirm dialog is up; the destructive action must NOT have fired yet.
+    await screen.findByRole('alertdialog');
+    expect(purgeSpy).not.toHaveBeenCalled();
+
+    // The Delete button stays disabled until the publisher name is typed exactly.
+    const deleteButton = await screen.findByRole('button', { name: 'Delete' });
+    expect(deleteButton).toBeDisabled();
+    fireEvent.click(deleteButton);
+    expect(purgeSpy).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText('Confirm name'), { target: { value: 'LOINC' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => expect(purgeSpy).toHaveBeenCalledWith('pub-loinc', 'loinc'));
+    expect(await screen.findByText('Stored distribution deleted.')).toBeInTheDocument();
+  });
 });
