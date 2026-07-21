@@ -137,13 +137,17 @@ describe('Terminology page', () => {
 
     const rowActions = (await screen.findAllByRole('button', { name: /actions/i }))[1];
     fireEvent.pointerDown(rowActions, { button: 0, ctrlKey: false, pointerType: 'mouse' });
-    if (!screen.queryByText('Browse ontology')) fireEvent.keyDown(rowActions, { key: 'Enter' });
-    fireEvent.click(await screen.findByText('Browse ontology'));
+    if (!screen.queryByText('Ontology')) fireEvent.keyDown(rowActions, { key: 'Enter' });
+    fireEvent.pointerMove(await screen.findByText('Ontology'));
+    fireEvent.keyDown(await screen.findByText('Ontology'), { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Browse'));
     expect(await screen.findByText('Browse mock LOINC')).toBeInTheDocument();
 
     fireEvent.pointerDown(rowActions, { button: 0, ctrlKey: false, pointerType: 'mouse' });
-    if (!screen.queryByText(/Ontology distribution/)) fireEvent.keyDown(rowActions, { key: 'Enter' });
-    fireEvent.click(await screen.findByText(/Ontology distribution/));
+    if (!screen.queryByText('Ontology')) fireEvent.keyDown(rowActions, { key: 'Enter' });
+    fireEvent.pointerMove(await screen.findByText('Ontology'));
+    fireEvent.keyDown(await screen.findByText('Ontology'), { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Distribution…'));
     expect(await screen.findByText('Distribution mock LOINC')).toBeInTheDocument();
   });
 
@@ -154,8 +158,10 @@ describe('Terminology page', () => {
 
     const rowActions = (await screen.findAllByRole('button', { name: /actions/i }))[1];
     fireEvent.pointerDown(rowActions, { button: 0, ctrlKey: false, pointerType: 'mouse' });
-    if (!screen.queryByText('Import terms...')) fireEvent.keyDown(rowActions, { key: 'Enter' });
-    fireEvent.click(await screen.findByText('Import terms...'));
+    if (!screen.queryByText('Terms')) fireEvent.keyDown(rowActions, { key: 'Enter' });
+    fireEvent.pointerMove(await screen.findByText('Terms'));
+    fireEvent.keyDown(await screen.findByText('Terms'), { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Import'));
 
     const input = await screen.findByTestId('term-import-input');
     expect(input).toHaveAttribute('accept', expect.stringContaining('.rrf'));
@@ -331,12 +337,14 @@ describe('Terminology page', () => {
 
     render(<MemoryRouter><Terminology /></MemoryRouter>);
 
-    // "Delete stored distribution" now lives on the system row's own ⋯ menu (not the section header).
+    // Purge now lives on the system row's ⋯ menu, under a "Delete" submenu → "Stored distribution".
     const allActions = await screen.findAllByRole('button', { name: /actions/i });
     const rowActions = allActions[allActions.length - 1];
     fireEvent.pointerDown(rowActions, { button: 0, ctrlKey: false, pointerType: 'mouse' });
-    if (!screen.queryByText('Delete stored distribution')) fireEvent.keyDown(rowActions, { key: 'Enter' });
-    fireEvent.click(await screen.findByText('Delete stored distribution'));
+    if (!screen.queryByText('Delete')) fireEvent.keyDown(rowActions, { key: 'Enter' });
+    fireEvent.pointerMove(await screen.findByText('Delete'));
+    fireEvent.keyDown(await screen.findByText('Delete'), { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Stored distribution'));
 
     // Confirm dialog is up; the destructive action must NOT have fired yet.
     await screen.findByRole('alertdialog');

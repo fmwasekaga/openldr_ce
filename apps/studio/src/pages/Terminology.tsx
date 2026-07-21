@@ -744,39 +744,48 @@ export function Terminology(): JSX.Element {
                                       Edit coding system
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
-                                    <DropdownMenuItem onClick={() => openTermImport(s)}>
-                                      Import terms...
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem asChild>
-                                      <a href={termsTemplateUrl(s.id)} download>Download terms template</a>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    {/* Ontology items */}
-                                    <DropdownMenuItem
-                                      disabled={distributions[s.id]?.indexStatus !== 'ready'}
-                                      onClick={() => setBrowseSystem(s)}
-                                    >
-                                      Browse ontology
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => setDistDialogSystem(s)}>
-                                      Ontology distribution…
-                                    </DropdownMenuItem>
+                                    <DropdownMenuSub>
+                                      <DropdownMenuSubTrigger>Terms</DropdownMenuSubTrigger>
+                                      <DropdownMenuSubContent>
+                                        <DropdownMenuItem onClick={() => openTermImport(s)}>Import</DropdownMenuItem>
+                                        <DropdownMenuItem asChild>
+                                          <a href={termsTemplateUrl(s.id)} download>Download template</a>
+                                        </DropdownMenuItem>
+                                      </DropdownMenuSubContent>
+                                    </DropdownMenuSub>
+                                    <DropdownMenuSub>
+                                      <DropdownMenuSubTrigger>Ontology</DropdownMenuSubTrigger>
+                                      <DropdownMenuSubContent>
+                                        <DropdownMenuItem
+                                          disabled={distributions[s.id]?.indexStatus !== 'ready'}
+                                          onClick={() => setBrowseSystem(s)}
+                                        >
+                                          Browse
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => setDistDialogSystem(s)}>Distribution…</DropdownMenuItem>
+                                      </DropdownMenuSubContent>
+                                    </DropdownMenuSub>
                                     <DropdownMenuSeparator />
                                     {/* Danger zone: purge just the retained zip, or remove the whole system. */}
-                                    {publisherSystemType(activeSection.publisher) && (
-                                      <DropdownMenuItem
-                                        className="text-destructive focus:text-destructive"
-                                        onClick={() => handlePurgeDistribution(activeSection.publisher.id, publisherSystemType(activeSection.publisher)!, s.systemCode)}
-                                      >
-                                        Delete stored distribution
-                                      </DropdownMenuItem>
-                                    )}
-                                    <DropdownMenuItem
-                                      className="text-destructive focus:text-destructive"
-                                      onClick={() => void handleSystemDelete(s)}
-                                    >
-                                      Delete coding system
-                                    </DropdownMenuItem>
+                                    <DropdownMenuSub>
+                                      <DropdownMenuSubTrigger className="text-destructive focus:text-destructive data-[state=open]:text-destructive">Delete</DropdownMenuSubTrigger>
+                                      <DropdownMenuSubContent>
+                                        {publisherSystemType(activeSection.publisher) && (
+                                          <DropdownMenuItem
+                                            className="text-destructive focus:text-destructive"
+                                            onClick={() => handlePurgeDistribution(activeSection.publisher.id, publisherSystemType(activeSection.publisher)!, s.systemCode)}
+                                          >
+                                            Stored distribution
+                                          </DropdownMenuItem>
+                                        )}
+                                        <DropdownMenuItem
+                                          className="text-destructive focus:text-destructive"
+                                          onClick={() => void handleSystemDelete(s)}
+                                        >
+                                          Coding system
+                                        </DropdownMenuItem>
+                                      </DropdownMenuSubContent>
+                                    </DropdownMenuSub>
                                   </DropdownMenuContent>
                                 </DropdownMenu>
                               </TableCell>
