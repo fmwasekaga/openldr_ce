@@ -8,3 +8,15 @@ export function validateDistributionImportArgs(system: string, opts: { file?: st
   if (!opts.acceptLicense) return 'the distribution license must be accepted (pass --accept-license)';
   return null;
 }
+
+// True when an insertRunning failure is a legitimate "an import is already running" signal rather
+// than a real error. Two such signals exist: the store's own hasActive guard (throws an Error whose
+// message contains "already active") and the active_key unique-index race in Postgres (SQLSTATE
+// 23505, unique_violation). Anything else — a dropped connection, a bad config — must be surfaced
+// truthfully, not mislabeled as a conflict. Pure, so it is unit-testable without a database.
+export function isActiveJobConflict(err: unknown): boolean {
+  const code = (err as { code?: unknown } | null)?.code;
+  if (code === '23505') return true; // Postgres unique_violation on active_key
+  const msg = err instanceof Error ? err.message : String(err);
+  return /already active/i.test(msg);
+}
