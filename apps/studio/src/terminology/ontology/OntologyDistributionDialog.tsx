@@ -120,8 +120,8 @@ export function OntologyDistributionDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="w-[560px]">
-          <div className="flex flex-col gap-1 border-b border-border px-6 py-4">
+        <DialogContent className="w-[560px] p-0">
+          <div className="flex flex-col gap-1 border-b border-border px-6 py-0">
             <DialogTitle>Ontology distribution for {systemName}</DialogTitle>
             {(status === 'none' || dist === null) && (
               <DialogDescription>No ontology distribution is linked for this coding system.</DialogDescription>
@@ -136,6 +136,7 @@ export function OntologyDistributionDialog({
               <Loader2 className="h-5 w-5 animate-spin" />
             </div>
           ) : (
+            <>
             <div className="flex flex-col gap-4 px-6 py-5">
               {dist?.stale && status !== 'error' && (
                 <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
@@ -213,38 +214,39 @@ export function OntologyDistributionDialog({
                 </div>
               )}
 
-              <div className="flex items-center justify-between gap-2 pt-1">
-                <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => onOpenChange(false)}>
-                  Close
-                </Button>
-                <div className="flex justify-end gap-2">
-                  {canRebuild && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 gap-2 text-xs"
-                      disabled={busy}
-                      onClick={() => void runBuild('rebuild')}
-                    >
-                      <RefreshCw className="h-3.5 w-3.5" />
-                      Rebuild
-                    </Button>
-                  )}
-                  {dist && status !== 'none' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 gap-2 text-xs text-destructive hover:text-destructive"
-                      disabled={busy}
-                      onClick={() => setConfirmUnlink(true)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Unlink
-                    </Button>
-                  )}
-                </div>
+            </div>
+            <div className="flex items-center justify-between gap-2 border-t border-border px-6 py-3">
+              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => onOpenChange(false)}>
+                Close
+              </Button>
+              <div className="flex justify-end gap-2">
+                {canRebuild && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-2 text-xs"
+                    disabled={busy}
+                    onClick={() => void runBuild('rebuild')}
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    Rebuild
+                  </Button>
+                )}
+                {dist && status !== 'none' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-2 text-xs text-destructive hover:text-destructive"
+                    disabled={busy}
+                    onClick={() => setConfirmUnlink(true)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Unlink
+                  </Button>
+                )}
               </div>
             </div>
+            </>
           )}
         </DialogContent>
       </Dialog>
