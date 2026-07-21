@@ -11,7 +11,7 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       minio: { condition: service_started }
-      keycloak: { condition: service_started }
+      keycloak: { condition: service_healthy }
     restart: unless-stopped
 
   studio:
@@ -34,7 +34,11 @@ services:
     volumes:
       - ./config/nginx/certs:/etc/nginx/certs:ro
       - certbot-www:/var/www/certbot
-    depends_on: ["api", "studio", "web", "keycloak"]
+    depends_on:
+      api: { condition: service_started }
+      studio: { condition: service_started }
+      web: { condition: service_started }
+      keycloak: { condition: service_healthy }
     restart: unless-stopped
 
   postgres:
@@ -74,8 +78,22 @@ services:
       mc mb --ignore-existing local/${S3_BUCKET:-openldr} &&
       echo 'bucket ready'"
 
+  # Renders the themed login page once, after Keycloak is healthy, so the first real user never
+  # pays the cold FreeMarker compile. Best-effort — never fails the stack. Internal back-channel;
+  # redirect_uri http://localhost/* is registered in the base realm, so Keycloak returns the login
+  # page (200) and compiles the theme rather than an invalid_redirect error.
+  keycloak-warmup:
+    image: curlimages/curl:latest
+    depends_on:
+      keycloak: { condition: service_healthy }
+    entrypoint:
+      - sh
+      - -c
+      - "curl -fsS -o /dev/null 'http://keycloak:8080/auth/realms/openldr/protocol/openid-connect/auth?client_id=openldr-web&response_type=code&scope=openid&redirect_uri=http%3A%2F%2Flocalhost%2Fstudio' || true; echo 'login theme warmed'"
+    restart: "no"
+
   keycloak:
-    image: quay.io/keycloak/keycloak:26.0
+    image: ghcr.io/open-laboratory-data-repository/openldr-keycloak:${OPENLDR_VERSION:-latest}
     # Production mode (`start`, not `start-dev`): persistent Postgres store instead of the throwaway H2
     # dev database. The stock image isn't pre-built for a specific DB vendor, so `start` (without
     # `--optimized`) auto-runs the build for KC_DB=postgres on boot. --import-realm still applies on the
@@ -92,12 +110,19 @@ services:
       KC_HOSTNAME: ${KC_HOSTNAME:-https://localhost/auth}
       KC_HTTP_ENABLED: "true"
       KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: "true"
     depends_on:
       # Wait for Postgres to be healthy so the keycloak database (created by the first-init script) exists.
       postgres: { condition: service_healthy }
     volumes:
       - ./config/keycloak/openldr-realm.json:/opt/keycloak/data/import/openldr-realm.json:ro
     expose: ["8080"]
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9000; printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3; grep -q UP <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
     restart: unless-stopped
 
   # Let's Encrypt helper (profile-gated: does NOT start with `up`). Invoked by the installer's

@@ -46,6 +46,7 @@ services:
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
     volumes:
       - ./infra/keycloak/openldr-realm.json:/opt/keycloak/data/import/openldr-realm.json:ro
+      - ./deploy/keycloak/themes/openldr:/opt/keycloak/themes/openldr:ro
     ports:
       - "8180:8080"
 
