@@ -436,7 +436,7 @@ export function ctxWith(status: 'up' | 'down'): AppContext {
     encryptSecret: (p: string) => p,
     decryptSecret: (b: string) => b,
     marketplaceForms: {} as never,
-    terminology: { ops: {} as never, admin: buildFakeAdmin(), ontology: buildFakeOntology(), loaders: buildFakeLoaders() },
+    terminology: { ops: {} as never, admin: buildFakeAdmin(), ontology: buildFakeOntology(), loaders: buildFakeLoaders(), ingestOntologyWithConcepts: async () => ({ conceptsLoaded: 0 }) },
     terminologyJobs: {
       enqueue: async () => ({} as any),
       claimNext: async () => null,
