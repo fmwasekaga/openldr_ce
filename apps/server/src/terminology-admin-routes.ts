@@ -411,6 +411,25 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
     reply.code(204);
     return null;
   });
+
+  // Rebuild an upload-managed coding system's concepts + ontology by RE-INGESTING its retained
+  // distribution zip from the blob store — the correct "rebuild" for uploads (the recorded ontology
+  // sourcePath is an ephemeral extraction dir that no longer exists). Re-enqueues onto the same
+  // ingest worker the upload uses, so progress flows through the job-status poll + bell.
+  app.post('/api/terminology/systems/:id/distribution/reingest', MANAGE, async (req, reply) => {
+    const id = (req.params as IdParam).id;
+    const jobs = await ctx.terminologyJobs.listForCodingSystem(id);
+    const latest = jobs.find((j) => j.blobKey);
+    if (!latest) { reply.code(409); return { error: 'no stored distribution to rebuild from — upload one first' }; }
+    try {
+      const job = await ctx.terminologyJobs.enqueue({
+        systemType: latest.systemType, codingSystemId: id, blobKey: latest.blobKey, version: latest.version, createdBy: req.user?.id ?? null,
+      });
+      await recordAudit(ctx, req, { action: 'terminology.distribution.reingested', entityType: 'coding_system', entityId: id, before: null, after: null, metadata: { systemType: latest.systemType, jobId: job.id, blobKey: latest.blobKey } });
+      reply.code(202);
+      return { jobId: job.id };
+    } catch (e) { return mapErr(e, reply); }
+  });
 }
 
 function isReadableBody(body: unknown): body is NodeJS.ReadableStream {

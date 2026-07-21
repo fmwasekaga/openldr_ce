@@ -183,6 +183,23 @@ describe('terminology distribution upload/status/purge (publisher-scoped)', () =
     expect(ctxState.enqueued[0].systemType).toBe('snomed');
   });
 
+  it('reingest re-enqueues from the retained blob (202) for an upload-managed system', async () => {
+    const { ctx, ctxState } = fakeCtx();
+    ctxState.jobsForSystem = [{ id: 'tij_old', systemType: 'loinc', codingSystemId: 'cs-url-LOINC', blobKey: 'terminology-dist/loinc/cs-url-LOINC-1.zip', version: '2.82' }];
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/terminology/systems/cs-url-LOINC/distribution/reingest' });
+    expect(res.statusCode).toBe(202);
+    expect(res.json().jobId).toBe('tij_1');
+    expect(ctxState.enqueued[0]).toMatchObject({ systemType: 'loinc', codingSystemId: 'cs-url-LOINC', blobKey: 'terminology-dist/loinc/cs-url-LOINC-1.zip', version: '2.82' });
+  });
+
+  it('reingest returns 409 when there is no retained distribution', async () => {
+    const { ctx, ctxState } = fakeCtx();
+    ctxState.jobsForSystem = [];
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/terminology/systems/cs-url-LOINC/distribution/reingest' });
+    expect(res.statusCode).toBe(409);
+    expect(ctxState.enqueued.length).toBe(0);
+  });
+
   it('still rejects a genuinely unknown systemType (400)', async () => {
     const { ctx } = fakeCtx();
     const res = await appWith(ctx).inject({ method: 'POST', url: '/api/terminology/publishers/pub-x/distribution?systemType=nope&acceptLicense=true', headers: { 'content-type': 'application/octet-stream' }, payload: Buffer.from('x') });
