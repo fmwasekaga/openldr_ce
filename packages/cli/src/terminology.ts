@@ -1,8 +1,10 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, createReadStream } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { loadConfig } from '@openldr/config';
-import { createTerminologyContext, recordAuditEvent } from '@openldr/bootstrap';
+import { createTerminologyContext, resolveCodingSystemId, createRunIngest, runIngestJob, recordAuditEvent } from '@openldr/bootstrap';
 import { cliActor } from './cli-actor';
 import { redactError } from './redact-error';
+import { validateDistributionImportArgs } from './distribution-args';
 
 function out(json: boolean, obj: unknown, human: string): void {
   process.stdout.write((json ? JSON.stringify(obj, null, 2) : human) + '\n');
@@ -200,4 +202,49 @@ export async function runOntologyUnlink(systemId: string, opts: { json?: boolean
   } finally {
     await ctx.close();
   }
+}
+
+export async function runDistributionImport(system: string, opts: { file?: string; acceptLicense?: boolean; version?: string; json: boolean }): Promise<number> {
+  const argErr = validateDistributionImportArgs(system, opts);
+  if (argErr) { process.stderr.write(`${argErr}\n`); return 1; }
+  const cfg = loadConfig();
+  const ctx = await createTerminologyContext(cfg);
+  try {
+    const codingSystemId = await resolveCodingSystemId(ctx.admin, system, opts.version ?? null);
+    const key = `terminology-dist/${system}/${codingSystemId}-${Date.now()}.zip`;
+    await ctx.blob.putStream(key, createReadStream(opts.file!), 'application/zip');
+    let job;
+    try {
+      job = await ctx.jobs.insertRunning({ systemType: system, codingSystemId, blobKey: key, version: opts.version ?? null, createdBy: 'cli' });
+    } catch {
+      // one-active-per-system guard tripped — clean up the just-uploaded blob and bail
+      await ctx.blob.delete(key).catch(() => {});
+      process.stderr.write(`an import for ${system} is already in progress\n`);
+      return 1;
+    }
+    const runIngest = createRunIngest({ blob: ctx.blob, terminology: ctx, workDirBase: cfg.TERMINOLOGY_WORK_DIR ?? tmpdir() });
+    const result = await runIngestJob({
+      job, jobs: ctx.jobs, blob: ctx.blob, runIngest, audit: ctx.audit, logger: ctx.logger,
+      onProgress: (p) => process.stderr.write(`${p.phase}: ${p.processed}${p.total != null ? `/${p.total}` : ''}\r`),
+    });
+    if (result.status === 'ready') {
+      out(opts.json, { system, conceptsLoaded: result.conceptsLoaded }, `\nimported ${system} (${result.conceptsLoaded} concepts)`);
+      return 0;
+    }
+    process.stderr.write(`\nterminology distribution import failed: ${result.error}\n`);
+    return 1;
+  } catch (err) { process.stderr.write(`terminology distribution import failed: ${redactError(err)}\n`); return 1; }
+  finally { await ctx.close(); }
+}
+
+export async function runDistributionPurge(system: string, opts: { json: boolean }): Promise<number> {
+  const ctx = await createTerminologyContext(loadConfig());
+  try {
+    const job = await ctx.jobs.latestForSystem(system);
+    if (job?.blobKey) await ctx.blob.delete(job.blobKey);
+    await recordAuditEvent(ctx, cliActor(), { action: 'terminology.distribution.purged', entityType: 'coding_system', entityId: job?.codingSystemId ?? system, metadata: { systemType: system, jobId: job?.id ?? null } });
+    out(opts.json, { system, purged: !!job?.blobKey }, job?.blobKey ? `purged ${system} distribution` : `no distribution to purge for ${system}`);
+    return 0;
+  } catch (err) { process.stderr.write(`terminology distribution purge failed: ${redactError(err)}\n`); return 1; }
+  finally { await ctx.close(); }
 }
