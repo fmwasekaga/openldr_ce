@@ -339,64 +339,78 @@ git commit -m "feat(terminology): delete upload-created coding systems (cascade)
 
 ---
 
-## Task 3: Refetch ontology distributions when an import completes
+## Task 3: Resume in-flight import polling on mount (fixes the stale ontology menu)
+
+**REVISED after reading the code (the original "add a refetch on complete" is already implemented).** Facts:
+- The poller ALREADY refreshes on completion: `startPollingImportJob`'s `poll()` (~368-393 in `Terminology.tsx`) calls `await reload()` when `job.status === 'ready'`, and `reload()` (~155-163) refetches `listOntologyDistributions()` → `setDistributions`. So a completion detected *while polling* enables "Browse ontology" correctly.
+- The gap: polling is only started when an import is **queued in the current session** (an effect keyed on `distImportPublisherId`, ~line 397). There is **no mount-time resume**. A long import (RxNorm builds 72k nodes) that finishes after a page reload/navigation never triggers `reload()`, so the menu stays stale until a manual refresh — exactly the RxNorm-vs-fast-LOINC asymmetry the user saw.
+
+**Fix:** on mount, for each distribution-capable publisher whose latest job is still in-flight (`queued`/`running`), resume `startPollingImportJob` so its completion refreshes the page. Uses the existing `publisherSystemType(publisher)` helper (maps `pub-loinc→loinc`, `pub-snomed-ct→snomed`, `pub-rxnorm→rxnorm`, else null).
 
 **Files:**
-- Modify: `apps/studio/src/pages/Terminology.tsx` (the import-job poller, ~lines 371-391)
-- Modify: a Studio test alongside (or add one) asserting the refetch on completion
+- Modify: `apps/studio/src/pages/Terminology.tsx`
+- Modify/add: `apps/studio/src/pages/Terminology.test.tsx` (or a focused new test)
 
-**Interfaces:**
-- Consumes existing `listOntologyDistributions()`, `listCodingSystems()`, `setDistributions`, `getTerminologyIngestJob`.
+- [ ] **Step 1: Confirm the shape.** Verify in `Terminology.tsx`: `reload()` refetches distributions (it does); `startPollingImportJob(publisherId, systemType)` exists (~368) and reloads on ready; `publisherSystemType(pub)` exists; `getTerminologyIngestJob(publisherId, systemType)` returns the latest job or throws/404s when none. The mount effect(s) (~168-176) only call `reload()` + set unmount cleanup — no poll resume.
 
-- [ ] **Step 1: Read the poller.** In `Terminology.tsx`, the `poll()` (~371) calls `getTerminologyIngestJob(publisherId, systemType)` every 3s and clears the badge on a terminal status. The initial load (~156-161) is the only place `setDistributions` runs, so a freshly-built ontology never refreshes.
-
-- [ ] **Step 2: Write the failing test.** Add a focused test (in `apps/studio/src/pages/Terminology.test.tsx` or a new `Terminology.refetch.test.tsx`) that mounts the page (or the poller unit if extracted), mocks `getTerminologyIngestJob` to return `status: 'ready'`, and asserts `listOntologyDistributions` is called again after the job reaches `ready`. Mock the api module; match the file's existing test setup for this page.
+- [ ] **Step 2: Write the failing test** in `apps/studio/src/pages/Terminology.test.tsx` (match the file's existing `vi.mock('../api', …)` harness). Mock so a distribution publisher (e.g. `pub-rxnorm`) has an in-flight job on mount that then completes:
 
 ```ts
-// sketch — adapt to the page's existing test harness/mocks
-expect(listOntologyDistributions).toHaveBeenCalledTimes(1); // initial load
-// advance the poll; job returns 'ready'
-await flushPollOnce();
-expect(listOntologyDistributions).toHaveBeenCalledTimes(2); // refetched on completion
+// getTerminologyIngestJob: first call 'running', second call 'ready'
+const getJob = vi.mocked(getTerminologyIngestJob);
+getJob.mockResolvedValueOnce({ id: 'j', status: 'running', phase: null, processed: 0, total: null, error: null, version: null, finishedAt: null } as never)
+      .mockResolvedValue({ id: 'j', status: 'ready', phase: null, processed: 1, total: 1, error: null, version: null, finishedAt: null } as never);
+// render with a rxnorm publisher present in listPublishers mock
+render(<TerminologyPage/>);   // match the file's actual render/wrapper
+await waitFor(() => expect(getJob).toHaveBeenCalledWith('pub-rxnorm', 'rxnorm')); // mount RESUMED polling
+// advance the 3s interval so the poll sees 'ready' and reloads
+await act(async () => { vi.advanceTimersByTime(3100); await Promise.resolve(); });
+await waitFor(() => expect(vi.mocked(listOntologyDistributions).mock.calls.length).toBeGreaterThan(1)); // reload() ran on completion
 ```
 
-- [ ] **Step 3: Run test to verify it fails**
+> Adapt render/wrapper, mock names, and timer handling to the file's existing patterns (it may or may not use fake timers — if not, drive the poll via its interval or extract the resume into a testable unit). The essential assertions: (a) mount calls `getTerminologyIngestJob` for the in-flight distribution publisher, (b) a subsequent `ready` triggers another `listOntologyDistributions`.
 
-Run: `cd apps/studio && npx vitest run src/pages/Terminology.refetch.test.tsx`
-Expected: FAIL — refetch not wired (called once).
+- [ ] **Step 3: Run → fail.** `cd apps/studio && npx vitest run src/pages/Terminology.test.tsx` — FAIL (mount does not resume polling; `getTerminologyIngestJob` not called on mount).
 
-- [ ] **Step 4: Add the refetch.** In `poll()`, when the job reaches a terminal status (`ready` or `failed`), after clearing the badge, refetch distributions + coding systems and update state:
+- [ ] **Step 4: Add the mount-resume effect.** Place it AFTER `startPollingImportJob` is defined (so it's in scope), matching the file's effect/deps conventions:
 
-```ts
-if (job.status === 'ready' || job.status === 'failed') {
-  // ...existing badge-clear / interval-clear...
-  if (job.status === 'ready') {
-    const [systems, dists] = await Promise.all([listCodingSystems(), listOntologyDistributions()]);
-    if (!cancelled()) {           // use the file's existing unmount guard
-      setSystems(systems);        // match the page's coding-systems state setter name
-      setDistributions(Object.fromEntries(dists.map((d) => [d.codingSystemId, d])));
+```tsx
+// Resume polling any distribution import still in-flight when the page (re)mounts, so its completion
+// refreshes the ontology menu (via reload()) even if the import outlived the session that started it.
+useEffect(() => {
+  if (publishers.length === 0) return;
+  let cancelled = false;
+  void (async () => {
+    for (const pub of publishers) {
+      const systemType = publisherSystemType(pub);
+      if (!systemType) continue;
+      if (importPollRef.current[pub.id]) continue; // already polling this publisher
+      try {
+        const job = await getTerminologyIngestJob(pub.id, systemType);
+        if (cancelled || !importPollMountedRef.current) return;
+        if (job.status === 'queued' || job.status === 'running') {
+          setImportJobs((prev) => ({ ...prev, [pub.id]: job }));
+          startPollingImportJob(pub.id, systemType);
+        }
+      } catch { /* no job for this system → nothing to resume */ }
     }
-  }
-}
+  })();
+  return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps — startPollingImportJob/publisherSystemType are stable; resume keyed on publishers only
+}, [publishers]);
 ```
 
-> Use the page's actual state setters and unmount guard (there is an `importPollRef` + an unmount no-op guard around `getTerminologyIngestJob`). Do not introduce a second guard pattern.
+> `publisherSystemType` returns the systemType or null; `getTerminologyIngestJob` throws/404s when there's no job (caught). If the studio package lint doesn't enforce `exhaustive-deps`, drop the disable comment.
 
-- [ ] **Step 5: Run test to verify it passes**
+- [ ] **Step 5: Run → pass.** `cd apps/studio && npx vitest run src/pages/Terminology.test.tsx`.
 
-Run: `cd apps/studio && npx vitest run src/pages/Terminology.refetch.test.tsx`
-Expected: PASS.
-
-- [ ] **Step 6: Typecheck studio**
-
-Run: `pnpm --filter @openldr/studio typecheck`
-Expected: clean.
+- [ ] **Step 6: Typecheck studio.** `pnpm --filter @openldr/studio typecheck` — clean.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add apps/studio/src/pages/Terminology.tsx apps/studio/src/pages/Terminology.refetch.test.tsx
-git commit -m "fix(studio): refetch ontology distributions when a terminology import completes"
+git add apps/studio/src/pages/Terminology.tsx apps/studio/src/pages/Terminology.test.tsx
+git commit -m "fix(studio): resume in-flight terminology import polling on mount (refreshes ontology menu)"
 ```
 
 ---
