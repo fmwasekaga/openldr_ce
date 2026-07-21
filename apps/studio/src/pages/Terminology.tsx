@@ -760,18 +760,22 @@ export function Terminology(): JSX.Element {
                                         </DropdownMenuItem>
                                       </DropdownMenuSubContent>
                                     </DropdownMenuSub>
-                                    <DropdownMenuSub>
-                                      <DropdownMenuSubTrigger>Ontology</DropdownMenuSubTrigger>
-                                      <DropdownMenuSubContent>
-                                        <DropdownMenuItem
-                                          disabled={distributions[s.id]?.indexStatus !== 'ready'}
-                                          onClick={() => setBrowseSystem(s)}
-                                        >
-                                          Browse
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => setDistDialogSystem(s)}>Distribution</DropdownMenuItem>
-                                      </DropdownMenuSubContent>
-                                    </DropdownMenuSub>
+                                    {/* Ontology (a hierarchical tree) only applies to LOINC / SNOMED / RxNorm.
+                                        The flat FHIR/UCUM/ICD reference systems have no ontology, so hide it there. */}
+                                    {publisherSystemType(activeSection.publisher) && (
+                                      <DropdownMenuSub>
+                                        <DropdownMenuSubTrigger>Ontology</DropdownMenuSubTrigger>
+                                        <DropdownMenuSubContent>
+                                          <DropdownMenuItem
+                                            disabled={distributions[s.id]?.indexStatus !== 'ready'}
+                                            onClick={() => setBrowseSystem(s)}
+                                          >
+                                            Browse
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem onClick={() => setDistDialogSystem(s)}>Distribution</DropdownMenuItem>
+                                        </DropdownMenuSubContent>
+                                      </DropdownMenuSub>
+                                    )}
                                     <DropdownMenuSeparator />
                                     {/* Danger zone: purge just the retained zip, or remove the whole system. */}
                                     <DropdownMenuSub>
