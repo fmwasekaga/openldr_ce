@@ -76,7 +76,7 @@ import { createDhis2Orchestration } from './dhis2-orchestration';
 import { selectTargetStore } from './target-store';
 import { createPluginRegistry } from './plugin-registry';
 import { createProjectionWorker } from './projection-worker';
-import { buildOntologyDistribution, createOperations, importTerminologyResource, ingestDistribution, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type LoadResult, type OntologyBuildProgress, type OntologyManifest, type Operations } from '@openldr/terminology';
+import { buildOntologyDistribution, canonicalSystemUrl, createOperations, importTerminologyResource, ingestDistribution, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type LoadResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType, type Operations } from '@openldr/terminology';
 import { createTerminologyIngestWorker } from './terminology-ingest-worker';
 import { downloadAndExtract } from './terminology-dist-extract';
 
@@ -283,6 +283,7 @@ export interface AppContext {
       amr(sqlitePath: string): Promise<LoadResult[]>;
       resource(json: unknown): Promise<LoadResult>;
     };
+    ingestOntologyWithConcepts(systemType: string, systemId: string, dir: string, onProgress: (p: { phase: string; processed: number; total: number | null }) => void): Promise<{ conceptsLoaded: number }>;
   };
   dashboards: DashboardsApi;
   reportDesigns: ReportDesignStore;
@@ -559,7 +560,8 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   // Sync S3: pass referenceCapture so central terminology-metadata authoring (publishers /
   // coding_systems / term_mappings) lands rows in reference_change_log for labs to pull.
   const termAdmin = createTerminologyAdminStore(termDb, termProjection, referenceCapture);
-  const termOntology = createOntologyApi(createOntologyStore(termDb));
+  const termOntologyStore = createOntologyStore(termDb);
+  const termOntology = createOntologyApi(termOntologyStore);
   const loaderStore: LoaderStore = {
     upsertConcepts: (r) => termStore.upsertConcepts(r),
     upsertMapElements: (r) => termStore.upsertMapElements(r),
@@ -598,6 +600,25 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
       amr: (p) => loadWhonetAmr(p, loaderStore),
       resource: (json) => importTerminologyResource(json, loaderStore),
     },
+    async ingestOntologyWithConcepts(systemType, systemId, dir, onProgress) {
+      const url = canonicalSystemUrl(systemType);
+      if (!url) throw new Error(`unsupported system type: ${systemType}`);
+      let conceptsLoaded = 0;
+      const conceptSink = async (rows: Parameters<LoaderStore['upsertConcepts']>[0]) => {
+        await loaderStore.upsertConcepts(rows);
+        conceptsLoaded += rows.length;
+      };
+      await buildOntologyDistribution(
+        systemId, dir, termOntologyStore,
+        (p) => onProgress({ phase: p.phase, processed: p.processed, total: p.total }),
+        { conceptSink, expectedType: systemType as OntologyType },
+      );
+      // Registration tail — same as loadLoinc: make the terms queryable + fire the sync signal.
+      const ref = await loaderStore.saveResource({ resourceType: 'CodeSystem', url, name: deriveSystemCode(url), status: 'active', content: 'not-present' });
+      await loaderStore.saveSystem(url, null, 'CodeSystem', ref.id);
+      await loaderStore.markSystemChanged(url);
+      return { conceptsLoaded };
+    },
   };
 
   // Task 6: terminology distribution ingest — job store (queue/claim/progress/retain-latest) +
@@ -631,6 +652,8 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
             },
             buildOntology: async (_systemType, codingSystemId, dir, onP) =>
               terminology.ontology.build(codingSystemId, dir, (p) => onP({ phase: p.phase, processed: p.processed, total: p.total })),
+            buildOntologyWithConcepts: async (systemType, codingSystemId, dir, onP) =>
+              terminology.ingestOntologyWithConcepts(systemType, codingSystemId, dir, onP),
           },
         });
       } finally {
