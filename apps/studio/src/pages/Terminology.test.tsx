@@ -147,7 +147,7 @@ describe('Terminology page', () => {
     if (!screen.queryByText('Ontology')) fireEvent.keyDown(rowActions, { key: 'Enter' });
     fireEvent.pointerMove(await screen.findByText('Ontology'));
     fireEvent.keyDown(await screen.findByText('Ontology'), { key: 'Enter' });
-    fireEvent.click(await screen.findByText('Distribution…'));
+    fireEvent.click(await screen.findByText('Distribution'));
     expect(await screen.findByText('Distribution mock LOINC')).toBeInTheDocument();
   });
 
@@ -344,7 +344,7 @@ describe('Terminology page', () => {
     if (!screen.queryByText('Delete')) fireEvent.keyDown(rowActions, { key: 'Enter' });
     fireEvent.pointerMove(await screen.findByText('Delete'));
     fireEvent.keyDown(await screen.findByText('Delete'), { key: 'Enter' });
-    fireEvent.click(await screen.findByText('Stored distribution'));
+    fireEvent.click(await screen.findByText('Distribution'));
 
     // Confirm dialog is up; the destructive action must NOT have fired yet.
     await screen.findByRole('alertdialog');

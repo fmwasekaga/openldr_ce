@@ -41,6 +41,7 @@ import { OntologyPickerDialog } from '../terminology/ontology/OntologyPickerDial
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { StripedEmpty } from '../components/ui/striped-empty';
+import { LoadingState } from '../components/ui/spinner';
 import { Checkbox } from '../components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
@@ -108,6 +109,7 @@ export function Terminology(): JSX.Element {
   const [valueSets, setValueSets] = useState<ValueSetSummary[]>([]);
   const [distributions, setDistributions] = useState<Record<string, OntologyDistribution>>({});
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   // ── navigation ──────────────────────────────────────────────────────────────
   const [selectedPublisherId, setSelectedPublisherId] = useState('');
@@ -160,7 +162,8 @@ export function Terminology(): JSX.Element {
       })
       .catch((e: unknown) => {
         setLoadError(e instanceof Error ? e.message : String(e));
-      });
+      })
+      .finally(() => setLoading(false));
 
   useEffect(() => {
     void reload();
@@ -473,7 +476,9 @@ export function Terminology(): JSX.Element {
 
             {/* Publisher list */}
             <div className="flex-1 overflow-auto">
-              {sections.length === 0 ? (
+              {loading ? (
+                <LoadingState label="Loading…" className="min-h-40" />
+              ) : sections.length === 0 ? (
                 <p className="p-3 text-xs text-muted-foreground">No publishers yet.</p>
               ) : (
                 sections.map(({ publisher: p }) => (
@@ -500,7 +505,9 @@ export function Terminology(): JSX.Element {
 
           {/* ── Main pane ───────────────────────────────────────────────── */}
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-            {!activeSection ? (
+            {loading ? (
+              <LoadingState label="Loading terminology…" className="flex-1" />
+            ) : !activeSection ? (
               /* No publisher selected */
               <StripedEmpty className="flex-1">
                 Select a publisher to browse its code systems and value sets.
@@ -649,7 +656,7 @@ export function Terminology(): JSX.Element {
                             Import terms...
                           </DropdownMenuItem>
                           <DropdownMenuItem disabled={!selectedSystem} asChild>
-                            <a href={selectedSystem ? termsTemplateUrl(selectedSystem.id) : '#'} download>Download template</a>
+                            <a href={selectedSystem ? termsTemplateUrl(selectedSystem.id) : '#'} download className="text-inherit no-underline">Download template</a>
                           </DropdownMenuItem>
                         </DropdownMenuSubContent>
                       </DropdownMenuSub>
@@ -749,7 +756,7 @@ export function Terminology(): JSX.Element {
                                       <DropdownMenuSubContent>
                                         <DropdownMenuItem onClick={() => openTermImport(s)}>Import</DropdownMenuItem>
                                         <DropdownMenuItem asChild>
-                                          <a href={termsTemplateUrl(s.id)} download>Download template</a>
+                                          <a href={termsTemplateUrl(s.id)} download className="text-inherit no-underline">Download template</a>
                                         </DropdownMenuItem>
                                       </DropdownMenuSubContent>
                                     </DropdownMenuSub>
@@ -762,7 +769,7 @@ export function Terminology(): JSX.Element {
                                         >
                                           Browse
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => setDistDialogSystem(s)}>Distribution…</DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => setDistDialogSystem(s)}>Distribution</DropdownMenuItem>
                                       </DropdownMenuSubContent>
                                     </DropdownMenuSub>
                                     <DropdownMenuSeparator />
@@ -775,7 +782,7 @@ export function Terminology(): JSX.Element {
                                             className="text-destructive focus:text-destructive"
                                             onClick={() => handlePurgeDistribution(activeSection.publisher.id, publisherSystemType(activeSection.publisher)!, s.systemCode)}
                                           >
-                                            Stored distribution
+                                            Distribution
                                           </DropdownMenuItem>
                                         )}
                                         <DropdownMenuItem
