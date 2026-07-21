@@ -26,11 +26,6 @@ const systemInput = z.object({
   active: z.boolean(),
   publisherId: z.string().nullish(),
 });
-const loincImportInput = z.object({
-  path: z.string().min(1),
-  acceptLicense: z.boolean(),
-});
-
 export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
   const admin = ctx.terminology.admin;
   type IdParam = { id: string };
@@ -120,20 +115,6 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
   });
 
   // ── Terms ────────────────────────────────────────────────────────────────
-  app.post('/api/terminology/import/loinc', MANAGE, async (req, reply) => {
-    const parsed = loincImportInput.safeParse(req.body);
-    if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
-    if (!parsed.data.acceptLicense) {
-      reply.code(400);
-      return { error: 'LOINC import requires accepting the LOINC license.' };
-    }
-    try {
-      const result = await ctx.terminology.loaders.loinc(parsed.data.path, parsed.data.acceptLicense);
-      await recordAudit(ctx, req, { action: 'coding_system.import', entityType: 'coding_system', entityId: 'loinc', before: null, after: null, metadata: { source: 'loinc', result } });
-      return result;
-    } catch (e) { return mapErr(e, reply); }
-  });
-
   const termInput = z.object({
     code: z.string().min(1), display: z.string().min(1),
     status: z.enum(['ACTIVE', 'DRAFT', 'DEPRECATED', 'DISABLED']),

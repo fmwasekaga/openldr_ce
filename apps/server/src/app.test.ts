@@ -227,27 +227,6 @@ describe('terminology admin routes', () => {
     await app.close();
   });
 
-  it('imports a LOINC distribution through the terminology loader', async () => {
-    const app = await buildApp(ctxWith('up'));
-
-    const missingLicense = await app.inject({
-      method: 'POST',
-      url: '/api/terminology/import/loinc',
-      payload: { path: 'D:\\terminology\\Loinc\\2.82', acceptLicense: false },
-    });
-    expect(missingLicense.statusCode).toBe(400);
-
-    const imported = await app.inject({
-      method: 'POST',
-      url: '/api/terminology/import/loinc',
-      payload: { path: 'D:\\terminology\\Loinc\\2.82', acceptLicense: true },
-    });
-    expect(imported.statusCode).toBe(200);
-    expect(JSON.parse(imported.body)).toMatchObject({ system: 'http://loinc.org', conceptsLoaded: 2 });
-
-    await app.close();
-  });
-
   it('creates, lists, expands, and exports value sets', async () => {
     const app = await buildApp(ctxWith('up'));
 

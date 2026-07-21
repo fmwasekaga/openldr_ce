@@ -833,7 +833,6 @@ export interface ValueSetInput {
   publisherId?: string | null; category?: string | null;
 }
 export interface ExpandedCode { system: string; code: string; display: string | null }
-export interface TerminologyLoadResult { system: string; conceptsLoaded: number; resourceUrl: string }
 
 export const listValueSets = (publisherId?: string): Promise<ValueSetSummary[]> =>
   authFetch(`/api/terminology/valuesets${publisherId ? `?publisherId=${encodeURIComponent(publisherId)}` : ''}`).then((r) => okJson<ValueSetSummary[]>(r, 'list value sets'));
@@ -857,8 +856,6 @@ export const importValueSet = (resource: unknown | Blob): Promise<ValueSet | Val
   return authFetch('/api/terminology/valuesets/import', init).then((r) => okJson<ValueSet | ValueSetCatalogImportResult>(r, 'import value set'));
 };
 export const valueSetExportUrl = (id: string): string => `/api/terminology/valuesets/${id}/export`;
-export const importLoincDistribution = (path: string, acceptLicense: boolean): Promise<TerminologyLoadResult> =>
-  authFetch('/api/terminology/import/loinc', jbody({ path, acceptLicense }, 'POST')).then((r) => okJson<TerminologyLoadResult>(r, 'import LOINC distribution'));
 
 export interface TerminologyIngestJobView {
   id: string; status: 'queued' | 'running' | 'ready' | 'failed';

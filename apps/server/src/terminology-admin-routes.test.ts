@@ -59,7 +59,6 @@ describe('terminology admin RBAC', () => {
     const { ctx } = fakeCtx();
     const app = appWith(ctx, ['lab_technician']);
     expect((await app.inject({ method: 'POST', url: '/api/terminology/publishers', payload: { name: 'P', role: 'local' } })).statusCode).toBe(403);
-    expect((await app.inject({ method: 'POST', url: '/api/terminology/import/loinc', payload: { path: '/x', acceptLicense: true } })).statusCode).toBe(403);
     expect((await app.inject({ method: 'DELETE', url: '/api/terminology/systems/sys9' })).statusCode).toBe(403);
   });
 
