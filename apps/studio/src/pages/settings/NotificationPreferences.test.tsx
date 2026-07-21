@@ -48,6 +48,7 @@ describe('NotificationPreferences page', () => {
         { type: 'sync_failed', enabled: true },
         { type: 'sync_quarantined', enabled: true },
         { type: 'plugin_crashed', enabled: true },
+        { type: 'system_crashed', enabled: true },
         { type: 'auth_failed', enabled: true },
         { type: 'site_revoked', enabled: true },
         { type: 'terminology_import_done', enabled: true },
