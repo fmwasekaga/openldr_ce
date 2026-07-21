@@ -48,5 +48,6 @@ echo "Registry=$REGISTRY  Tag=$TAG(+$VERSION)  Platform=$PLATFORM  Push=$PUSH  D
 build_one openldr-api     apps/server/Dockerfile .
 build_one openldr-studio  apps/studio/Dockerfile .
 build_one openldr-web     apps/web/Dockerfile    .
-build_one openldr-gateway deploy/nginx/Dockerfile deploy/nginx
-echo "Done. Images: $REGISTRY/openldr-{api,studio,web,gateway}:{$TAG,$VERSION}"
+build_one openldr-gateway  deploy/nginx/Dockerfile     deploy/nginx
+build_one openldr-keycloak deploy/keycloak/Dockerfile  deploy/keycloak
+echo "Done. Images: $REGISTRY/openldr-{api,studio,web,gateway,keycloak}:{$TAG,$VERSION}"

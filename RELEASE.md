@@ -11,8 +11,8 @@ prints the dev-run commands. See "Install from source" in the landing docs.
 
 ## Build & push the images
 
-OpenLDR CE ships four images to GHCR:
-`ghcr.io/open-laboratory-data-repository/openldr-{api,studio,web,gateway}`.
+OpenLDR CE ships five images to GHCR:
+`ghcr.io/open-laboratory-data-repository/openldr-{api,studio,web,gateway,keycloak}`.
 Authenticate to GHCR with a GitHub PAT that has `write:packages`, then run the
 publish script (its default registry is the org namespace above):
 
