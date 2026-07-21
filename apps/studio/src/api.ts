@@ -798,8 +798,12 @@ export const listCodingSystems = (publisher?: string) => authFetch(`/api/termino
 export const createCodingSystem = (i: CodingSystemInput) => authFetch('/api/terminology/systems', jbody(i, 'POST')).then((r) => okJson<CodingSystem>(r, 'create system'));
 export const updateCodingSystem = (id: string, i: CodingSystemInput) => authFetch(`/api/terminology/systems/${id}`, jbody(i, 'PUT')).then((r) => okJson<CodingSystem>(r, 'update system'));
 export async function deleteCodingSystem(id: string): Promise<void> {
-  const r = await authFetch(`/api/terminology/systems/${id}`, { method: 'DELETE' });
-  if (!r.ok && r.status !== 204) throw new Error(`delete system failed: ${r.status}`);
+  const r = await authFetch(`/api/terminology/systems/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  if (!r.ok && r.status !== 204) {
+    let msg = `delete system failed: ${r.status}`;
+    try { const j = await r.json(); if (j?.error) msg = j.error; } catch { /* keep status fallback */ }
+    throw new Error(msg);
+  }
 }
 export const systemDeletionImpact = (id: string) => authFetch(`/api/terminology/systems/${id}/deletion-impact`).then((r) => okJson<{ termCount: number; mappingCount: number }>(r, 'impact'));
 

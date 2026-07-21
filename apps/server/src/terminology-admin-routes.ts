@@ -102,12 +102,15 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
     catch (e) { return mapErr(e, reply); }
   });
   app.delete('/api/terminology/systems/:id', MANAGE, async (req, reply) => {
+    const id = (req.params as IdParam).id;
     try {
-      await admin.codingSystems.delete((req.params as IdParam).id);
-      await recordAudit(ctx, req, { action: 'coding_system.delete', entityType: 'coding_system', entityId: (req.params as IdParam).id, before: null, after: null });
+      const jobs = await ctx.terminologyJobs.listForCodingSystem(id);   // capture blob keys before deleting rows
+      await admin.codingSystems.delete(id, { cascade: true });          // policy + cascade (concepts + job rows + system row); throws 'conflict' if protected
+      await ctx.terminology.ontology.unlink(id).catch(() => {});        // ontology teardown (no-op if none)
+      for (const j of jobs) { try { await ctx.blob.delete(j.blobKey); } catch { /* best-effort blob cleanup */ } }
+      await recordAudit(ctx, req, { action: 'coding_system.delete', entityType: 'coding_system', entityId: id, before: null, after: null });
       reply.code(204); return null;
-    }
-    catch (e) { return mapErr(e, reply); }
+    } catch (e) { return mapErr(e, reply); }
   });
   app.get('/api/terminology/systems/:id/deletion-impact', async (req, reply) => {
     try { return await admin.codingSystems.deletionImpact((req.params as IdParam).id); }

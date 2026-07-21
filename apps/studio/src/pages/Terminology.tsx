@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
-import { Library, MoreHorizontal, ChevronRight } from 'lucide-react';
+import { Library, MoreHorizontal, ChevronRight, Plus } from 'lucide-react';
+import { toast } from 'sonner';
 import { AppShell } from '../shell/AppShell';
 import {
   listPublishers,
@@ -147,9 +148,6 @@ export function Terminology(): JSX.Element {
   // ── danger confirm ──────────────────────────────────────────────────────────
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
 
-  // ── toast ───────────────────────────────────────────────────────────────────
-  const [toast, setToast] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
-
   // ── load ────────────────────────────────────────────────────────────────────
   // Stable across renders in practice — only calls module-level API fns + setState.
   const reload = (): Promise<void> =>
@@ -192,7 +190,6 @@ export function Terminology(): JSX.Element {
     setPaneTab('systems');
     setVsSearch('');
     setVsSystem('__all__');
-    setToast(null);
   }, [selectedPublisherId]);
 
   // ── derived ─────────────────────────────────────────────────────────────────
@@ -233,15 +230,15 @@ export function Terminology(): JSX.Element {
             setConfirm(null);
             setSelectedPublisherId('');
             await reload();
-            setToast({ kind: 'ok', text: `Deleted publisher "${pub.name}".` });
+            toast.success(`Deleted publisher "${pub.name}".`);
           } catch (e: unknown) {
             setConfirm(null);
-            setToast({ kind: 'error', text: e instanceof Error ? e.message : String(e) });
+            toast.error(e instanceof Error ? e.message : String(e));
           }
         },
       });
     } catch (e: unknown) {
-      setToast({ kind: 'error', text: e instanceof Error ? e.message : String(e) });
+      toast.error(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -264,15 +261,15 @@ export function Terminology(): JSX.Element {
             setConfirm(null);
             setSelectedSystemId('');
             await reload();
-            setToast({ kind: 'ok', text: `Deleted coding system ${sys.systemCode}.` });
+            toast.success(`Deleted coding system ${sys.systemCode}.`);
           } catch (e: unknown) {
             setConfirm(null);
-            setToast({ kind: 'error', text: e instanceof Error ? e.message : String(e) });
+            toast.error(e instanceof Error ? e.message : String(e));
           }
         },
       });
     } catch (e: unknown) {
-      setToast({ kind: 'error', text: e instanceof Error ? e.message : String(e) });
+      toast.error(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -282,7 +279,7 @@ export function Terminology(): JSX.Element {
       setEditingValueSet(await getValueSet(id));
       setValueSetEditorOpen(true);
     } catch (e: unknown) {
-      setToast({ kind: 'error', text: e instanceof Error ? e.message : String(e) });
+      toast.error(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -293,7 +290,7 @@ export function Terminology(): JSX.Element {
       setEditingValueSet(dup);
       setValueSetEditorOpen(true);
     } catch (e: unknown) {
-      setToast({ kind: 'error', text: e instanceof Error ? e.message : String(e) });
+      toast.error(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -308,10 +305,10 @@ export function Terminology(): JSX.Element {
           await deleteValueSet(vs.id);
           setConfirm(null);
           await reload();
-          setToast({ kind: 'ok', text: 'Value set deleted.' });
+          toast.success('Value set deleted.');
         } catch (e: unknown) {
           setConfirm(null);
-          setToast({ kind: 'error', text: e instanceof Error ? e.message : String(e) });
+          toast.error(e instanceof Error ? e.message : String(e));
         }
       },
     });
@@ -324,14 +321,13 @@ export function Terminology(): JSX.Element {
     try {
       const saved = await importValueSet(file);
       await reload();
-      setToast({
-        kind: 'ok',
-        text: isValueSetCatalogImportResult(saved)
+      toast.success(
+        isValueSetCatalogImportResult(saved)
           ? `Imported ${saved.imported} value set(s); skipped ${saved.skipped}.`
           : `Imported value set "${saved.title ?? saved.url}".`,
-      });
+      );
     } catch (err: unknown) {
-      setToast({ kind: 'error', text: err instanceof Error ? err.message : String(err) });
+      toast.error(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -351,10 +347,10 @@ export function Terminology(): JSX.Element {
       setTermImportSystem(null);
       setTermsReloadKey((k) => k + 1);
       await reload();
-      setToast({ kind: 'ok', text: `Imported ${result.imported} term(s) into ${system.systemName}.` });
+      toast.success(`Imported ${result.imported} term(s) into ${system.systemName}.`);
     } catch (err: unknown) {
       setTermImportSystem(null);
-      setToast({ kind: 'error', text: err instanceof Error ? err.message : String(err) });
+      toast.error(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -391,20 +387,62 @@ export function Terminology(): JSX.Element {
     importPollRef.current[publisherId] = setInterval(() => void poll(), 3000);
   };
 
+  // Resume polling any distribution import still in-flight when the page (re)mounts, so its completion
+  // refreshes the ontology menu (via reload()) even if the import outlived the session that started it.
+  useEffect(() => {
+    if (publishers.length === 0) return;
+    let cancelled = false;
+    void (async () => {
+      for (const pub of publishers) {
+        const systemType = publisherSystemType(pub);
+        if (!systemType) continue;
+        if (importPollRef.current[pub.id]) continue; // already polling this publisher
+        try {
+          const job = await getTerminologyIngestJob(pub.id, systemType);
+          if (cancelled || !importPollMountedRef.current) return;
+          if (job.status === 'queued' || job.status === 'running') {
+            setImportJobs((prev) => ({ ...prev, [pub.id]: job }));
+            startPollingImportJob(pub.id, systemType);
+          }
+        } catch { /* no job for this system → nothing to resume */ }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [publishers]);
+
   const handleDistributionQueued = (_jobId: string): void => {
     setDistImportOpen(false);
-    setToast({ kind: 'ok', text: "Import started — you’ll be notified when it completes." });
+    toast.success("Import started — you’ll be notified when it completes.");
     if (distImportPublisherId) startPollingImportJob(distImportPublisherId, distImportSystemType);
   };
 
-  const handlePurgeDistribution = async (publisherId: string | null, systemType: 'loinc' | 'snomed' | 'rxnorm' | null): Promise<void> => {
+  const handlePurgeDistribution = (
+    publisherId: string | null,
+    systemType: 'loinc' | 'snomed' | 'rxnorm' | null,
+    label: string,
+  ): void => {
     if (!publisherId || !systemType) return;
-    try {
-      await purgeTerminologyDistribution(publisherId, systemType);
-      setToast({ kind: 'ok', text: 'Stored distribution deleted.' });
-    } catch (e: unknown) {
-      setToast({ kind: 'error', text: e instanceof Error ? e.message : String(e) });
-    }
+    setConfirm({
+      title: 'Delete stored distribution',
+      confirmName: label,
+      confirmLabel: 'Delete',
+      summary: (
+        <span>
+          Deletes the retained <b>{label}</b> distribution .zip. Already-ingested terms and ontology are{' '}
+          <b>not</b> affected.
+        </span>
+      ),
+      onConfirm: async () => {
+        try {
+          await purgeTerminologyDistribution(publisherId, systemType);
+          setConfirm(null);
+          toast.success('Stored distribution deleted.');
+        } catch (e: unknown) {
+          setConfirm(null);
+          toast.error(e instanceof Error ? e.message : String(e));
+        }
+      },
+    });
   };
 
   return (
@@ -563,9 +601,6 @@ export function Terminology(): JSX.Element {
                             <DropdownMenuItem onClick={() => openDistImport(activeSection.publisher.id, st)}>
                               Import distribution...
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => void handlePurgeDistribution(activeSection.publisher.id, st)}>
-                              Delete stored distribution
-                            </DropdownMenuItem>
                           </>
                         );
                       })()}
@@ -670,22 +705,25 @@ export function Terminology(): JSX.Element {
                           <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>Import...</DropdownMenuItem>
                         </DropdownMenuSubContent>
                       </DropdownMenuSub>
+
+                      {/* Danger zone */}
+                      {publisherSystemType(activeSection.publisher) && !selectedSystem && (() => {
+                        const st = publisherSystemType(activeSection.publisher)!;
+                        return (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => handlePurgeDistribution(activeSection.publisher.id, st, activeSection.publisher.name)}
+                            >
+                              Delete stored distribution
+                            </DropdownMenuItem>
+                          </>
+                        );
+                      })()}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
-
-                {/* Toast strip */}
-                {toast && (
-                  <div
-                    className={
-                      toast.kind === 'ok'
-                        ? 'mx-3 mt-2 rounded-md border border-green-500/40 bg-green-500/10 px-3 py-2 text-xs text-green-700 dark:text-green-400'
-                        : 'mx-3 mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive'
-                    }
-                  >
-                    {toast.text}
-                  </div>
-                )}
 
                 {/* Empty publisher hint */}
                 {!selectedSystemId && activeSection.systems.length === 0 && activeSection.valueSets.length === 0 && (
@@ -1011,6 +1049,15 @@ export function Terminology(): JSX.Element {
   );
 }
 
+function humanSize(n: number): string {
+  if (n < 1024) return `${n} B`;
+  const u = ['KB', 'MB', 'GB'];
+  let v = n / 1024;
+  let i = 0;
+  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+  return `${v.toFixed(1)} ${u[i]}`;
+}
+
 function ImportDistributionDialog({ open, onOpenChange, publisherId, systemType, onQueued }: {
   open: boolean; onOpenChange: (v: boolean) => void; publisherId: string; systemType: string; onQueued: (jobId: string) => void;
 }): JSX.Element {
@@ -1020,6 +1067,8 @@ function ImportDistributionDialog({ open, onOpenChange, publisherId, systemType,
   const [busy, setBusy] = useState(false);
   const [pct, setPct] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
   useEffect(() => { if (open) { setFile(null); setVersion(''); setAccepted(false); setBusy(false); setPct(0); setError(null); } }, [open]);
   const canImport = !!file && accepted && !busy;
   const handleImport = async (): Promise<void> => {
@@ -1043,7 +1092,40 @@ function ImportDistributionDialog({ open, onOpenChange, publisherId, systemType,
         <div className="space-y-4 px-4 py-4">
           <div className="space-y-1.5">
             <Label htmlFor="distFile">Distribution .zip</Label>
-            <Input id="distFile" type="file" accept=".zip" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => inputRef.current?.click()}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); inputRef.current?.click(); } }}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOver(false);
+                const f = e.dataTransfer.files?.[0];
+                if (f) setFile(f);
+              }}
+              className={`flex flex-col items-center justify-center gap-1 rounded-md border border-dashed px-4 py-6 text-center text-xs
+                ${dragOver ? 'border-primary bg-primary/5' : 'border-border'} cursor-pointer`}
+            >
+              <Plus className="h-5 w-5 text-muted-foreground" aria-hidden />
+              {file ? (
+                <span className="text-foreground">
+                  {file.name} <span className="text-muted-foreground">({humanSize(file.size)})</span>
+                </span>
+              ) : (
+                <span className="text-muted-foreground">Drag a distribution .zip here, or click to browse</span>
+              )}
+              <input
+                ref={inputRef}
+                id="distFile"
+                type="file"
+                accept=".zip"
+                className="sr-only"
+                tabIndex={-1}
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              />
+            </div>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="distVersion">Version (optional)</Label>
@@ -1055,7 +1137,14 @@ function ImportDistributionDialog({ open, onOpenChange, publisherId, systemType,
               I have accepted the license for this distribution.
             </Label>
           </div>
-          {busy && <div className="text-xs text-muted-foreground">Uploading… {Math.round(pct * 100)}%</div>}
+          {busy && (
+            <div className="space-y-1">
+              <div className="h-1.5 w-full overflow-hidden rounded bg-muted">
+                <div className="h-full bg-primary transition-[width]" style={{ width: `${Math.round(pct * 100)}%` }} />
+              </div>
+              <div className="text-xs text-muted-foreground">Uploading… {Math.round(pct * 100)}%</div>
+            </div>
+          )}
           {error && (
             <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
               {error}

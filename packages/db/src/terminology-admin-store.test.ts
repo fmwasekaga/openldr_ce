@@ -84,6 +84,25 @@ describe('terminology admin store', () => {
     expect(rows[0].systemName).toBe('LOINC v2');
   });
 
+  it('delete(id,{cascade}) removes an upload-created system + its concepts; protects a true seed', async () => {
+    const { db, s } = await store();
+    // upsertByUrl marks seeded=true (mirrors an uploaded system); give it a concept + an ingest job
+    await s.codingSystems.upsertByUrl({ url: 'http://x.test', systemCode: 'X', systemName: 'X', systemVersion: null, publisherId: null });
+    const id = (await s.codingSystems.getByUrl('http://x.test'))!.id;
+    await db.insertInto('terminology_concepts').values({ system: 'http://x.test', code: 'a', display: 'A', status: 'ACTIVE' } as never).execute();
+    await db.insertInto('terminology_ingest_jobs').values({ id: 'j1', system_type: 'loinc', coding_system_id: id, blob_key: 'k/a.zip', version: null, status: 'ready', active_key: null } as never).execute();
+    // upload-created (has a job) → cascade delete succeeds and removes concepts
+    await s.codingSystems.delete(id, { cascade: true });
+    expect(await s.codingSystems.getByUrl('http://x.test')).toBeNull();
+    const remaining = await db.selectFrom('terminology_concepts').selectAll().where('system', '=', 'http://x.test').execute();
+    expect(remaining).toHaveLength(0);
+
+    // a true seed (seeded, NO ingest job) is protected
+    await s.codingSystems.upsertByUrl({ url: 'http://seed.test', systemCode: 'SD', systemName: 'SD', systemVersion: null, publisherId: null });
+    const seedId = (await s.codingSystems.getByUrl('http://seed.test'))!.id;
+    await expect(s.codingSystems.delete(seedId, { cascade: true })).rejects.toThrow(/system-managed coding system/i);
+  });
+
   describe('codingSystems.getByUrl', () => {
     it('returns the coding system for a known url, null when absent', async () => {
       const { s } = await store();

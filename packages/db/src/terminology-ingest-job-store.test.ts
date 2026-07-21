@@ -108,4 +108,15 @@ describe('terminology ingest job store', () => {
     expect((await store.get(q.id))?.status).toBe('queued');
     await db.destroy();
   });
+
+  it('listForCodingSystem returns all jobs for a coding system, newest first', async () => {
+    const db = await makeMigratedDb();
+    const store = createTerminologyIngestJobStore(db as never);
+    await store.enqueue({ systemType: 'loinc', codingSystemId: 'cs-x', blobKey: 'k/a.zip', version: null, createdBy: null });
+    const forX = await store.listForCodingSystem('cs-x');
+    expect(forX).toHaveLength(1);
+    expect(forX[0].blobKey).toBe('k/a.zip');
+    expect(await store.listForCodingSystem('cs-none')).toEqual([]);
+    await db.destroy();
+  });
 });

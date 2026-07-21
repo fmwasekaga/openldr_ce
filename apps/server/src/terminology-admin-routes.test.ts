@@ -6,7 +6,7 @@ import './auth-plugin';
 
 function fakeCtx() {
   const auditEvents: Array<{ action: string; entityType: string; entityId: string; actorId: string | null; before?: unknown; after?: unknown; metadata?: unknown }> = [];
-  const ctxState = { active: false, enqueued: [] as any[], latest: null as any, put: [] as string[], deleted: [] as string[], codingSystem: null as any, upserts: [] as any[] };
+  const ctxState = { active: false, enqueued: [] as any[], latest: null as any, put: [] as string[], deleted: [] as string[], codingSystem: null as any, upserts: [] as any[], jobsForSystem: [] as any[], deleteThrows: null as any, unlinked: [] as string[] };
   const admin = {
     publishers: {
       create: async (d: any) => ({ id: 'pub1', ...d }),
@@ -17,7 +17,7 @@ function fakeCtx() {
       list: async () => [],
       create: async (d: any) => ({ id: 'sys1', ...d }),
       update: async (id: string, d: any) => ({ id, ...d }),
-      delete: async () => {},
+      delete: async (_id: string, _opts?: any) => { if (ctxState.deleteThrows) throw ctxState.deleteThrows; },
       getByUrl: async (_url: string) => ctxState.codingSystem,
       upsertByUrl: async (input: any) => { ctxState.codingSystem = { id: 'cs-url-LOINC', url: input.url, systemCode: input.systemCode, systemName: input.systemName, publisherId: input.publisherId, systemVersion: input.systemVersion ?? null, active: true, seeded: true, description: null }; ctxState.upserts.push(input); },
     },
@@ -30,13 +30,14 @@ function fakeCtx() {
     },
   };
   const ctx = {
-    terminology: { admin },
+    terminology: { admin, ontology: { unlink: async (id: string) => { ctxState.unlinked.push(id); } } },
     audit: { record: async (e: any) => { auditEvents.push(e); return e; } },
     logger: { error() {}, warn() {}, info() {} },
     terminologyJobs: {
       hasActive: async () => ctxState.active,
       enqueue: async (input: any) => { ctxState.enqueued.push(input); return { id: 'tij_1', status: 'queued', ...input }; },
       latestForSystem: async () => ctxState.latest,
+      listForCodingSystem: async (_id: string) => ctxState.jobsForSystem,
       get: async () => ctxState.latest,
     },
     blob: {
@@ -116,6 +117,28 @@ describe('terminology admin audit', () => {
     const app = appWith(ctx);
     const res = await app.inject({ method: 'POST', url: '/api/terminology/publishers', payload: { name: 'P', role: 'local' } });
     expect(res.statusCode).toBe(201);
+  });
+});
+
+describe('terminology admin: coding system cascade delete', () => {
+  it('deletes an upload-created system (has an ingest job): 204, unlinks ontology, deletes its blob', async () => {
+    const { ctx, ctxState } = fakeCtx();
+    ctxState.jobsForSystem = [{ id: 'tij_1', blobKey: 'terminology-dist/loinc/tij_1.zip' }];
+    const app = appWith(ctx);
+    const res = await app.inject({ method: 'DELETE', url: '/api/terminology/systems/cs-url-LOINC' });
+    expect(res.statusCode).toBe(204);
+    expect(ctxState.deleted).toEqual(['terminology-dist/loinc/tij_1.zip']);
+    expect(ctxState.unlinked).toEqual(['cs-url-LOINC']);
+  });
+
+  it('a protected (system-managed) coding system returns 409 with the guard message', async () => {
+    const { ctx, ctxState } = fakeCtx();
+    ctxState.deleteThrows = Object.assign(new Error('This is a system-managed coding system and cannot be deleted.'), { name: 'TerminologyAdminError', kind: 'conflict' });
+    const app = appWith(ctx);
+    const res = await app.inject({ method: 'DELETE', url: '/api/terminology/systems/cs-fhir' });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/system-managed coding system/i);
+    expect(ctxState.deleted).toEqual([]);
   });
 });
 
