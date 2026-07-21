@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { join } from 'node:path';
 import { rxnormAdapter } from './rxnorm';
 import { ROOT_CODE, type IndexWriter } from '../types';
+import { canonicalSystemUrl } from '../../system-urls';
 
 const FIXTURE = join(__dirname, '__fixtures__', 'rxnorm');
 
@@ -60,5 +61,40 @@ describe('rxnormAdapter two-layer', () => {
     expect(sbd.display).toContain('[Diflucan]');
 
     expect(collected.codes('216325', 'Generic equivalent')).toEqual(['197698']);
+  });
+
+  it('tees flat concepts for semantic-TTY drugs only when a conceptSink is provided', async () => {
+    const distribution = rxnormAdapter.detect(FIXTURE)!;
+    const collected = collector();
+    const concepts: any[] = [];
+    await rxnormAdapter.buildIndex(distribution, collected.writer, () => {}, async (rows) => { concepts.push(...rows); });
+
+    expect(concepts.length).toBeGreaterThan(0);
+    for (const c of concepts) {
+      expect(c.system).toBe(canonicalSystemUrl('rxnorm'));
+      expect(c.status).toBe('active');
+      expect(c.properties.tty).toBeTruthy(); // only semantic TTYs
+      expect(typeof c.display).toBe('string');
+    }
+
+    // Every RXNORM semantic-TTY atom in the fixture is emitted, keyed by RXCUI.
+    const codes = concepts.map((c) => c.code).sort();
+    expect(codes).toEqual(['197698', '203150', '216325', '315936', '317541', '4450']);
+    const fluconazole = concepts.find((c) => c.code === '4450');
+    expect(fluconazole).toMatchObject({ display: 'fluconazole', properties: { tty: 'IN' } });
+
+    // ATC classification codes (the spine, not drugs) live in atcNames/atcLeafToIngredient,
+    // never in `concepts` — so none of the fixture's ATC codes appear here.
+    const atcCodesInFixture = ['J02AC01', 'J02AC', 'J02A', 'J02', 'J'];
+    for (const atcCode of atcCodesInFixture) {
+      expect(codes).not.toContain(atcCode);
+    }
+  });
+
+  it('emits no concepts when no conceptSink is provided (rebuild path unchanged)', async () => {
+    const distribution = rxnormAdapter.detect(FIXTURE)!;
+    const collected = collector();
+    await rxnormAdapter.buildIndex(distribution, collected.writer, () => {}); // no 4th arg
+    expect(collected.nodes.length).toBeGreaterThan(0); // tree still built
   });
 });

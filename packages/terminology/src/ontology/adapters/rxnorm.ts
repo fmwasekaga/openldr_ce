@@ -1,7 +1,9 @@
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
-import { ROOT_CODE, type DetectedDistribution, type FileStat, type IndexWriter, type OntologyAdapter } from '../types';
+import type { ConceptRecord } from '@openldr/db';
+import { canonicalSystemUrl } from '../../system-urls';
+import { ROOT_CODE, type ConceptSink, type DetectedDistribution, type FileStat, type IndexWriter, type OntologyAdapter } from '../types';
 
 // RxNorm two-layer model. The browsable spine is the ATC classification tree
 // (built from SAB=ATC atoms by code prefix); its level-5 leaves bridge to RxNorm
@@ -87,7 +89,7 @@ export const rxnormAdapter: OntologyAdapter = {
     return { type: 'rxnorm', folderPath, files: { conso, rel }, fileStats: stats };
   },
 
-  async buildIndex(dist, writer: IndexWriter, onProgress): Promise<void> {
+  async buildIndex(dist, writer: IndexWriter, onProgress, conceptSink?: ConceptSink): Promise<void> {
     const concepts = new Map<string, Concept>();
     const atcNames = new Map<string, string>();
     const atcLeafToIngredient = new Map<string, Set<string>>();
@@ -125,6 +127,20 @@ export const rxnormAdapter: OntologyAdapter = {
       if (semantic && !cur.tty) cur.tty = tty;
       if (++cCount % 100000 === 0) onProgress({ phase: 'concepts', processed: cCount, total: null });
     });
+
+    if (conceptSink) {
+      const url = canonicalSystemUrl('rxnorm')!;
+      let batch: ConceptRecord[] = [];
+      for (const [rxcui, concept] of concepts) {
+        if (!concept.tty) continue; // semantic-TTY drug concepts only
+        batch.push({ system: url, code: rxcui, display: concept.display, status: 'active', properties: { tty: concept.tty } });
+        if (batch.length >= 1000) {
+          await conceptSink(batch);
+          batch = [];
+        }
+      }
+      if (batch.length) await conceptSink(batch);
+    }
 
     // Pass 2: capture the single-hop relations we compose into groups.
     // Normalized src = RXCUI2 (c[4]), dst = RXCUI1 (c[0]); SAB c[10], RELA c[7].
