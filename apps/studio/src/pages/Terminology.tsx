@@ -609,6 +609,9 @@ export function Terminology(): JSX.Element {
                       <DropdownMenuSub>
                         <DropdownMenuSubTrigger>Code system</DropdownMenuSubTrigger>
                         <DropdownMenuSubContent>
+                          {/* Only creating a new coding system is publisher-scoped; per-system actions
+                              (edit / browse ontology / ontology distribution / delete) live on each
+                              system row's own ⋯ menu to avoid duplicating them here. */}
                           <DropdownMenuItem
                             onClick={() => {
                               setEditingSystem(null);
@@ -616,45 +619,6 @@ export function Terminology(): JSX.Element {
                             }}
                           >
                             New
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            disabled={!selectedSystem}
-                            onClick={() => {
-                              if (selectedSystem) {
-                                setEditingSystem(selectedSystem);
-                                setSystemDialogOpen(true);
-                              }
-                            }}
-                          >
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          {/* Ontology items */}
-                          <DropdownMenuItem
-                            disabled={!selectedSystem || distributions[selectedSystem.id]?.indexStatus !== 'ready'}
-                            onClick={() => {
-                              if (selectedSystem) setBrowseSystem(selectedSystem);
-                            }}
-                          >
-                            Browse ontology
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            disabled={!selectedSystem}
-                            onClick={() => {
-                              if (selectedSystem) setDistDialogSystem(selectedSystem);
-                            }}
-                          >
-                            Ontology distribution…
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            disabled={!selectedSystem}
-                            className="text-destructive focus:text-destructive"
-                            onClick={() => {
-                              if (selectedSystem) void handleSystemDelete(selectedSystem);
-                            }}
-                          >
-                            Delete
                           </DropdownMenuItem>
                         </DropdownMenuSubContent>
                       </DropdownMenuSub>
@@ -706,21 +670,8 @@ export function Terminology(): JSX.Element {
                         </DropdownMenuSubContent>
                       </DropdownMenuSub>
 
-                      {/* Danger zone */}
-                      {publisherSystemType(activeSection.publisher) && !selectedSystem && (() => {
-                        const st = publisherSystemType(activeSection.publisher)!;
-                        return (
-                          <>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className="text-destructive focus:text-destructive"
-                              onClick={() => handlePurgeDistribution(activeSection.publisher.id, st, activeSection.publisher.name)}
-                            >
-                              Delete stored distribution
-                            </DropdownMenuItem>
-                          </>
-                        );
-                      })()}
+                      {/* Distribution + system deletes live on the system row's own ⋯ menu (they act
+                          on a specific coding system), not here at the publisher level. */}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
@@ -811,11 +762,20 @@ export function Terminology(): JSX.Element {
                                       Ontology distribution…
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
+                                    {/* Danger zone: purge just the retained zip, or remove the whole system. */}
+                                    {publisherSystemType(activeSection.publisher) && (
+                                      <DropdownMenuItem
+                                        className="text-destructive focus:text-destructive"
+                                        onClick={() => handlePurgeDistribution(activeSection.publisher.id, publisherSystemType(activeSection.publisher)!, s.systemCode)}
+                                      >
+                                        Delete stored distribution
+                                      </DropdownMenuItem>
+                                    )}
                                     <DropdownMenuItem
                                       className="text-destructive focus:text-destructive"
                                       onClick={() => void handleSystemDelete(s)}
                                     >
-                                      Delete
+                                      Delete coding system
                                     </DropdownMenuItem>
                                   </DropdownMenuContent>
                                 </DropdownMenu>
