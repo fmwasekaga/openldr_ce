@@ -64,6 +64,13 @@ describe('loincRowToConcept', () => {
     expect(c.properties).toMatchObject({ COMPONENT: 'Creatinine', CLASS: 'CHEM' });
   });
 
+  it('throws a clean error (does not crash the process) when Loinc.csv is missing', async () => {
+    const emptyDir = await mkdtemp(join(tmpdir(), 'openldr-loinc-empty-'));
+    tempDirs.push(emptyDir);
+    const s = memoryStore();
+    await expect(loadLoinc(emptyDir, { acceptLicense: true }, s.store)).rejects.toThrow(/missing Loinc\.csv/i);
+  });
+
   it('imports from an extracted LOINC distribution root containing LoincTable/Loinc.csv', async () => {
     const root = await makeLoincDistributionRoot([
       'LOINC_NUM,LONG_COMMON_NAME,STATUS,COMPONENT,PROPERTY,SYSTEM,SCALE_TYP,METHOD_TYP,CLASS',

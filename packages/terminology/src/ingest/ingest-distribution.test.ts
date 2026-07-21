@@ -1,4 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
+import { mkdtemp, cp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { ingestDistribution } from './ingest-distribution';
 
 describe('ingestDistribution (loinc)', () => {
@@ -31,6 +34,17 @@ describe('ingestDistribution (loinc)', () => {
     expect(res.conceptsLoaded).toBe(321);
     expect(deps.buildOntologyWithConcepts).toHaveBeenCalledWith('snomed', 'cs1', '/d', expect.any(Function));
     expect(deps.loadConcepts).not.toHaveBeenCalled();
+  });
+
+  it('unwraps a single release-folder wrapper so the loaders get the real root (real LOINC zips wrap under Loinc_x/)', async () => {
+    const wrap = await mkdtemp(join(tmpdir(), 'ing-'));
+    const inner = join(wrap, 'Loinc_2.82');
+    await cp(join(__dirname, '..', 'ontology', 'adapters', '__fixtures__', 'loinc'), inner, { recursive: true });
+    const deps = { loadConcepts: vi.fn(async () => ({ conceptsLoaded: 1 })), buildOntology: vi.fn(), buildOntologyWithConcepts: vi.fn() };
+    await ingestDistribution({ systemType: 'loinc', codingSystemId: 'cs1', distDir: wrap, acceptLicense: true, deps: deps as never, onProgress: () => {} });
+    // both loaders receive the descended `inner` dir, not the wrapper `wrap`.
+    expect(deps.loadConcepts).toHaveBeenCalledWith('loinc', inner, { acceptLicense: true });
+    expect(deps.buildOntology).toHaveBeenCalledWith('loinc', 'cs1', inner, expect.any(Function));
   });
 
   it('loinc still runs loadConcepts + buildOntology (no tee)', async () => {

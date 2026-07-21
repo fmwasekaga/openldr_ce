@@ -41,6 +41,12 @@ export async function loadLoinc(
     throw new OpenLdrError('LOINC import requires accepting the LOINC license (--accept-license)');
   }
   const file = resolveLoincCsvPath(loincTableDir);
+  // Fail the ingest cleanly (caught by the job runner) instead of letting createReadStream emit an
+  // unhandled 'error' event on a missing file — that surfaces as an uncaughtException and crashes the
+  // whole API process. Distribution-root unwrapping happens upstream in ingestDistribution.
+  if (!existsSync(file)) {
+    throw new OpenLdrError(`LOINC distribution is missing Loinc.csv (looked in "${loincTableDir}" and its LoincTable/ subfolder)`);
+  }
   const parser = createReadStream(file).pipe(parse({ columns: true, skip_empty_lines: true }));
   let batch: ConceptRecord[] = [];
   let count = 0;
