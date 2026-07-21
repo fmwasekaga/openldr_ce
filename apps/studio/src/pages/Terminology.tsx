@@ -1113,7 +1113,7 @@ function ImportDistributionDialog({ open, onOpenChange, publisherId, systemType,
               role="button"
               tabIndex={0}
               onClick={() => inputRef.current?.click()}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click(); }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); inputRef.current?.click(); } }}
               onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
               onDragLeave={() => setDragOver(false)}
               onDrop={(e) => {
@@ -1139,6 +1139,7 @@ function ImportDistributionDialog({ open, onOpenChange, publisherId, systemType,
                 type="file"
                 accept=".zip"
                 className="sr-only"
+                tabIndex={-1}
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               />
             </div>
