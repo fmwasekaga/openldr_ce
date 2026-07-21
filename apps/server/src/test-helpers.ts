@@ -439,6 +439,7 @@ export function ctxWith(status: 'up' | 'down'): AppContext {
     terminology: { ops: {} as never, admin: buildFakeAdmin(), ontology: buildFakeOntology(), loaders: buildFakeLoaders(), ingestOntologyWithConcepts: async () => ({ conceptsLoaded: 0 }) },
     terminologyJobs: {
       enqueue: async () => ({} as any),
+      insertRunning: async () => ({} as any),
       claimNext: async () => null,
       updateProgress: async () => {},
       finish: async () => {},
@@ -446,6 +447,7 @@ export function ctxWith(status: 'up' | 'down'): AppContext {
       latestForSystem: async () => null,
       latestReadyForSystem: async () => null,
       hasActive: async () => false,
+      failStaleRunning: async () => 0,
     } as never,
     dashboards: {} as never,
     reportDesigns: {} as never,
