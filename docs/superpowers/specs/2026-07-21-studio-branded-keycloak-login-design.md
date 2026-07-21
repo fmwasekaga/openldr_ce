@@ -60,10 +60,11 @@ Under a repo path (e.g. `infra/keycloak/themes/openldr/login/`):
   `common/keycloak` (that would pull in the PatternFly common resources we are
   deliberately avoiding per principle #1).
 - `resources/css/login.css` — the single stylesheet (Studio tokens; see §3).
-- `template.ftl` — a small override of `base`'s wrapper to place the `OpenLDR`
-  text wordmark (semibold, brand color) as the header. All login-flow pages
-  render through this wrapper, so styling it + the form controls themes every
-  page at once.
+- `template.ftl` — a small override of `base`'s wrapper to place the header:
+  the `OpenLDR` text wordmark (semibold, brand color `#4682B4`) with the
+  subtitle `Studio` beneath it (muted). No "laboratory" wording — the app is a
+  central repository, not a single lab. All login-flow pages render through this
+  wrapper, so styling it + the form controls themes every page at once.
 
 The realm sets `"loginTheme": "openldr"` (see §5).
 
