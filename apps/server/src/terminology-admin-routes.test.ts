@@ -152,9 +152,18 @@ describe('terminology distribution upload/status/purge (publisher-scoped)', () =
     expect(ctxState.put.length).toBe(0);
   });
 
-  it('rejects a non-loinc systemType (400)', async () => {
-    const { ctx } = fakeCtx();
+  it('accepts a snomed upload (resolve-or-create + enqueue)', async () => {
+    const { ctx, ctxState } = fakeCtx();
+    ctxState.codingSystem = null;
     const res = await appWith(ctx).inject({ method: 'POST', url: '/api/terminology/publishers/pub-snomed-ct/distribution?systemType=snomed&acceptLicense=true', headers: { 'content-type': 'application/octet-stream' }, payload: Buffer.from('x') });
+    expect(res.statusCode).toBe(201);
+    expect(ctxState.upserts[0]).toMatchObject({ url: 'http://snomed.info/sct' });
+    expect(ctxState.enqueued[0].systemType).toBe('snomed');
+  });
+
+  it('still rejects a genuinely unknown systemType (400)', async () => {
+    const { ctx } = fakeCtx();
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/terminology/publishers/pub-x/distribution?systemType=nope&acceptLicense=true', headers: { 'content-type': 'application/octet-stream' }, payload: Buffer.from('x') });
     expect(res.statusCode).toBe(400);
   });
 

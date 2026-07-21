@@ -380,7 +380,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
 
   // ── Distribution upload / status / purge ────────────────────────────────
   const UPLOAD = { preHandler: requireRole('lab_admin', 'lab_manager'), bodyLimit: 1_073_741_824 };
-  const SUPPORTED_SYSTEMS = new Set(['loinc']); // Slice 2 adds 'snomed','rxnorm'
+  const SUPPORTED_SYSTEMS = new Set(['loinc', 'snomed', 'rxnorm']);
 
   // Resolve the coding system for a systemType by its loader-backed canonical URL, creating it if
   // absent with the SAME values loadLoinc's saveSystem uses (so it is one row, not a duplicate).
