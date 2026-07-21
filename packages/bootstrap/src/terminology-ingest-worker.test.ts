@@ -73,4 +73,22 @@ describe('terminology ingest worker', () => {
     expect(info).toHaveBeenCalled();
     await w.stop();
   });
+
+  it('stop() awaits the in-flight startup crash-recovery before resolving', async () => {
+    let release!: (n: number) => void;
+    const gate = new Promise<number>((r) => { release = r; });
+    const { d } = deps();
+    const info = vi.fn();
+    d.jobs.failStaleRunning = vi.fn(() => gate); // stays pending until we release it
+    d.logger = { info, error() {} };
+    const w = createTerminologyIngestWorker(d as never);
+    let stopResolved = false;
+    const stopping = w.stop().then(() => { stopResolved = true; });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(stopResolved).toBe(false); // stop() must not resolve while crash-recovery is pending
+    release(3);
+    await stopping;
+    expect(stopResolved).toBe(true);
+    expect(info).toHaveBeenCalled(); // the .then log ran as part of the awaited chain
+  });
 });
