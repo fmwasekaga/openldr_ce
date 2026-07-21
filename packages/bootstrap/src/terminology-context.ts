@@ -1,9 +1,11 @@
 import { Kysely } from 'kysely';
 import type { Config } from '@openldr/config';
 import { redact, createLogger, type Logger } from '@openldr/core';
-import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, referenceCapture, markTerminologyChanged, type TerminologyAdminStore, type InternalSchema, type OntologyStore, resolveSeedPublisherId, deriveSystemCode } from '@openldr/db';
+import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, referenceCapture, markTerminologyChanged, createTerminologyIngestJobStore, type TerminologyAdminStore, type InternalSchema, type OntologyStore, type TerminologyIngestJobStore, resolveSeedPublisherId, deriveSystemCode } from '@openldr/db';
 import { buildOntologyDistribution, canonicalSystemUrl, createOperations, type Operations, type LoaderStore, loadLoinc, loadWhonetAmr, importTerminologyResource, stalenessReason, type LoadResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType } from '@openldr/terminology';
 import { createAuditStore, type AuditStore } from '@openldr/audit';
+import type { BlobStoragePort } from '@openldr/ports';
+import { createBlobFromConfig } from './s3-config';
 
 function createOntologyApi(ontologyStore: OntologyStore) {
   return {
@@ -43,6 +45,8 @@ export interface TerminologyContext {
   ingestOntologyWithConcepts(systemType: string, systemId: string, dir: string, onProgress: (p: { phase: string; processed: number; total: number | null }) => void): Promise<{ conceptsLoaded: number }>;
   audit: AuditStore;
   logger: Logger;
+  jobs: TerminologyIngestJobStore;
+  blob: BlobStoragePort;
   close(): Promise<void>;
 }
 
@@ -71,6 +75,8 @@ export async function createTerminologyContext(cfg: Config): Promise<Terminology
   const admin = createTerminologyAdminStore(db, projection, referenceCapture);
   const ontologyStore = createOntologyStore(db);
   const ontology = createOntologyApi(ontologyStore);
+  const jobs = createTerminologyIngestJobStore(db);
+  const blob = createBlobFromConfig(cfg);
   const loaderStore: LoaderStore = {
     upsertConcepts: (r) => store.upsertConcepts(r),
     upsertMapElements: (r) => store.upsertMapElements(r),
@@ -136,6 +142,8 @@ export async function createTerminologyContext(cfg: Config): Promise<Terminology
     },
     audit,
     logger,
+    jobs,
+    blob,
     async close() { await internal.close(); },
   };
 }

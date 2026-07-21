@@ -6,6 +6,7 @@ import { Kysely, sql } from 'kysely';
 import { createAuth } from '@openldr/adapter-auth';
 import { createEventBus } from '@openldr/adapter-event-bus';
 import { createS3Bucket } from '@openldr/adapter-s3-bucket';
+import { toS3BucketConfig } from './s3-config';
 import type { Config } from '@openldr/config';
 import { createLogger, HealthRegistry, open, seal, parseSecretKey, redact, type Logger } from '@openldr/core';
 import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore } from '@openldr/db';
@@ -352,14 +353,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     adminClientId: cfg.KEYCLOAK_ADMIN_CLIENT_ID,
     adminClientSecret: cfg.KEYCLOAK_ADMIN_CLIENT_SECRET,
   });
-  const blob = createS3Bucket({
-    endpoint: cfg.S3_ENDPOINT,
-    region: cfg.S3_REGION,
-    accessKeyId: cfg.S3_ACCESS_KEY_ID,
-    secretAccessKey: cfg.S3_SECRET_ACCESS_KEY,
-    bucket: cfg.S3_BUCKET,
-    forcePathStyle: cfg.S3_FORCE_PATH_STYLE,
-  });
+  const blob = createS3Bucket(toS3BucketConfig(cfg));
   const eventing = createEventBus({ url: cfg.INTERNAL_DATABASE_URL });
   const { store, engine } = selectTargetStore(cfg);
   const externalDb = store.db as unknown as Kysely<ExternalSchema>;
@@ -1285,6 +1279,7 @@ export { testConnector } from './connector-test';
 export * from './ingest-context';
 export * from './target-store';
 export * from './terminology-context';
+export * from './s3-config';
 export * from './terminology-ingest-shared';
 export * from './terminology-ingest-worker';
 export * from './seed';
