@@ -1,13 +1,14 @@
-import { createWriteStream, createReadStream } from 'node:fs';
+import { createWriteStream } from 'node:fs';
 import { mkdir, rm } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join, relative, isAbsolute } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import unzipper from 'unzipper';
 import type { BlobStoragePort } from '@openldr/ports';
 
-/** Stream a distribution zip from the blob store to `workDir`, extract it, and return the extracted
- *  root plus a cleanup that removes the whole working dir (zip + extracted tree). Nothing is buffered
- *  fully in memory: the blob is streamed to a temp file, then unzipper streams each entry to disk. */
+/** Stream a distribution zip from the blob store to `workDir`, extract it via random-access (reading
+ *  the zip's central directory — robust to data descriptors / ZIP64 that streaming inflate chokes on
+ *  with `Z_BUF_ERROR`), and return the extracted root plus a cleanup. Per-entry streaming keeps memory
+ *  bounded regardless of archive size. */
 export async function downloadAndExtract(
   blob: Pick<BlobStoragePort, 'getStream'>,
   key: string,
@@ -20,19 +21,18 @@ export async function downloadAndExtract(
   const src = await blob.getStream(key);
   await pipeline(src, createWriteStream(zipPath));
 
-  // NOTE: unzipper.Extract() is a duplexer2(parser, outStream) stream. duplexer2 auto-ends the
-  // duplex (emitting the *native* 'finish' event) as soon as the inner zip `parser` has consumed
-  // all input bytes -- which races ahead of `outStream` actually flushing extracted entries to
-  // disk. `pipeline()` resolves on that native 'finish', so it can return before nested-directory
-  // entries are written. unzipper's own `.promise()` instead waits for the 'close' event it emits
-  // only after `outStream` finishes, which is the true "extraction complete" signal.
-  await new Promise<void>((resolve, reject) => {
-    const extractStream = unzipper.Extract({ path: distDir });
-    const readStream = createReadStream(zipPath);
-    readStream.on('error', reject);
-    readStream.pipe(extractStream);
-    extractStream.promise().then(resolve, reject);
-  });
+  const directory = await unzipper.Open.file(zipPath);
+  for (const entry of directory.files) {
+    if (entry.type === 'Directory') continue;
+    const dest = join(distDir, entry.path);
+    // Zip-slip guard: the resolved destination must stay inside distDir.
+    const rel = relative(distDir, dest);
+    if (rel.startsWith('..') || isAbsolute(rel)) {
+      throw new Error(`invalid entry escapes distribution dir (zip-slip): ${entry.path}`);
+    }
+    await mkdir(dirname(dest), { recursive: true });
+    await pipeline(entry.stream(), createWriteStream(dest));
+  }
 
   return {
     distDir,
