@@ -1311,6 +1311,7 @@ export { testConnector } from './connector-test';
 export * from './ingest-context';
 export * from './target-store';
 export * from './terminology-context';
+export * from './terminology-ingest-shared';
 export * from './terminology-ingest-worker';
 export * from './seed';
 export * from './plugin-broker';
