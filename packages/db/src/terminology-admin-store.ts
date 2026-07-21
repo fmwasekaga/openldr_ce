@@ -132,7 +132,7 @@ export interface TerminologyAdminStore {
     list(publisherId?: string): Promise<CodingSystem[]>;
     create(input: CodingSystemInput): Promise<CodingSystem>;
     update(id: string, input: CodingSystemInput): Promise<CodingSystem>;
-    delete(id: string): Promise<void>;
+    delete(id: string, opts?: { cascade?: boolean }): Promise<void>;
     deletionImpact(id: string): Promise<{ termCount: number; mappingCount: number }>;
     upsertByUrl(input: { url: string; systemCode: string; systemName: string; systemVersion?: string | null; publisherId: string | null }): Promise<void>;
     getByUrl(url: string): Promise<CodingSystem | null>;
@@ -417,11 +417,23 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
           return csRow(row);
         });
       },
-      async delete(id) {
-        const row = await db.selectFrom('coding_systems').select(['seeded']).where('id', '=', id).executeTakeFirst();
+      async delete(id, opts) {
+        const row = await db.selectFrom('coding_systems').select(['seeded', 'url']).where('id', '=', id).executeTakeFirst();
         if (!row) throw new TerminologyAdminError(`coding system not found: ${id}`, 'not-found');
-        if (row.seeded) throw new TerminologyAdminError('cannot delete a seeded code system', 'conflict');
+        const jobCount = Number(
+          (await db.selectFrom('terminology_ingest_jobs').select((eb) => eb.fn.countAll<number>().as('n'))
+            .where('coding_system_id', '=', id).executeTakeFirst())?.n ?? 0,
+        );
+        // A true system seed (seeded, no uploaded distribution) is never deletable. An upload-created
+        // system (seeded but with an ingest job) is deletable via cascade.
+        if (row.seeded && jobCount === 0) {
+          throw new TerminologyAdminError('This is a system-managed coding system and cannot be deleted.', 'conflict');
+        }
         await db.transaction().execute(async (trx) => {
+          if (opts?.cascade) {
+            if (row.url) await trx.deleteFrom('terminology_concepts').where('system', '=', row.url).execute();
+            await trx.deleteFrom('terminology_ingest_jobs').where('coding_system_id', '=', id).execute();
+          }
           await trx.deleteFrom('coding_systems').where('id', '=', id).execute();
           if (capture) await capture.record(trx, 'coding_system', id, 'delete', null);
         });

@@ -445,6 +445,7 @@ export function ctxWith(status: 'up' | 'down'): AppContext {
       finish: async () => {},
       get: async () => null,
       latestForSystem: async () => null,
+      listForCodingSystem: async () => [],
       latestReadyForSystem: async () => null,
       hasActive: async () => false,
       failStaleRunning: async () => 0,

@@ -29,6 +29,7 @@ export interface TerminologyIngestJobStore {
   finish(id: string, status: 'ready' | 'failed', error: string | null): Promise<void>;
   get(id: string): Promise<TerminologyIngestJob | null>;
   latestForSystem(systemType: string): Promise<TerminologyIngestJob | null>;
+  listForCodingSystem(codingSystemId: string): Promise<TerminologyIngestJob[]>;
   latestReadyForSystem(systemType: string): Promise<TerminologyIngestJob | null>;
   hasActive(systemType: string): Promise<boolean>;
   failStaleRunning(error: string): Promise<number>;
@@ -129,6 +130,11 @@ export function createTerminologyIngestJobStore(db: Kysely<InternalSchema>): Ter
       const r = await db.selectFrom('terminology_ingest_jobs').selectAll()
         .where('system_type', '=', systemType).orderBy('created_at', 'desc').limit(1).executeTakeFirst();
       return r ? toJob(r as never) : null;
+    },
+    async listForCodingSystem(codingSystemId) {
+      const rows = await db.selectFrom('terminology_ingest_jobs').selectAll()
+        .where('coding_system_id', '=', codingSystemId).orderBy('created_at', 'desc').execute();
+      return rows.map((r) => toJob(r as never));
     },
     async latestReadyForSystem(systemType) {
       const r = await db.selectFrom('terminology_ingest_jobs').selectAll()
