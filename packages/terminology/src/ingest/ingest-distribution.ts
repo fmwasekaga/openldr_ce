@@ -1,3 +1,5 @@
+import { resolveDistributionRoot } from '../ontology/build';
+
 export interface IngestProgress { phase: string; processed: number; total: number | null }
 
 export interface IngestDeps {
@@ -27,14 +29,19 @@ export async function ingestDistribution(input: {
   if (!input.acceptLicense) {
     throw new Error('the distribution license must be accepted before import');
   }
+  // Real distributions wrap their content in a single top-level release folder (LOINC in `Loinc_2.82/`,
+  // SNOMED in `SnomedCT_..._<ts>/`). Resolve the true root ONCE here so BOTH the LOINC concept loader
+  // and the ontology builders receive the unwrapped dir — the concept loader has no unwrap of its own,
+  // so without this a wrapped LOINC zip can't find Loinc.csv.
+  const distDir = resolveDistributionRoot(input.distDir);
   if (input.systemType === 'loinc') {
     input.onProgress({ phase: 'concepts', processed: 0, total: null });
-    const { conceptsLoaded } = await input.deps.loadConcepts(input.systemType, input.distDir, { acceptLicense: input.acceptLicense });
+    const { conceptsLoaded } = await input.deps.loadConcepts(input.systemType, distDir, { acceptLicense: input.acceptLicense });
     input.onProgress({ phase: 'concepts', processed: conceptsLoaded, total: conceptsLoaded });
-    await input.deps.buildOntology(input.systemType, input.codingSystemId, input.distDir, input.onProgress);
+    await input.deps.buildOntology(input.systemType, input.codingSystemId, distDir, input.onProgress);
     return { conceptsLoaded };
   }
   // snomed / rxnorm: concepts + tree from one parse.
-  const { conceptsLoaded } = await input.deps.buildOntologyWithConcepts(input.systemType, input.codingSystemId, input.distDir, input.onProgress);
+  const { conceptsLoaded } = await input.deps.buildOntologyWithConcepts(input.systemType, input.codingSystemId, distDir, input.onProgress);
   return { conceptsLoaded };
 }
