@@ -8,7 +8,7 @@ const realmPath = resolve(here, '../../../infra/keycloak/openldr-realm.json');
 
 interface RealmRole { name: string }
 interface RealmClient { clientId: string; publicClient?: boolean; serviceAccountsEnabled?: boolean; secret?: string }
-interface RealmUser { username: string; realmRoles?: string[]; credentials?: { type: string }[]; serviceAccountClientId?: string }
+interface RealmUser { username: string; realmRoles?: string[]; credentials?: { type: string }[]; requiredActions?: string[]; serviceAccountClientId?: string }
 interface Realm {
   realm: string; enabled: boolean;
   loginTheme?: string;
@@ -64,5 +64,13 @@ describe('openldr realm export', () => {
     expect(u).toBeTruthy();
     expect(u!.realmRoles).toContain('lab_admin');
     expect(u!.credentials?.some((c) => c.type === 'password')).toBe(true);
+  });
+
+  it('forces labadmin to change the seeded password at first login', () => {
+    // temporary:true on a realm-import credential does NOT attach the required action, so the
+    // seeded password must change at first login is enforced explicitly (verified live: without
+    // this, labadmin logs straight through with no forced change).
+    const u = realm.users.find((x) => x.username === 'labadmin');
+    expect(u!.requiredActions).toContain('UPDATE_PASSWORD');
   });
 });

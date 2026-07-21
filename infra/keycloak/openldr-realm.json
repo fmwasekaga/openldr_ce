@@ -67,6 +67,7 @@
       "firstName": "Lab",
       "lastName": "Admin",
       "credentials": [{ "type": "password", "value": "labadmin", "temporary": true }],
+      "requiredActions": ["UPDATE_PASSWORD"],
       "realmRoles": ["lab_admin"]
     },
     {
