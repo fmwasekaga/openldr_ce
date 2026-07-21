@@ -32,9 +32,18 @@ describe('syncRowToNotification', () => {
 describe('auditRowToNotification', () => {
   const base = { id: 'a1', occurredAt: '2026-07-20T11:00:00.000Z', actorType: 'system' as const, actorId: null, actorName: 'System', entityType: 'auth', entityId: 'expired', before: null, after: null, metadata: undefined };
 
-  it('maps auth.failed → warning → /audit', () => {
-    const n = auditRowToNotification({ ...base, action: 'auth.failed' })!;
+  it('maps a security-relevant auth.failed → warning → /audit', () => {
+    const n = auditRowToNotification({ ...base, action: 'auth.failed', entityId: 'invalid' })!;
     expect(n).toMatchObject({ id: 'audit:a1', type: 'auth_failed', priority: 'warning', linkTo: '/audit' });
+  });
+
+  it('suppresses benign self-expiry auth.failed (reason "expired") from notifications', () => {
+    // by entityId (the reason)…
+    expect(auditRowToNotification({ ...base, action: 'auth.failed', entityId: 'expired' })).toBeNull();
+    // …and by metadata.reason (defensive; both are set by the recorder).
+    expect(auditRowToNotification({ ...base, action: 'auth.failed', entityId: 'auth', metadata: { reason: 'expired' } })).toBeNull();
+    // a non-expired reason still notifies.
+    expect(auditRowToNotification({ ...base, action: 'auth.failed', entityId: 'bad-signature' })).not.toBeNull();
   });
 
   it('maps plugin.crash → critical → /activity', () => {
