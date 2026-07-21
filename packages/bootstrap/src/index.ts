@@ -1,7 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { join } from 'node:path';
 import * as XLSX from 'xlsx';
 import pg from 'pg';
 import { Kysely, sql } from 'kysely';
@@ -76,9 +74,9 @@ import { createDhis2Orchestration } from './dhis2-orchestration';
 import { selectTargetStore } from './target-store';
 import { createPluginRegistry } from './plugin-registry';
 import { createProjectionWorker } from './projection-worker';
-import { buildOntologyDistribution, canonicalSystemUrl, createOperations, importTerminologyResource, ingestDistribution, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type LoadResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType, type Operations } from '@openldr/terminology';
+import { buildOntologyDistribution, canonicalSystemUrl, createOperations, importTerminologyResource, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type LoadResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType, type Operations } from '@openldr/terminology';
 import { createTerminologyIngestWorker } from './terminology-ingest-worker';
-import { downloadAndExtract } from './terminology-dist-extract';
+import { createRunIngest } from './terminology-ingest-shared';
 
 export class ReportNotFoundError extends Error {
   constructor(public readonly id: string) {
@@ -635,31 +633,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     audit,
     workDirBase: terminologyWorkDirBase,
     logger,
-    runIngest: async (job, onProgress) => {
-      const workDir = await mkdtemp(join(terminologyWorkDirBase, 'terminology-ingest-'));
-      try {
-        const { distDir } = await downloadAndExtract(blob, job.blobKey, workDir);
-        return await ingestDistribution({
-          systemType: job.systemType,
-          codingSystemId: job.codingSystemId,
-          distDir,
-          acceptLicense: true, // the API enforced acceptance at upload/enqueue time
-          onProgress,
-          deps: {
-            loadConcepts: async (_systemType, dir, opts) => {
-              const r = await terminology.loaders.loinc(dir, opts.acceptLicense);
-              return { conceptsLoaded: r.conceptsLoaded };
-            },
-            buildOntology: async (_systemType, codingSystemId, dir, onP) =>
-              terminology.ontology.build(codingSystemId, dir, (p) => onP({ phase: p.phase, processed: p.processed, total: p.total })),
-            buildOntologyWithConcepts: async (systemType, codingSystemId, dir, onP) =>
-              terminology.ingestOntologyWithConcepts(systemType, codingSystemId, dir, onP),
-          },
-        });
-      } finally {
-        await rm(workDir, { recursive: true, force: true });
-      }
-    },
+    runIngest: createRunIngest({ blob, terminology, workDirBase: terminologyWorkDirBase }),
   });
 
   const connectorStore = createConnectorStore(internal.db);
