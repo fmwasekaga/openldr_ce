@@ -67,6 +67,13 @@ const AUDIT_MAP: Record<string, { type: NotificationType; priority: Notification
 export function auditRowToNotification(row: AuditEvent): Notification | null {
   const m = AUDIT_MAP[row.action];
   if (!m) return null;
+  // Routine session expiry (`auth.failed` reason `expired`) is benign self-expiry noise — a validly
+  // signed token that simply aged out while the user was idle, which cannot be forged and so carries
+  // no security signal. Keep it in the audit log, but don't raise a bell notification for it. Other
+  // reasons (bad-signature, invalid, wrong-audience, …) may indicate a real attempt and still notify.
+  if (row.action === 'auth.failed' && (row.entityId === 'expired' || (row.metadata as { reason?: unknown } | null)?.reason === 'expired')) {
+    return null;
+  }
   return {
     id: `audit:${row.id}`,
     type: m.type,
