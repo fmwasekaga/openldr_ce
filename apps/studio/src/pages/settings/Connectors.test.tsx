@@ -26,6 +26,16 @@ function openRowActions(id: string) {
   }
 }
 
+// "Add connector" now lives behind the page header's ⋯ menu (Task 5 — consistency pass).
+async function openAddConnector() {
+  const trigger = await screen.findByTestId('connectors-menu-trigger');
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+  if (!document.querySelector('[role="menu"]')) {
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+  }
+  fireEvent.click(await screen.findByTestId('add-connector'));
+}
+
 const conn = {
   id: 'c1', name: 'Prod DHIS2', pluginId: 'dhis2-sink', type: null,
   kind: 'sink', allowedHost: 'dhis2.example.org', enabled: true,
@@ -51,18 +61,21 @@ describe('Connectors page', () => {
     expect(screen.getByText('dhis2.example.org')).toBeTruthy();
   });
 
-  it('Add button is always enabled even with no plugins', async () => {
+  it('"Add connector" menu item is always available even with no plugins', async () => {
     (api.listConnectors as any).mockResolvedValue([]);
     (api.listSinkPlugins as any).mockResolvedValue([]);
     render(<MemoryRouter><Connectors /></MemoryRouter>);
-    const btn = await screen.findByTestId('add-connector');
-    expect((btn as HTMLButtonElement).disabled).toBe(false);
+    const trigger = await screen.findByTestId('connectors-menu-trigger');
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!document.querySelector('[role="menu"]')) fireEvent.keyDown(trigger, { key: 'Enter' });
+    const item = await screen.findByTestId('add-connector');
+    expect(item.getAttribute('data-disabled')).toBeNull();
   });
 
   it('creates a plugin connector via the dialog', async () => {
     (api.createConnector as any).mockResolvedValue({ ...conn, id: 'c2', name: 'New' });
     render(<MemoryRouter><Connectors /></MemoryRouter>);
-    fireEvent.click(await screen.findByTestId('add-connector'));
+    await openAddConnector();
     fireEvent.change(await screen.findByTestId('connector-name'), { target: { value: 'New' } });
     // Radix Select inside a Radix Dialog: the popper content only mounts via
     // keyboard navigation in jsdom (the dialog marks the tree pointer-events:none),
@@ -86,7 +99,7 @@ describe('Connectors page', () => {
     render(<MemoryRouter><Connectors /></MemoryRouter>);
 
     // Open dialog
-    fireEvent.click(await screen.findByTestId('add-connector'));
+    await openAddConnector();
 
     // Fill name
     fireEvent.change(await screen.findByTestId('connector-name'), { target: { value: 'Local PG' } });
@@ -186,7 +199,7 @@ describe('Connectors page', () => {
     (api.listSinkPlugins as any).mockResolvedValue([]);
     render(<MemoryRouter><Connectors /></MemoryRouter>);
 
-    fireEvent.click(await screen.findByTestId('add-connector'));
+    await openAddConnector();
 
     // Switch to Database category
     fireEvent.keyDown(screen.getByTestId('connector-category'), { key: 'ArrowDown' });
@@ -207,7 +220,7 @@ describe('Connectors page', () => {
     (api.listSinkPlugins as any).mockResolvedValue([]);
     render(<MemoryRouter><Connectors /></MemoryRouter>);
 
-    fireEvent.click(await screen.findByTestId('add-connector'));
+    await openAddConnector();
 
     // Switch to Database category
     fireEvent.keyDown(screen.getByTestId('connector-category'), { key: 'ArrowDown' });
@@ -229,7 +242,7 @@ describe('Connectors page', () => {
     (api.listSinkPlugins as any).mockResolvedValue([]);
     render(<MemoryRouter><Connectors /></MemoryRouter>);
 
-    fireEvent.click(await screen.findByTestId('add-connector'));
+    await openAddConnector();
 
     // Switch to Host category
     fireEvent.keyDown(screen.getByTestId('connector-category'), { key: 'ArrowDown' });
@@ -250,7 +263,7 @@ describe('Connectors page', () => {
     (api.listSinkPlugins as any).mockResolvedValue([]);
     render(<MemoryRouter><Connectors /></MemoryRouter>);
 
-    fireEvent.click(await screen.findByTestId('add-connector'));
+    await openAddConnector();
 
     // Switch to Host category
     fireEvent.keyDown(screen.getByTestId('connector-category'), { key: 'ArrowDown' });
@@ -272,7 +285,7 @@ describe('Connectors page', () => {
     (api.createConnector as any).mockResolvedValue({ id: 'c5', name: 'Mail Relay', type: 'smtp', kind: 'host', allowedHost: null, enabled: true, createdAt: '', updatedAt: '' });
     render(<MemoryRouter><Connectors /></MemoryRouter>);
 
-    fireEvent.click(await screen.findByTestId('add-connector'));
+    await openAddConnector();
     fireEvent.change(await screen.findByTestId('connector-name'), { target: { value: 'Mail Relay' } });
 
     // Switch to Host category
@@ -302,7 +315,7 @@ describe('Connectors page', () => {
     (api.listSinkPlugins as any).mockResolvedValue([]);
     render(<MemoryRouter><Connectors /></MemoryRouter>);
 
-    fireEvent.click(await screen.findByTestId('add-connector'));
+    await openAddConnector();
     fireEvent.keyDown(screen.getByTestId('connector-category'), { key: 'ArrowDown' });
     fireEvent.click(await screen.findByRole('option', { name: /host/i }));
 
@@ -320,7 +333,7 @@ describe('Connectors page', () => {
     (api.createConnector as any).mockResolvedValue({ id: 'c4', name: 'Cache', type: 'redis', kind: 'host', allowedHost: null, enabled: true, createdAt: '', updatedAt: '' });
     render(<MemoryRouter><Connectors /></MemoryRouter>);
 
-    fireEvent.click(await screen.findByTestId('add-connector'));
+    await openAddConnector();
     fireEvent.change(await screen.findByTestId('connector-name'), { target: { value: 'Cache' } });
 
     // Switch to Database category

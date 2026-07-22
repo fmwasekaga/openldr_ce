@@ -9,6 +9,7 @@ import { TableTab } from './workspace/TableTab';
 import { QueryTab } from './workspace/QueryTab';
 import { useQueryStore } from './store';
 import { StripedEmpty } from '@/components/ui/striped-empty';
+import { EmptyState } from '@/components/ui/empty-state';
 import { queryApi } from './api';
 
 function Workspace({ canQuery }: { canQuery: boolean }): JSX.Element {
@@ -19,7 +20,9 @@ function Workspace({ canQuery }: { canQuery: boolean }): JSX.Element {
     <div className="flex h-full min-w-0 flex-1 flex-col">
       <TabBar canQuery={canQuery} />
       <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-        {!active && <StripedEmpty>{canQuery ? t('query.selectOrOpen') : t('query.noSources')}</StripedEmpty>}
+        {!active && (canQuery
+          ? <StripedEmpty>{t('query.selectOrOpen')}</StripedEmpty>
+          : <EmptyState title={t('query.noSources')} />)}
         {active?.kind === 'table' && <TableTab tab={active} />}
         {active?.kind === 'dataset' && <TableTab tab={active} />}
         {active?.kind === 'query' && <QueryTab tab={active} />}

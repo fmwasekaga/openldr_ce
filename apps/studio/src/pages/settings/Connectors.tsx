@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { MoreHorizontal } from 'lucide-react';
+import { MoreHorizontal, Plug } from 'lucide-react';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter, SheetClose,
 } from '@/components/ui/sheet';
@@ -16,7 +16,8 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Bleed } from '@/components/ui/bleed';
-import { StripedEmpty } from '@/components/ui/striped-empty';
+import { EmptyState } from '@/components/ui/empty-state';
+import { SettingsHeader } from './SettingsHeader';
 import {
   listConnectors, listSinkPlugins, createConnector, updateConnector, deleteConnector, testConnector,
   type Connector, type SinkPluginRef,
@@ -259,21 +260,33 @@ export function Connectors() {
     : busy || !draft.name || (draft.category === 'plugin' ? !draft.pluginId : !draft.type);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4" data-testid="connectors-page">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-semibold">{t('settings.connectors.heading')}</h1>
-          <p className="text-sm text-muted-foreground">{t('settings.connectors.description')}</p>
-        </div>
-        <Button data-testid="add-connector" onClick={openCreate}>
-          {t('settings.connectors.add')}
-        </Button>
-      </div>
+    <div className="flex min-h-0 flex-1 flex-col" data-testid="connectors-page">
+      <SettingsHeader
+        description={t('settings.connectors.description')}
+        actions={
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8" data-testid="connectors-menu-trigger" aria-label={t('settings.connectors.heading')}>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem data-testid="add-connector" onSelect={openCreate}>
+                {t('settings.connectors.add')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        }
+      />
 
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
       {rows.length === 0 ? (
-        <Bleed className="flex flex-1 flex-col">
-          <StripedEmpty className="flex-1">{t('settings.connectors.empty')}</StripedEmpty>
-        </Bleed>
+        <EmptyState
+          icon={<Plug className="h-6 w-6" />}
+          title={t('settings.connectors.emptyTitle')}
+          body={t('settings.connectors.empty')}
+          action={<Button variant="outline" onClick={openCreate}>{t('settings.connectors.add')}</Button>}
+        />
       ) : (
         <Bleed>
         <Table>
@@ -336,6 +349,7 @@ export function Connectors() {
         </Table>
         </Bleed>
       )}
+      </div>
 
       <Sheet open={draft !== null} onOpenChange={(o) => { if (!o) setDraft(null); }}>
         <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-2xl">

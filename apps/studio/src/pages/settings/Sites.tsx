@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Copy, MoreHorizontal } from 'lucide-react';
+import { Copy, MoreHorizontal, Building2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -9,8 +9,9 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { StripedEmpty } from '@/components/ui/striped-empty';
+import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/spinner';
+import { SettingsHeader } from './SettingsHeader';
 import { fetchSites, enrollSite, rotateSite, revokeSite, downloadCentralCertificate, type SyncSiteRow, type EnrollResult } from '@/api';
 
 function formatDate(iso: string | null): string {
@@ -111,12 +112,9 @@ export function Sites() {
   return (
     <>
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex items-center justify-between border-b border-border px-3 py-2">
-          <div>
-            <h1 className="text-lg font-semibold">{t('sites.title')}</h1>
-            <p className="text-sm text-muted-foreground">{t('sites.subtitle')}</p>
-          </div>
-          <div className="flex items-center gap-2">
+        <SettingsHeader
+          description={t('sites.subtitle')}
+          actions={
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={t('sites.actions')}><MoreHorizontal className="h-4 w-4" /></Button>
@@ -127,8 +125,8 @@ export function Sites() {
                 <DropdownMenuItem onClick={() => { void load(); }}>{t('sites.refresh')}</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          </div>
-        </div>
+          }
+        />
 
         <div className="flex flex-1 flex-col overflow-auto">
           <Table>
@@ -181,7 +179,14 @@ export function Sites() {
           </Table>
           {loading && <LoadingState className="flex-1" label={t('sites.loading')} />}
           {!loading && errored && <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-muted-foreground">{t('sites.errorState')}</div>}
-          {!loading && !errored && rows.length === 0 && <StripedEmpty className="flex-1">{t('sites.empty')}</StripedEmpty>}
+          {!loading && !errored && rows.length === 0 && (
+            <EmptyState
+              icon={<Building2 className="h-6 w-6" />}
+              title={t('sites.emptyTitle')}
+              body={t('sites.emptyBody')}
+              action={<Button variant="outline" onClick={openEnroll}>{t('sites.enroll')}</Button>}
+            />
+          )}
         </div>
       </div>
 

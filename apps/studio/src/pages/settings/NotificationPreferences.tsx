@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
+import { Bleed } from '@/components/ui/bleed';
+import { SettingsHeader } from './SettingsHeader';
 import {
   getNotificationPrefs, saveNotificationPrefs,
   type NotificationType, type NotificationPriority,
@@ -85,31 +86,26 @@ export function NotificationPreferences() {
   }, [enabled, minPriority, t]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4" data-testid="notification-preferences-page">
-      <div>
-        <h1 className="text-lg font-semibold">{t('notifications.pageHeading')}</h1>
-        <p className="text-sm text-muted-foreground">{t('notifications.preferencesHint')}</p>
-      </div>
-
-      <Card>
-        <CardHeader><CardTitle>{t('notifications.preferencesTitle')}</CardTitle></CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {loading ? (
-            <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
-          ) : (
-            <>
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto" data-testid="notification-preferences-page">
+      <SettingsHeader description={t('notifications.preferencesHint')} />
+      <div className="flex flex-col gap-4 p-4">
+        {loading ? (
+          <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+        ) : (
+          <>
+            <Bleed>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border text-xs text-muted-foreground">
-                      <th className="pb-2 pr-4 text-left font-medium">{t('notifications.eventColumn')}</th>
+                      <th className="pb-2 pr-4 pl-4 text-left font-medium">{t('notifications.eventColumn')}</th>
                       <th className="pb-2 px-3 text-center font-medium">{t('notifications.enabledColumn')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {TRIGGER_TYPES.map((type) => (
                       <tr key={type} className="border-b border-border/50 last:border-0">
-                        <td className="py-2.5 pr-4 text-foreground">{t(`notifications.triggers.${type}`)}</td>
+                        <td className="py-2.5 pr-4 pl-4 text-foreground">{t(`notifications.triggers.${type}`)}</td>
                         <td className="py-2.5 px-3 text-center">
                           <Checkbox
                             checked={enabled.get(type) ?? true}
@@ -123,32 +119,32 @@ export function NotificationPreferences() {
                   </tbody>
                 </table>
               </div>
+            </Bleed>
 
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="text-sm font-medium">{t('notifications.minPriority')}</div>
-                </div>
-                <Select value={minPriority} onValueChange={(v) => setMinPriority(v as NotificationPriority)}>
-                  <SelectTrigger className="w-32 shrink-0" aria-label={t('notifications.minPriority')} data-testid="notif-min-priority">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PRIORITIES.map((p) => (
-                      <SelectItem key={p} value={p}>{t(`notifications.priorities.${p}`)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-sm font-medium">{t('notifications.minPriority')}</div>
               </div>
+              <Select value={minPriority} onValueChange={(v) => setMinPriority(v as NotificationPriority)}>
+                <SelectTrigger className="w-32 shrink-0" aria-label={t('notifications.minPriority')} data-testid="notif-min-priority">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PRIORITIES.map((p) => (
+                    <SelectItem key={p} value={p}>{t(`notifications.priorities.${p}`)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-              <div className="flex items-center justify-end">
-                <Button size="sm" disabled={saving || !dirty} onClick={() => void handleSave()} data-testid="notif-save">
-                  {saving ? t('common.saving') : t('common.save')}
-                </Button>
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
+            <div className="flex items-center justify-end">
+              <Button size="sm" disabled={saving || !dirty} onClick={() => void handleSave()} data-testid="notif-save">
+                {saving ? t('common.saving') : t('common.save')}
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

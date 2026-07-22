@@ -10,7 +10,7 @@ const DEFAULT_SIZES: Record<string, { w: number; h: number }> = {
 
 interface State {
   current: Dashboard | null; editing: boolean; dirty: boolean;
-  setCurrent(d: Dashboard): void; setEditing(v: boolean): void; markClean(): void;
+  setCurrent(d: Dashboard | null): void; setEditing(v: boolean): void; markClean(): void;
   addWidget(w: WidgetConfig): void; updateWidget(w: WidgetConfig): void; removeWidget(id: string): void;
   setLayout(layout: LayoutItem[]): void; rename(name: string): void;
 }

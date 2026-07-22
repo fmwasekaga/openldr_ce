@@ -12,8 +12,8 @@ import {
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/cn';
-import { Plus, Pencil, Check, SlidersHorizontal, MoreHorizontal, Download, Upload, RefreshCw } from 'lucide-react';
-import { listDashboards, createDashboard, saveDashboard, fetchClientConfig, type Dashboard, type DashboardFilterDef, type WidgetConfig } from '../api';
+import { Plus, Pencil, Check, SlidersHorizontal, MoreHorizontal, Download, Upload, RefreshCw, Trash2 } from 'lucide-react';
+import { listDashboards, createDashboard, saveDashboard, deleteDashboard, fetchClientConfig, type Dashboard, type DashboardFilterDef, type WidgetConfig } from '../api';
 import { useDashboardStore } from './store';
 import { DashboardGrid } from './DashboardGrid';
 import { DashboardFilterBar } from './filters/DashboardFilterBar';
@@ -21,6 +21,7 @@ import { DashboardFilterEditor } from './filters/DashboardFilterEditor';
 import { exportDashboard, importDashboard, uniqueName } from './io';
 import { WidgetEditorDialog } from './editor/WidgetEditorDialog';
 import { StripedEmpty } from '@/components/ui/striped-empty';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 function defaultsFor(filters: DashboardFilterDef[]): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -44,6 +45,7 @@ export function DashboardPage() {
   const [filterEditorOpen, setFilterEditorOpen] = useState(false);
   const [sqlEnabled, setSqlEnabled] = useState(false);
   const [error, setError] = useState<string>();
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   // Bumping this remounts the widget grid, which re-runs every widget's query — a refresh.
   const [refreshKey, setRefreshKey] = useState(0);
   const saveTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -97,6 +99,24 @@ export function DashboardPage() {
       setCurrent(created);
       setEditing(true);
       setError(undefined);
+    } catch (e) {
+      setError(String((e as Error).message ?? e));
+    }
+  };
+
+  const handleDeleteDashboard = async () => {
+    if (!current) return;
+    const deleted = current;
+    try {
+      await deleteDashboard(deleted.id);
+      const rest = all.filter((d) => d.id !== deleted.id);
+      setAll(rest);
+      setEditing(false);
+      if (rest.length > 0) setCurrent(rest[0]);
+      else {
+        setCurrent(null);
+        setError('No dashboards found.');
+      }
     } catch (e) {
       setError(String((e as Error).message ?? e));
     }
@@ -261,6 +281,14 @@ export function DashboardPage() {
                 <Upload className="mr-2 h-4 w-4" />
                 {t('dashboard.importDashboard')}
               </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onSelect={() => setDeleteConfirmOpen(true)}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                {t('dashboard.deleteDashboard')}
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           </div>
@@ -321,6 +349,18 @@ export function DashboardPage() {
           onSave={(f) => setCurrent({ ...current, filters: f })}
         />
       )}
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        onOpenChange={setDeleteConfirmOpen}
+        title={t('dashboard.deleteConfirmTitle')}
+        description={t('dashboard.deleteConfirmBody')}
+        confirmLabel={t('dashboard.deleteDashboard')}
+        destructive
+        onConfirm={() => {
+          setDeleteConfirmOpen(false);
+          void handleDeleteDashboard();
+        }}
+      />
     </AppShell>
   );
 }

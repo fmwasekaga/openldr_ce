@@ -106,8 +106,6 @@ export function Marketplace() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4" data-testid="marketplace-page">
-      <h1 className="text-lg font-semibold">{t('settings.marketplace.heading')}</h1>
-
       <MarketplaceTabs
         configured={configured}
         available={available}

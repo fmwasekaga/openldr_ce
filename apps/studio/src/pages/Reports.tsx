@@ -9,6 +9,7 @@ import {
 import { ReportLibrary } from '../reports/ReportLibrary';
 import { TruncatedText } from '@/components/ui/truncated-text';
 import { StripedEmpty } from '@/components/ui/striped-empty';
+import { EmptyState } from '@/components/ui/empty-state';
 import { listReportCategories, type ReportCategory } from '../reports/reportCategoriesApi';
 import { ReportHistoryDrawer } from '../reports/ReportHistoryDrawer';
 import { ReportSchedulesDrawer } from '../reports/ReportSchedulesDrawer';
@@ -157,7 +158,11 @@ export function Reports() {
 
         <div className="flex min-w-0 flex-1 flex-col">
           {!selected ? (
-            <StripedEmpty>{reports.length === 0 ? t('reports.emptyLibrary') : t('reports.selectReport')}</StripedEmpty>
+            reports.length === 0 ? (
+              <EmptyState title={t('reports.emptyLibrary')} body={t('reports.emptyLibraryBody')} />
+            ) : (
+              <StripedEmpty>{t('reports.selectReport')}</StripedEmpty>
+            )
           ) : (
             <>
               <div className="flex items-start justify-between border-b border-border px-4 py-3">
