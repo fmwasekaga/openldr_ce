@@ -3,6 +3,7 @@
 // shell over these functions.
 
 import type { QueryModel, WidgetQuery, WidgetVariableDef } from '../../api';
+import type { TreeGroup } from './conditionTree.model';
 
 export type BuilderQuery = Extract<WidgetQuery, { mode: 'builder' }>;
 
@@ -60,6 +61,15 @@ export function setLimitPatch(value: BuilderQuery, limit: number | undefined): B
   const floored = limit !== undefined ? Math.floor(limit) : undefined;
   if (floored && Number.isFinite(floored) && floored > 0) next.limit = floored;
   else delete next.limit;
+  return next;
+}
+
+/** Author the AND/OR tree: set `filterTree` and clear the legacy flat `filters` (compiler prefers
+ *  the tree when present). Passing `undefined` reverts to the flat `filters`. */
+export function setFilterTreePatch(value: BuilderQuery, tree: TreeGroup | undefined): BuilderQuery {
+  const next = { ...value };
+  if (tree) { next.filterTree = tree as BuilderQuery['filterTree']; next.filters = []; }
+  else delete next.filterTree;
   return next;
 }
 

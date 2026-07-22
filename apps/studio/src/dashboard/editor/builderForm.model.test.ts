@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { setModelPatch, setMetricPatch, setDimensionPatch, setGrainPatch, setBreakdownPatch, setFiltersPatch, setLimitPatch, buildSaveQuery, shouldRestoreEjected, type BuilderQuery } from './builderForm.model';
+import { setModelPatch, setMetricPatch, setDimensionPatch, setGrainPatch, setBreakdownPatch, setFiltersPatch, setLimitPatch, setFilterTreePatch, buildSaveQuery, shouldRestoreEjected, type BuilderQuery } from './builderForm.model';
 import type { QueryModel, WidgetVariableDef } from '../../api';
 
 const models: QueryModel[] = [
@@ -103,6 +103,16 @@ describe('builderForm.model', () => {
     const withLimit = { ...base, limit: 10 };
     expect(setLimitPatch(withLimit, 0.5)).toEqual(base);
     expect(setLimitPatch(withLimit, NaN)).toEqual(base);
+  });
+
+  it('setFilterTreePatch sets the tree and clears the flat filters', () => {
+    const tree = { kind: 'group' as const, combinator: 'and' as const, children: [] };
+    expect(setFilterTreePatch(base, tree)).toEqual({ ...base, filterTree: tree, filters: [] });
+  });
+
+  it('setFilterTreePatch clears the tree for undefined', () => {
+    const withTree = { ...base, filterTree: { kind: 'group' as const, combinator: 'and' as const, children: [] } };
+    expect(setFilterTreePatch(withTree, undefined)).toEqual({ ...base, filters: base.filters });
   });
 
   describe('buildSaveQuery', () => {
