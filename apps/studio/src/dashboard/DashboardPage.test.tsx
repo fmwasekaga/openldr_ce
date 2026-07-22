@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, waitFor } from '@testing-library/react';
+import { render, waitFor, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { DashboardPage } from './DashboardPage';
 import { useDashboardStore } from './store';
@@ -29,8 +29,21 @@ describe('DashboardPage', () => {
       return Promise.resolve(new Response('{}', { status: 200 }));
     });
     const { findByText } = render(<MemoryRouter><DashboardPage /></MemoryRouter>);
-    // Falls through to the graceful empty state, and never POSTs a dashboard.
-    expect(await findByText('No dashboards found.')).toBeTruthy();
+    // Falls through to the graceful empty state (now a friendlier create/import prompt rather
+    // than the raw error string), and never POSTs a dashboard.
+    expect(await findByText('No dashboards yet.')).toBeTruthy();
     expect(postAttempted).toBe(false);
+  });
+
+  it('renders create/import actions in the empty state instead of a dead end', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((url: any) => {
+      if (String(url) === '/api/dashboards') return Promise.resolve(new Response('[]', { status: 200 }));
+      if (String(url).endsWith('/models')) return Promise.resolve(new Response('[]', { status: 200 }));
+      if (String(url) === '/api/config') return Promise.resolve(new Response(JSON.stringify({ dashboardSqlEnabled: false }), { status: 200 }));
+      return Promise.resolve(new Response('{}', { status: 200 }));
+    });
+    render(<MemoryRouter><DashboardPage /></MemoryRouter>);
+    expect(await screen.findByRole('button', { name: /New dashboard/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Import/i })).toBeInTheDocument();
   });
 });

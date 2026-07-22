@@ -157,7 +157,7 @@ export function Reports() {
 
         <div className="flex min-w-0 flex-1 flex-col">
           {!selected ? (
-            <StripedEmpty>{t('reports.selectReport')}</StripedEmpty>
+            <StripedEmpty>{reports.length === 0 ? t('reports.emptyLibrary') : t('reports.selectReport')}</StripedEmpty>
           ) : (
             <>
               <div className="flex items-start justify-between border-b border-border px-4 py-3">

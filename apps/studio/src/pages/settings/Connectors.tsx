@@ -271,8 +271,8 @@ export function Connectors() {
       </div>
 
       {rows.length === 0 ? (
-        <Bleed>
-          <StripedEmpty className="min-h-[14rem]">{t('settings.connectors.empty')}</StripedEmpty>
+        <Bleed className="flex flex-1 flex-col">
+          <StripedEmpty className="flex-1">{t('settings.connectors.empty')}</StripedEmpty>
         </Bleed>
       ) : (
         <Bleed>

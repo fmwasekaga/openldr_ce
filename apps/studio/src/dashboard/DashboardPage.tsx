@@ -79,6 +79,45 @@ export function DashboardPage() {
     }
   };
 
+  const handleNewDashboard = async () => {
+    const existingNames = new Set(all.map((d) => d.name));
+    let name = 'New dashboard';
+    for (let n = 2; existingNames.has(name); n++) name = `New dashboard ${n}`;
+    const blank: Dashboard = {
+      id: crypto.randomUUID(),
+      ownerId: null,
+      name,
+      layout: [],
+      widgets: [],
+      filters: [],
+      refreshIntervalSec: 0,
+      isDefault: false,
+    };
+    try {
+      const created = await createDashboard(blank);
+      setAll((prev) => [...prev, created]);
+      setCurrent(created);
+      setEditing(true);
+      setError(undefined);
+    } catch (e) {
+      setError(String((e as Error).message ?? e));
+    }
+  };
+
+  const fileInputEl = (
+    <input
+      ref={fileInput}
+      type="file"
+      accept="application/json,.json"
+      className="hidden"
+      onChange={(e) => {
+        const f = e.target.files?.[0];
+        if (f) handleImportFile(f);
+        e.target.value = '';
+      }}
+    />
+  );
+
   useEffect(() => {
     fetchClientConfig()
       .then((c) => setSqlEnabled(c.dashboardSqlEnabled))
@@ -119,11 +158,28 @@ export function DashboardPage() {
   }, [editing, dirty, current]);
 
   if (!current) {
+    const isEmpty = error === 'No dashboards found.';
     return (
       <AppShell title="Dashboard" fullBleed>
         <div className="ui-scope flex min-h-0 flex-1 flex-col">
-          <StripedEmpty>{error ?? 'Loading…'}</StripedEmpty>
+          {isEmpty ? (
+            <StripedEmpty>
+              <div className="flex flex-col items-center gap-3 text-center">
+                <p className="text-sm font-medium">{t('dashboard.emptyTitle')}</p>
+                <p className="max-w-sm text-xs text-muted-foreground">{t('dashboard.emptyBody')}</p>
+                <div className="flex items-center gap-2 pt-1">
+                  <Button onClick={() => void handleNewDashboard()}>{t('dashboard.newDashboard')}</Button>
+                  <Button variant="outline" onClick={() => fileInput.current?.click()}>
+                    {t('dashboard.importDashboard')}
+                  </Button>
+                </div>
+              </div>
+            </StripedEmpty>
+          ) : (
+            <StripedEmpty>{error ?? 'Loading…'}</StripedEmpty>
+          )}
         </div>
+        {fileInputEl}
       </AppShell>
     );
   }
@@ -210,17 +266,7 @@ export function DashboardPage() {
             </DropdownMenuContent>
           </DropdownMenu>
           </div>
-          <input
-            ref={fileInput}
-            type="file"
-            accept="application/json,.json"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) handleImportFile(f);
-              e.target.value = '';
-            }}
-          />
+          {fileInputEl}
         </div>
         <Separator />
         {current.filters.length > 0 && (

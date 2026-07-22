@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { ReportDesignerPage } from './ReportDesignerPage';
-import { createReportDesign, updateReportDesign, deleteReportDesign } from '../api';
+import { createReportDesign, updateReportDesign, deleteReportDesign, listReportDesigns } from '../api';
 
 // Mock the API layer: the list + single-design loads resolve from the mock seed data (which the
 // existing editor tests depend on), and the mutating calls resolve so we can assert they fire.
@@ -55,6 +55,20 @@ describe('ReportDesignerPage', () => {
   // assert *absence* of calls, so start each test with a clean slate. clearAllMocks keeps the
   // vi.mock implementations, only wiping recorded calls.
   beforeEach(() => vi.clearAllMocks());
+
+  it('shows a New template action in the empty (no-template) state', async () => {
+    vi.mocked(listReportDesigns).mockResolvedValueOnce([]);
+    render(
+      <MemoryRouter initialEntries={['/report-designer']}>
+        <Routes>
+          <Route path="/report-designer" element={<ReportDesignerPage />} />
+          <Route path="/report-designer/:id" element={<ReportDesignerPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText('Select or create a template')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /New template/i })).toBeInTheDocument();
+  });
 
   it('loads the design list into the explorer', async () => {
     await renderPage();

@@ -1,5 +1,6 @@
 // apps/studio/src/query/workspace/TabBar.tsx
 import { X, Plus, Table2, Zap, Package } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useQueryStore, type Tab } from '../store';
 
 function tabIcon(t: Tab) {
@@ -20,7 +21,8 @@ function isDirty(t: Tab): boolean {
   return t.sql !== def;
 }
 
-export function TabBar(): JSX.Element {
+export function TabBar({ canQuery }: { canQuery: boolean }): JSX.Element {
+  const { t } = useTranslation();
   const { tabs, activeId, setActive, closeTab, openQueryTab } = useQueryStore();
   return (
     <div className="flex h-10 items-stretch border-b border-border bg-muted/40">
@@ -39,7 +41,13 @@ export function TabBar(): JSX.Element {
           </div>
         );
       })}
-      <button aria-label="new query" className="flex items-center border-r border-border px-3 text-muted-foreground hover:bg-background/30 hover:text-foreground" onClick={() => openQueryTab({})}>
+      <button
+        aria-label="new query"
+        disabled={!canQuery}
+        title={!canQuery ? t('query.noSourcesHint') : undefined}
+        className="flex items-center border-r border-border px-3 text-muted-foreground hover:bg-background/30 hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+        onClick={() => openQueryTab({})}
+      >
         <Plus className="h-4 w-4" />
       </button>
     </div>

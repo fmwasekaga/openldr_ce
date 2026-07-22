@@ -9,15 +9,17 @@ import { TableTab } from './workspace/TableTab';
 import { QueryTab } from './workspace/QueryTab';
 import { useQueryStore } from './store';
 import { StripedEmpty } from '@/components/ui/striped-empty';
+import { queryApi } from './api';
 
-function Workspace(): JSX.Element {
+function Workspace({ canQuery }: { canQuery: boolean }): JSX.Element {
+  const { t } = useTranslation();
   const { tabs, activeId } = useQueryStore();
   const active = tabs.find((t) => t.id === activeId);
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col">
-      <TabBar />
+      <TabBar canQuery={canQuery} />
       <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-        {!active && <StripedEmpty>Select a table or open a query</StripedEmpty>}
+        {!active && <StripedEmpty>{canQuery ? t('query.selectOrOpen') : t('query.noSources')}</StripedEmpty>}
         {active?.kind === 'table' && <TableTab tab={active} />}
         {active?.kind === 'dataset' && <TableTab tab={active} />}
         {active?.kind === 'query' && <QueryTab tab={active} />}
@@ -29,10 +31,20 @@ function Workspace(): JSX.Element {
 export function QueryPage(): JSX.Element {
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(false);
+  // Default true so the "+" isn't briefly disabled while the availability check is in flight.
+  const [canQuery, setCanQuery] = useState(true);
   // The query store is module-level (survives route changes); clear open tabs when leaving so
   // re-entering the page starts from a blank workspace rather than restoring the old session.
   const reset = useQueryStore((s) => s.reset);
   useEffect(() => () => reset(), [reset]);
+
+  // Eagerly check whether there is anything queryable at all (connectors, datasets, or saved
+  // custom queries) so the "new query" action can be disabled instead of opening onto a dead end.
+  useEffect(() => {
+    Promise.all([queryApi.connectors(), queryApi.datasets(), queryApi.list()])
+      .then(([c, d, q]) => setCanQuery(c.length + d.length + q.length > 0))
+      .catch(() => setCanQuery(false));
+  }, []);
   return (
     <AppShell title={t('nav.query')} fullBleed>
       <div className="flex h-full min-h-0">
@@ -61,7 +73,7 @@ export function QueryPage(): JSX.Element {
           </div>
         )}
         <div className="flex min-w-0 flex-1" data-testid="query-workspace">
-          <Workspace />
+          <Workspace canQuery={canQuery} />
         </div>
       </div>
     </AppShell>

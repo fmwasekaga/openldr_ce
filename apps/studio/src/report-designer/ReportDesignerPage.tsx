@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Frame, PanelLeftOpen } from 'lucide-react';
 import { AppShell } from '@/shell/AppShell';
+import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { StripedEmpty } from '@/components/ui/striped-empty';
 import { useTemplateHistory } from '../forms-builder/useTemplateHistory';
@@ -411,6 +412,7 @@ export function ReportDesignerPage(): JSX.Element {
               <Frame className="h-6 w-6 text-muted-foreground" />
               <p className="text-sm font-medium">{t('reportDesigner.emptyTitle')}</p>
               <p className="max-w-sm text-xs text-muted-foreground">{t('reportDesigner.emptyBody')}</p>
+              <Button className="mt-2" onClick={newTemplate}>{t('reportDesigner.newTemplate')}</Button>
             </div>
           </StripedEmpty>
         )}
