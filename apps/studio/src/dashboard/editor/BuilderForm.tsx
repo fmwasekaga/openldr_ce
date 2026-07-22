@@ -2,15 +2,17 @@ import type { DashboardFilterDef, QueryModel } from '../../api';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { FilterTreeEditor } from './FilterTreeEditor';
+import { MeasuresEditor } from './MeasuresEditor';
 import { emptyTree, filtersToTree } from './conditionTree.model';
 import {
   setModelPatch,
-  setMetricPatch,
   setDimensionPatch,
   setGrainPatch,
   setBreakdownPatch,
   setFilterTreePatch,
   setLimitPatch,
+  measuresOf,
+  setMeasuresPatch,
   type BuilderQuery,
 } from './builderForm.model';
 
@@ -42,21 +44,12 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
         </Select>
       </label>
 
-      <label className="text-sm">
-        Measure
-        <Select value={value.metric.key} onValueChange={(key) => onChange(setMetricPatch(model, value, key))}>
-          <SelectTrigger aria-label="Measure" className="mt-1 w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {model?.metrics.map((m) => (
-              <SelectItem key={m.key} value={m.key}>
-                {m.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </label>
+      <div className="text-sm">
+        Summarize
+        <div className="mt-1">
+          <MeasuresEditor value={measuresOf(value)} model={model} onChange={(list) => onChange(setMeasuresPatch(value, list))} />
+        </div>
+      </div>
 
       <div className="text-sm">
         Filters

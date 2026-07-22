@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { setModelPatch, setMetricPatch, setDimensionPatch, setGrainPatch, setBreakdownPatch, setFiltersPatch, setLimitPatch, setFilterTreePatch, buildSaveQuery, shouldRestoreEjected, type BuilderQuery } from './builderForm.model';
+import { setModelPatch, setMetricPatch, setDimensionPatch, setGrainPatch, setBreakdownPatch, setFiltersPatch, setLimitPatch, setFilterTreePatch, buildSaveQuery, shouldRestoreEjected, measuresOf, setMeasuresPatch, type BuilderQuery } from './builderForm.model';
 import type { QueryModel, WidgetVariableDef } from '../../api';
 
 const models: QueryModel[] = [
@@ -113,6 +113,24 @@ describe('builderForm.model', () => {
   it('setFilterTreePatch clears the tree for undefined', () => {
     const withTree = { ...base, filterTree: { kind: 'group' as const, combinator: 'and' as const, children: [] } };
     expect(setFilterTreePatch(withTree, undefined)).toEqual({ ...base, filters: base.filters });
+  });
+
+  it('measuresOf returns the single metric as a one-item list', () => {
+    expect(measuresOf(base)).toEqual([base.metric]);
+  });
+
+  it('setMeasuresPatch maps one row to metric, clearing metrics', () => {
+    const out = setMeasuresPatch({ ...base, metrics: [base.metric, base.metric] }, [base.metric]);
+    expect(out.metric).toEqual(base.metric);
+    expect(out.metrics).toBeUndefined();
+  });
+
+  it('setMeasuresPatch maps multiple rows to metric + metrics', () => {
+    const a = { key: 'a', agg: 'count' as const };
+    const b = { key: 'b', agg: 'count' as const };
+    const out = setMeasuresPatch(base, [a, b]);
+    expect(out.metric).toEqual(a);
+    expect(out.metrics).toEqual([a, b]);
   });
 
   describe('buildSaveQuery', () => {

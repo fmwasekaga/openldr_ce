@@ -29,7 +29,7 @@ describe('BuilderForm', () => {
     const onChange = vi.fn();
     const { getByLabelText } = render(<BuilderForm models={models} value={base} onChange={onChange} />);
     expect(getByLabelText('Source')).toBeTruthy();
-    expect(getByLabelText('Measure')).toBeTruthy();
+    expect(getByLabelText('Add measure')).toBeTruthy();
     expect(getByLabelText('Group by')).toBeTruthy();
     expect(getByLabelText('Breakdown')).toBeTruthy();
   });
