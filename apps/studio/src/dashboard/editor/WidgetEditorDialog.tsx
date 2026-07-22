@@ -327,6 +327,17 @@ export function WidgetEditorDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Keep the CodeMirror view in sync when `sqlText` changes programmatically — chiefly the async
+  // Builder→SQL eject, whose compiled SQL resolves AFTER the editor has already mounted (with the
+  // old doc). Guard on the current doc so the user's own keystrokes (view → setSqlText via the
+  // update listener) don't re-dispatch and loop.
+  useEffect(() => {
+    const v = view.current;
+    if (!v) return;
+    const cur = v.state.doc.toString();
+    if (cur !== sqlText) v.dispatch({ changes: { from: 0, to: cur.length, insert: sqlText } });
+  }, [sqlText]);
+
   // Stored (vetted) SQL template for this widget, if editing an existing sql-mode widget.
   const storedTemplate = initial?.query.mode === 'sql' ? initial.query.sql : undefined;
 
