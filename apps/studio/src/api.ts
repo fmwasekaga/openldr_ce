@@ -266,8 +266,8 @@ export interface ConditionGroup { kind: 'group'; combinator: 'and' | 'or'; child
 
 export type WidgetQuery =
   | { mode: 'builder'; model: string;
-      metric: { key: string; label?: string; agg: string; column?: string; where?: { dimension: string; op: string; value: unknown }[]; derived?: { numerator: string; denominator: string; scale?: number; decimals?: number } };
-      metrics?: { key: string; label?: string; agg: string; column?: string; where?: { dimension: string; op: string; value: unknown }[]; derived?: { numerator: string; denominator: string; scale?: number; decimals?: number } }[];
+      metric: { key: string; label?: string; agg: string; column?: string; where?: { dimension: string; op: string; value: unknown }[]; derived?: { numerator: string; denominator: string; scale: number; decimals: number } };
+      metrics?: { key: string; label?: string; agg: string; column?: string; where?: { dimension: string; op: string; value: unknown }[]; derived?: { numerator: string; denominator: string; scale: number; decimals: number } }[];
       dimension?: { key: string; grain?: string; reference?: string }; breakdown?: { key: string }; filters: { dimension: string; op: string; value: unknown }[];
       filterTree?: ConditionGroup;
       limit?: number;

@@ -32,9 +32,14 @@ describe('recognizeSql — core shape', () => {
     expect(r).toMatchObject({ ok: false, code: 'unknown_table' });
   });
 
-  it('refuses multiple measures (v1 capability invariant)', () => {
+  it('recognizes multiple measures as a wide (metrics[]) query', () => {
     const r = recognizeSql('SELECT observation_desc AS label, COUNT(*) AS x, AVG(numeric_value) AS y FROM lab_results GROUP BY observation_desc');
-    expect(r).toMatchObject({ ok: false, code: 'multi_measure' });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.query.metric).toMatchObject({ key: 'count', agg: 'count' });
+      expect(r.query.metrics?.map((m) => m.key)).toEqual(['count', 'avg_value']);
+      expect(r.query.dimension).toEqual({ key: 'code_text' });
+    }
   });
 
   it('refuses a detail row list (no aggregate)', () => {
@@ -74,7 +79,13 @@ describe('recognizeSql — filters and corpus', () => {
     expect(r).toMatchObject({ ok: false, code: 'order_by_unsupported' });
   });
 
-  it('recognizes exactly 9 of the 13 seeded widgets, with expected refusal codes', () => {
+  it('recognizes 9 of the 13 seeded widgets, with expected refusal codes', () => {
+    // Still 9, not 10: relaxing multi_measure alone doesn't flip the corpus's sole
+    // multi-measure widget ("Analyte Volume vs Avg Value"). It now refuses on
+    // `not_null_unsupported` instead — its `WHERE numeric_value IS NOT NULL` sits on
+    // a measure column (numeric_value, inside AVG), not a dimension, and the builder
+    // has no faithful way to represent "not null" on a measure. Dropping that predicate
+    // would change COUNT(*) — an unfaithful eject round-trip — so the refusal is correct.
     const results = board.widgets.map((w: any) => ({ title: w.title, r: recognizeSql(w.query.sql) }));
     const passed = results.filter((x) => x.r.ok).map((x) => x.title);
     expect(passed.length).toBe(9);
@@ -82,7 +93,7 @@ describe('recognizeSql — filters and corpus', () => {
     expect(refusals).toEqual({
       'Result Finalisation %': 'case_measure',
       'Order → Report Pipeline': 'union',
-      'Analyte Volume vs Avg Value': 'multi_measure',
+      'Analyte Volume vs Avg Value': 'not_null_unsupported',
       'Recent Orders': 'detail_rows',
     });
   });

@@ -3,6 +3,8 @@
 // shell over these functions.
 
 import type { QueryModel, WidgetQuery, WidgetVariableDef } from '../../api';
+import type { TreeGroup } from './conditionTree.model';
+import { toBuilderMetrics, type Measure } from './measures.model';
 
 export type BuilderQuery = Extract<WidgetQuery, { mode: 'builder' }>;
 
@@ -54,6 +56,24 @@ export function setFiltersPatch(value: BuilderQuery, filters: BuilderQuery['filt
   return { ...value, filters };
 }
 
+/** Set (or, for a non-positive / undefined value, clear) the top-N row limit. */
+export function setLimitPatch(value: BuilderQuery, limit: number | undefined): BuilderQuery {
+  const next = { ...value };
+  const floored = limit !== undefined ? Math.floor(limit) : undefined;
+  if (floored && Number.isFinite(floored) && floored > 0) next.limit = floored;
+  else delete next.limit;
+  return next;
+}
+
+/** Author the AND/OR tree: set `filterTree` and clear the legacy flat `filters` (compiler prefers
+ *  the tree when present). Passing `undefined` reverts to the flat `filters`. */
+export function setFilterTreePatch(value: BuilderQuery, tree: TreeGroup | undefined): BuilderQuery {
+  const next = { ...value };
+  if (tree) { next.filterTree = tree as BuilderQuery['filterTree']; next.filters = []; }
+  else delete next.filterTree;
+  return next;
+}
+
 /**
  * Build the `WidgetQuery` that `WidgetEditorDialog.save()` persists, given the current editor
  * mode. Kept pure (and separate from the dialog's Radix-heavy JSX) so save-payload construction
@@ -84,4 +104,18 @@ export function buildSaveQuery(
  */
 export function shouldRestoreEjected(mode: 'builder' | 'sql', sqlText: string, lastEjectedSql: string | undefined): boolean {
   return mode === 'sql' && lastEjectedSql !== undefined && sqlText === lastEjectedSql;
+}
+
+/** The current measures as a list (the single `metric`, or the `metrics[]` array when wide). */
+export function measuresOf(value: BuilderQuery): Measure[] {
+  return (value.metrics as Measure[] | undefined) ?? [value.metric as Measure];
+}
+
+/** Persist an edited measures list back into the query's `metric`/`metrics` fields. */
+export function setMeasuresPatch(value: BuilderQuery, list: Measure[]): BuilderQuery {
+  const { metric, metrics } = toBuilderMetrics(list);
+  const next = { ...value, metric: metric as BuilderQuery['metric'] };
+  if (metrics) next.metrics = metrics as BuilderQuery['metrics'];
+  else delete next.metrics;
+  return next;
 }

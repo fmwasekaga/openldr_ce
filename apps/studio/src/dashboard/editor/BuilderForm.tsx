@@ -1,13 +1,18 @@
 import type { DashboardFilterDef, QueryModel } from '../../api';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
-import { FilterConditionEditor, type FilterCondition } from './FilterConditionEditor';
+import { Input } from '@/components/ui/input';
+import { FilterTreeEditor } from './FilterTreeEditor';
+import { MeasuresEditor } from './MeasuresEditor';
+import { emptyTree, filtersToTree } from './conditionTree.model';
 import {
   setModelPatch,
-  setMetricPatch,
   setDimensionPatch,
   setGrainPatch,
   setBreakdownPatch,
-  setFiltersPatch,
+  setFilterTreePatch,
+  setLimitPatch,
+  measuresOf,
+  setMeasuresPatch,
   type BuilderQuery,
 } from './builderForm.model';
 
@@ -39,32 +44,22 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
         </Select>
       </label>
 
-      <label className="text-sm">
-        Measure
-        <Select value={value.metric.key} onValueChange={(key) => onChange(setMetricPatch(model, value, key))}>
-          <SelectTrigger aria-label="Measure" className="mt-1 w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {model?.metrics.map((m) => (
-              <SelectItem key={m.key} value={m.key}>
-                {m.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </label>
+      <div className="text-sm">
+        Summarize
+        <div className="mt-1">
+          <MeasuresEditor value={measuresOf(value)} model={model} onChange={(list) => onChange(setMeasuresPatch(value, list))} />
+        </div>
+      </div>
 
       <div className="text-sm">
         Filters
-        <FilterConditionEditor
-          value={(value.filters ?? []) as FilterCondition[]}
-          dimensions={model?.dimensions ?? []}
-          dashboardFilters={dashboardFilters.map((f) => ({ id: f.id, label: f.label }))}
-          bindings={value.variableBindings ?? {}}
-          onChange={(f) => onChange(setFiltersPatch(value, f as BuilderQuery['filters']))}
-          onBindingsChange={(b) => onChange({ ...value, variableBindings: b })}
-        />
+        <div className="mt-1">
+          <FilterTreeEditor
+            value={value.filterTree ?? (value.filters?.length ? filtersToTree(value.filters) : emptyTree())}
+            dimensions={model?.dimensions ?? []}
+            onChange={(tree) => onChange(setFilterTreePatch(value, tree))}
+          />
+        </div>
       </div>
 
       <label className="text-sm">
@@ -118,6 +113,22 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
           </SelectContent>
         </Select>
       </label>
+
+      {(value.dimension || value.breakdown) && (
+        <label className="text-sm">
+          Limit
+          <Input
+            type="number"
+            min={1}
+            aria-label="Limit"
+            className="mt-1 h-8 w-full text-xs"
+            placeholder="All rows"
+            value={value.limit ?? ''}
+            onChange={(e) => onChange(setLimitPatch(value, e.target.value === '' ? undefined : Number(e.target.value)))}
+          />
+          <span className="mt-0.5 block text-[11px] text-muted-foreground">Top rows by the first measure, highest first.</span>
+        </label>
+      )}
     </div>
   );
 }

@@ -57,4 +57,20 @@ describe('bindQuery', () => {
     const out = bindQuery(q, { prio: 'stat' }) as any;
     expect(out.filters).toEqual([{ dimension: 'priority', op: 'eq', value: 'stat' }]);
   });
+
+  it('injects a scalar binding into a filterTree, pruning the bound dimension', () => {
+    const q = {
+      mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count' }, filters: [],
+      filterTree: { kind: 'group', combinator: 'and', children: [{ kind: 'rule', dimension: 'status', op: 'eq', value: 'F' }] },
+      variableBindings: { priority: 'prio' },
+    } as any;
+    const out = bindQuery(q, { prio: 'stat' }) as any;
+    expect(out.filterTree).toEqual({
+      kind: 'group', combinator: 'and',
+      children: [
+        { kind: 'group', combinator: 'and', children: [{ kind: 'rule', dimension: 'status', op: 'eq', value: 'F' }] },
+        { kind: 'rule', dimension: 'priority', op: 'eq', value: 'stat' },
+      ],
+    });
+  });
 });

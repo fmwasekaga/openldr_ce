@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { setModelPatch, setMetricPatch, setDimensionPatch, setGrainPatch, setBreakdownPatch, setFiltersPatch, buildSaveQuery, shouldRestoreEjected, type BuilderQuery } from './builderForm.model';
+import { setModelPatch, setMetricPatch, setDimensionPatch, setGrainPatch, setBreakdownPatch, setFiltersPatch, setLimitPatch, setFilterTreePatch, buildSaveQuery, shouldRestoreEjected, measuresOf, setMeasuresPatch, type BuilderQuery } from './builderForm.model';
 import type { QueryModel, WidgetVariableDef } from '../../api';
 
 const models: QueryModel[] = [
@@ -86,6 +86,51 @@ describe('builderForm.model', () => {
   it('setFiltersPatch replaces the top-level filters list', () => {
     const next = [{ dimension: 'priority', op: 'eq', value: 'high' }];
     expect(setFiltersPatch(base, next)).toEqual({ ...base, filters: next });
+  });
+
+  it('setLimitPatch sets a positive integer limit', () => {
+    expect(setLimitPatch(base, 10)).toEqual({ ...base, limit: 10 });
+  });
+
+  it('setLimitPatch clears the limit for undefined / 0 / negative', () => {
+    const withLimit = { ...base, limit: 10 };
+    expect(setLimitPatch(withLimit, undefined)).toEqual(base);
+    expect(setLimitPatch(withLimit, 0)).toEqual(base);
+    expect(setLimitPatch(withLimit, -5)).toEqual(base);
+  });
+
+  it('setLimitPatch clears the limit for a fractional value in (0,1) and for NaN', () => {
+    const withLimit = { ...base, limit: 10 };
+    expect(setLimitPatch(withLimit, 0.5)).toEqual(base);
+    expect(setLimitPatch(withLimit, NaN)).toEqual(base);
+  });
+
+  it('setFilterTreePatch sets the tree and clears the flat filters', () => {
+    const tree = { kind: 'group' as const, combinator: 'and' as const, children: [] };
+    expect(setFilterTreePatch(base, tree)).toEqual({ ...base, filterTree: tree, filters: [] });
+  });
+
+  it('setFilterTreePatch clears the tree for undefined', () => {
+    const withTree = { ...base, filterTree: { kind: 'group' as const, combinator: 'and' as const, children: [] } };
+    expect(setFilterTreePatch(withTree, undefined)).toEqual({ ...base, filters: base.filters });
+  });
+
+  it('measuresOf returns the single metric as a one-item list', () => {
+    expect(measuresOf(base)).toEqual([base.metric]);
+  });
+
+  it('setMeasuresPatch maps one row to metric, clearing metrics', () => {
+    const out = setMeasuresPatch({ ...base, metrics: [base.metric, base.metric] }, [base.metric]);
+    expect(out.metric).toEqual(base.metric);
+    expect(out.metrics).toBeUndefined();
+  });
+
+  it('setMeasuresPatch maps multiple rows to metric + metrics', () => {
+    const a = { key: 'a', agg: 'count' as const };
+    const b = { key: 'b', agg: 'count' as const };
+    const out = setMeasuresPatch(base, [a, b]);
+    expect(out.metric).toEqual(a);
+    expect(out.metrics).toEqual([a, b]);
   });
 
   describe('buildSaveQuery', () => {

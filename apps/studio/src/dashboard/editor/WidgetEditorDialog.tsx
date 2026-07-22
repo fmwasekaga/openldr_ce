@@ -35,7 +35,7 @@ import {
 import { renderWidget } from '../widgets';
 import { resolveValues, applyTemplate } from '../template';
 import { BuilderForm } from './BuilderForm';
-import { buildSaveQuery, shouldRestoreEjected, type BuilderQuery } from './builderForm.model';
+import { buildSaveQuery, shouldRestoreEjected, measuresOf, type BuilderQuery } from './builderForm.model';
 
 const WIDGET_TYPES: { value: string; label: string }[] = [
   { value: 'kpi', label: 'Number' },
@@ -389,6 +389,16 @@ export function WidgetEditorDialog({
       .finally(() => setRunning(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, JSON.stringify(builderQuery)]);
+
+  // Multi-measure results are a table (all measures → columns). If the user adds a second measure
+  // while a chart type is selected, switch to Table — charts plot only one measure.
+  useEffect(() => {
+    if (mode !== 'builder') return;
+    const multi = measuresOf(builderQuery).length > 1;
+    const singleValue = ['table', 'kpi', 'gauge', 'progress-bar', 'traffic-light'].includes(type);
+    if (multi && !singleValue) setType('table');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, JSON.stringify(builderQuery.metrics ?? null)]);
 
   // Editing the SQL invalidates any prior "can't show this in the builder" refusal — re-check on
   // the next toBuilder click rather than leaving a stale block in place.
