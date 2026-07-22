@@ -284,7 +284,6 @@ export function Connectors() {
         <EmptyState
           icon={<Plug className="h-6 w-6" />}
           title={t('settings.connectors.emptyTitle')}
-          body={t('settings.connectors.empty')}
           action={<Button variant="outline" onClick={openCreate}>{t('settings.connectors.add')}</Button>}
         />
       ) : (
@@ -355,7 +354,7 @@ export function Connectors() {
         <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-2xl">
           <SheetHeader className="border-b border-border px-6 py-4">
             <SheetTitle>{draft?.id === null ? t('settings.connectors.newTitle') : t('settings.connectors.editTitle')}</SheetTitle>
-            <SheetDescription>{t('settings.connectors.description')}</SheetDescription>
+            <SheetDescription>{t('settings.connectors.sheetDescription')}</SheetDescription>
           </SheetHeader>
           {draft ? (
             <>

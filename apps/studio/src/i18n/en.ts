@@ -319,6 +319,7 @@ export const en = {
     connectors: {
       heading: 'Connectors',
       description: 'Secrets are encrypted at rest and never shown again.',
+      sheetDescription: 'Configure an outbound sink connector for an external system. Secrets are encrypted at rest and never shown again.',
       add: 'Add connector',
       empty: 'No connectors yet.',
       emptyTitle: 'No connectors yet',
