@@ -225,7 +225,7 @@ export function General() {
                   <div className="text-sm font-medium">{t(`settings.general.danger.${k}.label`)}</div>
                   <div className="text-xs text-muted-foreground">{t(`settings.general.danger.${k}.description`)}</div>
                 </div>
-                <Button variant="secondary" className="border-destructive/50 text-destructive" disabled={dangerBusy} onClick={() => setPending(action)}>
+                <Button variant="secondary" className="w-32 shrink-0 border-destructive/50 text-destructive" disabled={dangerBusy} onClick={() => setPending(action)}>
                   {t(`settings.general.danger.${k}.button`)}
                 </Button>
               </div>

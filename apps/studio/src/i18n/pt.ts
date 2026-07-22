@@ -670,6 +670,7 @@ export const pt: EnShape = {
     emptyTitle: 'Ainda não há painéis.',
     emptyBody: 'Crie um painel para adicionar widgets, ou importe um a partir de um ficheiro.',
     newDashboard: 'Novo painel',
+    delete: 'Eliminar',
     deleteDashboard: 'Eliminar painel',
     deleteConfirmTitle: 'Eliminar este painel?',
     deleteConfirmBody: 'Esta ação elimina permanentemente o painel e os seus widgets. Não pode ser desfeita.',

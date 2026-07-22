@@ -279,7 +279,6 @@ export function Connectors() {
         }
       />
 
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
       {rows.length === 0 ? (
         <EmptyState
           icon={<Plug className="h-6 w-6" />}
@@ -287,6 +286,7 @@ export function Connectors() {
           action={<Button variant="outline" onClick={openCreate}>{t('settings.connectors.add')}</Button>}
         />
       ) : (
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
         <Bleed>
         <Table>
           <TableHeader>
@@ -347,8 +347,8 @@ export function Connectors() {
           </TableBody>
         </Table>
         </Bleed>
+        </div>
       )}
-      </div>
 
       <Sheet open={draft !== null} onOpenChange={(o) => { if (!o) setDraft(null); }}>
         <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-2xl">

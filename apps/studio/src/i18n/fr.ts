@@ -670,6 +670,7 @@ export const fr: EnShape = {
     emptyTitle: 'Aucun tableau de bord pour l’instant.',
     emptyBody: 'Créez un tableau de bord pour ajouter des widgets, ou importez-en un depuis un fichier.',
     newDashboard: 'Nouveau tableau de bord',
+    delete: 'Supprimer',
     deleteDashboard: 'Supprimer le tableau de bord',
     deleteConfirmTitle: 'Supprimer ce tableau de bord ?',
     deleteConfirmBody: 'Cette action supprime définitivement le tableau de bord et ses widgets. Impossible à annuler.',

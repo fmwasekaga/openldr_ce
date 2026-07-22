@@ -674,6 +674,7 @@ export const en = {
     emptyTitle: 'No dashboards yet.',
     emptyBody: 'Create a dashboard to add widgets, or import one from a file.',
     newDashboard: 'New dashboard',
+    delete: 'Delete',
     deleteDashboard: 'Delete dashboard',
     deleteConfirmTitle: 'Delete this dashboard?',
     deleteConfirmBody: 'This permanently deletes the dashboard and its widgets. This cannot be undone.',

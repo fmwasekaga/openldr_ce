@@ -265,6 +265,14 @@ export function DashboardPage() {
                     <Check className="mr-2 h-4 w-4" />
                     Done
                   </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onSelect={() => setDeleteConfirmOpen(true)}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    {t('dashboard.delete')}
+                  </DropdownMenuItem>
                 </>
               ) : (
                 <DropdownMenuItem onSelect={() => setEditing(true)}>
@@ -280,14 +288,6 @@ export function DashboardPage() {
               <DropdownMenuItem onSelect={() => fileInput.current?.click()}>
                 <Upload className="mr-2 h-4 w-4" />
                 {t('dashboard.importDashboard')}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                onSelect={() => setDeleteConfirmOpen(true)}
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                {t('dashboard.deleteDashboard')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

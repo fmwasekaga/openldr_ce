@@ -55,7 +55,7 @@ describe('DashboardPage', () => {
     expect(screen.getByRole('button', { name: /Import/i })).toBeInTheDocument();
   });
 
-  it('offers a destructive "Delete dashboard" menu item that opens a confirm dialog', async () => {
+  it('does NOT offer "Delete" outside of edit mode', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation((url: any) => {
       if (String(url) === '/api/dashboards') return Promise.resolve(new Response(JSON.stringify([{ id: 'd1', ownerId: null, name: 'Overview', layout: [], widgets: [], filters: [], refreshIntervalSec: 0, isDefault: true }]), { status: 200 }));
       if (String(url).endsWith('/models')) return Promise.resolve(new Response('[]', { status: 200 }));
@@ -65,7 +65,22 @@ describe('DashboardPage', () => {
     render(<MemoryRouter><DashboardPage /></MemoryRouter>);
     await waitFor(() => expect(screen.getByText('Overview')).toBeTruthy());
     openDashboardMenu();
-    const deleteItem = await screen.findByText('Delete dashboard');
+    await screen.findByText('Edit');
+    expect(screen.queryByText('Delete')).toBeNull();
+  });
+
+  it('offers a destructive "Delete" menu item in edit mode that opens a confirm dialog', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((url: any) => {
+      if (String(url) === '/api/dashboards') return Promise.resolve(new Response(JSON.stringify([{ id: 'd1', ownerId: null, name: 'Overview', layout: [], widgets: [], filters: [], refreshIntervalSec: 0, isDefault: true }]), { status: 200 }));
+      if (String(url).endsWith('/models')) return Promise.resolve(new Response('[]', { status: 200 }));
+      if (String(url) === '/api/config') return Promise.resolve(new Response(JSON.stringify({ dashboardSqlEnabled: false }), { status: 200 }));
+      return Promise.resolve(new Response('{}', { status: 200 }));
+    });
+    render(<MemoryRouter><DashboardPage /></MemoryRouter>);
+    await waitFor(() => expect(screen.getByText('Overview')).toBeTruthy());
+    useDashboardStore.setState({ editing: true });
+    openDashboardMenu();
+    const deleteItem = await screen.findByText('Delete');
     expect(deleteItem).toBeInTheDocument();
     fireEvent.click(deleteItem);
     expect(await screen.findByRole('alertdialog')).toBeInTheDocument();

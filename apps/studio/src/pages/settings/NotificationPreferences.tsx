@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -26,14 +25,12 @@ const PRIORITIES: NotificationPriority[] = ['info', 'warning', 'critical'];
 export function NotificationPreferences() {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   // Overlay of explicit opt-outs. Absence of a type here = enabled (matches
   // the server's contract: `disabled` only lists the types turned off).
   const [enabled, setEnabled] = useState<Map<NotificationType, boolean>>(new Map());
-  const [originalEnabled, setOriginalEnabled] = useState<Map<NotificationType, boolean>>(new Map());
   const [minPriority, setMinPriority] = useState<NotificationPriority>('info');
-  const [originalMinPriority, setOriginalMinPriority] = useState<NotificationPriority>('info');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -42,9 +39,7 @@ export function NotificationPreferences() {
       const next = new Map<NotificationType, boolean>();
       for (const type of TRIGGER_TYPES) next.set(type, !disabled.includes(type));
       setEnabled(next);
-      setOriginalEnabled(new Map(next));
       setMinPriority(mp);
-      setOriginalMinPriority(mp);
     } catch (e) {
       toast.error(String(e instanceof Error ? e.message : e));
     } finally {
@@ -54,34 +49,40 @@ export function NotificationPreferences() {
 
   useEffect(() => { void load(); }, [load]);
 
-  const toggle = (type: NotificationType) => {
-    setEnabled((prev) => {
-      const next = new Map(prev);
-      next.set(type, !(prev.get(type) ?? true));
-      return next;
-    });
-  };
-
-  const dirty = useMemo(() => {
-    if (minPriority !== originalMinPriority) return true;
-    for (const type of TRIGGER_TYPES) {
-      if ((enabled.get(type) ?? true) !== (originalEnabled.get(type) ?? true)) return true;
-    }
-    return false;
-  }, [enabled, originalEnabled, minPriority, originalMinPriority]);
-
-  const handleSave = useCallback(async () => {
-    setSaving(true);
+  const toggle = useCallback(async (type: NotificationType) => {
+    const next = new Map(enabled);
+    next.set(type, !(enabled.get(type) ?? true));
+    setEnabled(next);
+    setBusy(true);
     try {
-      const prefs = TRIGGER_TYPES.map((type) => ({ type, enabled: enabled.get(type) ?? true }));
-      await saveNotificationPrefs(prefs, minPriority);
-      setOriginalEnabled(new Map(enabled));
-      setOriginalMinPriority(minPriority);
+      await saveNotificationPrefs(
+        TRIGGER_TYPES.map((tt) => ({ type: tt, enabled: next.get(tt) ?? true })),
+        minPriority,
+      );
       toast.success(t('settings.saved'));
     } catch (e) {
+      setEnabled(enabled);
       toast.error(String(e instanceof Error ? e.message : e));
     } finally {
-      setSaving(false);
+      setBusy(false);
+    }
+  }, [enabled, minPriority, t]);
+
+  const changeMinPriority = useCallback(async (next: NotificationPriority) => {
+    const prev = minPriority;
+    setMinPriority(next);
+    setBusy(true);
+    try {
+      await saveNotificationPrefs(
+        TRIGGER_TYPES.map((tt) => ({ type: tt, enabled: enabled.get(tt) ?? true })),
+        next,
+      );
+      toast.success(t('settings.saved'));
+    } catch (e) {
+      setMinPriority(prev);
+      toast.error(String(e instanceof Error ? e.message : e));
+    } finally {
+      setBusy(false);
     }
   }, [enabled, minPriority, t]);
 
@@ -107,9 +108,10 @@ export function NotificationPreferences() {
                       <tr key={type} className="border-b border-border/50 last:border-0">
                         <td className="py-2.5 pr-4 pl-4 text-foreground">{t(`notifications.triggers.${type}`)}</td>
                         <td className="py-2.5 px-3 text-center">
-                          <Checkbox
+                          <Switch
                             checked={enabled.get(type) ?? true}
-                            onCheckedChange={() => toggle(type)}
+                            disabled={busy}
+                            onCheckedChange={() => void toggle(type)}
                             aria-label={t(`notifications.triggers.${type}`)}
                             data-testid={`notif-enabled-${type}`}
                           />
@@ -125,7 +127,11 @@ export function NotificationPreferences() {
               <div>
                 <div className="text-sm font-medium">{t('notifications.minPriority')}</div>
               </div>
-              <Select value={minPriority} onValueChange={(v) => setMinPriority(v as NotificationPriority)}>
+              <Select
+                value={minPriority}
+                disabled={busy}
+                onValueChange={(v) => void changeMinPriority(v as NotificationPriority)}
+              >
                 <SelectTrigger className="w-32 shrink-0" aria-label={t('notifications.minPriority')} data-testid="notif-min-priority">
                   <SelectValue />
                 </SelectTrigger>
@@ -135,12 +141,6 @@ export function NotificationPreferences() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-
-            <div className="flex items-center justify-end">
-              <Button size="sm" disabled={saving || !dirty} onClick={() => void handleSave()} data-testid="notif-save">
-                {saving ? t('common.saving') : t('common.save')}
-              </Button>
             </div>
           </>
         )}
