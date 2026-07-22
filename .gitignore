@@ -20,3 +20,6 @@ e2e/artifacts/
 .dhis2-seed/
 .openldr/
 temp/
+
+# Portable Python runtime downloaded by @openldr/bootstrap at runtime/test time (not source)
+packages/bootstrap/Python/
