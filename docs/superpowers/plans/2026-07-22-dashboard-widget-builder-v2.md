@@ -101,7 +101,9 @@ Append to `builderForm.model.ts`:
 /** Set (or, for a non-positive / undefined value, clear) the top-N row limit. */
 export function setLimitPatch(value: BuilderQuery, limit: number | undefined): BuilderQuery {
   const next = { ...value };
-  if (limit && Number.isFinite(limit) && limit > 0) next.limit = Math.floor(limit);
+  // Floor BEFORE the positivity gate so a fractional value in (0,1) clears rather than rounds to 0.
+  const floored = limit !== undefined ? Math.floor(limit) : undefined;
+  if (floored && Number.isFinite(floored) && floored > 0) next.limit = floored;
   else delete next.limit;
   return next;
 }
