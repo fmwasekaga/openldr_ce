@@ -103,12 +103,11 @@ export function recognizeSql(sql: string): RecognizeResult {
     for (const item of splitTop(mSel![1])) {
       const { expr, alias } = splitAlias(item);
       const agg = classifyAgg(expr, reg!);
-      if (agg) { measures.push(agg); if (alias) measureAlias = alias; continue; }
+      if (agg) { if (alias && measures.length === 0) measureAlias = alias; measures.push(agg); continue; }
       if (dimItem) refuse('detail_rows', 'projects multiple non-aggregated columns (detail row list, not a metric)');
       dimItem = expr;
     }
     if (measures.length === 0) refuse('detail_rows', 'no aggregate measure (detail row list, not a metric)');
-    if (measures.length > 1) refuse('multi_measure', 'multiple measures — not supported in the builder yet');
 
     let dimension: BuilderQuery['dimension']; let groupCol: string | undefined;
     if (dimItem) {
@@ -153,6 +152,7 @@ export function recognizeSql(sql: string): RecognizeResult {
     }
 
     const query: BuilderQuery = { mode: 'builder', model: reg!.model, metric: measures[0] as never, filters };
+    if (measures.length > 1) query.metrics = measures as never;
     if (dimension) query.dimension = dimension;
     if (limit != null) query.limit = limit;
     return { ok: true, query };
