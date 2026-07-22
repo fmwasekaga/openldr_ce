@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { setModelPatch, setMetricPatch, setDimensionPatch, setGrainPatch, setBreakdownPatch, setFiltersPatch, buildSaveQuery, type BuilderQuery } from './builderForm.model';
+import { setModelPatch, setMetricPatch, setDimensionPatch, setGrainPatch, setBreakdownPatch, setFiltersPatch, buildSaveQuery, shouldRestoreEjected, type BuilderQuery } from './builderForm.model';
 import type { QueryModel, WidgetVariableDef } from '../../api';
 
 const models: QueryModel[] = [
@@ -103,6 +103,34 @@ describe('builderForm.model', () => {
         variableBindings: bindings,
         variables: varDefs,
       });
+    });
+  });
+
+  describe('shouldRestoreEjected', () => {
+    // Builder -> SQL eject produces compiled SQL (quoted identifiers, inlined params) that
+    // recognizeSql cannot parse, so a plain round-trip (SQL untouched since eject) must restore
+    // the in-memory builderQuery losslessly rather than fail recognition.
+    it('returns true when in sql mode and the SQL is unchanged since eject', () => {
+      const ejected = 'select "status" as "label" from "lab_requests"';
+      expect(shouldRestoreEjected('sql', ejected, ejected)).toBe(true);
+    });
+
+    // Anti-silent-loss case: the user hand-edited the ejected SQL, so the stale in-memory
+    // builderQuery must NOT be restored — the caller must fall through to recognizeSql instead of
+    // silently discarding the edit.
+    it('returns false when the SQL has been edited since eject', () => {
+      const ejected = 'select "status" as "label" from "lab_requests"';
+      const edited = 'select "status" as "label" from "lab_requests" where "status" = \'X\'';
+      expect(shouldRestoreEjected('sql', edited, ejected)).toBe(false);
+    });
+
+    it('returns false when there has been no eject in this session', () => {
+      expect(shouldRestoreEjected('sql', 'select 1', undefined)).toBe(false);
+    });
+
+    it('returns false when in builder mode', () => {
+      const ejected = 'select "status" as "label" from "lab_requests"';
+      expect(shouldRestoreEjected('builder', ejected, ejected)).toBe(false);
     });
   });
 });

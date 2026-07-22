@@ -35,7 +35,7 @@ import {
 import { renderWidget } from '../widgets';
 import { resolveValues, applyTemplate } from '../template';
 import { BuilderForm } from './BuilderForm';
-import { buildSaveQuery, type BuilderQuery } from './builderForm.model';
+import { buildSaveQuery, shouldRestoreEjected, type BuilderQuery } from './builderForm.model';
 
 const WIDGET_TYPES: { value: string; label: string }[] = [
   { value: 'kpi', label: 'Number' },
@@ -230,6 +230,11 @@ export function WidgetEditorDialog({
   // Builder -> SQL eject: true once the user has switched away from the builder in this dialog
   // session, so the "JS-side shaping isn't in this SQL" banner shows above the editor.
   const [ejectedFromBuilder, setEjectedFromBuilder] = useState(false);
+  // The exact compiled SQL text last written into the editor by an eject (toSql). Lets toBuilder
+  // tell a plain round-trip (SQL untouched since eject -> restore builderQuery losslessly) apart
+  // from a hand-edited eject (SQL changed -> must re-recognize, never silently discard the edit).
+  // See shouldRestoreEjected in builderForm.model.ts.
+  const [lastEjectedSql, setLastEjectedSql] = useState<string | undefined>();
   const [testValues, setTestValues] = useState<Record<string, unknown>>({});
   const [dynamicVarOptions, setDynamicVarOptions] = useState<Record<string, string[]>>({});
   const [preview, setPreview] = useState<ReportResult>();
@@ -380,11 +385,13 @@ export function WidgetEditorDialog({
     setBuilderBlockedReason(undefined);
   }, [sqlText]);
 
-  // SQL -> Builder: recognize the current SQL text as a builder query. If it doesn't originate
-  // from an sql-mode widget and we're only viewing SQL because of an eject, the in-memory
-  // builderQuery is still authoritative (round-trips exactly) — skip re-parsing.
+  // SQL -> Builder: recognize the current SQL text as a builder query. If the SQL is exactly what
+  // the last Builder -> SQL eject produced (untouched since), the in-memory builderQuery is still
+  // authoritative (round-trips exactly, and the compiled eject SQL isn't recognizable anyway) —
+  // skip re-parsing. Otherwise (never ejected, or the SQL was hand-edited since) re-recognize so
+  // an edit is never silently discarded.
   const toBuilder = () => {
-    if (initial?.query.mode !== 'sql' && mode === 'sql') {
+    if (shouldRestoreEjected(mode, sqlText, lastEjectedSql)) {
       setBuilderBlockedReason(undefined);
       setMode('builder');
       return;
@@ -407,7 +414,10 @@ export function WidgetEditorDialog({
     if (mode === 'builder') {
       setEjectedFromBuilder(true);
       compileBuilderToSql(builderQuery)
-        .then((sql) => setSqlText(sql))
+        .then((sql) => {
+          setSqlText(sql);
+          setLastEjectedSql(sql);
+        })
         .catch(() => {});
     }
     setMode('sql');

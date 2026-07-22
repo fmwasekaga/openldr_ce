@@ -68,3 +68,20 @@ export function buildSaveQuery(
 ): WidgetQuery {
   return mode === 'builder' ? builderQuery : { mode: 'sql', sql: sqlText, variableBindings: bindings, variables: varDefs };
 }
+
+/**
+ * Decide whether toggling from SQL back to Builder can losslessly restore the in-memory
+ * `builderQuery` instead of re-parsing `sqlText` with `recognizeSql`.
+ *
+ * Builder -> SQL eject compiles the builder query to SQL with quoted identifiers and inlined
+ * params (e.g. `from "lab_requests"`, `"status" as "label"`) that `recognizeSql` — which only
+ * understands unquoted `FROM \w+` style SQL — cannot parse. So a plain round-trip (the SQL is
+ * exactly what was last ejected) must skip the recognizer and restore `builderQuery` directly.
+ *
+ * The moment the user edits the ejected SQL, `sqlText` no longer equals `lastEjectedSql` and this
+ * returns false so the caller falls through to `recognizeSql` — re-recognizing the edit instead of
+ * silently discarding it and restoring the stale pre-edit builder query.
+ */
+export function shouldRestoreEjected(mode: 'builder' | 'sql', sqlText: string, lastEjectedSql: string | undefined): boolean {
+  return mode === 'sql' && lastEjectedSql !== undefined && sqlText === lastEjectedSql;
+}
