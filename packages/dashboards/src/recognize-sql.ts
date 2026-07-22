@@ -5,7 +5,8 @@ type BuilderQuery = Extract<WidgetQuery, { mode: 'builder' }>;
 export type RecognizeCode =
   | 'union' | 'join' | 'cte' | 'window' | 'case_measure' | 'multi_measure'
   | 'detail_rows' | 'unknown_table' | 'unknown_dimension' | 'unknown_metric'
-  | 'unrecognized_predicate' | 'not_null_unsupported' | 'parse_failed';
+  | 'unrecognized_predicate' | 'not_null_unsupported' | 'parse_failed'
+  | 'order_by_unsupported';
 export type RecognizeResult =
   | { ok: true; query: BuilderQuery }
   | { ok: false; code: RecognizeCode; reason: string };
@@ -98,10 +99,11 @@ export function recognizeSql(sql: string): RecognizeResult {
 
     const measures: { key: string; agg: string; column?: string }[] = [];
     let dimItem: string | null = null;
+    let measureAlias = 'value';
     for (const item of splitTop(mSel![1])) {
-      const { expr } = splitAlias(item);
+      const { expr, alias } = splitAlias(item);
       const agg = classifyAgg(expr, reg!);
-      if (agg) { measures.push(agg); continue; }
+      if (agg) { measures.push(agg); if (alias) measureAlias = alias; continue; }
       if (dimItem) refuse('detail_rows', 'projects multiple non-aggregated columns (detail row list, not a metric)');
       dimItem = expr;
     }
@@ -137,6 +139,17 @@ export function recognizeSql(sql: string): RecognizeResult {
         const op = m[2] === '>=' ? 'gte' : m[2] === '<=' ? 'lte' : 'eq';
         filters.push({ dimension: resolveDim(m[1], reg!).key, op, value: clean(m[3]) });
       } else refuse('unrecognized_predicate', `unrecognized predicate: "${p}"`);
+    }
+
+    if (limit != null) {
+      const orderM = body.match(/order\s+by\s+(.+?)\s*$/i);
+      if (orderM) {
+        const firstTerm = splitTop(orderM[1])[0] ?? '';
+        const orderCol = firstTerm.replace(/\s+(asc|desc)\s*$/i, '').trim();
+        if (orderCol.toLowerCase() !== measureAlias.toLowerCase()) {
+          refuse('order_by_unsupported', 'ORDER BY on a non-measure column combined with a row limit — top-N would change meaning');
+        }
+      }
     }
 
     const query: BuilderQuery = { mode: 'builder', model: reg!.model, metric: measures[0] as never, filters };

@@ -63,6 +63,17 @@ describe('recognizeSql — filters and corpus', () => {
     if (r.ok) expect(r.query.limit).toBe(15);
   });
 
+  it('allows a limit whose ORDER BY is the measure alias descending', () => {
+    const r = recognizeSql('SELECT panel_desc AS label, COUNT(*) AS value FROM lab_requests GROUP BY panel_desc ORDER BY value DESC OFFSET 0 ROWS FETCH NEXT 15 ROWS ONLY');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.query.limit).toBe(15);
+  });
+
+  it('refuses a limit whose ORDER BY is a non-measure column (top-N would change meaning)', () => {
+    const r = recognizeSql('SELECT panel_desc AS label, COUNT(*) AS value FROM lab_requests GROUP BY panel_desc ORDER BY authored_at DESC OFFSET 0 ROWS FETCH NEXT 5 ROWS ONLY');
+    expect(r).toMatchObject({ ok: false, code: 'order_by_unsupported' });
+  });
+
   it('recognizes exactly 9 of the 13 seeded widgets, with expected refusal codes', () => {
     const results = board.widgets.map((w: any) => ({ title: w.title, r: recognizeSql(w.query.sql) }));
     const passed = results.filter((x) => x.r.ok).map((x) => x.title);
