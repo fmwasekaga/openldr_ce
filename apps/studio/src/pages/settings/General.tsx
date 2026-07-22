@@ -206,7 +206,7 @@ export function General() {
                   if (level !== validationLevel) setPendingValidation(level);
                 }}
               >
-                <SelectTrigger className="w-32 shrink-0 border-destructive/50 text-destructive" aria-label={t('settings.general.danger.validation.label')}>
+                <SelectTrigger className="relative w-32 shrink-0 justify-center border-destructive/50 text-destructive [&>svg]:absolute [&>svg]:right-3" aria-label={t('settings.general.danger.validation.label')}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
