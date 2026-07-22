@@ -1,10 +1,15 @@
 import { useEffect, useState } from 'react';
 import { runWidgetQuery, type ReportResult, type WidgetConfig, type WidgetQuery } from '../api';
 import { renderWidget } from './widgets';
+import { bindFilterTree } from './editor/conditionTree.model';
 
 export function bindQuery(q: WidgetQuery, filterValues: Record<string, unknown>): WidgetQuery {
   if (q.mode === 'builder') {
     if (!q.variableBindings) return q;
+    if (q.filterTree) {
+      const filterTree = bindFilterTree(q.filterTree as any, q.variableBindings, filterValues);
+      return { ...q, filterTree } as WidgetQuery;
+    }
     // A bound row's own literal filter (e.g. {dimension:'authored_on', op:'eq', value:''}) stays
     // in q.filters until the row is deleted — drop it here so the derived binding filter(s)
     // REPLACE it instead of being ANDed alongside it (which zeroes out results / type-errors).
