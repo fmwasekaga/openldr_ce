@@ -5,7 +5,11 @@ import { renderWidget } from './widgets';
 export function bindQuery(q: WidgetQuery, filterValues: Record<string, unknown>): WidgetQuery {
   if (q.mode === 'builder') {
     if (!q.variableBindings) return q;
-    const filters = [...q.filters];
+    // A bound row's own literal filter (e.g. {dimension:'authored_on', op:'eq', value:''}) stays
+    // in q.filters until the row is deleted — drop it here so the derived binding filter(s)
+    // REPLACE it instead of being ANDed alongside it (which zeroes out results / type-errors).
+    const bound = new Set(Object.keys(q.variableBindings));
+    const filters = q.filters.filter((f) => !bound.has(f.dimension));
     for (const [dimKey, filterId] of Object.entries(q.variableBindings)) {
       const v = filterValues[filterId];
       if (v == null || v === '') continue;

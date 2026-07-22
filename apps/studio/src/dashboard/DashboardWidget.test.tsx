@@ -34,4 +34,27 @@ describe('bindQuery', () => {
     const out = bindQuery(q, { prio: 'stat' }) as any;
     expect(out.filters).toEqual([{ dimension: 'priority', op: 'eq', value: 'stat' }]);
   });
+
+  it('drops a bound row\'s stale literal filter so the binding supersedes it (date-range)', () => {
+    const q = {
+      mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count' },
+      filters: [{ dimension: 'authored_on', op: 'eq', value: '' }],
+      variableBindings: { authored_on: 'period' },
+    } as any;
+    const out = bindQuery(q, { period: { from: '2024-01-01', to: '2024-03-31' } }) as any;
+    expect(out.filters).toEqual([
+      { dimension: 'authored_on', op: 'gte', value: '2024-01-01' },
+      { dimension: 'authored_on', op: 'lte', value: '2024-03-31' },
+    ]);
+  });
+
+  it('drops a bound row\'s stale literal filter so the binding supersedes it (scalar)', () => {
+    const q = {
+      mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count' },
+      filters: [{ dimension: 'priority', op: 'eq', value: '' }],
+      variableBindings: { priority: 'prio' },
+    } as any;
+    const out = bindQuery(q, { prio: 'stat' }) as any;
+    expect(out.filters).toEqual([{ dimension: 'priority', op: 'eq', value: 'stat' }]);
+  });
 });

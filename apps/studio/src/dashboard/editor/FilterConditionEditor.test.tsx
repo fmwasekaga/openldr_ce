@@ -66,4 +66,20 @@ describe('FilterConditionEditor', () => {
     expect(getByLabelText('Bound dashboard filter')).toBeTruthy();
     expect(queryByLabelText('Filter value')).toBeNull();
   });
+
+  it('hides the operator Select on a bound row but keeps it on an unbound row', () => {
+    const dashboardFilters = [{ id: 'period', label: 'Period' }];
+    const { getByLabelText, queryByLabelText } = render(
+      <FilterConditionEditor
+        value={[{ dimension: 'status', op: 'eq', value: '' }]}
+        dimensions={dims}
+        dashboardFilters={dashboardFilters}
+        bindings={{ status: 'period' }}
+        onChange={vi.fn()}
+        onBindingsChange={vi.fn()}
+      />,
+    );
+    expect(getByLabelText('Filter field')).toBeTruthy();
+    expect(queryByLabelText('Filter operator')).toBeNull();
+  });
 });

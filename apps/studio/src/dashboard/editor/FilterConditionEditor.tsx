@@ -27,7 +27,16 @@ export function FilterConditionEditor({ value, dimensions, dashboardFilters = []
         const bound = !!boundFilterId;
         return (
           <div key={i} className="flex items-center gap-1">
-            <Select value={c.dimension} onValueChange={(v) => onChange(updateCondition(value, i, { dimension: v }))}>
+            <Select
+              value={c.dimension}
+              onValueChange={(v) => {
+                onChange(updateCondition(value, i, { dimension: v }));
+                // Changing a bound row's dimension would otherwise leave `bindings` keyed by the
+                // OLD dimension — an orphaned binding that bindQuery would keep applying against a
+                // field the row no longer shows. Clear it so the row reverts to a plain literal.
+                if (bound) onBindingsChange?.(setBound(bindings, c.dimension, null));
+              }}
+            >
               <SelectTrigger aria-label="Filter field" className="h-7 w-32 text-xs">
                 <SelectValue />
               </SelectTrigger>
@@ -39,18 +48,20 @@ export function FilterConditionEditor({ value, dimensions, dashboardFilters = []
                 ))}
               </SelectContent>
             </Select>
-            <Select value={c.op} onValueChange={(v) => onChange(updateCondition(value, i, { op: v, value: toValue(v, toLiteral(c.value)) }))}>
-              <SelectTrigger aria-label="Filter operator" className="h-7 w-24 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {OPS.map((o) => (
-                  <SelectItem key={o} value={o}>
-                    {o}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {!bound && (
+              <Select value={c.op} onValueChange={(v) => onChange(updateCondition(value, i, { op: v, value: toValue(v, toLiteral(c.value)) }))}>
+                <SelectTrigger aria-label="Filter operator" className="h-7 w-24 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {OPS.map((o) => (
+                    <SelectItem key={o} value={o}>
+                      {o}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             {dashboardFilters.length > 0 && (
               <div className="inline-flex shrink-0 overflow-hidden rounded border border-input text-[10px]">
                 <button
