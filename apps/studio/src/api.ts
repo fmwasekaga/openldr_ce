@@ -270,6 +270,7 @@ export type WidgetQuery =
       metrics?: { key: string; label?: string; agg: string; column?: string; where?: { dimension: string; op: string; value: unknown }[]; derived?: { numerator: string; denominator: string; scale?: number; decimals?: number } }[];
       dimension?: { key: string; grain?: string; reference?: string }; breakdown?: { key: string }; filters: { dimension: string; op: string; value: unknown }[];
       filterTree?: ConditionGroup;
+      limit?: number;
       variableBindings?: Record<string, string> }
   | { mode: 'sql'; sql: string; variableBindings?: Record<string, string>; variables?: Record<string, WidgetVariableDef>;
       values?: Record<string, string | number | null | { from: string; to: string }> };
