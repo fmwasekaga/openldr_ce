@@ -7,6 +7,8 @@
 #   -HttpPort <n>       gateway HTTP port (default 80)
 #   -HttpsPort <n>      gateway HTTPS port (default 443)
 #   -NoStart / -NoPull
+#   -Seedless           empty first run  -  skips the seeded sample dashboard + demo data
+#                       (the default seeds them so a fresh install comes up populated; fresh install only)
 #   -ReadyTimeout <n>   post-start readiness wait in seconds (default 180; 0 disables)
 #   -TargetDb postgres|mssql|mysql (default postgres  -  selects the external analytics/target DB)
 #   -MssqlDemo (spin up a bundled MSSQL container for evaluation; implies -TargetDb mssql)
@@ -29,6 +31,7 @@ param(
   [int]$ReadyTimeout = 180,
   [switch]$NoStart,
   [switch]$NoPull,
+  [switch]$Seedless,
   [ValidateSet('postgres','mssql','mysql')]
   [string]$TargetDb = 'postgres',
   [switch]$MssqlDemo,
@@ -290,6 +293,8 @@ if (-not $envExists) {
   try { $hashBytes = $md5.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($resolvedDir.ToLower())) } finally { $md5.Dispose() }
   $hashHex = -join ($hashBytes[0..3] | ForEach-Object { $_.ToString("x2") })
   $projectName = "$leaf-$hashHex"
+  # Seed the sample dashboard + demo data on first boot unless -Seedless was passed.
+  $seedOnStart = if ($Seedless) { 'false' } else { 'true' }
 
   if ($TargetDb -eq 'mssql') {
     $targetDbEnvBlock = @"
@@ -354,7 +359,7 @@ INITIAL_LAB_ADMIN_PASSWORD=$labAdminPw
 TLS_CERT_PATH=/etc/openldr/tls-cert.pem
 SECRETS_ENCRYPTION_KEY=$secretsKey
 MIGRATE_ON_START=true
-SEED_ON_START=true
+SEED_ON_START=$seedOnStart
 MARKETPLACE_REGISTRY_URL=https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/marketplace/main
 "@ | Out-File -FilePath $envPath -Encoding ascii
   # Lock the secrets file down to the current user (drop inherited ACLs). Grant Modify

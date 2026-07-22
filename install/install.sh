@@ -7,6 +7,8 @@
 #        --letsencrypt <email> (issue a trusted Let's Encrypt cert for --server-name),
 #        --staging (use the LE staging CA — for testing, avoids rate limits),
 #        --no-start (scaffold + config only), --no-pull (skip image pull).
+#        --seedless (empty first run — skips the seeded sample dashboard + demo data; the
+#          default seeds them so a fresh install comes up populated. Fresh install only.),
 #        --ready-timeout <seconds> (default 180; 0 disables the post-start readiness wait),
 #        --target-db postgres|mssql|mysql (default postgres — selects the external analytics/target DB),
 #        --mssql-demo (spin up a bundled MSSQL container for evaluation; implies --target-db mssql),
@@ -31,6 +33,7 @@ LE_EMAIL=""
 LE_STAGING=""
 NO_START=0
 NO_PULL=0
+SEED=1
 READY_TIMEOUT=180
 TARGET_DB="postgres"
 MSSQL_DEMO=0
@@ -60,6 +63,7 @@ while [ $# -gt 0 ]; do
     --staging) LE_STAGING=1; shift ;;
     --no-start) NO_START=1; shift ;;
     --no-pull) NO_PULL=1; shift ;;
+    --seedless|--no-seed) SEED=0; shift ;;
     --ready-timeout) READY_TIMEOUT="$2"; shift 2 ;;
     --target-db) TARGET_DB="$2"; shift 2 ;;
     --mssql-demo) MSSQL_DEMO=1; TARGET_DB="mssql"; shift ;;
@@ -277,6 +281,8 @@ if [ ! -f "$DIR/.env" ]; then
   if [ "$MSSQL_DEMO" -eq 1 ] && [ -z "$MSSQL_PASSWORD" ]; then MSSQL_PASSWORD="$(rand)Aa1!"; fi
   if [ "$MYSQL_DEMO" -eq 1 ] && [ -z "$MYSQL_PASSWORD" ]; then MYSQL_PASSWORD="$(rand)Aa1"; fi
   SECRETS_KEY="$(openssl rand -base64 32 2>/dev/null || head -c 32 /dev/urandom | base64 | tr -d '\n')"
+  # Seed the sample dashboard + demo data on first boot unless --seedless was passed.
+  SEED_ON_START_VAL=true; [ "$SEED" -eq 0 ] && SEED_ON_START_VAL=false
 
   # COMPOSE_PROJECT_NAME: Compose's own default (the install dir's leaf name) collides
   # whenever two installs share a leaf dir name (e.g. two "./openldr" installs from
@@ -355,7 +361,7 @@ INITIAL_LAB_ADMIN_PASSWORD=$LABADMIN_PW
 TLS_CERT_PATH=/etc/openldr/tls-cert.pem
 SECRETS_ENCRYPTION_KEY=$SECRETS_KEY
 MIGRATE_ON_START=true
-SEED_ON_START=true
+SEED_ON_START=$SEED_ON_START_VAL
 LETSENCRYPT_EMAIL=$LE_EMAIL
 MARKETPLACE_REGISTRY_URL=https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/marketplace/main
 EOF

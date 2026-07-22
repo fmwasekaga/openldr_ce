@@ -180,9 +180,15 @@ Bring-your-own cert instead: drop `fullchain.pem` + `privkey.pem` into `deploy/n
 ## Database migrations & seed
 
 The app **self-migrates on startup** when `MIGRATE_ON_START=true` (set in `.env.prod.example`);
-migrations are idempotent. `SEED_ON_START=true` seeds idempotent sample data (org/location/patient,
-the bundled sample forms, and the default lab-order ingestion workflows) after migration. Loading
-real reference terminology (LOINC/RxNorm/SNOMED) and lab data is a separate, heavier import.
+migrations are idempotent. `SEED_ON_START=true` seeds idempotent sample data (the sample dashboard,
+org/location/patient, the bundled sample forms, and the default lab-order ingestion workflows) after
+migration. Loading real reference terminology (LOINC/RxNorm/SNOMED) and lab data is a separate,
+heavier import.
+
+**Seeded vs seedless install:** the installer writes `SEED_ON_START=true` by default, so a fresh
+install comes up populated with the sample dashboard + demo data. Pass **`--seedless`**
+(`install.sh --seedless`) / **`-Seedless`** (`install.ps1 -Seedless`) for an empty first run — an
+operator starting from a clean slate. (Fresh install only; a re-run keeps the existing `.env` value.)
 
 ## Supported external databases
 
