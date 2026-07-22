@@ -1,47 +1,123 @@
-import type { QueryModel, WidgetQuery } from '../../api';
-import { MetricConditionEditor, type MetricCondition } from './MetricConditionEditor';
+import type { DashboardFilterDef, QueryModel } from '../../api';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { FilterConditionEditor, type FilterCondition } from './FilterConditionEditor';
+import {
+  setModelPatch,
+  setMetricPatch,
+  setDimensionPatch,
+  setGrainPatch,
+  setBreakdownPatch,
+  setFiltersPatch,
+  type BuilderQuery,
+} from './builderForm.model';
 
-type BuilderQuery = Extract<WidgetQuery, { mode: 'builder' }>;
+// Radix Select renders `<SelectItem value="">` as an error, so "no selection" is modeled with
+// this sentinel and translated back to '' before it reaches the pure builderForm.model helpers.
+const NONE = '__none__';
 
-export function BuilderForm({ models, value, onChange }: { models: QueryModel[]; value: BuilderQuery; onChange: (q: BuilderQuery) => void }) {
+export function BuilderForm({ models, value, dashboardFilters = [], onChange }: {
+  models: QueryModel[]; value: BuilderQuery; dashboardFilters?: DashboardFilterDef[]; onChange: (q: BuilderQuery) => void;
+}) {
   const model = models.find((m) => m.id === value.model) ?? models[0];
-  const setModel = (id: string) => { const m = models.find((x) => x.id === id)!; onChange({ ...value, model: id, metric: m.metrics[0], metrics: undefined, dimension: undefined, filters: [], filterTree: undefined }); };
-  const setMetric = (key: string) => { const mm = model.metrics.find((x) => x.key === key)!; onChange({ ...value, metric: mm }); };
-  const setWhere = (w: MetricCondition[]) => onChange({ ...value, metric: { ...value.metric, where: w.length ? w : undefined } });
-  const setDim = (key: string) => onChange({ ...value, dimension: key ? { key } : undefined });
   const dim = model?.dimensions.find((d) => d.key === value.dimension?.key);
+
   return (
-    <div className="flex flex-col gap-3">
-      <label className="text-sm">Source
-        <select aria-label="Source" className="mt-1 w-full rounded border border-border bg-background p-2" value={value.model} onChange={(e) => setModel(e.target.value)}>
-          {models.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-        </select>
+    <div className="flex flex-col gap-3 p-1">
+      <label className="text-sm">
+        Source
+        <Select value={value.model} onValueChange={(id) => onChange(setModelPatch(models, value, id))}>
+          <SelectTrigger aria-label="Source" className="mt-1 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {models.map((m) => (
+              <SelectItem key={m.id} value={m.id}>
+                {m.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </label>
-      <label className="text-sm">Metric
-        <select aria-label="Metric" className="mt-1 w-full rounded border border-border bg-background p-2" value={value.metric.key} onChange={(e) => setMetric(e.target.value)}>
-          {model?.metrics.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
-        </select>
+
+      <label className="text-sm">
+        Measure
+        <Select value={value.metric.key} onValueChange={(key) => onChange(setMetricPatch(model, value, key))}>
+          <SelectTrigger aria-label="Measure" className="mt-1 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {model?.metrics.map((m) => (
+              <SelectItem key={m.key} value={m.key}>
+                {m.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </label>
-      <div className="text-sm">Only where
-        <MetricConditionEditor
-          conditions={(value.metric.where ?? []) as MetricCondition[]}
+
+      <div className="text-sm">
+        Filters
+        <FilterConditionEditor
+          value={(value.filters ?? []) as FilterCondition[]}
           dimensions={model?.dimensions ?? []}
-          onChange={setWhere}
+          dashboardFilters={dashboardFilters.map((f) => ({ id: f.id, label: f.label }))}
+          bindings={value.variableBindings ?? {}}
+          onChange={(f) => onChange(setFiltersPatch(value, f as BuilderQuery['filters']))}
+          onBindingsChange={(b) => onChange({ ...value, variableBindings: b })}
         />
       </div>
-      <label className="text-sm">Group by
-        <select aria-label="Group by" className="mt-1 w-full rounded border border-border bg-background p-2" value={value.dimension?.key ?? ''} onChange={(e) => setDim(e.target.value)}>
-          <option value="">(none)</option>
-          {model?.dimensions.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
-        </select>
+
+      <label className="text-sm">
+        Group by
+        <Select value={value.dimension?.key ?? NONE} onValueChange={(key) => onChange(setDimensionPatch(value, key === NONE ? '' : key))}>
+          <SelectTrigger aria-label="Group by" className="mt-1 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NONE}>(none)</SelectItem>
+            {model?.dimensions.map((d) => (
+              <SelectItem key={d.key} value={d.key}>
+                {d.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </label>
+
       {dim?.kind === 'date' && dim.dateGrain && (
-        <label className="text-sm">Grain
-          <select aria-label="Grain" className="mt-1 w-full rounded border border-border bg-background p-2" value={value.dimension?.grain ?? 'month'} onChange={(e) => onChange({ ...value, dimension: { key: dim.key, grain: e.target.value } })}>
-            {dim.dateGrain.map((g) => <option key={g} value={g}>{g}</option>)}
-          </select>
+        <label className="text-sm">
+          Grain
+          <Select value={value.dimension?.grain ?? 'month'} onValueChange={(g) => onChange(setGrainPatch(value, g))}>
+            <SelectTrigger aria-label="Grain" className="mt-1 w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {dim.dateGrain.map((g) => (
+                <SelectItem key={g} value={g}>
+                  {g}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
       )}
+
+      <label className="text-sm">
+        Breakdown
+        <Select value={value.breakdown?.key ?? NONE} onValueChange={(key) => onChange(setBreakdownPatch(value, key === NONE ? '' : key))}>
+          <SelectTrigger aria-label="Breakdown" className="mt-1 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NONE}>(none)</SelectItem>
+            {model?.dimensions.map((d) => (
+              <SelectItem key={d.key} value={d.key}>
+                {d.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </label>
     </div>
   );
 }

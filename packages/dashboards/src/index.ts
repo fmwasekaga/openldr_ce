@@ -8,3 +8,5 @@ export * from './template';
 export * from './custom-query';
 export * from './custom-query-run';
 export { SAMPLE_DASHBOARD } from './samples';
+export { recognizeSql, type RecognizeResult, type RecognizeCode } from './recognize-sql';
+export { formatSql } from './format-sql';

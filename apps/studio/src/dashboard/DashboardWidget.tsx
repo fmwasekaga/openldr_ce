@@ -2,13 +2,24 @@ import { useEffect, useState } from 'react';
 import { runWidgetQuery, type ReportResult, type WidgetConfig, type WidgetQuery } from '../api';
 import { renderWidget } from './widgets';
 
-function bindQuery(q: WidgetQuery, filterValues: Record<string, unknown>): WidgetQuery {
+export function bindQuery(q: WidgetQuery, filterValues: Record<string, unknown>): WidgetQuery {
   if (q.mode === 'builder') {
     if (!q.variableBindings) return q;
-    const filters = [...q.filters];
-    for (const [varName, filterId] of Object.entries(q.variableBindings)) {
+    // A bound row's own literal filter (e.g. {dimension:'authored_on', op:'eq', value:''}) stays
+    // in q.filters until the row is deleted — drop it here so the derived binding filter(s)
+    // REPLACE it instead of being ANDed alongside it (which zeroes out results / type-errors).
+    const bound = new Set(Object.keys(q.variableBindings));
+    const filters = q.filters.filter((f) => !bound.has(f.dimension));
+    for (const [dimKey, filterId] of Object.entries(q.variableBindings)) {
       const v = filterValues[filterId];
-      if (v != null && v !== '') filters.push({ dimension: varName, op: 'eq', value: v });
+      if (v == null || v === '') continue;
+      if (typeof v === 'object' && 'from' in v && 'to' in v) {
+        const range = v as { from: string; to: string };
+        if (range.from) filters.push({ dimension: dimKey, op: 'gte', value: range.from });
+        if (range.to) filters.push({ dimension: dimKey, op: 'lte', value: range.to });
+      } else {
+        filters.push({ dimension: dimKey, op: 'eq', value: v as string | number });
+      }
     }
     return { ...q, filters };
   }

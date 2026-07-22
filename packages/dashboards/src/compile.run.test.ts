@@ -3,6 +3,36 @@ import { newDb } from 'pg-mem';
 import { runBuilderQuery } from './compile';
 import { getModel } from './models/registry';
 
+describe('runBuilderQuery limit (top-N)', () => {
+  function memReq() {
+    const mem = newDb();
+    mem.public.none('create table lab_requests (status text, panel_desc text, priority text, authored_at text, patient_id text)');
+    return mem;
+  }
+
+  it('keeps only the top-N labels by measure, descending', async () => {
+    const mem = memReq();
+    mem.public.none("insert into lab_requests (panel_desc) values ('A'),('A'),('A'),('B'),('B'),('C')");
+    const db = mem.adapters.createKysely() as unknown as import('kysely').Kysely<any>;
+    const res = await runBuilderQuery(db, getModel('service_requests')!, {
+      mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count' },
+      dimension: { key: 'code_text' }, filters: [], limit: 2,
+    });
+    expect(res.rows.map((r) => r.label)).toEqual(['A', 'B']);
+  });
+
+  it('is a no-op when the row count is within the limit', async () => {
+    const mem = memReq();
+    mem.public.none("insert into lab_requests (panel_desc) values ('A'),('B')");
+    const db = mem.adapters.createKysely() as unknown as import('kysely').Kysely<any>;
+    const res = await runBuilderQuery(db, getModel('service_requests')!, {
+      mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count' },
+      dimension: { key: 'code_text' }, filters: [], limit: 5,
+    });
+    expect(res.rows.length).toBe(2);
+  });
+});
+
 describe('runBuilderQuery breakdown', () => {
   it('shapes long [label, series, value] rows', async () => {
     const mem = newDb();

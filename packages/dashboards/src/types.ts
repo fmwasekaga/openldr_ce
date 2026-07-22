@@ -75,6 +75,7 @@ export const WidgetQuerySchema = z.discriminatedUnion('mode', [
     breakdown: z.object({ key: z.string() }).optional(),
     filters: z.array(QueryFilterSchema).default([]),
     filterTree: ConditionGroupSchema.optional(), // recursive AND/OR tree; supersedes `filters` when present
+    limit: z.number().int().positive().optional(), // top-N of the shaped result, by primary measure desc
     variableBindings: z.record(z.string()).optional(),
   }),
   z.object({

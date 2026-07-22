@@ -250,6 +250,20 @@ function ratio(d: NonNullable<Metric['derived']>, row: Record<string, unknown>):
   return Math.round(v * f) / f;
 }
 
+/** Top-N of shaped rows: by label-total when a breakdown splits rows, else by the measure value. */
+function applyTopN(
+  rows: Record<string, unknown>[], limit: number | undefined, valueKey: string, hasBreakdown: boolean,
+): Record<string, unknown>[] {
+  if (!limit || rows.length <= limit) return rows;
+  if (hasBreakdown) {
+    const totals = new Map<unknown, number>();
+    for (const r of rows) totals.set(r.label, (totals.get(r.label) ?? 0) + Number(r[valueKey] ?? 0));
+    const keep = new Set([...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit).map(([l]) => l));
+    return rows.filter((r) => keep.has(r.label));
+  }
+  return [...rows].sort((a, b) => Number(b[valueKey] ?? 0) - Number(a[valueKey] ?? 0)).slice(0, limit);
+}
+
 /** Shape a multi-metric (wide) query into a table: label + one column per metric (aggregate or derived). */
 async function runWideQuery(
   db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery,
@@ -286,6 +300,7 @@ async function runWideQuery(
   for (const row of shaped) {
     for (const m of derivedMetrics) row[m.key] = ratio(m.derived!, row);
   }
+  shaped = applyTopN(shaped, q.limit, aggKeys[0] ?? 'label', false);
 
   const columns: ReportColumn[] = [
     { key: 'label', label: d?.label ?? model.label, kind: d?.kind === 'date' ? 'date' : 'string' },
@@ -323,6 +338,7 @@ export async function runBuilderQuery(
     } else {
       shaped = rows.map((r) => ({ label: r.label ?? '(none)', series: String(r.series ?? '(none)'), value: Number(r.value ?? 0) }));
     }
+    shaped = applyTopN(shaped, q.limit, 'value', true);
     const columns: ReportColumn[] = [
       { key: 'label', label: d?.label ?? model.label, kind: d?.kind === 'date' ? 'date' : 'string' },
       { key: 'series', label: b.label, kind: 'string' },
@@ -344,6 +360,7 @@ export async function runBuilderQuery(
   } else {
     shaped = [{ label: model.label, value: Number(rows[0]?.value ?? 0) }];
   }
+  shaped = applyTopN(shaped, q.limit, 'value', false);
   const columns: ReportColumn[] = [
     { key: 'label', label: d?.label ?? model.label, kind: d?.kind === 'date' ? 'date' : 'string' },
     { key: 'value', label: q.metric.label ?? 'Value', kind: 'number' },

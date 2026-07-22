@@ -57,6 +57,17 @@ export function registerDashboardRoutes(app: FastifyInstance<any, any, any, any>
     } catch (err) { return mapError(err, reply); }
   });
 
+  // Builder→SQL eject: compile a builder-mode query to readable SQL text (parameters inlined as
+  // literals) for the widget editor's SQL tab. Display-only — never executed as submitted here.
+  app.post('/api/dashboards/compile-sql', VIEW, async (req, reply) => {
+    try {
+      const q = WidgetQuerySchema.parse(req.body);
+      if (q.mode !== 'builder') { reply.code(400); return { error: 'compile-sql accepts a builder-mode query' }; }
+      const sql = await ctx.dashboards.compileSql(q);
+      return { sql };
+    } catch (err) { return mapError(err, reply); }
+  });
+
   app.get('/api/dashboards', VIEW, async () => ctx.dashboards.store.list());
 
   app.get('/api/dashboards/:id', VIEW, async (req, reply) => {

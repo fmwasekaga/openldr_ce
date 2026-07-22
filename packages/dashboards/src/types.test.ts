@@ -128,3 +128,28 @@ describe('DimensionRef.reference', () => {
     expect((q as { dimension?: { reference?: string } }).dimension).not.toHaveProperty('reference');
   });
 });
+
+describe('optional limit (top-N)', () => {
+  it('accepts an optional positive-integer limit on a builder query', () => {
+    const q = WidgetQuerySchema.parse({
+      mode: 'builder', model: 'service_requests',
+      metric: { key: 'count', agg: 'count' }, filters: [], limit: 15,
+    });
+    expect(q.mode === 'builder' && q.limit).toBe(15);
+  });
+
+  it('rejects a non-positive limit', () => {
+    expect(() => WidgetQuerySchema.parse({
+      mode: 'builder', model: 'service_requests',
+      metric: { key: 'count', agg: 'count' }, filters: [], limit: 0,
+    })).toThrow();
+  });
+
+  it('validates a stored builder query with no limit (backward compat)', () => {
+    const q = WidgetQuerySchema.parse({
+      mode: 'builder', model: 'service_requests',
+      metric: { key: 'count', agg: 'count' }, filters: [],
+    });
+    expect(q.mode === 'builder' && q.limit).toBeUndefined();
+  });
+});
