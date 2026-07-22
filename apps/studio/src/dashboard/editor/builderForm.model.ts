@@ -2,7 +2,7 @@
 // they're unit-testable without jsdom or Radix — see BuilderForm.tsx, which is a thin shadcn
 // shell over these functions.
 
-import type { QueryModel, WidgetQuery } from '../../api';
+import type { QueryModel, WidgetQuery, WidgetVariableDef } from '../../api';
 
 export type BuilderQuery = Extract<WidgetQuery, { mode: 'builder' }>;
 
@@ -52,4 +52,19 @@ export function setBreakdownPatch(value: BuilderQuery, key: string): BuilderQuer
 /** Replace the top-level filters list. */
 export function setFiltersPatch(value: BuilderQuery, filters: BuilderQuery['filters']): BuilderQuery {
   return { ...value, filters };
+}
+
+/**
+ * Build the `WidgetQuery` that `WidgetEditorDialog.save()` persists, given the current editor
+ * mode. Kept pure (and separate from the dialog's Radix-heavy JSX) so save-payload construction
+ * is unit-testable without jsdom — see WidgetEditorDialog.test.tsx and this file's tests.
+ */
+export function buildSaveQuery(
+  mode: 'builder' | 'sql',
+  builderQuery: BuilderQuery,
+  sqlText: string,
+  bindings: Record<string, string>,
+  varDefs: Record<string, WidgetVariableDef>,
+): WidgetQuery {
+  return mode === 'builder' ? builderQuery : { mode: 'sql', sql: sqlText, variableBindings: bindings, variables: varDefs };
 }

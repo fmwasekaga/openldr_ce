@@ -659,6 +659,12 @@ export const fr: EnShape = {
     exportDashboard: 'Exporter',
     importDashboard: 'Importer',
   },
+  widgetEditor: {
+    modeBuilder: 'Générateur',
+    modeSql: 'SQL',
+    ejectBanner: 'Ce SQL récupère les lignes ; le regroupement temporel, les ratios et le top-N sont appliqués ensuite et ne figurent pas ici.',
+    cannotShowInBuilder: 'Impossible d’afficher ceci dans le générateur',
+  },
   reportDesigner: {
     title: 'Concepteur de rapports',
     templates: 'Modèles',

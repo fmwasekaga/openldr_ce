@@ -659,6 +659,12 @@ export const pt: EnShape = {
     exportDashboard: 'Exportar',
     importDashboard: 'Importar',
   },
+  widgetEditor: {
+    modeBuilder: 'Construtor',
+    modeSql: 'SQL',
+    ejectBanner: 'Este SQL busca as linhas; agrupamento temporal, rácios e top-N são aplicados depois e não aparecem aqui.',
+    cannotShowInBuilder: 'Não é possível mostrar isto no construtor',
+  },
   reportDesigner: {
     title: 'Designer de relatórios',
     templates: 'Modelos',

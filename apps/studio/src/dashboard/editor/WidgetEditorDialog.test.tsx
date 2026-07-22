@@ -13,14 +13,23 @@ const sqlWidget: WidgetConfig = {
 describe('WidgetEditorDialog', () => {
   // The full save flow (which routes through the Radix ⋯ menu) is covered by the
   // Playwright check; jsdom can't reliably open Radix menus. Here we smoke-test that the
-  // SQL editor mounts with its core controls.
+  // SQL editor mounts with its core controls when opening an existing SQL-mode widget.
   it('renders the SQL editor controls', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('[]', { status: 200 }));
-    const { getByLabelText } = render(<WidgetEditorDialog open dashboardFilters={[]} onClose={() => {}} onSave={() => {}} />);
+    const { getByLabelText } = render(<WidgetEditorDialog open initial={sqlWidget} dashboardFilters={[]} onClose={() => {}} onSave={() => {}} />);
     expect(getByLabelText('Title')).toBeTruthy();
     expect(getByLabelText('SQL')).toBeTruthy();
     expect(getByLabelText('Editor menu')).toBeTruthy();
     expect(getByLabelText('Close')).toBeTruthy();
+  });
+
+  // shadcn/Radix Select can't be driven in jsdom (see BuilderForm.test.tsx); this is a render
+  // smoke-test that a brand-new widget (no `initial`) defaults to Builder mode, i.e. the
+  // Builder pane's Source picker is what mounts in the top-left region, not the SQL editor.
+  it('defaults a new widget to Builder mode and shows the source picker', () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('[]', { status: 200 }));
+    const { getByLabelText } = render(<WidgetEditorDialog open initial={undefined} dashboardFilters={[]} onClose={() => {}} onSave={() => {}} />);
+    expect(getByLabelText('Source')).toBeInTheDocument();
   });
 
   it('makes the SQL field read-only when sqlEnabled is false', () => {

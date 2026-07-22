@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { setModelPatch, setMetricPatch, setDimensionPatch, setGrainPatch, setBreakdownPatch, setFiltersPatch, type BuilderQuery } from './builderForm.model';
-import type { QueryModel } from '../../api';
+import { setModelPatch, setMetricPatch, setDimensionPatch, setGrainPatch, setBreakdownPatch, setFiltersPatch, buildSaveQuery, type BuilderQuery } from './builderForm.model';
+import type { QueryModel, WidgetVariableDef } from '../../api';
 
 const models: QueryModel[] = [
   {
@@ -86,5 +86,23 @@ describe('builderForm.model', () => {
   it('setFiltersPatch replaces the top-level filters list', () => {
     const next = [{ dimension: 'priority', op: 'eq', value: 'high' }];
     expect(setFiltersPatch(base, next)).toEqual({ ...base, filters: next });
+  });
+
+  describe('buildSaveQuery', () => {
+    const bindings: Record<string, string> = { ward: 'filter-1' };
+    const varDefs: Record<string, WidgetVariableDef> = { ward: { type: 'text', label: 'Ward' } };
+
+    it('returns the builder query verbatim in builder mode, ignoring SQL state', () => {
+      expect(buildSaveQuery('builder', base, 'select 1', bindings, varDefs)).toEqual(base);
+    });
+
+    it('returns a sql-mode query in sql mode, ignoring the builder state', () => {
+      expect(buildSaveQuery('sql', base, 'select 1 as value', bindings, varDefs)).toEqual({
+        mode: 'sql',
+        sql: 'select 1 as value',
+        variableBindings: bindings,
+        variables: varDefs,
+      });
+    });
   });
 });

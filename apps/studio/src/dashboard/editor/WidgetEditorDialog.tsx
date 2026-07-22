@@ -5,6 +5,7 @@ import { sql as sqlLang } from '@codemirror/lang-sql';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { basicSetup } from 'codemirror';
 import { Play, MoreHorizontal, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,6 +28,8 @@ import {
 } from '../../api';
 import { renderWidget } from '../widgets';
 import { resolveValues, applyTemplate } from '../template';
+import { BuilderForm } from './BuilderForm';
+import { buildSaveQuery, type BuilderQuery } from './builderForm.model';
 
 const WIDGET_TYPES: { value: string; label: string }[] = [
   { value: 'kpi', label: 'Number' },
@@ -197,6 +200,7 @@ export function WidgetEditorDialog({
   onSave: (w: WidgetConfig) => void;
   onDelete?: () => void;
 }) {
+  const { t } = useTranslation();
   const initialSql = initial?.query.mode === 'sql' ? initial.query.sql : 'select 1 as value';
   const initialBindings = (initial?.query.mode === 'sql' && initial.query.variableBindings) || {};
   const initialDefs = (initial?.query.mode === 'sql' && initial.query.variables) || {};
@@ -204,6 +208,12 @@ export function WidgetEditorDialog({
   const [title, setTitle] = useState(initial?.title ?? 'New widget');
   const [type, setType] = useState(initial?.type ?? 'kpi');
   const [sqlText, setSqlText] = useState(initialSql);
+  const [mode, setMode] = useState<'builder' | 'sql'>(initial?.query.mode ?? 'builder');
+  const [builderQuery, setBuilderQuery] = useState<BuilderQuery>(
+    initial?.query.mode === 'builder'
+      ? initial.query
+      : { mode: 'builder', model: 'service_requests', metric: { key: 'count', label: 'Count', agg: 'count' }, filters: [] },
+  );
   const [visual, setVisual] = useState<Visual>(initial?.visual ?? {});
   const [bindings, setBindings] = useState<Record<string, string>>(initialBindings);
   const [varDefs, setVarDefs] = useState<Record<string, WidgetVariableDef>>(initialDefs);
@@ -231,7 +241,16 @@ export function WidgetEditorDialog({
   sqlReadOnlyRef.current = sqlReadOnly;
 
   useEffect(() => {
-    listModels().then(setModels).catch(() => {});
+    listModels()
+      .then((m) => {
+        setModels(m);
+        // Seed the builder default's model/metric once the real model list arrives, but only
+        // when this is still an unedited guess (the guessed model id isn't one of the loaded
+        // models) — an existing builder-mode widget, or one the user has already touched, is
+        // left alone.
+        setBuilderQuery((q) => (m.some((x) => x.id === q.model) ? q : { ...q, model: m[0]?.id ?? q.model, metric: m[0]?.metrics[0] ?? q.metric }));
+      })
+      .catch(() => {});
   }, []);
 
   // Load dynamic options for variables that define an optionsSql query.
@@ -326,9 +345,25 @@ export function WidgetEditorDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Builder-mode preview: run the builder query live whenever it (or the mode) changes.
+  useEffect(() => {
+    if (mode !== 'builder') return;
+    setRunning(true);
+    runWidgetQuery(builderQuery)
+      .then((r) => {
+        setPreview(r);
+        setError(undefined);
+        const cols = r.columns.map((c) => c.key);
+        setVisual((v) => ({ ...v, xAxisKey: v.xAxisKey ?? cols[0], yAxisKey: v.yAxisKey ?? cols[1] ?? cols[0] }));
+      })
+      .catch((e) => setError(String(e.message ?? e)))
+      .finally(() => setRunning(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, JSON.stringify(builderQuery)]);
+
   const save = () => {
     const id = initial?.id ?? (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `w-${Math.round(performance.now())}`);
-    const query: WidgetQuery = { mode: 'sql', sql: sqlText, variableBindings: bindings, variables: varDefs };
+    const query = buildSaveQuery(mode, builderQuery, sqlText, bindings, varDefs);
     onSave({ id, type, title, query, refreshIntervalSec: initial?.refreshIntervalSec ?? 0, visual });
   };
 
@@ -379,11 +414,35 @@ export function WidgetEditorDialog({
                   })}
                 </div>
               )}
-              <div className="min-h-0 flex-1 overflow-hidden">
-                <div ref={onEditorMount} className="h-full" />
-                <textarea aria-label="SQL" className="sr-only" readOnly={sqlReadOnly} value={sqlText} onChange={(e) => setSqlText(e.target.value)} />
+              <div className="min-h-0 flex-1 overflow-auto">
+                {mode === 'builder' ? (
+                  <BuilderForm models={models} value={builderQuery} onChange={setBuilderQuery} />
+                ) : (
+                  <>
+                    <div ref={onEditorMount} className="h-full" />
+                    <textarea aria-label="SQL" className="sr-only" readOnly={sqlReadOnly} value={sqlText} onChange={(e) => setSqlText(e.target.value)} />
+                  </>
+                )}
               </div>
               <div className="flex items-center border-t border-border px-2 py-1">
+                <div className="mr-2 inline-flex overflow-hidden rounded border border-border text-[11px]">
+                  <button
+                    type="button"
+                    aria-pressed={mode === 'builder'}
+                    onClick={() => setMode('builder')}
+                    className={mode === 'builder' ? 'bg-primary px-2 py-0.5 text-primary-foreground' : 'px-2 py-0.5 text-muted-foreground'}
+                  >
+                    {t('widgetEditor.modeBuilder')}
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={mode === 'sql'}
+                    onClick={() => setMode('sql')}
+                    className={mode === 'sql' ? 'bg-primary px-2 py-0.5 text-primary-foreground' : 'px-2 py-0.5 text-muted-foreground'}
+                  >
+                    {t('widgetEditor.modeSql')}
+                  </button>
+                </div>
                 <span className="text-[11px] tabular-nums text-muted-foreground">{(preview?.rows.length ?? 0).toLocaleString()} rows</span>
                 <div className="ml-auto flex items-center gap-1">
                   <Button variant="ghost" size="icon" className="h-7 w-7" title="Run query" onClick={run} disabled={running || !sqlText.trim()}>

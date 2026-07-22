@@ -663,6 +663,12 @@ export const en = {
     exportDashboard: 'Export',
     importDashboard: 'Import',
   },
+  widgetEditor: {
+    modeBuilder: 'Builder',
+    modeSql: 'SQL',
+    ejectBanner: 'This SQL fetches the rows; grain, ratios, and top-N are applied afterward and are not shown here.',
+    cannotShowInBuilder: "Can't show this in the builder",
+  },
   reportDesigner: {
     title: 'Report Designer',
     templates: 'Templates',
