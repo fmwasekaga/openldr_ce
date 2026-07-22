@@ -187,7 +187,7 @@ export function DashboardPage() {
                 <p className="max-w-sm text-xs text-muted-foreground">{t('dashboard.emptyBody')}</p>
                 <div className="flex items-center gap-2 pt-1">
                   <Button onClick={() => void handleNewDashboard()}>{t('dashboard.newDashboard')}</Button>
-                  <Button variant="outline" onClick={() => fileInput.current?.click()}>
+                  <Button variant="secondary" className="bg-secondary text-secondary-foreground hover:bg-secondary/80" onClick={() => fileInput.current?.click()}>
                     {t('dashboard.importDashboard')}
                   </Button>
                 </div>

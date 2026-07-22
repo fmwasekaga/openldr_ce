@@ -1,28 +1,35 @@
 // apps/studio/src/query/QueryPage.tsx
 import { useEffect, useState } from 'react';
-import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { PanelLeftClose, PanelLeftOpen, Database, Table2 } from 'lucide-react';
 import { AppShell } from '../shell/AppShell';
+import { Button } from '@/components/ui/button';
 import { useTranslation } from 'react-i18next';
 import { ExplorerTree } from './tree/ExplorerTree';
 import { TabBar } from './workspace/TabBar';
 import { TableTab } from './workspace/TableTab';
 import { QueryTab } from './workspace/QueryTab';
 import { useQueryStore } from './store';
-import { StripedEmpty } from '@/components/ui/striped-empty';
 import { EmptyState } from '@/components/ui/empty-state';
 import { queryApi } from './api';
 
 function Workspace({ canQuery }: { canQuery: boolean }): JSX.Element {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { tabs, activeId } = useQueryStore();
   const active = tabs.find((t) => t.id === activeId);
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col">
       <TabBar canQuery={canQuery} />
-      <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {!active && (canQuery
-          ? <StripedEmpty>{t('query.selectOrOpen')}</StripedEmpty>
-          : <EmptyState title={t('query.noSources')} />)}
+          ? <EmptyState icon={<Table2 className="h-6 w-6" />} title={t('query.selectOrOpen')} />
+          : <EmptyState
+              icon={<Database className="h-6 w-6" />}
+              title={t('query.noSourcesTitle')}
+              body={t('query.noSources')}
+              action={<Button onClick={() => navigate('/settings/connectors')}>{t('query.addConnector')}</Button>}
+            />)}
         {active?.kind === 'table' && <TableTab tab={active} />}
         {active?.kind === 'dataset' && <TableTab tab={active} />}
         {active?.kind === 'query' && <QueryTab tab={active} />}

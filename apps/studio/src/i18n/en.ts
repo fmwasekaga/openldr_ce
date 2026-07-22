@@ -665,8 +665,10 @@ export const en = {
     deleteQuery: 'Delete query', confirmDeleteQuery: 'Delete this custom query?',
     collapseExplorer: 'Collapse explorer', expandExplorer: 'Expand explorer',
     selectOrOpen: 'Select a table or open a query',
-    noSources: 'No connectors or datasets to query yet. Add a connector in Settings.',
+    noSourcesTitle: 'Nothing to query yet',
+    noSources: 'Add a connector or dataset in Settings to start querying.',
     noSourcesHint: 'Add a connector or dataset first',
+    addConnector: 'Add connector',
   },
   dashboard: {
     exportDashboard: 'Export',

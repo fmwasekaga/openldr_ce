@@ -184,7 +184,7 @@ export function Sites() {
               icon={<Building2 className="h-6 w-6" />}
               title={t('sites.emptyTitle')}
               body={t('sites.emptyBody')}
-              action={<Button variant="outline" onClick={openEnroll}>{t('sites.enroll')}</Button>}
+              action={<Button onClick={openEnroll}>{t('sites.enroll')}</Button>}
             />
           )}
         </div>

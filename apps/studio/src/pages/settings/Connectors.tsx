@@ -283,7 +283,7 @@ export function Connectors() {
         <EmptyState
           icon={<Plug className="h-6 w-6" />}
           title={t('settings.connectors.emptyTitle')}
-          action={<Button variant="outline" onClick={openCreate}>{t('settings.connectors.add')}</Button>}
+          action={<Button onClick={openCreate}>{t('settings.connectors.add')}</Button>}
         />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">

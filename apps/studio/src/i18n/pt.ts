@@ -661,8 +661,10 @@ export const pt: EnShape = {
     deleteQuery: 'Eliminar consulta', confirmDeleteQuery: 'Eliminar esta consulta personalizada?',
     collapseExplorer: 'Recolher explorador', expandExplorer: 'Expandir explorador',
     selectOrOpen: 'Selecione uma tabela ou abra uma consulta',
-    noSources: 'Ainda não há conectores ou conjuntos de dados para consultar. Adicione um conector em Definições.',
+    noSourcesTitle: 'Nada para consultar ainda',
+    noSources: 'Adicione um conector ou conjunto de dados em Definições para começar a consultar.',
     noSourcesHint: 'Adicione primeiro um conector ou conjunto de dados',
+    addConnector: 'Adicionar conector',
   },
   dashboard: {
     exportDashboard: 'Exportar',

@@ -661,8 +661,10 @@ export const fr: EnShape = {
     deleteQuery: 'Supprimer la requête', confirmDeleteQuery: 'Supprimer cette requête personnalisée ?',
     collapseExplorer: 'Réduire l’explorateur', expandExplorer: 'Développer l’explorateur',
     selectOrOpen: 'Sélectionnez une table ou ouvrez une requête',
-    noSources: 'Aucun connecteur ou jeu de données à interroger pour l’instant. Ajoutez un connecteur dans les paramètres.',
+    noSourcesTitle: 'Rien à interroger pour le moment',
+    noSources: 'Ajoutez un connecteur ou un jeu de données dans les paramètres pour commencer à interroger.',
     noSourcesHint: 'Ajoutez d’abord un connecteur ou un jeu de données',
+    addConnector: 'Ajouter un connecteur',
   },
   dashboard: {
     exportDashboard: 'Exporter',
