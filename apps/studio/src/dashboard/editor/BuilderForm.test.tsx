@@ -52,4 +52,12 @@ describe('BuilderForm', () => {
     const { queryByLabelText } = render(<BuilderForm models={models} value={base} onChange={vi.fn()} />);
     expect(queryByLabelText('Grain')).toBeNull();
   });
+
+  it('renders a Limit control only when there is a group-by or breakdown', () => {
+    const { queryByLabelText } = render(<BuilderForm models={models} value={base} onChange={vi.fn()} />);
+    expect(queryByLabelText('Limit')).toBeNull();
+    const grouped = { ...base, dimension: { key: 'status' } } as Extract<WidgetQuery, { mode: 'builder' }>;
+    const { getByLabelText } = render(<BuilderForm models={models} value={grouped} onChange={vi.fn()} />);
+    expect(getByLabelText('Limit')).toBeTruthy();
+  });
 });

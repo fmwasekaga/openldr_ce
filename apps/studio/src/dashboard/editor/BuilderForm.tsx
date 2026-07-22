@@ -1,5 +1,6 @@
 import type { DashboardFilterDef, QueryModel } from '../../api';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 import { FilterConditionEditor, type FilterCondition } from './FilterConditionEditor';
 import {
   setModelPatch,
@@ -8,6 +9,7 @@ import {
   setGrainPatch,
   setBreakdownPatch,
   setFiltersPatch,
+  setLimitPatch,
   type BuilderQuery,
 } from './builderForm.model';
 
@@ -118,6 +120,22 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
           </SelectContent>
         </Select>
       </label>
+
+      {(value.dimension || value.breakdown) && (
+        <label className="text-sm">
+          Limit
+          <Input
+            type="number"
+            min={1}
+            aria-label="Limit"
+            className="mt-1 h-8 w-full text-xs"
+            placeholder="All rows"
+            value={value.limit ?? ''}
+            onChange={(e) => onChange(setLimitPatch(value, e.target.value === '' ? undefined : Number(e.target.value)))}
+          />
+          <span className="mt-0.5 block text-[11px] text-muted-foreground">Top rows by the first measure, highest first.</span>
+        </label>
+      )}
     </div>
   );
 }
