@@ -1,4 +1,4 @@
-import type { WidgetQuery, Agg, DateGrain } from './types';
+import type { WidgetQuery, Agg } from './types';
 import { listModels } from './models/registry';
 
 type BuilderQuery = Extract<WidgetQuery, { mode: 'builder' }>;
@@ -43,6 +43,12 @@ function splitTop(s: string, sep = ','): string[] {
 function splitAlias(item: string): { expr: string; alias: string | null } {
   const m = item.match(/^(.*?)\s+as\s+(\w+)$/is); return m ? { expr: m[1].trim(), alias: m[2] } : { expr: item.trim(), alias: null };
 }
+function splitTopRe(s: string, sep: RegExp): string[] {
+  const out: string[] = []; let last = 0; let m: RegExpExecArray | null; sep.lastIndex = 0;
+  const balanced = (t: string) => (t.match(/\(/g)?.length ?? 0) === (t.match(/\)/g)?.length ?? 0);
+  while ((m = sep.exec(s))) { if (balanced(s.slice(last, m.index))) { out.push(s.slice(last, m.index)); last = sep.lastIndex; } }
+  out.push(s.slice(last)); return out.map((x) => x.trim()).filter(Boolean);
+}
 function classifyAgg(expr: string, reg: TableEntry): { key: string; agg: Agg; column?: string } | null {
   const e = unwrapNum(expr); let m: RegExpMatchArray | null;
   if (/^count\(\s*\*\s*\)$/i.test(e)) return { key: 'count', agg: 'count' };
@@ -61,24 +67,40 @@ function classifyAgg(expr: string, reg: TableEntry): { key: string; agg: Agg; co
   return null;
 }
 
+const clean = (v: string): string => v.trim().replace(/^'(.*)'$/s, '$1');
+function resolveDim(rawCol: string, reg: TableEntry): { key: string } {
+  let col = rawCol.trim(); const sm = col.match(SUBSTR); if (sm) col = sm[1];
+  const d = reg.dims[col.toLowerCase()];
+  if (!d) refuse('unknown_dimension', `filter column "${col}" is not a model dimension`);
+  return { key: d!.key };
+}
+
 export function recognizeSql(sql: string): RecognizeResult {
   try {
-    const raw = sql.trim();
-    if (/\bunion\b/i.test(raw)) refuse('union', 'UNION (combines multiple tables/queries)');
-    if (/\bjoin\b/i.test(raw)) refuse('join', 'explicit JOIN');
-    if (/\bwith\b\s+\w+\s+as\s*\(/i.test(raw)) refuse('cte', 'CTE (WITH ...)');
-    if (/\bover\s*\(/i.test(raw)) refuse('window', 'window function (OVER)');
+    const raw0 = sql.trim();
+    if (/\bunion\b/i.test(raw0)) refuse('union', 'UNION (combines multiple tables/queries)');
+    if (/\bjoin\b/i.test(raw0)) refuse('join', 'explicit JOIN');
+    if (/\bwith\b\s+\w+\s+as\s*\(/i.test(raw0)) refuse('cte', 'CTE (WITH ...)');
+    if (/\bover\s*\(/i.test(raw0)) refuse('window', 'window function (OVER)');
 
-    const mSel = raw.match(/^select\s+(.+?)\s+from\s+(\w+)\b/is);
+    let limit: number | undefined;
+    const raw = raw0
+      .replace(/offset\s+\d+\s+rows\s+fetch\s+next\s+(\d+)\s+rows\s+only/i, (_, n) => { limit = +n; return ''; })
+      .replace(/\blimit\s+(\d+)/i, (_, n) => { limit = +n; return ''; });
+
+    const optional: string[] = [];
+    const body = raw.replace(/\[\[(.*?)\]\]/gs, (_, inner) => { optional.push(inner.trim()); return ' '; });
+
+    const mSel = body.match(/^select\s+(.+?)\s+from\s+(\w+)\b/is);
     if (!mSel) refuse('parse_failed', 'could not parse SELECT ... FROM');
     const reg = INDEX[mSel![2].toLowerCase()];
     if (!reg) refuse('unknown_table', `unknown table "${mSel![2]}"`);
 
-    const measures: { key: string; agg: Agg; column?: string }[] = [];
+    const measures: { key: string; agg: string; column?: string }[] = [];
     let dimItem: string | null = null;
     for (const item of splitTop(mSel![1])) {
       const { expr } = splitAlias(item);
-      const agg = classifyAgg(expr, reg);
+      const agg = classifyAgg(expr, reg!);
       if (agg) { measures.push(agg); continue; }
       if (dimItem) refuse('detail_rows', 'projects multiple non-aggregated columns (detail row list, not a metric)');
       dimItem = expr;
@@ -86,17 +108,40 @@ export function recognizeSql(sql: string): RecognizeResult {
     if (measures.length === 0) refuse('detail_rows', 'no aggregate measure (detail row list, not a metric)');
     if (measures.length > 1) refuse('multi_measure', 'multiple measures — not supported in the builder yet');
 
-    let dimension: BuilderQuery['dimension'];
+    let dimension: BuilderQuery['dimension']; let groupCol: string | undefined;
     if (dimItem) {
-      let col = dimItem; let grain: DateGrain | undefined; const sm = col.match(SUBSTR);
+      let col = dimItem; let grain: string | undefined; const sm = col.match(SUBSTR);
       if (sm) { col = sm[1]; grain = 'day'; }
-      const d = reg.dims[col.toLowerCase()];
+      groupCol = col.toLowerCase();
+      const d = reg!.dims[groupCol];
       if (!d) refuse('unknown_dimension', `group-by column "${col}" is not a model dimension`);
-      dimension = grain ? { key: d.key, grain } : { key: d.key };
+      dimension = grain ? { key: d!.key, grain: grain as never } : { key: d!.key };
     }
 
-    const query: BuilderQuery = { mode: 'builder', model: reg.model, metric: measures[0], filters: [] };
+    const whereM = body.match(/\bwhere\s+(.+?)(?:\s+group\s+by|\s+order\s+by|\s*$)/is);
+    const preds: string[] = [];
+    if (whereM) for (const p of splitTopRe(whereM[1], /\band\b/gi)) preds.push(p.trim());
+    for (const o of optional) preds.push(o.replace(/^and\s+/i, '').trim());
+
+    const filters: NonNullable<BuilderQuery['filters']> = [];
+    for (const p of preds) {
+      if (/^1\s*=\s*1$/.test(p)) continue;
+      let m: RegExpMatchArray | null;
+      if ((m = p.match(/^(.+?)\s+is\s+not\s+null$/i))) {
+        const col = m[1].trim().toLowerCase();
+        if (col === groupCol || reg!.dims[col]) continue; // tolerated: builder shows nulls as (none)
+        refuse('not_null_unsupported', `IS NOT NULL on "${col}"`);
+      } else if ((m = p.match(/^(.+?)\s+in\s*\((.+)\)$/i))) {
+        filters.push({ dimension: resolveDim(m[1], reg!).key, op: 'in', value: splitTop(m[2]).map(clean) });
+      } else if ((m = p.match(/^(.+?)\s*(>=|<=|=)\s*(.+)$/))) {
+        const op = m[2] === '>=' ? 'gte' : m[2] === '<=' ? 'lte' : 'eq';
+        filters.push({ dimension: resolveDim(m[1], reg!).key, op, value: clean(m[3]) });
+      } else refuse('unrecognized_predicate', `unrecognized predicate: "${p}"`);
+    }
+
+    const query: BuilderQuery = { mode: 'builder', model: reg!.model, metric: measures[0] as never, filters };
     if (dimension) query.dimension = dimension;
+    if (limit != null) query.limit = limit;
     return { ok: true, query };
   } catch (e) {
     if (e instanceof Refuse) return { ok: false, code: e.code, reason: e.message };
