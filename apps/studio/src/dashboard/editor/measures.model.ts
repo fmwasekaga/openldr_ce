@@ -57,6 +57,10 @@ export function aggregateMeasures(list: Measure[]): Measure[] {
 
 export function toBuilderMetrics(list: Measure[]): { metric: Measure; metrics?: Measure[] } {
   const firstAggregate = aggregateMeasures(list)[0] ?? list[0];
-  if (list.length <= 1) return { metric: list[0], metrics: undefined };
+  // Only a single NON-derived row collapses to the scalar `metric`. A derived (formula) row is
+  // computed post-aggregation from sibling measures and needs the wide `metrics[]` path — so any
+  // list that contains a formula stays wide, even a lone formula row. Collapsing a derived row to
+  // `metric` would render its placeholder `agg` (COUNT(*)) mislabeled as the ratio.
+  if (list.length <= 1 && !list.some((m) => m.derived)) return { metric: list[0], metrics: undefined };
   return { metric: firstAggregate, metrics: list };
 }

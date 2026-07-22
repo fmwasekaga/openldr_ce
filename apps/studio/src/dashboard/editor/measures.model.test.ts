@@ -52,4 +52,12 @@ describe('measures.model', () => {
     const list: Measure[] = [{ key: 'a', agg: 'count' }, { key: 'b', agg: 'count' }];
     expect(toBuilderMetrics(list)).toEqual({ metric: list[0], metrics: list });
   });
+
+  it('toBuilderMetrics keeps a lone formula row wide (never collapses a derived row to a scalar metric)', () => {
+    // Degenerate but reachable: every aggregate deleted, leaving one formula row. Collapsing it to the
+    // scalar `metric` would render its placeholder agg (COUNT(*)) mislabeled as the ratio — so it must
+    // stay in the wide metrics[] path.
+    const lone: Measure[] = [{ key: 'r', agg: 'count', derived: { numerator: 'a', denominator: 'b', scale: 100, decimals: 1 } }];
+    expect(toBuilderMetrics(lone)).toEqual({ metric: lone[0], metrics: lone });
+  });
 });
