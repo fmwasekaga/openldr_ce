@@ -48,6 +48,25 @@ describe('createOidc', () => {
     expect(settings.redirect_uri).toContain('/auth/callback');
     expect(settings.response_type).toBe('code');
   });
+  it('supplies explicit Keycloak metadata so OIDC discovery (.well-known) is never fetched', () => {
+    // Institutional proxies commonly block any path segment starting with a dot (a "hide
+    // dotfiles" rule), which 404s Keycloak's /.well-known/openid-configuration and breaks
+    // login. Deriving the endpoints from the realm issuer avoids the discovery request.
+    createOidc(oidcCfg);
+    const settings = (UserManager as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const base = 'https://kc/realms/openldr';
+    expect(settings.metadata).toMatchObject({
+      issuer: base,
+      authorization_endpoint: `${base}/protocol/openid-connect/auth`,
+      token_endpoint: `${base}/protocol/openid-connect/token`,
+      userinfo_endpoint: `${base}/protocol/openid-connect/userinfo`,
+      end_session_endpoint: `${base}/protocol/openid-connect/logout`,
+      jwks_uri: `${base}/protocol/openid-connect/certs`,
+    });
+    // No metadata URL should be configured — presence of `metadata` short-circuits discovery,
+    // but an explicit undefined metadataUrl documents that .well-known is intentionally unused.
+    expect(JSON.stringify(settings.metadata)).not.toContain('.well-known');
+  });
   it('handleCallback stores the access token', async () => {
     signinCallback.mockResolvedValue({ access_token: 'tok', expired: false });
     const oidc = createOidc(oidcCfg);

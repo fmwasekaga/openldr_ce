@@ -22,9 +22,32 @@ export interface OidcClient {
   getStoredUser(): Promise<User | null>;
 }
 
+/**
+ * Keycloak's OIDC endpoints are fully deterministic from the realm issuer URL, so we can supply
+ * them to oidc-client-ts directly instead of relying on discovery. This matters behind institutional
+ * reverse proxies (e.g. a ministry gateway) that apply a "hide dotfiles" rule — `location ~ /\.` —
+ * which 404s any path with a dot-prefixed segment, including `/.well-known/openid-configuration`.
+ * Passing `metadata` short-circuits that discovery fetch; every endpoint below is a plain non-dot
+ * path that proxies through normally. The issuer value stays exactly `cfg.issuerUrl` so it still
+ * matches the `iss` claim on issued tokens.
+ */
+function keycloakMetadata(issuerUrl: string) {
+  const base = issuerUrl.replace(/\/+$/, '');
+  const oidc = `${base}/protocol/openid-connect`;
+  return {
+    issuer: base,
+    authorization_endpoint: `${oidc}/auth`,
+    token_endpoint: `${oidc}/token`,
+    userinfo_endpoint: `${oidc}/userinfo`,
+    end_session_endpoint: `${oidc}/logout`,
+    jwks_uri: `${oidc}/certs`,
+  };
+}
+
 export function createOidc(cfg: OidcConfig): OidcClient {
   const mgr = new UserManager({
     authority: cfg.issuerUrl,
+    metadata: keycloakMetadata(cfg.issuerUrl),
     client_id: cfg.clientId,
     redirect_uri: `${window.location.origin}/studio/auth/callback`,
     post_logout_redirect_uri: `${window.location.origin}/studio`,
