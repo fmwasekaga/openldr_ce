@@ -172,6 +172,7 @@ you can also set them in `.env` directly.
 | `--staging` | off | Use the Let's Encrypt staging CA (testing; avoids rate limits). |
 | `--no-start` | off | Scaffold and configure only; don't start the stack. |
 | `--no-pull` | off | Skip pulling images (use what's already local). |
+| `--seedless` | off (seeded) | Empty first run — skip the seeded sample dashboard + demo data (the default seeds them). Windows: `-Seedless`. Fresh install only. |
 | `--target-db <db>` | `postgres` | External analytics database: `postgres`, `mssql`, or `mysql`. |
 | `--mssql-demo` | off | Bundle a SQL Server 2022 container (evaluation only); implies `--target-db mssql`. |
 | `--mssql-host <host>` | — | BYO SQL Server host (required for `--target-db mssql` without `--mssql-demo`). |
