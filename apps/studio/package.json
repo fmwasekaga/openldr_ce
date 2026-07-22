@@ -22,6 +22,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@glideapps/glide-data-grid": "^6.0.3",
+    "@openldr/dashboards": "workspace:*",
     "@openldr/forms": "workspace:*",
     "@openldr/plugin-ui-sdk": "workspace:*",
     "@openldr/report-designer": "workspace:*",

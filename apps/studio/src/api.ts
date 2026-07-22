@@ -296,6 +296,12 @@ export async function listModels(): Promise<QueryModel[]> {
 export async function runWidgetQuery(q: WidgetQuery): Promise<ReportResult> {
   return authFetch('/api/dashboards/query', json(q)).then((r) => okJson<ReportResult>(r, 'run query'));
 }
+/** Builder→SQL eject: compile a builder-mode query to its SQL text (display-only; never executed as returned). */
+export async function compileBuilderToSql(q: Extract<WidgetQuery, { mode: 'builder' }>): Promise<string> {
+  return authFetch('/api/dashboards/compile-sql', json(q))
+    .then((r) => okJson<{ sql: string }>(r, 'compile sql'))
+    .then((x) => x.sql);
+}
 export async function listDashboards(): Promise<Dashboard[]> {
   return authFetch('/api/dashboards').then((r) => okJson<Dashboard[]>(r, 'list dashboards'));
 }

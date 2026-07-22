@@ -16,7 +16,7 @@ import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore, createUserProfileStore, type UserProfileStore } from '@openldr/users';
 import { createFormStore, type FormStore } from '@openldr/forms';
 import { getEventSource, eventSourceCatalog, toCsv, type ReportResult, type ReportSummary, type ReportParamMeta, type ReportMetricMeta } from '@openldr/reporting';
-import { createDashboardStore, getModel, listModels, runBuilderQuery, runSqlQuery, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, seedDefaultDashboard, runStoredQuery, type DashboardStore, type WidgetQuery, type RunStoredQueryDeps } from '@openldr/dashboards';
+import { createDashboardStore, getModel, listModels, runBuilderQuery, runSqlQuery, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, seedDefaultDashboard, runStoredQuery, compileBuilderQuery, formatSql, type DashboardStore, type WidgetQuery, type RunStoredQueryDeps } from '@openldr/dashboards';
 import { createReportDesignStore, renderReportDesignPdf, resolveDesignTables, type ReportDesignStore } from '@openldr/report-designer';
 import {
   createWorkflowStore, type WorkflowStore,
@@ -94,6 +94,9 @@ export interface DashboardsApi {
   store: DashboardStore;
   models(): ReturnType<typeof listModels>;
   query(q: WidgetQuery): Promise<ReportResult>;
+  /** Builder→SQL eject: compile a builder-mode query to its SQL text (parameters inlined as
+   *  readable literals). Display-only — the returned text is never executed. */
+  compileSql(q: Extract<WidgetQuery, { mode: 'builder' }>): Promise<string>;
 }
 
 export interface ReportingApi {
@@ -492,7 +495,15 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     }
     return { ...data, meta: { generatedAt: new Date().toISOString(), rowCount: data.rows.length } };
   };
-  const dashboards: DashboardsApi = { store: dashboardStore, models: () => listModels(), query: runDashboardQuery };
+  // Builder→SQL eject: compile the builder query the same way `runDashboardQuery` does, but
+  // return the SQL text (parameters inlined as readable literals) instead of running it.
+  const compileDashboardSql = async (q: Extract<WidgetQuery, { mode: 'builder' }>): Promise<string> => {
+    const model = getModel(q.model);
+    if (!model) throw new DashboardQueryError(`unknown model: ${q.model}`);
+    const { sql: compiledSql, parameters } = compileBuilderQuery(reportingDb, model, q).compile();
+    return formatSql(compiledSql, parameters);
+  };
+  const dashboards: DashboardsApi = { store: dashboardStore, models: () => listModels(), query: runDashboardQuery, compileSql: compileDashboardSql };
   const workflowStore = createWorkflowStore(internal.db);
   const workflowRuns = createWorkflowRunStore(internal.db);
   const workflowSchedules = createWorkflowScheduleStore(internal.db);

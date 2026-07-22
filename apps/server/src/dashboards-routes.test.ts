@@ -21,6 +21,7 @@ function fakeCtx(cfg: { DASHBOARD_SQL_ENABLED?: boolean } = {}) {
         if (q.mode === 'sql') { const e: any = new Error('raw SQL widgets are disabled'); e.name = 'DashboardQueryError'; throw e; }
         return { columns: [], rows: [], chart: { type: 'stat', value: '0', label: 'x' }, meta: { generatedAt: 'now', rowCount: 0 } };
       },
+      compileSql: async (q: any) => `select count(*) as value from lab_requests where status = 'active' -- model:${q.model}`,
     },
     audit: { record: async (e: any) => { auditEvents.push(e); return e; } },
     logger: { error() {}, warn() {}, info() {} },
@@ -58,6 +59,24 @@ describe('dashboard routes', () => {
     const app = appWith(fakeCtx());
     const res = await app.inject({ method: 'POST', url: '/api/dashboards/query', payload: { mode: 'sql', sql: 'select 1' } });
     expect(res.statusCode).toBe(400);
+  });
+
+  it('compile-sql returns SQL text for a builder query', async () => {
+    const app = appWith(fakeCtx());
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/dashboards/compile-sql',
+      payload: { mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count' }, filters: [] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().sql).toMatch(/select count\(\*\)/i);
+  });
+
+  it('compile-sql rejects a sql-mode body', async () => {
+    const app = appWith(fakeCtx());
+    const res = await app.inject({ method: 'POST', url: '/api/dashboards/compile-sql', payload: { mode: 'sql', sql: 'select 1' } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/builder-mode/i);
   });
   it('creates and lists a dashboard', async () => {
     const app = appWith(fakeCtx());

@@ -6,6 +6,11 @@ import { oneDark } from '@codemirror/theme-one-dark';
 import { basicSetup } from 'codemirror';
 import { Play, MoreHorizontal, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
+// Browser-safe subpath: recognize-sql.ts + the pure model registry only. The package root ('.')
+// also exports compile.ts/store.ts (kysely + @openldr/db) and must stay server-only — see
+// apps/studio/src/dashboard/template.ts for the established rule.
+import { recognizeSql } from '@openldr/dashboards/pure';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +24,7 @@ import { StripedEmpty } from '@/components/ui/striped-empty';
 import {
   listModels,
   runWidgetQuery,
+  compileBuilderToSql,
   type QueryModel,
   type DashboardFilterDef,
   type WidgetConfig,
@@ -217,6 +223,13 @@ export function WidgetEditorDialog({
   const [visual, setVisual] = useState<Visual>(initial?.visual ?? {});
   const [bindings, setBindings] = useState<Record<string, string>>(initialBindings);
   const [varDefs, setVarDefs] = useState<Record<string, WidgetVariableDef>>(initialDefs);
+  // SQL -> Builder import guard: set when the current sqlText can't be recognized as a builder
+  // query (see toBuilder below). Disables the Builder toggle and shows the refusal reason inline
+  // until the SQL changes.
+  const [builderBlockedReason, setBuilderBlockedReason] = useState<string | undefined>();
+  // Builder -> SQL eject: true once the user has switched away from the builder in this dialog
+  // session, so the "JS-side shaping isn't in this SQL" banner shows above the editor.
+  const [ejectedFromBuilder, setEjectedFromBuilder] = useState(false);
   const [testValues, setTestValues] = useState<Record<string, unknown>>({});
   const [dynamicVarOptions, setDynamicVarOptions] = useState<Record<string, string[]>>({});
   const [preview, setPreview] = useState<ReportResult>();
@@ -361,6 +374,45 @@ export function WidgetEditorDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, JSON.stringify(builderQuery)]);
 
+  // Editing the SQL invalidates any prior "can't show this in the builder" refusal — re-check on
+  // the next toBuilder click rather than leaving a stale block in place.
+  useEffect(() => {
+    setBuilderBlockedReason(undefined);
+  }, [sqlText]);
+
+  // SQL -> Builder: recognize the current SQL text as a builder query. If it doesn't originate
+  // from an sql-mode widget and we're only viewing SQL because of an eject, the in-memory
+  // builderQuery is still authoritative (round-trips exactly) — skip re-parsing.
+  const toBuilder = () => {
+    if (initial?.query.mode !== 'sql' && mode === 'sql') {
+      setBuilderBlockedReason(undefined);
+      setMode('builder');
+      return;
+    }
+    const r = recognizeSql(sqlText);
+    if (r.ok) {
+      setBuilderQuery(r.query as unknown as BuilderQuery);
+      setBuilderBlockedReason(undefined);
+      setMode('builder');
+    } else {
+      setBuilderBlockedReason(r.reason);
+      toast.error(`${t('widgetEditor.cannotShowInBuilder')}: ${r.reason}`);
+    }
+  };
+
+  // Builder -> SQL (eject): fill the editor with the builder query compiled to SQL text and show
+  // the "JS-side shaping isn't in this SQL" banner. A compile failure is silently ignored — the
+  // editor just keeps whatever SQL text it already had.
+  const toSql = () => {
+    if (mode === 'builder') {
+      setEjectedFromBuilder(true);
+      compileBuilderToSql(builderQuery)
+        .then((sql) => setSqlText(sql))
+        .catch(() => {});
+    }
+    setMode('sql');
+  };
+
   const save = () => {
     const id = initial?.id ?? (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `w-${Math.round(performance.now())}`);
     const query = buildSaveQuery(mode, builderQuery, sqlText, bindings, varDefs);
@@ -419,6 +471,9 @@ export function WidgetEditorDialog({
                   <BuilderForm models={models} value={builderQuery} onChange={setBuilderQuery} />
                 ) : (
                   <>
+                    {ejectedFromBuilder && (
+                      <div className="border-b border-border bg-muted px-2 py-1 text-[11px] text-muted-foreground">{t('widgetEditor.ejectBanner')}</div>
+                    )}
                     <div ref={onEditorMount} className="h-full" />
                     <textarea aria-label="SQL" className="sr-only" readOnly={sqlReadOnly} value={sqlText} onChange={(e) => setSqlText(e.target.value)} />
                   </>
@@ -429,20 +484,27 @@ export function WidgetEditorDialog({
                   <button
                     type="button"
                     aria-pressed={mode === 'builder'}
-                    onClick={() => setMode('builder')}
-                    className={mode === 'builder' ? 'bg-primary px-2 py-0.5 text-primary-foreground' : 'px-2 py-0.5 text-muted-foreground'}
+                    onClick={toBuilder}
+                    disabled={!!builderBlockedReason}
+                    title={builderBlockedReason}
+                    className={`disabled:cursor-not-allowed disabled:opacity-50 ${mode === 'builder' ? 'bg-primary px-2 py-0.5 text-primary-foreground' : 'px-2 py-0.5 text-muted-foreground'}`}
                   >
                     {t('widgetEditor.modeBuilder')}
                   </button>
                   <button
                     type="button"
                     aria-pressed={mode === 'sql'}
-                    onClick={() => setMode('sql')}
+                    onClick={toSql}
                     className={mode === 'sql' ? 'bg-primary px-2 py-0.5 text-primary-foreground' : 'px-2 py-0.5 text-muted-foreground'}
                   >
                     {t('widgetEditor.modeSql')}
                   </button>
                 </div>
+                {builderBlockedReason && (
+                  <span role="alert" className="mr-2 max-w-[28ch] truncate text-[11px] text-destructive" title={builderBlockedReason}>
+                    {builderBlockedReason}
+                  </span>
+                )}
                 <span className="text-[11px] tabular-nums text-muted-foreground">{(preview?.rows.length ?? 0).toLocaleString()} rows</span>
                 <div className="ml-auto flex items-center gap-1">
                   <Button variant="ghost" size="icon" className="h-7 w-7" title="Run query" onClick={run} disabled={running || !sqlText.trim()}>

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, waitFor } from '@testing-library/react';
+import { render, waitFor, fireEvent, screen } from '@testing-library/react';
 import { WidgetEditorDialog } from './WidgetEditorDialog';
 import type { WidgetConfig } from '../../api';
 
@@ -64,5 +64,42 @@ describe('WidgetEditorDialog', () => {
     // `values` map — never client-substituted SQL — so the server can vet it with the flag off.
     expect(calls[0].sql).toBe('select 42 as value');
     expect(calls[0]).toHaveProperty('values');
+  });
+
+  // SQL -> Builder import guard: unrecognizable SQL (a UNION here) must not silently drop into
+  // the builder pane with a wrong/partial query — the toggle disables and the refusal reason
+  // (from @openldr/dashboards' recognizeSql) is shown inline so the test can assert it without
+  // depending on the sonner toast portal being present in the jsdom tree.
+  it('disables the Builder toggle for unrecognizable SQL and shows a reason', () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('[]', { status: 200 }));
+    const initial = {
+      id: 'w1', type: 'kpi', title: 't', refreshIntervalSec: 0, visual: {},
+      query: { mode: 'sql', sql: 'SELECT a, b FROM lab_requests UNION SELECT c, d FROM specimens' },
+    } as const;
+    render(<WidgetEditorDialog open initial={initial as any} onClose={() => {}} onSave={() => {}} />);
+    const builderBtn = screen.getByRole('button', { name: 'Builder' });
+    fireEvent.click(builderBtn);
+    expect(screen.getByRole('button', { name: 'Builder' })).toBeDisabled();
+    // The refusal reason is rendered as an inline `role="alert"` element next to the toggle (not
+    // only fired as a sonner toast, whose portal may not be present in the jsdom tree). Scoped to
+    // `role="alert"` rather than a plain text query, since the SQL itself (rendered by CodeMirror
+    // in the editor pane) also literally contains the word "UNION".
+    expect(screen.getByRole('alert')).toHaveTextContent(/UNION/i);
+  });
+
+  // SQL -> Builder import guard: recognizable SQL imports into the builder query and switches
+  // panes. The recognizer's field-level correctness is already covered by recognize-sql.test.ts's
+  // corpus test; here we only assert the Builder pane (a shadcn Select whose .value jsdom can't
+  // read) actually mounted and the toggle stayed enabled.
+  it('imports recognizable SQL into the builder', () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('[]', { status: 200 }));
+    const initial = {
+      id: 'w2', type: 'bar-chart', title: 't', refreshIntervalSec: 0, visual: {},
+      query: { mode: 'sql', sql: 'SELECT status AS label, COUNT(*) AS value FROM lab_requests GROUP BY status' },
+    } as const;
+    render(<WidgetEditorDialog open initial={initial as any} onClose={() => {}} onSave={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Builder' }));
+    expect(screen.getByLabelText('Source')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Builder' })).not.toBeDisabled();
   });
 });
