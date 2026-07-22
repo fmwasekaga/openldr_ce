@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { setModelPatch, setMetricPatch, setDimensionPatch, setGrainPatch, setBreakdownPatch, setFiltersPatch, buildSaveQuery, shouldRestoreEjected, type BuilderQuery } from './builderForm.model';
+import { setModelPatch, setMetricPatch, setDimensionPatch, setGrainPatch, setBreakdownPatch, setFiltersPatch, setLimitPatch, buildSaveQuery, shouldRestoreEjected, type BuilderQuery } from './builderForm.model';
 import type { QueryModel, WidgetVariableDef } from '../../api';
 
 const models: QueryModel[] = [
@@ -86,6 +86,17 @@ describe('builderForm.model', () => {
   it('setFiltersPatch replaces the top-level filters list', () => {
     const next = [{ dimension: 'priority', op: 'eq', value: 'high' }];
     expect(setFiltersPatch(base, next)).toEqual({ ...base, filters: next });
+  });
+
+  it('setLimitPatch sets a positive integer limit', () => {
+    expect(setLimitPatch(base, 10)).toEqual({ ...base, limit: 10 });
+  });
+
+  it('setLimitPatch clears the limit for undefined / 0 / negative', () => {
+    const withLimit = { ...base, limit: 10 };
+    expect(setLimitPatch(withLimit, undefined)).toEqual(base);
+    expect(setLimitPatch(withLimit, 0)).toEqual(base);
+    expect(setLimitPatch(withLimit, -5)).toEqual(base);
   });
 
   describe('buildSaveQuery', () => {

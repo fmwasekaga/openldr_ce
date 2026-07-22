@@ -54,6 +54,14 @@ export function setFiltersPatch(value: BuilderQuery, filters: BuilderQuery['filt
   return { ...value, filters };
 }
 
+/** Set (or, for a non-positive / undefined value, clear) the top-N row limit. */
+export function setLimitPatch(value: BuilderQuery, limit: number | undefined): BuilderQuery {
+  const next = { ...value };
+  if (limit && Number.isFinite(limit) && limit > 0) next.limit = Math.floor(limit);
+  else delete next.limit;
+  return next;
+}
+
 /**
  * Build the `WidgetQuery` that `WidgetEditorDialog.save()` persists, given the current editor
  * mode. Kept pure (and separate from the dialog's Radix-heavy JSX) so save-payload construction
