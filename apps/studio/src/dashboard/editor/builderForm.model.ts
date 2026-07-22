@@ -57,7 +57,8 @@ export function setFiltersPatch(value: BuilderQuery, filters: BuilderQuery['filt
 /** Set (or, for a non-positive / undefined value, clear) the top-N row limit. */
 export function setLimitPatch(value: BuilderQuery, limit: number | undefined): BuilderQuery {
   const next = { ...value };
-  if (limit && Number.isFinite(limit) && limit > 0) next.limit = Math.floor(limit);
+  const floored = limit !== undefined ? Math.floor(limit) : undefined;
+  if (floored && Number.isFinite(floored) && floored > 0) next.limit = floored;
   else delete next.limit;
   return next;
 }

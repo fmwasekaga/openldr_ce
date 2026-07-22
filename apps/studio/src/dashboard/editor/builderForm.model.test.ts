@@ -99,6 +99,12 @@ describe('builderForm.model', () => {
     expect(setLimitPatch(withLimit, -5)).toEqual(base);
   });
 
+  it('setLimitPatch clears the limit for a fractional value in (0,1) and for NaN', () => {
+    const withLimit = { ...base, limit: 10 };
+    expect(setLimitPatch(withLimit, 0.5)).toEqual(base);
+    expect(setLimitPatch(withLimit, NaN)).toEqual(base);
+  });
+
   describe('buildSaveQuery', () => {
     const bindings: Record<string, string> = { ward: 'filter-1' };
     const varDefs: Record<string, WidgetVariableDef> = { ward: { type: 'text', label: 'Ward' } };
