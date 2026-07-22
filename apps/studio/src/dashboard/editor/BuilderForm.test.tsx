@@ -60,4 +60,16 @@ describe('BuilderForm', () => {
     const { getByLabelText } = render(<BuilderForm models={models} value={grouped} onChange={vi.fn()} />);
     expect(getByLabelText('Limit')).toBeTruthy();
   });
+
+  it('renders the AND/OR filter tree root controls', () => {
+    const { getByLabelText } = render(<BuilderForm models={models} value={base} onChange={vi.fn()} />);
+    expect(getByLabelText('Add condition')).toBeTruthy();
+    expect(getByLabelText('Add group')).toBeTruthy();
+  });
+
+  it('adapts a legacy flat-filters widget into a tree (renders its rule)', () => {
+    const legacy = { ...base, filters: [{ dimension: 'status', op: 'eq', value: 'F' }] } as Extract<WidgetQuery, { mode: 'builder' }>;
+    const { getAllByLabelText } = render(<BuilderForm models={models} value={legacy} onChange={vi.fn()} />);
+    expect(getAllByLabelText('Filter field').length).toBe(1);
+  });
 });

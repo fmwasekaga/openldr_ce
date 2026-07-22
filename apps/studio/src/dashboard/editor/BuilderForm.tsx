@@ -1,14 +1,15 @@
 import type { DashboardFilterDef, QueryModel } from '../../api';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { FilterConditionEditor, type FilterCondition } from './FilterConditionEditor';
+import { FilterTreeEditor } from './FilterTreeEditor';
+import { emptyTree, filtersToTree } from './conditionTree.model';
 import {
   setModelPatch,
   setMetricPatch,
   setDimensionPatch,
   setGrainPatch,
   setBreakdownPatch,
-  setFiltersPatch,
+  setFilterTreePatch,
   setLimitPatch,
   type BuilderQuery,
 } from './builderForm.model';
@@ -59,14 +60,13 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
 
       <div className="text-sm">
         Filters
-        <FilterConditionEditor
-          value={(value.filters ?? []) as FilterCondition[]}
-          dimensions={model?.dimensions ?? []}
-          dashboardFilters={dashboardFilters.map((f) => ({ id: f.id, label: f.label }))}
-          bindings={value.variableBindings ?? {}}
-          onChange={(f) => onChange(setFiltersPatch(value, f as BuilderQuery['filters']))}
-          onBindingsChange={(b) => onChange({ ...value, variableBindings: b })}
-        />
+        <div className="mt-1">
+          <FilterTreeEditor
+            value={value.filterTree ?? (value.filters?.length ? filtersToTree(value.filters) : emptyTree())}
+            dimensions={model?.dimensions ?? []}
+            onChange={(tree) => onChange(setFilterTreePatch(value, tree))}
+          />
+        </div>
       </div>
 
       <label className="text-sm">
