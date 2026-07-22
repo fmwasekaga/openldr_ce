@@ -668,6 +668,8 @@ export const en = {
     modeSql: 'SQL',
     ejectBanner: 'This SQL fetches the rows; grain, ratios, and top-N are applied afterward and are not shown here.',
     cannotShowInBuilder: "Can't show this in the builder",
+    bindValue: 'Value',
+    bindDashboardFilter: 'Dashboard filter',
   },
   reportDesigner: {
     title: 'Report Designer',

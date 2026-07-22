@@ -34,3 +34,15 @@ export function updateCondition(list: FilterCondition[], i: number, patch: Parti
 export function removeCondition(list: FilterCondition[], i: number): FilterCondition[] {
   return list.filter((_, j) => j !== i);
 }
+
+/**
+ * Set (or, for a falsy `filterId`, clear) the dashboard-filter binding for a dimension key.
+ * Always returns a new object — never mutates `bindings` — so callers can pass the result
+ * straight to a state setter / onChange without aliasing bugs.
+ */
+export function setBound(bindings: Record<string, string>, dimKey: string, filterId: string | null): Record<string, string> {
+  const next = { ...bindings };
+  if (filterId) next[dimKey] = filterId;
+  else delete next[dimKey];
+  return next;
+}

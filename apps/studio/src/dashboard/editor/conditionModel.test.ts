@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toValue, toLiteral, addCondition, updateCondition, removeCondition } from './conditionModel';
+import { toValue, toLiteral, addCondition, updateCondition, removeCondition, setBound } from './conditionModel';
 
 const dims = [{ key: 'status' }, { key: 'priority' }];
 
@@ -49,5 +49,27 @@ describe('conditionModel', () => {
       { dimension: 'priority', op: 'eq', value: '' },
     ];
     expect(removeCondition(list, 0)).toEqual([{ dimension: 'priority', op: 'eq', value: '' }]);
+  });
+
+  it('setBound adds a binding for the dimension when given a filter id', () => {
+    expect(setBound({}, 'status', 'period')).toEqual({ status: 'period' });
+  });
+
+  it('setBound leaves other bindings untouched when adding one', () => {
+    expect(setBound({ priority: 'prio' }, 'status', 'period')).toEqual({ priority: 'prio', status: 'period' });
+  });
+
+  it('setBound clears the binding for the dimension when given null', () => {
+    expect(setBound({ status: 'period', priority: 'prio' }, 'status', null)).toEqual({ priority: 'prio' });
+  });
+
+  it('setBound clears the binding for the dimension when given an empty string', () => {
+    expect(setBound({ status: 'period' }, 'status', '')).toEqual({});
+  });
+
+  it('setBound does not mutate the original bindings object', () => {
+    const original = { priority: 'prio' };
+    setBound(original, 'status', 'period');
+    expect(original).toEqual({ priority: 'prio' });
   });
 });

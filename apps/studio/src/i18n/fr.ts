@@ -664,6 +664,8 @@ export const fr: EnShape = {
     modeSql: 'SQL',
     ejectBanner: 'Ce SQL récupère les lignes ; le regroupement temporel, les ratios et le top-N sont appliqués ensuite et ne figurent pas ici.',
     cannotShowInBuilder: 'Impossible d’afficher ceci dans le générateur',
+    bindValue: 'Valeur',
+    bindDashboardFilter: 'Filtre du tableau de bord',
   },
   reportDesigner: {
     title: 'Concepteur de rapports',

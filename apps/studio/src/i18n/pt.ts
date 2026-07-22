@@ -664,6 +664,8 @@ export const pt: EnShape = {
     modeSql: 'SQL',
     ejectBanner: 'Este SQL busca as linhas; agrupamento temporal, rácios e top-N são aplicados depois e não aparecem aqui.',
     cannotShowInBuilder: 'Não é possível mostrar isto no construtor',
+    bindValue: 'Valor',
+    bindDashboardFilter: 'Filtro do painel',
   },
   reportDesigner: {
     title: 'Designer de relatórios',

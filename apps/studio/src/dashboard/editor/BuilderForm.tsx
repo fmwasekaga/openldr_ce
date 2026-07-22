@@ -1,4 +1,4 @@
-import type { QueryModel } from '../../api';
+import type { DashboardFilterDef, QueryModel } from '../../api';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { FilterConditionEditor, type FilterCondition } from './FilterConditionEditor';
 import {
@@ -15,7 +15,9 @@ import {
 // this sentinel and translated back to '' before it reaches the pure builderForm.model helpers.
 const NONE = '__none__';
 
-export function BuilderForm({ models, value, onChange }: { models: QueryModel[]; value: BuilderQuery; onChange: (q: BuilderQuery) => void }) {
+export function BuilderForm({ models, value, dashboardFilters = [], onChange }: {
+  models: QueryModel[]; value: BuilderQuery; dashboardFilters?: DashboardFilterDef[]; onChange: (q: BuilderQuery) => void;
+}) {
   const model = models.find((m) => m.id === value.model) ?? models[0];
   const dim = model?.dimensions.find((d) => d.key === value.dimension?.key);
 
@@ -58,7 +60,10 @@ export function BuilderForm({ models, value, onChange }: { models: QueryModel[];
         <FilterConditionEditor
           value={(value.filters ?? []) as FilterCondition[]}
           dimensions={model?.dimensions ?? []}
+          dashboardFilters={dashboardFilters.map((f) => ({ id: f.id, label: f.label }))}
+          bindings={value.variableBindings ?? {}}
           onChange={(f) => onChange(setFiltersPatch(value, f as BuilderQuery['filters']))}
+          onBindingsChange={(b) => onChange({ ...value, variableBindings: b })}
         />
       </div>
 

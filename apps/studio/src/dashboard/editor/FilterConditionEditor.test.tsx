@@ -27,4 +27,43 @@ describe('FilterConditionEditor', () => {
     expect(getByLabelText('Filter operator')).toBeTruthy();
     expect(getByRole('button', { name: /remove filter/i })).toBeTruthy();
   });
+
+  it('omits the value/dashboard-filter toggle when no dashboardFilters are supplied', () => {
+    const { queryByRole } = render(
+      <FilterConditionEditor value={[{ dimension: 'status', op: 'eq', value: '' }]} dimensions={dims} onChange={vi.fn()} />,
+    );
+    expect(queryByRole('button', { name: /dashboard filter/i })).toBeNull();
+  });
+
+  it('renders a value/dashboard-filter toggle per row when dashboardFilters are supplied', () => {
+    const dashboardFilters = [{ id: 'period', label: 'Period' }];
+    const { getByRole } = render(
+      <FilterConditionEditor
+        value={[{ dimension: 'status', op: 'eq', value: '' }]}
+        dimensions={dims}
+        dashboardFilters={dashboardFilters}
+        bindings={{}}
+        onChange={vi.fn()}
+        onBindingsChange={vi.fn()}
+      />,
+    );
+    expect(getByRole('button', { name: /^value$/i })).toBeTruthy();
+    expect(getByRole('button', { name: /dashboard filter/i })).toBeTruthy();
+  });
+
+  it('shows the dashboard-filter Select instead of the literal Input when the row is bound', () => {
+    const dashboardFilters = [{ id: 'period', label: 'Period' }];
+    const { getByLabelText, queryByLabelText } = render(
+      <FilterConditionEditor
+        value={[{ dimension: 'status', op: 'eq', value: '' }]}
+        dimensions={dims}
+        dashboardFilters={dashboardFilters}
+        bindings={{ status: 'period' }}
+        onChange={vi.fn()}
+        onBindingsChange={vi.fn()}
+      />,
+    );
+    expect(getByLabelText('Bound dashboard filter')).toBeTruthy();
+    expect(queryByLabelText('Filter value')).toBeNull();
+  });
 });
