@@ -18,7 +18,7 @@ import { useDashboardStore } from './store';
 import { DashboardGrid } from './DashboardGrid';
 import { DashboardFilterBar } from './filters/DashboardFilterBar';
 import { DashboardFilterEditor } from './filters/DashboardFilterEditor';
-import { exportDashboard, importDashboard } from './io';
+import { exportDashboard, importDashboard, uniqueName } from './io';
 import { WidgetEditorDialog } from './editor/WidgetEditorDialog';
 import { StripedEmpty } from '@/components/ui/striped-empty';
 
@@ -80,9 +80,7 @@ export function DashboardPage() {
   };
 
   const handleNewDashboard = async () => {
-    const existingNames = new Set(all.map((d) => d.name));
-    let name = 'New dashboard';
-    for (let n = 2; existingNames.has(name); n++) name = `New dashboard ${n}`;
+    const name = uniqueName('New dashboard', all.map((d) => d.name));
     const blank: Dashboard = {
       id: crypto.randomUUID(),
       ownerId: null,
