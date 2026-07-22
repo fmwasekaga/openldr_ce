@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { AppShell } from '../shell/AppShell';
+import { FileText } from 'lucide-react';
 import {
   fetchReports, fetchReport, fetchReportOptions, logReportRun,
   type ReportSummary, type ReportResult,
@@ -159,7 +160,11 @@ export function Reports() {
         <div className="flex min-w-0 flex-1 flex-col">
           {!selected ? (
             reports.length === 0 ? (
-              <EmptyState title={t('reports.emptyLibrary')} body={t('reports.emptyLibraryBody')} />
+              <EmptyState
+                icon={<FileText className="h-6 w-6" />}
+                title={t('reports.emptyLibrary')}
+                body={t('reports.emptyLibraryBody')}
+              />
             ) : (
               <StripedEmpty>{t('reports.selectReport')}</StripedEmpty>
             )

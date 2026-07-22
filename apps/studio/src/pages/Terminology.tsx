@@ -41,6 +41,7 @@ import { OntologyPickerDialog } from '../terminology/ontology/OntologyPickerDial
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { StripedEmpty } from '../components/ui/striped-empty';
+import { EmptyState } from '../components/ui/empty-state';
 import { LoadingState } from '../components/ui/spinner';
 import { Checkbox } from '../components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../components/ui/dialog';
@@ -685,9 +686,12 @@ export function Terminology(): JSX.Element {
 
                 {/* Empty publisher hint */}
                 {!selectedSystemId && activeSection.systems.length === 0 && activeSection.valueSets.length === 0 && (
-                  <StripedEmpty className="flex-1 px-6">
-                    No code systems or value sets yet. Use the ⋯ menu to add one.
-                  </StripedEmpty>
+                  <EmptyState
+                    className="px-6"
+                    icon={<Library className="h-6 w-6" />}
+                    title="No code systems or value sets yet"
+                    body="Use the ⋯ menu to add one."
+                  />
                 )}
 
                 {/* Code-systems table */}

@@ -11,6 +11,7 @@ import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { StripedEmpty } from '@/components/ui/striped-empty';
+import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/spinner';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { cn } from '@/lib/cn';
@@ -406,7 +407,9 @@ export function DistributedSync() {
                   </TableBody>
                 )}
               </Table>
-              {filtered.length === 0 && <StripedEmpty className="flex-1">{t('settings.sync.empty')}</StripedEmpty>}
+              {filtered.length === 0 && (
+                <EmptyState icon={<RefreshCw className="h-6 w-6" />} title={t('settings.sync.empty')} />
+              )}
             </div>
 
             <TablePagination

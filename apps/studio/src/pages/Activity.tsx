@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { RefreshCw } from 'lucide-react';
+import { Activity as ActivityIcon, RefreshCw } from 'lucide-react';
 import { AppShell } from '@/shell/AppShell';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { StripedEmpty } from '@/components/ui/striped-empty';
+import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -243,7 +244,9 @@ export function Activity() {
           </Table>
           {loading && <LoadingState className="flex-1" label={t('common.loading')} />}
           {!loading && error && <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-destructive">{error}</div>}
-          {!loading && !error && filtered.length === 0 && <StripedEmpty className="flex-1">{t('activity.empty')}</StripedEmpty>}
+          {!loading && !error && filtered.length === 0 && (
+            <EmptyState icon={<ActivityIcon className="h-6 w-6" />} title={t('activity.empty')} />
+          )}
         </div>
 
         <TablePagination

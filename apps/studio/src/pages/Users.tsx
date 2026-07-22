@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { MoreHorizontal } from 'lucide-react';
+import { MoreHorizontal, Users as UsersIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { AppShell } from '@/shell/AppShell';
 import { Badge } from '@/components/ui/badge';
@@ -8,6 +8,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { StripedEmpty } from '@/components/ui/striped-empty';
+import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/spinner';
 import { TablePagination } from '@/components/ui/table-pagination';
 import {
@@ -198,7 +199,13 @@ export function Users() {
             )}
           </Table>
           {loading && <LoadingState className="flex-1" label={t('common.loading')} />}
-          {!loading && view.rows.length === 0 && <StripedEmpty className="flex-1">{rows.length === 0 ? t('users.noUsers') : t('users.noMatch')}</StripedEmpty>}
+          {!loading && view.rows.length === 0 && (
+            rows.length === 0 ? (
+              <EmptyState icon={<UsersIcon className="h-6 w-6" />} title={t('users.noUsers')} />
+            ) : (
+              <StripedEmpty className="flex-1">{t('users.noMatch')}</StripedEmpty>
+            )
+          )}
         </div>
 
         <TablePagination page={table.page} pageSize={table.pageSize} total={view.total} onPageChange={table.setPage} onPageSizeChange={table.setPageSize} leftSlot={<span className="text-muted-foreground">{t('users.count', { count: view.total })}</span>} />

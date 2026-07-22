@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { RefreshCw } from 'lucide-react';
+import { Bell, RefreshCw } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { AppShell } from '@/shell/AppShell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { StripedEmpty } from '@/components/ui/striped-empty';
+import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/spinner';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TablePagination } from '@/components/ui/table-pagination';
@@ -252,7 +253,9 @@ export function Notifications() {
           </Table>
           {loading && <LoadingState className="flex-1" label={t('common.loading')} />}
           {!loading && error && <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-destructive">{error}</div>}
-          {!loading && !error && rows.length === 0 && <StripedEmpty className="flex-1">{t('notifications.history.empty')}</StripedEmpty>}
+          {!loading && !error && rows.length === 0 && (
+            <EmptyState icon={<Bell className="h-6 w-6" />} title={t('notifications.history.empty')} />
+          )}
         </div>
 
         <TablePagination

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { MoreHorizontal } from 'lucide-react';
+import { MoreHorizontal, Workflow as WorkflowIcon } from 'lucide-react';
 import { AppShell } from '@/shell/AppShell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { StripedEmpty } from '@/components/ui/striped-empty';
+import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/spinner';
 import { fetchWorkflows, createWorkflow, deleteWorkflow, type Workflow } from '@/api';
 
@@ -196,7 +197,13 @@ export function WorkflowList() {
             )}
           </Table>
           {loading && <LoadingState className="flex-1" label="Loading…" />}
-          {!loading && pageRows.length === 0 && <StripedEmpty className="flex-1">{search ? 'No workflows match.' : 'No workflows yet.'}</StripedEmpty>}
+          {!loading && pageRows.length === 0 && (
+            search ? (
+              <StripedEmpty className="flex-1">No workflows match.</StripedEmpty>
+            ) : (
+              <EmptyState icon={<WorkflowIcon className="h-6 w-6" />} title="No workflows yet" />
+            )
+          )}
         </div>
 
         <TablePagination

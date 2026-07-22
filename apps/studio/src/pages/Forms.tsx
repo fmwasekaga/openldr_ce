@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileInput, MoreHorizontal, RefreshCw } from 'lucide-react';
+import { ClipboardList, FileInput, MoreHorizontal, RefreshCw } from 'lucide-react';
 import { AppShell } from '@/shell/AppShell';
 import { Badge } from '@/components/ui/badge';
 import { StripedEmpty } from '@/components/ui/striped-empty';
+import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -299,7 +300,13 @@ export function Forms() {
             )}
           </Table>
           {loading && <LoadingState className="flex-1" label="Loading…" />}
-          {!loading && pageRows.length === 0 && <StripedEmpty className="flex-1">{search ? 'No forms match.' : 'No forms yet.'}</StripedEmpty>}
+          {!loading && pageRows.length === 0 && (
+            search ? (
+              <StripedEmpty className="flex-1">No forms match.</StripedEmpty>
+            ) : (
+              <EmptyState icon={<ClipboardList className="h-6 w-6" />} title="No forms yet" />
+            )
+          )}
         </div>
 
         <TablePagination

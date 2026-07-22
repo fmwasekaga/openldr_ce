@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
-import { Copy, Filter, RefreshCw, RotateCcw, X } from 'lucide-react';
+import { ClipboardCheck, Copy, Filter, RefreshCw, RotateCcw, X } from 'lucide-react';
 import { AppShell } from '@/shell/AppShell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { StripedEmpty } from '@/components/ui/striped-empty';
+import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/spinner';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -390,7 +391,9 @@ export function Audit() {
           </Table>
           {loading && <LoadingState className="flex-1" label="Loading…" />}
           {!loading && error && <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-destructive">{error}</div>}
-          {!loading && !error && events.length === 0 && <StripedEmpty className="flex-1">No audit events.</StripedEmpty>}
+          {!loading && !error && events.length === 0 && (
+            <EmptyState icon={<ClipboardCheck className="h-6 w-6" />} title="No audit events" />
+          )}
         </div>
 
         <TablePagination

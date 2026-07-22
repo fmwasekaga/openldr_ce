@@ -12,7 +12,7 @@ import {
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/cn';
-import { Plus, Pencil, Check, SlidersHorizontal, MoreHorizontal, Download, Upload, RefreshCw, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Check, SlidersHorizontal, MoreHorizontal, Download, Upload, RefreshCw, Trash2, LayoutDashboard } from 'lucide-react';
 import { listDashboards, createDashboard, saveDashboard, deleteDashboard, fetchClientConfig, type Dashboard, type DashboardFilterDef, type WidgetConfig } from '../api';
 import { useDashboardStore } from './store';
 import { DashboardGrid } from './DashboardGrid';
@@ -183,6 +183,7 @@ export function DashboardPage() {
           {isEmpty ? (
             <StripedEmpty>
               <div className="flex flex-col items-center gap-3 text-center">
+                <LayoutDashboard className="h-6 w-6 text-muted-foreground" />
                 <p className="text-sm font-medium">{t('dashboard.emptyTitle')}</p>
                 <p className="max-w-sm text-xs text-muted-foreground">{t('dashboard.emptyBody')}</p>
                 <div className="flex items-center gap-2 pt-1">
