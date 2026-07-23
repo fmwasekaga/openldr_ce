@@ -341,7 +341,24 @@ export function WidgetEditorDialog({
   // Stored (vetted) SQL template for this widget, if editing an existing sql-mode widget.
   const storedTemplate = initial?.query.mode === 'sql' ? initial.query.sql : undefined;
 
+  const runQuery = (q: WidgetQuery) => {
+    setRunning(true);
+    runWidgetQuery(q)
+      .then((r) => {
+        setPreview(r);
+        setError(undefined);
+        const cols = r.columns.map((c) => c.key);
+        setVisual((v) => ({ ...v, xAxisKey: v.xAxisKey ?? cols[0], yAxisKey: v.yAxisKey ?? cols[1] ?? cols[0] }));
+      })
+      .catch((e) => setError(String(e.message ?? e)))
+      .finally(() => setRunning(false));
+  };
+
   const run = () => {
+    if (mode === 'builder') {
+      runQuery(builderQuery);
+      return;
+    }
     let q: WidgetQuery;
     if (sqlReadOnlyRef.current && storedTemplate != null) {
       // Flag off: SQL is read-only, so `sqlText` equals the persisted template. Send the STORED
@@ -357,16 +374,7 @@ export function WidgetEditorDialog({
       const resolved = resolveValues(testValuesRef.current);
       q = { mode: 'sql', sql: applyTemplate(sqlRef.current, resolved), variableBindings: bindings };
     }
-    setRunning(true);
-    runWidgetQuery(q)
-      .then((r) => {
-        setPreview(r);
-        setError(undefined);
-        const cols = r.columns.map((c) => c.key);
-        setVisual((v) => ({ ...v, xAxisKey: v.xAxisKey ?? cols[0], yAxisKey: v.yAxisKey ?? cols[1] ?? cols[0] }));
-      })
-      .catch((e) => setError(String(e.message ?? e)))
-      .finally(() => setRunning(false));
+    runQuery(q);
   };
 
   useEffect(() => {
@@ -377,16 +385,7 @@ export function WidgetEditorDialog({
   // Builder-mode preview: run the builder query live whenever it (or the mode) changes.
   useEffect(() => {
     if (mode !== 'builder') return;
-    setRunning(true);
-    runWidgetQuery(builderQuery)
-      .then((r) => {
-        setPreview(r);
-        setError(undefined);
-        const cols = r.columns.map((c) => c.key);
-        setVisual((v) => ({ ...v, xAxisKey: v.xAxisKey ?? cols[0], yAxisKey: v.yAxisKey ?? cols[1] ?? cols[0] }));
-      })
-      .catch((e) => setError(String(e.message ?? e)))
-      .finally(() => setRunning(false));
+    runQuery(builderQuery);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, JSON.stringify(builderQuery)]);
 
@@ -541,7 +540,7 @@ export function WidgetEditorDialog({
                 )}
                 <span className="text-[11px] tabular-nums text-muted-foreground">{(preview?.rows.length ?? 0).toLocaleString()} rows</span>
                 <div className="ml-auto flex items-center gap-1">
-                  <Button variant="ghost" size="icon" className="h-7 w-7" title="Run query" onClick={run} disabled={running || !sqlText.trim()}>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" title="Run query" aria-label="Run query" onClick={run} disabled={running || !sqlText.trim()}>
                     <Play className={`h-3.5 w-3.5 ${running ? 'animate-pulse' : ''}`} />
                   </Button>
                   <DropdownMenu>

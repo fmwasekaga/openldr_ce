@@ -103,6 +103,27 @@ describe('WidgetEditorDialog', () => {
     expect(screen.getByRole('button', { name: 'Builder' })).not.toBeDisabled();
   });
 
+  it('runs the builder query (not the SQL placeholder) when Play is clicked in builder mode', async () => {
+    const calls: any[] = [];
+    const result = { columns: [{ key: 'value' }], rows: [{ value: 0 }], chart: { type: 'stat', value: '0', label: '' }, meta: { generatedAt: 'now', rowCount: 1 } };
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any, init?: any) => {
+      if (String(url).includes('/api/dashboards/query')) {
+        calls.push(JSON.parse(init.body));
+        return new Response(JSON.stringify(result), { status: 200 });
+      }
+      return new Response('[]', { status: 200 });
+    });
+    render(<WidgetEditorDialog open initial={undefined} dashboardFilters={[]} onClose={() => {}} onSave={() => {}} />);
+    // The builder auto-preview fires a builder-mode query on mount; wait for it, then clear.
+    await waitFor(() => expect(calls.length).toBeGreaterThan(0));
+    calls.length = 0;
+    fireEvent.click(screen.getByRole('button', { name: 'Run query' }));
+    await waitFor(() => expect(calls.length).toBeGreaterThan(0));
+    // Play must run the BUILDER query, not the `select 1 as value` placeholder.
+    expect(calls.at(-1).mode).toBe('builder');
+    expect(calls.at(-1)).not.toHaveProperty('sql');
+  });
+
   // NOTE: a dedicated test for the "no measure" empty-panel text (see WidgetEditorDialog.tsx's
   // `builderHasNoMeasure`) is not included here. Rendering a builder query with an absent `metric`
   // (the documented no-measure shape from WidgetQuerySchema) crashes BuilderForm today: its `shown`
