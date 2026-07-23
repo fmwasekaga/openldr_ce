@@ -125,15 +125,16 @@ export function setMeasuresPatch(value: BuilderQuery, list: Measure[]): BuilderQ
 
 /** Append a "join column" ad-hoc dimension to the query. */
 export function addAdhocDimensionPatch(value: BuilderQuery, dim: AdhocDimension): BuilderQuery {
-  const list = [...((value.adhocDimensions as AdhocDimension[] | undefined) ?? []), dim];
-  return { ...value, adhocDimensions: list as BuilderQuery['adhocDimensions'] };
+  const list = [...(value.adhocDimensions ?? []), dim];
+  return { ...value, adhocDimensions: list };
 }
 
 /** Remove an ad-hoc dimension by key, dropping the field when empty and clearing any group-by/
  *  breakdown that referenced it (mirrors the derived-measure orphan cleanup in measures.model.ts). */
 export function removeAdhocDimensionPatch(value: BuilderQuery, key: string): BuilderQuery {
-  const list = ((value.adhocDimensions as AdhocDimension[] | undefined) ?? []).filter((d) => d.key !== key);
-  const next = { ...value, adhocDimensions: list as BuilderQuery['adhocDimensions'] };
+  const list = (value.adhocDimensions ?? []).filter((d) => d.key !== key);
+  const next = { ...value };
+  next.adhocDimensions = list;
   if (next.dimension?.key === key) next.dimension = undefined;
   if (next.breakdown?.key === key) next.breakdown = undefined;
   return next;

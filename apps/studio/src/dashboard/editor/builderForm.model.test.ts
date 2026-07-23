@@ -200,6 +200,13 @@ describe('adhoc dimension patches', () => {
     expect(next.dimension).toBeUndefined();       // orphan cleanup
   });
 
+  it('removes an adhoc dimension and clears any breakdown that referenced it', () => {
+    let q = addAdhocDimensionPatch(baseQ(), adhoc);
+    q = { ...q, breakdown: { key: 'jp__sex' } };
+    const next = removeAdhocDimensionPatch(q, 'jp__sex');
+    expect(next.breakdown).toBeUndefined();
+  });
+
   it('drops the adhocDimensions field when the list becomes empty', () => {
     const q = addAdhocDimensionPatch(baseQ(), adhoc);
     const next = removeAdhocDimensionPatch(q, 'jp__sex');
