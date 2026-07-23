@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Kysely, SqliteDialect } from 'kysely';
-import { compileBuilderQuery, collectUsedJoins, effectiveModel } from './compile';
+import { compileBuilderQuery, collectUsedJoins, effectiveModel, runBuilderQuery } from './compile';
 import { getModel } from './models/registry';
 
 // A dummy Kysely instance just for .compile() — no real DB.
@@ -331,7 +331,7 @@ describe('effectiveModel', () => {
     const em = effectiveModel(SR(), q({
       adhocDimensions: [{ key: 'jp__sex', label: 'Patient Sex', join: 'jp', column: 'sex', kind: 'string' }],
     }) as any);
-    expect(em.dimensions.find((d) => d.key === 'jp__sex')).toMatchObject({ column: 'sex', join: 'jp' });
+    expect(em.dimensions.find((d) => d.key === 'jp__sex')).toMatchObject({ column: 'sex', join: 'jp', kind: 'string' });
   });
 
   it('is a no-op (same reference) when there are no adhoc dimensions', () => {
@@ -361,5 +361,20 @@ describe('compileBuilderQuery with an adhoc join column', () => {
     const sql = compileBuilderQuery(db, getModel('service_requests')!, built as any).compile().sql;
     expect(sql).toMatch(/left join .*patients/i);
     expect(sql).toMatch(/jp"?\."?sex/i);
+  });
+
+  it('runBuilderQuery rejects a denied adhoc column (guard runs on the run path)', async () => {
+    await expect(runBuilderQuery(db, getModel('service_requests')!, q({
+      adhocDimensions: [{ key: 'x', label: 'X', join: 'jp', column: 'surname', kind: 'string' }],
+    }) as any)).rejects.toThrow(/column/i);
+  });
+
+  it('adds the LEFT JOIN when the adhoc column is used as a breakdown', () => {
+    const sql = compileBuilderQuery(db, getModel('service_requests')!, q({
+      adhocDimensions: [{ key: 'jp__sex', label: 'Patient Sex', join: 'jp', column: 'sex', kind: 'string' }],
+      dimension: { key: 'authored_on' },
+      breakdown: { key: 'jp__sex' },
+    }) as any).compile().sql;
+    expect(sql).toMatch(/left join .*patients/i);
   });
 });

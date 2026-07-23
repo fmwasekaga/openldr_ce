@@ -180,8 +180,11 @@ export function effectiveModel(model: QueryModel, q: BuilderQuery): QueryModel {
     if (!exposableColumns(model, a.join).includes(a.column)) {
       throw new Error(`adhoc dimension ${a.key}: column not exposable: ${a.column}`);
     }
-    if (existing.has(a.key)) continue; // idempotent: safe to call on an already-merged model
+    // idempotent: safe to call on an already-merged model. A collision with a REAL model dimension key
+    // is also intentionally skipped — the trusted base dimension wins (fail-safe; an adhoc dim can never shadow it).
+    if (existing.has(a.key)) continue;
     extra.push({ key: a.key, label: a.label, column: a.column, kind: a.kind, join: a.join });
+    existing.add(a.key);
   }
   return extra.length ? { ...model, dimensions: [...model.dimensions, ...extra] } : model;
 }
