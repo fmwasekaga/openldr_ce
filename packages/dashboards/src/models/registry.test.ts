@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { listModels, getModel, exposableColumns, modelsForClient, type QueryModel } from './registry';
+import { listModels, getModel, exposableColumns, modelsForClient, type QueryModel, JOINABLE_TABLES, joinableColumns, getJoinableTable, joinableTablesForClient } from './registry';
 
 describe('model registry', () => {
   it('exposes service_requests with count metric and date dimension', () => {
@@ -144,5 +144,36 @@ describe('modelsForClient', () => {
     const oj = m.optionalJoins!.find((x) => x.alias === 'jp')!;
     expect(oj.left).toBe('patient_id');
     expect(oj.right).toBe('id');
+  });
+});
+
+describe('joinable tables (arbitrary joins)', () => {
+  it('joinableColumns applies a denylist policy (all-minus-deny)', () => {
+    const patients = getJoinableTable('patients')!;
+    const cols = joinableColumns(patients);
+    expect(cols).toContain('sex');
+    expect(cols).not.toContain('national_id'); // PII denied
+    expect(cols).not.toContain('surname');
+  });
+
+  it('joinableColumns returns [] when a table has no policy (fail-safe closed)', () => {
+    expect(joinableColumns({ table: 'patients', label: 'x' } as any)).toEqual([]);
+  });
+
+  it('joinableColumns applies an allowlist policy', () => {
+    expect(joinableColumns({ table: 'facilities', label: 'F', columns: ['facility_name'] } as any)).toEqual(['facility_name']);
+  });
+
+  it('joinableTablesForClient ships policy-filtered columns + PKs + allColumns, never the raw denylist', () => {
+    const p = joinableTablesForClient().find((t) => t.table === 'patients')!;
+    expect(p.columns).not.toContain('national_id');
+    expect(p.primaryKeys).toEqual(['id']);
+    expect(p.allColumns).toContain('national_id'); // allColumns = every real column, for key pickers
+    expect((p as any).denyColumns).toBeUndefined();
+  });
+
+  it('modelsForClient includes the base table columns for the left-key picker', () => {
+    const m = modelsForClient().find((x) => x.id === 'service_requests')!;
+    expect(m.tableColumns).toContain('patient_id');
   });
 });
