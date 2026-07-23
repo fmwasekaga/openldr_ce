@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { listModels, getModel, exposableColumns, type QueryModel } from './registry';
+import { listModels, getModel, exposableColumns, modelsForClient, type QueryModel } from './registry';
 
 describe('model registry', () => {
   it('exposes service_requests with count metric and date dimension', () => {
@@ -79,5 +79,29 @@ describe('exposableColumns', () => {
 
   it('returns [] for an unknown alias', () => {
     expect(exposableColumns(MODEL_WITH_OPTIONAL, 'nope')).toEqual([]);
+  });
+});
+
+describe('service_requests demo optional join', () => {
+  it('declares an optional patients join with a PII denylist', () => {
+    const j = (getModel('service_requests')!.joins ?? []).find((x) => x.alias === 'jp');
+    expect(j?.optional).toBe(true);
+    expect(j?.denyColumns).toEqual(expect.arrayContaining(['surname', 'firstname', 'national_id']));
+  });
+});
+
+describe('modelsForClient', () => {
+  it('projects optional joins to {alias,label,exposableColumns} and omits raw joins/denyColumns', () => {
+    const m = modelsForClient().find((x) => x.id === 'service_requests')!;
+    expect((m as unknown as Record<string, unknown>).joins).toBeUndefined();
+    const oj = m.optionalJoins!.find((x) => x.alias === 'jp')!;
+    expect(oj.label).toBe('Patient');
+    expect(oj.exposableColumns).toContain('managing_organization');
+    expect(oj.exposableColumns).not.toContain('surname'); // denied names never reach the client
+  });
+
+  it('omits optionalJoins for models without optional joins', () => {
+    const m = modelsForClient().find((x) => x.id === 'diagnostic_reports')!;
+    expect(m.optionalJoins).toBeUndefined();
   });
 });

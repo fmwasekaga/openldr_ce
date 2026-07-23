@@ -27,6 +27,11 @@ const COUNT: ModelMetric = { key: 'count', label: 'Count', agg: 'count' };
 export const MODELS: QueryModel[] = [
   {
     id: 'service_requests', label: 'Test Orders', table: 'lab_requests',
+    joins: [
+      { table: 'patients', alias: 'jp', left: 'patient_id', right: 'id', optional: true, label: 'Patient',
+        denyColumns: ['id', 'patient_guid', 'surname', 'firstname', 'national_id', 'phone', 'email', 'date_of_birth',
+                      'replaced_by_id', 'plugin_id', 'plugin_version', 'batch_id'] },
+    ],
     dimensions: [
       { key: 'status', label: 'Status', column: 'status', kind: 'string' },
       { key: 'priority', label: 'Priority', column: 'priority', kind: 'string' },
@@ -103,4 +108,29 @@ export function exposableColumns(model: QueryModel, alias: string): string[] {
   if (!j || !j.optional || !j.denyColumns?.length) return [];
   const deny = new Set(j.denyColumns);
   return EXTERNAL_TABLE_COLUMNS[j.table].filter((c) => !deny.has(c));
+}
+
+export interface ClientOptionalJoin { alias: string; label: string; exposableColumns: string[] }
+export interface ClientQueryModel {
+  id: string; label: string; table: keyof ExternalSchema;
+  dimensions: ModelDimension[]; metrics: ModelMetric[];
+  optionalJoins?: ClientOptionalJoin[];
+}
+
+/**
+ * Model list shaped for the browser. Raw `joins`/`denyColumns` are dropped; each usable optional
+ * join becomes `{ alias, label, exposableColumns }` where the columns are already denylist-filtered,
+ * so denied PII column names never travel to the client. A join whose `exposableColumns` is empty
+ * (fail-safe: no denylist declared) is omitted entirely.
+ */
+export function modelsForClient(): ClientQueryModel[] {
+  return MODELS.map((m) => {
+    const optionalJoins = (m.joins ?? [])
+      .filter((j) => j.optional)
+      .map((j) => ({ alias: j.alias, label: j.label ?? String(j.table), exposableColumns: exposableColumns(m, j.alias) }))
+      .filter((oj) => oj.exposableColumns.length > 0);
+    const { id, label, table, dimensions, metrics } = m;
+    return optionalJoins.length ? { id, label, table, dimensions, metrics, optionalJoins }
+                                : { id, label, table, dimensions, metrics };
+  });
 }
