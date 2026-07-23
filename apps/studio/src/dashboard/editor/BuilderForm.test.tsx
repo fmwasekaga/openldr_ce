@@ -94,6 +94,21 @@ describe('BuilderForm Add menu + join column', () => {
     expect(screen.getByText(/join column/i)).toBeInTheDocument();
   });
 
+  it('the Join columns card × clears ALL join columns, not just the last', () => {
+    const onChange = vi.fn();
+    const value = {
+      mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count', label: 'Count' }, filters: [],
+      adhocDimensions: [
+        { key: 'jp__sex', label: 'Patient Sex', join: 'jp', column: 'sex', kind: 'string' },
+        { key: 'jp__managing_organization', label: 'Patient Org', join: 'jp', column: 'managing_organization', kind: 'string' },
+      ],
+    } as never;
+    render(<BuilderForm models={modelsWithJoin} value={value} onChange={onChange} />);
+    fireEvent.click(screen.getByRole('button', { name: /remove join columns/i }));
+    const last = onChange.mock.calls.at(-1)![0];
+    expect(last.adhocDimensions ?? []).toHaveLength(0);
+  });
+
   it('lists an added adhoc dimension as a Filter field option', () => {
     const value = {
       mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count', label: 'Count' },

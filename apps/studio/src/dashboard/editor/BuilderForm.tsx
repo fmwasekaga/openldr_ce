@@ -144,9 +144,8 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
       {shown.has('groupby') && (
         <SectionCard label="Group by" onRemove={() => removeSection('groupby')}>
           <label className="text-sm">
-            Group by
             <Select value={value.dimension?.key ?? NONE} onValueChange={(key) => onChange(setDimensionPatch(value, key === NONE ? '' : key))}>
-              <SelectTrigger aria-label="Group by" className="mt-1 w-full">
+              <SelectTrigger aria-label="Group by" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -183,9 +182,8 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
       {shown.has('breakdown') && (
         <SectionCard label="Breakdown" onRemove={() => removeSection('breakdown')}>
           <label className="text-sm">
-            Breakdown
             <Select value={value.breakdown?.key ?? NONE} onValueChange={(key) => onChange(setBreakdownPatch(value, key === NONE ? '' : key))}>
-              <SelectTrigger aria-label="Breakdown" className="mt-1 w-full">
+              <SelectTrigger aria-label="Breakdown" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -220,7 +218,7 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
       )}
 
       {adhoc.length > 0 && (
-        <SectionCard label="Join columns" onRemove={() => adhoc.forEach((a) => onChange(removeAdhocDimensionPatch(value, a.key)))}>
+        <SectionCard label="Join columns" onRemove={() => onChange(adhoc.reduce((q, a) => removeAdhocDimensionPatch(q, a.key), value))}>
           <div className="flex flex-wrap gap-1">
             {adhoc.map((a) => (
               <span key={a.key} className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs">

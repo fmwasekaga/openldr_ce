@@ -499,7 +499,7 @@ export function WidgetEditorDialog({
               )}
               <div className="min-h-0 flex-1 overflow-auto">
                 {mode === 'builder' ? (
-                  <BuilderForm models={models} value={builderQuery} dashboardFilters={dashboardFilters} onChange={setBuilderQuery} />
+                  <BuilderForm key={builderQuery.model} models={models} value={builderQuery} dashboardFilters={dashboardFilters} onChange={setBuilderQuery} />
                 ) : (
                   <>
                     {ejectedFromBuilder && (
