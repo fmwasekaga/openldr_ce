@@ -16,7 +16,7 @@ import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore, createUserProfileStore, type UserProfileStore } from '@openldr/users';
 import { createFormStore, type FormStore } from '@openldr/forms';
 import { getEventSource, eventSourceCatalog, toCsv, type ReportResult, type ReportSummary, type ReportParamMeta, type ReportMetricMeta } from '@openldr/reporting';
-import { createDashboardStore, getModel, listModels, runBuilderQuery, runSqlQuery, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, seedDefaultDashboard, runStoredQuery, compileBuilderQuery, formatSql, type DashboardStore, type WidgetQuery, type RunStoredQueryDeps } from '@openldr/dashboards';
+import { createDashboardStore, getModel, runBuilderQuery, runSqlQuery, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, seedDefaultDashboard, runStoredQuery, compileBuilderQuery, formatSql, modelsForClient, type DashboardStore, type WidgetQuery, type RunStoredQueryDeps, type ClientQueryModel } from '@openldr/dashboards';
 import { createReportDesignStore, renderReportDesignPdf, resolveDesignTables, type ReportDesignStore } from '@openldr/report-designer';
 import {
   createWorkflowStore, type WorkflowStore,
@@ -92,7 +92,7 @@ export class DashboardQueryError extends Error {
 
 export interface DashboardsApi {
   store: DashboardStore;
-  models(): ReturnType<typeof listModels>;
+  models(): ClientQueryModel[];
   query(q: WidgetQuery): Promise<ReportResult>;
   /** Builder→SQL eject: compile a builder-mode query to its SQL text (parameters inlined as
    *  readable literals). Display-only — the returned text is never executed. */
@@ -503,7 +503,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     const { sql: compiledSql, parameters } = compileBuilderQuery(reportingDb, model, q).compile();
     return formatSql(compiledSql, parameters);
   };
-  const dashboards: DashboardsApi = { store: dashboardStore, models: () => listModels(), query: runDashboardQuery, compileSql: compileDashboardSql };
+  const dashboards: DashboardsApi = { store: dashboardStore, models: () => modelsForClient(), query: runDashboardQuery, compileSql: compileDashboardSql };
   const workflowStore = createWorkflowStore(internal.db);
   const workflowRuns = createWorkflowRunStore(internal.db);
   const workflowSchedules = createWorkflowScheduleStore(internal.db);

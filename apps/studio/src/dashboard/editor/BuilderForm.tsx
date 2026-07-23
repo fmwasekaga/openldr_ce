@@ -1,8 +1,11 @@
+import { useState } from 'react';
 import type { DashboardFilterDef, QueryModel } from '../../api';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { FilterTreeEditor } from './FilterTreeEditor';
 import { MeasuresEditor } from './MeasuresEditor';
+import { JoinColumnPicker } from './JoinColumnPicker';
 import { emptyTree, filtersToTree } from './conditionTree.model';
 import {
   setModelPatch,
@@ -13,6 +16,8 @@ import {
   setLimitPatch,
   measuresOf,
   setMeasuresPatch,
+  addAdhocDimensionPatch,
+  removeAdhocDimensionPatch,
   type BuilderQuery,
 } from './builderForm.model';
 
@@ -25,6 +30,11 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
 }) {
   const model = models.find((m) => m.id === value.model) ?? models[0];
   const dim = model?.dimensions.find((d) => d.key === value.dimension?.key);
+
+  const adhoc = value.adhocDimensions ?? [];
+  const dimOptions = [...(model?.dimensions ?? []), ...adhoc.map((a) => ({ key: a.key, label: a.label, kind: a.kind }))];
+  const [addOpen, setAddOpen] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
 
   return (
     <div className="flex flex-col gap-3 p-1">
@@ -70,7 +80,7 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={NONE}>(none)</SelectItem>
-            {model?.dimensions.map((d) => (
+            {dimOptions.map((d) => (
               <SelectItem key={d.key} value={d.key}>
                 {d.label}
               </SelectItem>
@@ -105,7 +115,7 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={NONE}>(none)</SelectItem>
-            {model?.dimensions.map((d) => (
+            {dimOptions.map((d) => (
               <SelectItem key={d.key} value={d.key}>
                 {d.label}
               </SelectItem>
@@ -129,6 +139,44 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
           <span className="mt-0.5 block text-[11px] text-muted-foreground">Top rows by the first measure, highest first.</span>
         </label>
       )}
+
+      {adhoc.length > 0 && (
+        <div className="text-sm">
+          Join columns
+          <div className="mt-1 flex flex-wrap gap-1">
+            {adhoc.map((a) => (
+              <span key={a.key} className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs">
+                {a.label}
+                <button type="button" aria-label={`Remove ${a.label}`} onClick={() => onChange(removeAdhocDimensionPatch(value, a.key))}>×</button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="border-t pt-2">
+        {!showPicker && (
+          <>
+            <Button size="sm" variant="outline" aria-label="Add clause" onClick={() => setAddOpen((o) => !o)}>＋ Add</Button>
+            {addOpen && (
+              <div className="mt-1 flex flex-col items-start">
+                {model?.optionalJoins?.length
+                  ? <button type="button" className="text-sm" onClick={() => { setShowPicker(true); setAddOpen(false); }}>Join column</button>
+                  : <span className="text-xs text-muted-foreground">No optional joins</span>}
+              </div>
+            )}
+          </>
+        )}
+        {showPicker && model?.optionalJoins && (
+          <div className="mt-2">
+            <JoinColumnPicker
+              optionalJoins={model.optionalJoins}
+              onAdd={(dim) => { onChange(addAdhocDimensionPatch(value, dim)); setShowPicker(false); }}
+              onCancel={() => setShowPicker(false)}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

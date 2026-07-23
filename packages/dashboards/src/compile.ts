@@ -1,6 +1,7 @@
 import { type Kysely, sql, expressionBuilder, type SelectQueryBuilder } from 'kysely';
 import type { ExternalSchema } from '@openldr/db';
 import type { QueryModel, ModelDimension, ModelJoin } from './models/registry';
+import { exposableColumns } from './models/registry';
 import type { WidgetQuery, Metric, QueryFilter, DateGrain, ConditionNode, ConditionRule } from './types';
 import type { ReportResultData, ReportColumn, ChartHint } from '@openldr/reporting';
 import { ageBandArms } from './age-band';
@@ -161,6 +162,33 @@ function ageBandExprs(d: ModelDimension, reference?: string) {
   return { label, rank };
 }
 
+/**
+ * Fold a query's ad-hoc join columns into the model as real dimensions, so the rest of the compiler
+ * (dim/colName/collectUsedJoins → leftJoin) treats them like any joined dimension. Validates each
+ * ad-hoc dim against the optional-join + denylist rules — this is the server-side guard that stops a
+ * hand-edited widget JSON from exposing a denied or foreign column. No-op (returns the same model)
+ * when the query has no ad-hoc dimensions.
+ */
+export function effectiveModel(model: QueryModel, q: BuilderQuery): QueryModel {
+  const adhoc = q.adhocDimensions ?? [];
+  if (adhoc.length === 0) return model;
+  const existing = new Set(model.dimensions.map((d) => d.key));
+  const extra: ModelDimension[] = [];
+  for (const a of adhoc) {
+    const j = (model.joins ?? []).find((x) => x.alias === a.join);
+    if (!j || !j.optional) throw new Error(`adhoc dimension ${a.key}: unknown or non-optional join: ${a.join}`);
+    if (!exposableColumns(model, a.join).includes(a.column)) {
+      throw new Error(`adhoc dimension ${a.key}: column not exposable: ${a.column}`);
+    }
+    // idempotent: safe to call on an already-merged model. A collision with a REAL model dimension key
+    // is also intentionally skipped — the trusted base dimension wins (fail-safe; an adhoc dim can never shadow it).
+    if (existing.has(a.key)) continue;
+    extra.push({ key: a.key, label: a.label, column: a.column, kind: a.kind, join: a.join });
+    existing.add(a.key);
+  }
+  return extra.length ? { ...model, dimensions: [...model.dimensions, ...extra] } : model;
+}
+
 // Distinct joins referenced by any dimension the query uses (dimension/breakdown/filters/filterTree/metric-where).
 export function collectUsedJoins(model: QueryModel, q: BuilderQuery): ModelJoin[] {
   const aliases = new Set<string>();
@@ -180,6 +208,7 @@ export function collectUsedJoins(model: QueryModel, q: BuilderQuery): ModelJoin[
 
 /** Build the Kysely query (no grain bucketing — date grain is applied in JS after fetch). */
 export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery): AnyQB {
+  model = effectiveModel(model, q);
   const wide = !!(q.metrics && q.metrics.length > 0);
   let qb = db.selectFrom(model.table) as unknown as AnyQB;
   const usedJoins = collectUsedJoins(model, q);
@@ -268,6 +297,7 @@ function applyTopN(
 async function runWideQuery(
   db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery,
 ): Promise<ReportResultData> {
+  model = effectiveModel(model, q);
   const metrics = q.metrics!;
   const aggKeys = metrics.filter((m) => !m.derived).map((m) => m.key);
   const derivedMetrics = metrics.filter((m) => m.derived);
@@ -318,6 +348,7 @@ async function runWideQuery(
 export async function runBuilderQuery(
   db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery,
 ): Promise<ReportResultData> {
+  model = effectiveModel(model, q);
   if (q.metrics && q.metrics.length > 0) return runWideQuery(db, model, q);
   const rows = (await compileBuilderQuery(db, model, q).execute()) as { value: number; label?: unknown; series?: unknown }[];
   const d = q.dimension ? dim(model, q.dimension.key) : undefined;

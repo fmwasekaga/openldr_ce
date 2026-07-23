@@ -153,3 +153,28 @@ describe('optional limit (top-N)', () => {
     expect(q.mode === 'builder' && q.limit).toBeUndefined();
   });
 });
+
+describe('builder adhocDimensions', () => {
+  const base = { mode: 'builder' as const, model: 'service_requests', metric: { key: 'count', agg: 'count' as const }, filters: [] };
+
+  it('accepts a well-formed adhoc dimension', () => {
+    const parsed = WidgetQuerySchema.parse({
+      ...base,
+      adhocDimensions: [{ key: 'jp__sex', label: 'Patient Sex', join: 'jp', column: 'sex', kind: 'string' }],
+    });
+    expect(parsed.mode).toBe('builder');
+    if (parsed.mode === 'builder') expect(parsed.adhocDimensions?.[0].column).toBe('sex');
+  });
+
+  it('rejects an adhoc dimension with an invalid kind', () => {
+    expect(() => WidgetQuerySchema.parse({
+      ...base,
+      adhocDimensions: [{ key: 'x', label: 'X', join: 'jp', column: 'sex', kind: 'boolean' }],
+    })).toThrow();
+  });
+
+  it('omits the field cleanly when absent', () => {
+    const parsed = WidgetQuerySchema.parse(base);
+    if (parsed.mode === 'builder') expect(parsed.adhocDimensions).toBeUndefined();
+  });
+});

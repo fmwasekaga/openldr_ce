@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { BuilderForm } from './BuilderForm';
 import type { QueryModel, WidgetQuery } from '../../api';
 
@@ -71,5 +71,35 @@ describe('BuilderForm', () => {
     const legacy = { ...base, filters: [{ dimension: 'status', op: 'eq', value: 'F' }] } as Extract<WidgetQuery, { mode: 'builder' }>;
     const { getAllByLabelText } = render(<BuilderForm models={models} value={legacy} onChange={vi.fn()} />);
     expect(getAllByLabelText('Filter field').length).toBe(1);
+  });
+});
+
+const modelsWithJoin = [{
+  id: 'service_requests', label: 'Test Orders',
+  dimensions: [{ key: 'status', label: 'Status', column: 'status', kind: 'string' }],
+  metrics: [{ key: 'count', label: 'Count', agg: 'count' }],
+  optionalJoins: [{ alias: 'jp', label: 'Patient', exposableColumns: ['sex', 'managing_organization'] }],
+}] as never;
+const builderValue = { mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count', label: 'Count' }, filters: [] } as never;
+
+describe('BuilderForm Add menu + join column', () => {
+  it('offers "Join column" in the Add menu when the model has optional joins', () => {
+    render(<BuilderForm models={modelsWithJoin} value={builderValue} onChange={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: /add clause/i }));
+    expect(screen.getByText(/join column/i)).toBeInTheDocument();
+  });
+
+  it('adds an adhoc dimension through the picker and emits it on change', () => {
+    const onChange = vi.fn();
+    render(<BuilderForm models={modelsWithJoin} value={builderValue} onChange={onChange} />);
+    fireEvent.click(screen.getByRole('button', { name: /add clause/i }));
+    fireEvent.click(screen.getByText(/join column/i));
+    // choose column 'sex' via the real Radix Select (Column has aria-label="Column" inside JoinColumnPicker):
+    fireEvent.click(screen.getByLabelText('Column'));
+    fireEvent.click(screen.getByRole('option', { name: 'sex' }));
+    fireEvent.click(screen.getByRole('button', { name: /add column/i }));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+      adhocDimensions: [expect.objectContaining({ key: 'jp__sex', column: 'sex' })],
+    }));
   });
 });

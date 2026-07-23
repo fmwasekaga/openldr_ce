@@ -55,6 +55,17 @@ export type Metric = z.infer<typeof MetricSchema>;
 export const DimensionRefSchema = z.object({ key: z.string(), grain: z.enum(['day', 'week', 'month', 'year']).optional(), reference: z.string().optional() });
 export type DimensionRef = z.infer<typeof DimensionRefSchema>;
 
+// A user-authored dimension backed by a column from an OPTIONAL join (the "join column" escape hatch).
+// `key` is a query-local identifier; group-by/breakdown/filter reference it like any dimension key.
+export const AdhocDimensionSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  join: z.string(),
+  column: z.string(),
+  kind: z.enum(['string', 'date', 'number']),
+});
+export type AdhocDimension = z.infer<typeof AdhocDimensionSchema>;
+
 export const WidgetVariableDefSchema = z.object({
   type: z.enum(['text', 'number', 'date', 'date-range']),
   label: z.string(),
@@ -75,6 +86,7 @@ export const WidgetQuerySchema = z.discriminatedUnion('mode', [
     breakdown: z.object({ key: z.string() }).optional(),
     filters: z.array(QueryFilterSchema).default([]),
     filterTree: ConditionGroupSchema.optional(), // recursive AND/OR tree; supersedes `filters` when present
+    adhocDimensions: z.array(AdhocDimensionSchema).optional(), // "join column" escape-hatch dimensions
     limit: z.number().int().positive().optional(), // top-N of the shaped result, by primary measure desc
     variableBindings: z.record(z.string()).optional(),
   }),

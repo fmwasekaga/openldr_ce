@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import Fastify from 'fastify';
+import { modelsForClient } from '@openldr/dashboards';
 import { registerDashboardRoutes } from './dashboards-routes';
 import './auth-plugin';
 
@@ -16,7 +17,7 @@ function fakeCtx(cfg: { DASHBOARD_SQL_ENABLED?: boolean } = {}) {
         update: async (_id: string, d: any) => d,
         remove: async (id: string) => { const i = data.findIndex((x) => x.id === id); if (i >= 0) data.splice(i, 1); },
       },
-      models: () => [{ id: 'service_requests', label: 'Test Orders', dimensions: [], metrics: [] }],
+      models: () => modelsForClient(),
       query: async (q: any) => {
         if (q.mode === 'sql') { const e: any = new Error('raw SQL widgets are disabled'); e.name = 'DashboardQueryError'; throw e; }
         return { columns: [], rows: [], chart: { type: 'stat', value: '0', label: 'x' }, meta: { generatedAt: 'now', rowCount: 0 } };
@@ -49,6 +50,18 @@ describe('dashboard routes', () => {
     const res = await app.inject({ method: 'GET', url: '/api/dashboards/models' });
     expect(res.statusCode).toBe(200);
     expect(res.json()[0].id).toBe('service_requests');
+  });
+  it('GET /api/dashboards/models returns optionalJoins with denylist-filtered columns and no raw joins', async () => {
+    const app = appWith(fakeCtx());
+    const res = await app.inject({ method: 'GET', url: '/api/dashboards/models' });
+    expect(res.statusCode).toBe(200);
+    const models = res.json() as Array<Record<string, any>>;
+    const sr = models.find((m) => m.id === 'service_requests')!;
+    expect(sr.joins).toBeUndefined();
+    const jp = sr.optionalJoins.find((j: any) => j.alias === 'jp');
+    expect(jp.label).toBe('Patient');
+    expect(jp.exposableColumns).toContain('managing_organization');
+    expect(jp.exposableColumns).not.toContain('surname');
   });
   it('runs a builder query', async () => {
     const app = appWith(fakeCtx());

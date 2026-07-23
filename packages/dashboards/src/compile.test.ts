@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Kysely, SqliteDialect } from 'kysely';
-import { compileBuilderQuery, collectUsedJoins } from './compile';
+import { compileBuilderQuery, collectUsedJoins, effectiveModel, runBuilderQuery } from './compile';
 import { getModel } from './models/registry';
 
 // A dummy Kysely instance just for .compile() — no real DB.
@@ -317,5 +317,64 @@ describe('compileBuilderQuery cross-model join (facility)', () => {
     expect(sql).not.toMatch(/left join/i);
     expect(sql).toMatch(/group by "observation_desc"/i);
     expect(sql).not.toMatch(/"lab_results"\."observation_desc"/i);
+  });
+});
+
+const SR = () => getModel('service_requests')!;
+const q = (over: Record<string, unknown>) => ({
+  mode: 'builder' as const, model: 'service_requests',
+  metric: { key: 'count', agg: 'count' as const }, filters: [], ...over,
+});
+
+describe('effectiveModel', () => {
+  it('merges a valid adhoc dimension into the model dimensions', () => {
+    const em = effectiveModel(SR(), q({
+      adhocDimensions: [{ key: 'jp__sex', label: 'Patient Sex', join: 'jp', column: 'sex', kind: 'string' }],
+    }) as any);
+    expect(em.dimensions.find((d) => d.key === 'jp__sex')).toMatchObject({ column: 'sex', join: 'jp', kind: 'string' });
+  });
+
+  it('is a no-op (same reference) when there are no adhoc dimensions', () => {
+    const m = SR();
+    expect(effectiveModel(m, q({}) as any)).toBe(m);
+  });
+
+  it('rejects an adhoc dimension on a non-optional / unknown join', () => {
+    expect(() => effectiveModel(SR(), q({
+      adhocDimensions: [{ key: 'x', label: 'X', join: 'nope', column: 'sex', kind: 'string' }],
+    }) as any)).toThrow(/join/i);
+  });
+
+  it('rejects an adhoc dimension whose column is denied or not exposable', () => {
+    expect(() => effectiveModel(SR(), q({
+      adhocDimensions: [{ key: 'x', label: 'X', join: 'jp', column: 'surname', kind: 'string' }],
+    }) as any)).toThrow(/column/i);
+  });
+});
+
+describe('compileBuilderQuery with an adhoc join column', () => {
+  it('adds the LEFT JOIN and groups by the joined column', () => {
+    const built = q({
+      adhocDimensions: [{ key: 'jp__sex', label: 'Patient Sex', join: 'jp', column: 'sex', kind: 'string' }],
+      dimension: { key: 'jp__sex' },
+    });
+    const sql = compileBuilderQuery(db, getModel('service_requests')!, built as any).compile().sql;
+    expect(sql).toMatch(/left join .*patients/i);
+    expect(sql).toMatch(/jp"?\."?sex/i);
+  });
+
+  it('runBuilderQuery rejects a denied adhoc column (guard runs on the run path)', async () => {
+    await expect(runBuilderQuery(db, getModel('service_requests')!, q({
+      adhocDimensions: [{ key: 'x', label: 'X', join: 'jp', column: 'surname', kind: 'string' }],
+    }) as any)).rejects.toThrow(/column/i);
+  });
+
+  it('adds the LEFT JOIN when the adhoc column is used as a breakdown', () => {
+    const sql = compileBuilderQuery(db, getModel('service_requests')!, q({
+      adhocDimensions: [{ key: 'jp__sex', label: 'Patient Sex', join: 'jp', column: 'sex', kind: 'string' }],
+      dimension: { key: 'authored_on' },
+      breakdown: { key: 'jp__sex' },
+    }) as any).compile().sql;
+    expect(sql).toMatch(/left join .*patients/i);
   });
 });

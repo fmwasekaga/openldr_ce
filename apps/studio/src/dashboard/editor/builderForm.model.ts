@@ -8,6 +8,8 @@ import { toBuilderMetrics, type Measure } from './measures.model';
 
 export type BuilderQuery = Extract<WidgetQuery, { mode: 'builder' }>;
 
+export type AdhocDimension = { key: string; label: string; join: string; column: string; kind: 'string' | 'date' | 'number' };
+
 /**
  * Switch the source model. Resets everything scoped to the previous model's shape (metric,
  * extra metrics, group-by dimension, breakdown, and both filter forms) since dimension/metric
@@ -25,6 +27,7 @@ export function setModelPatch(models: QueryModel[], value: BuilderQuery, id: str
     breakdown: undefined,
     filters: [],
     filterTree: undefined,
+    adhocDimensions: undefined,
   };
 }
 
@@ -117,5 +120,23 @@ export function setMeasuresPatch(value: BuilderQuery, list: Measure[]): BuilderQ
   const next = { ...value, metric: metric as BuilderQuery['metric'] };
   if (metrics) next.metrics = metrics as BuilderQuery['metrics'];
   else delete next.metrics;
+  return next;
+}
+
+/** Append a "join column" ad-hoc dimension to the query. */
+export function addAdhocDimensionPatch(value: BuilderQuery, dim: AdhocDimension): BuilderQuery {
+  const list = value.adhocDimensions ?? [];
+  if (list.some((d) => d.key === dim.key)) return value; // already added — no duplicate
+  return { ...value, adhocDimensions: [...list, dim] };
+}
+
+/** Remove an ad-hoc dimension by key, dropping the field when empty and clearing any group-by/
+ *  breakdown that referenced it (mirrors the derived-measure orphan cleanup in measures.model.ts). */
+export function removeAdhocDimensionPatch(value: BuilderQuery, key: string): BuilderQuery {
+  const list = (value.adhocDimensions ?? []).filter((d) => d.key !== key);
+  const next = { ...value };
+  next.adhocDimensions = list;
+  if (next.dimension?.key === key) next.dimension = undefined;
+  if (next.breakdown?.key === key) next.breakdown = undefined;
   return next;
 }

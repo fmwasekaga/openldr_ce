@@ -1,4 +1,7 @@
-import type { ExternalSchema } from '@openldr/db';
+// Import from the browser-safe `./schema/external` subpath, NOT the `@openldr/db` barrel: the barrel
+// re-exports internal-db.ts (which imports `pg`), and pulling a runtime VALUE like EXTERNAL_TABLE_COLUMNS
+// through it drags `pg` into the studio browser bundle (crashes with "Buffer is not defined").
+import { type ExternalSchema, EXTERNAL_TABLE_COLUMNS } from '@openldr/db/schema/external';
 import type { Agg, DateGrain, DimensionKind } from '../types';
 
 export interface AgeBandCompute {
@@ -13,6 +16,9 @@ export interface ModelJoin {
   left: string;                   // base column: 'subject_ref'
   leftReplace?: [string, string]; // ['Patient/',''] → replace(base.left, 'Patient/', '')
   right: string;                  // joined column: 'id'
+  optional?: boolean;      // offered in the "+ Add → Join column" picker instead of firing via a default dimension
+  label?: string;          // display name for the join in the picker (defaults to the table name)
+  denyColumns?: string[];  // columns that may NOT be exposed; REQUIRED for an optional join to be usable (fail-safe)
 }
 export interface ModelDimension { key: string; label: string; column: string; kind: DimensionKind; dateGrain?: DateGrain[]; compute?: AgeBandCompute; join?: string }
 export interface ModelMetric { key: string; label: string; agg: Agg; column?: string }
@@ -24,6 +30,11 @@ const COUNT: ModelMetric = { key: 'count', label: 'Count', agg: 'count' };
 export const MODELS: QueryModel[] = [
   {
     id: 'service_requests', label: 'Test Orders', table: 'lab_requests',
+    joins: [
+      { table: 'patients', alias: 'jp', left: 'patient_id', right: 'id', optional: true, label: 'Patient',
+        denyColumns: ['id', 'patient_guid', 'surname', 'firstname', 'national_id', 'phone', 'email', 'date_of_birth',
+                      'replaced_by_id', 'plugin_id', 'plugin_version', 'batch_id'] },
+    ],
     dimensions: [
       { key: 'status', label: 'Status', column: 'status', kind: 'string' },
       { key: 'priority', label: 'Priority', column: 'priority', kind: 'string' },
@@ -87,3 +98,38 @@ export const MODELS: QueryModel[] = [
 
 export function listModels(): QueryModel[] { return MODELS; }
 export function getModel(id: string): QueryModel | undefined { return MODELS.find((m) => m.id === id); }
+
+/**
+ * Columns a power user may expose from an OPTIONAL join, i.e. the joined table's columns minus the
+ * join's `denyColumns`. Fail-safe: an optional join with an ABSENT OR EMPTY `denyColumns` exposes
+ * nothing (returns []) — both are "not configured" and therefore unavailable, so a newly added join
+ * never leaks columns until an admin declares its (non-empty) denylist.
+ * Non-optional / unknown aliases return [] — only optional joins are user-selectable.
+ */
+export function exposableColumns(model: QueryModel, alias: string): string[] {
+  const j = (model.joins ?? []).find((x) => x.alias === alias);
+  if (!j || !j.optional || !j.denyColumns?.length) return [];
+  const deny = new Set(j.denyColumns);
+  return EXTERNAL_TABLE_COLUMNS[j.table].filter((c) => !deny.has(c));
+}
+
+export interface ClientOptionalJoin { alias: string; label: string; exposableColumns: string[] }
+export type ClientQueryModel = Omit<QueryModel, 'joins'> & { optionalJoins?: ClientOptionalJoin[] };
+
+/**
+ * Model list shaped for the browser. Raw `joins`/`denyColumns` are dropped; each usable optional
+ * join becomes `{ alias, label, exposableColumns }` where the columns are already denylist-filtered,
+ * so denied PII column names never travel to the client. A join whose `exposableColumns` is empty
+ * (fail-safe: no denylist declared) is omitted entirely.
+ */
+export function modelsForClient(models: QueryModel[] = MODELS): ClientQueryModel[] {
+  return models.map((m) => {
+    const optionalJoins = (m.joins ?? [])
+      .filter((j) => j.optional)
+      .map((j) => ({ alias: j.alias, label: j.label ?? j.table, exposableColumns: exposableColumns(m, j.alias) }))
+      .filter((oj) => oj.exposableColumns.length > 0);
+    const { id, label, table, dimensions, metrics } = m;
+    return optionalJoins.length ? { id, label, table, dimensions, metrics, optionalJoins }
+                                : { id, label, table, dimensions, metrics };
+  });
+}
