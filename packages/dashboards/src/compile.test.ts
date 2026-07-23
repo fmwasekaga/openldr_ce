@@ -445,10 +445,35 @@ describe('custom columns (row-level computed dimension)', () => {
     const { sql } = compileBuilderQuery(db, model, {
       mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count' }, filters: [],
       customColumns: [{ key: 'ratio', label: 'Ratio', expr: { kind: 'arithmetic', op: '/',
-        left: { type: 'field', dimension: 'status' }, right: { type: 'number', value: 1000 } } }],
+        left: { type: 'number', value: 10 }, right: { type: 'number', value: 1000 } } }],
       dimension: { key: 'ratio' },
     } as any).compile();
     expect(sql).toMatch(/nullif\(/i);
+  });
+
+  it('rejects an arithmetic operand that is not a number field', () => {
+    const model = getModel('service_requests')!;
+    expect(() => compileBuilderQuery(db, model, {
+      mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count' }, filters: [],
+      customColumns: [{ key: 'x', label: 'x', expr: { kind: 'arithmetic', op: '-',
+        left: { type: 'field', dimension: 'status' }, right: { type: 'number', value: 1 } } }],
+      dimension: { key: 'x' },
+    } as any)).toThrow(/must be a number field/i);
+  });
+
+  it('compiles arithmetic over a numeric dimension', () => {
+    // Inline model with a numeric dimension (the registry currently has none).
+    const model = { id: 'nums', label: 'Nums', table: 'lab_results',
+      dimensions: [{ key: 'nv', label: 'Numeric Value', column: 'numeric_value', kind: 'number' }],
+      metrics: [{ key: 'count', label: 'Count', agg: 'count' }] } as any;
+    const { sql } = compileBuilderQuery(db, model, {
+      mode: 'builder', model: 'nums', metric: { key: 'count', agg: 'count' }, filters: [],
+      customColumns: [{ key: 'scaled', label: 'Scaled', expr: { kind: 'arithmetic', op: '/',
+        left: { type: 'field', dimension: 'nv' }, right: { type: 'number', value: 1000 } } }],
+      dimension: { key: 'scaled' },
+    } as any).compile();
+    expect(sql).toMatch(/nullif\(/i);
+    expect(sql).toMatch(/as "label"/i);
   });
 
   it('fires the join for a custom column whose operand references a joined dimension', () => {

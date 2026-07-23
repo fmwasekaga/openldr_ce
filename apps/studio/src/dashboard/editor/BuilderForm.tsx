@@ -82,8 +82,8 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
   const filterDimOptions = dimOptions.filter((d) => !customColumns.some((c) => c.key === d.key));
   // Operands may reference only plain (non-computed) dimensions: model dims (minus age-band) + ad-hoc.
   const operandDims = [
-    ...(model?.dimensions ?? []).filter((d) => !d.compute).map((d) => ({ key: d.key, label: d.label })),
-    ...adhoc.map((a) => ({ key: a.key, label: a.label })),
+    ...(model?.dimensions ?? []).filter((d) => !d.compute).map((d) => ({ key: d.key, label: d.label, kind: d.kind })),
+    ...adhoc.map((a) => ({ key: a.key, label: a.label, kind: a.kind })),
   ];
   const dim = dimOptions.find((d) => d.key === value.dimension?.key);
   const [showPicker, setShowPicker] = useState(false);

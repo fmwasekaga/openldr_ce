@@ -3,8 +3,9 @@ import { describe, it, expect, vi } from 'vitest';
 import { CustomColumnEditor } from './CustomColumnEditor';
 
 const dims = [
-  { key: 'status', label: 'Status' },
-  { key: 'priority', label: 'Priority' },
+  { key: 'status', label: 'Status', kind: 'string' as const },
+  { key: 'priority', label: 'Priority', kind: 'string' as const },
+  { key: 'nv', label: 'Numeric Value', kind: 'number' as const },
 ];
 
 describe('CustomColumnEditor', () => {
@@ -41,5 +42,15 @@ describe('CustomColumnEditor', () => {
     fireEvent.click(screen.getByLabelText('Operand field'));
     fireEvent.click(screen.getByRole('option', { name: 'Status' }));
     expect(screen.getByRole('button', { name: /add column/i })).toBeEnabled();
+  });
+
+  it('arithmetic operands offer only numeric fields', () => {
+    render(<CustomColumnEditor dims={dims} existing={[]} onAdd={() => {}} onCancel={() => {}} />);
+    fireEvent.click(screen.getByLabelText('Operation'));
+    fireEvent.click(screen.getByRole('option', { name: /arithmetic/i }));
+    // left operand defaults to type 'field'; open its field select (there are two "Operand field" selects — use the first)
+    fireEvent.click(screen.getAllByLabelText('Operand field')[0]);
+    expect(screen.getByRole('option', { name: 'Numeric Value' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Status' })).not.toBeInTheDocument();
   });
 });

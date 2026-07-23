@@ -239,6 +239,9 @@ export function effectiveModel(model: QueryModel, q: BuilderQuery): QueryModel {
         const ref = dims.find((d) => d.key === o.dimension);
         if (!ref) throw new Error(`custom column ${c.key}: unknown field ${o.dimension}`);
         if (ref.compute) throw new Error(`custom column ${c.key}: field ${o.dimension} is itself computed (not allowed)`);
+        if (c.expr.kind === 'arithmetic' && ref.kind !== 'number') {
+          throw new Error(`custom column ${c.key}: arithmetic operand ${o.dimension} must be a number field`);
+        }
       }
       if (keys.has(c.key)) continue; // trusted dimension wins / idempotent
       // `column: ''` is intentional — an expr-computed dim has no single backing column; its SQL comes
