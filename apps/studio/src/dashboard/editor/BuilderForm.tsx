@@ -4,6 +4,7 @@ import { Sigma, Filter, Rows3, Columns3, ArrowUpDown, Blend, Grid2x2Plus, type L
 import type { DashboardFilterDef, ModelDimension, QueryModel } from '../../api';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import { FilterTreeEditor } from './FilterTreeEditor';
 import { MeasuresEditor } from './MeasuresEditor';
 import { JoinDataPicker } from './JoinDataPicker';
@@ -247,28 +248,38 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
 
   // Icon-only actions directly under Data (Metabase-style): Join (when joinable) + Custom column.
   const dataActions: ReactNode = (
-    <div className="flex gap-1.5 px-1">
-      {model?.optionalJoins?.length ? (
-        <button
-          type="button"
-          aria-label="Join data"
-          title="Join data"
-          onClick={() => { setShowCustom(false); setShowPicker(true); }}
-          className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-card hover:bg-muted"
-        >
-          <Blend size={15} aria-hidden="true" />
-        </button>
-      ) : null}
-      <button
-        type="button"
-        aria-label="Custom column"
-        title="Custom column"
-        onClick={() => { setShowPicker(false); setShowCustom(true); }}
-        className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-card hover:bg-muted"
-      >
-        <Grid2x2Plus size={15} aria-hidden="true" />
-      </button>
-    </div>
+    <TooltipProvider>
+      <div className="flex gap-1.5 px-1">
+        {model?.optionalJoins?.length ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label="Join data"
+                onClick={() => { setShowCustom(false); setShowPicker(true); }}
+                className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-card hover:bg-muted"
+              >
+                <Blend size={15} aria-hidden="true" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Join data</TooltipContent>
+          </Tooltip>
+        ) : null}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              aria-label="Custom column"
+              onClick={() => { setShowPicker(false); setShowCustom(true); }}
+              className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-card hover:bg-muted"
+            >
+              <Grid2x2Plus size={15} aria-hidden="true" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>Custom column</TooltipContent>
+        </Tooltip>
+      </div>
+    </TooltipProvider>
   );
 
   // The inline JoinDataPicker / CustomColumnEditor, rendered right under the action buttons.

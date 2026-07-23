@@ -78,8 +78,8 @@ export function MeasuresEditor({ value, model, onChange }: {
           </div>
         );
       })}
-      <div className="flex gap-1">
-        <Button type="button" size="sm" variant="outline" className="h-7 flex-1" aria-label="Add measure" onClick={() => onChange(addMeasure(value, model ?? { metrics: [] }))}>
+      <div className="flex justify-end gap-1">
+        <Button type="button" size="sm" variant="outline" className="h-7" aria-label="Add measure" onClick={() => onChange(addMeasure(value, model ?? { metrics: [] }))}>
           <Plus className="mr-1 h-3 w-3" /> Add measure
         </Button>
         <Button type="button" size="sm" variant="outline" className="h-7" aria-label="Add formula" onClick={() => onChange(addFormula(value))}>
