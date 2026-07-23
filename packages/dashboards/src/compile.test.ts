@@ -519,6 +519,18 @@ describe('custom columns (row-level computed dimension)', () => {
     expect(sql).toMatch(/as "series"/i);
   });
 
+  it('compiles an arithmetic custom column over a registry numeric dimension', () => {
+    const model = getModel('observations')!;
+    const { sql } = compileBuilderQuery(db, model, {
+      mode: 'builder', model: 'observations', metric: { key: 'count', agg: 'count' }, filters: [],
+      customColumns: [{ key: 'scaled', label: 'Scaled', expr: { kind: 'arithmetic', op: '/',
+        left: { type: 'field', dimension: 'value' }, right: { type: 'number', value: 1000 } } }],
+      dimension: { key: 'scaled' },
+    } as any).compile();
+    expect(sql).toMatch(/nullif\(/i);
+    expect(sql).toMatch(/as "label"/i);
+  });
+
   it('refuses to use a custom column as a filter field', () => {
     const model = getModel('service_requests')!;
     expect(() => compileBuilderQuery(db, model, {

@@ -80,12 +80,12 @@ describe('recognizeSql — filters and corpus', () => {
   });
 
   it('recognizes 9 of the 13 seeded widgets, with expected refusal codes', () => {
-    // Still 9, not 10: relaxing multi_measure alone doesn't flip the corpus's sole
-    // multi-measure widget ("Analyte Volume vs Avg Value"). It now refuses on
-    // `not_null_unsupported` instead — its `WHERE numeric_value IS NOT NULL` sits on
-    // a measure column (numeric_value, inside AVG), not a dimension, and the builder
-    // has no faithful way to represent "not null" on a measure. Dropping that predicate
-    // would change COUNT(*) — an unfaithful eject round-trip — so the refusal is correct.
+    // IS NOT NULL is only faithfully droppable on the group-by column (the builder
+    // shows those nulls as a `(none)` bucket). On any other column — including a real
+    // dimension like `numeric_value` (key `value`) — dropping the predicate would
+    // silently change the row set feeding the aggregate, so it must be refused.
+    // "Analyte Volume vs Avg Value" filters `WHERE numeric_value IS NOT NULL` to gate
+    // its AVG/COUNT, so it refuses with `not_null_unsupported`.
     const results = board.widgets.map((w: any) => ({ title: w.title, r: recognizeSql(w.query.sql) }));
     const passed = results.filter((x) => x.r.ok).map((x) => x.title);
     expect(passed.length).toBe(9);

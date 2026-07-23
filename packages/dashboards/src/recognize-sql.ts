@@ -130,7 +130,7 @@ export function recognizeSql(sql: string): RecognizeResult {
       let m: RegExpMatchArray | null;
       if ((m = p.match(/^(.+?)\s+is\s+not\s+null$/i))) {
         const col = m[1].trim().toLowerCase();
-        if (col === groupCol || reg!.dims[col]) continue; // tolerated: builder shows nulls as (none)
+        if (col === groupCol) continue; // builder shows group-by nulls as (none); other not-nulls change aggregates → refuse
         refuse('not_null_unsupported', `IS NOT NULL on "${col}"`);
       } else if ((m = p.match(/^(.+?)\s+in\s*\((.+)\)$/i))) {
         filters.push({ dimension: resolveDim(m[1], reg!).key, op: 'in', value: splitTop(m[2]).map(clean) });

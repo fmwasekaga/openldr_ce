@@ -61,6 +61,7 @@ export const MODELS: QueryModel[] = [
       { key: 'code_text', label: 'Analyte', column: 'observation_desc', kind: 'string' },
       { key: 'interpretation_code', label: 'Interpretation', column: 'abnormal_flag', kind: 'string' },
       { key: 'value_unit', label: 'Unit', column: 'numeric_units', kind: 'string' },
+      { key: 'value', label: 'Value', column: 'numeric_value', kind: 'number' },
       { key: 'effective_date_time', label: 'Effective', column: 'result_timestamp', kind: 'date', dateGrain: DATE_GRAINS },
       { key: 'facility', label: 'Facility', column: 'managing_organization', kind: 'string', join: 'jp' },
     ],

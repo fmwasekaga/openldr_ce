@@ -113,6 +113,13 @@ describe('observations optional relationships', () => {
   });
 });
 
+describe('observations numeric value dimension', () => {
+  it('exposes numeric_value as a number-kind dimension', () => {
+    const d = getModel('observations')!.dimensions.find((x) => x.key === 'value');
+    expect(d).toMatchObject({ label: 'Value', column: 'numeric_value', kind: 'number' });
+  });
+});
+
 describe('modelsForClient', () => {
   it('projects optional joins to {alias,label,exposableColumns} and omits raw joins/denyColumns', () => {
     const m = modelsForClient().find((x) => x.id === 'service_requests')!;
