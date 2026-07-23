@@ -16,7 +16,7 @@ export interface ModelJoin {
   left: string;                   // base column: 'subject_ref'
   leftReplace?: [string, string]; // ['Patient/',''] → replace(base.left, 'Patient/', '')
   right: string;                  // joined column: 'id'
-  optional?: boolean;      // offered in the "+ Add → Join column" picker instead of firing via a default dimension
+  optional?: boolean;      // offered in the "+ Add → Join data" picker instead of firing via a default dimension
   label?: string;          // display name for the join in the picker (defaults to the table name)
   denyColumns?: string[];  // columns that may NOT be exposed; REQUIRED for an optional join to be usable (fail-safe)
 }
@@ -45,7 +45,17 @@ export const MODELS: QueryModel[] = [
   },
   {
     id: 'observations', label: 'Results', table: 'lab_results',
-    joins: [{ table: 'patients', alias: 'jp', left: 'patient_id', right: 'id' }],
+    joins: [
+      { table: 'patients', alias: 'jp', left: 'patient_id', right: 'id' },
+      { table: 'specimens', alias: 'js', left: 'specimen_id', right: 'id', optional: true, label: 'Specimen',
+        denyColumns: ['id', 'patient_id', 'accession', 'source_system', 'plugin_id', 'plugin_version', 'batch_id'] },
+      // Keyed on the business identifier `request_id` (not a PK): assumed unique per request in
+      // well-formed data. If a source ever emits duplicate request_ids, this leftJoin can fan out and
+      // inflate COUNT/aggregate metrics for widgets that pull in this relationship — an admin/data
+      // assumption, unlike the PK-keyed `jp`/`js` joins.
+      { table: 'lab_requests', alias: 'jr', left: 'request_id', right: 'request_id', optional: true, label: 'Request',
+        denyColumns: ['id', 'request_id', 'patient_id', 'source_system', 'plugin_id', 'plugin_version', 'batch_id'] },
+    ],
     dimensions: [
       { key: 'code_text', label: 'Analyte', column: 'observation_desc', kind: 'string' },
       { key: 'interpretation_code', label: 'Interpretation', column: 'abnormal_flag', kind: 'string' },
@@ -113,20 +123,21 @@ export function exposableColumns(model: QueryModel, alias: string): string[] {
   return EXTERNAL_TABLE_COLUMNS[j.table].filter((c) => !deny.has(c));
 }
 
-export interface ClientOptionalJoin { alias: string; label: string; exposableColumns: string[] }
+export interface ClientOptionalJoin { alias: string; label: string; left: string; right: string; exposableColumns: string[] }
 export type ClientQueryModel = Omit<QueryModel, 'joins'> & { optionalJoins?: ClientOptionalJoin[] };
 
 /**
  * Model list shaped for the browser. Raw `joins`/`denyColumns` are dropped; each usable optional
- * join becomes `{ alias, label, exposableColumns }` where the columns are already denylist-filtered,
- * so denied PII column names never travel to the client. A join whose `exposableColumns` is empty
- * (fail-safe: no denylist declared) is omitted entirely.
+ * join becomes `{ alias, label, left, right, exposableColumns }` where the columns are already
+ * denylist-filtered, so denied PII column names never travel to the client. `left`/`right` are the
+ * admin-declared join keys (FK column names), surfaced for read-only display. A join whose
+ * `exposableColumns` is empty (fail-safe: no denylist declared) is omitted entirely.
  */
 export function modelsForClient(models: QueryModel[] = MODELS): ClientQueryModel[] {
   return models.map((m) => {
     const optionalJoins = (m.joins ?? [])
       .filter((j) => j.optional)
-      .map((j) => ({ alias: j.alias, label: j.label ?? j.table, exposableColumns: exposableColumns(m, j.alias) }))
+      .map((j) => ({ alias: j.alias, label: j.label ?? j.table, left: j.left, right: j.right, exposableColumns: exposableColumns(m, j.alias) }))
       .filter((oj) => oj.exposableColumns.length > 0);
     const { id, label, table, dimensions, metrics } = m;
     return optionalJoins.length ? { id, label, table, dimensions, metrics, optionalJoins }

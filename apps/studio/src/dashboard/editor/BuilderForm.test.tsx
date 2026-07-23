@@ -82,27 +82,27 @@ const modelsWithJoin = [{
   id: 'service_requests', label: 'Test Orders',
   dimensions: [{ key: 'status', label: 'Status', column: 'status', kind: 'string' }],
   metrics: [{ key: 'count', label: 'Count', agg: 'count' }],
-  optionalJoins: [{ alias: 'jp', label: 'Patient', exposableColumns: ['sex', 'managing_organization'] }],
+  optionalJoins: [{ alias: 'jp', label: 'Patient', left: 'patient_id', right: 'id', exposableColumns: ['sex', 'managing_organization'] }],
 }] as never;
 const builderValue = { mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count', label: 'Count' }, filters: [] } as never;
 
 describe('BuilderForm Add menu + join column', () => {
-  it('offers a "Join column" tile when the model has optional joins', () => {
+  it('offers a "Join data" tile when the model has optional joins', () => {
     render(<BuilderForm models={modelsWithJoin} value={builderValue} onChange={() => {}} />);
-    expect(screen.getByRole('button', { name: /join column/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /join data/i })).toBeInTheDocument();
   });
 
-  it('the Join columns card × clears ALL join columns, not just the last', () => {
+  it('the relationship card × removes every column for that relationship', () => {
     const onChange = vi.fn();
     const value = {
       mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count', label: 'Count' }, filters: [],
       adhocDimensions: [
-        { key: 'jp__sex', label: 'Patient Sex', join: 'jp', column: 'sex', kind: 'string' },
-        { key: 'jp__managing_organization', label: 'Patient Org', join: 'jp', column: 'managing_organization', kind: 'string' },
+        { key: 'jp__sex', label: 'Patient → Sex', join: 'jp', column: 'sex', kind: 'string' },
+        { key: 'jp__managing_organization', label: 'Patient → Managing Organization', join: 'jp', column: 'managing_organization', kind: 'string' },
       ],
     } as never;
     render(<BuilderForm models={modelsWithJoin} value={value} onChange={onChange} />);
-    fireEvent.click(screen.getByRole('button', { name: /remove join columns/i }));
+    fireEvent.click(screen.getByRole('button', { name: /remove join: patient/i }));
     const last = onChange.mock.calls.at(-1)![0];
     expect(last.adhocDimensions ?? []).toHaveLength(0);
   });
@@ -128,14 +128,12 @@ describe('BuilderForm Add menu + join column', () => {
     expect(screen.getByLabelText('Grain')).toBeInTheDocument();
   });
 
-  it('adds an adhoc dimension through the picker and emits it on change', () => {
+  it('adds join columns through the Join data picker and emits them on change', () => {
     const onChange = vi.fn();
     render(<BuilderForm models={modelsWithJoin} value={builderValue} onChange={onChange} />);
-    fireEvent.click(screen.getByRole('button', { name: /join column/i }));
-    // choose column 'sex' via the real Radix Select (Column has aria-label="Column" inside JoinColumnPicker):
-    fireEvent.click(screen.getByLabelText('Column'));
-    fireEvent.click(screen.getByRole('option', { name: 'sex' }));
-    fireEvent.click(screen.getByRole('button', { name: /add column/i }));
+    fireEvent.click(screen.getByRole('button', { name: /join data/i }));
+    fireEvent.click(screen.getByLabelText('sex'));       // check the column
+    fireEvent.click(screen.getByRole('button', { name: /apply/i }));
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
       adhocDimensions: [expect.objectContaining({ key: 'jp__sex', column: 'sex' })],
     }));

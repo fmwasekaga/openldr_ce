@@ -123,24 +123,69 @@ export function setMeasuresPatch(value: BuilderQuery, list: Measure[]): BuilderQ
   return next;
 }
 
-/** Append a "join column" ad-hoc dimension to the query. */
-export function addAdhocDimensionPatch(value: BuilderQuery, dim: AdhocDimension): BuilderQuery {
-  const list = value.adhocDimensions ?? [];
-  if (list.some((d) => d.key === dim.key)) return value; // already added — no duplicate
-  return { ...value, adhocDimensions: [...list, dim] };
-}
-
 /** Remove an ad-hoc dimension by key, dropping the field when empty and clearing every reference
  *  the removed column left behind — group-by, breakdown, flat `filters`, and `filterTree` rules —
  *  so the query never carries a dangling dimension key (mirrors the derived-measure orphan cleanup
  *  in measures.model.ts). */
 export function removeAdhocDimensionPatch(value: BuilderQuery, key: string): BuilderQuery {
   const list = (value.adhocDimensions ?? []).filter((d) => d.key !== key);
-  const next = { ...value };
-  next.adhocDimensions = list;
-  if (next.dimension?.key === key) next.dimension = undefined;
-  if (next.breakdown?.key === key) next.breakdown = undefined;
-  if (next.filters?.length) next.filters = next.filters.filter((f) => f.dimension !== key);
-  if (next.filterTree) next.filterTree = pruneDimensions(next.filterTree as TreeGroup, new Set([key])) as BuilderQuery['filterTree'];
+  const next = { ...value, adhocDimensions: list };
+  return clearDimensionRefs(next, new Set([key]));
+}
+
+// --- "Join data" helpers (moved here from JoinColumnPicker so they're pure + unit-testable) ---
+
+/** Query-local key for an ad-hoc join column. */
+export function adhocKey(join: string, column: string): string {
+  return `${join}__${column}`;
+}
+
+/** Columns that look like dates/numbers get a better default kind; everything else is a string. */
+export function inferKind(column: string): AdhocDimension['kind'] {
+  if (/(_at|_time|date|timestamp|issued|authored|received|effective)/i.test(column)) return 'date';
+  if (/(count|value|amount|age|number|_id$)/i.test(column)) return 'number';
+  return 'string';
+}
+
+/** Title-case a snake_case column name for a default label. */
+export function humanize(column: string): string {
+  return column.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Build an ad-hoc dimension for one join column, with a derived key/label/kind. */
+export function makeAdhocDimension(joinAlias: string, joinLabel: string, column: string): AdhocDimension {
+  return { key: adhocKey(joinAlias, column), label: `${joinLabel} → ${humanize(column)}`, join: joinAlias, column, kind: inferKind(column) };
+}
+
+/** Clear every reference (group-by, breakdown, flat filters, filterTree) to any key in `keys`. */
+function clearDimensionRefs(next: BuilderQuery, keys: Set<string>): BuilderQuery {
+  if (next.dimension && keys.has(next.dimension.key)) next.dimension = undefined;
+  if (next.breakdown && keys.has(next.breakdown.key)) next.breakdown = undefined;
+  if (next.filters?.length) next.filters = next.filters.filter((f) => !keys.has(f.dimension));
+  if (next.filterTree) next.filterTree = pruneDimensions(next.filterTree as TreeGroup, keys) as BuilderQuery['filterTree'];
   return next;
+}
+
+/**
+ * Reconcile the ad-hoc columns for ONE relationship (join alias) to exactly `columns`: keep every
+ * ad-hoc dimension from OTHER relationships, replace this alias's set with freshly-derived dims, and
+ * orphan-clean any group-by/breakdown/filter reference to a column that was dropped. The derived key
+ * is stable, so an unchanged column keeps its key (and its references) across a reconcile.
+ */
+export function setRelationshipColumnsPatch(value: BuilderQuery, joinAlias: string, joinLabel: string, columns: string[]): BuilderQuery {
+  const others = (value.adhocDimensions ?? []).filter((d) => d.join !== joinAlias);
+  const desired = columns.map((c) => makeAdhocDimension(joinAlias, joinLabel, c));
+  const desiredKeys = new Set(desired.map((d) => d.key));
+  const removedKeys = new Set(
+    (value.adhocDimensions ?? []).filter((d) => d.join === joinAlias && !desiredKeys.has(d.key)).map((d) => d.key),
+  );
+  const next = { ...value, adhocDimensions: [...others, ...desired] };
+  return clearDimensionRefs(next, removedKeys);
+}
+
+/** Remove an entire relationship (all ad-hoc dims for `joinAlias`) and orphan-clean their references. */
+export function removeRelationshipPatch(value: BuilderQuery, joinAlias: string): BuilderQuery {
+  const removedKeys = new Set((value.adhocDimensions ?? []).filter((d) => d.join === joinAlias).map((d) => d.key));
+  const next = { ...value, adhocDimensions: (value.adhocDimensions ?? []).filter((d) => d.join !== joinAlias) };
+  return clearDimensionRefs(next, removedKeys);
 }

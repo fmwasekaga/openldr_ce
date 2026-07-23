@@ -90,6 +90,27 @@ describe('service_requests demo optional join', () => {
   });
 });
 
+describe('observations optional relationships', () => {
+  it('offers specimens (js) and lab_requests (jr) as optional relationships, denylist-filtered', () => {
+    const m = modelsForClient().find((x) => x.id === 'observations')!;
+    const aliases = (m.optionalJoins ?? []).map((j) => j.alias).sort();
+    expect(aliases).toEqual(['jr', 'js']);
+    const js = m.optionalJoins!.find((j) => j.alias === 'js')!;
+    expect(js).toMatchObject({ label: 'Specimen', left: 'specimen_id', right: 'id' });
+    expect(js.exposableColumns).toEqual(['received_time', 'status', 'type_code', 'type_text', 'origin', 'created_at']);
+    expect(js.exposableColumns).not.toContain('patient_id'); // denied
+    const jr = m.optionalJoins!.find((j) => j.alias === 'jr')!;
+    expect(jr).toMatchObject({ label: 'Request', left: 'request_id', right: 'request_id' });
+    expect(jr.exposableColumns).toContain('panel_desc');
+    expect(jr.exposableColumns).not.toContain('patient_id'); // denied
+  });
+
+  it('does not expose the non-optional patients join (jp) as user-pickable', () => {
+    const m = modelsForClient().find((x) => x.id === 'observations')!;
+    expect((m.optionalJoins ?? []).some((j) => j.alias === 'jp')).toBe(false);
+  });
+});
+
 describe('modelsForClient', () => {
   it('projects optional joins to {alias,label,exposableColumns} and omits raw joins/denyColumns', () => {
     const m = modelsForClient().find((x) => x.id === 'service_requests')!;
@@ -107,5 +128,12 @@ describe('modelsForClient', () => {
   it('keeps only optional joins with a usable denylist, dropping non-optional and undenied joins', () => {
     const [m] = modelsForClient([MODEL_WITH_OPTIONAL]);
     expect(m.optionalJoins?.map((j) => j.alias)).toEqual(['jp']); // jf (no denylist) and jauto (not optional) dropped
+  });
+
+  it('includes the admin-declared join keys (left/right) for read-only display', () => {
+    const m = modelsForClient().find((x) => x.id === 'service_requests')!;
+    const oj = m.optionalJoins!.find((x) => x.alias === 'jp')!;
+    expect(oj.left).toBe('patient_id');
+    expect(oj.right).toBe('id');
   });
 });
