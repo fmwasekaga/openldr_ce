@@ -1,6 +1,6 @@
 import { Fragment, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Sigma, Filter, Rows3, Columns3, ArrowUpDown, Combine, Calculator, type LucideIcon } from 'lucide-react';
+import { Sigma, Filter, Rows3, Columns3, ArrowUpDown, Blend, Grid2x2Plus, type LucideIcon } from 'lucide-react';
 import type { DashboardFilterDef, ModelDimension, QueryModel } from '../../api';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
@@ -256,7 +256,7 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
           onClick={() => { setShowCustom(false); setShowPicker(true); }}
           className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card hover:bg-muted"
         >
-          <Combine size={18} aria-hidden="true" />
+          <Blend size={18} aria-hidden="true" />
         </button>
       ) : null}
       <button
@@ -266,7 +266,7 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
         onClick={() => { setShowPicker(false); setShowCustom(true); }}
         className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card hover:bg-muted"
       >
-        <Calculator size={18} aria-hidden="true" />
+        <Grid2x2Plus size={18} aria-hidden="true" />
       </button>
     </div>
   );
@@ -293,9 +293,11 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
       </div>
     ) : null;
 
-  // The bottom Add tiles row now holds only the unshown clause sections — Join data and Custom
-  // column moved to the icon-button row under Data. Disappears once every section is shown.
-  const showAddTiles = unshown.length > 0;
+  // The bottom Add tiles row holds the unshown clause sections plus Join data and Custom column —
+  // Metabase shows both of those in the icon row under Data AND again here as labeled tiles.
+  // Custom column is always available, so this row always renders (unlike the clause tiles, which
+  // disappear once every section is shown).
+  const showAddTiles = true;
   const addTilesRow: ReactNode = (
     <div className="flex flex-wrap gap-2 px-1">
       {unshown.map((k) => {
@@ -312,6 +314,24 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
           </button>
         );
       })}
+      {model?.optionalJoins?.length ? (
+        <button
+          type="button"
+          onClick={() => { setShowCustom(false); setShowPicker(true); }}
+          className="flex min-w-[76px] flex-col items-center gap-1 rounded-md border border-border bg-card px-3 py-2 text-xs hover:bg-muted"
+        >
+          <Blend size={16} aria-hidden="true" />
+          Join data
+        </button>
+      ) : null}
+      <button
+        type="button"
+        onClick={() => { setShowPicker(false); setShowCustom(true); }}
+        className="flex min-w-[76px] flex-col items-center gap-1 rounded-md border border-border bg-card px-3 py-2 text-xs hover:bg-muted"
+      >
+        <Grid2x2Plus size={16} aria-hidden="true" />
+        Custom column
+      </button>
     </div>
   );
 

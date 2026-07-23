@@ -89,7 +89,8 @@ const builderValue = { mode: 'builder', model: 'service_requests', metric: { key
 describe('BuilderForm Add menu + join column', () => {
   it('offers a "Join data" button when the model has optional joins', () => {
     render(<BuilderForm models={modelsWithJoin} value={builderValue} onChange={() => {}} />);
-    expect(screen.getByRole('button', { name: /join data/i })).toBeInTheDocument();
+    // Join data appears twice: the icon-only button under Data and the labeled tile in the bottom row.
+    expect(screen.getAllByRole('button', { name: /join data/i })).toHaveLength(2);
   });
 
   it('the relationship card × removes every column for that relationship', () => {
@@ -131,7 +132,8 @@ describe('BuilderForm Add menu + join column', () => {
   it('adds join columns through the Join data picker and emits them on change', () => {
     const onChange = vi.fn();
     render(<BuilderForm models={modelsWithJoin} value={builderValue} onChange={onChange} />);
-    fireEvent.click(screen.getByRole('button', { name: /join data/i }));
+    // Either instance (icon button under Data, or the bottom labeled tile) opens the same picker.
+    fireEvent.click(screen.getAllByRole('button', { name: /join data/i })[0]);
     fireEvent.click(screen.getByLabelText('sex'));       // check the column
     fireEvent.click(screen.getByRole('button', { name: /apply/i }));
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
@@ -141,8 +143,9 @@ describe('BuilderForm Add menu + join column', () => {
 
   it('shows Join data and Custom column as buttons under Data', () => {
     render(<BuilderForm models={modelsWithJoin} value={builderValue} onChange={() => {}} />);
-    expect(screen.getByRole('button', { name: /join data/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /custom column/i })).toBeInTheDocument();
+    // Each also appears again as a labeled tile in the bottom add row.
+    expect(screen.getAllByRole('button', { name: /join data/i })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: /custom column/i })).toHaveLength(2);
   });
 });
 
@@ -157,7 +160,8 @@ const withMeasure = { mode: 'builder', model: 'service_requests', metric: { key:
 describe('BuilderForm custom columns', () => {
   it('offers a "Custom column" tile', () => {
     render(<BuilderForm models={models} value={base} onChange={() => {}} />);
-    expect(screen.getByRole('button', { name: /custom column/i })).toBeInTheDocument();
+    // Custom column appears twice: the icon-only button under Data and the labeled bottom tile.
+    expect(screen.getAllByRole('button', { name: /custom column/i })).toHaveLength(2);
   });
 
   it('renders active custom columns in a card and removes one on ×', () => {
