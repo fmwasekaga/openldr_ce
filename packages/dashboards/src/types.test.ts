@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { WidgetConfigSchema, WidgetQuerySchema, MetricSchema, DerivedRatioSchema, ConditionGroupSchema } from './types';
+import { WidgetConfigSchema, WidgetQuerySchema, MetricSchema, DerivedRatioSchema, ConditionGroupSchema, ExprSchema, CustomColumnSchema, customColumnKind } from './types';
 
 describe('WidgetConfigSchema', () => {
   it('accepts a builder widget', () => {
@@ -189,5 +189,40 @@ describe('builder query without a measure', () => {
   it('still parses a builder query WITH a metric', () => {
     const parsed = WidgetQuerySchema.parse({ mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count' }, filters: [] });
     if (parsed.mode === 'builder') expect(parsed.metric?.agg).toBe('count');
+  });
+});
+
+describe('custom column schema', () => {
+  it('accepts a concat expression of fields and literals', () => {
+    const ok = ExprSchema.safeParse({ kind: 'concat', parts: [
+      { type: 'field', dimension: 'status' }, { type: 'string', value: ' / ' }, { type: 'field', dimension: 'priority' },
+    ] });
+    expect(ok.success).toBe(true);
+  });
+
+  it('requires at least one concat part', () => {
+    expect(ExprSchema.safeParse({ kind: 'concat', parts: [] }).success).toBe(false);
+  });
+
+  it('accepts a binary arithmetic expression', () => {
+    const ok = ExprSchema.safeParse({ kind: 'arithmetic', op: '/', left: { type: 'field', dimension: 'a' }, right: { type: 'number', value: 1000 } });
+    expect(ok.success).toBe(true);
+  });
+
+  it('rejects an unknown arithmetic operator', () => {
+    expect(ExprSchema.safeParse({ kind: 'arithmetic', op: '^', left: { type: 'number', value: 1 }, right: { type: 'number', value: 2 } }).success).toBe(false);
+  });
+
+  it('accepts a builder query carrying customColumns', () => {
+    const ok = WidgetQuerySchema.safeParse({
+      mode: 'builder', model: 'm', metric: { key: 'count', agg: 'count' }, filters: [],
+      customColumns: [{ key: 'full', label: 'Full', expr: { kind: 'concat', parts: [{ type: 'field', dimension: 'status' }] } }],
+    });
+    expect(ok.success).toBe(true);
+  });
+
+  it('customColumnKind derives string for concat and number for arithmetic', () => {
+    expect(customColumnKind({ kind: 'concat', parts: [{ type: 'string', value: 'x' }] })).toBe('string');
+    expect(customColumnKind({ kind: 'arithmetic', op: '+', left: { type: 'number', value: 1 }, right: { type: 'number', value: 2 } })).toBe('number');
   });
 });

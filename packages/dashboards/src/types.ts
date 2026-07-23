@@ -66,6 +66,30 @@ export const AdhocDimensionSchema = z.object({
 });
 export type AdhocDimension = z.infer<typeof AdhocDimensionSchema>;
 
+// A custom-column operand: a reference to an existing (non-computed) dimension, or a bound literal.
+export const OperandSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('field'), dimension: z.string() }),
+  z.object({ type: z.literal('string'), value: z.string() }),
+  z.object({ type: z.literal('number'), value: z.number() }),
+]);
+export type Operand = z.infer<typeof OperandSchema>;
+
+// A structured, parser-free row-level expression. concat → string; arithmetic → number.
+export const ExprSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('concat'), parts: z.array(OperandSchema).min(1) }),
+  z.object({ kind: z.literal('arithmetic'), op: z.enum(['+', '-', '*', '/']), left: OperandSchema, right: OperandSchema }),
+]);
+export type Expr = z.infer<typeof ExprSchema>;
+
+// A user-authored computed group-by dimension. `key` is query-local; group-by/breakdown reference it.
+export const CustomColumnSchema = z.object({ key: z.string(), label: z.string(), expr: ExprSchema });
+export type CustomColumn = z.infer<typeof CustomColumnSchema>;
+
+/** The DimensionKind a custom column produces — derived from its expression, never stored. */
+export function customColumnKind(expr: Expr): 'string' | 'number' {
+  return expr.kind === 'concat' ? 'string' : 'number';
+}
+
 export const WidgetVariableDefSchema = z.object({
   type: z.enum(['text', 'number', 'date', 'date-range']),
   label: z.string(),
@@ -87,6 +111,7 @@ export const WidgetQuerySchema = z.discriminatedUnion('mode', [
     filters: z.array(QueryFilterSchema).default([]),
     filterTree: ConditionGroupSchema.optional(), // recursive AND/OR tree; supersedes `filters` when present
     adhocDimensions: z.array(AdhocDimensionSchema).optional(), // "join column" escape-hatch dimensions
+    customColumns: z.array(CustomColumnSchema).optional(), // row-level computed group-by dimensions
     limit: z.number().int().positive().optional(), // top-N of the shaped result, by primary measure desc
     variableBindings: z.record(z.string()).optional(),
   }),
