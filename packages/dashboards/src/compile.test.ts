@@ -378,3 +378,17 @@ describe('compileBuilderQuery with an adhoc join column', () => {
     expect(sql).toMatch(/left join .*patients/i);
   });
 });
+
+describe('builder query with no measure', () => {
+  const noMeasure = { mode: 'builder' as const, model: 'service_requests', filters: [] };
+
+  it('runBuilderQuery returns an empty result without executing SQL', async () => {
+    const res = await runBuilderQuery(db, getModel('service_requests')!, noMeasure as any);
+    expect(res.rows).toEqual([]);
+    expect(res.columns).toEqual([]);
+  });
+
+  it('compileBuilderQuery does not throw for a no-measure query (SQL preview path)', () => {
+    expect(() => compileBuilderQuery(db, getModel('service_requests')!, noMeasure as any).compile()).not.toThrow();
+  });
+});

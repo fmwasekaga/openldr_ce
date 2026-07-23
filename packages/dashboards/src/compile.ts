@@ -9,6 +9,10 @@ import { ageBandArms } from './age-band';
 type BuilderQuery = Extract<WidgetQuery, { mode: 'builder' }>;
 type AnyQB = SelectQueryBuilder<ExternalSchema, keyof ExternalSchema, unknown>;
 
+function hasMeasure(q: BuilderQuery): boolean {
+  return !!q.metric || !!(q.metrics && q.metrics.length > 0);
+}
+
 function dim(model: QueryModel, key: string): ModelDimension {
   const d = model.dimensions.find((x) => x.key === key);
   if (!d) throw new Error(`unknown dimension: ${key}`);
@@ -198,7 +202,7 @@ export function collectUsedJoins(model: QueryModel, q: BuilderQuery): ModelJoin[
   for (const f of q.filters ?? []) add(f.dimension);
   const walk = (node?: ConditionNode) => { if (!node) return; if (node.kind === 'rule') add(node.dimension); else node.children.forEach(walk); };
   walk(q.filterTree);
-  for (const m of [q.metric, ...(q.metrics ?? [])]) for (const w of m.where ?? []) add(w.dimension);
+  for (const m of [q.metric, ...(q.metrics ?? [])]) { if (!m) continue; for (const w of m.where ?? []) add(w.dimension); }
   return [...aliases].map((a) => {
     const j = (model.joins ?? []).find((x) => x.alias === a);
     if (!j) throw new Error(`unknown join alias: ${a}`);
@@ -234,8 +238,10 @@ export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryMode
       }
       qb = qb.select(metricExpr(model, m, qualify).as(m.key));
     }
-  } else {
+  } else if (q.metric) {
     qb = qb.select(metricExpr(model, q.metric, qualify).as('value'));
+  } else {
+    qb = qb.select(sql<number>`0`.as('value')); // no measure: valid but trivial SQL for preview
   }
   if (q.dimension) {
     const d = dim(model, q.dimension.key);
@@ -349,6 +355,7 @@ export async function runBuilderQuery(
   db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery,
 ): Promise<ReportResultData> {
   model = effectiveModel(model, q);
+  if (!hasMeasure(q)) return { columns: [], rows: [], chart: { type: 'stat', value: '', label: 'No measure' } };
   if (q.metrics && q.metrics.length > 0) return runWideQuery(db, model, q);
   const rows = (await compileBuilderQuery(db, model, q).execute()) as { value: number; label?: unknown; series?: unknown }[];
   const d = q.dimension ? dim(model, q.dimension.key) : undefined;
@@ -373,7 +380,7 @@ export async function runBuilderQuery(
     const columns: ReportColumn[] = [
       { key: 'label', label: d?.label ?? model.label, kind: d?.kind === 'date' ? 'date' : 'string' },
       { key: 'series', label: b.label, kind: 'string' },
-      { key: 'value', label: q.metric.label ?? 'Value', kind: 'number' },
+      { key: 'value', label: q.metric?.label ?? 'Value', kind: 'number' },
     ];
     return { columns, rows: shaped, chart: { type: 'bar', x: 'label', y: 'value' } };
   }
@@ -394,7 +401,7 @@ export async function runBuilderQuery(
   shaped = applyTopN(shaped, q.limit, 'value', false);
   const columns: ReportColumn[] = [
     { key: 'label', label: d?.label ?? model.label, kind: d?.kind === 'date' ? 'date' : 'string' },
-    { key: 'value', label: q.metric.label ?? 'Value', kind: 'number' },
+    { key: 'value', label: q.metric?.label ?? 'Value', kind: 'number' },
   ];
   const chart: ChartHint = d
     ? { type: 'bar', x: 'label', y: 'value' }
