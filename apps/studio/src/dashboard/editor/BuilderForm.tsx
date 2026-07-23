@@ -37,7 +37,7 @@ function SectionCard({ label, onRemove, children }: {
   label: string; onRemove: () => void; children: ReactNode;
 }) {
   return (
-    <div className="rounded-md border border-border bg-card p-3">
+    <div className="mx-1 rounded-md border border-border bg-card p-3">
       <div className="mb-2 flex items-center justify-between">
         <span className="text-sm font-medium">{label}</span>
         <button
@@ -225,7 +225,7 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
         />
       </div>
     ) : hasTiles ? (
-      <div className="flex flex-wrap gap-2 pt-2">
+      <div className="flex flex-wrap gap-2 px-1 pt-2">
         {unshown.map((k) => {
           const Icon = SECTION_ICON[k];
           return (
@@ -259,8 +259,8 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
   if (addBlock) blocks.push(addBlock);
 
   return (
-    <div className="flex flex-col gap-3 px-3 py-2">
-      <div className="rounded-md border border-border bg-card p-3">
+    <div className="flex flex-col gap-3 py-2">
+      <div className="mx-1 rounded-md border border-border bg-card p-3">
         <label className="text-sm">
           Source
           <Select value={value.model} onValueChange={(id) => onChange(setModelPatch(models, value, id))}>
