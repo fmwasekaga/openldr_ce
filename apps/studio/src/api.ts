@@ -264,6 +264,15 @@ export interface WidgetVariableDef {
 export interface ConditionRule { kind: 'rule'; dimension: string; op: string; value: unknown }
 export interface ConditionGroup { kind: 'group'; combinator: 'and' | 'or'; children: (ConditionRule | ConditionGroup)[] }
 
+export type CustomColumnOperand =
+  | { type: 'field'; dimension: string }
+  | { type: 'string'; value: string }
+  | { type: 'number'; value: number };
+export type CustomColumnExpr =
+  | { kind: 'concat'; parts: CustomColumnOperand[] }
+  | { kind: 'arithmetic'; op: '+' | '-' | '*' | '/'; left: CustomColumnOperand; right: CustomColumnOperand };
+export interface CustomColumn { key: string; label: string; expr: CustomColumnExpr }
+
 export type WidgetQuery =
   | { mode: 'builder'; model: string;
       metric?: { key: string; label?: string; agg: string; column?: string; where?: { dimension: string; op: string; value: unknown }[]; derived?: { numerator: string; denominator: string; scale: number; decimals: number } };
@@ -272,6 +281,7 @@ export type WidgetQuery =
       filterTree?: ConditionGroup;
       limit?: number;
       adhocDimensions?: { key: string; label: string; join: string; column: string; kind: 'string' | 'date' | 'number' }[];
+      customColumns?: CustomColumn[];
       variableBindings?: Record<string, string> }
   | { mode: 'sql'; sql: string; variableBindings?: Record<string, string>; variables?: Record<string, WidgetVariableDef>;
       values?: Record<string, string | number | null | { from: string; to: string }> };
