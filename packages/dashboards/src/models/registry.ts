@@ -45,7 +45,17 @@ export const MODELS: QueryModel[] = [
   },
   {
     id: 'observations', label: 'Results', table: 'lab_results',
-    joins: [{ table: 'patients', alias: 'jp', left: 'patient_id', right: 'id' }],
+    joins: [
+      { table: 'patients', alias: 'jp', left: 'patient_id', right: 'id' },
+      { table: 'specimens', alias: 'js', left: 'specimen_id', right: 'id', optional: true, label: 'Specimen',
+        denyColumns: ['id', 'patient_id', 'accession', 'source_system', 'plugin_id', 'plugin_version', 'batch_id'] },
+      // Keyed on the business identifier `request_id` (not a PK): assumed unique per request in
+      // well-formed data. If a source ever emits duplicate request_ids, this leftJoin can fan out and
+      // inflate COUNT/aggregate metrics for widgets that pull in this relationship — an admin/data
+      // assumption, unlike the PK-keyed `jp`/`js` joins.
+      { table: 'lab_requests', alias: 'jr', left: 'request_id', right: 'request_id', optional: true, label: 'Request',
+        denyColumns: ['id', 'request_id', 'patient_id', 'source_system', 'plugin_id', 'plugin_version', 'batch_id'] },
+    ],
     dimensions: [
       { key: 'code_text', label: 'Analyte', column: 'observation_desc', kind: 'string' },
       { key: 'interpretation_code', label: 'Interpretation', column: 'abnormal_flag', kind: 'string' },
