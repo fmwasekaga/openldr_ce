@@ -158,7 +158,7 @@ export function makeAdhocDimension(joinAlias: string, joinLabel: string, column:
 }
 
 /** Clear every reference (group-by, breakdown, flat filters, filterTree) to any key in `keys`. */
-function clearDimensionRefs(next: BuilderQuery, keys: Set<string>): BuilderQuery {
+export function clearDimensionRefs(next: BuilderQuery, keys: Set<string>): BuilderQuery {
   if (next.dimension && keys.has(next.dimension.key)) next.dimension = undefined;
   if (next.breakdown && keys.has(next.breakdown.key)) next.breakdown = undefined;
   if (next.filters?.length) next.filters = next.filters.filter((f) => !keys.has(f.dimension));

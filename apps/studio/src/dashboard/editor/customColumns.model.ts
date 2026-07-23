@@ -1,9 +1,8 @@
 // Pure state-transition helpers for user-authored custom columns (row-level computed dimensions).
 // React/DOM-free so they're unit-testable — see CustomColumnEditor.tsx for the shell.
 
-import type { BuilderQuery } from './builderForm.model';
+import { clearDimensionRefs, type BuilderQuery } from './builderForm.model';
 import type { CustomColumn, CustomColumnExpr, CustomColumnOperand } from '../../api';
-import { pruneDimensions, type TreeGroup } from './conditionTree.model';
 
 export type { CustomColumn, CustomColumnExpr, CustomColumnOperand };
 
@@ -45,9 +44,5 @@ export function updateCustomColumn(value: BuilderQuery, key: string, patch: Part
 /** Remove a custom column and clear every reference it left behind (group-by, breakdown, filters, tree). */
 export function removeCustomColumn(value: BuilderQuery, key: string): BuilderQuery {
   const next: BuilderQuery = { ...value, customColumns: (value.customColumns ?? []).filter((c) => c.key !== key) };
-  if (next.dimension?.key === key) next.dimension = undefined;
-  if (next.breakdown?.key === key) next.breakdown = undefined;
-  if (next.filters?.length) next.filters = next.filters.filter((f) => f.dimension !== key);
-  if (next.filterTree) next.filterTree = pruneDimensions(next.filterTree as TreeGroup, new Set([key])) as BuilderQuery['filterTree'];
-  return next;
+  return clearDimensionRefs(next, new Set([key]));
 }
