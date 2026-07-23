@@ -192,6 +192,12 @@ describe('adhoc dimension patches', () => {
     expect(next.adhocDimensions).toEqual([adhoc]);
   });
 
+  it('does not add a duplicate adhoc dimension with the same key', () => {
+    const q = addAdhocDimensionPatch(baseQ(), adhoc);
+    const next = addAdhocDimensionPatch(q, adhoc);
+    expect(next.adhocDimensions).toEqual([adhoc]); // unchanged — no duplicate
+  });
+
   it('removes an adhoc dimension and clears any group-by that referenced it', () => {
     let q = addAdhocDimensionPatch(baseQ(), adhoc);
     q = setDimensionPatch(q, 'jp__sex');

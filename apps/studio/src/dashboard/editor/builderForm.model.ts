@@ -125,8 +125,9 @@ export function setMeasuresPatch(value: BuilderQuery, list: Measure[]): BuilderQ
 
 /** Append a "join column" ad-hoc dimension to the query. */
 export function addAdhocDimensionPatch(value: BuilderQuery, dim: AdhocDimension): BuilderQuery {
-  const list = [...(value.adhocDimensions ?? []), dim];
-  return { ...value, adhocDimensions: list };
+  const list = value.adhocDimensions ?? [];
+  if (list.some((d) => d.key === dim.key)) return value; // already added — no duplicate
+  return { ...value, adhocDimensions: [...list, dim] };
 }
 
 /** Remove an ad-hoc dimension by key, dropping the field when empty and clearing any group-by/
