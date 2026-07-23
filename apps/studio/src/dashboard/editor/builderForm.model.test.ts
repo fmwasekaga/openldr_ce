@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { setModelPatch, setMetricPatch, setDimensionPatch, setGrainPatch, setBreakdownPatch, setFiltersPatch, setLimitPatch, setFilterTreePatch, buildSaveQuery, shouldRestoreEjected, measuresOf, setMeasuresPatch, addAdhocDimensionPatch, removeAdhocDimensionPatch, adhocKey, makeAdhocDimension, setRelationshipColumnsPatch, removeRelationshipPatch, type BuilderQuery } from './builderForm.model';
+import { setModelPatch, setMetricPatch, setDimensionPatch, setGrainPatch, setBreakdownPatch, setFiltersPatch, setLimitPatch, setFilterTreePatch, buildSaveQuery, shouldRestoreEjected, measuresOf, setMeasuresPatch, removeAdhocDimensionPatch, adhocKey, makeAdhocDimension, setRelationshipColumnsPatch, removeRelationshipPatch, type BuilderQuery } from './builderForm.model';
 import type { QueryModel, WidgetVariableDef } from '../../api';
 
 const models: QueryModel[] = [
@@ -196,19 +196,8 @@ const baseQ = () => ({
 const adhoc = { key: 'jp__sex', label: 'Patient Sex', join: 'jp', column: 'sex', kind: 'string' as const };
 
 describe('adhoc dimension patches', () => {
-  it('adds an adhoc dimension', () => {
-    const next = addAdhocDimensionPatch(baseQ(), adhoc);
-    expect(next.adhocDimensions).toEqual([adhoc]);
-  });
-
-  it('does not add a duplicate adhoc dimension with the same key', () => {
-    const q = addAdhocDimensionPatch(baseQ(), adhoc);
-    const next = addAdhocDimensionPatch(q, adhoc);
-    expect(next.adhocDimensions).toEqual([adhoc]); // unchanged — no duplicate
-  });
-
   it('removes an adhoc dimension and clears any group-by that referenced it', () => {
-    let q = addAdhocDimensionPatch(baseQ(), adhoc);
+    let q: BuilderQuery = { ...baseQ(), adhocDimensions: [adhoc] };
     q = setDimensionPatch(q, 'jp__sex');
     const next = removeAdhocDimensionPatch(q, 'jp__sex');
     expect(next.adhocDimensions).toEqual([]);
@@ -216,21 +205,21 @@ describe('adhoc dimension patches', () => {
   });
 
   it('removes an adhoc dimension and clears any breakdown that referenced it', () => {
-    let q = addAdhocDimensionPatch(baseQ(), adhoc);
+    let q: BuilderQuery = { ...baseQ(), adhocDimensions: [adhoc] };
     q = { ...q, breakdown: { key: 'jp__sex' } };
     const next = removeAdhocDimensionPatch(q, 'jp__sex');
     expect(next.breakdown).toBeUndefined();
   });
 
   it('removes an adhoc dimension and clears orphaned flat filters that referenced it', () => {
-    let q = addAdhocDimensionPatch(baseQ(), adhoc);
+    let q: BuilderQuery = { ...baseQ(), adhocDimensions: [adhoc] };
     q = { ...q, filters: [{ dimension: 'jp__sex', op: 'eq', value: 'male' }, { dimension: 'status', op: 'eq', value: 'x' }] };
     const next = removeAdhocDimensionPatch(q, 'jp__sex');
     expect(next.filters).toEqual([{ dimension: 'status', op: 'eq', value: 'x' }]);
   });
 
   it('removes an adhoc dimension and prunes orphaned filterTree rules that referenced it', () => {
-    let q = addAdhocDimensionPatch(baseQ(), adhoc);
+    let q: BuilderQuery = { ...baseQ(), adhocDimensions: [adhoc] };
     q = {
       ...q,
       filterTree: {
@@ -251,7 +240,7 @@ describe('adhoc dimension patches', () => {
   });
 
   it('drops the adhocDimensions field when the list becomes empty', () => {
-    const q = addAdhocDimensionPatch(baseQ(), adhoc);
+    const q: BuilderQuery = { ...baseQ(), adhocDimensions: [adhoc] };
     const next = removeAdhocDimensionPatch(q, 'jp__sex');
     expect('adhocDimensions' in next ? next.adhocDimensions?.length : 0).toBe(0);
   });
@@ -261,7 +250,7 @@ describe('adhoc dimension patches', () => {
       { id: 'service_requests', label: 'Test Orders', dimensions: [], metrics: [{ key: 'count', label: 'Count', agg: 'count' }] },
       { id: 'observations', label: 'Results', dimensions: [], metrics: [{ key: 'count', label: 'Count', agg: 'count' }] },
     ] as never;
-    const q = addAdhocDimensionPatch(baseQ(), adhoc);
+    const q: BuilderQuery = { ...baseQ(), adhocDimensions: [adhoc] };
     const next = setModelPatch(models, q, 'observations');
     expect(next.adhocDimensions).toBeUndefined();
   });

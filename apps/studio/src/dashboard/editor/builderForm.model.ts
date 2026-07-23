@@ -123,13 +123,6 @@ export function setMeasuresPatch(value: BuilderQuery, list: Measure[]): BuilderQ
   return next;
 }
 
-/** Append a "join column" ad-hoc dimension to the query. */
-export function addAdhocDimensionPatch(value: BuilderQuery, dim: AdhocDimension): BuilderQuery {
-  const list = value.adhocDimensions ?? [];
-  if (list.some((d) => d.key === dim.key)) return value; // already added — no duplicate
-  return { ...value, adhocDimensions: [...list, dim] };
-}
-
 /** Remove an ad-hoc dimension by key, dropping the field when empty and clearing every reference
  *  the removed column left behind — group-by, breakdown, flat `filters`, and `filterTree` rules —
  *  so the query never carries a dangling dimension key (mirrors the derived-measure orphan cleanup

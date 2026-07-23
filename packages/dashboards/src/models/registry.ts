@@ -16,7 +16,7 @@ export interface ModelJoin {
   left: string;                   // base column: 'subject_ref'
   leftReplace?: [string, string]; // ['Patient/',''] → replace(base.left, 'Patient/', '')
   right: string;                  // joined column: 'id'
-  optional?: boolean;      // offered in the "+ Add → Join column" picker instead of firing via a default dimension
+  optional?: boolean;      // offered in the "+ Add → Join data" picker instead of firing via a default dimension
   label?: string;          // display name for the join in the picker (defaults to the table name)
   denyColumns?: string[];  // columns that may NOT be exposed; REQUIRED for an optional join to be usable (fail-safe)
 }
