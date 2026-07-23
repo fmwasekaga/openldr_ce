@@ -44,6 +44,21 @@ describe('createAppContext', () => {
     // Nothing reachable in this test → overall down, but no crash.
     expect(out.status).toBe('down');
   }, 20000);
+
+  // Coverage gap closed: the route-level test (apps/server/src/dashboards-routes.test.ts) mocks
+  // ctx.dashboards entirely, so it never exercises the real `models: () => modelsForClient()`
+  // wiring in index.ts. This builds the real AppContext (same as above) and calls the real
+  // dashboards.models() — modelsForClient() is pure (no DB/pg), so this is safe without a live DB.
+  it('dashboards.models() returns the PII-safe client projection (real wiring)', async () => {
+    ctx = await createAppContext(cfg);
+    const models = ctx.dashboards.models();
+    const sr = models.find((m) => m.id === 'service_requests')!;
+    expect((sr as Record<string, unknown>).joins).toBeUndefined(); // raw joins never exposed
+    const jp = sr.optionalJoins?.find((j) => j.alias === 'jp');
+    expect(jp?.label).toBe('Patient');
+    expect(jp?.exposableColumns).toContain('managing_organization');
+    expect(jp?.exposableColumns).not.toContain('surname'); // denied PII absent
+  }, 20000);
 });
 
 /**
