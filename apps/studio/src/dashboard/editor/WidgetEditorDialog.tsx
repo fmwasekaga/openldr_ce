@@ -456,11 +456,9 @@ export function WidgetEditorDialog({
   const errorMsg = error;
   const detectedVars = extractLogicalVariables(sqlText, varDefs);
   const previewConfig: WidgetConfig = { id: 'preview', type, title, query: { mode: 'sql', sql: sqlText }, refreshIntervalSec: 0, visual };
-  // measuresOf() always returns a 1-element array even with no measure (it falls back to
-  // `[value.metric]`, which is `[undefined]` when `metric` is absent) — filter(Boolean) so a truly
-  // measure-less query (metric absent, metrics absent/empty; see WidgetQuerySchema's `metric`
-  // comment) is correctly detected as having zero measures.
-  const builderHasNoMeasure = mode === 'builder' && measuresOf(builderQuery).filter(Boolean).length === 0;
+  // measuresOf() returns [] for a truly measure-less query (metric absent, metrics absent/empty),
+  // so an empty list means zero measures.
+  const builderHasNoMeasure = mode === 'builder' && measuresOf(builderQuery).length === 0;
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>

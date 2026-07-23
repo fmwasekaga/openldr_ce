@@ -66,7 +66,6 @@ describe('BuilderForm', () => {
 
   it('renders the AND/OR filter tree root controls after adding the Filter section', () => {
     render(<BuilderForm models={models} value={base} onChange={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /add clause/i }));
     fireEvent.click(screen.getByRole('button', { name: /^filter$/i }));
     expect(screen.getByLabelText('Add condition')).toBeTruthy();
     expect(screen.getByLabelText('Add group')).toBeTruthy();
@@ -88,10 +87,9 @@ const modelsWithJoin = [{
 const builderValue = { mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count', label: 'Count' }, filters: [] } as never;
 
 describe('BuilderForm Add menu + join column', () => {
-  it('offers "Join column" in the Add menu when the model has optional joins', () => {
+  it('offers a "Join column" tile when the model has optional joins', () => {
     render(<BuilderForm models={modelsWithJoin} value={builderValue} onChange={() => {}} />);
-    fireEvent.click(screen.getByRole('button', { name: /add clause/i }));
-    expect(screen.getByText(/join column/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /join column/i })).toBeInTheDocument();
   });
 
   it('the Join columns card × clears ALL join columns, not just the last', () => {
@@ -133,8 +131,7 @@ describe('BuilderForm Add menu + join column', () => {
   it('adds an adhoc dimension through the picker and emits it on change', () => {
     const onChange = vi.fn();
     render(<BuilderForm models={modelsWithJoin} value={builderValue} onChange={onChange} />);
-    fireEvent.click(screen.getByRole('button', { name: /add clause/i }));
-    fireEvent.click(screen.getByText(/join column/i));
+    fireEvent.click(screen.getByRole('button', { name: /join column/i }));
     // choose column 'sex' via the real Radix Select (Column has aria-label="Column" inside JoinColumnPicker):
     fireEvent.click(screen.getByLabelText('Column'));
     fireEvent.click(screen.getByRole('option', { name: 'sex' }));
@@ -166,11 +163,15 @@ describe('BuilderForm minimal-core sections', () => {
     expect(screen.getByText(/summarize/i)).toBeInTheDocument();
   });
 
-  it('adding "Group by" from the Add menu reveals the Group by section', () => {
+  it('adding "Group by" from the Add tiles reveals the Group by section', () => {
     render(<BuilderForm models={modelsFix} value={withMeasure} onChange={() => {}} />);
-    fireEvent.click(screen.getByRole('button', { name: /add clause/i }));
     fireEvent.click(screen.getByRole('button', { name: /^group by$/i }));
     expect(screen.getByLabelText('Group by')).toBeInTheDocument();
+  });
+
+  it('renders a no-measure query without crashing', () => {
+    const noMeasure = { mode: 'builder', model: 'service_requests', filters: [] } as never;
+    expect(() => render(<BuilderForm models={modelsFix} value={noMeasure} onChange={() => {}} />)).not.toThrow();
   });
 
   it('removing the Summarize section clears the measure (emits metric-less query)', () => {

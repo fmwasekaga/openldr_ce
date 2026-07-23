@@ -111,7 +111,7 @@ export function shouldRestoreEjected(mode: 'builder' | 'sql', sqlText: string, l
 
 /** The current measures as a list (the single `metric`, or the `metrics[]` array when wide). */
 export function measuresOf(value: BuilderQuery): Measure[] {
-  return (value.metrics as Measure[] | undefined) ?? [value.metric as Measure];
+  return (value.metrics as Measure[] | undefined) ?? (value.metric ? [value.metric as Measure] : []);
 }
 
 /** Persist an edited measures list back into the query's `metric`/`metrics` fields. */
