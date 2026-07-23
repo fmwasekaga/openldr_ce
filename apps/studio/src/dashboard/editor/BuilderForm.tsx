@@ -259,7 +259,7 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
   if (addBlock) blocks.push(addBlock);
 
   return (
-    <div className="flex flex-col gap-3 p-1">
+    <div className="flex flex-col gap-3 px-3 py-2">
       <div className="rounded-md border border-border bg-card p-3">
         <label className="text-sm">
           Source
