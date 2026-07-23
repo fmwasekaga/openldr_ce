@@ -148,6 +148,23 @@ const modelsFix = [{
 }] as never;
 const withMeasure = { mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count', label: 'Count' }, filters: [] } as never;
 
+describe('BuilderForm custom columns', () => {
+  it('offers a "Custom column" tile', () => {
+    render(<BuilderForm models={models} value={base} onChange={() => {}} />);
+    expect(screen.getByRole('button', { name: /custom column/i })).toBeInTheDocument();
+  });
+
+  it('renders active custom columns in a card and removes one on ×', () => {
+    const onChange = vi.fn();
+    const value = { ...base, customColumns: [{ key: 'sp', label: 'Status/Priority', expr: { kind: 'concat', parts: [{ type: 'field', dimension: 'status' }] } }] } as never;
+    render(<BuilderForm models={models} value={value} onChange={onChange} />);
+    expect(screen.getByText('Status/Priority')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /remove Status\/Priority/i }));
+    const last = onChange.mock.calls.at(-1)![0];
+    expect(last.customColumns ?? []).toHaveLength(0);
+  });
+});
+
 describe('BuilderForm minimal-core sections', () => {
   it('pins only Source; Group by / Breakdown are NOT shown until added', () => {
     render(<BuilderForm models={modelsFix} value={withMeasure} onChange={() => {}} />);

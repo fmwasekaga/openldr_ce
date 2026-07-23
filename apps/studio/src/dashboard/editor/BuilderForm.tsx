@@ -1,12 +1,14 @@
 import { Fragment, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Sigma, Filter, Rows3, Columns3, ArrowUpDown, Combine, type LucideIcon } from 'lucide-react';
+import { Sigma, Filter, Rows3, Columns3, ArrowUpDown, Combine, Calculator, type LucideIcon } from 'lucide-react';
 import type { DashboardFilterDef, ModelDimension, QueryModel } from '../../api';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { FilterTreeEditor } from './FilterTreeEditor';
 import { MeasuresEditor } from './MeasuresEditor';
 import { JoinDataPicker } from './JoinDataPicker';
+import { CustomColumnEditor } from './CustomColumnEditor';
+import { addCustomColumn, removeCustomColumn, customColumnKind } from './customColumns.model';
 import { emptyTree, filtersToTree } from './conditionTree.model';
 import {
   setModelPatch,
@@ -73,8 +75,19 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
     ...(model?.dimensions ?? []),
     ...adhoc.map((a) => ({ key: a.key, label: a.label, column: a.column, kind: a.kind, join: a.join, ...(a.kind === 'date' ? { dateGrain: DATE_GRAINS } : {}) })),
   ];
+  const customColumns = value.customColumns ?? [];
+  // Custom columns are first-class group-by/breakdown dimensions (kind derived from their expr).
+  dimOptions.push(...customColumns.map((c) => ({ key: c.key, label: c.label, column: '', kind: customColumnKind(c.expr) })));
+  // Filters can't reference a computed expression in v1 → exclude custom columns from the filter list.
+  const filterDimOptions = dimOptions.filter((d) => !customColumns.some((c) => c.key === d.key));
+  // Operands may reference only plain (non-computed) dimensions: model dims (minus age-band) + ad-hoc.
+  const operandDims = [
+    ...(model?.dimensions ?? []).filter((d) => !d.compute).map((d) => ({ key: d.key, label: d.label })),
+    ...adhoc.map((a) => ({ key: a.key, label: a.label })),
+  ];
   const dim = dimOptions.find((d) => d.key === value.dimension?.key);
   const [showPicker, setShowPicker] = useState(false);
+  const [showCustom, setShowCustom] = useState(false);
 
   // Which optional sections are shown. Lazy initializer captures the query state only on mount, so a
   // section stays shown after you clear its field mid-edit (matching Metabase's clause chips).
@@ -111,7 +124,7 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
       <SectionCard label="Filter" onRemove={() => removeSection('filter')}>
         <FilterTreeEditor
           value={value.filterTree ?? (value.filters?.length ? filtersToTree(value.filters) : emptyTree())}
-          dimensions={dimOptions}
+          dimensions={filterDimOptions}
           onChange={(tree) => onChange(setFilterTreePatch(value, tree))}
         />
       </SectionCard>
@@ -215,12 +228,27 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
         </SectionCard>
       );
     }),
+    ...(customColumns.length > 0
+      ? [
+          <SectionCard key="__customcols__" label="Custom columns" onRemove={() => onChange(customColumns.reduce((q, c) => removeCustomColumn(q, c.key), value))}>
+            <div className="flex flex-wrap gap-1">
+              {customColumns.map((c) => (
+                <span key={c.key} className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs">
+                  {c.label}
+                  <button type="button" aria-label={`Remove ${c.label}`} onClick={() => onChange(removeCustomColumn(value, c.key))}>×</button>
+                </span>
+              ))}
+            </div>
+          </SectionCard>,
+        ]
+      : []),
   ];
 
   // The Add area: the JoinDataPicker replaces the tiles while picking; otherwise a Metabase-style
   // row of always-visible tiles (one per unshown section, plus a Join-data tile when the model has
   // optional joins). Nothing when there is neither.
-  const hasTiles = unshown.length > 0 || !!model?.optionalJoins?.length;
+  // Custom column is always offered once a model is selected, so the tiles row always renders.
+  const hasTiles = true;
   const addBlock: ReactNode =
     showPicker && model?.optionalJoins ? (
       <div className="pt-2">
@@ -229,6 +257,15 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
           adhoc={adhoc}
           onApply={(alias, joinLabel, columns) => { onChange(setRelationshipColumnsPatch(value, alias, joinLabel, columns)); setShowPicker(false); }}
           onCancel={() => setShowPicker(false)}
+        />
+      </div>
+    ) : showCustom ? (
+      <div className="pt-2">
+        <CustomColumnEditor
+          dims={operandDims}
+          existing={customColumns}
+          onAdd={(col) => { onChange(addCustomColumn(value, col)); setShowCustom(false); }}
+          onCancel={() => setShowCustom(false)}
         />
       </div>
     ) : hasTiles ? (
@@ -257,6 +294,14 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
             Join data
           </button>
         ) : null}
+        <button
+          type="button"
+          onClick={() => setShowCustom(true)}
+          className="flex min-w-[76px] flex-col items-center gap-1 rounded-md border border-border bg-card px-3 py-2 text-xs hover:bg-muted"
+        >
+          <Calculator size={16} aria-hidden="true" />
+          Custom column
+        </button>
       </div>
     ) : null;
 
