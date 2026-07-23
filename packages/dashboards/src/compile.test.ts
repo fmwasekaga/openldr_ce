@@ -379,6 +379,36 @@ describe('compileBuilderQuery with an adhoc join column', () => {
   });
 });
 
+describe('compileBuilderQuery multiple optional joins', () => {
+  it('emits a leftJoin per distinct optional join referenced, with qualified refs', () => {
+    const model = getModel('observations')!;
+    const { sql } = compileBuilderQuery(db, model, {
+      mode: 'builder', model: 'observations',
+      metric: { key: 'count', agg: 'count' },
+      adhocDimensions: [
+        { key: 'js__status', label: 'Specimen Status', join: 'js', column: 'status', kind: 'string' },
+        { key: 'jr__priority', label: 'Request Priority', join: 'jr', column: 'priority', kind: 'string' },
+      ],
+      dimension: { key: 'js__status' },
+      filters: [{ dimension: 'jr__priority', op: 'eq', value: 'high' }],
+    } as any).compile();
+    expect(sql).toMatch(/left join "specimens" as "js"/i);
+    expect(sql).toMatch(/left join "lab_requests" as "jr"/i);
+    expect(sql).toMatch(/"js"\."status" as "label"/i);
+    expect(sql).not.toMatch(/as "jp"/i); // the non-optional patients join is not referenced → not emitted
+  });
+
+  it('rejects an ad-hoc column that the denylist excludes', () => {
+    const model = getModel('observations')!;
+    expect(() => compileBuilderQuery(db, model, {
+      mode: 'builder', model: 'observations',
+      metric: { key: 'count', agg: 'count' },
+      adhocDimensions: [{ key: 'js__patient_id', label: 'x', join: 'js', column: 'patient_id', kind: 'string' }],
+      dimension: { key: 'js__patient_id' }, filters: [],
+    } as any)).toThrow(/not exposable/i);
+  });
+});
+
 describe('builder query with no measure', () => {
   const noMeasure = { mode: 'builder' as const, model: 'service_requests', filters: [] };
 
