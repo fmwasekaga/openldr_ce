@@ -25,12 +25,12 @@ describe('BuilderForm', () => {
   // shadcn/Radix Select renders a combobox, not a native <select>, and jsdom can't reliably
   // open Radix menus (see WidgetEditorDialog.test.tsx). Behavior is covered by
   // builderForm.model.test.ts's pure-function tests; this is a render smoke-test only.
-  it('renders the Source, Measure, Group by, and Breakdown controls', () => {
+  it('renders the Data, Measure, Group by, and Breakdown controls', () => {
     const onChange = vi.fn();
     // Group by / Breakdown are now on-demand sections; populate them so the shown-set initializer renders them.
     const full = { ...base, dimension: { key: 'status' }, breakdown: { key: 'priority' } } as Extract<WidgetQuery, { mode: 'builder' }>;
     const { getByLabelText } = render(<BuilderForm models={models} value={full} onChange={onChange} />);
-    expect(getByLabelText('Source')).toBeTruthy();
+    expect(getByLabelText('Data')).toBeTruthy();
     expect(getByLabelText('Add measure')).toBeTruthy();
     expect(getByLabelText('Group by')).toBeTruthy();
     expect(getByLabelText('Breakdown')).toBeTruthy();
@@ -87,7 +87,7 @@ const modelsWithJoin = [{
 const builderValue = { mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count', label: 'Count' }, filters: [] } as never;
 
 describe('BuilderForm Add menu + join column', () => {
-  it('offers a "Join data" tile when the model has optional joins', () => {
+  it('offers a "Join data" button when the model has optional joins', () => {
     render(<BuilderForm models={modelsWithJoin} value={builderValue} onChange={() => {}} />);
     expect(screen.getByRole('button', { name: /join data/i })).toBeInTheDocument();
   });
@@ -138,6 +138,12 @@ describe('BuilderForm Add menu + join column', () => {
       adhocDimensions: [expect.objectContaining({ key: 'jp__sex', column: 'sex' })],
     }));
   });
+
+  it('shows Join data and Custom column as buttons under Data', () => {
+    render(<BuilderForm models={modelsWithJoin} value={builderValue} onChange={() => {}} />);
+    expect(screen.getByRole('button', { name: /join data/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /custom column/i })).toBeInTheDocument();
+  });
 });
 
 const modelsFix = [{
@@ -166,9 +172,9 @@ describe('BuilderForm custom columns', () => {
 });
 
 describe('BuilderForm minimal-core sections', () => {
-  it('pins only Source; Group by / Breakdown are NOT shown until added', () => {
+  it('pins only Data; Group by / Breakdown are NOT shown until added', () => {
     render(<BuilderForm models={modelsFix} value={withMeasure} onChange={() => {}} />);
-    expect(screen.getByLabelText('Source')).toBeInTheDocument();
+    expect(screen.getByLabelText('Data')).toBeInTheDocument();
     expect(screen.queryByLabelText('Group by')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Breakdown')).not.toBeInTheDocument();
   });

@@ -204,12 +204,12 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
     ),
   };
 
-  // Ordered list of every visible optional block: the shown section cards (in SECTION_ORDER),
-  // then one relationship card per active join alias (grouped from the ad-hoc dimensions). A subtle
-  // hairline is rendered before each block (and before the Add tiles) so every section is visually
-  // separated, no label.
+  // Ordered list of every visible optional block: one relationship card per active join alias
+  // (grouped from the ad-hoc dimensions), then the custom-columns card, then the shown section
+  // cards (in SECTION_ORDER) — Metabase-style, join/custom-column blocks sit right under Data,
+  // ahead of the clause sections. A subtle hairline is rendered before each block (and before the
+  // Add tiles) so every section is visually separated, no label.
   const visibleBlocks: ReactNode[] = [
-    ...SECTION_ORDER.filter((k) => shown.has(k)).map((k) => sectionNodes[k]),
     ...[...new Set(adhoc.map((a) => a.join))].map((alias) => {
       const meta = model?.optionalJoins?.find((j) => j.alias === alias);
       const cols = adhoc.filter((a) => a.join === alias);
@@ -242,16 +242,39 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
           </SectionCard>,
         ]
       : []),
+    ...SECTION_ORDER.filter((k) => shown.has(k)).map((k) => sectionNodes[k]),
   ];
 
-  // The Add area: the JoinDataPicker replaces the tiles while picking; otherwise a Metabase-style
-  // row of always-visible tiles (one per unshown section, plus a Join-data tile when the model has
-  // optional joins). Nothing when there is neither.
-  // Custom column is always offered once a model is selected, so the tiles row always renders.
-  const hasTiles = true;
-  const addBlock: ReactNode =
+  // Icon-only actions directly under Data (Metabase-style): Join (when joinable) + Custom column.
+  const dataActions: ReactNode = (
+    <div className="flex gap-2 px-1">
+      {model?.optionalJoins?.length ? (
+        <button
+          type="button"
+          aria-label="Join data"
+          title="Join data"
+          onClick={() => { setShowCustom(false); setShowPicker(true); }}
+          className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card hover:bg-muted"
+        >
+          <Combine size={18} aria-hidden="true" />
+        </button>
+      ) : null}
+      <button
+        type="button"
+        aria-label="Custom column"
+        title="Custom column"
+        onClick={() => { setShowPicker(false); setShowCustom(true); }}
+        className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card hover:bg-muted"
+      >
+        <Calculator size={18} aria-hidden="true" />
+      </button>
+    </div>
+  );
+
+  // The inline JoinDataPicker / CustomColumnEditor, rendered right under the action buttons.
+  const inlineEditor: ReactNode =
     showPicker && model?.optionalJoins ? (
-      <div className="pt-2">
+      <div className="px-1">
         <JoinDataPicker
           optionalJoins={model.optionalJoins}
           adhoc={adhoc}
@@ -260,7 +283,7 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
         />
       </div>
     ) : showCustom ? (
-      <div className="pt-2">
+      <div className="px-1">
         <CustomColumnEditor
           dims={operandDims}
           existing={customColumns}
@@ -268,55 +291,42 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
           onCancel={() => setShowCustom(false)}
         />
       </div>
-    ) : hasTiles ? (
-      <div className="flex flex-wrap gap-2 px-1">
-        {unshown.map((k) => {
-          const Icon = SECTION_ICON[k];
-          return (
-            <button
-              key={k}
-              type="button"
-              onClick={() => addSection(k)}
-              className="flex min-w-[76px] flex-col items-center gap-1 rounded-md border border-border bg-card px-3 py-2 text-xs hover:bg-muted"
-            >
-              <Icon size={16} aria-hidden="true" />
-              {SECTION_LABEL[k]}
-            </button>
-          );
-        })}
-        {model?.optionalJoins?.length ? (
-          <button
-            type="button"
-            onClick={() => setShowPicker(true)}
-            className="flex min-w-[76px] flex-col items-center gap-1 rounded-md border border-border bg-card px-3 py-2 text-xs hover:bg-muted"
-          >
-            <Combine size={16} aria-hidden="true" />
-            Join data
-          </button>
-        ) : null}
-        <button
-          type="button"
-          onClick={() => setShowCustom(true)}
-          className="flex min-w-[76px] flex-col items-center gap-1 rounded-md border border-border bg-card px-3 py-2 text-xs hover:bg-muted"
-        >
-          <Calculator size={16} aria-hidden="true" />
-          Custom column
-        </button>
-      </div>
     ) : null;
 
-  // Every block below Source, each preceded by a hairline divider (which also serves as the
-  // divider under Source). One leading divider per block — no doubled or trailing hairlines.
+  // The bottom Add tiles row now holds only the unshown clause sections — Join data and Custom
+  // column moved to the icon-button row under Data. Disappears once every section is shown.
+  const showAddTiles = unshown.length > 0;
+  const addTilesRow: ReactNode = (
+    <div className="flex flex-wrap gap-2 px-1">
+      {unshown.map((k) => {
+        const Icon = SECTION_ICON[k];
+        return (
+          <button
+            key={k}
+            type="button"
+            onClick={() => addSection(k)}
+            className="flex min-w-[76px] flex-col items-center gap-1 rounded-md border border-border bg-card px-3 py-2 text-xs hover:bg-muted"
+          >
+            <Icon size={16} aria-hidden="true" />
+            {SECTION_LABEL[k]}
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  // Every block below Data, each preceded by a hairline divider (which also serves as the
+  // divider under Data's action row). One leading divider per block — no doubled or trailing hairlines.
   const blocks: ReactNode[] = [...visibleBlocks];
-  if (addBlock) blocks.push(addBlock);
+  if (showAddTiles) blocks.push(addTilesRow);
 
   return (
     <div className="flex flex-col gap-3 py-2">
       <div className="mx-1 rounded-md border border-border bg-card p-3">
         <label className="text-sm">
-          Source
+          Data
           <Select value={value.model} onValueChange={(id) => onChange(setModelPatch(models, value, id))}>
-            <SelectTrigger aria-label="Source" className="mt-1 w-full">
+            <SelectTrigger aria-label="Data" className="mt-1 w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -329,6 +339,9 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
           </Select>
         </label>
       </div>
+
+      {dataActions}
+      {inlineEditor}
 
       {blocks.map((b, i) => (
         <Fragment key={i}>

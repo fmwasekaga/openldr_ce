@@ -25,11 +25,11 @@ describe('WidgetEditorDialog', () => {
 
   // shadcn/Radix Select can't be driven in jsdom (see BuilderForm.test.tsx); this is a render
   // smoke-test that a brand-new widget (no `initial`) defaults to Builder mode, i.e. the
-  // Builder pane's Source picker is what mounts in the top-left region, not the SQL editor.
-  it('defaults a new widget to Builder mode and shows the source picker', () => {
+  // Builder pane's Data picker is what mounts in the top-left region, not the SQL editor.
+  it('defaults a new widget to Builder mode and shows the data picker', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('[]', { status: 200 }));
     const { getByLabelText } = render(<WidgetEditorDialog open initial={undefined} dashboardFilters={[]} onClose={() => {}} onSave={() => {}} />);
-    expect(getByLabelText('Source')).toBeInTheDocument();
+    expect(getByLabelText('Data')).toBeInTheDocument();
   });
 
   it('makes the SQL field read-only when sqlEnabled is false', () => {
@@ -99,7 +99,7 @@ describe('WidgetEditorDialog', () => {
     } as const;
     render(<WidgetEditorDialog open initial={initial as any} onClose={() => {}} onSave={() => {}} />);
     fireEvent.click(screen.getByRole('button', { name: 'Builder' }));
-    expect(screen.getByLabelText('Source')).toBeInTheDocument();
+    expect(screen.getByLabelText('Data')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Builder' })).not.toBeDisabled();
   });
 
