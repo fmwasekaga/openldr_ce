@@ -76,6 +76,12 @@ function pruneBound(node: TreeNode, bound: Set<string>): TreeNode | null {
   return { ...node, children };
 }
 
+/** Drop every rule whose dimension is in `keys` (empty groups are kept). Used to clear filter/
+ *  filterTree references orphaned by removing an ad-hoc dimension. */
+export function pruneDimensions(root: TreeGroup, keys: Set<string>): TreeGroup {
+  return pruneBound(root, keys) as TreeGroup;
+}
+
 /**
  * Runtime binding: replace bound-dimension rules with the resolved dashboard-filter value(s),
  * ANDed with the rest of the tree. ANDing at a fresh root keeps the injected value correct even

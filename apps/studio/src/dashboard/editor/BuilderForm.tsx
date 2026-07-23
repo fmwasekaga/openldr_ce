@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { DashboardFilterDef, QueryModel } from '../../api';
+import type { DashboardFilterDef, ModelDimension, QueryModel } from '../../api';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -25,14 +25,25 @@ import {
 // this sentinel and translated back to '' before it reaches the pure builderForm.model helpers.
 const NONE = '__none__';
 
+// Ad-hoc date columns carry no server-provided grain list (effectiveModel folds them in without
+// dateGrain), so the picker offers these defaults — matching the model registry's DATE_GRAINS.
+// The server buckets on q.dimension.grain regardless of the dim's dateGrain, so any of these works.
+const DATE_GRAINS = ['day', 'week', 'month', 'year'];
+
 export function BuilderForm({ models, value, dashboardFilters = [], onChange }: {
   models: QueryModel[]; value: BuilderQuery; dashboardFilters?: DashboardFilterDef[]; onChange: (q: BuilderQuery) => void;
 }) {
   const model = models.find((m) => m.id === value.model) ?? models[0];
-  const dim = model?.dimensions.find((d) => d.key === value.dimension?.key);
 
   const adhoc = value.adhocDimensions ?? [];
-  const dimOptions = [...(model?.dimensions ?? []), ...adhoc.map((a) => ({ key: a.key, label: a.label, kind: a.kind }))];
+  // Merge ad-hoc join columns into the effective dimension list (mirrors the server's effectiveModel)
+  // so they're first-class in Group by, Breakdown, and the filter tree. Date columns get default
+  // grains since ad-hoc dims carry no dateGrain of their own.
+  const dimOptions: ModelDimension[] = [
+    ...(model?.dimensions ?? []),
+    ...adhoc.map((a) => ({ key: a.key, label: a.label, column: a.column, kind: a.kind, join: a.join, ...(a.kind === 'date' ? { dateGrain: DATE_GRAINS } : {}) })),
+  ];
+  const dim = dimOptions.find((d) => d.key === value.dimension?.key);
   const [addOpen, setAddOpen] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
 
@@ -66,7 +77,7 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
         <div className="mt-1">
           <FilterTreeEditor
             value={value.filterTree ?? (value.filters?.length ? filtersToTree(value.filters) : emptyTree())}
-            dimensions={model?.dimensions ?? []}
+            dimensions={dimOptions}
             onChange={(tree) => onChange(setFilterTreePatch(value, tree))}
           />
         </div>

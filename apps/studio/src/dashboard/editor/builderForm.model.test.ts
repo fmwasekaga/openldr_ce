@@ -213,6 +213,34 @@ describe('adhoc dimension patches', () => {
     expect(next.breakdown).toBeUndefined();
   });
 
+  it('removes an adhoc dimension and clears orphaned flat filters that referenced it', () => {
+    let q = addAdhocDimensionPatch(baseQ(), adhoc);
+    q = { ...q, filters: [{ dimension: 'jp__sex', op: 'eq', value: 'male' }, { dimension: 'status', op: 'eq', value: 'x' }] };
+    const next = removeAdhocDimensionPatch(q, 'jp__sex');
+    expect(next.filters).toEqual([{ dimension: 'status', op: 'eq', value: 'x' }]);
+  });
+
+  it('removes an adhoc dimension and prunes orphaned filterTree rules that referenced it', () => {
+    let q = addAdhocDimensionPatch(baseQ(), adhoc);
+    q = {
+      ...q,
+      filterTree: {
+        kind: 'group' as const,
+        combinator: 'and' as const,
+        children: [
+          { kind: 'rule' as const, dimension: 'jp__sex', op: 'eq', value: 'male' },
+          { kind: 'rule' as const, dimension: 'status', op: 'eq', value: 'x' },
+        ],
+      },
+    };
+    const next = removeAdhocDimensionPatch(q, 'jp__sex');
+    expect(next.filterTree).toEqual({
+      kind: 'group',
+      combinator: 'and',
+      children: [{ kind: 'rule', dimension: 'status', op: 'eq', value: 'x' }],
+    });
+  });
+
   it('drops the adhocDimensions field when the list becomes empty', () => {
     const q = addAdhocDimensionPatch(baseQ(), adhoc);
     const next = removeAdhocDimensionPatch(q, 'jp__sex');

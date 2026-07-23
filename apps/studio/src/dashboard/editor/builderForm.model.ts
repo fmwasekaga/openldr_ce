@@ -3,7 +3,7 @@
 // shell over these functions.
 
 import type { QueryModel, WidgetQuery, WidgetVariableDef } from '../../api';
-import type { TreeGroup } from './conditionTree.model';
+import { pruneDimensions, type TreeGroup } from './conditionTree.model';
 import { toBuilderMetrics, type Measure } from './measures.model';
 
 export type BuilderQuery = Extract<WidgetQuery, { mode: 'builder' }>;
@@ -130,13 +130,17 @@ export function addAdhocDimensionPatch(value: BuilderQuery, dim: AdhocDimension)
   return { ...value, adhocDimensions: [...list, dim] };
 }
 
-/** Remove an ad-hoc dimension by key, dropping the field when empty and clearing any group-by/
- *  breakdown that referenced it (mirrors the derived-measure orphan cleanup in measures.model.ts). */
+/** Remove an ad-hoc dimension by key, dropping the field when empty and clearing every reference
+ *  the removed column left behind — group-by, breakdown, flat `filters`, and `filterTree` rules —
+ *  so the query never carries a dangling dimension key (mirrors the derived-measure orphan cleanup
+ *  in measures.model.ts). */
 export function removeAdhocDimensionPatch(value: BuilderQuery, key: string): BuilderQuery {
   const list = (value.adhocDimensions ?? []).filter((d) => d.key !== key);
   const next = { ...value };
   next.adhocDimensions = list;
   if (next.dimension?.key === key) next.dimension = undefined;
   if (next.breakdown?.key === key) next.breakdown = undefined;
+  if (next.filters?.length) next.filters = next.filters.filter((f) => f.dimension !== key);
+  if (next.filterTree) next.filterTree = pruneDimensions(next.filterTree as TreeGroup, new Set([key])) as BuilderQuery['filterTree'];
   return next;
 }

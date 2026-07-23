@@ -89,6 +89,27 @@ describe('BuilderForm Add menu + join column', () => {
     expect(screen.getByText(/join column/i)).toBeInTheDocument();
   });
 
+  it('lists an added adhoc dimension as a Filter field option', () => {
+    const value = {
+      mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count', label: 'Count' },
+      adhocDimensions: [{ key: 'jp__sex', label: 'Patient Sex', join: 'jp', column: 'sex', kind: 'string' }],
+      filterTree: { kind: 'group', combinator: 'and', children: [{ kind: 'rule', dimension: 'status', op: 'eq', value: '' }] },
+    } as never;
+    render(<BuilderForm models={modelsWithJoin} value={value} onChange={() => {}} />);
+    fireEvent.click(screen.getByLabelText('Filter field'));
+    expect(screen.getByRole('option', { name: 'Patient Sex' })).toBeInTheDocument();
+  });
+
+  it('renders a Grain control for an adhoc date column used as group-by', () => {
+    const value = {
+      mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count', label: 'Count' }, filters: [],
+      adhocDimensions: [{ key: 'jp__created', label: 'Created', join: 'jp', column: 'created_at', kind: 'date' }],
+      dimension: { key: 'jp__created' },
+    } as never;
+    render(<BuilderForm models={modelsWithJoin} value={value} onChange={() => {}} />);
+    expect(screen.getByLabelText('Grain')).toBeInTheDocument();
+  });
+
   it('adds an adhoc dimension through the picker and emits it on change', () => {
     const onChange = vi.fn();
     render(<BuilderForm models={modelsWithJoin} value={builderValue} onChange={onChange} />);
