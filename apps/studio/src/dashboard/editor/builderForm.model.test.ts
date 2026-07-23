@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { setModelPatch, setMetricPatch, setDimensionPatch, setGrainPatch, setBreakdownPatch, setFiltersPatch, setLimitPatch, setFilterTreePatch, buildSaveQuery, shouldRestoreEjected, measuresOf, setMeasuresPatch, removeAdhocDimensionPatch, adhocKey, makeAdhocDimension, setRelationshipColumnsPatch, removeRelationshipPatch, type BuilderQuery } from './builderForm.model';
+import { setModelPatch, setMetricPatch, setDimensionPatch, setGrainPatch, setBreakdownPatch, setFiltersPatch, setLimitPatch, setFilterTreePatch, buildSaveQuery, shouldRestoreEjected, measuresOf, setMeasuresPatch, removeAdhocDimensionPatch, adhocKey, makeAdhocDimension, setRelationshipColumnsPatch, removeRelationshipPatch, addUserJoinPatch, removeUserJoinPatch, setUserJoinKeysPatch, uniqueJoinId, type BuilderQuery } from './builderForm.model';
 import type { QueryModel, WidgetVariableDef } from '../../api';
 
 const models: QueryModel[] = [
@@ -14,12 +14,14 @@ const models: QueryModel[] = [
       { key: 'count', label: 'Count', agg: 'count' },
       { key: 'sum_x', label: 'Sum X', agg: 'sum', column: 'x' },
     ],
+    tableColumns: [],
   },
   {
     id: 'observations',
     label: 'Results',
     dimensions: [{ key: 'code_text', label: 'Analyte', column: 'code_text', kind: 'string' }],
     metrics: [{ key: 'count', label: 'Count', agg: 'count' }],
+    tableColumns: [],
   },
 ];
 
@@ -310,5 +312,34 @@ describe('join relationship patches', () => {
     expect((next.adhocDimensions ?? []).map((d) => d.key)).toEqual(['jr__priority']); // jr kept
     expect(next.dimension).toBeUndefined();                 // js group-by cleaned
     expect(next.breakdown).toEqual({ key: 'jr__priority' }); // jr breakdown kept
+  });
+});
+
+describe('user join patches', () => {
+  const q0 = () => ({ mode: 'builder' as const, model: 'service_requests', metric: { key: 'count', agg: 'count', label: 'Count' }, filters: [] });
+
+  it('addUserJoinPatch appends a user join', () => {
+    const next = addUserJoinPatch(q0(), { id: 'u1', table: 'patients', left: 'patient_id', right: 'id', label: 'Patient' });
+    expect(next.userJoins).toEqual([{ id: 'u1', table: 'patients', left: 'patient_id', right: 'id', label: 'Patient' }]);
+  });
+
+  it('uniqueJoinId avoids collisions', () => {
+    expect(uniqueJoinId([])).toBe('u1');
+    expect(uniqueJoinId([{ id: 'u1' }])).toBe('u2');
+  });
+
+  it('setUserJoinKeysPatch updates one join\'s keys', () => {
+    let q = addUserJoinPatch(q0(), { id: 'u1', table: 'patients', left: 'patient_id', right: 'id' });
+    q = setUserJoinKeysPatch(q, 'u1', { right: 'patient_guid' });
+    expect(q.userJoins![0].right).toBe('patient_guid');
+  });
+
+  it('removeUserJoinPatch removes the join, its adhoc columns, and orphan-cleans references', () => {
+    let q: any = addUserJoinPatch(q0(), { id: 'u1', table: 'patients', left: 'patient_id', right: 'id' });
+    q = { ...q, adhocDimensions: [{ key: 'u1__sex', label: 'Sex', join: 'u1', column: 'sex', kind: 'string' }], dimension: { key: 'u1__sex' } };
+    const next = removeUserJoinPatch(q, 'u1');
+    expect(next.userJoins ?? []).toHaveLength(0);
+    expect((next.adhocDimensions ?? []).some((d: any) => d.join === 'u1')).toBe(false);
+    expect(next.dimension).toBeUndefined();
   });
 });

@@ -1,7 +1,7 @@
 import { Fragment, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Sigma, Filter, Rows3, Columns3, ArrowUpDown, Blend, Grid2x2Plus, type LucideIcon } from 'lucide-react';
-import type { DashboardFilterDef, ModelDimension, QueryModel } from '../../api';
+import type { DashboardFilterDef, ModelDimension, QueryModel, ClientJoinableTable } from '../../api';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -9,6 +9,7 @@ import { FilterTreeEditor } from './FilterTreeEditor';
 import { MeasuresEditor } from './MeasuresEditor';
 import { JoinDataPicker } from './JoinDataPicker';
 import { CustomColumnEditor } from './CustomColumnEditor';
+import { UserJoinBuilder } from './UserJoinBuilder';
 import { addCustomColumn, removeCustomColumn, customColumnKind } from './customColumns.model';
 import { emptyTree, filtersToTree } from './conditionTree.model';
 import {
@@ -23,6 +24,10 @@ import {
   removeAdhocDimensionPatch,
   removeRelationshipPatch,
   setRelationshipColumnsPatch,
+  addUserJoinPatch,
+  setUserJoinKeysPatch,
+  removeUserJoinPatch,
+  uniqueJoinId,
   type BuilderQuery,
 } from './builderForm.model';
 
@@ -63,10 +68,12 @@ const SECTION_ORDER: SectionKey[] = ['summarize', 'filter', 'groupby', 'breakdow
 const SECTION_LABEL: Record<SectionKey, string> = { summarize: 'Summarize', filter: 'Filter', groupby: 'Group by', breakdown: 'Breakdown', sort: 'Sort' };
 const SECTION_ICON: Record<SectionKey, LucideIcon> = { summarize: Sigma, filter: Filter, groupby: Rows3, breakdown: Columns3, sort: ArrowUpDown };
 
-export function BuilderForm({ models, value, dashboardFilters = [], onChange }: {
-  models: QueryModel[]; value: BuilderQuery; dashboardFilters?: DashboardFilterDef[]; onChange: (q: BuilderQuery) => void;
+export function BuilderForm({ models, value, dashboardFilters = [], joinableTables = [], onChange }: {
+  models: QueryModel[]; value: BuilderQuery; dashboardFilters?: DashboardFilterDef[]; joinableTables?: ClientJoinableTable[]; onChange: (q: BuilderQuery) => void;
 }) {
   const model = models.find((m) => m.id === value.model) ?? models[0];
+  const baseColumns = model?.tableColumns ?? [];
+  const userJoins = value.userJoins ?? [];
 
   const adhoc = value.adhocDimensions ?? [];
   // Merge ad-hoc join columns into the effective dimension list (mirrors the server's effectiveModel)
@@ -211,24 +218,41 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
   // ahead of the clause sections. A subtle hairline is rendered before each block (and before the
   // Add tiles) so every section is visually separated, no label.
   const visibleBlocks: ReactNode[] = [
-    ...[...new Set(adhoc.map((a) => a.join))].map((alias) => {
-      const meta = model?.optionalJoins?.find((j) => j.alias === alias);
-      const cols = adhoc.filter((a) => a.join === alias);
-      const label = meta?.label ?? alias;
-      return (
-        <SectionCard key={`__join_${alias}__`} label={`Join: ${label}`} onRemove={() => onChange(removeRelationshipPatch(value, alias))}>
-          {meta && <p className="mb-2 text-xs text-muted-foreground">on {meta.left} = {meta.right}</p>}
-          <div className="flex flex-wrap gap-1">
-            {cols.map((a) => (
-              <span key={a.key} className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs">
-                {a.label}
-                <button type="button" aria-label={`Remove ${a.label}`} onClick={() => onChange(removeAdhocDimensionPatch(value, a.key))}>×</button>
-              </span>
-            ))}
-          </div>
-        </SectionCard>
-      );
-    }),
+    // Curated (admin) relationship cards: ad-hoc-dimension join aliases that AREN'T a user-join id
+    // (user joins get their own UserJoinBuilder block below, keyed by the same `join` alias).
+    ...[...new Set(adhoc.map((a) => a.join))]
+      .filter((alias) => !userJoins.some((uj) => uj.id === alias))
+      .map((alias) => {
+        const meta = model?.optionalJoins?.find((j) => j.alias === alias);
+        const cols = adhoc.filter((a) => a.join === alias);
+        const label = meta?.label ?? alias;
+        return (
+          <SectionCard key={`__join_${alias}__`} label={`Join: ${label}`} onRemove={() => onChange(removeRelationshipPatch(value, alias))}>
+            {meta && <p className="mb-2 text-xs text-muted-foreground">on {meta.left} = {meta.right}</p>}
+            <div className="flex flex-wrap gap-1">
+              {cols.map((a) => (
+                <span key={a.key} className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs">
+                  {a.label}
+                  <button type="button" aria-label={`Remove ${a.label}`} onClick={() => onChange(removeAdhocDimensionPatch(value, a.key))}>×</button>
+                </span>
+              ))}
+            </div>
+          </SectionCard>
+        );
+      }),
+    // User-defined join blocks: one UserJoinBuilder per entry in value.userJoins.
+    ...userJoins.map((uj) => (
+      <UserJoinBuilder
+        key={`__userjoin_${uj.id}__`}
+        join={uj}
+        joinable={joinableTables}
+        baseColumns={baseColumns}
+        selected={adhoc.filter((d) => d.join === uj.id).map((d) => d.column)}
+        onChange={(patch) => onChange(setUserJoinKeysPatch(value, uj.id, patch))}
+        onColumns={(id, cols) => onChange(setRelationshipColumnsPatch(value, id, joinableTables.find((t) => t.table === uj.table)?.label ?? uj.table, cols))}
+        onRemove={() => onChange(removeUserJoinPatch(value, uj.id))}
+      />
+    )),
     ...(customColumns.length > 0
       ? [
           <SectionCard key="__customcols__" label="Custom columns" onRemove={() => onChange(customColumns.reduce((q, c) => removeCustomColumn(q, c.key), value))}>
@@ -250,7 +274,7 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
   const dataActions: ReactNode = (
     <TooltipProvider>
       <div className="flex gap-1.5 px-1">
-        {model?.optionalJoins?.length ? (
+        {model?.optionalJoins?.length || joinableTables.length ? (
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -282,16 +306,34 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
     </TooltipProvider>
   );
 
-  // The inline JoinDataPicker / CustomColumnEditor, rendered right under the action buttons.
+  // The inline JoinDataPicker / CustomColumnEditor, rendered right under the action buttons. The
+  // curated JoinDataPicker only exists when the model has admin-defined optionalJoins; "+ Add a
+  // join" (arbitrary user-defined joins against the admin-governed joinable-table universe) is
+  // available whenever the server exposes any joinable table — so models with NO curated joins
+  // (e.g. Patients/Facilities) can still reach arbitrary joins, which is the whole point of the feature.
   const inlineEditor: ReactNode =
-    showPicker && model?.optionalJoins ? (
-      <div className="px-1">
-        <JoinDataPicker
-          optionalJoins={model.optionalJoins}
-          adhoc={adhoc}
-          onApply={(alias, joinLabel, columns) => { onChange(setRelationshipColumnsPatch(value, alias, joinLabel, columns)); setShowPicker(false); }}
-          onCancel={() => setShowPicker(false)}
-        />
+    showPicker ? (
+      <div className="flex flex-col gap-2 px-1">
+        {model?.optionalJoins && (
+          <JoinDataPicker
+            optionalJoins={model.optionalJoins}
+            adhoc={adhoc}
+            onApply={(alias, joinLabel, columns) => { onChange(setRelationshipColumnsPatch(value, alias, joinLabel, columns)); setShowPicker(false); }}
+            onCancel={() => setShowPicker(false)}
+          />
+        )}
+        {joinableTables.length > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              onChange(addUserJoinPatch(value, { id: uniqueJoinId(userJoins), table: joinableTables[0].table, left: '', right: '', label: joinableTables[0].label }));
+              setShowPicker(false);
+            }}
+            className="self-start rounded-md border border-border bg-card px-3 py-1.5 text-xs hover:bg-muted"
+          >
+            + Add a join
+          </button>
+        )}
       </div>
     ) : showCustom ? (
       <div className="px-1">
@@ -325,7 +367,7 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
           </button>
         );
       })}
-      {model?.optionalJoins?.length ? (
+      {model?.optionalJoins?.length || joinableTables.length ? (
         <button
           type="button"
           onClick={() => { setShowCustom(false); setShowPicker(true); }}

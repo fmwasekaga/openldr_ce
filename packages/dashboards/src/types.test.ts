@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { WidgetConfigSchema, WidgetQuerySchema, MetricSchema, DerivedRatioSchema, ConditionGroupSchema, ExprSchema, CustomColumnSchema, customColumnKind } from './types';
+import { WidgetConfigSchema, WidgetQuerySchema, MetricSchema, DerivedRatioSchema, ConditionGroupSchema, ExprSchema, CustomColumnSchema, customColumnKind, UserJoinSchema } from './types';
 
 describe('WidgetConfigSchema', () => {
   it('accepts a builder widget', () => {
@@ -224,5 +224,22 @@ describe('custom column schema', () => {
   it('customColumnKind derives string for concat and number for arithmetic', () => {
     expect(customColumnKind({ kind: 'concat', parts: [{ type: 'string', value: 'x' }] })).toBe('string');
     expect(customColumnKind({ kind: 'arithmetic', op: '+', left: { type: 'number', value: 1 }, right: { type: 'number', value: 2 } })).toBe('number');
+  });
+});
+
+describe('user joins schema', () => {
+  it('accepts a userJoin', () => {
+    expect(UserJoinSchema.safeParse({ id: 'u1', table: 'patients', left: 'patient_id', right: 'id', label: 'Patient' }).success).toBe(true);
+  });
+  it('rejects a userJoin id with SQL-alias-breaking characters', () => {
+    expect(UserJoinSchema.safeParse({ id: 'u1 as x', table: 'patients', left: 'patient_id', right: 'id' }).success).toBe(false);
+    expect(UserJoinSchema.safeParse({ id: 'a.b', table: 'patients', left: 'patient_id', right: 'id' }).success).toBe(false);
+  });
+  it('accepts a builder query carrying userJoins', () => {
+    const ok = WidgetQuerySchema.safeParse({
+      mode: 'builder', model: 'm', metric: { key: 'count', agg: 'count' }, filters: [],
+      userJoins: [{ id: 'u1', table: 'patients', left: 'patient_id', right: 'id' }],
+    });
+    expect(ok.success).toBe(true);
   });
 });

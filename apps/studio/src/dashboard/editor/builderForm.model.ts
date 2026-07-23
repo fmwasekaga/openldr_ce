@@ -2,7 +2,7 @@
 // they're unit-testable without jsdom or Radix — see BuilderForm.tsx, which is a thin shadcn
 // shell over these functions.
 
-import type { QueryModel, WidgetQuery, WidgetVariableDef } from '../../api';
+import type { QueryModel, UserJoin, WidgetQuery, WidgetVariableDef } from '../../api';
 import { pruneDimensions, type TreeGroup } from './conditionTree.model';
 import { toBuilderMetrics, type Measure } from './measures.model';
 
@@ -188,5 +188,37 @@ export function setRelationshipColumnsPatch(value: BuilderQuery, joinAlias: stri
 export function removeRelationshipPatch(value: BuilderQuery, joinAlias: string): BuilderQuery {
   const removedKeys = new Set((value.adhocDimensions ?? []).filter((d) => d.join === joinAlias).map((d) => d.key));
   const next = { ...value, adhocDimensions: (value.adhocDimensions ?? []).filter((d) => d.join !== joinAlias) };
+  return clearDimensionRefs(next, removedKeys);
+}
+
+// --- User-defined join helpers (admin-governed universe; ids prefixed `u` to avoid colliding
+// with admin optional-join aliases `jp`/`js`/`jr`) ---
+
+/** `u1`, `u2`, … avoiding collisions with existing user-join ids. */
+export function uniqueJoinId(list: { id: string }[]): string {
+  const used = new Set(list.map((j) => j.id));
+  let n = 1;
+  while (used.has(`u${n}`)) n++;
+  return `u${n}`;
+}
+
+export function addUserJoinPatch(value: BuilderQuery, join: UserJoin): BuilderQuery {
+  const list = value.userJoins ?? [];
+  if (list.some((j) => j.id === join.id)) return value;
+  return { ...value, userJoins: [...list, join] };
+}
+
+export function setUserJoinKeysPatch(value: BuilderQuery, id: string, patch: Partial<Pick<UserJoin, 'left' | 'right' | 'table' | 'label'>>): BuilderQuery {
+  return { ...value, userJoins: (value.userJoins ?? []).map((j) => (j.id === id ? { ...j, ...patch } : j)) };
+}
+
+/** Remove a user join, all its ad-hoc columns, and orphan-clean any group-by/breakdown/filter refs. */
+export function removeUserJoinPatch(value: BuilderQuery, id: string): BuilderQuery {
+  const removedKeys = new Set((value.adhocDimensions ?? []).filter((d) => d.join === id).map((d) => d.key));
+  const next: BuilderQuery = {
+    ...value,
+    userJoins: (value.userJoins ?? []).filter((j) => j.id !== id),
+    adhocDimensions: (value.adhocDimensions ?? []).filter((d) => d.join !== id),
+  };
   return clearDimensionRefs(next, removedKeys);
 }

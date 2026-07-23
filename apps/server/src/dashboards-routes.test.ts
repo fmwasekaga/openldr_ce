@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import Fastify from 'fastify';
-import { modelsForClient } from '@openldr/dashboards';
+import { modelsForClient, joinableTablesForClient } from '@openldr/dashboards';
 import { registerDashboardRoutes } from './dashboards-routes';
 import './auth-plugin';
 
@@ -18,6 +18,7 @@ function fakeCtx(cfg: { DASHBOARD_SQL_ENABLED?: boolean } = {}) {
         remove: async (id: string) => { const i = data.findIndex((x) => x.id === id); if (i >= 0) data.splice(i, 1); },
       },
       models: () => modelsForClient(),
+      joinableTables: () => joinableTablesForClient(),
       query: async (q: any) => {
         if (q.mode === 'sql') { const e: any = new Error('raw SQL widgets are disabled'); e.name = 'DashboardQueryError'; throw e; }
         return { columns: [], rows: [], chart: { type: 'stat', value: '0', label: 'x' }, meta: { generatedAt: 'now', rowCount: 0 } };
@@ -62,6 +63,18 @@ describe('dashboard routes', () => {
     expect(jp.label).toBe('Patient');
     expect(jp.exposableColumns).toContain('managing_organization');
     expect(jp.exposableColumns).not.toContain('surname');
+  });
+  it('GET /api/dashboards/joinable-tables returns the joinable-table universe and never leaks denyColumns', async () => {
+    const app = appWith(fakeCtx());
+    const res = await app.inject({ method: 'GET', url: '/api/dashboards/joinable-tables' });
+    expect(res.statusCode).toBe(200);
+    const tables = res.json() as Array<Record<string, any>>;
+    expect(tables.length).toBeGreaterThan(0);
+    expect(tables.every((t) => !('denyColumns' in t))).toBe(true);
+    const patients = tables.find((t) => t.table === 'patients');
+    expect(patients?.columns).toBeDefined();
+    expect(patients?.primaryKeys).toBeDefined();
+    expect(patients?.allColumns).toBeDefined();
   });
   it('runs a builder query', async () => {
     const app = appWith(fakeCtx());

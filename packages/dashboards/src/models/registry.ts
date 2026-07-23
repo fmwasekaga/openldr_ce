@@ -20,6 +20,7 @@ export interface ModelJoin {
   optional?: boolean;      // offered in the "+ Add → Join data" picker instead of firing via a default dimension
   label?: string;          // display name for the join in the picker (defaults to the table name)
   denyColumns?: string[];  // columns that may NOT be exposed; REQUIRED for an optional join to be usable (fail-safe)
+  exposable?: string[];    // explicit allowlist for a synthesized user join (overrides denyColumns logic)
 }
 export interface ModelDimension { key: string; label: string; column: string; kind: DimensionKind; dateGrain?: DateGrain[]; compute?: AgeBandCompute | ExprCompute; join?: string }
 export interface ModelMetric { key: string; label: string; agg: Agg; column?: string }
@@ -125,8 +126,64 @@ export function exposableColumns(model: QueryModel, alias: string): string[] {
   return EXTERNAL_TABLE_COLUMNS[j.table].filter((c) => !deny.has(c));
 }
 
+/** Exposable columns for any join alias: a synthesized user join's explicit `exposable`, else the
+ *  admin optional-join denylist rules (exposableColumns). */
+export function exposableFor(model: QueryModel, alias: string): string[] {
+  const j = (model.joins ?? []).find((x) => x.alias === alias);
+  return j?.exposable ?? exposableColumns(model, alias);
+}
+
+export interface JoinableTable {
+  table: keyof ExternalSchema;
+  label: string;
+  columns?: string[];      // ALLOWLIST of exposable output columns, OR…
+  denyColumns?: string[];  // …all-minus-denylist (an explicit [] means "all"). Exactly one is the policy.
+  primaryKeys?: string[];  // unique columns → no fan-out warning when used as the right key
+}
+
+/** The admin-governed universe of joinable tables (global). Extend as needed. */
+export const JOINABLE_TABLES: JoinableTable[] = [
+  { table: 'patients', label: 'Patient', primaryKeys: ['id'],
+    denyColumns: ['id', 'patient_guid', 'surname', 'firstname', 'national_id', 'phone', 'email',
+                  'date_of_birth', 'replaced_by_id', 'plugin_id', 'plugin_version', 'batch_id'] },
+  { table: 'facilities', label: 'Facility', primaryKeys: ['id'],
+    denyColumns: ['plugin_id', 'plugin_version', 'batch_id'] },
+  { table: 'specimens', label: 'Specimen', primaryKeys: ['id'],
+    denyColumns: ['id', 'patient_id', 'accession', 'plugin_id', 'plugin_version', 'batch_id'] },
+  { table: 'lab_requests', label: 'Request', primaryKeys: ['id'],
+    denyColumns: ['id', 'patient_id', 'plugin_id', 'plugin_version', 'batch_id'] },
+  { table: 'diagnostic_reports', label: 'Report', primaryKeys: ['id'],
+    denyColumns: ['id', 'patient_id', 'plugin_id', 'plugin_version', 'batch_id'] },
+];
+
+export function getJoinableTable(table: string): JoinableTable | undefined {
+  return JOINABLE_TABLES.find((t) => t.table === table);
+}
+
+/**
+ * Exposable OUTPUT columns for a joinable table, per its admin policy. Allowlist wins; otherwise
+ * all-minus-denylist (an explicit empty denylist means "all"); no policy at all → [] (fail-safe closed).
+ */
+export function joinableColumns(jt: JoinableTable): string[] {
+  const all = EXTERNAL_TABLE_COLUMNS[jt.table];
+  if (jt.columns) return jt.columns.filter((c) => all.includes(c));
+  if (jt.denyColumns) { const deny = new Set(jt.denyColumns); return all.filter((c) => !deny.has(c)); }
+  return [];
+}
+
+export interface ClientJoinableTable { table: string; label: string; columns: string[]; primaryKeys: string[]; allColumns: string[] }
+
+/** Browser-safe projection: policy-filtered output `columns`, `primaryKeys`, and `allColumns` (every
+ *  real column name, for the join-key pickers). Raw `denyColumns` never travel. Tables that expose no
+ *  output columns are dropped (nothing to join to). */
+export function joinableTablesForClient(): ClientJoinableTable[] {
+  return JOINABLE_TABLES
+    .map((jt) => ({ table: jt.table, label: jt.label, columns: joinableColumns(jt), primaryKeys: jt.primaryKeys ?? [], allColumns: EXTERNAL_TABLE_COLUMNS[jt.table] }))
+    .filter((t) => t.columns.length > 0);
+}
+
 export interface ClientOptionalJoin { alias: string; label: string; left: string; right: string; exposableColumns: string[] }
-export type ClientQueryModel = Omit<QueryModel, 'joins'> & { optionalJoins?: ClientOptionalJoin[] };
+export type ClientQueryModel = Omit<QueryModel, 'joins'> & { optionalJoins?: ClientOptionalJoin[]; tableColumns: string[] };
 
 /**
  * Model list shaped for the browser. Raw `joins`/`denyColumns` are dropped; each usable optional
@@ -142,7 +199,8 @@ export function modelsForClient(models: QueryModel[] = MODELS): ClientQueryModel
       .map((j) => ({ alias: j.alias, label: j.label ?? j.table, left: j.left, right: j.right, exposableColumns: exposableColumns(m, j.alias) }))
       .filter((oj) => oj.exposableColumns.length > 0);
     const { id, label, table, dimensions, metrics } = m;
-    return optionalJoins.length ? { id, label, table, dimensions, metrics, optionalJoins }
-                                : { id, label, table, dimensions, metrics };
+    const tableColumns = EXTERNAL_TABLE_COLUMNS[table];
+    return optionalJoins.length ? { id, label, table, dimensions, metrics, optionalJoins, tableColumns }
+                                : { id, label, table, dimensions, metrics, tableColumns };
   });
 }

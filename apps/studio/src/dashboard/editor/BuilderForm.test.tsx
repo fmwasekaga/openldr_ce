@@ -12,6 +12,7 @@ const models: QueryModel[] = [
       { key: 'priority', label: 'Priority', column: 'priority', kind: 'string' },
     ],
     metrics: [{ key: 'count', label: 'Count', agg: 'count' }],
+    tableColumns: [],
   },
 ];
 const base = {
@@ -43,6 +44,7 @@ describe('BuilderForm', () => {
         label: 'Test Orders',
         dimensions: [{ key: 'collected', label: 'Collected', column: 'collected', kind: 'date', dateGrain: ['day', 'month'] }],
         metrics: [{ key: 'count', label: 'Count', agg: 'count' }],
+        tableColumns: [],
       },
     ];
     const withDim = { ...base, model: 'service_requests', dimension: { key: 'collected' } } as Extract<WidgetQuery, { mode: 'builder' }>;
@@ -206,5 +208,80 @@ describe('BuilderForm minimal-core sections', () => {
     const last = onChange.mock.calls.at(-1)![0];
     expect(last.metric).toBeUndefined();
     expect(last.metrics).toBeUndefined();
+  });
+});
+
+// --- User-defined joins (arbitrary joins against the admin-governed joinable-table universe) ---
+
+const joinableTablesFixture = [
+  { table: 'patients', label: 'Patient', columns: ['sex'], primaryKeys: ['id'], allColumns: ['id', 'patient_id', 'sex'] },
+];
+
+// This model has NO curated optionalJoins — arbitrary joins must still be reachable, since a
+// model with only one FK (or none) is exactly the case curated joins alone can't serve.
+const modelsNoCuratedJoins: QueryModel[] = [
+  {
+    id: 'service_requests', label: 'Test Orders',
+    dimensions: [{ key: 'status', label: 'Status', column: 'status', kind: 'string' }],
+    metrics: [{ key: 'count', label: 'Count', agg: 'count' }],
+    tableColumns: ['id', 'patient_id', 'status'],
+  },
+];
+const baseNoJoins = { mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count', label: 'Count' }, filters: [] } as Extract<WidgetQuery, { mode: 'builder' }>;
+
+describe('BuilderForm user-defined joins', () => {
+  it('offers "Join data" (and reaches "+ Add a join") even when the model has no curated optionalJoins', () => {
+    render(<BuilderForm models={modelsNoCuratedJoins} value={baseNoJoins} joinableTables={joinableTablesFixture} onChange={() => {}} />);
+    // Join data appears twice (icon under Data + bottom tile) purely because joinableTables is non-empty.
+    fireEvent.click(screen.getAllByRole('button', { name: /join data/i })[0]);
+    expect(screen.getByRole('button', { name: /\+ add a join/i })).toBeInTheDocument();
+  });
+
+  it('"+ Add a join" emits a userJoins entry', () => {
+    const onChange = vi.fn();
+    render(<BuilderForm models={modelsNoCuratedJoins} value={baseNoJoins} joinableTables={joinableTablesFixture} onChange={onChange} />);
+    fireEvent.click(screen.getAllByRole('button', { name: /join data/i })[0]);
+    fireEvent.click(screen.getByRole('button', { name: /\+ add a join/i }));
+    const last = onChange.mock.calls.at(-1)![0];
+    expect(last.userJoins).toEqual([expect.objectContaining({ id: 'u1', table: 'patients', label: 'Patient' })]);
+  });
+
+  it('renders a UserJoinBuilder block for each entry in value.userJoins', () => {
+    const withUserJoin = { ...baseNoJoins, userJoins: [{ id: 'u1', table: 'patients', left: 'patient_id', right: 'id', label: 'Patient' }] } as Extract<WidgetQuery, { mode: 'builder' }>;
+    render(<BuilderForm models={modelsNoCuratedJoins} value={withUserJoin} joinableTables={joinableTablesFixture} onChange={() => {}} />);
+    expect(screen.getByText('Join: Patient')).toBeInTheDocument();
+    expect(screen.getByLabelText('sex')).toBeInTheDocument();
+  });
+
+  it('removing a user join clears its ad-hoc columns and group-by reference', () => {
+    const onChange = vi.fn();
+    const withRef = {
+      ...baseNoJoins,
+      userJoins: [{ id: 'u1', table: 'patients', left: 'patient_id', right: 'id', label: 'Patient' }],
+      adhocDimensions: [{ key: 'u1__sex', label: 'Patient → Sex', join: 'u1', column: 'sex', kind: 'string' as const }],
+      dimension: { key: 'u1__sex' },
+    } as Extract<WidgetQuery, { mode: 'builder' }>;
+    render(<BuilderForm models={modelsNoCuratedJoins} value={withRef} joinableTables={joinableTablesFixture} onChange={onChange} />);
+    fireEvent.click(screen.getByRole('button', { name: /remove join u1/i }));
+    const last = onChange.mock.calls.at(-1)![0];
+    expect(last.userJoins ?? []).toHaveLength(0);
+    expect(last.adhocDimensions ?? []).toHaveLength(0);
+    expect(last.dimension).toBeUndefined();
+  });
+
+  it('does NOT render a duplicate curated join card when a user join has columns selected (regression: alias-collision guard)', () => {
+    // A user join (u1) with selected columns (adhocDimensions with join='u1') should render
+    // ONLY the UserJoinBuilder block, not also a spurious curated "Join: u1" card.
+    // The guard at BuilderForm.tsx:224 filters out join aliases that match userJoins ids.
+    const withSelectedColumns = {
+      ...baseNoJoins,
+      userJoins: [{ id: 'u1', table: 'patients', left: 'patient_id', right: 'id', label: 'Patient' }],
+      adhocDimensions: [{ key: 'u1__sex', label: 'Sex', join: 'u1', column: 'sex', kind: 'string' as const }],
+    } as Extract<WidgetQuery, { mode: 'builder' }>;
+    render(<BuilderForm models={modelsNoCuratedJoins} value={withSelectedColumns} joinableTables={joinableTablesFixture} onChange={() => {}} />);
+    // No spurious curated card with accessible name "Remove join: u1" (with colon, from SectionCard label lowercased)
+    expect(screen.queryByLabelText('Remove join: u1')).toBeNull();
+    // The legitimate UserJoinBuilder block IS present with accessible name "Remove join u1" (no colon)
+    expect(screen.getByLabelText('Remove join u1')).toBeInTheDocument();
   });
 });

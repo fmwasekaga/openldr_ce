@@ -1,7 +1,8 @@
 import { type Kysely, sql, expressionBuilder, type SelectQueryBuilder } from 'kysely';
 import type { ExternalSchema } from '@openldr/db';
 import type { QueryModel, ModelDimension, ModelJoin, AgeBandCompute } from './models/registry';
-import { exposableColumns } from './models/registry';
+import { exposableFor, getJoinableTable, joinableColumns } from './models/registry';
+import { EXTERNAL_TABLE_COLUMNS } from '@openldr/db/schema/external';
 import type { WidgetQuery, Metric, QueryFilter, DateGrain, ConditionNode, ConditionRule, Expr, Operand } from './types';
 import { customColumnKind } from './types';
 import type { ReportResultData, ReportColumn, ChartHint } from '@openldr/reporting';
@@ -209,6 +210,25 @@ function ageBandExprs(d: ModelDimension, reference?: string) {
 export function effectiveModel(model: QueryModel, q: BuilderQuery): QueryModel {
   let eff = model;
 
+  // 0) User-defined joins → synthesized ModelJoins, validated against the admin joinable universe.
+  const userJoins = q.userJoins ?? [];
+  if (userJoins.length) {
+    const baseCols = EXTERNAL_TABLE_COLUMNS[eff.table];
+    const synth: ModelJoin[] = [];
+    for (const uj of userJoins) {
+      const jt = getJoinableTable(uj.table);
+      if (!jt) throw new Error(`user join ${uj.id}: table not joinable: ${uj.table}`);
+      const rightCols = EXTERNAL_TABLE_COLUMNS[uj.table as keyof typeof EXTERNAL_TABLE_COLUMNS];
+      if (!baseCols.includes(uj.left)) throw new Error(`user join ${uj.id}: unknown left key: ${uj.left}`);
+      if (!rightCols || !rightCols.includes(uj.right)) throw new Error(`user join ${uj.id}: unknown right key: ${uj.right}`);
+      synth.push({ table: uj.table as ModelJoin['table'], alias: uj.id, left: uj.left, right: uj.right, optional: true, exposable: joinableColumns(jt) });
+    }
+    // Admin joins FIRST, synth (user) joins after: `exposableFor` and `collectUsedJoins` both use
+    // first-match `Array.find` by alias, so this order makes a trusted admin join shadow any user
+    // join whose id collides with an admin alias (belt-and-braces with the `u*`/`j*` id namespaces).
+    eff = { ...eff, joins: [...(eff.joins ?? []), ...synth] };
+  }
+
   // 1) Ad-hoc join columns (unchanged behavior).
   const adhoc = q.adhocDimensions ?? [];
   if (adhoc.length) {
@@ -217,7 +237,7 @@ export function effectiveModel(model: QueryModel, q: BuilderQuery): QueryModel {
     for (const a of adhoc) {
       const j = (eff.joins ?? []).find((x) => x.alias === a.join);
       if (!j || !j.optional) throw new Error(`adhoc dimension ${a.key}: unknown or non-optional join: ${a.join}`);
-      if (!exposableColumns(eff, a.join).includes(a.column)) throw new Error(`adhoc dimension ${a.key}: column not exposable: ${a.column}`);
+      if (!exposableFor(eff, a.join).includes(a.column)) throw new Error(`adhoc dimension ${a.key}: column not exposable: ${a.column}`);
       // idempotent: safe to call on an already-merged model. A collision with a REAL model dimension key
       // is also intentionally skipped — the trusted base dimension wins (fail-safe; an adhoc dim can never shadow it).
       if (existing.has(a.key)) continue;

@@ -66,6 +66,21 @@ export const AdhocDimensionSchema = z.object({
 });
 export type AdhocDimension = z.infer<typeof AdhocDimensionSchema>;
 
+// A user-defined join: base-model table column `left` = joined `table` column `right`. `id` is a
+// query-local alias (distinct id → same table joinable twice). Columns selected from it are ordinary
+// adhocDimensions whose `join` references this id.
+export const UserJoinSchema = z.object({
+  // Alphanumeric/underscore only: this is emitted as a SQL join alias, and it formalizes the
+  // `u<n>` (user) vs `j*` (admin) namespace separation the compiler's first-match join shadowing
+  // relies on. Rejects ids with `.`/spaces that would otherwise produce malformed SQL.
+  id: z.string().regex(/^[A-Za-z0-9_]+$/),
+  table: z.string(),
+  left: z.string(),
+  right: z.string(),
+  label: z.string().optional(),
+});
+export type UserJoin = z.infer<typeof UserJoinSchema>;
+
 // A custom-column operand: a reference to an existing (non-computed) dimension, or a bound literal.
 export const OperandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('field'), dimension: z.string() }),
@@ -111,6 +126,7 @@ export const WidgetQuerySchema = z.discriminatedUnion('mode', [
     filters: z.array(QueryFilterSchema).default([]),
     filterTree: ConditionGroupSchema.optional(), // recursive AND/OR tree; supersedes `filters` when present
     adhocDimensions: z.array(AdhocDimensionSchema).optional(), // "join column" escape-hatch dimensions
+    userJoins: z.array(UserJoinSchema).optional(),
     customColumns: z.array(CustomColumnSchema).optional(), // row-level computed group-by dimensions
     limit: z.number().int().positive().optional(), // top-N of the shaped result, by primary measure desc
     variableBindings: z.record(z.string()).optional(),
