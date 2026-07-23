@@ -225,7 +225,7 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
         />
       </div>
     ) : hasTiles ? (
-      <div className="flex flex-wrap gap-2 px-1 pt-2">
+      <div className="flex flex-wrap gap-2 px-1">
         {unshown.map((k) => {
           const Icon = SECTION_ICON[k];
           return (
