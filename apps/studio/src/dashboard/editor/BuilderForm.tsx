@@ -247,16 +247,16 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
 
   // Icon-only actions directly under Data (Metabase-style): Join (when joinable) + Custom column.
   const dataActions: ReactNode = (
-    <div className="flex gap-2 px-1">
+    <div className="flex gap-1.5 px-1">
       {model?.optionalJoins?.length ? (
         <button
           type="button"
           aria-label="Join data"
           title="Join data"
           onClick={() => { setShowCustom(false); setShowPicker(true); }}
-          className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card hover:bg-muted"
+          className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-card hover:bg-muted"
         >
-          <Blend size={18} aria-hidden="true" />
+          <Blend size={15} aria-hidden="true" />
         </button>
       ) : null}
       <button
@@ -264,9 +264,9 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
         aria-label="Custom column"
         title="Custom column"
         onClick={() => { setShowPicker(false); setShowCustom(true); }}
-        className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card hover:bg-muted"
+        className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-card hover:bg-muted"
       >
-        <Grid2x2Plus size={18} aria-hidden="true" />
+        <Grid2x2Plus size={15} aria-hidden="true" />
       </button>
     </div>
   );
