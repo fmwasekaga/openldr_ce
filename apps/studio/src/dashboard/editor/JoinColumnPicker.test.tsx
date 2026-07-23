@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
-import { JoinColumnPicker, adhocKey } from './JoinColumnPicker';
+import { JoinColumnPicker } from './JoinColumnPicker';
+import { adhocKey } from './builderForm.model';
 
 const optionalJoins = [
   { alias: 'jp', label: 'Patient', left: 'patient_id', right: 'id', exposableColumns: ['sex', 'managing_organization'] },

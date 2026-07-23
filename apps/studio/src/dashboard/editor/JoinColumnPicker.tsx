@@ -1,24 +1,9 @@
 import { useState } from 'react';
 import type { ClientOptionalJoin } from '../../api';
-import type { AdhocDimension } from './builderForm.model';
+import { adhocKey, inferKind, humanize, type AdhocDimension } from './builderForm.model';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-
-/** Query-local key for an ad-hoc join column. */
-export function adhocKey(join: string, column: string): string {
-  return `${join}__${column}`;
-}
-
-// Columns that look like dates/numbers get a better default kind; everything else is a string.
-function inferKind(column: string): AdhocDimension['kind'] {
-  if (/(_at|_time|date|timestamp|issued|authored|received|effective)/i.test(column)) return 'date';
-  if (/(count|value|amount|age|number|_id$)/i.test(column)) return 'number';
-  return 'string';
-}
-
-const humanize = (column: string) =>
-  column.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
 export function JoinColumnPicker({
   optionalJoins,

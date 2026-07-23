@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { setModelPatch, setMetricPatch, setDimensionPatch, setGrainPatch, setBreakdownPatch, setFiltersPatch, setLimitPatch, setFilterTreePatch, buildSaveQuery, shouldRestoreEjected, measuresOf, setMeasuresPatch, addAdhocDimensionPatch, removeAdhocDimensionPatch, type BuilderQuery } from './builderForm.model';
+import { setModelPatch, setMetricPatch, setDimensionPatch, setGrainPatch, setBreakdownPatch, setFiltersPatch, setLimitPatch, setFilterTreePatch, buildSaveQuery, shouldRestoreEjected, measuresOf, setMeasuresPatch, addAdhocDimensionPatch, removeAdhocDimensionPatch, adhocKey, makeAdhocDimension, setRelationshipColumnsPatch, removeRelationshipPatch, type BuilderQuery } from './builderForm.model';
 import type { QueryModel, WidgetVariableDef } from '../../api';
 
 const models: QueryModel[] = [
@@ -264,5 +264,52 @@ describe('adhoc dimension patches', () => {
     const q = addAdhocDimensionPatch(baseQ(), adhoc);
     const next = setModelPatch(models, q, 'observations');
     expect(next.adhocDimensions).toBeUndefined();
+  });
+});
+
+describe('join relationship patches', () => {
+  const q0 = () => ({ mode: 'builder' as const, model: 'observations', metric: { key: 'count', agg: 'count', label: 'Count' }, filters: [] });
+
+  it('adhocKey builds a stable join__column key', () => {
+    expect(adhocKey('js', 'status')).toBe('js__status');
+  });
+
+  it('makeAdhocDimension derives key/label/kind for a column', () => {
+    expect(makeAdhocDimension('js', 'Specimen', 'received_time')).toEqual({
+      key: 'js__received_time', label: 'Specimen → Received Time', join: 'js', column: 'received_time', kind: 'date',
+    });
+  });
+
+  it('setRelationshipColumnsPatch adds the selected columns for one relationship', () => {
+    const next = setRelationshipColumnsPatch(q0(), 'js', 'Specimen', ['status', 'origin']);
+    expect(next.adhocDimensions).toEqual([
+      { key: 'js__status', label: 'Specimen → Status', join: 'js', column: 'status', kind: 'string' },
+      { key: 'js__origin', label: 'Specimen → Origin', join: 'js', column: 'origin', kind: 'string' },
+    ]);
+  });
+
+  it('setRelationshipColumnsPatch leaves other relationships untouched', () => {
+    let q = setRelationshipColumnsPatch(q0(), 'js', 'Specimen', ['status']);
+    q = setRelationshipColumnsPatch(q, 'jr', 'Request', ['priority']);
+    expect((q.adhocDimensions ?? []).map((d) => d.key)).toEqual(['js__status', 'jr__priority']);
+  });
+
+  it('setRelationshipColumnsPatch drops a deselected column and orphan-cleans its group-by', () => {
+    let q = setRelationshipColumnsPatch(q0(), 'js', 'Specimen', ['status', 'origin']);
+    q = setDimensionPatch(q, 'js__origin');
+    const next = setRelationshipColumnsPatch(q, 'js', 'Specimen', ['status']); // drop origin
+    expect((next.adhocDimensions ?? []).map((d) => d.key)).toEqual(['js__status']);
+    expect(next.dimension).toBeUndefined(); // orphan cleanup
+  });
+
+  it('removeRelationshipPatch removes every column for the alias and orphan-cleans references', () => {
+    let q = setRelationshipColumnsPatch(q0(), 'js', 'Specimen', ['status']);
+    q = setRelationshipColumnsPatch(q, 'jr', 'Request', ['priority']);
+    q = setDimensionPatch(q, 'js__status');
+    q = { ...q, breakdown: { key: 'jr__priority' } };
+    const next = removeRelationshipPatch(q, 'js');
+    expect((next.adhocDimensions ?? []).map((d) => d.key)).toEqual(['jr__priority']); // jr kept
+    expect(next.dimension).toBeUndefined();                 // js group-by cleaned
+    expect(next.breakdown).toEqual({ key: 'jr__priority' }); // jr breakdown kept
   });
 });
