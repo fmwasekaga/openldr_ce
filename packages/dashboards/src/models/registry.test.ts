@@ -96,12 +96,16 @@ describe('modelsForClient', () => {
     expect((m as unknown as Record<string, unknown>).joins).toBeUndefined();
     const oj = m.optionalJoins!.find((x) => x.alias === 'jp')!;
     expect(oj.label).toBe('Patient');
-    expect(oj.exposableColumns).toContain('managing_organization');
-    expect(oj.exposableColumns).not.toContain('surname'); // denied names never reach the client
+    expect(oj.exposableColumns).toEqual(['sex', 'managing_organization', 'active', 'source_system', 'created_at']);
   });
 
   it('omits optionalJoins for models without optional joins', () => {
     const m = modelsForClient().find((x) => x.id === 'diagnostic_reports')!;
     expect(m.optionalJoins).toBeUndefined();
+  });
+
+  it('keeps only optional joins with a usable denylist, dropping non-optional and undenied joins', () => {
+    const [m] = modelsForClient([MODEL_WITH_OPTIONAL]);
+    expect(m.optionalJoins?.map((j) => j.alias)).toEqual(['jp']); // jf (no denylist) and jauto (not optional) dropped
   });
 });

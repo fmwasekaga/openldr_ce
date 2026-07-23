@@ -111,11 +111,7 @@ export function exposableColumns(model: QueryModel, alias: string): string[] {
 }
 
 export interface ClientOptionalJoin { alias: string; label: string; exposableColumns: string[] }
-export interface ClientQueryModel {
-  id: string; label: string; table: keyof ExternalSchema;
-  dimensions: ModelDimension[]; metrics: ModelMetric[];
-  optionalJoins?: ClientOptionalJoin[];
-}
+export type ClientQueryModel = Omit<QueryModel, 'joins'> & { optionalJoins?: ClientOptionalJoin[] };
 
 /**
  * Model list shaped for the browser. Raw `joins`/`denyColumns` are dropped; each usable optional
@@ -123,11 +119,11 @@ export interface ClientQueryModel {
  * so denied PII column names never travel to the client. A join whose `exposableColumns` is empty
  * (fail-safe: no denylist declared) is omitted entirely.
  */
-export function modelsForClient(): ClientQueryModel[] {
-  return MODELS.map((m) => {
+export function modelsForClient(models: QueryModel[] = MODELS): ClientQueryModel[] {
+  return models.map((m) => {
     const optionalJoins = (m.joins ?? [])
       .filter((j) => j.optional)
-      .map((j) => ({ alias: j.alias, label: j.label ?? String(j.table), exposableColumns: exposableColumns(m, j.alias) }))
+      .map((j) => ({ alias: j.alias, label: j.label ?? j.table, exposableColumns: exposableColumns(m, j.alias) }))
       .filter((oj) => oj.exposableColumns.length > 0);
     const { id, label, table, dimensions, metrics } = m;
     return optionalJoins.length ? { id, label, table, dimensions, metrics, optionalJoins }
