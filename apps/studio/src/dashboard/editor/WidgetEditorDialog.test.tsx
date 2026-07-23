@@ -102,4 +102,14 @@ describe('WidgetEditorDialog', () => {
     expect(screen.getByLabelText('Source')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Builder' })).not.toBeDisabled();
   });
+
+  // NOTE: a dedicated test for the "no measure" empty-panel text (see WidgetEditorDialog.tsx's
+  // `builderHasNoMeasure`) is not included here. Rendering a builder query with an absent `metric`
+  // (the documented no-measure shape from WidgetQuerySchema) crashes BuilderForm today: its `shown`
+  // state seeds from `measuresOf(value).length` (builderForm.model.ts), which is always >= 1 even
+  // with no measure (measuresOf falls back to `[value.metric]`, i.e. `[undefined]`) — so the
+  // Summarize section mounts MeasuresEditor with `[undefined]`, and MeasuresEditor's
+  // aggregateMeasures() throws on `undefined.derived`. That's a pre-existing bug outside this
+  // task's scope (WidgetEditorDialog.tsx only); flagged separately rather than fixed/mocked-around
+  // here.
 });

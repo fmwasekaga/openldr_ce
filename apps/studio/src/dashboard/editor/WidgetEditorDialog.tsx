@@ -456,6 +456,11 @@ export function WidgetEditorDialog({
   const errorMsg = error;
   const detectedVars = extractLogicalVariables(sqlText, varDefs);
   const previewConfig: WidgetConfig = { id: 'preview', type, title, query: { mode: 'sql', sql: sqlText }, refreshIntervalSec: 0, visual };
+  // measuresOf() always returns a 1-element array even with no measure (it falls back to
+  // `[value.metric]`, which is `[undefined]` when `metric` is absent) — filter(Boolean) so a truly
+  // measure-less query (metric absent, metrics absent/empty; see WidgetQuerySchema's `metric`
+  // comment) is correctly detected as having zero measures.
+  const builderHasNoMeasure = mode === 'builder' && measuresOf(builderQuery).filter(Boolean).length === 0;
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -567,7 +572,7 @@ export function WidgetEditorDialog({
               </div>
             </div>
             <div className="min-w-0 flex-[2] overflow-hidden rounded-t-md border border-border p-3">
-              {errorMsg ? <div className="text-sm text-destructive">{errorMsg}</div> : preview && preview.rows.length ? renderWidget(previewConfig, preview) : <EmptyPanel text="Run a query to see preview" />}
+              {errorMsg ? <div className="text-sm text-destructive">{errorMsg}</div> : preview && preview.rows.length ? renderWidget(previewConfig, preview) : <EmptyPanel text={builderHasNoMeasure ? 'Add a measure to see results' : 'Run a query to see preview'} />}
             </div>
           </div>
 
