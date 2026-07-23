@@ -50,6 +50,9 @@ function assertSqlAuthoringAllowed(sqlEnabled: boolean, d: Dashboard, prevTempla
 export function registerDashboardRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
   app.get('/api/dashboards/models', VIEW, async () => ctx.dashboards.models());
 
+  // Global admin-governed universe of joinable tables (not per-model), for the join-picker UI.
+  app.get('/api/dashboards/joinable-tables', VIEW, async () => ctx.dashboards.joinableTables());
+
   app.post('/api/dashboards/query', VIEW, async (req, reply) => {
     try {
       const q = WidgetQuerySchema.parse(req.body);

@@ -273,6 +273,9 @@ export type CustomColumnExpr =
   | { kind: 'arithmetic'; op: '+' | '-' | '*' | '/'; left: CustomColumnOperand; right: CustomColumnOperand };
 export interface CustomColumn { key: string; label: string; expr: CustomColumnExpr }
 
+export interface UserJoin { id: string; table: string; left: string; right: string; label?: string }
+export interface ClientJoinableTable { table: string; label: string; columns: string[]; primaryKeys: string[]; allColumns: string[] }
+
 export type WidgetQuery =
   | { mode: 'builder'; model: string;
       metric?: { key: string; label?: string; agg: string; column?: string; where?: { dimension: string; op: string; value: unknown }[]; derived?: { numerator: string; denominator: string; scale: number; decimals: number } };
@@ -282,6 +285,7 @@ export type WidgetQuery =
       limit?: number;
       adhocDimensions?: { key: string; label: string; join: string; column: string; kind: 'string' | 'date' | 'number' }[];
       customColumns?: CustomColumn[];
+      userJoins?: UserJoin[];
       variableBindings?: Record<string, string> }
   | { mode: 'sql'; sql: string; variableBindings?: Record<string, string>; variables?: Record<string, WidgetVariableDef>;
       values?: Record<string, string | number | null | { from: string; to: string }> };
@@ -298,12 +302,15 @@ export interface Dashboard {
 export interface ModelDimension { key: string; label: string; column: string; kind: 'string' | 'date' | 'number'; dateGrain?: string[]; compute?: { kind: 'age-band'; bands: { maxAge: number; label: string }[]; openEndedLabel: string; unknownLabel: string }; join?: string }
 export interface ModelMetric { key: string; label: string; agg: string; column?: string }
 export interface ClientOptionalJoin { alias: string; label: string; left: string; right: string; exposableColumns: string[] }
-export interface QueryModel { id: string; label: string; dimensions: ModelDimension[]; metrics: ModelMetric[]; optionalJoins?: ClientOptionalJoin[] }
+export interface QueryModel { id: string; label: string; dimensions: ModelDimension[]; metrics: ModelMetric[]; optionalJoins?: ClientOptionalJoin[]; tableColumns: string[] }
 
 const json = (body: unknown) => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
 export async function listModels(): Promise<QueryModel[]> {
   return authFetch('/api/dashboards/models').then((r) => okJson<QueryModel[]>(r, 'load models'));
+}
+export async function fetchJoinableTables(): Promise<ClientJoinableTable[]> {
+  return authFetch('/api/dashboards/joinable-tables').then((r) => okJson<ClientJoinableTable[]>(r, 'load joinable tables'));
 }
 export async function runWidgetQuery(q: WidgetQuery): Promise<ReportResult> {
   return authFetch('/api/dashboards/query', json(q)).then((r) => okJson<ReportResult>(r, 'run query'));

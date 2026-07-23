@@ -12,6 +12,7 @@ const models: QueryModel[] = [
       { key: 'priority', label: 'Priority', column: 'priority', kind: 'string' },
     ],
     metrics: [{ key: 'count', label: 'Count', agg: 'count' }],
+    tableColumns: [],
   },
 ];
 const base = {
@@ -43,6 +44,7 @@ describe('BuilderForm', () => {
         label: 'Test Orders',
         dimensions: [{ key: 'collected', label: 'Collected', column: 'collected', kind: 'date', dateGrain: ['day', 'month'] }],
         metrics: [{ key: 'count', label: 'Count', agg: 'count' }],
+        tableColumns: [],
       },
     ];
     const withDim = { ...base, model: 'service_requests', dimension: { key: 'collected' } } as Extract<WidgetQuery, { mode: 'builder' }>;
