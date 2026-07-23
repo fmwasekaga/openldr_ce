@@ -268,4 +268,20 @@ describe('BuilderForm user-defined joins', () => {
     expect(last.adhocDimensions ?? []).toHaveLength(0);
     expect(last.dimension).toBeUndefined();
   });
+
+  it('does NOT render a duplicate curated join card when a user join has columns selected (regression: alias-collision guard)', () => {
+    // A user join (u1) with selected columns (adhocDimensions with join='u1') should render
+    // ONLY the UserJoinBuilder block, not also a spurious curated "Join: u1" card.
+    // The guard at BuilderForm.tsx:224 filters out join aliases that match userJoins ids.
+    const withSelectedColumns = {
+      ...baseNoJoins,
+      userJoins: [{ id: 'u1', table: 'patients', left: 'patient_id', right: 'id', label: 'Patient' }],
+      adhocDimensions: [{ key: 'u1__sex', label: 'Sex', join: 'u1', column: 'sex', kind: 'string' as const }],
+    } as Extract<WidgetQuery, { mode: 'builder' }>;
+    render(<BuilderForm models={modelsNoCuratedJoins} value={withSelectedColumns} joinableTables={joinableTablesFixture} onChange={() => {}} />);
+    // No spurious curated card with accessible name "Remove join: u1" (with colon, from SectionCard label lowercased)
+    expect(screen.queryByLabelText('Remove join: u1')).toBeNull();
+    // The legitimate UserJoinBuilder block IS present with accessible name "Remove join u1" (no colon)
+    expect(screen.getByLabelText('Remove join u1')).toBeInTheDocument();
+  });
 });
