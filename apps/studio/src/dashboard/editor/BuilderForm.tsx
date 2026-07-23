@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
+import type { ReactNode } from 'react';
+import { Sigma, Filter, Rows3, Columns3, ArrowUpDown, Combine, type LucideIcon } from 'lucide-react';
 import type { DashboardFilterDef, ModelDimension, QueryModel } from '../../api';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
 import { FilterTreeEditor } from './FilterTreeEditor';
 import { MeasuresEditor } from './MeasuresEditor';
 import { JoinColumnPicker } from './JoinColumnPicker';
@@ -30,6 +31,34 @@ const NONE = '__none__';
 // The server buckets on q.dimension.grain regardless of the dim's dateGrain, so any of these works.
 const DATE_GRAINS = ['day', 'week', 'month', 'year'];
 
+// A removable optional-clause card: themed border + header (label + × remove) wrapping its editor.
+// Studio has no Tabler/`ti` icon font, so the header is text-only (no icon dependency introduced).
+function SectionCard({ label, onRemove, children }: {
+  label: string; onRemove: () => void; children: ReactNode;
+}) {
+  return (
+    <div className="rounded-md border border-border bg-card p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-sm font-medium">{label}</span>
+        <button
+          type="button"
+          aria-label={`Remove ${label.toLowerCase()}`}
+          className="text-muted-foreground hover:text-foreground"
+          onClick={onRemove}
+        >
+          ×
+        </button>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+type SectionKey = 'summarize' | 'filter' | 'groupby' | 'breakdown' | 'sort';
+const SECTION_ORDER: SectionKey[] = ['summarize', 'filter', 'groupby', 'breakdown', 'sort'];
+const SECTION_LABEL: Record<SectionKey, string> = { summarize: 'Summarize', filter: 'Filter', groupby: 'Group by', breakdown: 'Breakdown', sort: 'Sort' };
+const SECTION_ICON: Record<SectionKey, LucideIcon> = { summarize: Sigma, filter: Filter, groupby: Rows3, breakdown: Columns3, sort: ArrowUpDown };
+
 export function BuilderForm({ models, value, dashboardFilters = [], onChange }: {
   models: QueryModel[]; value: BuilderQuery; dashboardFilters?: DashboardFilterDef[]; onChange: (q: BuilderQuery) => void;
 }) {
@@ -44,98 +73,106 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
     ...adhoc.map((a) => ({ key: a.key, label: a.label, column: a.column, kind: a.kind, join: a.join, ...(a.kind === 'date' ? { dateGrain: DATE_GRAINS } : {}) })),
   ];
   const dim = dimOptions.find((d) => d.key === value.dimension?.key);
-  const [addOpen, setAddOpen] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
 
-  return (
-    <div className="flex flex-col gap-3 p-1">
-      <label className="text-sm">
-        Source
-        <Select value={value.model} onValueChange={(id) => onChange(setModelPatch(models, value, id))}>
-          <SelectTrigger aria-label="Source" className="mt-1 w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {models.map((m) => (
-              <SelectItem key={m.id} value={m.id}>
-                {m.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </label>
+  // Which optional sections are shown. Lazy initializer captures the query state only on mount, so a
+  // section stays shown after you clear its field mid-edit (matching Metabase's clause chips).
+  const hasFilter = !!value.filterTree || !!(value.filters && value.filters.length);
+  const [shown, setShown] = useState<Set<SectionKey>>(() => {
+    const s = new Set<SectionKey>();
+    if (measuresOf(value).length) s.add('summarize');
+    if (hasFilter) s.add('filter');
+    if (value.dimension) s.add('groupby');
+    if (value.breakdown) s.add('breakdown');
+    if (value.limit != null) s.add('sort');
+    return s;
+  });
 
-      <div className="text-sm">
-        Summarize
-        <div className="mt-1">
-          <MeasuresEditor value={measuresOf(value)} model={model} onChange={(list) => onChange(setMeasuresPatch(value, list))} />
-        </div>
-      </div>
+  const addSection = (k: SectionKey) => { setShown((prev) => new Set(prev).add(k)); };
+  const removeSection = (k: SectionKey) => {
+    setShown((prev) => { const n = new Set(prev); n.delete(k); return n; });
+    if (k === 'summarize') onChange(setMeasuresPatch(value, []));
+    if (k === 'filter') onChange(setFilterTreePatch(value, emptyTree()));
+    if (k === 'groupby') onChange(setDimensionPatch(value, ''));
+    if (k === 'breakdown') onChange(setBreakdownPatch(value, ''));
+    if (k === 'sort') onChange(setLimitPatch(value, undefined));
+  };
+  const unshown = SECTION_ORDER.filter((k) => !shown.has(k));
 
-      <div className="text-sm">
-        Filters
-        <div className="mt-1">
-          <FilterTreeEditor
-            value={value.filterTree ?? (value.filters?.length ? filtersToTree(value.filters) : emptyTree())}
-            dimensions={dimOptions}
-            onChange={(tree) => onChange(setFilterTreePatch(value, tree))}
-          />
-        </div>
-      </div>
-
-      <label className="text-sm">
-        Group by
-        <Select value={value.dimension?.key ?? NONE} onValueChange={(key) => onChange(setDimensionPatch(value, key === NONE ? '' : key))}>
-          <SelectTrigger aria-label="Group by" className="mt-1 w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={NONE}>(none)</SelectItem>
-            {dimOptions.map((d) => (
-              <SelectItem key={d.key} value={d.key}>
-                {d.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </label>
-
-      {dim?.kind === 'date' && dim.dateGrain && (
+  // The optional-section cards, keyed by section, rendered only when shown.
+  const sectionNodes: Record<SectionKey, ReactNode> = {
+    summarize: (
+      <SectionCard label="Summarize" onRemove={() => removeSection('summarize')}>
+        <MeasuresEditor value={measuresOf(value)} model={model} onChange={(list) => onChange(setMeasuresPatch(value, list))} />
+      </SectionCard>
+    ),
+    filter: (
+      <SectionCard label="Filter" onRemove={() => removeSection('filter')}>
+        <FilterTreeEditor
+          value={value.filterTree ?? (value.filters?.length ? filtersToTree(value.filters) : emptyTree())}
+          dimensions={dimOptions}
+          onChange={(tree) => onChange(setFilterTreePatch(value, tree))}
+        />
+      </SectionCard>
+    ),
+    groupby: (
+      <SectionCard label="Group by" onRemove={() => removeSection('groupby')}>
         <label className="text-sm">
-          Grain
-          <Select value={value.dimension?.grain ?? 'month'} onValueChange={(g) => onChange(setGrainPatch(value, g))}>
-            <SelectTrigger aria-label="Grain" className="mt-1 w-full">
+          <Select value={value.dimension?.key ?? NONE} onValueChange={(key) => onChange(setDimensionPatch(value, key === NONE ? '' : key))}>
+            <SelectTrigger aria-label="Group by" className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {dim.dateGrain.map((g) => (
-                <SelectItem key={g} value={g}>
-                  {g}
+              <SelectItem value={NONE}>(none)</SelectItem>
+              {dimOptions.map((d) => (
+                <SelectItem key={d.key} value={d.key}>
+                  {d.label}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </label>
-      )}
 
-      <label className="text-sm">
-        Breakdown
-        <Select value={value.breakdown?.key ?? NONE} onValueChange={(key) => onChange(setBreakdownPatch(value, key === NONE ? '' : key))}>
-          <SelectTrigger aria-label="Breakdown" className="mt-1 w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={NONE}>(none)</SelectItem>
-            {dimOptions.map((d) => (
-              <SelectItem key={d.key} value={d.key}>
-                {d.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </label>
-
-      {(value.dimension || value.breakdown) && (
+        {dim?.kind === 'date' && dim.dateGrain && (
+          <label className="mt-2 block text-sm">
+            Grain
+            <Select value={value.dimension?.grain ?? 'month'} onValueChange={(g) => onChange(setGrainPatch(value, g))}>
+              <SelectTrigger aria-label="Grain" className="mt-1 w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {dim.dateGrain.map((g) => (
+                  <SelectItem key={g} value={g}>
+                    {g}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </label>
+        )}
+      </SectionCard>
+    ),
+    breakdown: (
+      <SectionCard label="Breakdown" onRemove={() => removeSection('breakdown')}>
+        <label className="text-sm">
+          <Select value={value.breakdown?.key ?? NONE} onValueChange={(key) => onChange(setBreakdownPatch(value, key === NONE ? '' : key))}>
+            <SelectTrigger aria-label="Breakdown" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NONE}>(none)</SelectItem>
+              {dimOptions.map((d) => (
+                <SelectItem key={d.key} value={d.key}>
+                  {d.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </label>
+      </SectionCard>
+    ),
+    sort: (
+      <SectionCard label="Sort" onRemove={() => removeSection('sort')}>
         <label className="text-sm">
           Limit
           <Input
@@ -149,45 +186,104 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
           />
           <span className="mt-0.5 block text-[11px] text-muted-foreground">Top rows by the first measure, highest first.</span>
         </label>
-      )}
+      </SectionCard>
+    ),
+  };
 
-      {adhoc.length > 0 && (
-        <div className="text-sm">
-          Join columns
-          <div className="mt-1 flex flex-wrap gap-1">
-            {adhoc.map((a) => (
-              <span key={a.key} className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs">
-                {a.label}
-                <button type="button" aria-label={`Remove ${a.label}`} onClick={() => onChange(removeAdhocDimensionPatch(value, a.key))}>×</button>
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
+  // Ordered list of every visible optional block: the shown section cards (in SECTION_ORDER),
+  // then the Join-columns card when there are ad-hoc dimensions. A subtle hairline is rendered
+  // before each block (and before the Add tiles) so every section is visually separated, no label.
+  const visibleBlocks: ReactNode[] = [
+    ...SECTION_ORDER.filter((k) => shown.has(k)).map((k) => sectionNodes[k]),
+    ...(adhoc.length > 0
+      ? [
+          <SectionCard key="__joincols__" label="Join columns" onRemove={() => onChange(adhoc.reduce((q, a) => removeAdhocDimensionPatch(q, a.key), value))}>
+            <div className="flex flex-wrap gap-1">
+              {adhoc.map((a) => (
+                <span key={a.key} className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs">
+                  {a.label}
+                  <button type="button" aria-label={`Remove ${a.label}`} onClick={() => onChange(removeAdhocDimensionPatch(value, a.key))}>×</button>
+                </span>
+              ))}
+            </div>
+          </SectionCard>,
+        ]
+      : []),
+  ];
 
-      <div className="border-t pt-2">
-        {!showPicker && (
-          <>
-            <Button size="sm" variant="outline" aria-label="Add clause" onClick={() => setAddOpen((o) => !o)}>＋ Add</Button>
-            {addOpen && (
-              <div className="mt-1 flex flex-col items-start">
-                {model?.optionalJoins?.length
-                  ? <button type="button" className="text-sm" onClick={() => { setShowPicker(true); setAddOpen(false); }}>Join column</button>
-                  : <span className="text-xs text-muted-foreground">No optional joins</span>}
-              </div>
-            )}
-          </>
-        )}
-        {showPicker && model?.optionalJoins && (
-          <div className="mt-2">
-            <JoinColumnPicker
-              optionalJoins={model.optionalJoins}
-              onAdd={(dim) => { onChange(addAdhocDimensionPatch(value, dim)); setShowPicker(false); }}
-              onCancel={() => setShowPicker(false)}
-            />
-          </div>
-        )}
+  // The Add area: the JoinColumnPicker replaces the tiles while picking; otherwise a Metabase-style
+  // row of always-visible tiles (one per unshown section, plus a Join-column tile when the model has
+  // optional joins). Nothing when there is neither.
+  const hasTiles = unshown.length > 0 || !!model?.optionalJoins?.length;
+  const addBlock: ReactNode =
+    showPicker && model?.optionalJoins ? (
+      <div className="pt-2">
+        <JoinColumnPicker
+          optionalJoins={model.optionalJoins}
+          onAdd={(d) => { onChange(addAdhocDimensionPatch(value, d)); setShowPicker(false); }}
+          onCancel={() => setShowPicker(false)}
+        />
       </div>
+    ) : hasTiles ? (
+      <div className="flex flex-wrap gap-2 pt-2">
+        {unshown.map((k) => {
+          const Icon = SECTION_ICON[k];
+          return (
+            <button
+              key={k}
+              type="button"
+              onClick={() => addSection(k)}
+              className="flex min-w-[76px] flex-col items-center gap-1 rounded-md border border-border bg-card px-3 py-2 text-xs hover:bg-muted"
+            >
+              <Icon size={16} aria-hidden="true" />
+              {SECTION_LABEL[k]}
+            </button>
+          );
+        })}
+        {model?.optionalJoins?.length ? (
+          <button
+            type="button"
+            onClick={() => setShowPicker(true)}
+            className="flex min-w-[76px] flex-col items-center gap-1 rounded-md border border-border bg-card px-3 py-2 text-xs hover:bg-muted"
+          >
+            <Combine size={16} aria-hidden="true" />
+            Join column
+          </button>
+        ) : null}
+      </div>
+    ) : null;
+
+  // Every block below Source, each preceded by a hairline divider (which also serves as the
+  // divider under Source). One leading divider per block — no doubled or trailing hairlines.
+  const blocks: ReactNode[] = [...visibleBlocks];
+  if (addBlock) blocks.push(addBlock);
+
+  return (
+    <div className="flex flex-col gap-3 p-1">
+      <div className="rounded-md border border-border bg-card p-3">
+        <label className="text-sm">
+          Source
+          <Select value={value.model} onValueChange={(id) => onChange(setModelPatch(models, value, id))}>
+            <SelectTrigger aria-label="Source" className="mt-1 w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {models.map((m) => (
+                <SelectItem key={m.id} value={m.id}>
+                  {m.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </label>
+      </div>
+
+      {blocks.map((b, i) => (
+        <Fragment key={i}>
+          <div className="h-px bg-border" />
+          {b}
+        </Fragment>
+      ))}
     </div>
   );
 }

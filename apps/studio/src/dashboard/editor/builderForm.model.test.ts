@@ -119,8 +119,17 @@ describe('builderForm.model', () => {
     expect(measuresOf(base)).toEqual([base.metric]);
   });
 
+  describe('measuresOf with no measure', () => {
+    it('returns [] when the query has neither metric nor metrics', () => {
+      expect(measuresOf({ mode: 'builder', model: 'm', filters: [] } as never)).toEqual([]);
+    });
+    it('returns the single metric as a 1-element list when present', () => {
+      expect(measuresOf({ mode: 'builder', model: 'm', metric: { key: 'count', agg: 'count' }, filters: [] } as never)).toHaveLength(1);
+    });
+  });
+
   it('setMeasuresPatch maps one row to metric, clearing metrics', () => {
-    const out = setMeasuresPatch({ ...base, metrics: [base.metric, base.metric] }, [base.metric]);
+    const out = setMeasuresPatch({ ...base, metrics: [base.metric!, base.metric!] }, [base.metric!]);
     expect(out.metric).toEqual(base.metric);
     expect(out.metrics).toBeUndefined();
   });

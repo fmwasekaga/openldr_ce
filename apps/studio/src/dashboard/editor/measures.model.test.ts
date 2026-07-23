@@ -66,3 +66,11 @@ describe('measures.model', () => {
     expect(toBuilderMetrics(lone)).toEqual({ metric: lone[0], metrics: lone });
   });
 });
+
+describe('toBuilderMetrics with no measures', () => {
+  it('yields undefined metric and metrics for an empty list', () => {
+    const { metric, metrics } = toBuilderMetrics([]);
+    expect(metric).toBeUndefined();
+    expect(metrics).toBeUndefined();
+  });
+});
