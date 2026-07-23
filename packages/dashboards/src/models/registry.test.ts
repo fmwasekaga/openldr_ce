@@ -31,7 +31,9 @@ describe('patients age_band computed dimension', () => {
     expect(d).toBeDefined();
     expect(d!.column).toBe('date_of_birth');
     expect(d!.compute).toMatchObject({ kind: 'age-band', openEndedLabel: '50+', unknownLabel: 'unknown' });
-    expect(d!.compute!.bands.map((b) => b.label)).toEqual(['0-4', '5-14', '15-24', '25-49']);
+    const compute = d!.compute!;
+    if (compute.kind !== 'age-band') throw new Error('expected age-band compute');
+    expect(compute.bands.map((b) => b.label)).toEqual(['0-4', '5-14', '15-24', '25-49']);
   });
 });
 

@@ -422,3 +422,71 @@ describe('builder query with no measure', () => {
     expect(() => compileBuilderQuery(db, getModel('service_requests')!, noMeasure as any).compile()).not.toThrow();
   });
 });
+
+describe('custom columns (row-level computed dimension)', () => {
+  it('compiles a concat custom column as a group-by via CONCAT with bound literals', () => {
+    const model = getModel('service_requests')!;
+    const { sql, parameters } = compileBuilderQuery(db, model, {
+      mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count' }, filters: [],
+      customColumns: [{ key: 'sp', label: 'Status/Priority', expr: { kind: 'concat', parts: [
+        { type: 'field', dimension: 'status' }, { type: 'string', value: ' / ' }, { type: 'field', dimension: 'priority' },
+      ] } }],
+      dimension: { key: 'sp' },
+    } as any).compile();
+    expect(sql).toMatch(/concat\(/i);
+    expect(sql).toMatch(/as "label"/i);
+    expect(sql).toMatch(/group by/i);
+    expect(parameters).toContain(' / ');       // literal is a bound parameter…
+    expect(sql).not.toContain(' / ');          // …not inlined into the SQL text
+  });
+
+  it('compiles arithmetic with div-by-zero guarded by nullif', () => {
+    const model = getModel('service_requests')!;
+    const { sql } = compileBuilderQuery(db, model, {
+      mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count' }, filters: [],
+      customColumns: [{ key: 'ratio', label: 'Ratio', expr: { kind: 'arithmetic', op: '/',
+        left: { type: 'field', dimension: 'status' }, right: { type: 'number', value: 1000 } } }],
+      dimension: { key: 'ratio' },
+    } as any).compile();
+    expect(sql).toMatch(/nullif\(/i);
+  });
+
+  it('fires the join for a custom column whose operand references a joined dimension', () => {
+    const model = getModel('observations')!;
+    const { sql } = compileBuilderQuery(db, model, {
+      mode: 'builder', model: 'observations', metric: { key: 'count', agg: 'count' }, filters: [],
+      customColumns: [{ key: 'fc', label: 'Facility/Analyte', expr: { kind: 'concat', parts: [
+        { type: 'field', dimension: 'facility' }, { type: 'string', value: '/' }, { type: 'field', dimension: 'code_text' },
+      ] } }],
+      dimension: { key: 'fc' },
+    } as any).compile();
+    expect(sql).toMatch(/left join "patients" as "jp"/i); // 'facility' → join jp, pulled in via the custom column
+  });
+
+  it('rejects a custom column referencing an unknown field', () => {
+    const model = getModel('service_requests')!;
+    expect(() => compileBuilderQuery(db, model, {
+      mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count' }, filters: [],
+      customColumns: [{ key: 'x', label: 'x', expr: { kind: 'concat', parts: [{ type: 'field', dimension: 'nope' }] } }],
+      dimension: { key: 'x' },
+    } as any)).toThrow(/unknown field/i);
+  });
+
+  it('rejects a custom column whose operand is itself computed (no nesting)', () => {
+    const model = getModel('patients')!; // has age_band (computed)
+    expect(() => compileBuilderQuery(db, model, {
+      mode: 'builder', model: 'patients', metric: { key: 'count', agg: 'count' }, filters: [],
+      customColumns: [{ key: 'x', label: 'x', expr: { kind: 'concat', parts: [{ type: 'field', dimension: 'age_band' }] } }],
+      dimension: { key: 'x' },
+    } as any)).toThrow(/computed/i);
+  });
+
+  it('refuses to use a custom column as a filter field', () => {
+    const model = getModel('service_requests')!;
+    expect(() => compileBuilderQuery(db, model, {
+      mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count' },
+      customColumns: [{ key: 'sp', label: 'x', expr: { kind: 'concat', parts: [{ type: 'field', dimension: 'status' }] } }],
+      filters: [{ dimension: 'sp', op: 'eq', value: 'X' }],
+    } as any)).toThrow(/custom column/i);
+  });
+});

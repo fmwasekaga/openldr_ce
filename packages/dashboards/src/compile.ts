@@ -1,8 +1,9 @@
 import { type Kysely, sql, expressionBuilder, type SelectQueryBuilder } from 'kysely';
 import type { ExternalSchema } from '@openldr/db';
-import type { QueryModel, ModelDimension, ModelJoin } from './models/registry';
+import type { QueryModel, ModelDimension, ModelJoin, AgeBandCompute } from './models/registry';
 import { exposableColumns } from './models/registry';
-import type { WidgetQuery, Metric, QueryFilter, DateGrain, ConditionNode, ConditionRule } from './types';
+import type { WidgetQuery, Metric, QueryFilter, DateGrain, ConditionNode, ConditionRule, Expr, Operand } from './types';
+import { customColumnKind } from './types';
 import type { ReportResultData, ReportColumn, ChartHint } from '@openldr/reporting';
 import { ageBandArms } from './age-band';
 
@@ -27,6 +28,7 @@ function likePattern(value: unknown): string {
 // A dimension's column ref string: joined dims → "alias"."col"; base dims → qualified only when a join is active.
 function colName(model: QueryModel, dimKey: string, qualify: boolean): string {
   const d = dim(model, dimKey);
+  if (d.compute?.kind === 'expr') throw new Error(`custom column cannot be used as a filter or where field: ${dimKey}`);
   if (d.join) return `${d.join}.${d.column}`;
   return qualify ? `${model.table}.${d.column}` : d.column;
 }
@@ -149,11 +151,39 @@ function compileNode(eb: any, model: QueryModel, node: ConditionNode, qualify: b
   return node.combinator === 'or' ? eb.or(parts) : eb.and(parts);
 }
 
+/** The operands of an expression, flattened (concat parts, or the two arithmetic sides). */
+function exprOperands(expr: Expr): Operand[] {
+  return expr.kind === 'concat' ? expr.parts : [expr.left, expr.right];
+}
+
+/** SQL for one operand: a validated column ref (via colName) or a BOUND literal (never inlined). */
+function operandSql(model: QueryModel, o: Operand, qualify: boolean) {
+  if (o.type === 'field') return sql.ref(colName(model, o.dimension, qualify));
+  return sql`${o.value}`;
+}
+
+/** Build the row-level SQL for a custom column. concat → portable CONCAT(); arithmetic → portable
+ *  operators, with `/` guarded by nullif so div-by-zero yields NULL rather than an engine error. */
+function exprToSql(model: QueryModel, expr: Expr, qualify: boolean) {
+  if (expr.kind === 'concat') {
+    const parts = expr.parts.map((p) => operandSql(model, p, qualify));
+    return sql`concat(${sql.join(parts, sql`, `)})`;
+  }
+  const l = operandSql(model, expr.left, qualify);
+  const r = operandSql(model, expr.right, qualify);
+  switch (expr.op) {
+    case '+': return sql`(${l} + ${r})`;
+    case '-': return sql`(${l} - ${r})`;
+    case '*': return sql`(${l} * ${r})`;
+    case '/': return sql`(${l} / nullif(${r}, 0))`;
+  }
+}
+
 // Build label + rank CASE expressions for a computed age-band dimension, thresholds bound (not inlined).
 function ageBandExprs(d: ModelDimension, reference?: string) {
   const parsed = reference ? new Date(reference) : new Date();
   const ref = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
-  const a = ageBandArms(d.compute!, ref);
+  const a = ageBandArms(d.compute as AgeBandCompute, ref);
   const col = sql.ref(d.column);
   let label = sql`case when ${col} is null then ${a.unknownLabel} when ${col} > ${a.refYMD} then ${a.unknownLabel}`;
   let rank = sql`case when ${col} is null then ${a.unknownRank} when ${col} > ${a.refYMD} then ${a.unknownRank}`;
@@ -167,36 +197,71 @@ function ageBandExprs(d: ModelDimension, reference?: string) {
 }
 
 /**
- * Fold a query's ad-hoc join columns into the model as real dimensions, so the rest of the compiler
- * (dim/colName/collectUsedJoins → leftJoin) treats them like any joined dimension. Validates each
- * ad-hoc dim against the optional-join + denylist rules — this is the server-side guard that stops a
- * hand-edited widget JSON from exposing a denied or foreign column. No-op (returns the same model)
- * when the query has no ad-hoc dimensions.
+ * Fold a query's user-authored dimensions into the model as real dimensions, so the rest of the
+ * compiler (dim/colName/collectUsedJoins → leftJoin) treats them like any model dimension. Two folds:
+ *  1) Ad-hoc join columns — validated against the optional-join + denylist rules (the server-side
+ *     guard that stops a hand-edited widget JSON from exposing a denied or foreign column).
+ *  2) Custom columns — row-level `compute:{kind:'expr'}` dimensions whose field operands are validated
+ *     to reference an existing NON-computed dimension (forbids nesting; keeps operands to columns the
+ *     user could already group by).
+ * No-op (returns the same model) when the query has neither.
  */
 export function effectiveModel(model: QueryModel, q: BuilderQuery): QueryModel {
+  let eff = model;
+
+  // 1) Ad-hoc join columns (unchanged behavior).
   const adhoc = q.adhocDimensions ?? [];
-  if (adhoc.length === 0) return model;
-  const existing = new Set(model.dimensions.map((d) => d.key));
-  const extra: ModelDimension[] = [];
-  for (const a of adhoc) {
-    const j = (model.joins ?? []).find((x) => x.alias === a.join);
-    if (!j || !j.optional) throw new Error(`adhoc dimension ${a.key}: unknown or non-optional join: ${a.join}`);
-    if (!exposableColumns(model, a.join).includes(a.column)) {
-      throw new Error(`adhoc dimension ${a.key}: column not exposable: ${a.column}`);
+  if (adhoc.length) {
+    const existing = new Set(eff.dimensions.map((d) => d.key));
+    const extra: ModelDimension[] = [];
+    for (const a of adhoc) {
+      const j = (eff.joins ?? []).find((x) => x.alias === a.join);
+      if (!j || !j.optional) throw new Error(`adhoc dimension ${a.key}: unknown or non-optional join: ${a.join}`);
+      if (!exposableColumns(eff, a.join).includes(a.column)) throw new Error(`adhoc dimension ${a.key}: column not exposable: ${a.column}`);
+      // idempotent: safe to call on an already-merged model. A collision with a REAL model dimension key
+      // is also intentionally skipped — the trusted base dimension wins (fail-safe; an adhoc dim can never shadow it).
+      if (existing.has(a.key)) continue;
+      extra.push({ key: a.key, label: a.label, column: a.column, kind: a.kind, join: a.join });
+      existing.add(a.key);
     }
-    // idempotent: safe to call on an already-merged model. A collision with a REAL model dimension key
-    // is also intentionally skipped — the trusted base dimension wins (fail-safe; an adhoc dim can never shadow it).
-    if (existing.has(a.key)) continue;
-    extra.push({ key: a.key, label: a.label, column: a.column, kind: a.kind, join: a.join });
-    existing.add(a.key);
+    if (extra.length) eff = { ...eff, dimensions: [...eff.dimensions, ...extra] };
   }
-  return extra.length ? { ...model, dimensions: [...model.dimensions, ...extra] } : model;
+
+  // 2) Custom columns → computed-expr dimensions. Operands must reference an existing, NON-computed
+  //    dimension (forbids nesting and keeps every operand a column the user could already group by).
+  const customs = q.customColumns ?? [];
+  if (customs.length) {
+    const dims = [...eff.dimensions];
+    const keys = new Set(dims.map((d) => d.key));
+    for (const c of customs) {
+      for (const o of exprOperands(c.expr)) {
+        if (o.type !== 'field') continue;
+        const ref = dims.find((d) => d.key === o.dimension);
+        if (!ref) throw new Error(`custom column ${c.key}: unknown field ${o.dimension}`);
+        if (ref.compute) throw new Error(`custom column ${c.key}: field ${o.dimension} is itself computed (not allowed)`);
+      }
+      if (keys.has(c.key)) continue; // trusted dimension wins / idempotent
+      // `column: ''` is intentional — an expr-computed dim has no single backing column; its SQL comes
+      // from `compute.expr` via exprToSql, and colName throws before ever reading `column` for it.
+      dims.push({ key: c.key, label: c.label, column: '', kind: customColumnKind(c.expr), compute: { kind: 'expr', expr: c.expr } });
+      keys.add(c.key);
+    }
+    eff = { ...eff, dimensions: dims };
+  }
+
+  return eff;
 }
 
 // Distinct joins referenced by any dimension the query uses (dimension/breakdown/filters/filterTree/metric-where).
 export function collectUsedJoins(model: QueryModel, q: BuilderQuery): ModelJoin[] {
   const aliases = new Set<string>();
-  const add = (dimKey?: string) => { if (!dimKey) return; const d = model.dimensions.find((x) => x.key === dimKey); if (d?.join) aliases.add(d.join); };
+  const add = (dimKey?: string) => {
+    if (!dimKey) return;
+    const d = model.dimensions.find((x) => x.key === dimKey);
+    if (!d) return;
+    if (d.join) aliases.add(d.join);
+    if (d.compute?.kind === 'expr') for (const o of exprOperands(d.compute.expr)) if (o.type === 'field') add(o.dimension);
+  };
   add(q.dimension?.key);
   add(q.breakdown?.key);
   for (const f of q.filters ?? []) add(f.dimension);
@@ -245,11 +310,14 @@ export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryMode
   }
   if (q.dimension) {
     const d = dim(model, q.dimension.key);
-    if (d.compute) {
+    if (d.compute?.kind === 'age-band') {
       const { label, rank } = ageBandExprs(d, q.dimension.reference);
       // GROUP BY both label + rank so ORDER BY rank is a grouped expression on strict engines
       // (Postgres/MSSQL reject ORDER BY an ungrouped expression). rank is 1:1 with label → same groups.
       qb = qb.select(label.as('label') as never).groupBy(label as never).groupBy(rank as never).orderBy(rank as never);
+    } else if (d.compute?.kind === 'expr') {
+      const e = exprToSql(model, d.compute.expr, qualify);
+      qb = qb.select(e.as('label') as never).groupBy(e as never).orderBy(e as never);
     } else {
       const ref = colName(model, q.dimension.key, qualify);
       qb = qb.select(sql.ref(ref).as('label')).groupBy(ref as never).orderBy(ref as never);
@@ -257,9 +325,12 @@ export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryMode
   }
   if (!wide && q.breakdown) {
     const b = dim(model, q.breakdown.key);
-    if (b.compute) {
+    if (b.compute?.kind === 'age-band') {
       const { label, rank } = ageBandExprs(b, undefined); // breakdown has no reference → current date
       qb = qb.select(label.as('series') as never).groupBy(label as never).groupBy(rank as never).orderBy(rank as never);
+    } else if (b.compute?.kind === 'expr') {
+      const e = exprToSql(model, b.compute.expr, qualify);
+      qb = qb.select(e.as('series') as never).groupBy(e as never).orderBy(e as never);
     } else {
       const ref = colName(model, q.breakdown.key, qualify);
       qb = qb.select(sql.ref(ref).as('series')).groupBy(ref as never).orderBy(ref as never);

@@ -2,7 +2,7 @@
 // re-exports internal-db.ts (which imports `pg`), and pulling a runtime VALUE like EXTERNAL_TABLE_COLUMNS
 // through it drags `pg` into the studio browser bundle (crashes with "Buffer is not defined").
 import { type ExternalSchema, EXTERNAL_TABLE_COLUMNS } from '@openldr/db/schema/external';
-import type { Agg, DateGrain, DimensionKind } from '../types';
+import type { Agg, DateGrain, DimensionKind, Expr } from '../types';
 
 export interface AgeBandCompute {
   kind: 'age-band';
@@ -10,6 +10,7 @@ export interface AgeBandCompute {
   openEndedLabel: string;                      // older than the last band, e.g. '50+'
   unknownLabel: string;                        // null / future birth_date, e.g. 'unknown'
 }
+export interface ExprCompute { kind: 'expr'; expr: Expr }
 export interface ModelJoin {
   table: keyof ExternalSchema;    // 'patients'
   alias: string;                  // 'jp'
@@ -20,7 +21,7 @@ export interface ModelJoin {
   label?: string;          // display name for the join in the picker (defaults to the table name)
   denyColumns?: string[];  // columns that may NOT be exposed; REQUIRED for an optional join to be usable (fail-safe)
 }
-export interface ModelDimension { key: string; label: string; column: string; kind: DimensionKind; dateGrain?: DateGrain[]; compute?: AgeBandCompute; join?: string }
+export interface ModelDimension { key: string; label: string; column: string; kind: DimensionKind; dateGrain?: DateGrain[]; compute?: AgeBandCompute | ExprCompute; join?: string }
 export interface ModelMetric { key: string; label: string; agg: Agg; column?: string }
 export interface QueryModel { id: string; label: string; table: keyof ExternalSchema; dimensions: ModelDimension[]; metrics: ModelMetric[]; joins?: ModelJoin[] }
 
