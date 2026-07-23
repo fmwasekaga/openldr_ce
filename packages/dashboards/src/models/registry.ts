@@ -1,4 +1,4 @@
-import type { ExternalSchema } from '@openldr/db';
+import { type ExternalSchema, EXTERNAL_TABLE_COLUMNS } from '@openldr/db';
 import type { Agg, DateGrain, DimensionKind } from '../types';
 
 export interface AgeBandCompute {
@@ -13,6 +13,9 @@ export interface ModelJoin {
   left: string;                   // base column: 'subject_ref'
   leftReplace?: [string, string]; // ['Patient/',''] → replace(base.left, 'Patient/', '')
   right: string;                  // joined column: 'id'
+  optional?: boolean;      // offered in the "+ Add → Join column" picker instead of firing via a default dimension
+  label?: string;          // display name for the join in the picker (defaults to the table name)
+  denyColumns?: string[];  // columns that may NOT be exposed; REQUIRED for an optional join to be usable (fail-safe)
 }
 export interface ModelDimension { key: string; label: string; column: string; kind: DimensionKind; dateGrain?: DateGrain[]; compute?: AgeBandCompute; join?: string }
 export interface ModelMetric { key: string; label: string; agg: Agg; column?: string }
@@ -87,3 +90,16 @@ export const MODELS: QueryModel[] = [
 
 export function listModels(): QueryModel[] { return MODELS; }
 export function getModel(id: string): QueryModel | undefined { return MODELS.find((m) => m.id === id); }
+
+/**
+ * Columns a power user may expose from an OPTIONAL join, i.e. the joined table's columns minus the
+ * join's `denyColumns`. Fail-safe: an optional join with no `denyColumns` declared exposes nothing
+ * (returns []), so a newly added join never leaks columns until an admin declares its denylist.
+ * Non-optional / unknown aliases return [] — only optional joins are user-selectable.
+ */
+export function exposableColumns(model: QueryModel, alias: string): string[] {
+  const j = (model.joins ?? []).find((x) => x.alias === alias);
+  if (!j || !j.optional || !j.denyColumns) return [];
+  const deny = new Set(j.denyColumns);
+  return EXTERNAL_TABLE_COLUMNS[j.table].filter((c) => !deny.has(c));
+}

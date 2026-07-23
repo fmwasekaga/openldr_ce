@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { listModels, getModel } from './registry';
+import { exposableColumns, type QueryModel } from './registry';
 
 describe('model registry', () => {
   it('exposes service_requests with count metric and date dimension', () => {
@@ -43,5 +44,39 @@ describe('observations facility join', () => {
     expect(join).not.toHaveProperty('leftReplace');
     const facility = m.dimensions.find((d) => d.key === 'facility');
     expect(facility).toMatchObject({ key: 'facility', column: 'managing_organization', join: 'jp' });
+  });
+});
+
+const MODEL_WITH_OPTIONAL: QueryModel = {
+  id: 'm', label: 'M', table: 'lab_requests',
+  dimensions: [],
+  metrics: [{ key: 'count', label: 'Count', agg: 'count' }],
+  joins: [
+    { table: 'patients', alias: 'jp', left: 'patient_id', right: 'id',
+      optional: true, denyColumns: ['surname', 'firstname', 'national_id', 'phone', 'email', 'patient_guid', 'date_of_birth'] },
+    { table: 'facilities', alias: 'jf', left: 'facility_id', right: 'id', optional: true }, // no denyColumns → unavailable
+    { table: 'patients', alias: 'jauto', left: 'patient_id', right: 'id' },                 // not optional
+  ],
+};
+
+describe('exposableColumns', () => {
+  it('returns table columns minus denyColumns for a configured optional join', () => {
+    const cols = exposableColumns(MODEL_WITH_OPTIONAL, 'jp');
+    expect(cols).toContain('managing_organization');
+    expect(cols).toContain('sex');
+    expect(cols).not.toContain('surname');
+    expect(cols).not.toContain('national_id');
+  });
+
+  it('fail-safe: an optional join with NO denyColumns exposes nothing', () => {
+    expect(exposableColumns(MODEL_WITH_OPTIONAL, 'jf')).toEqual([]);
+  });
+
+  it('returns [] for a non-optional join alias', () => {
+    expect(exposableColumns(MODEL_WITH_OPTIONAL, 'jauto')).toEqual([]);
+  });
+
+  it('returns [] for an unknown alias', () => {
+    expect(exposableColumns(MODEL_WITH_OPTIONAL, 'nope')).toEqual([]);
   });
 });
