@@ -287,7 +287,7 @@ export interface Dashboard {
 }
 export interface ModelDimension { key: string; label: string; column: string; kind: 'string' | 'date' | 'number'; dateGrain?: string[]; compute?: { kind: 'age-band'; bands: { maxAge: number; label: string }[]; openEndedLabel: string; unknownLabel: string }; join?: string }
 export interface ModelMetric { key: string; label: string; agg: string; column?: string }
-export interface ClientOptionalJoin { alias: string; label: string; exposableColumns: string[] }
+export interface ClientOptionalJoin { alias: string; label: string; left: string; right: string; exposableColumns: string[] }
 export interface QueryModel { id: string; label: string; dimensions: ModelDimension[]; metrics: ModelMetric[]; optionalJoins?: ClientOptionalJoin[] }
 
 const json = (body: unknown) => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });

@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { JoinColumnPicker, adhocKey } from './JoinColumnPicker';
 
 const optionalJoins = [
-  { alias: 'jp', label: 'Patient', exposableColumns: ['sex', 'managing_organization'] },
+  { alias: 'jp', label: 'Patient', left: 'patient_id', right: 'id', exposableColumns: ['sex', 'managing_organization'] },
 ];
 
 describe('adhocKey', () => {

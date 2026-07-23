@@ -108,4 +108,11 @@ describe('modelsForClient', () => {
     const [m] = modelsForClient([MODEL_WITH_OPTIONAL]);
     expect(m.optionalJoins?.map((j) => j.alias)).toEqual(['jp']); // jf (no denylist) and jauto (not optional) dropped
   });
+
+  it('includes the admin-declared join keys (left/right) for read-only display', () => {
+    const m = modelsForClient().find((x) => x.id === 'service_requests')!;
+    const oj = m.optionalJoins!.find((x) => x.alias === 'jp')!;
+    expect(oj.left).toBe('patient_id');
+    expect(oj.right).toBe('id');
+  });
 });
