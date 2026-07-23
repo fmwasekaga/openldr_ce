@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { listModels, getModel, exposableColumns, modelsForClient, type QueryModel, JOINABLE_TABLES, joinableColumns, getJoinableTable, joinableTablesForClient } from './registry';
+import { listModels, getModel, exposableColumns, exposableFor, modelsForClient, type QueryModel, JOINABLE_TABLES, joinableColumns, getJoinableTable, joinableTablesForClient } from './registry';
 
 describe('model registry', () => {
   it('exposes service_requests with count metric and date dimension', () => {
@@ -175,5 +175,18 @@ describe('joinable tables (arbitrary joins)', () => {
   it('modelsForClient includes the base table columns for the left-key picker', () => {
     const m = modelsForClient().find((x) => x.id === 'service_requests')!;
     expect(m.tableColumns).toContain('patient_id');
+  });
+});
+
+describe('exposableFor', () => {
+  it('returns a synthesized join\'s explicit exposable list', () => {
+    const model = { id: 'm', label: 'M', table: 'lab_requests',
+      joins: [{ table: 'patients', alias: 'u1', left: 'patient_id', right: 'id', optional: true, exposable: ['sex'] }],
+      dimensions: [], metrics: [] } as any;
+    expect(exposableFor(model, 'u1')).toEqual(['sex']);
+  });
+  it('falls back to exposableColumns for an admin optional join', () => {
+    const m = getModel('service_requests')!;
+    expect(exposableFor(m, 'jp')).toEqual(exposableColumns(m, 'jp'));
   });
 });

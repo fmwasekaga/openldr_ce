@@ -20,6 +20,7 @@ export interface ModelJoin {
   optional?: boolean;      // offered in the "+ Add → Join data" picker instead of firing via a default dimension
   label?: string;          // display name for the join in the picker (defaults to the table name)
   denyColumns?: string[];  // columns that may NOT be exposed; REQUIRED for an optional join to be usable (fail-safe)
+  exposable?: string[];    // explicit allowlist for a synthesized user join (overrides denyColumns logic)
 }
 export interface ModelDimension { key: string; label: string; column: string; kind: DimensionKind; dateGrain?: DateGrain[]; compute?: AgeBandCompute | ExprCompute; join?: string }
 export interface ModelMetric { key: string; label: string; agg: Agg; column?: string }
@@ -123,6 +124,13 @@ export function exposableColumns(model: QueryModel, alias: string): string[] {
   if (!j || !j.optional || !j.denyColumns?.length) return [];
   const deny = new Set(j.denyColumns);
   return EXTERNAL_TABLE_COLUMNS[j.table].filter((c) => !deny.has(c));
+}
+
+/** Exposable columns for any join alias: a synthesized user join's explicit `exposable`, else the
+ *  admin optional-join denylist rules (exposableColumns). */
+export function exposableFor(model: QueryModel, alias: string): string[] {
+  const j = (model.joins ?? []).find((x) => x.alias === alias);
+  return j?.exposable ?? exposableColumns(model, alias);
 }
 
 export interface JoinableTable {

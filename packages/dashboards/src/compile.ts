@@ -1,7 +1,7 @@
 import { type Kysely, sql, expressionBuilder, type SelectQueryBuilder } from 'kysely';
 import type { ExternalSchema } from '@openldr/db';
 import type { QueryModel, ModelDimension, ModelJoin, AgeBandCompute } from './models/registry';
-import { exposableColumns } from './models/registry';
+import { exposableFor } from './models/registry';
 import type { WidgetQuery, Metric, QueryFilter, DateGrain, ConditionNode, ConditionRule, Expr, Operand } from './types';
 import { customColumnKind } from './types';
 import type { ReportResultData, ReportColumn, ChartHint } from '@openldr/reporting';
@@ -217,7 +217,7 @@ export function effectiveModel(model: QueryModel, q: BuilderQuery): QueryModel {
     for (const a of adhoc) {
       const j = (eff.joins ?? []).find((x) => x.alias === a.join);
       if (!j || !j.optional) throw new Error(`adhoc dimension ${a.key}: unknown or non-optional join: ${a.join}`);
-      if (!exposableColumns(eff, a.join).includes(a.column)) throw new Error(`adhoc dimension ${a.key}: column not exposable: ${a.column}`);
+      if (!exposableFor(eff, a.join).includes(a.column)) throw new Error(`adhoc dimension ${a.key}: column not exposable: ${a.column}`);
       // idempotent: safe to call on an already-merged model. A collision with a REAL model dimension key
       // is also intentionally skipped — the trusted base dimension wins (fail-safe; an adhoc dim can never shadow it).
       if (existing.has(a.key)) continue;
