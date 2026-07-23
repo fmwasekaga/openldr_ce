@@ -17,6 +17,11 @@ describe('measures.model', () => {
     ]);
   });
 
+  it('addMeasure carries the model metric column when the first metric has one', () => {
+    const avgFirst = { metrics: [{ key: 'avg_value', label: 'Avg', agg: 'avg', column: 'numeric_value' }] };
+    expect(addMeasure([], avgFirst)).toEqual([{ key: 'avg_value', label: 'Avg', agg: 'avg', column: 'numeric_value' }]);
+  });
+
   it('addFormula references the first two aggregate measures', () => {
     const two: Measure[] = [{ key: 'a', agg: 'count' }, { key: 'b', agg: 'count' }];
     const out = addFormula(two);
