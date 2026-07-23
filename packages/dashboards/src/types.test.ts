@@ -231,6 +231,10 @@ describe('user joins schema', () => {
   it('accepts a userJoin', () => {
     expect(UserJoinSchema.safeParse({ id: 'u1', table: 'patients', left: 'patient_id', right: 'id', label: 'Patient' }).success).toBe(true);
   });
+  it('rejects a userJoin id with SQL-alias-breaking characters', () => {
+    expect(UserJoinSchema.safeParse({ id: 'u1 as x', table: 'patients', left: 'patient_id', right: 'id' }).success).toBe(false);
+    expect(UserJoinSchema.safeParse({ id: 'a.b', table: 'patients', left: 'patient_id', right: 'id' }).success).toBe(false);
+  });
   it('accepts a builder query carrying userJoins', () => {
     const ok = WidgetQuerySchema.safeParse({
       mode: 'builder', model: 'm', metric: { key: 'count', agg: 'count' }, filters: [],

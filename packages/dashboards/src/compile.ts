@@ -223,6 +223,9 @@ export function effectiveModel(model: QueryModel, q: BuilderQuery): QueryModel {
       if (!rightCols || !rightCols.includes(uj.right)) throw new Error(`user join ${uj.id}: unknown right key: ${uj.right}`);
       synth.push({ table: uj.table as ModelJoin['table'], alias: uj.id, left: uj.left, right: uj.right, optional: true, exposable: joinableColumns(jt) });
     }
+    // Admin joins FIRST, synth (user) joins after: `exposableFor` and `collectUsedJoins` both use
+    // first-match `Array.find` by alias, so this order makes a trusted admin join shadow any user
+    // join whose id collides with an admin alias (belt-and-braces with the `u*`/`j*` id namespaces).
     eff = { ...eff, joins: [...(eff.joins ?? []), ...synth] };
   }
 

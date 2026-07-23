@@ -70,7 +70,10 @@ export type AdhocDimension = z.infer<typeof AdhocDimensionSchema>;
 // query-local alias (distinct id → same table joinable twice). Columns selected from it are ordinary
 // adhocDimensions whose `join` references this id.
 export const UserJoinSchema = z.object({
-  id: z.string(),
+  // Alphanumeric/underscore only: this is emitted as a SQL join alias, and it formalizes the
+  // `u<n>` (user) vs `j*` (admin) namespace separation the compiler's first-match join shadowing
+  // relies on. Rejects ids with `.`/spaces that would otherwise produce malformed SQL.
+  id: z.string().regex(/^[A-Za-z0-9_]+$/),
   table: z.string(),
   left: z.string(),
   right: z.string(),
