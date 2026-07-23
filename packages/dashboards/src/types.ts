@@ -80,7 +80,7 @@ export const WidgetQuerySchema = z.discriminatedUnion('mode', [
   z.object({
     mode: z.literal('builder'),
     model: z.string(),
-    metric: MetricSchema,
+    metric: MetricSchema.optional(), // absent when the widget has no Summarize measure
     metrics: z.array(MetricSchema).optional(), // Slice A: multi-column table mode
     dimension: DimensionRefSchema.optional(),
     breakdown: z.object({ key: z.string() }).optional(),

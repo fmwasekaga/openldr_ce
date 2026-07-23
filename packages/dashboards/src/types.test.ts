@@ -178,3 +178,16 @@ describe('builder adhocDimensions', () => {
     if (parsed.mode === 'builder') expect(parsed.adhocDimensions).toBeUndefined();
   });
 });
+
+describe('builder query without a measure', () => {
+  it('parses a builder query that has no metric', () => {
+    const parsed = WidgetQuerySchema.parse({ mode: 'builder', model: 'service_requests', filters: [] });
+    expect(parsed.mode).toBe('builder');
+    if (parsed.mode === 'builder') expect(parsed.metric).toBeUndefined();
+  });
+
+  it('still parses a builder query WITH a metric', () => {
+    const parsed = WidgetQuerySchema.parse({ mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count' }, filters: [] });
+    if (parsed.mode === 'builder') expect(parsed.metric?.agg).toBe('count');
+  });
+});
