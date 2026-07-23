@@ -36,11 +36,6 @@ export function addCustomColumn(value: BuilderQuery, col: CustomColumn): Builder
   return { ...value, customColumns: [...list, col] };
 }
 
-/** Patch one custom column by key. */
-export function updateCustomColumn(value: BuilderQuery, key: string, patch: Partial<CustomColumn>): BuilderQuery {
-  return { ...value, customColumns: (value.customColumns ?? []).map((c) => (c.key === key ? { ...c, ...patch } : c)) };
-}
-
 /** Remove a custom column and clear every reference it left behind (group-by, breakdown, filters, tree). */
 export function removeCustomColumn(value: BuilderQuery, key: string): BuilderQuery {
   const next: BuilderQuery = { ...value, customColumns: (value.customColumns ?? []).filter((c) => c.key !== key) };

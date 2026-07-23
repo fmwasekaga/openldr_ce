@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { addCustomColumn, updateCustomColumn, removeCustomColumn, uniqueCustomKey, customColumnKind, deriveCustomLabel } from './customColumns.model';
+import { addCustomColumn, removeCustomColumn, uniqueCustomKey, customColumnKind, deriveCustomLabel } from './customColumns.model';
 import { setDimensionPatch, type BuilderQuery } from './builderForm.model';
 
 const q0 = () => ({ mode: 'builder' as const, model: 'service_requests', metric: { key: 'count', agg: 'count', label: 'Count' }, filters: [] }) as BuilderQuery;
@@ -26,12 +26,6 @@ describe('customColumns.model', () => {
     const a = addCustomColumn(q0(), col);
     expect(a.customColumns).toEqual([col]);
     expect(addCustomColumn(a, col).customColumns).toEqual([col]); // no duplicate
-  });
-
-  it('updateCustomColumn patches one column by key', () => {
-    const a = addCustomColumn(q0(), col);
-    const b = updateCustomColumn(a, 'custom', { label: 'Renamed' });
-    expect(b.customColumns![0].label).toBe('Renamed');
   });
 
   it('removeCustomColumn drops it and orphan-cleans a group-by that referenced it', () => {

@@ -481,6 +481,19 @@ describe('custom columns (row-level computed dimension)', () => {
     } as any)).toThrow(/computed/i);
   });
 
+  it('compiles a concat custom column as a breakdown (series)', () => {
+    const model = getModel('service_requests')!;
+    const { sql } = compileBuilderQuery(db, model, {
+      mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count' }, filters: [],
+      customColumns: [{ key: 'sp', label: 'Status/Priority', expr: { kind: 'concat', parts: [
+        { type: 'field', dimension: 'status' }, { type: 'field', dimension: 'priority' },
+      ] } }],
+      dimension: { key: 'status' }, breakdown: { key: 'sp' },
+    } as any).compile();
+    expect(sql).toMatch(/concat\(/i);
+    expect(sql).toMatch(/as "series"/i);
+  });
+
   it('refuses to use a custom column as a filter field', () => {
     const model = getModel('service_requests')!;
     expect(() => compileBuilderQuery(db, model, {

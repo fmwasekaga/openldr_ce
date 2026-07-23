@@ -254,6 +254,16 @@ describe('adhoc dimension patches', () => {
     const next = setModelPatch(models, q, 'observations');
     expect(next.adhocDimensions).toBeUndefined();
   });
+
+  it('clears custom columns when the source model changes', () => {
+    const models = [
+      { id: 'service_requests', label: 'Test Orders', dimensions: [], metrics: [{ key: 'count', label: 'Count', agg: 'count' }] },
+      { id: 'observations', label: 'Results', dimensions: [], metrics: [{ key: 'count', label: 'Count', agg: 'count' }] },
+    ] as never;
+    const q = { ...baseQ(), customColumns: [{ key: 'sp', label: 'S/P', expr: { kind: 'concat', parts: [{ type: 'field', dimension: 'status' }] } }] } as never;
+    const next = setModelPatch(models, q, 'observations');
+    expect(next.customColumns).toBeUndefined();
+  });
 });
 
 describe('join relationship patches', () => {

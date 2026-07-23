@@ -28,6 +28,7 @@ export function setModelPatch(models: QueryModel[], value: BuilderQuery, id: str
     filters: [],
     filterTree: undefined,
     adhocDimensions: undefined,
+    customColumns: undefined,
   };
 }
 
