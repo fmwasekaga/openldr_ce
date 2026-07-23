@@ -25,12 +25,14 @@ import {
   listModels,
   runWidgetQuery,
   compileBuilderToSql,
+  fetchJoinableTables,
   type QueryModel,
   type DashboardFilterDef,
   type WidgetConfig,
   type WidgetQuery,
   type WidgetVariableDef,
   type ReportResult,
+  type ClientJoinableTable,
 } from '../../api';
 import { renderWidget } from '../widgets';
 import { resolveValues, applyTemplate } from '../template';
@@ -241,6 +243,7 @@ export function WidgetEditorDialog({
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string>();
   const [models, setModels] = useState<QueryModel[]>([]);
+  const [joinableTables, setJoinableTables] = useState<ClientJoinableTable[]>([]);
   const [showCharts, setShowCharts] = useState(false);
   const [showTables, setShowTables] = useState(false);
   const [showVariables, setShowVariables] = useState(false);
@@ -269,6 +272,7 @@ export function WidgetEditorDialog({
         setBuilderQuery((q) => (m.some((x) => x.id === q.model) ? q : { ...q, model: m[0]?.id ?? q.model, metric: m[0]?.metrics[0] ?? q.metric }));
       })
       .catch(() => {});
+    fetchJoinableTables().then(setJoinableTables).catch(() => {});
   }, []);
 
   // Load dynamic options for variables that define an optionsSql query.
@@ -501,7 +505,7 @@ export function WidgetEditorDialog({
               )}
               <div className="min-h-0 flex-1 overflow-auto">
                 {mode === 'builder' ? (
-                  <BuilderForm key={builderQuery.model} models={models} value={builderQuery} dashboardFilters={dashboardFilters} onChange={setBuilderQuery} />
+                  <BuilderForm key={builderQuery.model} models={models} value={builderQuery} dashboardFilters={dashboardFilters} joinableTables={joinableTables} onChange={setBuilderQuery} />
                 ) : (
                   <>
                     {ejectedFromBuilder && (

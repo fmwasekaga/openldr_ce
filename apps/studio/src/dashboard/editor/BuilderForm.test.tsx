@@ -210,3 +210,62 @@ describe('BuilderForm minimal-core sections', () => {
     expect(last.metrics).toBeUndefined();
   });
 });
+
+// --- User-defined joins (arbitrary joins against the admin-governed joinable-table universe) ---
+
+const joinableTablesFixture = [
+  { table: 'patients', label: 'Patient', columns: ['sex'], primaryKeys: ['id'], allColumns: ['id', 'patient_id', 'sex'] },
+];
+
+// This model has NO curated optionalJoins — arbitrary joins must still be reachable, since a
+// model with only one FK (or none) is exactly the case curated joins alone can't serve.
+const modelsNoCuratedJoins: QueryModel[] = [
+  {
+    id: 'service_requests', label: 'Test Orders',
+    dimensions: [{ key: 'status', label: 'Status', column: 'status', kind: 'string' }],
+    metrics: [{ key: 'count', label: 'Count', agg: 'count' }],
+    tableColumns: ['id', 'patient_id', 'status'],
+  },
+];
+const baseNoJoins = { mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count', label: 'Count' }, filters: [] } as Extract<WidgetQuery, { mode: 'builder' }>;
+
+describe('BuilderForm user-defined joins', () => {
+  it('offers "Join data" (and reaches "+ Add a join") even when the model has no curated optionalJoins', () => {
+    render(<BuilderForm models={modelsNoCuratedJoins} value={baseNoJoins} joinableTables={joinableTablesFixture} onChange={() => {}} />);
+    // Join data appears twice (icon under Data + bottom tile) purely because joinableTables is non-empty.
+    fireEvent.click(screen.getAllByRole('button', { name: /join data/i })[0]);
+    expect(screen.getByRole('button', { name: /\+ add a join/i })).toBeInTheDocument();
+  });
+
+  it('"+ Add a join" emits a userJoins entry', () => {
+    const onChange = vi.fn();
+    render(<BuilderForm models={modelsNoCuratedJoins} value={baseNoJoins} joinableTables={joinableTablesFixture} onChange={onChange} />);
+    fireEvent.click(screen.getAllByRole('button', { name: /join data/i })[0]);
+    fireEvent.click(screen.getByRole('button', { name: /\+ add a join/i }));
+    const last = onChange.mock.calls.at(-1)![0];
+    expect(last.userJoins).toEqual([expect.objectContaining({ id: 'u1', table: 'patients', label: 'Patient' })]);
+  });
+
+  it('renders a UserJoinBuilder block for each entry in value.userJoins', () => {
+    const withUserJoin = { ...baseNoJoins, userJoins: [{ id: 'u1', table: 'patients', left: 'patient_id', right: 'id', label: 'Patient' }] } as Extract<WidgetQuery, { mode: 'builder' }>;
+    render(<BuilderForm models={modelsNoCuratedJoins} value={withUserJoin} joinableTables={joinableTablesFixture} onChange={() => {}} />);
+    expect(screen.getByText('Join: Patient')).toBeInTheDocument();
+    expect(screen.getByLabelText('sex')).toBeInTheDocument();
+  });
+
+  it('removing a user join clears its ad-hoc columns and group-by reference', () => {
+    const onChange = vi.fn();
+    const withRef = {
+      ...baseNoJoins,
+      userJoins: [{ id: 'u1', table: 'patients', left: 'patient_id', right: 'id', label: 'Patient' }],
+      adhocDimensions: [{ key: 'u1__sex', label: 'Patient → Sex', join: 'u1', column: 'sex', kind: 'string' as const }],
+      dimension: { key: 'u1__sex' },
+    } as Extract<WidgetQuery, { mode: 'builder' }>;
+    render(<BuilderForm models={modelsNoCuratedJoins} value={withRef} joinableTables={joinableTablesFixture} onChange={onChange} />);
+    fireEvent.click(screen.getByRole('button', { name: /remove join u1/i }));
+    const last = onChange.mock.calls.at(-1)![0];
+    expect(last.userJoins ?? []).toHaveLength(0);
+    expect(last.adhocDimensions ?? []).toHaveLength(0);
+    expect(last.dimension).toBeUndefined();
+  });
+});
