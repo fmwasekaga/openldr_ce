@@ -1,7 +1,8 @@
 import { type Kysely, sql, expressionBuilder, type SelectQueryBuilder } from 'kysely';
 import type { ExternalSchema } from '@openldr/db';
 import type { QueryModel, ModelDimension, ModelJoin, AgeBandCompute } from './models/registry';
-import { exposableFor } from './models/registry';
+import { exposableFor, getJoinableTable, joinableColumns } from './models/registry';
+import { EXTERNAL_TABLE_COLUMNS } from '@openldr/db/schema/external';
 import type { WidgetQuery, Metric, QueryFilter, DateGrain, ConditionNode, ConditionRule, Expr, Operand } from './types';
 import { customColumnKind } from './types';
 import type { ReportResultData, ReportColumn, ChartHint } from '@openldr/reporting';
@@ -208,6 +209,22 @@ function ageBandExprs(d: ModelDimension, reference?: string) {
  */
 export function effectiveModel(model: QueryModel, q: BuilderQuery): QueryModel {
   let eff = model;
+
+  // 0) User-defined joins → synthesized ModelJoins, validated against the admin joinable universe.
+  const userJoins = q.userJoins ?? [];
+  if (userJoins.length) {
+    const baseCols = EXTERNAL_TABLE_COLUMNS[eff.table];
+    const synth: ModelJoin[] = [];
+    for (const uj of userJoins) {
+      const jt = getJoinableTable(uj.table);
+      if (!jt) throw new Error(`user join ${uj.id}: table not joinable: ${uj.table}`);
+      const rightCols = EXTERNAL_TABLE_COLUMNS[uj.table as keyof typeof EXTERNAL_TABLE_COLUMNS];
+      if (!baseCols.includes(uj.left)) throw new Error(`user join ${uj.id}: unknown left key: ${uj.left}`);
+      if (!rightCols || !rightCols.includes(uj.right)) throw new Error(`user join ${uj.id}: unknown right key: ${uj.right}`);
+      synth.push({ table: uj.table as ModelJoin['table'], alias: uj.id, left: uj.left, right: uj.right, optional: true, exposable: joinableColumns(jt) });
+    }
+    eff = { ...eff, joins: [...(eff.joins ?? []), ...synth] };
+  }
 
   // 1) Ad-hoc join columns (unchanged behavior).
   const adhoc = q.adhocDimensions ?? [];

@@ -540,3 +540,66 @@ describe('custom columns (row-level computed dimension)', () => {
     } as any)).toThrow(/custom column/i);
   });
 });
+
+describe('user-defined (arbitrary) joins', () => {
+  it('synthesizes a user join into a leftJoin with qualified refs', () => {
+    const model = getModel('service_requests')!; // base table lab_requests
+    const { sql } = compileBuilderQuery(db, model, {
+      mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count' }, filters: [],
+      userJoins: [{ id: 'u1', table: 'patients', left: 'patient_id', right: 'id', label: 'Patient' }],
+      adhocDimensions: [{ key: 'u1__sex', label: 'Patient Sex', join: 'u1', column: 'sex', kind: 'string' }],
+      dimension: { key: 'u1__sex' },
+    } as any).compile();
+    expect(sql).toMatch(/left join "patients" as "u1"/i);
+    expect(sql).toMatch(/"u1"\."sex" as "label"/i);
+  });
+
+  it('supports the same table joined twice under distinct aliases', () => {
+    const model = getModel('service_requests')!;
+    const { sql } = compileBuilderQuery(db, model, {
+      mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count' },
+      userJoins: [
+        { id: 'u1', table: 'patients', left: 'patient_id', right: 'id' },
+        { id: 'u2', table: 'patients', left: 'patient_id', right: 'id' },
+      ],
+      adhocDimensions: [
+        { key: 'u1__sex', label: 'A', join: 'u1', column: 'sex', kind: 'string' },
+        { key: 'u2__managing_organization', label: 'B', join: 'u2', column: 'managing_organization', kind: 'string' },
+      ],
+      dimension: { key: 'u1__sex' },
+      filters: [{ dimension: 'u2__managing_organization', op: 'eq', value: 'Org/1' }],
+    } as any).compile();
+    expect(sql).toMatch(/left join "patients" as "u1"/i);
+    expect(sql).toMatch(/left join "patients" as "u2"/i);
+  });
+
+  it('rejects a user join to a table not in the joinable set', () => {
+    const model = getModel('service_requests')!;
+    expect(() => compileBuilderQuery(db, model, {
+      mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count' }, filters: [],
+      userJoins: [{ id: 'u1', table: 'secret_table', left: 'patient_id', right: 'id' }],
+      adhocDimensions: [{ key: 'u1__x', label: 'x', join: 'u1', column: 'x', kind: 'string' }],
+      dimension: { key: 'u1__x' },
+    } as any)).toThrow(/not joinable/i);
+  });
+
+  it('rejects selecting a denylisted (PII) column from a user join', () => {
+    const model = getModel('service_requests')!;
+    expect(() => compileBuilderQuery(db, model, {
+      mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count' }, filters: [],
+      userJoins: [{ id: 'u1', table: 'patients', left: 'patient_id', right: 'id' }],
+      adhocDimensions: [{ key: 'u1__national_id', label: 'x', join: 'u1', column: 'national_id', kind: 'string' }],
+      dimension: { key: 'u1__national_id' },
+    } as any)).toThrow(/not exposable/i);
+  });
+
+  it('rejects a join key that is not a real column', () => {
+    const model = getModel('service_requests')!;
+    expect(() => compileBuilderQuery(db, model, {
+      mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count' }, filters: [],
+      userJoins: [{ id: 'u1', table: 'patients', left: 'evil', right: 'id' }],
+      adhocDimensions: [{ key: 'u1__sex', label: 'x', join: 'u1', column: 'sex', kind: 'string' }],
+      dimension: { key: 'u1__sex' },
+    } as any)).toThrow(/unknown (left|right) key/i);
+  });
+});
