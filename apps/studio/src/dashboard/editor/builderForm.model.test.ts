@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { setModelPatch, setMetricPatch, setDimensionPatch, setGrainPatch, setBreakdownPatch, setFiltersPatch, setLimitPatch, setFilterTreePatch, buildSaveQuery, shouldRestoreEjected, measuresOf, setMeasuresPatch, type BuilderQuery } from './builderForm.model';
+import { setModelPatch, setMetricPatch, setDimensionPatch, setGrainPatch, setBreakdownPatch, setFiltersPatch, setLimitPatch, setFilterTreePatch, buildSaveQuery, shouldRestoreEjected, measuresOf, setMeasuresPatch, addAdhocDimensionPatch, removeAdhocDimensionPatch, type BuilderQuery } from './builderForm.model';
 import type { QueryModel, WidgetVariableDef } from '../../api';
 
 const models: QueryModel[] = [
@@ -177,5 +177,42 @@ describe('builderForm.model', () => {
       const ejected = 'select "status" as "label" from "lab_requests"';
       expect(shouldRestoreEjected('builder', ejected, ejected)).toBe(false);
     });
+  });
+});
+
+const baseQ = () => ({
+  mode: 'builder' as const, model: 'service_requests',
+  metric: { key: 'count', agg: 'count', label: 'Count' }, filters: [],
+});
+const adhoc = { key: 'jp__sex', label: 'Patient Sex', join: 'jp', column: 'sex', kind: 'string' as const };
+
+describe('adhoc dimension patches', () => {
+  it('adds an adhoc dimension', () => {
+    const next = addAdhocDimensionPatch(baseQ(), adhoc);
+    expect(next.adhocDimensions).toEqual([adhoc]);
+  });
+
+  it('removes an adhoc dimension and clears any group-by that referenced it', () => {
+    let q = addAdhocDimensionPatch(baseQ(), adhoc);
+    q = setDimensionPatch(q, 'jp__sex');
+    const next = removeAdhocDimensionPatch(q, 'jp__sex');
+    expect(next.adhocDimensions).toEqual([]);
+    expect(next.dimension).toBeUndefined();       // orphan cleanup
+  });
+
+  it('drops the adhocDimensions field when the list becomes empty', () => {
+    const q = addAdhocDimensionPatch(baseQ(), adhoc);
+    const next = removeAdhocDimensionPatch(q, 'jp__sex');
+    expect('adhocDimensions' in next ? next.adhocDimensions?.length : 0).toBe(0);
+  });
+
+  it('clears adhoc dimensions when the source model changes', () => {
+    const models = [
+      { id: 'service_requests', label: 'Test Orders', dimensions: [], metrics: [{ key: 'count', label: 'Count', agg: 'count' }] },
+      { id: 'observations', label: 'Results', dimensions: [], metrics: [{ key: 'count', label: 'Count', agg: 'count' }] },
+    ] as never;
+    const q = addAdhocDimensionPatch(baseQ(), adhoc);
+    const next = setModelPatch(models, q, 'observations');
+    expect(next.adhocDimensions).toBeUndefined();
   });
 });
