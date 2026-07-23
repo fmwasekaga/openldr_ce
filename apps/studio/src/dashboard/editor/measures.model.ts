@@ -55,7 +55,7 @@ export function aggregateMeasures(list: Measure[]): Measure[] {
   return list.filter((m) => !m.derived);
 }
 
-export function toBuilderMetrics(list: Measure[]): { metric: Measure; metrics?: Measure[] } {
+export function toBuilderMetrics(list: Measure[]): { metric?: Measure; metrics?: Measure[] } {
   const firstAggregate = aggregateMeasures(list)[0] ?? list[0];
   // Only a single NON-derived row collapses to the scalar `metric`. A derived (formula) row is
   // computed post-aggregation from sibling measures and needs the wide `metrics[]` path — so any

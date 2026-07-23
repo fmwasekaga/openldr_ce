@@ -120,7 +120,7 @@ describe('builderForm.model', () => {
   });
 
   it('setMeasuresPatch maps one row to metric, clearing metrics', () => {
-    const out = setMeasuresPatch({ ...base, metrics: [base.metric, base.metric] }, [base.metric]);
+    const out = setMeasuresPatch({ ...base, metrics: [base.metric!, base.metric!] }, [base.metric!]);
     expect(out.metric).toEqual(base.metric);
     expect(out.metrics).toBeUndefined();
   });
