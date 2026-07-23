@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { listModels, getModel } from './registry';
-import { exposableColumns, type QueryModel } from './registry';
+import { listModels, getModel, exposableColumns, type QueryModel } from './registry';
 
 describe('model registry', () => {
   it('exposes service_requests with count metric and date dimension', () => {
@@ -62,14 +61,16 @@ const MODEL_WITH_OPTIONAL: QueryModel = {
 describe('exposableColumns', () => {
   it('returns table columns minus denyColumns for a configured optional join', () => {
     const cols = exposableColumns(MODEL_WITH_OPTIONAL, 'jp');
-    expect(cols).toContain('managing_organization');
-    expect(cols).toContain('sex');
-    expect(cols).not.toContain('surname');
-    expect(cols).not.toContain('national_id');
+    expect(cols).toEqual(['id', 'sex', 'managing_organization', 'active', 'replaced_by_id', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at']);
   });
 
   it('fail-safe: an optional join with NO denyColumns exposes nothing', () => {
     expect(exposableColumns(MODEL_WITH_OPTIONAL, 'jf')).toEqual([]);
+  });
+
+  it('fail-safe: an optional join with an EMPTY denyColumns exposes nothing', () => {
+    const model = { ...MODEL_WITH_OPTIONAL, joins: [{ table: 'patients', alias: 'je', left: 'patient_id', right: 'id', optional: true, denyColumns: [] as string[] }] } as QueryModel;
+    expect(exposableColumns(model, 'je')).toEqual([]);
   });
 
   it('returns [] for a non-optional join alias', () => {

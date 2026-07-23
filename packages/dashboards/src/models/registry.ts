@@ -93,13 +93,14 @@ export function getModel(id: string): QueryModel | undefined { return MODELS.fin
 
 /**
  * Columns a power user may expose from an OPTIONAL join, i.e. the joined table's columns minus the
- * join's `denyColumns`. Fail-safe: an optional join with no `denyColumns` declared exposes nothing
- * (returns []), so a newly added join never leaks columns until an admin declares its denylist.
+ * join's `denyColumns`. Fail-safe: an optional join with an ABSENT OR EMPTY `denyColumns` exposes
+ * nothing (returns []) — both are "not configured" and therefore unavailable, so a newly added join
+ * never leaks columns until an admin declares its (non-empty) denylist.
  * Non-optional / unknown aliases return [] — only optional joins are user-selectable.
  */
 export function exposableColumns(model: QueryModel, alias: string): string[] {
   const j = (model.joins ?? []).find((x) => x.alias === alias);
-  if (!j || !j.optional || !j.denyColumns) return [];
+  if (!j || !j.optional || !j.denyColumns?.length) return [];
   const deny = new Set(j.denyColumns);
   return EXTERNAL_TABLE_COLUMNS[j.table].filter((c) => !deny.has(c));
 }
