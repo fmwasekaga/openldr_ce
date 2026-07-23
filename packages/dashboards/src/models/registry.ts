@@ -1,4 +1,7 @@
-import { type ExternalSchema, EXTERNAL_TABLE_COLUMNS } from '@openldr/db';
+// Import from the browser-safe `./schema/external` subpath, NOT the `@openldr/db` barrel: the barrel
+// re-exports internal-db.ts (which imports `pg`), and pulling a runtime VALUE like EXTERNAL_TABLE_COLUMNS
+// through it drags `pg` into the studio browser bundle (crashes with "Buffer is not defined").
+import { type ExternalSchema, EXTERNAL_TABLE_COLUMNS } from '@openldr/db/schema/external';
 import type { Agg, DateGrain, DimensionKind } from '../types';
 
 export interface AgeBandCompute {

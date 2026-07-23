@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./schema/external": "./src/schema/external.ts",
     "./testing": "./src/migrations/internal/test-helpers.ts"
   },
   "scripts": {

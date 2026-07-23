@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { EXTERNAL_TABLE_COLUMNS } from './export-data';
+import { EXTERNAL_TABLE_COLUMNS } from './schema/external';
 
 describe('EXTERNAL_TABLE_COLUMNS', () => {
   it('covers the 6 canonical external flat tables', () => {
