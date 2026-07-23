@@ -6,7 +6,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { Input } from '@/components/ui/input';
 import { FilterTreeEditor } from './FilterTreeEditor';
 import { MeasuresEditor } from './MeasuresEditor';
-import { JoinColumnPicker } from './JoinColumnPicker';
+import { JoinDataPicker } from './JoinDataPicker';
 import { emptyTree, filtersToTree } from './conditionTree.model';
 import {
   setModelPatch,
@@ -17,8 +17,9 @@ import {
   setLimitPatch,
   measuresOf,
   setMeasuresPatch,
-  addAdhocDimensionPatch,
   removeAdhocDimensionPatch,
+  removeRelationshipPatch,
+  setRelationshipColumnsPatch,
   type BuilderQuery,
 } from './builderForm.model';
 
@@ -191,36 +192,42 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
   };
 
   // Ordered list of every visible optional block: the shown section cards (in SECTION_ORDER),
-  // then the Join-columns card when there are ad-hoc dimensions. A subtle hairline is rendered
-  // before each block (and before the Add tiles) so every section is visually separated, no label.
+  // then one relationship card per active join alias (grouped from the ad-hoc dimensions). A subtle
+  // hairline is rendered before each block (and before the Add tiles) so every section is visually
+  // separated, no label.
   const visibleBlocks: ReactNode[] = [
     ...SECTION_ORDER.filter((k) => shown.has(k)).map((k) => sectionNodes[k]),
-    ...(adhoc.length > 0
-      ? [
-          <SectionCard key="__joincols__" label="Join columns" onRemove={() => onChange(adhoc.reduce((q, a) => removeAdhocDimensionPatch(q, a.key), value))}>
-            <div className="flex flex-wrap gap-1">
-              {adhoc.map((a) => (
-                <span key={a.key} className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs">
-                  {a.label}
-                  <button type="button" aria-label={`Remove ${a.label}`} onClick={() => onChange(removeAdhocDimensionPatch(value, a.key))}>×</button>
-                </span>
-              ))}
-            </div>
-          </SectionCard>,
-        ]
-      : []),
+    ...[...new Set(adhoc.map((a) => a.join))].map((alias) => {
+      const meta = model?.optionalJoins?.find((j) => j.alias === alias);
+      const cols = adhoc.filter((a) => a.join === alias);
+      const label = meta?.label ?? alias;
+      return (
+        <SectionCard key={`__join_${alias}__`} label={`Join: ${label}`} onRemove={() => onChange(removeRelationshipPatch(value, alias))}>
+          {meta && <p className="mb-2 text-xs text-muted-foreground">on {meta.left} = {meta.right}</p>}
+          <div className="flex flex-wrap gap-1">
+            {cols.map((a) => (
+              <span key={a.key} className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs">
+                {a.label}
+                <button type="button" aria-label={`Remove ${a.label}`} onClick={() => onChange(removeAdhocDimensionPatch(value, a.key))}>×</button>
+              </span>
+            ))}
+          </div>
+        </SectionCard>
+      );
+    }),
   ];
 
-  // The Add area: the JoinColumnPicker replaces the tiles while picking; otherwise a Metabase-style
-  // row of always-visible tiles (one per unshown section, plus a Join-column tile when the model has
+  // The Add area: the JoinDataPicker replaces the tiles while picking; otherwise a Metabase-style
+  // row of always-visible tiles (one per unshown section, plus a Join-data tile when the model has
   // optional joins). Nothing when there is neither.
   const hasTiles = unshown.length > 0 || !!model?.optionalJoins?.length;
   const addBlock: ReactNode =
     showPicker && model?.optionalJoins ? (
       <div className="pt-2">
-        <JoinColumnPicker
+        <JoinDataPicker
           optionalJoins={model.optionalJoins}
-          onAdd={(d) => { onChange(addAdhocDimensionPatch(value, d)); setShowPicker(false); }}
+          adhoc={adhoc}
+          onApply={(alias, joinLabel, columns) => { onChange(setRelationshipColumnsPatch(value, alias, joinLabel, columns)); setShowPicker(false); }}
           onCancel={() => setShowPicker(false)}
         />
       </div>
@@ -247,7 +254,7 @@ export function BuilderForm({ models, value, dashboardFilters = [], onChange }: 
             className="flex min-w-[76px] flex-col items-center gap-1 rounded-md border border-border bg-card px-3 py-2 text-xs hover:bg-muted"
           >
             <Combine size={16} aria-hidden="true" />
-            Join column
+            Join data
           </button>
         ) : null}
       </div>
