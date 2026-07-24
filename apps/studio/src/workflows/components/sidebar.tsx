@@ -1,6 +1,7 @@
 ﻿import { useEffect, useMemo, useState, type DragEvent } from 'react';
 import { ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen, Search, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { isNarrowViewport } from '@/lib/viewport';
 import { nodeCategories, IMPLEMENTED_TEMPLATE_IDS } from '../constants';
 import type { NodeCategory, NodeTemplate } from '../lib/types';
 import type { NodeVariant } from './node-types/base-node';
@@ -141,7 +142,9 @@ function pluginTemplate(d: WorkflowNodeDescriptor): NodeTemplate {
 }
 
 export function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false);
+  // Collapse the node library to a rail by default on phone-width screens so the canvas gets the
+  // full width; desktop opens expanded as before.
+  const [collapsed, setCollapsed] = useState(isNarrowViewport);
   const [search, setSearch] = useState('');
   const [pluginCats, setPluginCats] = useState<NodeCategory[]>([]);
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>(() =>

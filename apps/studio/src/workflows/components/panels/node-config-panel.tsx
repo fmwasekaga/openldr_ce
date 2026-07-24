@@ -70,7 +70,7 @@ export function NodeConfigPanel() {
   return (
     <aside
       style={{ width }}
-      className="relative flex h-full shrink-0 flex-col border-l border-border bg-card"
+      className="relative flex h-full shrink-0 flex-col border-l border-border bg-card max-w-[88vw]"
     >
       <div
         onMouseDown={startResize}

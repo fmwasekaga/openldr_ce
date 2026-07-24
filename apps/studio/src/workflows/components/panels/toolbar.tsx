@@ -18,10 +18,10 @@ export function Toolbar({ onSave, onRun, onHistory, onDatasets, saving, executin
   const workflowId = useWorkflowStore((s) => s.workflowId);
 
   return (
-    <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-card px-4">
+    <div className="flex h-12 shrink-0 items-center gap-2 overflow-x-auto border-b border-border bg-card px-4 [&>button]:shrink-0">
       <input
         type="text"
-        className="rounded-md border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:border-muted-foreground/50 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+        className="w-40 min-w-[8rem] shrink-0 rounded-md border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:border-muted-foreground/50 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20 sm:w-auto"
         value={workflowName}
         onChange={(e) => setWorkflowName(e.target.value)}
         placeholder="Untitled Workflow"
