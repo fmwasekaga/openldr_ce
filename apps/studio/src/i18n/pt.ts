@@ -107,6 +107,8 @@ export const pt: EnShape = {
     resetPasswordDescription: 'Definir uma nova palavra-passe para {{username}}.',
     newPassword: 'Nova palavra-passe',
     newPasswordPlaceholder: 'Introduzir nova palavra-passe',
+    password: 'Palavra-passe',
+    passwordPlaceholder: 'Introduzir palavra-passe',
     confirmPassword: 'Confirmar palavra-passe',
     copyPassword: 'Copiar palavra-passe',
     showPassword: 'Mostrar palavra-passe',

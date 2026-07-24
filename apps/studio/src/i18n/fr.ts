@@ -107,6 +107,8 @@ export const fr: EnShape = {
     resetPasswordDescription: 'Définir un nouveau mot de passe pour {{username}}.',
     newPassword: 'Nouveau mot de passe',
     newPasswordPlaceholder: 'Saisir un nouveau mot de passe',
+    password: 'Mot de passe',
+    passwordPlaceholder: 'Saisir un mot de passe',
     confirmPassword: 'Confirmer le mot de passe',
     copyPassword: 'Copier le mot de passe',
     showPassword: 'Afficher le mot de passe',
