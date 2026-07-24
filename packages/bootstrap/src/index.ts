@@ -104,7 +104,8 @@ export interface DashboardsApi {
   columnPolicy: ColumnPolicyStore;
   /** Re-read the column policy from the DB into the in-memory cache that models()/joinableTables()/
    *  query()/compileSql() read. Call after any columnPolicy write so the change takes effect without
-   *  a restart (mirrors syncRuntime.reconcile()'s no-restart-required pattern). */
+   *  a restart (mirrors syncRuntime.reconcile()'s no-restart-required pattern). Propagates errors
+   *  unwrapped — callers must handle failures. */
   reloadColumnPolicy(): Promise<void>;
 }
 

@@ -66,7 +66,7 @@ describe('DataExposure page', () => {
     expect(dialog).toHaveTextContent(/national_id/);
 
     fireEvent.click(screen.getByRole('button', { name: /un-?hide/i }));
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
 
     openPageMenu();
     fireEvent.click(await screen.findByTestId('data-exposure-save'));

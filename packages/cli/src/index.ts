@@ -207,7 +207,7 @@ rolesCmd.command('revoke <slug> <capability>').description('Remove one capabilit
     try { process.exitCode = await runRolesRevoke(slug, capability, opts); } catch (err) { process.stderr.write(`roles revoke failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
 
-const dataExposure = program.command('data-exposure').description('Column exposure policy for dashboards/queries/reports');
+const dataExposure = program.command('data-exposure').description('Column exposure policy for dashboards/queries/reports (a running server picks up CLI changes after its next in-app policy save or restart)');
 dataExposure.command('list').description('List hidden columns per table').option('--json', 'emit JSON', false)
   .action(async (opts: { json: boolean }) => {
     try { process.exitCode = await runDataExposureList(opts); } catch (err) { process.stderr.write(`data-exposure list failed: ${redactError(err)}\n`); process.exitCode = 1; }
