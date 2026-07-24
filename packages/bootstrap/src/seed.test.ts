@@ -131,18 +131,18 @@ describe('seedDatabase — default workflows', () => {
   // The seeded sample-forms include "Lab order" at index 3 → the fake assigns it id 'form-3'.
   const ORDER_FORM_ID = 'form-3';
 
-  it('seeds the inbound + reactive default workflows', async () => {
+  it('seeds the Ingest-form + Ingest-raw + reactive default workflows', async () => {
     const { app, workflows } = fakeApp();
     const res = await seedDatabase(fakeDb, app);
-    expect(res.workflowsSeeded).toBe(2);
-    expect(workflows.map((w) => w.id).sort()).toEqual(['wf-sample', 'wf-sample-reactive']);
+    expect(res.workflowsSeeded).toBe(3);
+    expect(workflows.map((w) => w.id).sort()).toEqual(['wf-ingest-form', 'wf-ingest-raw', 'wf-sample-reactive']);
   });
 
-  it('injects the seeded "Lab order" form id into the inbound Form Validate node', async () => {
+  it('injects the seeded "Lab order" form id into the Ingest-form Form Validate node', async () => {
     const { app, workflows } = fakeApp();
     await seedDatabase(fakeDb, app);
-    const inbound = workflows.find((w) => w.id === 'wf-sample');
-    const def = inbound?.definition as { nodes: { data: { action?: string; config?: { formId?: string } } }[] };
+    const ingestForm = workflows.find((w) => w.id === 'wf-ingest-form');
+    const def = ingestForm?.definition as { nodes: { data: { action?: string; config?: { formId?: string } } }[] };
     const fv = def.nodes.find((n) => n.data.action === 'form-validate');
     expect(fv?.data.config?.formId).toBe(ORDER_FORM_ID);
   });
@@ -152,7 +152,7 @@ describe('seedDatabase — default workflows', () => {
     await seedDatabase(fakeDb, app);
     const res2 = await seedDatabase(fakeDb, app);
     expect(res2.workflowsSeeded).toBe(0);
-    expect(workflows).toHaveLength(2);
+    expect(workflows).toHaveLength(3);
   });
 });
 
@@ -166,11 +166,11 @@ describe('seedEssentials — always-seeded minimum (SEED_ON_START off)', () => {
     const forms = await app.forms.list();
     expect(forms.map((f) => f.name).sort()).toEqual(['Lab order', 'Users']);
     expect(forms.every((f) => f.status === 'published')).toBe(true);
-    // Both default workflows seeded, bound to the seeded Lab order form's id.
-    expect(res.workflowsSeeded).toBe(2);
-    expect(workflows.map((w) => w.id).sort()).toEqual(['wf-sample', 'wf-sample-reactive']);
-    const inbound = workflows.find((w) => w.id === 'wf-sample');
-    const def = inbound?.definition as { nodes: { data: { action?: string; config?: { formId?: string } } }[] };
+    // All three default workflows seeded; Ingest-form is bound to the seeded Lab order form's id.
+    expect(res.workflowsSeeded).toBe(3);
+    expect(workflows.map((w) => w.id).sort()).toEqual(['wf-ingest-form', 'wf-ingest-raw', 'wf-sample-reactive']);
+    const ingestForm = workflows.find((w) => w.id === 'wf-ingest-form');
+    const def = ingestForm?.definition as { nodes: { data: { action?: string; config?: { formId?: string } } }[] };
     const orderForm = forms.find((f) => f.name === 'Lab order')!;
     expect(def.nodes.find((n) => n.data.action === 'form-validate')?.data.config?.formId).toBe(orderForm.id);
   });
@@ -182,7 +182,7 @@ describe('seedEssentials — always-seeded minimum (SEED_ON_START off)', () => {
     expect(res2.formsSeeded).toBe(0);
     expect(res2.workflowsSeeded).toBe(0);
     expect((await app.forms.list())).toHaveLength(2);
-    expect(workflows).toHaveLength(2);
+    expect(workflows).toHaveLength(3);
   });
 
   it('does not seed demo data (no connector, dashboard, or terminology writes)', async () => {
@@ -393,7 +393,7 @@ describe('seedDatabase — bundled terminology', () => {
     const res = await seedDatabase(fakeDb, app);
     // The rest of the seed still succeeds; terminology counts fall back to 0.
     expect(res.terminology).toEqual({ valueSetsImported: 0, ucumConceptsImported: 0 });
-    expect(res.workflowsSeeded).toBe(2);
+    expect(res.workflowsSeeded).toBe(3);
     expect(res.dashboardsSeeded).toBe(1);
   });
 });
