@@ -1349,5 +1349,13 @@ export async function dangerFactoryReset(ctx: AppContext): Promise<void> {
   } finally {
     await dbCtx.close();
   }
+  // Admin-lockout guard: wipeInternalDatabase() TRUNCATEs roles/role_capabilities/user_roles
+  // along with everything else, and seedDatabase() deliberately does NOT reseed roles (that
+  // seed is routed through createAppContext's unconditional boot-time call — see the comment
+  // beside `const roles = createRoleStore(internal.db)` above). Without this call a live server
+  // would be left with zero roles — and once RBAC enforcement lands, nobody holding
+  // `roles.manage` — until the process restarts. seedSystemRoles() is idempotent, so calling it
+  // here is safe even though createAppContext already seeded it once at boot.
+  await ctx.roles.seedSystemRoles();
   ctx.featureFlags.invalidate();
 }
