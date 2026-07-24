@@ -52,6 +52,100 @@ describe('bundleToResources', () => {
     ] };
     expect(() => bundleToResources(bundle)).toThrow(/DELETE|method/);
   });
+
+  it('accepts Bundle.type "batch"', () => {
+    const bundle = { resourceType: 'Bundle', type: 'batch', entry: [
+      { fullUrl: 'ServiceRequest/obr1', resource: { resourceType: 'ServiceRequest', id: 'obr1', status: 'active', intent: 'order' }, request: { method: 'PUT', url: 'ServiceRequest/obr1' } },
+    ] };
+    const out = bundleToResources(bundle);
+    expect(out.map((r) => r.resourceType)).toEqual(['ServiceRequest']);
+  });
+
+  it('accepts Bundle.type "collection"', () => {
+    const bundle = { resourceType: 'Bundle', type: 'collection', entry: [
+      { fullUrl: 'ServiceRequest/obr1', resource: { resourceType: 'ServiceRequest', id: 'obr1', status: 'active', intent: 'order' }, request: { method: 'PUT', url: 'ServiceRequest/obr1' } },
+    ] };
+    const out = bundleToResources(bundle);
+    expect(out.map((r) => r.resourceType)).toEqual(['ServiceRequest']);
+  });
+
+  it('rejects a lowercase "delete" entry (case-insensitive method check)', () => {
+    const bundle = { resourceType: 'Bundle', type: 'transaction', entry: [
+      { resource: { resourceType: 'ServiceRequest', id: 'obr1' }, request: { method: 'delete', url: 'ServiceRequest/obr1' } },
+    ] };
+    expect(() => bundleToResources(bundle)).toThrow(/DELETE|method/);
+  });
+
+  it('rewrites a deeply-nested reference (extension.valueReference)', () => {
+    const nested = {
+      resourceType: 'Observation',
+      id: 'obs-nested',
+      status: 'final',
+      extension: [{ url: 'http://example.org/ext', valueReference: { reference: 'urn:uuid:sr' } }],
+    };
+    const bundle = { resourceType: 'Bundle', type: 'transaction', entry: [
+      { fullUrl: 'urn:uuid:sr', resource: { resourceType: 'ServiceRequest', id: 'obr1', status: 'active', intent: 'order' }, request: { method: 'PUT', url: 'ServiceRequest/obr1' } },
+      { fullUrl: 'urn:uuid:o', resource: nested, request: { method: 'PUT', url: 'Observation/obs-nested' } },
+    ] };
+    const out = bundleToResources(bundle);
+    const observation = out.find((r) => r.resourceType === 'Observation') as any;
+    expect(observation.extension[0].valueReference.reference).toBe('ServiceRequest/obr1');
+  });
+
+  it('rewrites both a top-level subject.reference and a further nested reference on the same resource', () => {
+    const both = {
+      resourceType: 'Observation',
+      id: 'obs-both',
+      status: 'final',
+      subject: { reference: 'urn:uuid:sr' },
+      identifier: { assigner: { reference: 'urn:uuid:sr' } },
+    };
+    const bundle = { resourceType: 'Bundle', type: 'transaction', entry: [
+      { fullUrl: 'urn:uuid:sr', resource: { resourceType: 'ServiceRequest', id: 'obr1', status: 'active', intent: 'order' }, request: { method: 'PUT', url: 'ServiceRequest/obr1' } },
+      { fullUrl: 'urn:uuid:o', resource: both, request: { method: 'PUT', url: 'Observation/obs-both' } },
+    ] };
+    const out = bundleToResources(bundle);
+    const observation = out.find((r) => r.resourceType === 'Observation') as any;
+    expect(observation.subject.reference).toBe('ServiceRequest/obr1');
+    expect(observation.identifier.assigner.reference).toBe('ServiceRequest/obr1');
+  });
+
+  it('rewrites a reference inside a contained resource', () => {
+    const withContained = {
+      resourceType: 'Observation',
+      id: 'obs-contained',
+      status: 'final',
+      contained: [
+        { resourceType: 'Provenance', id: 'prov1', target: [{ reference: 'urn:uuid:sr' }] },
+      ],
+    };
+    const bundle = { resourceType: 'Bundle', type: 'transaction', entry: [
+      { fullUrl: 'urn:uuid:sr', resource: { resourceType: 'ServiceRequest', id: 'obr1', status: 'active', intent: 'order' }, request: { method: 'PUT', url: 'ServiceRequest/obr1' } },
+      { fullUrl: 'urn:uuid:o', resource: withContained, request: { method: 'PUT', url: 'Observation/obs-contained' } },
+    ] };
+    const out = bundleToResources(bundle);
+    const observation = out.find((r) => r.resourceType === 'Observation') as any;
+    expect(observation.contained[0].target[0].reference).toBe('ServiceRequest/obr1');
+  });
+
+  it('throws a clean error when Bundle.entry is present but not an array', () => {
+    const bundle = { resourceType: 'Bundle', type: 'transaction', entry: { resource: sr } };
+    expect(() => bundleToResources(bundle)).toThrow(/entry must be an array/);
+  });
+
+  it('throws a clean error when an entry resource has no resourceType', () => {
+    const bundle = { resourceType: 'Bundle', type: 'transaction', entry: [
+      { fullUrl: 'urn:uuid:x', resource: { id: 'x' }, request: { method: 'PUT', url: 'x' } },
+    ] };
+    expect(() => bundleToResources(bundle)).toThrow(/resourceType/);
+  });
+
+  it('throws a clean error when an entry resource has an empty-string resourceType', () => {
+    const bundle = { resourceType: 'Bundle', type: 'transaction', entry: [
+      { fullUrl: 'urn:uuid:x', resource: { resourceType: '', id: 'x' }, request: { method: 'PUT', url: 'x' } },
+    ] };
+    expect(() => bundleToResources(bundle)).toThrow(/resourceType/);
+  });
 });
 
 describe('unwrapBundleHandler', () => {

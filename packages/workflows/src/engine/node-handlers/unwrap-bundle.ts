@@ -20,7 +20,10 @@ function rewriteRefs(value: unknown, map: Map<string, string>): void {
   for (const k of Object.keys(obj)) if (k !== 'reference') rewriteRefs(obj[k], map);
 }
 
-/** Bundle or bare array → flat resource list with references resolved. Throws on invalid input. */
+/**
+ * Bundle or bare array → flat resource list with references resolved. Throws on invalid input.
+ * NOTE: not pure — mutates the input resources in place (assigns missing ids, rewrites references).
+ */
 export function bundleToResources(payload: unknown): Res[] {
   if (Array.isArray(payload)) return payload as Res[]; // bare-array passthrough (today's contract)
 
@@ -33,7 +36,11 @@ export function bundleToResources(payload: unknown): Res[] {
     throw new Error(`unwrap-bundle: unsupported Bundle.type "${type}" (expected transaction/batch/collection)`);
   }
 
-  const entries = (bundle['entry'] as Res[] | undefined) ?? [];
+  const rawEntries = bundle['entry'];
+  if (rawEntries !== undefined && !Array.isArray(rawEntries)) {
+    throw new Error('unwrap-bundle: Bundle.entry must be an array');
+  }
+  const entries = (rawEntries as Res[] | undefined) ?? [];
   const resources: Res[] = [];
   const map = new Map<string, string>();
 
@@ -45,10 +52,14 @@ export function bundleToResources(payload: unknown): Res[] {
     }
     const resource = entry['resource'] as Res | undefined;
     if (!resource || typeof resource !== 'object') continue;
+    const resourceType = resource['resourceType'];
+    if (typeof resourceType !== 'string' || resourceType.length === 0) {
+      throw new Error('unwrap-bundle: entry resource missing resourceType');
+    }
     if (typeof resource['id'] !== 'string' || (resource['id'] as string).length === 0) {
       resource['id'] = randomUUID(); // urn:uuid create with no id
     }
-    const typeId = `${String(resource['resourceType'])}/${String(resource['id'])}`;
+    const typeId = `${resourceType}/${String(resource['id'])}`;
     const fullUrl = entry['fullUrl'];
     if (typeof fullUrl === 'string' && fullUrl.length > 0) map.set(fullUrl, typeId);
     map.set(typeId, typeId); // relative refs resolve to themselves
