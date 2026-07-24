@@ -45,6 +45,14 @@ const FHIR_PUBLISHER_ID = 'pub-hl7-fhir';
 /** Name used to dedup the default target-warehouse connector — idempotency key. */
 const DEFAULT_CONNECTOR_NAME = 'Target Warehouse (Postgres)';
 
+/** Name of the seeded lab-order form the inbound ingestion workflow validates against. */
+const ORDER_FORM_NAME = 'Lab order';
+/** Name of the seeded form that drives the Users management page. */
+const USERS_FORM_NAME = 'Users';
+/** The forms that MUST exist on every install regardless of SEED_ON_START (see `seedEssentials`):
+ *  the Users-page form and the Lab order form the ingestion workflow binds to. */
+const ESSENTIAL_FORM_NAMES = new Set<string>([USERS_FORM_NAME, ORDER_FORM_NAME]);
+
 /** Name for the MSSQL target-warehouse connector — distinct from DEFAULT_CONNECTOR_NAME so the
  *  two warehouse connectors are identifiable by name. `seedDataDrivenReports` resolves EITHER name
  *  and seeds the dialect-appropriate report SQL (Slice 2b), so built-in reports now seed on an
@@ -57,12 +65,18 @@ const MSSQL_CONNECTOR_NAME = 'Target Warehouse (SQL Server)';
 // (Task 5), so a mysql install seeds the full data-driven report set just like Postgres/MSSQL.
 const MYSQL_CONNECTOR_NAME = 'Target Warehouse (MySQL/MariaDB)';
 
-// Minimal structural shape of the forms surface seedDatabase needs. Typed against FormStore
-// directly (not AppContext) to keep seed.ts from importing ./index, which re-exports this
-// module — that would be a circular dependency. AppContext satisfies this at the call sites.
-export interface FormSeedTarget {
+// The forms + workflows surface the ALWAYS-seeded essentials need (see `seedEssentials`). Typed
+// against FormStore/WorkflowStore directly (not AppContext) to keep seed.ts from importing ./index,
+// which re-exports this module — that would be a circular dependency. AppContext satisfies it.
+export interface EssentialSeedTarget {
   forms: Pick<FormStore, 'list' | 'create' | 'setStatus'>;
   workflows: { store: Pick<WorkflowStore, 'list' | 'create'> };
+}
+
+// Full structural shape of the forms surface seedDatabase needs — the essentials above plus the
+// connector/dashboard/report/terminology/settings surfaces only the opt-in full demo seed touches.
+// AppContext satisfies this at the call sites.
+export interface FormSeedTarget extends EssentialSeedTarget {
   // Host connector store + config, threaded from AppContext, so the seed can create a
   // default target-warehouse connector. Structural subset — AppContext satisfies it.
   connectors: Pick<ConnectorStore, 'list' | 'create'>;
@@ -109,6 +123,88 @@ export interface FormSeedTarget {
   };
 }
 
+// Create (deduped by name) + publish the given forms. Dedup by name, not id: forms.create()
+// always generates a fresh `form-<uuid>` id and ignores the sample's id, so id-based dedup would
+// re-create the samples every run. Publishing is what makes a form drive its target pages (the
+// Users page needs a published 'users' form); idempotent — only drafts get published, never
+// re-snapshotted. Returns the count created and the seeded "Lab order" form's id (for the
+// workflow bind), or null if that form wasn't in `forms`.
+async function upsertPublishedForms(
+  app: EssentialSeedTarget,
+  forms: (typeof sampleForms)[number][],
+): Promise<{ seeded: number; orderFormId: string | null }> {
+  const existingForms = await app.forms.list();
+  const existingByName = new Map(existingForms.map((f) => [f.name, f]));
+  let orderFormId: string | null = null;
+  let seeded = 0;
+  for (const form of forms) {
+    const existing = existingByName.get(form.name);
+    // Capture just id + status — list() yields FormSummary, create() yields FormDefinition.
+    let id: string;
+    let status: string;
+    if (existing) {
+      id = existing.id;
+      status = existing.status;
+    } else {
+      const created = await app.forms.create({
+        name: form.name,
+        versionLabel: form.versionLabel,
+        fhirResourceType: form.fhirResourceType,
+        fhirVersion: form.fhirVersion,
+        fhirProfileUrl: form.fhirProfileUrl,
+        facilityId: form.facilityId,
+        status: form.status,
+        active: form.active,
+        schema: form,
+        targetPages: form.targetPages,
+      });
+      id = created.id;
+      status = created.status;
+      seeded++;
+    }
+    if (status !== 'published') await app.forms.setStatus(id, 'published');
+    if (form.name === ORDER_FORM_NAME) orderFormId = id;
+  }
+  return { seeded, orderFormId };
+}
+
+// Seed the default workflows — the inbound lab-order ingestion loop + its reactive companion,
+// seeded once each (idempotent by stable id) so a fresh install ships a real, runnable example.
+// The inbound's Form Validate node is bound to the seeded "Lab order" form's actual id, and the
+// webhook secret is generated per-install (so no secret is committed and reseeds never rotate it).
+// Matched by id, not name, so operator-edited copies are never re-created. No-op (with a warning)
+// when the order form is absent, since the inbound loop can't be bound without it.
+async function seedDefaultWorkflowsFor(app: EssentialSeedTarget, orderFormId: string | null): Promise<number> {
+  if (!orderFormId) {
+    console.warn(`[seed] "${ORDER_FORM_NAME}" form not found — skipping default workflow seed`);
+    return 0;
+  }
+  const existingWorkflows = await app.workflows.store.list();
+  let seeded = 0;
+  const defaults = buildDefaultWorkflows({ orderFormId, webhookSecret: randomUUID() });
+  for (const wf of defaults) {
+    if (!existingWorkflows.some((w) => w.id === wf.id)) {
+      await app.workflows.store.create(wf);
+      seeded += 1;
+    }
+  }
+  return seeded;
+}
+
+// The ALWAYS-seeded minimum, independent of SEED_ON_START: the Users-page form, the Lab order
+// form, and the inbound lab-order ingestion workflow (+ its reactive companion) bound to it. These
+// are NOT optional demo data — the Users page can't render without a published 'users'-targeted
+// form, and the ingestion loop can't validate without the "Lab order" form — so a fresh install
+// with SEED_ON_START=false must still get them. Deliberately mirrors the unconditional
+// `roles.seedSystemRoles()` boot-time seed (see createAppContext): idempotent (forms deduped by
+// name, workflows by id), so it's safe to run on every boot and re-run alongside the full seed.
+export async function seedEssentials(app: EssentialSeedTarget): Promise<{ formsSeeded: number; workflowsSeeded: number }> {
+  const essentialForms = sampleForms.filter((f) => ESSENTIAL_FORM_NAMES.has(f.name));
+  const { seeded: formsSeeded, orderFormId } = await upsertPublishedForms(app, essentialForms);
+  const workflowsSeeded = await seedDefaultWorkflowsFor(app, orderFormId);
+  return { formsSeeded, workflowsSeeded };
+}
+
 // Idempotent sample-data seed shared by the `openldr db seed` CLI and the server's
 // SEED_ON_START path. Persists a minimal org/location/patient set and the bundled sample
 // forms (deduped by name, published so they drive their target pages) and a default
@@ -136,61 +232,13 @@ export async function seedDatabase(db: DbContext, app: FormSeedTarget): Promise<
     resources.push({ id: r.id, flattened: out.flattened });
   }
 
-  // Dedup by name, not id: forms.create() always generates a fresh `form-<uuid>` id and
-  // ignores the sample's id, so id-based dedup would re-create the samples every run.
-  const existingForms = await app.forms.list();
-  const existingByName = new Map(existingForms.map((f) => [f.name, f]));
-  let orderFormId: string | null = null;
-  let formsSeeded = 0;
-  for (const form of sampleForms) {
-    const existing = existingByName.get(form.name);
-    // Capture just id + status — list() yields FormSummary, create() yields FormDefinition.
-    let id: string;
-    let status: string;
-    if (existing) {
-      id = existing.id;
-      status = existing.status;
-    } else {
-      const created = await app.forms.create({
-        name: form.name,
-        versionLabel: form.versionLabel,
-        fhirResourceType: form.fhirResourceType,
-        fhirVersion: form.fhirVersion,
-        fhirProfileUrl: form.fhirProfileUrl,
-        facilityId: form.facilityId,
-        status: form.status,
-        active: form.active,
-        schema: form,
-        targetPages: form.targetPages,
-      });
-      id = created.id;
-      status = created.status;
-      formsSeeded++;
-    }
-    // Publish so the forms actually drive their target pages (the Users page needs a
-    // published 'users' form). Idempotent: only publish drafts, never re-snapshot.
-    if (status !== 'published') await app.forms.setStatus(id, 'published');
-    if (form.name === 'Lab order') orderFormId = id;
-  }
-
-  // Default workflows — the inbound lab-order ingestion loop + its reactive companion, seeded
-  // once each (idempotent by stable id) so a fresh install ships a real, runnable example. The
-  // inbound's Form Validate node is bound to the seeded "Lab order" form's actual id, and the
-  // webhook secret is generated per-install (so no secret is committed and reseeds never rotate
-  // it). Matched by id, not name, so operator-edited copies are never re-created.
-  const existingWorkflows = await app.workflows.store.list();
-  let workflowsSeeded = 0;
-  if (orderFormId) {
-    const defaults = buildDefaultWorkflows({ orderFormId, webhookSecret: randomUUID() });
-    for (const wf of defaults) {
-      if (!existingWorkflows.some((w) => w.id === wf.id)) {
-        await app.workflows.store.create(wf);
-        workflowsSeeded += 1;
-      }
-    }
-  } else {
-    console.warn('[seed] "Lab order" form not found — skipping default workflow seed');
-  }
+  // All sample forms (facility/users/patient/order), published so they drive their target pages,
+  // then the default workflows bound to the seeded "Lab order" form. The Users form + Lab order
+  // form + workflows are the always-seeded essentials (see `seedEssentials`); the full demo seed
+  // just also covers the facility + patient forms. Order preserved (sampleForms order) so the
+  // "Lab order" form keeps its position. Both helpers dedup, so this is a no-op on a populated DB.
+  const { seeded: formsSeeded, orderFormId } = await upsertPublishedForms(app, sampleForms);
+  const workflowsSeeded = await seedDefaultWorkflowsFor(app, orderFormId);
 
   // Default target-warehouse connector — a ready `type:'postgres'` host connector pointing at
   // TARGET_DATABASE_URL so a fresh install has a connector for workflow DB nodes to select.

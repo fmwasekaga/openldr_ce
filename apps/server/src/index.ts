@@ -1,5 +1,5 @@
 import { loadConfig } from '@openldr/config';
-import { createAppContext, createIngestContext, createDbContext, seedDatabase, drainCrashMarkersToAudit, guardAgainstCrashLoop } from '@openldr/bootstrap';
+import { createAppContext, createIngestContext, createDbContext, seedDatabase, seedEssentials, drainCrashMarkersToAudit, guardAgainstCrashLoop } from '@openldr/bootstrap';
 import { createLogger, makeCrashHandler } from '@openldr/core';
 import { buildApp } from './app';
 
@@ -70,9 +70,15 @@ async function main(): Promise<void> {
     ctx.logger.warn({ err }, 'crash-marker audit drain failed at startup (continuing)');
   }
 
-  // Seed idempotent sample data after migration when enabled (prod demo). Needs the forms
-  // store (AppContext) for sample forms and a DbContext for the FHIR resources. Idempotent:
-  // dedups by name, so a populated DB is a no-op.
+  // Seed idempotent sample data after migration. The FULL demo seed (org/location/patient
+  // resources, all sample forms, default connector, dashboards, reports, terminology, feature
+  // flags) is opt-in via SEED_ON_START. But a minimum set MUST exist on every install regardless
+  // of that flag — the Users-page form, the Lab order form, and the inbound ingestion workflow
+  // bound to it — so `seedEssentials` runs UNCONDITIONALLY (mirroring the boot-time
+  // roles.seedSystemRoles() call in createAppContext, which is also deliberately not SEED_ON_START-
+  // gated). Both paths are idempotent (forms deduped by name, workflows by id) and best-effort:
+  // a seed failure must not block startup. The full seed already includes the essentials, so the
+  // two are mutually exclusive here to avoid seeding them twice.
   if (cfg.SEED_ON_START) {
     const dbCtx = await createDbContext(cfg);
     try {
@@ -80,6 +86,13 @@ async function main(): Promise<void> {
       logger.info({ resources: resources.length, formsSeeded, workflowsSeeded, connectorsSeeded, dashboardsSeeded, settingsSeeded, terminology }, 'startup seed complete');
     } finally {
       await dbCtx.close();
+    }
+  } else {
+    try {
+      const { formsSeeded, workflowsSeeded } = await seedEssentials(ctx);
+      logger.info({ formsSeeded, workflowsSeeded }, 'essential seed complete (SEED_ON_START off)');
+    } catch (err) {
+      logger.warn({ err }, 'essential seed failed (continuing)');
     }
   }
 
