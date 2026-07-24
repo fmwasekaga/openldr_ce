@@ -104,6 +104,8 @@ export const en = {
     resetPasswordDescription: 'Set a new password for {{username}}.',
     newPassword: 'New password',
     newPasswordPlaceholder: 'Enter a new password',
+    password: 'Password',
+    passwordPlaceholder: 'Enter a password',
     confirmPassword: 'Confirm password',
     copyPassword: 'Copy password',
     showPassword: 'Show password',

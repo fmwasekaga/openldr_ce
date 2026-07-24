@@ -335,14 +335,14 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
                 autoComplete="off"
               />
 
-              <Label htmlFor="user-password" className="whitespace-nowrap">{t('users.newPassword')}</Label>
+              <Label htmlFor="user-password" className="whitespace-nowrap">{t('users.password')}</Label>
               <Input
                 id="user-password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="new-password"
-                placeholder={t('users.newPasswordPlaceholder')}
+                placeholder={t('users.passwordPlaceholder')}
               />
 
               {password && (
