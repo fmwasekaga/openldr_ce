@@ -4,13 +4,13 @@ import { ReportDesignSchema } from '@openldr/report-designer/pure';
 import { renderReportDesignPdf, resolveDesignTables } from '@openldr/report-designer';
 import { runStoredQuery, type RunStoredQueryDeps } from './run-stored-query';
 import { recordAudit } from './audit-helper';
-import { requireRole } from './rbac';
+import { requireCapability } from './rbac';
 
 export function registerReportDesignRoutes(
   app: FastifyInstance<any, any, any, any>, ctx: AppContext, deps: RunStoredQueryDeps,
 ): void {
-  const MANAGE = { preHandler: requireRole('lab_admin', 'lab_manager') };
-  const PREVIEW = { preHandler: requireRole('lab_admin', 'lab_manager', 'data_analyst') };
+  const MANAGE = { preHandler: requireCapability('reports.edit_templates') };
+  const PREVIEW = { preHandler: requireCapability('reports.run') };
 
   app.get('/api/report-designs', async () => ctx.reportDesigns.list());
 
