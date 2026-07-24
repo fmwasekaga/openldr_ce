@@ -473,7 +473,7 @@ export function WidgetEditorDialog({
               aria-label="Title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-80 border-0 bg-transparent px-0 text-base font-semibold text-foreground outline-none focus:border-b focus:border-primary"
+              className="w-full min-w-0 border-0 bg-transparent px-0 text-base font-semibold text-foreground outline-none focus:border-b focus:border-primary md:w-80"
             />
           </DialogTitle>
           <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Close" onClick={onClose}>
@@ -481,10 +481,12 @@ export function WidgetEditorDialog({
           </Button>
         </div>
 
-        {/* Body: 4 sections */}
-        <div className="flex min-h-0 flex-1 flex-col gap-0 p-3">
-          <div className="flex min-h-0 h-1/2 gap-3">
-            <div className="flex min-w-0 flex-[3] flex-col rounded-t-md border border-border">
+        {/* Body: 4 sections. On desktop they form a 2×2 grid (query + results on the left, preview +
+            config on the right) filling fixed halves. On phones that grid can't breathe, so the body
+            becomes a single scrolling column and each pane gets a usable min-height. */}
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3 md:gap-0 md:overflow-hidden">
+          <div className="flex min-h-0 flex-col gap-3 md:h-1/2 md:flex-row">
+            <div className="flex min-h-[260px] min-w-0 flex-[3] flex-col rounded-md border border-border md:min-h-0 md:rounded-b-none">
               {detectedVars.length > 0 && (
                 <div className="flex flex-wrap items-center gap-1 border-b border-border px-2 py-1.5">
                   {detectedVars.map((v) => {
@@ -572,13 +574,13 @@ export function WidgetEditorDialog({
                 </div>
               </div>
             </div>
-            <div className="min-w-0 flex-[2] overflow-hidden rounded-t-md border border-border p-3">
+            <div className="min-h-[160px] min-w-0 flex-[2] overflow-hidden rounded-md border border-border p-3 md:min-h-0 md:rounded-b-none">
               {errorMsg ? <div className="text-sm text-destructive">{errorMsg}</div> : preview && preview.rows.length ? renderWidget(previewConfig, preview) : <EmptyPanel text={builderHasNoMeasure ? 'Add a measure to see results' : 'Run a query to see preview'} />}
             </div>
           </div>
 
-          <div className="flex min-h-0 h-1/2 gap-3">
-            <div className="min-w-0 flex-[3] overflow-auto rounded-b-md border border-t-0 border-border">
+          <div className="flex min-h-0 flex-col gap-3 md:h-1/2 md:flex-row">
+            <div className="min-h-[200px] min-w-0 flex-[3] overflow-auto rounded-md border border-border md:min-h-0 md:rounded-t-none md:border-t-0">
               {errorMsg ? (
                 <div className="p-3 text-sm text-destructive">{errorMsg}</div>
               ) : preview && preview.rows.length ? (
@@ -608,7 +610,7 @@ export function WidgetEditorDialog({
                 <EmptyPanel text="Run a query to see results" />
               )}
             </div>
-            <div className="min-w-0 flex-[2] overflow-y-auto rounded-b-md border border-t-0 border-border p-3">
+            <div className="min-h-[200px] min-w-0 flex-[2] overflow-y-auto rounded-md border border-border p-3 md:min-h-0 md:rounded-t-none md:border-t-0">
               {columns.length > 0 ? (
                 <ConfigPanel widgetType={type} columns={columns} visual={visual} onVisualChange={setVisual} xKey={xKey} yKey={yKey} />
               ) : (

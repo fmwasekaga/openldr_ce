@@ -264,10 +264,12 @@ export function FormBuilderPage(): JSX.Element {
           </div>
         ) : null}
 
-        {/* Two-pane body (sheet overlays on field select) */}
+        {/* Two-pane body (sheet overlays on field select). On phones the field list takes the
+            full width and the preview pane is hidden — editing still happens through the
+            field-editor sheet — so the 26rem list can't overflow a narrow screen. */}
         <div className="flex min-h-0 flex-1 overflow-hidden">
           {/* Left: FieldListPane (sections managed via the Sections popover inside it) */}
-          <div className="w-[26rem] shrink-0 border-r border-border overflow-hidden flex flex-col">
+          <div className="flex w-full shrink-0 flex-col overflow-hidden border-r border-border md:w-[26rem]">
             <FieldListPane
               fields={schema.fields}
               sections={schema.sections}
@@ -290,8 +292,8 @@ export function FormBuilderPage(): JSX.Element {
             />
           </div>
 
-          {/* Right: PreviewPane (manages its own edge-to-edge scroll) */}
-          <div className="flex-1 min-w-0 overflow-hidden">
+          {/* Right: PreviewPane (manages its own edge-to-edge scroll). Hidden on phones. */}
+          <div className="hidden min-w-0 flex-1 overflow-hidden md:block">
             <PreviewPane schema={schema} />
           </div>
         </div>

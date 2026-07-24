@@ -28,7 +28,7 @@ export function PreviewReportDesignDialog({ open, design, onOpenChange }: {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl">
+      <DialogContent className="max-w-[95vw] sm:max-w-4xl">
         <DialogClose
           aria-label={t('common.close')}
           className="absolute right-4 top-4 z-10 rounded p-1 text-muted-foreground hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"

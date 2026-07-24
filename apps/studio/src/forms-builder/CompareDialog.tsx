@@ -51,7 +51,7 @@ export function CompareDialog({ formId, current, open, onOpenChange }: { formId:
   const latestLabel = latest ? (latest.versionLabel ?? `v${latest.version}`) : '';
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl gap-0 overflow-hidden p-0">
+      <DialogContent className="max-w-[95vw] gap-0 overflow-hidden p-0 sm:max-w-2xl">
         <div className="border-b border-border px-6 py-4">
           <DialogTitle className="text-base font-semibold">Compare form versions</DialogTitle>
           <p className="mt-1 text-xs text-muted-foreground">
