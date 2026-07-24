@@ -193,6 +193,9 @@ importers:
       '@openldr/plugin-ui-sdk':
         specifier: workspace:*
         version: link:../../packages/plugin-ui-sdk
+      '@openldr/rbac':
+        specifier: workspace:*
+        version: link:../../packages/rbac
       '@openldr/report-designer':
         specifier: workspace:*
         version: link:../../packages/report-designer
