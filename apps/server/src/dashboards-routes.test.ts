@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import Fastify from 'fastify';
 import { modelsForClient, joinableTablesForClient } from '@openldr/dashboards';
 import { registerDashboardRoutes } from './dashboards-routes';
@@ -24,6 +24,11 @@ function fakeCtx(cfg: { DASHBOARD_SQL_ENABLED?: boolean } = {}) {
         return { columns: [], rows: [], chart: { type: 'stat', value: '0', label: 'x' }, meta: { generatedAt: 'now', rowCount: 0 } };
       },
       compileSql: async (q: any) => `select count(*) as value from lab_requests where status = 'active' -- model:${q.model}`,
+      columnPolicy: {
+        listHidden: async () => ({ patients: ['national_id'] }),
+        replaceTable: vi.fn(async () => {}),
+      },
+      reloadColumnPolicy: vi.fn(async () => {}),
     },
     audit: { record: async (e: any) => { auditEvents.push(e); return e; } },
     logger: { error() {}, warn() {}, info() {} },
@@ -39,6 +44,7 @@ const dashWithSql = { id: 'd1', name: 'M', layout: [], widgets: [sqlWidget], fil
 // Dashboard routes are RBAC-gated (VIEW: reporting roles; MANAGE: admin/manager). Inject an authorized
 // actor so tests exercise the handlers, not the role guard. `id:'admin1'` matches the audit assertion.
 const ADMIN_CAPS = ['dashboards.view', 'dashboards.create', 'dashboards.edit', 'dashboards.delete'];
+const ADMIN_CAPS_WITH_EXPOSURE = [...ADMIN_CAPS, 'data_exposure.manage'];
 
 function appWith(ctx: any = fakeCtx(), roles: string[] = ['lab_admin'], capabilities: string[] = ADMIN_CAPS) {
   const app = Fastify();
@@ -179,5 +185,48 @@ describe('dashboard routes', () => {
     const before = events.length;
     await app.inject({ method: 'DELETE', url: '/api/dashboards/does-not-exist' });
     expect(events.length).toBe(before);
+  });
+
+  it('GET /api/dashboards/column-policy returns per-column hidden+pii flags', async () => {
+    const app = appWith(fakeCtx(), ['lab_admin'], ADMIN_CAPS_WITH_EXPOSURE);
+    const res = await app.inject({ method: 'GET', url: '/api/dashboards/column-policy' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    const patients = body.tables.find((t: any) => t.table === 'patients');
+    expect(patients.label).toBe('Patient');
+    const natId = patients.columns.find((c: any) => c.name === 'national_id');
+    expect(natId).toMatchObject({ hidden: true, pii: true });
+    const facilityId = patients.columns.find((c: any) => c.name === 'facility_id');
+    expect(facilityId).toBeUndefined(); // sanity: not a real patients column
+    const specimens = body.tables.find((t: any) => t.table === 'specimens');
+    const accession = specimens.columns.find((c: any) => c.name === 'accession');
+    expect(accession).toMatchObject({ hidden: false, pii: false });
+  });
+
+  it('PUT /api/dashboards/column-policy replaces + reloads + audits, dropping unknown columns', async () => {
+    const ctx = fakeCtx();
+    const app = appWith(ctx, ['lab_admin'], ADMIN_CAPS_WITH_EXPOSURE);
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/dashboards/column-policy',
+      payload: { patients: ['national_id', 'not_a_real_column'], not_governed_table: ['whatever'] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ok: true });
+    expect(ctx.dashboards.columnPolicy.replaceTable).toHaveBeenCalledWith('patients', ['national_id'], 'admin');
+    // Only GOVERNED tables are writable; an ungoverned key must not reach replaceTable.
+    expect(ctx.dashboards.columnPolicy.replaceTable).not.toHaveBeenCalledWith('not_governed_table', expect.anything(), expect.anything());
+    expect(ctx.dashboards.reloadColumnPolicy).toHaveBeenCalled();
+    const events = ctx.__auditEvents as Array<{ action: string; entityType: string; entityId: string }>;
+    const auditEvent = events.find((e) => e.action === 'data_exposure.policy.updated');
+    expect(auditEvent).toMatchObject({ entityType: 'column_exposure_policy', entityId: 'global' });
+  });
+
+  it('column-policy routes are gated by data_exposure.manage', async () => {
+    const app = appWith(fakeCtx(), ['lab_admin'], ADMIN_CAPS); // ADMIN_CAPS lacks data_exposure.manage
+    const getRes = await app.inject({ method: 'GET', url: '/api/dashboards/column-policy' });
+    expect(getRes.statusCode).toBe(403);
+    const putRes = await app.inject({ method: 'PUT', url: '/api/dashboards/column-policy', payload: { patients: [] } });
+    expect(putRes.statusCode).toBe(403);
   });
 });
