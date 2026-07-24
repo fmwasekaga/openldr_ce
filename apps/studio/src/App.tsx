@@ -25,6 +25,7 @@ import { WorkflowList } from './workflows/WorkflowList';
 import { PluginContainer } from './plugins/PluginContainer';
 import { RequireCapability } from './auth/RequireCapability';
 import { Roles } from './pages/Roles';
+import { DataExposure } from '@/pages/settings/DataExposure';
 import { CallbackPage } from './auth/CallbackPage';
 import { Toaster } from './components/ui/sonner';
 
@@ -53,7 +54,7 @@ export function App() {
         path="/settings"
         element={
           <RequireCapability
-            caps={['settings.view', 'notifications.view', 'sync.view', 'sync.manage', 'marketplace.view', 'connectors.manage', 'roles.view']}
+            caps={['settings.view', 'notifications.view', 'sync.view', 'sync.manage', 'marketplace.view', 'connectors.manage', 'roles.view', 'data_exposure.manage']}
           >
             <SettingsShell />
           </RequireCapability>
@@ -67,6 +68,7 @@ export function App() {
         <Route path="marketplace" element={<RequireCapability cap="marketplace.view"><Marketplace /></RequireCapability>} />
         <Route path="connectors" element={<RequireCapability cap="connectors.manage"><Connectors /></RequireCapability>} />
         <Route path="roles" element={<RequireCapability cap="roles.view"><Roles /></RequireCapability>} />
+        <Route path="data-exposure" element={<RequireCapability cap="data_exposure.manage"><DataExposure /></RequireCapability>} />
       </Route>
       <Route path="/audit" element={<Audit />} />
       <Route path="/activity" element={<Activity />} />

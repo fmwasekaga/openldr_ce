@@ -19,6 +19,7 @@ const SUB_NAV: SubNavItem[] = [
   { labelKey: 'settings.subNav.connectors', to: '/settings/connectors', caps: ['connectors.manage'] },
   { labelKey: 'settings.subNav.marketplace', to: '/settings/marketplace', caps: ['marketplace.view'] },
   { labelKey: 'settings.subNav.roles', to: '/settings/roles', caps: ['roles.view'] },
+  { labelKey: 'settings.subNav.dataExposure', to: '/settings/data-exposure', caps: ['data_exposure.manage'] },
 ];
 
 /**
