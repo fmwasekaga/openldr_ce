@@ -75,9 +75,15 @@ function fakeCtx(syncEnabled = true) {
   };
 }
 
+const ALL_SETTINGS_CAPS = ['settings.feature_flags', 'settings.edit_general', 'settings.danger_zone', 'sync.view', 'sync.manage'];
+
+// Tests below cover route BEHAVIOR (previously role-gated to lab_admin only), not RBAC boundaries
+// per se — grant every settings/sync capability to a 'lab_admin' actor and none to anyone else,
+// mirroring the old role check 1:1. Explicit 403 tests below assert the boundary itself.
 function appWithUser(roles: string[], reg: (app: any) => void) {
+  const capabilities = roles.includes('lab_admin') ? ALL_SETTINGS_CAPS : [];
   const app = Fastify();
-  app.addHook('preHandler', async (req: any) => { req.user = { id: 'u1', username: 'admin', roles }; });
+  app.addHook('preHandler', async (req: any) => { req.user = { id: 'u1', username: 'admin', roles, capabilities }; });
   reg(app);
   return app;
 }

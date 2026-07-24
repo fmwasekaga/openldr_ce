@@ -129,7 +129,7 @@ function fakeCtx() {
 function adminApp(ctx: AppContext) {
   const app = Fastify();
   app.addHook('onRequest', async (req) => {
-    req.user = { id: 'admin', username: 'admin', displayName: null, roles: ['lab_admin'], capabilities: [] };
+    req.user = { id: 'admin', username: 'admin', displayName: null, roles: ['lab_admin'], capabilities: ['sync.view', 'sync.manage'] };
   });
   registerSettingsRoutes(app, ctx);
   return app;
