@@ -237,19 +237,24 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
           ...formMeta,
         });
       }
-      if (!savedIdentity) { setSavedIdentity(saved); onSaved(saved); }
+      // Track the persisted identity so a retry doesn't re-create/re-PUT it, but do NOT signal
+      // success yet — success (the toast + list refresh via onSaved) is withheld until the role
+      // assignment also succeeds, so a rejected role change never shows a misleading "saved".
+      if (!savedIdentity) { setSavedIdentity(saved); }
 
       try {
         // selectedRoleId is always populated once the role catalog has loaded (see the roles
         // effect above) — a user always has exactly one role, so this never sends [].
         await setUserRoles(saved.id, selectedRoleId ? [selectedRoleId] : []);
       } catch (roleErr) {
-        // The identity write already succeeded and onSaved has already run — surface this
-        // inline and keep the dialog open so the user can retry role assignment (or close and
-        // fix it later by re-editing this user).
+        // The identity write succeeded but the role change was rejected (e.g. the last-admin
+        // guard). Do NOT signal success — surface the error inline and keep the dialog open so
+        // the user can pick a valid role and retry (or close and fix it later by re-editing).
         setError(t('users.rolesSaveError', { error: roleErr instanceof Error ? roleErr.message : String(roleErr) }));
         return;
       }
+      // Both the identity write and the role assignment succeeded — now signal success.
+      onSaved(saved);
       onOpenChange(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
