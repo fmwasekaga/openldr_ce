@@ -23,7 +23,7 @@ export const IMPLEMENTED_TEMPLATE_IDS = new Set<string>([
   // conditions
   'if', 'filter', 'switch',
   // data transforms
-  'sort', 'limit', 'remove-duplicates', 'rename-keys', 'split-out',
+  'sort', 'limit', 'remove-duplicates', 'rename-keys', 'split-out', 'unwrap-bundle',
   'aggregate', 'summarize', 'pivot', 'date-time', 'compare-datasets',
   // sinks
   'materialize-dataset', 'export-artifact',
@@ -339,6 +339,10 @@ export const nodeCategories: NodeCategory[] = [
     items: [
       node('split-out', 'action', 'Split Out', 'SplitSquareHorizontal', 'Split array into items', {
         data: { config: { field: '' } },
+      }),
+      node('unwrap-bundle', 'action', 'Unwrap FHIR Bundle', 'PackageOpen', 'Unwrap a FHIR Bundle into resources', {
+        keywords: ['fhir', 'bundle', 'entry', 'resources'],
+        data: { config: { sourcePath: '' } },
       }),
       node('aggregate', 'action', 'Aggregate', 'Combine', 'Collect items into one', {
         data: { config: { field: '', outputField: '' } },

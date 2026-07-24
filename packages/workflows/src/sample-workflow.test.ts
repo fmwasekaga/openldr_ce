@@ -22,12 +22,11 @@ describe('buildDefaultWorkflows', () => {
     expect(reactive.enabled).toBe(true);
   });
 
-  it('Ingest-form validates against the injected form; Ingest-raw splits the body', () => {
+  it('Ingest-form validates against the form; Ingest-raw unwraps a Bundle', () => {
     const fv = form.definition.nodes.find((n) => n.data.action === 'form-validate');
     expect(fv?.data.config).toMatchObject({ formId: 'form-xyz', sourcePath: 'body' });
-    const split = raw.definition.nodes.find((n) => n.data.action === 'split-out');
-    expect(split?.data.config).toMatchObject({ field: 'body' });
-    // Ingest-raw must NOT form-validate (it persists pre-built FHIR).
+    const unwrap = raw.definition.nodes.find((n) => n.data.action === 'unwrap-bundle');
+    expect(unwrap?.data.config).toMatchObject({ sourcePath: 'body' });
     expect(raw.definition.nodes.some((n) => n.data.action === 'form-validate')).toBe(false);
   });
 
@@ -54,8 +53,8 @@ describe('buildDefaultWorkflows', () => {
       'persist-1->log-1',
     ]);
     expect(raw.definition.edges.map((e) => `${e.source}->${e.target}`)).toEqual([
-      'trigger-1->split-1',
-      'split-1->persist-1',
+      'trigger-1->unwrap-1',
+      'unwrap-1->persist-1',
       'persist-1->log-1',
     ]);
   });

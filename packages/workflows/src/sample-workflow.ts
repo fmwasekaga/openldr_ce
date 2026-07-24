@@ -13,14 +13,16 @@ import type { Workflow } from './types';
 //
 //   Ingest-raw (wf-ingest-raw, DISABLED):
 //     Webhook (POST /api/workflows/hooks/cdr-ingest, X-Webhook-Token)
-//       → Split Out (field 'body' — unwraps the webhook envelope's body array into one item per
-//                   FHIR resource)
+//       → Unwrap FHIR Bundle (sourcePath 'body' — accepts a FHIR transaction Bundle, unwrapping
+//                             entry[].resource into one item per FHIR resource; still tolerates a
+//                             bare array of pre-built resources)
 //       → Persist Store (source: webhook-cdr-ingest → emits data.persisted)
 //       → Log
-//     Use this when the sender posts a BARE ARRAY of pre-built FHIR resources (e.g. the CDR
-//     toolchain). ONE webhook handles tests AND questionnaires together: Persist stores every
-//     resource and the projection routes each by resourceType (Observation → lab_results,
-//     ServiceRequest → lab_requests, QuestionnaireResponse → questionnaire_responses, …).
+//     Use this when the sender posts a FHIR transaction Bundle (or a bare array) of pre-built FHIR
+//     resources (e.g. the CDR toolchain). ONE webhook handles tests AND questionnaires together:
+//     Persist stores every resource and the projection routes each by resourceType
+//     (Observation → lab_results, ServiceRequest → lab_requests,
+//     QuestionnaireResponse → questionnaire_responses, …).
 //
 //   Reactive (wf-sample-reactive, ENABLED):
 //     Event Trigger (data.persisted, source: webhook-lab-orders) → Log
@@ -129,12 +131,13 @@ export function buildDefaultWorkflows({ orderFormId, formWebhookSecret, rawWebho
     id: 'wf-ingest-raw',
     name: 'Ingest-raw',
     description:
-      'Raw FHIR ingestion. POST a BARE ARRAY of FHIR resources to /api/workflows/hooks/cdr-ingest ' +
-      'with header X-Webhook-Token → Split Out unwraps the request body → persist each resource → ' +
-      'emit data.persisted. One webhook handles tests AND questionnaires: the projection routes each ' +
-      'by type (Observation→lab_results, QuestionnaireResponse→questionnaire_responses, …). Use this ' +
-      'when the sender posts pre-built FHIR (e.g. the CDR toolchain). Disabled by default: enable it ' +
-      'and copy the webhook secret to accept requests.',
+      'Raw FHIR ingestion. POST a FHIR transaction Bundle to /api/workflows/hooks/cdr-ingest with ' +
+      'header X-Webhook-Token → Unwrap FHIR Bundle unwraps entry[].resource (still tolerates a bare ' +
+      'array) → persist each resource → emit data.persisted. One webhook handles tests AND ' +
+      'questionnaires: the projection routes each by type (Observation→lab_results, ' +
+      'QuestionnaireResponse→questionnaire_responses, …). Use this when the sender posts pre-built ' +
+      'FHIR (e.g. the CDR toolchain). Disabled by default: enable it and copy the webhook secret to ' +
+      'accept requests.',
     enabled: false,
     createdBy: null,
     definition: {
@@ -153,15 +156,15 @@ export function buildDefaultWorkflows({ orderFormId, formWebhookSecret, rawWebho
           },
         },
         {
-          id: 'split-1',
+          id: 'unwrap-1',
           type: 'action',
           position: { x: 360, y: 220 },
           data: {
-            label: 'Split body',
-            action: 'split-out',
-            config: { field: 'body' },
-            templateId: 'split-out',
-            iconName: 'Split',
+            label: 'Unwrap FHIR Bundle',
+            action: 'unwrap-bundle',
+            config: { sourcePath: 'body' },
+            templateId: 'unwrap-bundle',
+            iconName: 'PackageOpen',
           },
         },
         {
@@ -192,8 +195,8 @@ export function buildDefaultWorkflows({ orderFormId, formWebhookSecret, rawWebho
         },
       ],
       edges: [
-        { id: 'e1', source: 'trigger-1', target: 'split-1' },
-        { id: 'e2', source: 'split-1', target: 'persist-1' },
+        { id: 'e1', source: 'trigger-1', target: 'unwrap-1' },
+        { id: 'e2', source: 'unwrap-1', target: 'persist-1' },
         { id: 'e3', source: 'persist-1', target: 'log-1' },
       ],
     },
