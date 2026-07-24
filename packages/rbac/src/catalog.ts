@@ -59,6 +59,8 @@ const RAW: Omit<CapabilityMeta, never>[] = [
   { key: 'settings.edit_general', group: 'settings', label: 'Edit general settings', description: 'Change general, number, and validation settings.' },
   { key: 'settings.feature_flags', group: 'settings', label: 'Manage feature flags', description: 'Toggle feature flags.' },
   { key: 'settings.danger_zone', group: 'settings', label: 'Danger zone', description: 'Run destructive maintenance actions.' },
+  // Data Exposure
+  { key: 'data_exposure.manage', group: 'data_exposure', label: 'Manage data exposure', description: 'Control which table columns may be exposed through dashboards, queries, and reports.' },
   // Observability
   { key: 'activity.view', group: 'observability', label: 'View activity', description: 'See the payload-lifecycle activity feed.' },
   { key: 'notifications.view', group: 'observability', label: 'View notifications', description: 'Receive notifications and set preferences.' },
@@ -79,6 +81,7 @@ const GROUP_LABELS: Record<string, string> = {
   connectors: 'Connectors',
   sync: 'Sync',
   settings: 'Settings',
+  data_exposure: 'Data Exposure',
   observability: 'Observability',
   audit: 'Audit',
 };
