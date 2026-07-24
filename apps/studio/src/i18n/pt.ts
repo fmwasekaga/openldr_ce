@@ -222,7 +222,6 @@ export const pt: EnShape = {
     lockedNotice: 'Esta é uma função incorporada. O seu nome, identificador e capacidades não podem ser alterados.',
     nameRequired: 'O nome é obrigatório.',
     capabilitiesHeading: 'Capacidades',
-    selectAll: 'Selecionar tudo',
     selectedCount: '{{selected}} de {{total}} selecionadas',
     groupCount: '{{selected}}/{{total}}',
     noCapabilities: 'Não há capacidades disponíveis.',

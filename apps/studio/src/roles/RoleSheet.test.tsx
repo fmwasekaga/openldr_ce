@@ -44,27 +44,20 @@ beforeEach(() => {
 });
 
 describe('RoleSheet', () => {
-  it('group "select all" checks every capability in that group and updates the counter', async () => {
+  it('there is no select-all control; toggling individual capabilities updates the counter', async () => {
     render(<RoleSheet open role={null} onOpenChange={vi.fn()} onSaved={vi.fn()} />);
 
     const usersGroup = await screen.findByTestId('capability-group-users');
     expect(screen.getByTestId('capability-count').textContent).toMatch(/0 of 4 selected/);
+    expect(screen.queryByTestId('capability-select-all')).toBeNull();
+    expect(screen.queryByText(/select all/i)).toBeNull();
 
-    const groupSelectAll = within(usersGroup).getByLabelText('Select all');
-    fireEvent.click(groupSelectAll);
+    fireEvent.click(within(usersGroup).getByTestId('capability-users.view'));
+    fireEvent.click(within(usersGroup).getByTestId('capability-users.manage'));
 
-    expect(within(usersGroup).getByLabelText(/View users/)).toBeChecked();
-    expect(within(usersGroup).getByLabelText(/Manage users/)).toBeChecked();
+    expect(within(usersGroup).getByTestId('capability-users.view')).toHaveAttribute('aria-checked', 'true');
+    expect(within(usersGroup).getByTestId('capability-users.manage')).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByTestId('capability-count').textContent).toMatch(/2 of 4 selected/);
-  });
-
-  it('global "select all" checks every capability across every group', async () => {
-    render(<RoleSheet open role={null} onOpenChange={vi.fn()} onSaved={vi.fn()} />);
-
-    await screen.findByTestId('capability-group-users');
-    fireEvent.click(screen.getByTestId('capability-select-all'));
-
-    await waitFor(() => expect(screen.getByTestId('capability-count').textContent).toMatch(/4 of 4 selected/));
   });
 
   it('save (create) posts name, slug, and the selected capability keys', async () => {
@@ -77,9 +70,9 @@ describe('RoleSheet', () => {
     await waitFor(() => expect((screen.getByTestId('role-slug') as HTMLInputElement).value).toBe('reviewer'));
 
     const usersGroup = await screen.findByTestId('capability-group-users');
-    fireEvent.click(within(usersGroup).getByLabelText(/View users/));
+    fireEvent.click(within(usersGroup).getByTestId('capability-users.view'));
     const rolesGroup = screen.getByTestId('capability-group-roles');
-    fireEvent.click(within(rolesGroup).getByLabelText(/View roles/));
+    fireEvent.click(within(rolesGroup).getByTestId('capability-roles.view'));
 
     fireEvent.click(screen.getByTestId('role-save'));
 
@@ -121,7 +114,7 @@ describe('RoleSheet', () => {
     expect(screen.queryByTestId('role-save')).toBeNull();
 
     const usersGroup = screen.getByTestId('capability-group-users');
-    expect(within(usersGroup).getByLabelText(/View users/)).toBeDisabled();
+    expect(within(usersGroup).getByTestId('capability-users.view')).toBeDisabled();
   });
 
   it('users with roles.view only (no roles.manage) get a read-only sheet, no Save button', async () => {

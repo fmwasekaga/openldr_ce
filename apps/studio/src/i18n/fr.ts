@@ -222,7 +222,6 @@ export const fr: EnShape = {
     lockedNotice: 'Ce rôle est intégré. Son nom, son identifiant et ses capacités ne peuvent pas être modifiés.',
     nameRequired: 'Le nom est requis.',
     capabilitiesHeading: 'Capacités',
-    selectAll: 'Tout sélectionner',
     selectedCount: '{{selected}} sur {{total}} sélectionnées',
     groupCount: '{{selected}}/{{total}}',
     noCapabilities: 'Aucune capacité disponible.',

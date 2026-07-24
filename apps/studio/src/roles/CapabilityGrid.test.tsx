@@ -21,18 +21,28 @@ describe('CapabilityGrid (render smoke tests — selection logic itself is cover
     expect(screen.getByTestId('capability-count').textContent).toMatch(/0 of 1 selected/);
   });
 
-  it('clicking a capability checkbox calls onChange with the toggled set', () => {
+  it('there is no select-all control, global or per-group', () => {
+    render(<CapabilityGrid groups={groups} selected={new Set()} onChange={vi.fn()} />);
+    expect(screen.queryByTestId('capability-select-all')).toBeNull();
+    expect(screen.queryByText(/select all/i)).toBeNull();
+  });
+
+  it('clicking a capability switch calls onChange with the toggled set', () => {
     const onChange = vi.fn();
     render(<CapabilityGrid groups={groups} selected={new Set()} onChange={onChange} />);
-    fireEvent.click(screen.getByLabelText(/View users/));
+    fireEvent.click(screen.getByTestId('capability-users.view'));
     expect(onChange).toHaveBeenCalledWith(new Set(['users.view']));
   });
 
-  it('readOnly disables every checkbox', () => {
+  it('renders a checked switch for a selected capability', () => {
+    render(<CapabilityGrid groups={groups} selected={new Set(['users.view'])} onChange={vi.fn()} />);
+    expect(screen.getByTestId('capability-users.view')).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('readOnly disables every switch', () => {
     render(<CapabilityGrid groups={groups} selected={new Set(['users.view'])} onChange={vi.fn()} readOnly />);
-    expect(screen.getByTestId('capability-select-all')).toBeDisabled();
     const group = screen.getByTestId('capability-group-users');
-    expect(within(group).getByLabelText(/View users/)).toBeDisabled();
+    expect(within(group).getByTestId('capability-users.view')).toBeDisabled();
   });
 
   it('renders a "no capabilities" message for an empty catalog', () => {

@@ -218,7 +218,6 @@ export const en = {
     lockedNotice: 'This is a built-in role. Its name, slug, and capabilities cannot be changed.',
     nameRequired: 'Name is required.',
     capabilitiesHeading: 'Capabilities',
-    selectAll: 'Select all',
     selectedCount: '{{selected}} of {{total}} selected',
     groupCount: '{{selected}}/{{total}}',
     noCapabilities: 'No capabilities available.',
