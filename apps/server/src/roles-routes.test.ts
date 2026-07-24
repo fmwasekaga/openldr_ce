@@ -348,6 +348,17 @@ describe('roles routes — user-role assignment', () => {
     expect(body.map((r) => r.slug)).toEqual(['data_analyst']);
   });
 
+  it('GET /api/users/:id/roles succeeds for an actor with users.view but not roles.view', async () => {
+    const { ctx, seedRole, assign } = fakeCtx();
+    const id = seedRole({ slug: 'data_analyst', name: 'Data Analyst', capabilities: ['query.run'] });
+    assign('subject-1', id);
+    const app = appWithUser(ctx, ['users.view']); // no roles.view
+    const res = await app.inject({ method: 'GET', url: '/api/users/subject-1/roles' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as RoleRecord[];
+    expect(body.map((r) => r.slug)).toEqual(['data_analyst']);
+  });
+
   it('PUT /api/users/:id/roles applies via setUserRoles, audits user.assign_role', async () => {
     const { ctx, seedRole, auditEvents } = fakeCtx();
     const analyst = seedRole({ slug: 'data_analyst', name: 'Data Analyst', capabilities: ['query.run'] });
@@ -373,8 +384,7 @@ describe('roles routes — user-role assignment', () => {
 
     const app = appWithUser(ctx, ['roles.manage']);
     const res = await app.inject({ method: 'PUT', url: '/api/users/subject-admin/roles', payload: { roleIds: [technician] } });
-    expect(res.statusCode).toBeGreaterThanOrEqual(400);
-    expect(res.statusCode).toBeLessThan(500);
+    expect(res.statusCode).toBe(400);
 
     // Assignment must not have applied.
     const viewApp = appWithUser(ctx, ['roles.view']);

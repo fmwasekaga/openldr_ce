@@ -27,3 +27,17 @@ export function requireCapability(cap: string) {
     }
   };
 }
+
+/** preHandler guard: requires the request actor to hold at least one of `caps`. */
+export function requireAnyCapability(...caps: string[]) {
+  return async (req: FastifyRequest, reply: FastifyReply) => {
+    if (!req.user) {
+      reply.code(401);
+      return reply.send({ error: 'authentication required' });
+    }
+    if (!req.user.capabilities.some((c) => caps.includes(c))) {
+      reply.code(403);
+      return reply.send({ error: 'insufficient capability' });
+    }
+  };
+}

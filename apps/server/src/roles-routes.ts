@@ -3,7 +3,7 @@ import type { AppContext } from '@openldr/bootstrap';
 import { redact, OpenLdrError } from '@openldr/core';
 import { CAPABILITY_GROUPS } from '@openldr/rbac';
 import { z } from 'zod';
-import { requireCapability } from './rbac';
+import { requireAnyCapability, requireCapability } from './rbac';
 import { recordAudit } from './audit-helper';
 
 const roleInput = z.object({
@@ -128,7 +128,11 @@ export function registerRolesRoutes(app: FastifyInstance<any, any, any, any>, ct
     }
   });
 
-  app.get('/api/users/:id/roles', VIEW, async (req) => ctx.roles.rolesForUser((req.params as { id: string }).id));
+  app.get(
+    '/api/users/:id/roles',
+    { preHandler: requireAnyCapability('roles.view', 'users.view') },
+    async (req) => ctx.roles.rolesForUser((req.params as { id: string }).id),
+  );
 
   app.put('/api/users/:id/roles', MANAGE, async (req, reply) => {
     const subject = (req.params as { id: string }).id;
