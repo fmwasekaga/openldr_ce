@@ -230,6 +230,7 @@ export interface DashboardsTable {
 export interface ColumnExposurePolicyTable {
   table_name: string;
   column_name: string;
+  hidden: Generated<boolean>;
   updated_at: Generated<Date>;
   updated_by: string | null;
 }

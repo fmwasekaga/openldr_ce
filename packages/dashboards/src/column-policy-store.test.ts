@@ -31,10 +31,23 @@ describe('column policy store', () => {
     expect(hidden.patients).toEqual(['national_id']); // surname etc. now exposed
   });
 
-  it('replaceTable with an empty hidden array clears the table rows', async () => {
+  it('replaceTable with an empty hidden array fully exposes the table (no hidden columns)', async () => {
     await seedColumnExposurePolicy(db);
     const store = createColumnPolicyStore(db);
     await store.replaceTable('patients', []);
+    const hidden = await store.listHidden();
+    expect(hidden.patients).toBeUndefined();
+  });
+
+  it('a fully-exposed table stays configured after reload (regression: no revert to defaults)', async () => {
+    await seedColumnExposurePolicy(db);
+    const store = createColumnPolicyStore(db);
+    await store.replaceTable('patients', []); // expose every column, no floor
+    const policy = await store.load();
+    // Must be an entry with an EMPTY Set, not `undefined` — absent would make hiddenFor() fall
+    // back to HARDCODED_DENY_UNION and silently re-hide national_id/surname/etc.
+    expect(policy.has('patients')).toBe(true);
+    expect(policy.get('patients')?.size).toBe(0);
     const hidden = await store.listHidden();
     expect(hidden.patients).toBeUndefined();
   });

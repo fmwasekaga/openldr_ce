@@ -62,6 +62,7 @@ import * as m060 from './060_notifications';
 import * as m061 from './061_terminology_ingest_jobs';
 import * as m062 from './062_rbac';
 import * as m063 from './063_column_exposure_policy';
+import * as m064 from './064_column_exposure_policy_hidden';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -127,4 +128,5 @@ export const internalMigrations: Record<string, Migration> = {
   '061_terminology_ingest_jobs': { up: m061.up, down: m061.down },
   '062_rbac': { up: m062.up, down: m062.down },
   '063_column_exposure_policy': { up: m063.up, down: m063.down },
+  '064_column_exposure_policy_hidden': { up: m064.up, down: m064.down },
 };

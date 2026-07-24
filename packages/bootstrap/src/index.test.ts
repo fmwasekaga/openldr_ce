@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { makeMigratedDb } from '@openldr/db/testing';
 import { createAppSettingsStore, createReportStore, createRoleStore, referenceCapture } from '@openldr/db';
-import { createDashboardStore, createColumnPolicyStore, joinableTablesForClient, HARDCODED_DENY_UNION } from '@openldr/dashboards';
+import { createDashboardStore, createColumnPolicyStore, joinableTablesForClient } from '@openldr/dashboards';
 import { createFormStore } from '@openldr/forms';
 import type { Config } from '@openldr/config';
 import { createAppContext, type AppContext } from './index';
@@ -107,21 +107,14 @@ describe('createAppContext column-policy cache wiring (Data Exposure Task 5)', (
     const before = joinableTablesForClient(policyCache).find((t) => t.table === 'patients')!;
     expect(before.columns).not.toContain('national_id');
 
-    // Un-hide just national_id, keeping every other hardcoded-deny column explicitly hidden — NOT
-    // `replaceTable('patients', [])`. An empty hidden list deletes every row for the table, so
-    // `load()`'s map has no entry for it and `hiddenFor()` (registry.ts) falls back to
-    // HARDCODED_DENY_UNION — the "expose everything" write would silently revert to the default,
-    // which is what a real admin UI must avoid by always sending the explicit reduced list (this is
-    // a pre-existing column-policy-store/registry contract from Tasks 1/4, out of scope to change
-    // here — see column-policy-store.test.ts's "replaceTable with an empty hidden array clears the
-    // table rows" case, which proves the same absent-vs-empty behavior).
-    const stillHidden = HARDCODED_DENY_UNION.patients.filter((c) => c !== 'national_id');
-    await columnPolicy.replaceTable('patients', stillHidden, 'test');
+    // Fully expose the table (Task 5b: per-column `hidden` flag) — this now survives reload
+    // instead of reverting to HARDCODED_DENY_UNION, because load() yields a map entry (an empty
+    // Set) for any table with rows, not just tables with hidden columns.
+    await columnPolicy.replaceTable('patients', [], 'test');
     await reloadColumnPolicy();
 
     const after = joinableTablesForClient(policyCache).find((t) => t.table === 'patients')!;
     expect(after.columns).toContain('national_id');
-    expect(after.columns).not.toContain('surname'); // still explicitly denied
   });
 });
 
