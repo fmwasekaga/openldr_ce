@@ -181,7 +181,7 @@ async function seedDefaultWorkflowsFor(app: EssentialSeedTarget, orderFormId: st
   }
   const existingWorkflows = await app.workflows.store.list();
   let seeded = 0;
-  const defaults = buildDefaultWorkflows({ orderFormId, webhookSecret: randomUUID() });
+  const defaults = buildDefaultWorkflows({ orderFormId, formWebhookSecret: randomUUID(), rawWebhookSecret: randomUUID() });
   for (const wf of defaults) {
     if (!existingWorkflows.some((w) => w.id === wf.id)) {
       await app.workflows.store.create(wf);
