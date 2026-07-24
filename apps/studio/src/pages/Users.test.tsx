@@ -160,8 +160,10 @@ describe('Users page', () => {
     const editItem = await screen.findByText(/^edit$/i);
     fireEvent.click(editItem);
 
-    await screen.findByRole('button', { name: /^save$/i });
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    // UserDialog's Save lives in its own ⋯ (Actions) menu, not a footer button.
+    const dialogActionsTrigger = await screen.findByRole('button', { name: 'Actions' });
+    openDropdown(dialogActionsTrigger);
+    fireEvent.click(screen.getByRole('menuitem', { name: /^save$/i }));
 
     await waitFor(() => expect(updateUser).toHaveBeenCalled());
     const updateCall = (updateUser as ReturnType<typeof vi.fn>).mock.calls[0][1] as Record<string, unknown>;
@@ -192,8 +194,10 @@ describe('Users page', () => {
     const phoneInput = await screen.findByLabelText('Phone');
     fireEvent.change(phoneInput, { target: { value: '555-9999' } });
 
-    // Submit via the form's Create button
-    fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
+    // Submit via UserDialog's ⋯ (Actions) menu — Create lives there, not in a footer button.
+    const dialogActionsTrigger = screen.getByRole('button', { name: 'Actions' });
+    openDropdown(dialogActionsTrigger);
+    fireEvent.click(screen.getByRole('menuitem', { name: /^create$/i }));
 
     await waitFor(() =>
       expect(createUser).toHaveBeenCalledWith(expect.objectContaining({

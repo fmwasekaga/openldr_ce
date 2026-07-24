@@ -93,6 +93,7 @@ export const fr: EnShape = {
     editUserTitle: "Modifier l'utilisateur",
     newUserTitle: 'Nouvel utilisateur',
     editUserDesc: 'Mettre à jour le profil, les rôles et le statut.',
+    actions: 'Actions',
     newUserDesc: 'Créer un compte opérateur local.',
     noUsersForm:
       'Aucun formulaire Utilisateurs publié trouvé. Créez un formulaire Utilisateurs dans le Générateur de formulaires.',
@@ -126,7 +127,6 @@ export const fr: EnShape = {
     rolesLabel: 'Rôle',
     noRolesAvailable: 'Aucun rôle défini pour le moment. Créez-en un dans Paramètres → Rôles.',
     selectRolePlaceholder: 'Sélectionner un rôle',
-    noRoleOption: 'Aucun rôle',
     rolesSaveError: "Utilisateur enregistré, mais l'attribution des rôles a échoué : {{error}}",
     roleNames: {
       lab_admin: 'Admin laboratoire',
@@ -224,8 +224,8 @@ export const fr: EnShape = {
     nameRequired: 'Le nom est requis.',
     capabilitiesHeading: 'Capacités',
     selectedCount: '{{selected}} sur {{total}} sélectionnées',
-    groupCount: '{{selected}}/{{total}}',
     noCapabilities: 'Aucune capacité disponible.',
+    actions: 'Actions',
   },
   settings: {
     title: 'Paramètres',

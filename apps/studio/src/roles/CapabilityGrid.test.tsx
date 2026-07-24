@@ -21,6 +21,23 @@ describe('CapabilityGrid (render smoke tests — selection logic itself is cover
     expect(screen.getByTestId('capability-count').textContent).toMatch(/0 of 1 selected/);
   });
 
+  it('does not render a per-group selected count, only the global counter', () => {
+    render(<CapabilityGrid groups={groups} selected={new Set(['users.view'])} onChange={vi.fn()} />);
+    const group = screen.getByTestId('capability-group-users');
+    // The group card shows its label but no "x/y" style per-group count.
+    expect(within(group).queryByText(/^\d+\/\d+$/)).toBeNull();
+    expect(screen.getByTestId('capability-count').textContent).toMatch(/1 of 1 selected/);
+  });
+
+  it('renders a full-width divider between the group title and its capability rows', () => {
+    render(<CapabilityGrid groups={groups} selected={new Set()} onChange={vi.fn()} />);
+    const group = screen.getByTestId('capability-group-users');
+    const divider = group.querySelector('.border-t.border-border');
+    expect(divider).toBeTruthy();
+    // Bleeds past the card's own padding (-mx-3) so it spans the full card width.
+    expect(divider).toHaveClass('-mx-3');
+  });
+
   it('there is no select-all control, global or per-group', () => {
     render(<CapabilityGrid groups={groups} selected={new Set()} onChange={vi.fn()} />);
     expect(screen.queryByTestId('capability-select-all')).toBeNull();

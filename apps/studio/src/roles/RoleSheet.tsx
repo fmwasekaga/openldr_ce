@@ -1,11 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { MoreHorizontal } from 'lucide-react';
 import { slugify } from '@openldr/rbac';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/auth/AuthProvider';
 import { createRole, updateRole, getRoleCatalog, type RoleRecord, type CapabilityGroup } from '@/api';
 import { CapabilityGrid } from './CapabilityGrid';
@@ -101,6 +108,27 @@ export function RoleSheet({ open, onOpenChange, role, onSaved }: RoleSheetProps)
           <SheetDescription>{t('roles.sheetDescription')}</SheetDescription>
         </SheetHeader>
 
+        <div className="flex items-center justify-end px-6 py-3">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label={t('roles.actions')} data-testid="role-actions-trigger">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {!readOnly ? (
+                <DropdownMenuItem data-testid="role-save" disabled={saving || !name.trim()} onClick={() => void handleSave()}>
+                  {saving ? t('common.saving') : isEdit ? t('common.save') : t('common.create')}
+                </DropdownMenuItem>
+              ) : null}
+              <DropdownMenuItem onClick={() => onOpenChange(false)}>
+                {readOnly ? t('common.close') : t('common.cancel')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <div className="border-t border-border" />
+
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
           {error ? (
             <div className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive" data-testid="role-sheet-error">
@@ -153,15 +181,6 @@ export function RoleSheet({ open, onOpenChange, role, onSaved }: RoleSheetProps)
             )}
           </div>
         </div>
-
-        <SheetFooter className="border-t border-border px-6 py-4">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>{readOnly ? t('common.close') : t('common.cancel')}</Button>
-          {!readOnly ? (
-            <Button data-testid="role-save" disabled={saving || !name.trim()} onClick={() => void handleSave()}>
-              {saving ? t('common.saving') : isEdit ? t('common.save') : t('common.create')}
-            </Button>
-          ) : null}
-        </SheetFooter>
       </SheetContent>
     </Sheet>
   );

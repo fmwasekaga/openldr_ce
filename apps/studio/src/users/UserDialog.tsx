@@ -1,10 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   createUser, updateUser, listPublishedForms, getForm,
   listRoles, getUserRoles, setUserRoles,
@@ -18,9 +25,10 @@ import { FormSchema as FormSchemaZ } from '@openldr/forms/pure';
 // handled separately (below) via the roles.* capability API, not written to Keycloak here.
 const CORE_KEYS = new Set(['firstName', 'lastName', 'email']);
 
-// Sentinel value for the "no role" option in the role Select — Radix Select disallows an
-// empty-string item value, so we map this sentinel back to '' (no role) at the state boundary.
-const NO_ROLE_VALUE = '__none__';
+// A user must always have exactly one role — there is no "no role" state. The least-privilege
+// system role is the default for a brand-new user, and the fallback if an existing user
+// somehow has none assigned (or the default itself is missing from the catalog).
+const DEFAULT_ROLE_SLUG = 'lab_technician';
 
 type IdentityPatch = { firstName?: string | null; lastName?: string | null; email?: string | null };
 type FormMeta = Pick<CreateUserPayload, 'formSchemaId' | 'formVersion'>;
@@ -104,6 +112,12 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // The ⋯ "Save" menu item lives outside the FormRuntime-rendered <form> (it's in a toolbar row
+  // under the SheetHeader, not a footer). When a Users form is published, Save proxies a click to
+  // this hidden submit button so the click still goes through FormRuntime's own <form onSubmit>
+  // (and its field validation) — no change to FormRuntime itself required.
+  const hiddenSubmitRef = useRef<HTMLButtonElement>(null);
+
   // The identity record once it has been created/updated this dialog-open session. Set when
   // the identity write succeeds but the subsequent setUserRoles call fails, so a retry only
   // re-attempts the role assignment instead of creating a duplicate user / re-PUTting identity.
@@ -148,9 +162,10 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, user?.id]);
 
-  // Load the role catalog + (when editing) the user's current role assignment. A user may have
-  // at most one role; if the API ever returns several (legacy data), take the first and don't
-  // crash.
+  // Load the role catalog + (when editing) the user's current role assignment. A user always has
+  // exactly one role; if the API ever returns several (legacy data), take the first and don't
+  // crash. A user is never left roleless: create defaults to the least-privilege system role
+  // (Lab Technician), and edit falls back to it too if the user somehow has none assigned.
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
@@ -162,9 +177,12 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
       const allRoles = await listRoles();
       if (cancelled) return;
       setRoles(allRoles);
+      const defaultRoleId = allRoles.find((r) => r.slug === DEFAULT_ROLE_SLUG)?.id ?? allRoles[0]?.id ?? '';
       if (user) {
         const current = await getUserRoles(user.id);
-        if (!cancelled) setSelectedRoleId(current[0]?.id ?? '');
+        if (!cancelled) setSelectedRoleId(current[0]?.id ?? defaultRoleId);
+      } else if (!cancelled) {
+        setSelectedRoleId(defaultRoleId);
       }
     };
     load()
@@ -222,6 +240,8 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
       if (!savedIdentity) { setSavedIdentity(saved); onSaved(saved); }
 
       try {
+        // selectedRoleId is always populated once the role catalog has loaded (see the roles
+        // effect above) — a user always has exactly one role, so this never sends [].
         await setUserRoles(saved.id, selectedRoleId ? [selectedRoleId] : []);
       } catch (roleErr) {
         // The identity write already succeeded and onSaved has already run — surface this
@@ -265,6 +285,13 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
   // set schemaLoading (avoids racing ahead of a form that's about to load).
   const formUnresolved = !noForm && schema === null;
 
+  /** ⋯ "Save": form-present path proxies to FormRuntime's own submit; no-form path saves directly. */
+  const handleMenuSave = () => {
+    if (formReady) hiddenSubmitRef.current?.click();
+    else void handleCoreSubmit();
+  };
+  const saveDisabled = formReady ? saving : saving || schemaLoading || formUnresolved;
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-xl">
@@ -272,6 +299,25 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
           <SheetTitle>{isEdit ? t('users.editUserTitle') : t('users.newUserTitle')}</SheetTitle>
           <SheetDescription>{isEdit ? t('users.editUserDesc') : t('users.newUserDesc')}</SheetDescription>
         </SheetHeader>
+
+        <div className="flex items-center justify-end px-6 py-3">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label={t('users.actions')}>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem disabled={saveDisabled} onClick={handleMenuSave}>
+                {saving ? t('common.saving') : isEdit ? t('common.save') : t('common.create')}
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={saving} onClick={() => onOpenChange(false)}>
+                {t('common.cancel')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <div className="border-t border-border" />
 
         <div className="min-h-0 flex-1 overflow-y-auto">
           {error ? (
@@ -325,15 +371,11 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
             ) : roles.length === 0 ? (
               <p className="text-sm text-muted-foreground">{t('users.noRolesAvailable')}</p>
             ) : (
-              <Select
-                value={selectedRoleId || NO_ROLE_VALUE}
-                onValueChange={(v) => setSelectedRoleId(v === NO_ROLE_VALUE ? '' : v)}
-              >
+              <Select value={selectedRoleId} onValueChange={setSelectedRoleId}>
                 <SelectTrigger id="user-role-select" className="w-full" aria-label={t('users.rolesLabel')}>
                   <SelectValue placeholder={t('users.selectRolePlaceholder')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={NO_ROLE_VALUE}>{t('users.noRoleOption')}</SelectItem>
                   {roles.map((r) => (
                     <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
                   ))}
@@ -354,14 +396,11 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
               schema={schema}
               initialAnswers={initialAnswers}
               onSubmit={handleSubmit}
-              footer={
-                <SheetFooter className="border-t border-border px-6 py-4 sm:justify-end">
-                  <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>{t('common.cancel')}</Button>
-                  <Button type="submit" disabled={saving}>
-                    {saving ? t('common.saving') : isEdit ? t('common.save') : t('common.create')}
-                  </Button>
-                </SheetFooter>
-              }
+              // The visible Save affordance is the ⋯ menu in the toolbar row above, not a form
+              // footer. This hidden submit button keeps the ⋯ "Save" item routed through
+              // FormRuntime's own <form onSubmit> (and its field validation) with no change to
+              // FormRuntime needed.
+              footer={<button ref={hiddenSubmitRef} type="submit" className="hidden" aria-hidden="true" />}
             />
           ) : (
             <>
@@ -370,14 +409,6 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
                   {t('users.noUsersForm')}
                 </div>
               ) : null}
-              {/* No-form (or form-load-error) path: always-present, always-working Save —
-                  creating/editing a user must never depend on a published Users form existing. */}
-              <SheetFooter className="border-t border-border px-6 py-4 sm:justify-end">
-                <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>{t('common.cancel')}</Button>
-                <Button onClick={() => void handleCoreSubmit()} disabled={saving || schemaLoading || formUnresolved}>
-                  {saving ? t('common.saving') : isEdit ? t('common.save') : t('common.create')}
-                </Button>
-              </SheetFooter>
             </>
           )}
         </div>

@@ -16,13 +16,6 @@ export function selectedCapabilityCount(groups: CapabilityGroup[], selected: Rea
   return n;
 }
 
-/** Number of a single group's capabilities present in `selected`. */
-export function groupSelectedCount(group: CapabilityGroup, selected: ReadonlySet<string>): number {
-  let n = 0;
-  for (const c of group.capabilities) if (selected.has(c.key)) n++;
-  return n;
-}
-
 /** Flip a single capability's membership. Never mutates `selected`. */
 export function toggleCapability(selected: ReadonlySet<string>, key: string): Set<string> {
   const next = new Set(selected);

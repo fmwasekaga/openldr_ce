@@ -37,6 +37,21 @@ const existingRole: RoleRecord = {
   isSystem: false, locked: false, capabilities: ['users.view'], memberCount: 3,
 };
 
+/**
+ * Open the ⋯ actions menu. Radix opens DropdownMenuContent on pointerdown; jsdom sometimes
+ * needs a follow-up Enter keydown for the menu to mount — same pattern as
+ * forms-builder/FieldEditorSheet.test.tsx.
+ */
+function openActionsMenu(expectText: string) {
+  const trigger = screen.getByTestId('role-actions-trigger');
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+  // Query by menuitem role, not text — the Sheet's own X close button also has a "Close"
+  // sr-only label, which would otherwise collide with the ⋯ menu's Close/Cancel item.
+  if (!screen.queryByRole('menuitem', { name: expectText })) {
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+  }
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockCanManage = true;
@@ -74,6 +89,7 @@ describe('RoleSheet', () => {
     const rolesGroup = screen.getByTestId('capability-group-roles');
     fireEvent.click(within(rolesGroup).getByTestId('capability-roles.view'));
 
+    openActionsMenu('Create');
     fireEvent.click(screen.getByTestId('role-save'));
 
     await waitFor(() => expect(api.createRole).toHaveBeenCalledWith({
@@ -90,6 +106,7 @@ describe('RoleSheet', () => {
 
     await screen.findByTestId('capability-group-users');
     fireEvent.change(screen.getByTestId('role-name'), { target: { value: 'Data Analyst (renamed)' } });
+    openActionsMenu('Save');
     fireEvent.click(screen.getByTestId('role-save'));
 
     await waitFor(() => expect(api.updateRole).toHaveBeenCalledWith('r1', {
@@ -111,7 +128,9 @@ describe('RoleSheet', () => {
     expect(screen.getByTestId('role-name')).toBeDisabled();
     expect(screen.getByTestId('role-slug')).toBeDisabled();
     expect(screen.getByTestId('role-locked-notice')).toBeTruthy();
+    openActionsMenu('Close');
     expect(screen.queryByTestId('role-save')).toBeNull();
+    expect(screen.getByRole('menuitem', { name: 'Close' })).toBeTruthy();
 
     const usersGroup = screen.getByTestId('capability-group-users');
     expect(within(usersGroup).getByTestId('capability-users.view')).toBeDisabled();
@@ -123,6 +142,7 @@ describe('RoleSheet', () => {
 
     await screen.findByTestId('capability-group-users');
     expect(screen.getByTestId('role-name')).toBeDisabled();
+    openActionsMenu('Close');
     expect(screen.queryByTestId('role-save')).toBeNull();
   });
 
@@ -132,8 +152,21 @@ describe('RoleSheet', () => {
 
     await screen.findByTestId('capability-group-users');
     fireEvent.change(screen.getByTestId('role-name'), { target: { value: 'Reviewer' } });
+    openActionsMenu('Create');
     fireEvent.click(screen.getByTestId('role-save'));
 
     expect(await screen.findByTestId('role-sheet-error')).toHaveTextContent(/locked/i);
+  });
+
+  it('⋯ menu Cancel closes without saving', async () => {
+    const onOpenChange = vi.fn();
+    render(<RoleSheet open role={null} onOpenChange={onOpenChange} onSaved={vi.fn()} />);
+
+    await screen.findByTestId('capability-group-users');
+    openActionsMenu('Cancel');
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Cancel' }));
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(api.createRole).not.toHaveBeenCalled();
   });
 });

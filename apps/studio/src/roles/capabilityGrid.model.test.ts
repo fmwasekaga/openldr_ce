@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { CapabilityGroup } from '@/api';
 import {
-  totalCapabilityCount, selectedCapabilityCount, groupSelectedCount, toggleCapability,
+  totalCapabilityCount, selectedCapabilityCount, toggleCapability,
 } from './capabilityGrid.model';
 
 const groups: CapabilityGroup[] = [
@@ -34,12 +34,6 @@ describe('capabilityGrid.model', () => {
   it('selectedCapabilityCount counts only keys present in selected', () => {
     const selected = new Set(['users.view', 'roles.manage', 'unknown.key']);
     expect(selectedCapabilityCount(groups, selected)).toBe(2);
-  });
-
-  it('groupSelectedCount scopes to one group', () => {
-    const selected = new Set(['users.view', 'roles.manage', 'roles.assign']);
-    expect(groupSelectedCount(groups[0], selected)).toBe(1);
-    expect(groupSelectedCount(groups[1], selected)).toBe(2);
   });
 
   it('toggleCapability adds an absent key and removes a present one, without mutating the input', () => {

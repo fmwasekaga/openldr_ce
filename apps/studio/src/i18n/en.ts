@@ -91,6 +91,7 @@ export const en = {
     editUserTitle: 'Edit user',
     newUserTitle: 'New user',
     editUserDesc: 'Update profile, roles, and status.',
+    actions: 'Actions',
     newUserDesc: 'Create a local operator account.',
     noUsersForm: 'No published Users form found. Create a Users form in the Form Builder.',
     firstName: 'First name',
@@ -122,7 +123,6 @@ export const en = {
     rolesLabel: 'Role',
     noRolesAvailable: 'No roles defined yet. Create one in Settings → Roles.',
     selectRolePlaceholder: 'Select a role',
-    noRoleOption: 'No role',
     rolesSaveError: 'User saved, but role assignment failed: {{error}}',
     roleNames: {
       lab_admin: 'Lab Admin',
@@ -220,8 +220,8 @@ export const en = {
     nameRequired: 'Name is required.',
     capabilitiesHeading: 'Capabilities',
     selectedCount: '{{selected}} of {{total}} selected',
-    groupCount: '{{selected}}/{{total}}',
     noCapabilities: 'No capabilities available.',
+    actions: 'Actions',
   },
   settings: {
     title: 'Settings',

@@ -119,7 +119,10 @@ describe('Roles page', () => {
 
     fireEvent.click(screen.getByTestId('create-role'));
     fireEvent.change(await screen.findByTestId('role-name'), { target: { value: 'New Role' } });
-    fireEvent.click(screen.getByTestId('role-save'));
+
+    // RoleSheet's Save lives in its own ⋯ (Actions) menu, not a footer button.
+    openDropdown(screen.getByTestId('role-actions-trigger'));
+    fireEvent.click(await screen.findByTestId('role-save'));
 
     await waitFor(() => expect(api.createRole).toHaveBeenCalledWith(expect.objectContaining({ name: 'New Role' })));
     expect(await screen.findByText('New Role')).toBeTruthy();

@@ -43,6 +43,9 @@ const minimalSchema = {
 const allRoles: RoleRecord[] = [
   { id: 'r1', slug: 'lab-admin', name: 'Lab Admin', description: null, isSystem: true, locked: true, capabilities: [], memberCount: 1 },
   { id: 'r2', slug: 'data-analyst', name: 'Data Analyst', description: null, isSystem: false, locked: false, capabilities: [], memberCount: 2 },
+  // Deliberately last in the list — proves the create-default and no-role-fallback resolve by
+  // slug (=== 'lab_technician'), not by "just take the first role".
+  { id: 'r3', slug: 'lab_technician', name: 'Lab Technician', description: null, isSystem: true, locked: false, capabilities: [], memberCount: 5 },
 ];
 
 const editUser: UserSummary = {
@@ -54,6 +57,21 @@ const editUser: UserSummary = {
 function pickRole(name: string) {
   fireEvent.click(screen.getByRole('combobox', { name: 'Role' }));
   fireEvent.click(screen.getByText(name));
+}
+
+/**
+ * Open the ⋯ actions menu and click the item matching `itemName` (a RegExp/string passed to
+ * getByRole('menuitem', { name })). Radix opens DropdownMenuContent on pointerdown; jsdom
+ * sometimes needs a follow-up Enter keydown for the menu to mount — same pattern as
+ * forms-builder/FieldEditorSheet.test.tsx.
+ */
+function clickMenuItem(itemName: string | RegExp) {
+  const trigger = screen.getByRole('button', { name: 'Actions' });
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+  if (!screen.queryByRole('menuitem', { name: itemName })) {
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+  }
+  fireEvent.click(screen.getByRole('menuitem', { name: itemName }));
 }
 
 beforeEach(() => {
@@ -68,6 +86,16 @@ beforeEach(() => {
   (api.listRoles as ReturnType<typeof vi.fn>).mockResolvedValue(allRoles);
   (api.getUserRoles as ReturnType<typeof vi.fn>).mockResolvedValue([]);
   (api.setUserRoles as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+});
+
+describe('UserDialog — ⋯ actions menu', () => {
+  it('has a ⋯ (Actions) menu trigger, not footer buttons', async () => {
+    render(<UserDialog open user={null} onOpenChange={vi.fn()} onSaved={vi.fn()} />);
+    await screen.findByRole('combobox', { name: 'Role' });
+    expect(screen.getByRole('button', { name: 'Actions' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^save$/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^create$/i })).toBeNull();
+  });
 });
 
 describe('UserDialog — role assignment (single-select)', () => {
@@ -89,14 +117,22 @@ describe('UserDialog — role assignment (single-select)', () => {
     await waitFor(() => expect(trigger).toHaveTextContent('Data Analyst'));
   });
 
-  it('create is seeded with no role selected', async () => {
+  it('create defaults the role Select to Lab Technician (least-privilege), never empty', async () => {
     render(<UserDialog open user={null} onOpenChange={vi.fn()} onSaved={vi.fn()} />);
 
     const trigger = await screen.findByRole('combobox', { name: 'Role' });
-    expect(trigger).toHaveTextContent('No role');
+    await waitFor(() => expect(trigger).toHaveTextContent('Lab Technician'));
   });
 
-  it('edit: save calls setUserRoles with the single selected role id for the existing user id', async () => {
+  it('there is no "No role" option in the Role Select — a user always has exactly one role', async () => {
+    render(<UserDialog open user={null} onOpenChange={vi.fn()} onSaved={vi.fn()} />);
+    const trigger = await screen.findByRole('combobox', { name: 'Role' });
+    await waitFor(() => expect(trigger).toHaveTextContent('Lab Technician'));
+    fireEvent.click(trigger);
+    expect(screen.queryByText(/no role/i)).toBeNull();
+  });
+
+  it('edit: ⋯ → Save calls setUserRoles with the single selected role id for the existing user id (submits via FormRuntime)', async () => {
     (api.updateUser as ReturnType<typeof vi.fn>).mockResolvedValue({ ...editUser });
     const onSaved = vi.fn();
     const onOpenChange = vi.fn();
@@ -105,7 +141,7 @@ describe('UserDialog — role assignment (single-select)', () => {
     await screen.findByRole('combobox', { name: 'Role' });
     pickRole('Data Analyst');
 
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    clickMenuItem(/^save$/i);
 
     await waitFor(() => expect(api.setUserRoles).toHaveBeenCalled());
     expect(api.setUserRoles).toHaveBeenCalledWith('u1', ['r2']);
@@ -113,21 +149,20 @@ describe('UserDialog — role assignment (single-select)', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
-  it('edit: choosing "No role" saves an empty role list', async () => {
-    (api.getUserRoles as ReturnType<typeof vi.fn>).mockResolvedValue([allRoles[0]]);
+  it('edit: a user with no role assigned (legacy data) falls back to the Lab Technician default, never empty', async () => {
+    (api.getUserRoles as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (api.updateUser as ReturnType<typeof vi.fn>).mockResolvedValue({ ...editUser });
     render(<UserDialog open user={editUser} onOpenChange={vi.fn()} onSaved={vi.fn()} />);
 
     const trigger = await screen.findByRole('combobox', { name: 'Role' });
-    await waitFor(() => expect(trigger).toHaveTextContent('Lab Admin'));
-    pickRole('No role');
+    await waitFor(() => expect(trigger).toHaveTextContent('Lab Technician'));
 
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    clickMenuItem(/^save$/i);
 
-    await waitFor(() => expect(api.setUserRoles).toHaveBeenCalledWith('u1', []));
+    await waitFor(() => expect(api.setUserRoles).toHaveBeenCalledWith('u1', ['r3']));
   });
 
-  it('create: calls setUserRoles with the id createUser returns, not a client-side id', async () => {
+  it('create: ⋯ → Create calls setUserRoles with the id createUser returns, not a client-side id (submits via FormRuntime)', async () => {
     (api.createUser as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: 'new-directory-id', username: 'grace', firstName: 'Grace', lastName: null, email: null,
       roles: [], enabled: true, createdAt: '2026-01-01T00:00:00Z', extras: {}, formSchemaId: 'form-1', formVersion: 1,
@@ -138,7 +173,7 @@ describe('UserDialog — role assignment (single-select)', () => {
     await screen.findByRole('combobox', { name: 'Role' });
     pickRole('Lab Admin');
 
-    fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
+    clickMenuItem(/^create$/i);
 
     await waitFor(() => expect(api.createUser).toHaveBeenCalled());
     // createUser payload must not carry a `roles` key — that identity write path is gone.
@@ -157,13 +192,24 @@ describe('UserDialog — role assignment (single-select)', () => {
     render(<UserDialog open user={editUser} onOpenChange={onOpenChange} onSaved={onSaved} />);
 
     await screen.findByRole('combobox', { name: 'Role' });
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    clickMenuItem(/^save$/i);
 
     expect(await screen.findByText(/cannot remove the last member/i)).toBeTruthy();
     // The identity write did succeed — the parent list is still updated — but the sheet
     // stays open so the error is visible and the user can retry role assignment.
     expect(onSaved).toHaveBeenCalled();
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
+  });
+
+  it('⋯ → Cancel closes without saving', async () => {
+    const onOpenChange = vi.fn();
+    render(<UserDialog open user={editUser} onOpenChange={onOpenChange} onSaved={vi.fn()} />);
+
+    await screen.findByRole('combobox', { name: 'Role' });
+    clickMenuItem(/^cancel$/i);
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(api.updateUser).not.toHaveBeenCalled();
   });
 });
 
@@ -172,7 +218,7 @@ describe('UserDialog — seedless (no published Users form)', () => {
     (api.listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([]);
   });
 
-  it('creating a user works with no published Users form: shows a working Save and calls createUser then setUserRoles', async () => {
+  it('creating a user works with no published Users form: ⋯ → Create calls createUser then setUserRoles (no-form path, direct submit)', async () => {
     (api.createUser as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: 'seedless-id', username: 'nora', firstName: null, lastName: null, email: null,
       roles: [], enabled: true, createdAt: '2026-01-01T00:00:00Z', extras: {}, formSchemaId: null, formVersion: null,
@@ -186,9 +232,14 @@ describe('UserDialog — seedless (no published Users form)', () => {
     await screen.findByRole('combobox', { name: 'Role' });
     pickRole('Lab Admin');
 
-    const saveButton = screen.getByRole('button', { name: /^create$/i });
-    expect(saveButton).toBeEnabled();
-    fireEvent.click(saveButton);
+    const trigger = screen.getByRole('button', { name: 'Actions' });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menuitem', { name: /^create$/i })) {
+      fireEvent.keyDown(trigger, { key: 'Enter' });
+    }
+    const saveItem = screen.getByRole('menuitem', { name: /^create$/i });
+    expect(saveItem).not.toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(saveItem);
 
     await waitFor(() => expect(api.createUser).toHaveBeenCalled());
     const payload = (api.createUser as ReturnType<typeof vi.fn>).mock.calls[0][0];
@@ -202,16 +253,14 @@ describe('UserDialog — seedless (no published Users form)', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
-  it('editing a user works with no published Users form: shows a working Save', async () => {
+  it('editing a user works with no published Users form: ⋯ → Save works', async () => {
     (api.updateUser as ReturnType<typeof vi.fn>).mockResolvedValue({ ...editUser, formSchemaId: null, formVersion: null });
     const onSaved = vi.fn();
     const onOpenChange = vi.fn();
     render(<UserDialog open user={editUser} onOpenChange={onOpenChange} onSaved={onSaved} />);
 
     await screen.findByText(/no published users form/i);
-    const saveButton = screen.getByRole('button', { name: /^save$/i });
-    expect(saveButton).toBeEnabled();
-    fireEvent.click(saveButton);
+    clickMenuItem(/^save$/i);
 
     await waitFor(() => expect(api.updateUser).toHaveBeenCalled());
     expect((api.updateUser as ReturnType<typeof vi.fn>).mock.calls[0][1]).not.toHaveProperty('formSchemaId');
@@ -220,9 +269,9 @@ describe('UserDialog — seedless (no published Users form)', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
-  it('renders exactly one Save/Create button (no duplicate footers)', async () => {
+  it('renders exactly one ⋯ actions menu (no duplicate action affordances)', async () => {
     render(<UserDialog open user={null} onOpenChange={vi.fn()} onSaved={vi.fn()} />);
     await screen.findByText(/no published users form/i);
-    expect(screen.getAllByRole('button', { name: /^create$/i })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Actions' })).toHaveLength(1);
   });
 });

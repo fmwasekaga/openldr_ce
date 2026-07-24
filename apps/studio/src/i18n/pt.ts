@@ -93,6 +93,7 @@ export const pt: EnShape = {
     editUserTitle: 'Editar utilizador',
     newUserTitle: 'Novo utilizador',
     editUserDesc: 'Atualizar perfil, funções e estado.',
+    actions: 'Ações',
     newUserDesc: 'Criar uma conta de operador local.',
     noUsersForm:
       'Nenhum formulário de Utilizadores publicado encontrado. Crie um formulário de Utilizadores no Construtor de Formulários.',
@@ -126,7 +127,6 @@ export const pt: EnShape = {
     rolesLabel: 'Função',
     noRolesAvailable: 'Ainda não há funções definidas. Crie uma em Definições → Funções.',
     selectRolePlaceholder: 'Selecionar uma função',
-    noRoleOption: 'Sem função',
     rolesSaveError: 'Utilizador guardado, mas a atribuição de funções falhou: {{error}}',
     roleNames: {
       lab_admin: 'Administrador do laboratório',
@@ -224,8 +224,8 @@ export const pt: EnShape = {
     nameRequired: 'O nome é obrigatório.',
     capabilitiesHeading: 'Capacidades',
     selectedCount: '{{selected}} de {{total}} selecionadas',
-    groupCount: '{{selected}}/{{total}}',
     noCapabilities: 'Não há capacidades disponíveis.',
+    actions: 'Ações',
   },
   settings: {
     title: 'Definições',
