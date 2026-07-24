@@ -4,6 +4,42 @@
 import { type ExternalSchema, EXTERNAL_TABLE_COLUMNS } from '@openldr/db/schema/external';
 import type { Agg, DateGrain, DimensionKind, Expr } from '../types';
 
+/** table name -> set of columns that MUST be hidden. Absent table/column => exposed. */
+export type ColumnPolicy = Map<string, Set<string>>;
+
+/**
+ * Per-table UNION of every hardcoded denylist that existed before the runtime policy
+ * (JOINABLE_TABLES[].denyColumns + every MODELS[].joins[].denyColumns). This is BOTH the
+ * seed for column_exposure_policy AND the runtime fallback when the policy has no entry
+ * for a table (empty/unreachable store) — so known PII is never silently exposed.
+ */
+export const HARDCODED_DENY_UNION: Record<string, string[]> = {
+  patients: ['id', 'patient_guid', 'surname', 'firstname', 'national_id', 'phone', 'email',
+             'date_of_birth', 'replaced_by_id', 'plugin_id', 'plugin_version', 'batch_id'],
+  specimens: ['id', 'patient_id', 'accession', 'source_system', 'plugin_id', 'plugin_version', 'batch_id'],
+  lab_requests: ['id', 'request_id', 'patient_id', 'source_system', 'plugin_id', 'plugin_version', 'batch_id'],
+  facilities: ['plugin_id', 'plugin_version', 'batch_id'],
+  diagnostic_reports: ['id', 'patient_id', 'plugin_id', 'plugin_version', 'batch_id'],
+};
+
+/** Columns classified as PII for the Data Exposure UI badge + un-hide confirmation ONLY.
+ *  Display metadata — never an enforcement input. */
+export const PII_COLUMNS: Record<string, string[]> = {
+  patients: ['patient_guid', 'surname', 'firstname', 'national_id', 'phone', 'email', 'date_of_birth'],
+  specimens: [], lab_requests: [], facilities: [], diagnostic_reports: [], lab_results: [],
+};
+
+/** Hidden-column set for a table: the policy entry, else the hardcoded union fallback. */
+function hiddenFor(table: string, policy?: ColumnPolicy): Set<string> {
+  return policy?.get(table) ?? new Set(HARDCODED_DENY_UNION[table] ?? []);
+}
+
+/** Exposable columns of a table = all real columns minus the hidden set. */
+export function tableExposableColumns(table: keyof ExternalSchema, policy?: ColumnPolicy): string[] {
+  const deny = hiddenFor(table, policy);
+  return EXTERNAL_TABLE_COLUMNS[table].filter((c) => !deny.has(c));
+}
+
 export interface AgeBandCompute {
   kind: 'age-band';
   bands: { maxAge: number; label: string }[]; // closed upper bounds, e.g. { maxAge: 4, label: '0-4' }
@@ -19,8 +55,8 @@ export interface ModelJoin {
   right: string;                  // joined column: 'id'
   optional?: boolean;      // offered in the "+ Add → Join data" picker instead of firing via a default dimension
   label?: string;          // display name for the join in the picker (defaults to the table name)
-  denyColumns?: string[];  // columns that may NOT be exposed; REQUIRED for an optional join to be usable (fail-safe)
-  exposable?: string[];    // explicit allowlist for a synthesized user join (overrides denyColumns logic)
+  denyColumns?: string[];  // legacy documentation only — no longer read at runtime (see tableExposableColumns)
+  exposable?: string[];    // explicit allowlist for a synthesized user join (overrides the policy-aware exposableColumns)
 }
 export interface ModelDimension { key: string; label: string; column: string; kind: DimensionKind; dateGrain?: DateGrain[]; compute?: AgeBandCompute | ExprCompute; join?: string }
 export interface ModelMetric { key: string; label: string; agg: Agg; column?: string }
@@ -113,31 +149,28 @@ export function listModels(): QueryModel[] { return MODELS; }
 export function getModel(id: string): QueryModel | undefined { return MODELS.find((m) => m.id === id); }
 
 /**
- * Columns a power user may expose from an OPTIONAL join, i.e. the joined table's columns minus the
- * join's `denyColumns`. Fail-safe: an optional join with an ABSENT OR EMPTY `denyColumns` exposes
- * nothing (returns []) — both are "not configured" and therefore unavailable, so a newly added join
- * never leaks columns until an admin declares its (non-empty) denylist.
+ * Columns a power user may expose from an OPTIONAL join, i.e. the joined table's exposable columns
+ * per the injected policy (falling back to HARDCODED_DENY_UNION when the policy has no entry for the
+ * table). Exposed-by-default: a table absent from the policy exposes all-minus-union, not nothing.
  * Non-optional / unknown aliases return [] — only optional joins are user-selectable.
  */
-export function exposableColumns(model: QueryModel, alias: string): string[] {
+export function exposableColumns(model: QueryModel, alias: string, policy?: ColumnPolicy): string[] {
   const j = (model.joins ?? []).find((x) => x.alias === alias);
-  if (!j || !j.optional || !j.denyColumns?.length) return [];
-  const deny = new Set(j.denyColumns);
-  return EXTERNAL_TABLE_COLUMNS[j.table].filter((c) => !deny.has(c));
+  if (!j || !j.optional) return [];
+  return tableExposableColumns(j.table, policy);
 }
 
 /** Exposable columns for any join alias: a synthesized user join's explicit `exposable`, else the
- *  admin optional-join denylist rules (exposableColumns). */
-export function exposableFor(model: QueryModel, alias: string): string[] {
+ *  policy-aware optional-join rules (exposableColumns). */
+export function exposableFor(model: QueryModel, alias: string, policy?: ColumnPolicy): string[] {
   const j = (model.joins ?? []).find((x) => x.alias === alias);
-  return j?.exposable ?? exposableColumns(model, alias);
+  return j?.exposable ?? exposableColumns(model, alias, policy);
 }
 
 export interface JoinableTable {
   table: keyof ExternalSchema;
   label: string;
-  columns?: string[];      // ALLOWLIST of exposable output columns, OR…
-  denyColumns?: string[];  // …all-minus-denylist (an explicit [] means "all"). Exactly one is the policy.
+  denyColumns?: string[];  // legacy documentation only — no longer read at runtime (see tableExposableColumns)
   primaryKeys?: string[];  // unique columns → no fan-out warning when used as the right key
 }
 
@@ -160,15 +193,10 @@ export function getJoinableTable(table: string): JoinableTable | undefined {
   return JOINABLE_TABLES.find((t) => t.table === table);
 }
 
-/**
- * Exposable OUTPUT columns for a joinable table, per its admin policy. Allowlist wins; otherwise
- * all-minus-denylist (an explicit empty denylist means "all"); no policy at all → [] (fail-safe closed).
- */
-export function joinableColumns(jt: JoinableTable): string[] {
-  const all = EXTERNAL_TABLE_COLUMNS[jt.table];
-  if (jt.columns) return jt.columns.filter((c) => all.includes(c));
-  if (jt.denyColumns) { const deny = new Set(jt.denyColumns); return all.filter((c) => !deny.has(c)); }
-  return [];
+/** Exposable OUTPUT columns for a joinable table, per the injected policy (falling back to
+ *  HARDCODED_DENY_UNION when the policy has no entry for the table). */
+export function joinableColumns(jt: JoinableTable, policy?: ColumnPolicy): string[] {
+  return tableExposableColumns(jt.table, policy);
 }
 
 export interface ClientJoinableTable { table: string; label: string; columns: string[]; primaryKeys: string[]; allColumns: string[] }
@@ -176,9 +204,9 @@ export interface ClientJoinableTable { table: string; label: string; columns: st
 /** Browser-safe projection: policy-filtered output `columns`, `primaryKeys`, and `allColumns` (every
  *  real column name, for the join-key pickers). Raw `denyColumns` never travel. Tables that expose no
  *  output columns are dropped (nothing to join to). */
-export function joinableTablesForClient(): ClientJoinableTable[] {
+export function joinableTablesForClient(policy?: ColumnPolicy): ClientJoinableTable[] {
   return JOINABLE_TABLES
-    .map((jt) => ({ table: jt.table, label: jt.label, columns: joinableColumns(jt), primaryKeys: jt.primaryKeys ?? [], allColumns: EXTERNAL_TABLE_COLUMNS[jt.table] }))
+    .map((jt) => ({ table: jt.table, label: jt.label, columns: joinableColumns(jt, policy), primaryKeys: jt.primaryKeys ?? [], allColumns: EXTERNAL_TABLE_COLUMNS[jt.table] }))
     .filter((t) => t.columns.length > 0);
 }
 
@@ -188,15 +216,15 @@ export type ClientQueryModel = Omit<QueryModel, 'joins'> & { optionalJoins?: Cli
 /**
  * Model list shaped for the browser. Raw `joins`/`denyColumns` are dropped; each usable optional
  * join becomes `{ alias, label, left, right, exposableColumns }` where the columns are already
- * denylist-filtered, so denied PII column names never travel to the client. `left`/`right` are the
+ * policy-filtered, so denied PII column names never travel to the client. `left`/`right` are the
  * admin-declared join keys (FK column names), surfaced for read-only display. A join whose
- * `exposableColumns` is empty (fail-safe: no denylist declared) is omitted entirely.
+ * `exposableColumns` is empty (every column of its table is denied) is omitted entirely.
  */
-export function modelsForClient(models: QueryModel[] = MODELS): ClientQueryModel[] {
+export function modelsForClient(models: QueryModel[] = MODELS, policy?: ColumnPolicy): ClientQueryModel[] {
   return models.map((m) => {
     const optionalJoins = (m.joins ?? [])
       .filter((j) => j.optional)
-      .map((j) => ({ alias: j.alias, label: j.label ?? j.table, left: j.left, right: j.right, exposableColumns: exposableColumns(m, j.alias) }))
+      .map((j) => ({ alias: j.alias, label: j.label ?? j.table, left: j.left, right: j.right, exposableColumns: exposableColumns(m, j.alias, policy) }))
       .filter((oj) => oj.exposableColumns.length > 0);
     const { id, label, table, dimensions, metrics } = m;
     const tableColumns = EXTERNAL_TABLE_COLUMNS[table];
