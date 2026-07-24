@@ -11,10 +11,11 @@ export function registerReportDesignRoutes(
 ): void {
   const MANAGE = { preHandler: requireCapability('reports.edit_templates') };
   const PREVIEW = { preHandler: requireCapability('reports.run') };
+  const VIEW = { preHandler: requireCapability('reports.view') };
 
-  app.get('/api/report-designs', async () => ctx.reportDesigns.list());
+  app.get('/api/report-designs', VIEW, async () => ctx.reportDesigns.list());
 
-  app.get('/api/report-designs/:id', async (req, reply) => {
+  app.get('/api/report-designs/:id', VIEW, async (req, reply) => {
     const { id } = req.params as { id: string };
     const d = await ctx.reportDesigns.get(id);
     if (!d) { reply.code(404); return { error: 'not found' }; }

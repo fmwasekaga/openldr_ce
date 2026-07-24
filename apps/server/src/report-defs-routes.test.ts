@@ -24,7 +24,7 @@ const minimal = {
   id: 'r1', name: 'AMR', description: '', category: 'amr', designId: 'd1', primaryQueryId: 'q1',
 };
 
-function appWith(ctx: any, roles: string[] = ['lab_admin'], capabilities: string[] = ['reports.edit_templates']) {
+function appWith(ctx: any, roles: string[] = ['lab_admin'], capabilities: string[] = ['reports.edit_templates', 'reports.view']) {
   const app = Fastify();
   app.addHook('onRequest', async (req) => { (req as any).user = { id: 'u', username: 'u', displayName: null, roles, capabilities }; });
   registerReportDefRoutes(app, ctx);
@@ -67,6 +67,21 @@ describe('report-defs routes', () => {
     const app = appWith(fakeCtx());
     const res = await app.inject({ method: 'GET', url: '/api/report-defs/nope' });
     expect(res.statusCode).toBe(404);
+  });
+
+  it('403s a GET list from an actor without reports.view', async () => {
+    const app = appWith(fakeCtx(), ['lab_technician'], []);
+    const res = await app.inject({ method: 'GET', url: '/api/report-defs' });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('403s a GET-by-id from an actor without reports.view', async () => {
+    const ctx = fakeCtx();
+    const adminApp = appWith(ctx);
+    await adminApp.inject({ method: 'POST', url: '/api/report-defs', payload: minimal });
+    const app = appWith(ctx, ['lab_technician'], []);
+    const res = await app.inject({ method: 'GET', url: '/api/report-defs/r1' });
+    expect(res.statusCode).toBe(403);
   });
 
   it('404s a PUT of an unknown id', async () => {

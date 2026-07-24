@@ -17,7 +17,7 @@ function fakeCtx(initial: { id: string; label: string; order: number }[] = []) {
   } as any;
 }
 
-function appWith(ctx: any, roles: string[] = ['lab_admin'], capabilities: string[] = ['reports.edit_templates']) {
+function appWith(ctx: any, roles: string[] = ['lab_admin'], capabilities: string[] = ['reports.edit_templates', 'reports.view']) {
   const app = Fastify();
   app.addHook('onRequest', async (req) => { (req as any).user = { id: 'u', username: 'u', displayName: null, roles, capabilities }; });
   registerReportCategoryRoutes(app, ctx);
@@ -68,9 +68,15 @@ describe('report-categories routes', () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it('GET is open to any authenticated role', async () => {
-    const app = appWith(fakeCtx(validList), ['lab_technician'], []);
+  it('GET is open to any authenticated role holding reports.view', async () => {
+    const app = appWith(fakeCtx(validList), ['lab_technician'], ['reports.view']);
     const res = await app.inject({ method: 'GET', url: '/api/report-categories' });
     expect(res.statusCode).toBe(200);
+  });
+
+  it('GET 403s an actor without reports.view', async () => {
+    const app = appWith(fakeCtx(validList), ['lab_technician'], []);
+    const res = await app.inject({ method: 'GET', url: '/api/report-categories' });
+    expect(res.statusCode).toBe(403);
   });
 });
