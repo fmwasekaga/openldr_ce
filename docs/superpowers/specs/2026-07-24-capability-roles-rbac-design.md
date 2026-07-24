@@ -23,7 +23,7 @@ run reports, but nothing else." They can only pick from the five fixed tiers.
 A true, admin-defined, capability-based RBAC system:
 
 - Admins create/edit/delete **custom roles** in `Settings → Roles`, each composed
-  from a grid of **~32 action-level capabilities** grouped by domain.
+  from a grid of **~36 action-level capabilities** grouped by domain.
 - Capabilities are **enforced end-to-end** — the server gates each route on the
   specific capability, and the UI hides what the user cannot do.
 - Roles are assigned to users at creation/edit time.
@@ -38,7 +38,7 @@ A true, admin-defined, capability-based RBAC system:
    The token is **not consulted for authorization**. Capability/role edits take
    effect on the **next request** — no re-login, no Keycloak Admin API calls for
    authz.
-4. **Granularity:** action-level (~32 caps across 11 domains).
+4. **Granularity:** action-level (~36 caps across 14 domains).
 5. **Multiple roles per user; effective capabilities = the union** across all
    assigned roles.
 
@@ -50,8 +50,11 @@ an application contract shipped and versioned with the code. The DB stores only
 capability key). A new app version may add capability keys; a seed/migration
 backfills the affected system roles.
 
-Draft catalog (32 keys below; final set pinned during implementation against the
-actual guarded surfaces — the count may grow as domains are audited):
+Catalog (36 keys below, across 14 domains; final set pinned during
+implementation against the actual guarded surfaces). The four caps marked *(new)*
+were added after mapping the presets to today's real guards — they cover gated
+surfaces (Query workbench, Connectors, Activity, Notifications) that the first
+draft missed:
 
 | Domain | Capabilities |
 |---|---|
@@ -59,12 +62,15 @@ actual guarded surfaces — the count may grow as domains are audited):
 | Reports | `reports.view` · `reports.run` · `reports.edit_templates` · `reports.export` |
 | Forms | `forms.view` · `forms.edit` · `forms.publish` |
 | Workflows | `workflows.view` · `workflows.edit` · `workflows.run` · `workflows.manage_secrets` |
+| Query | `query.run` *(new)* |
 | Users | `users.view` · `users.manage` · `users.reset_password` · `users.force_logout` |
 | Roles | `roles.view` · `roles.manage` |
 | Terminology | `terminology.view` · `terminology.manage` |
 | Marketplace | `marketplace.view` · `marketplace.manage` |
+| Connectors | `connectors.manage` *(new)* |
 | Sync | `sync.view` · `sync.manage` |
 | Settings | `settings.view` · `settings.edit_general` · `settings.feature_flags` · `settings.danger_zone` |
+| Observability | `activity.view` *(new)* · `notifications.view` *(new)* |
 | Audit | `audit.view` |
 
 Each key has a human label + description + domain-group, defined alongside the
@@ -86,12 +92,54 @@ Seed the existing five as `is_system` roles so current installs keep working:
 - **Administrator** (from `lab_admin`) → **all capabilities**; **locked**
   (cannot be deleted or edited) — the permanent escape hatch.
 - `lab_manager`, `lab_technician`, `data_analyst`, `system_auditor` → seeded with
-  sensible capability sets; **editable but not deletable**.
+  the exact preset below; **editable but not deletable**.
+
+The presets are derived from — and preserve — each role's *actual* access today
+(mapped from every `requireRole`/`RequireRole` guard in the code), so the cutover
+changes nobody's effective permissions:
+
+| Capability | Admin | Manager | Analyst | Auditor | Technician |
+|---|:--:|:--:|:--:|:--:|:--:|
+| `dashboards.view` | ✓ | ✓ | ✓ | ✓ | — |
+| `dashboards.create` / `edit` / `delete` | ✓ | ✓ | — | — | — |
+| `reports.view` | ✓ | ✓ | ✓ | ✓ | — |
+| `reports.run` | ✓ | ✓ | ✓ | — | — |
+| `reports.export` | ✓ | ✓ | ✓ | — | — |
+| `reports.edit_templates` | ✓ | ✓ | — | — | — |
+| `forms.view` (fill/submit) | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `forms.edit` / `publish` | ✓ | ✓ | — | — | — |
+| `workflows.view` / `edit` / `run` / `manage_secrets` | ✓ | ✓ | — | — | — |
+| `query.run` | ✓ | ✓ | ✓ | — | — |
+| `terminology.view` | ✓ | ✓ | ✓ | ✓ | — |
+| `terminology.manage` | ✓ | ✓ | — | — | — |
+| `activity.view` | ✓ | ✓ | ✓ | ✓ | — |
+| `notifications.view` | ✓ | ✓ | ✓ | ✓ | — |
+| `audit.view` | ✓ | — | — | ✓ | — |
+| `users.*` | ✓ | — | — | — | — |
+| `roles.view` / `manage` | ✓ | — | — | — | — |
+| `marketplace.view` / `manage` | ✓ | — | — | — | — |
+| `connectors.manage` | ✓ | — | — | — | — |
+| `sync.view` / `manage` | ✓ | — | — | — | — |
+| `settings.view` / `edit_general` / `feature_flags` / `danger_zone` | ✓ | — | — | — | — |
+
+Deliberate calls baked into the presets:
+
+- **Technician stays data-entry-only** — its one meaningful cap is `forms.view`
+  (matches today, where it appears in no guard). No dashboards.
+- **`terminology.view`** is a read baseline for analyst/auditor (browsing is
+  largely open today); only `terminology.manage` (import/edit) is restricted.
+- **Connectors** is a single admin-only `connectors.manage` cap, not a view/edit
+  split (it is an admin infra page).
 
 **Migration of existing users:** a Keycloak user already carrying `lab_admin`
 (etc.) is auto-mapped to the matching system role by slug on first login, so
 **nobody loses access** during the cutover. After migration, authorization comes
 solely from `user_roles`.
+
+**Currently-ungated routes:** a handful of authenticated routes have no role
+guard today (e.g. form fill/submit). The enforcement slice pins each to either a
+baseline cap (`forms.view`) or a specific cap; any that would tighten access
+for a system role is called out in that slice's plan before it lands.
 
 ## Enforcement
 
