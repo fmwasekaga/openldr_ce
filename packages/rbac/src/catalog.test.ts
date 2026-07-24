@@ -2,9 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { CAPABILITIES, CAPABILITY_KEYS, CAPABILITY_GROUPS } from './catalog';
 
 describe('capability catalog', () => {
-  it('exposes 36 unique capability keys', () => {
-    expect(CAPABILITY_KEYS.length).toBe(36);
-    expect(new Set(CAPABILITY_KEYS).size).toBe(36);
+  it('includes the data_exposure.manage capability', () => {
+    expect(CAPABILITY_KEYS).toContain('data_exposure.manage');
+  });
+
+  it('exposes 37 unique capability keys', () => {
+    expect(CAPABILITY_KEYS.length).toBe(37);
+    expect(new Set(CAPABILITY_KEYS).size).toBe(37);
   });
 
   it('every capability belongs to a declared group', () => {

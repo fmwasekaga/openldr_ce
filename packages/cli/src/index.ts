@@ -20,6 +20,7 @@ import { runMarketVerify, runMarketInstall, runMarketList, runMarketRollback, ru
 import { runArtifactKeygen, runArtifactNew, runArtifactBuild, runArtifactPack, runArtifactSign, runArtifactTest, runArtifactPublish } from './artifact';
 import { runSettingsFlagsList, runSettingsFlagsSet, runSettingsDanger, runSettingsSyncShow, runSettingsSyncSet, runSettingsNumbersList, runSettingsNumbersSet, runSettingsValidationShow, runSettingsValidationSet } from './settings';
 import { runRolesList, runRolesShow, runRolesCreate, runRolesEdit, runRolesDelete, runRolesGrant, runRolesRevoke, runUserAssignRole, runUserUnassignRole } from './roles';
+import { runDataExposureList, runDataExposureHide, runDataExposureShow } from './data-exposure';
 import { runSyncStatus, runSyncNow, runSyncEnroll, runSyncList, runSyncRotate, runSyncRevoke, runSyncAmend, runSyncMergePatient, runSyncExport, runSyncImport, runSyncQuarantineList, runSyncQuarantineRetry, runSyncDivergenceList, runSyncDivergenceShow, runSyncDivergenceClear } from './sync';
 import { runErrorsList } from './errors';
 import { setActorOverride } from './cli-actor';
@@ -204,6 +205,20 @@ rolesCmd.command('grant <slug> <capability>').description('Add one capability to
 rolesCmd.command('revoke <slug> <capability>').description('Remove one capability from a role').option('--json', 'emit JSON', false)
   .action(async (slug: string, capability: string, opts: { json: boolean }) => {
     try { process.exitCode = await runRolesRevoke(slug, capability, opts); } catch (err) { process.stderr.write(`roles revoke failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+
+const dataExposure = program.command('data-exposure').description('Column exposure policy for dashboards/queries/reports (a running server picks up CLI changes after its next in-app policy save or restart)');
+dataExposure.command('list').description('List hidden columns per table').option('--json', 'emit JSON', false)
+  .action(async (opts: { json: boolean }) => {
+    try { process.exitCode = await runDataExposureList(opts); } catch (err) { process.stderr.write(`data-exposure list failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+dataExposure.command('hide <table> <columns...>').description('Hide columns from analytics').option('--json', 'emit JSON', false)
+  .action(async (table: string, columns: string[], opts: { json: boolean }) => {
+    try { process.exitCode = await runDataExposureHide(table, columns, opts); } catch (err) { process.stderr.write(`data-exposure hide failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+dataExposure.command('show <table> <columns...>').description('Expose columns to analytics').option('--json', 'emit JSON', false)
+  .action(async (table: string, columns: string[], opts: { json: boolean }) => {
+    try { process.exitCode = await runDataExposureShow(table, columns, opts); } catch (err) { process.stderr.write(`data-exposure show failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
 
 const syncGroup = program.command('sync').description('lab⇄central sync status + control');

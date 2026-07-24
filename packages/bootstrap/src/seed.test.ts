@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { FEATURE_FLAGS } from '@openldr/config';
-import { seedDatabase, seedDefaultConnector, type FormSeedTarget } from './seed';
+import { seedDatabase, seedDefaultConnector, seedEssentials, type FormSeedTarget } from './seed';
 import type { DbContext } from './db-context';
 
 // In-memory fakes so we exercise the real seedDatabase logic without a database.
@@ -153,6 +153,44 @@ describe('seedDatabase — default workflows', () => {
     const res2 = await seedDatabase(fakeDb, app);
     expect(res2.workflowsSeeded).toBe(0);
     expect(workflows).toHaveLength(2);
+  });
+});
+
+describe('seedEssentials — always-seeded minimum (SEED_ON_START off)', () => {
+  it('seeds ONLY the Users + Lab order forms and the two default workflows', async () => {
+    const { app, workflows } = fakeApp();
+    const res = await seedEssentials(app);
+    // Two essential forms, both published; the two other sample forms (facility/patient) are NOT
+    // seeded here — those are demo-only and belong to the full SEED_ON_START seed.
+    expect(res.formsSeeded).toBe(2);
+    const forms = await app.forms.list();
+    expect(forms.map((f) => f.name).sort()).toEqual(['Lab order', 'Users']);
+    expect(forms.every((f) => f.status === 'published')).toBe(true);
+    // Both default workflows seeded, bound to the seeded Lab order form's id.
+    expect(res.workflowsSeeded).toBe(2);
+    expect(workflows.map((w) => w.id).sort()).toEqual(['wf-sample', 'wf-sample-reactive']);
+    const inbound = workflows.find((w) => w.id === 'wf-sample');
+    const def = inbound?.definition as { nodes: { data: { action?: string; config?: { formId?: string } } }[] };
+    const orderForm = forms.find((f) => f.name === 'Lab order')!;
+    expect(def.nodes.find((n) => n.data.action === 'form-validate')?.data.config?.formId).toBe(orderForm.id);
+  });
+
+  it('is idempotent — re-running seeds nothing new', async () => {
+    const { app, workflows } = fakeApp();
+    await seedEssentials(app);
+    const res2 = await seedEssentials(app);
+    expect(res2.formsSeeded).toBe(0);
+    expect(res2.workflowsSeeded).toBe(0);
+    expect((await app.forms.list())).toHaveLength(2);
+    expect(workflows).toHaveLength(2);
+  });
+
+  it('does not seed demo data (no connector, dashboard, or terminology writes)', async () => {
+    const { app, connectors, dashboards, valueSets } = fakeApp({ SECRETS_ENCRYPTION_KEY: 'k', TARGET_DATABASE_URL: 'postgres://u:p@h:5432/d' });
+    await seedEssentials(app);
+    expect(connectors).toHaveLength(0);
+    expect(dashboards).toHaveLength(0);
+    expect(valueSets).toHaveLength(0);
   });
 });
 

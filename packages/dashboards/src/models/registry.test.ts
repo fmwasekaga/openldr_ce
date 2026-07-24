@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { listModels, getModel, exposableColumns, exposableFor, modelsForClient, type QueryModel, JOINABLE_TABLES, joinableColumns, getJoinableTable, joinableTablesForClient } from './registry';
+import { listModels, getModel, exposableColumns, exposableFor, modelsForClient, type QueryModel, JOINABLE_TABLES, joinableColumns, getJoinableTable, joinableTablesForClient, HARDCODED_DENY_UNION, PII_COLUMNS, tableExposableColumns, type ColumnPolicy } from './registry';
 
 describe('model registry', () => {
   it('exposes service_requests with count metric and date dimension', () => {
@@ -61,18 +61,23 @@ const MODEL_WITH_OPTIONAL: QueryModel = {
 };
 
 describe('exposableColumns', () => {
-  it('returns table columns minus denyColumns for a configured optional join', () => {
+  it('returns table columns minus the HARDCODED_DENY_UNION fallback for a configured optional join', () => {
     const cols = exposableColumns(MODEL_WITH_OPTIONAL, 'jp');
-    expect(cols).toEqual(['id', 'sex', 'managing_organization', 'active', 'replaced_by_id', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at']);
+    expect(cols).toEqual(['sex', 'managing_organization', 'active', 'source_system', 'created_at']);
   });
 
-  it('fail-safe: an optional join with NO denyColumns exposes nothing', () => {
-    expect(exposableColumns(MODEL_WITH_OPTIONAL, 'jf')).toEqual([]);
+  it('exposed-by-default: an optional join with NO local denyColumns still falls back to the union', () => {
+    const cols = exposableColumns(MODEL_WITH_OPTIONAL, 'jf');
+    expect(cols).not.toEqual([]);
+    expect(cols).toContain('facility_name');
+    expect(cols).not.toContain('plugin_id'); // still denied via HARDCODED_DENY_UNION.facilities
   });
 
-  it('fail-safe: an optional join with an EMPTY denyColumns exposes nothing', () => {
+  it('exposed-by-default: a local denyColumns field is no longer read (union fallback applies instead)', () => {
     const model = { ...MODEL_WITH_OPTIONAL, joins: [{ table: 'patients', alias: 'je', left: 'patient_id', right: 'id', optional: true, denyColumns: [] as string[] }] } as QueryModel;
-    expect(exposableColumns(model, 'je')).toEqual([]);
+    const cols = exposableColumns(model, 'je');
+    expect(cols).not.toEqual([]);
+    expect(cols).not.toContain('national_id'); // still denied via HARDCODED_DENY_UNION.patients
   });
 
   it('returns [] for a non-optional join alias', () => {
@@ -134,9 +139,12 @@ describe('modelsForClient', () => {
     expect(m.optionalJoins).toBeUndefined();
   });
 
-  it('keeps only optional joins with a usable denylist, dropping non-optional and undenied joins', () => {
+  it('keeps optional joins exposed-by-default, dropping only the non-optional join', () => {
     const [m] = modelsForClient([MODEL_WITH_OPTIONAL]);
-    expect(m.optionalJoins?.map((j) => j.alias)).toEqual(['jp']); // jf (no denylist) and jauto (not optional) dropped
+    const aliases = m.optionalJoins?.map((j) => j.alias) ?? [];
+    expect(aliases).toContain('jp'); // has an explicit (now-ignored) local denylist; still exposed via the union fallback
+    expect(aliases).toContain('jf'); // no local denylist -> exposed-by-default via the union fallback, no longer dropped
+    expect(aliases).not.toContain('jauto'); // not optional -> never user-pickable
   });
 
   it('includes the admin-declared join keys (left/right) for read-only display', () => {
@@ -156,12 +164,9 @@ describe('joinable tables (arbitrary joins)', () => {
     expect(cols).not.toContain('surname');
   });
 
-  it('joinableColumns returns [] when a table has no policy (fail-safe closed)', () => {
-    expect(joinableColumns({ table: 'patients', label: 'x' } as any)).toEqual([]);
-  });
-
-  it('joinableColumns applies an allowlist policy', () => {
-    expect(joinableColumns({ table: 'facilities', label: 'F', columns: ['facility_name'] } as any)).toEqual(['facility_name']);
+  it('joinableColumns falls back to the union when the policy has no entry (exposed-by-default, but real PII stays hidden)', () => {
+    const cols = joinableColumns(getJoinableTable('patients')!);
+    expect(cols).not.toContain('national_id');
   });
 
   it('joinableTablesForClient ships policy-filtered columns + PKs + allColumns, never the raw denylist', () => {
@@ -188,5 +193,33 @@ describe('exposableFor', () => {
   it('falls back to exposableColumns for an admin optional join', () => {
     const m = getModel('service_requests')!;
     expect(exposableFor(m, 'jp')).toEqual(exposableColumns(m, 'jp'));
+  });
+});
+
+describe('policy-aware exposure', () => {
+  it('HARDCODED_DENY_UNION is the per-table union of every hardcoded denylist', () => {
+    expect(new Set(HARDCODED_DENY_UNION.patients)).toEqual(new Set([
+      'id', 'patient_guid', 'surname', 'firstname', 'national_id', 'phone', 'email',
+      'date_of_birth', 'replaced_by_id', 'plugin_id', 'plugin_version', 'batch_id',
+    ]));
+    // source_system unioned in from the per-model specimen/request joins:
+    expect(HARDCODED_DENY_UNION.specimens).toContain('source_system');
+    expect(HARDCODED_DENY_UNION.lab_requests).toContain('source_system');
+  });
+
+  it('tableExposableColumns falls back to the union when the policy has no entry', () => {
+    expect(tableExposableColumns('patients')).toContain('sex');
+    expect(tableExposableColumns('patients')).not.toContain('national_id');
+  });
+
+  it('tableExposableColumns honors an explicit policy (exposed-by-default)', () => {
+    const policy: ColumnPolicy = new Map([['patients', new Set(['sex'])]]);
+    const cols = tableExposableColumns('patients', policy);
+    expect(cols).not.toContain('sex');       // hidden by policy
+    expect(cols).toContain('national_id');   // NOT in policy => exposed (no floor)
+  });
+
+  it('PII_COLUMNS flags patient identifiers', () => {
+    expect(PII_COLUMNS.patients).toEqual(expect.arrayContaining(['national_id', 'phone', 'surname']));
   });
 });

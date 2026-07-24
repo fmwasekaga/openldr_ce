@@ -227,6 +227,14 @@ export interface DashboardsTable {
   updated_at: Generated<Date>;
 }
 
+export interface ColumnExposurePolicyTable {
+  table_name: string;
+  column_name: string;
+  hidden: Generated<boolean>;
+  updated_at: Generated<Date>;
+  updated_by: string | null;
+}
+
 export interface TerminologyConceptsTable {
   system: string;
   code: string;
@@ -733,6 +741,7 @@ export interface InternalSchema {
   dhis2_schedules: Dhis2SchedulesTable;
   dhis2_metadata_cache: Dhis2MetadataCacheTable;
   dashboards: DashboardsTable;
+  column_exposure_policy: ColumnExposurePolicyTable;
   form_definitions: FormDefinitionsTable;
   form_versions: FormVersionsTable;
   user_profiles: UserProfilesTable;

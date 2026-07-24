@@ -1,7 +1,8 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { ZodError } from 'zod';
 import { DashboardQueryError, type AppContext } from '@openldr/bootstrap';
-import { DashboardSchema, WidgetQuerySchema, type Dashboard } from '@openldr/dashboards';
+import { DashboardSchema, WidgetQuerySchema, PII_COLUMNS, type Dashboard } from '@openldr/dashboards';
+import { EXTERNAL_TABLE_COLUMNS } from '@openldr/db/schema/external';
 import { recordAudit } from './audit-helper';
 import { requireCapability } from './rbac';
 
@@ -14,6 +15,18 @@ const VIEW = { preHandler: requireCapability('dashboards.view') };
 const CREATE = { preHandler: requireCapability('dashboards.create') };
 const EDIT = { preHandler: requireCapability('dashboards.edit') };
 const DELETE = { preHandler: requireCapability('dashboards.delete') };
+const EXPOSURE = { preHandler: requireCapability('data_exposure.manage') };
+
+// The governed tables + labels shown on the Settings -> Data Exposure page (a fixed subset of
+// EXTERNAL_TABLE_COLUMNS that is joinable/modeled). Only these tables are readable/writable via
+// the column-policy routes below — any other key in a PUT body is silently ignored.
+const GOVERNED: Array<{ table: keyof typeof EXTERNAL_TABLE_COLUMNS; label: string }> = [
+  { table: 'patients', label: 'Patient' },
+  { table: 'specimens', label: 'Specimen' },
+  { table: 'lab_requests', label: 'Request' },
+  { table: 'facilities', label: 'Facility' },
+  { table: 'diagnostic_reports', label: 'Report' },
+];
 
 // Collect the set of already-vetted SQL templates (trimmed) from a persisted dashboard. On
 // UPDATE these are the SQL widgets the user is allowed to keep — layout/chart/config edits to
@@ -118,6 +131,51 @@ export function registerDashboardRoutes(app: FastifyInstance<any, any, any, any>
       await recordAudit(ctx, req, { action: 'dashboard.delete', entityType: 'dashboard', entityId: id, before, after: null });
     }
     return { ok: true };
+  });
+
+  // Settings -> Data Exposure: per-table/per-column hidden flags, admin-governed and audited.
+  app.get('/api/dashboards/column-policy', EXPOSURE, async () => {
+    const hidden = await ctx.dashboards.columnPolicy.listHidden();
+    return {
+      tables: GOVERNED.map(({ table, label }) => {
+        const hiddenSet = new Set(hidden[table] ?? []);
+        const pii = new Set(PII_COLUMNS[table] ?? []);
+        return {
+          table,
+          label,
+          columns: EXTERNAL_TABLE_COLUMNS[table].map((name) => ({
+            name,
+            hidden: hiddenSet.has(name),
+            pii: pii.has(name),
+          })),
+        };
+      }),
+    };
+  });
+
+  app.put('/api/dashboards/column-policy', EXPOSURE, async (req, reply) => {
+    try {
+      const body = (req.body ?? {}) as Record<string, string[]>;
+      const before = await ctx.dashboards.columnPolicy.listHidden();
+      // Only GOVERNED tables are writable; any other body key is ignored. Column names are
+      // validated against the real schema so unknown/typo'd names never get persisted.
+      for (const { table } of GOVERNED) {
+        if (!Array.isArray(body[table])) continue;
+        const valid = new Set(EXTERNAL_TABLE_COLUMNS[table]);
+        const hiddenCols = body[table].filter((c) => valid.has(c));
+        await ctx.dashboards.columnPolicy.replaceTable(table, hiddenCols, req.user?.username ?? undefined);
+      }
+      await ctx.dashboards.reloadColumnPolicy();
+      const after = await ctx.dashboards.columnPolicy.listHidden();
+      await recordAudit(ctx, req, {
+        action: 'data_exposure.policy.updated',
+        entityType: 'column_exposure_policy',
+        entityId: 'global',
+        before,
+        after,
+      });
+      return { ok: true };
+    } catch (err) { return mapError(err, reply); }
   });
 }
 
