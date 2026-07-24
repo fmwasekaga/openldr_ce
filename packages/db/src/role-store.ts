@@ -107,6 +107,22 @@ export function createRoleStore(db: Kysely<InternalSchema>): RoleStore {
       .execute();
     return rows.length > 0;
   }
+  // Distinct users who hold roles.manage via some role OTHER than roleId.
+  // Used to guard role deletion: if this is zero, deleting roleId (and thus
+  // its user_roles rows) would leave nobody able to manage roles, even if
+  // another role formally grants roles.manage but currently has no members
+  // (e.g. an unassigned system role like lab_admin).
+  async function manageHoldersExcludingRole(roleId: string): Promise<number> {
+    const rows = await db
+      .selectFrom('user_roles')
+      .innerJoin('role_capabilities', 'role_capabilities.role_id', 'user_roles.role_id')
+      .select('user_roles.user_id')
+      .where('role_capabilities.capability', '=', 'roles.manage')
+      .where('user_roles.role_id', '!=', roleId)
+      .groupBy('user_roles.user_id')
+      .execute();
+    return rows.length;
+  }
 
   async function writeCaps(roleId: string, caps: string[]): Promise<void> {
     await db.deleteFrom('role_capabilities').where('role_id', '=', roleId).execute();
@@ -168,6 +184,14 @@ export function createRoleStore(db: Kysely<InternalSchema>): RoleStore {
           .where('role_id', '!=', id)
           .execute();
         if (others.length === 0) throw new OpenLdrError('cannot delete the last role granting roles.manage');
+        // Role-level check above only confirms another role grants roles.manage —
+        // not that anyone actually holds it. Mirror unassignRole's user-level guard
+        // so deleting this role (and its user_roles) can't drop the real holder
+        // count to zero.
+        const remainingHolders = await manageHoldersExcludingRole(id);
+        if (remainingHolders === 0) {
+          throw new OpenLdrError('cannot delete a role that is the last source of roles.manage for its members');
+        }
       }
       await db.deleteFrom('role_capabilities').where('role_id', '=', id).execute();
       await db.deleteFrom('user_roles').where('role_id', '=', id).execute();

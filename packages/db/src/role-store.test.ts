@@ -105,6 +105,35 @@ describe('RoleStore', () => {
     await db.destroy();
   });
 
+  it('remove rejects deleting a custom role that is the only actual roles.manage holder, even if lab_admin also grants it but has no members', async () => {
+    const db = await makeMigratedDb();
+    const store = createRoleStore(db);
+    await store.seedSystemRoles(); // lab_admin exists and grants roles.manage, but nobody is assigned to it
+    const custom = await store.create({ name: 'Super Manager', capabilities: ['roles.manage'] });
+    await store.assignRole('sub-only-admin', custom.id);
+
+    await expect(store.remove(custom.id)).rejects.toThrow();
+
+    // Must not have partially applied.
+    const rolesAfter = await store.rolesForUser('sub-only-admin');
+    expect(rolesAfter.map((r) => r.slug)).toContain(custom.slug);
+    await db.destroy();
+  });
+
+  it('remove succeeds deleting a roles.manage-granting custom role when another user still holds roles.manage', async () => {
+    const db = await makeMigratedDb();
+    const store = createRoleStore(db);
+    await store.seedSystemRoles();
+    const admin = (await store.getBySlug('lab_admin'))!;
+    const custom = await store.create({ name: 'Super Manager', capabilities: ['roles.manage'] });
+    await store.assignRole('sub-admin', admin.id); // another real manage holder
+    await store.assignRole('sub-custom', custom.id);
+
+    await expect(store.remove(custom.id)).resolves.toBeUndefined();
+    expect(await store.get(custom.id)).toBeNull();
+    await db.destroy();
+  });
+
   it('setUserRoles succeeds when roles.manage is still held by someone else', async () => {
     const db = await makeMigratedDb();
     const store = createRoleStore(db);
