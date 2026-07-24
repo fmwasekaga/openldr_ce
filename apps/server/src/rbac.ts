@@ -13,3 +13,17 @@ export function requireRole(...roles: string[]) {
     }
   };
 }
+
+/** preHandler guard: requires the request actor to hold `cap`. */
+export function requireCapability(cap: string) {
+  return async (req: FastifyRequest, reply: FastifyReply) => {
+    if (!req.user) {
+      reply.code(401);
+      return reply.send({ error: 'authentication required' });
+    }
+    if (!req.user.capabilities.includes(cap)) {
+      reply.code(403);
+      return reply.send({ error: 'insufficient capability' });
+    }
+  };
+}

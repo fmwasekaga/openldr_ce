@@ -113,6 +113,26 @@ describe('auth routes', () => {
     expect(Array.isArray(body.roles)).toBe(true);
     await app.close();
   });
+
+  it('GET /api/me/capabilities returns the caller capabilities under dev bypass', async () => {
+    const app = await buildApp(ctxWith('up'));
+    const me = await app.inject({ method: 'GET', url: '/api/me' });
+    const res = await app.inject({ method: 'GET', url: '/api/me/capabilities' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(Array.isArray(body.capabilities)).toBe(true);
+    expect(body.capabilities).toEqual(me.json().capabilities);
+    await app.close();
+  });
+
+  it('GET /api/me/capabilities 401s when the request is not authenticated', async () => {
+    const app = await buildApp(ctxWith('up'));
+    // A bearer token present (even a bogus one) skips the dev-bypass actor and fails
+    // verification, leaving req.user unset for the route's own 401 check.
+    const res = await app.inject({ method: 'GET', url: '/api/me/capabilities', headers: { authorization: 'Bearer not-a-real-token' } });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
 });
 
 describe('terminology admin routes', () => {

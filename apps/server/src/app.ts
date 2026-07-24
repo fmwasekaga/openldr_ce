@@ -128,6 +128,14 @@ export async function buildApp(ctx: AppContext) {
     return req.user;
   });
 
+  app.get('/api/me/capabilities', async (req, reply) => {
+    if (!req.user) {
+      reply.code(401);
+      return { error: 'authentication required' };
+    }
+    return { capabilities: req.user.capabilities };
+  });
+
   registerConfigRoute(app, ctx);
   registerReportRoutes(app, ctx);
   registerTerminologyRoutes(app, ctx);
