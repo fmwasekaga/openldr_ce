@@ -1,9 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
-import { requireRole } from './rbac';
+import { requireCapability } from './rbac';
 
-// Read-only payload-lifecycle views: same analyst-facing roles that can read reports/audit.
-const VIEW = { preHandler: requireRole('lab_admin', 'lab_manager', 'data_analyst', 'system_auditor') };
+// Read-only payload-lifecycle views.
+const VIEW = { preHandler: requireCapability('activity.view') };
 
 export function registerActivityRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
   app.get('/api/activity', VIEW, async (req) => {
