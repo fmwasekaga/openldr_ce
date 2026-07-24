@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Frame, PanelLeftOpen } from 'lucide-react';
 import { AppShell } from '@/shell/AppShell';
+import { isNarrowViewport } from '@/lib/viewport';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -52,7 +53,11 @@ export function ReportDesignerPage(): JSX.Element {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(0.75);
-  const [collapsed, setCollapsed] = useState(false);
+  // Collapse the templates explorer by default on phone-width screens so the canvas / empty state
+  // gets the full width; desktop opens expanded as before.
+  const [collapsed, setCollapsed] = useState(
+    isNarrowViewport,
+  );
   const [error, setError] = useState<string>();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);

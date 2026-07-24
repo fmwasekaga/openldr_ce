@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PanelLeftClose, PanelLeftOpen, Database, Table2 } from 'lucide-react';
 import { AppShell } from '../shell/AppShell';
+import { isNarrowViewport } from '@/lib/viewport';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from 'react-i18next';
 import { ExplorerTree } from './tree/ExplorerTree';
@@ -40,7 +41,11 @@ function Workspace({ canQuery }: { canQuery: boolean }): JSX.Element {
 
 export function QueryPage(): JSX.Element {
   const { t } = useTranslation();
-  const [collapsed, setCollapsed] = useState(false);
+  // Start with the explorer collapsed on phone-width screens so the workspace gets the full width;
+  // on desktop it opens expanded as before.
+  const [collapsed, setCollapsed] = useState(
+    isNarrowViewport,
+  );
   // Default true so the "+" isn't briefly disabled while the availability check is in flight.
   const [canQuery, setCanQuery] = useState(true);
   // The query store is module-level (survives route changes); clear open tabs when leaving so

@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { PanelLeftClose, PanelLeftOpen, Download } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { AppShell } from '../shell/AppShell';
+import { isNarrowViewport } from '@/lib/viewport';
 import {
   DOC_GROUPS,
   DOC_GUIDES,
@@ -83,7 +84,11 @@ export function Docs() {
     ? (i18n.language as Locale)
     : 'en';
   const [query, setQuery] = useState('');
-  const [collapsed, setCollapsed] = useState(false);
+  // Collapse the docs table-of-contents by default on phone-width screens so the article gets the
+  // full width; desktop opens expanded as before.
+  const [collapsed, setCollapsed] = useState(
+    isNarrowViewport,
+  );
   const [lightbox, setLightbox] = useState<LightboxImage | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [version, setVersion] = useState(DEFAULT_DOC_VERSION);

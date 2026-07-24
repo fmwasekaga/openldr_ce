@@ -26,16 +26,35 @@ export function DashboardGrid({ filterValues, onEdit }: { filterValues: Record<s
     return () => observer.disconnect();
   }, []);
 
-  // Items are `static` (locked) when not editing so drag/resize handles never appear.
-  const layout = useMemo<Layout[]>(
-    () => (current?.layout ?? []).map((l) => ({ ...l, static: !editing }) as Layout),
-    [current?.layout, editing],
-  );
+  // Below this container width the 12-column grid is unusably cramped (a `w:3` KPI card would be
+  // ~80px), so the dashboard reflows to a single stacked column. `width` is 0 until the
+  // ResizeObserver reports, at which point it reflects the real content width.
+  const isMobile = width > 0 && width < 640;
+
+  // Items are `static` (locked) when not editing so drag/resize handles never appear. On mobile
+  // every widget is forced full-width (`w:12`, `x:0`) and stacked in visual order (top-to-bottom,
+  // then left-to-right). This stacked layout is display-only — it is never persisted, so the
+  // authored desktop layout is preserved.
+  const layout = useMemo<Layout[]>(() => {
+    const base = current?.layout ?? [];
+    if (isMobile) {
+      let y = 0;
+      return [...base]
+        .sort((a, b) => a.y - b.y || a.x - b.x)
+        .map((l) => {
+          const item = { i: l.i, x: 0, y, w: 12, h: l.h, static: true } as Layout;
+          y += l.h;
+          return item;
+        });
+    }
+    return base.map((l) => ({ ...l, static: !editing }) as Layout);
+  }, [current?.layout, editing, isMobile]);
 
   if (!current) return null;
 
   const onLayoutChange = (l: Layout[]) => {
-    if (editing) setLayout(l.map((x) => ({ i: x.i, x: x.x, y: x.y, w: x.w, h: x.h })));
+    // Never persist the mobile stacked layout — it would overwrite the authored desktop grid.
+    if (editing && !isMobile) setLayout(l.map((x) => ({ i: x.i, x: x.x, y: x.y, w: x.w, h: x.h })));
   };
 
   return (
@@ -46,8 +65,8 @@ export function DashboardGrid({ filterValues, onEdit }: { filterValues: Record<s
         cols={12}
         rowHeight={80}
         width={width || 1200}
-        isDraggable={editing}
-        isResizable={editing}
+        isDraggable={editing && !isMobile}
+        isResizable={editing && !isMobile}
         draggableHandle=".drag-handle"
         draggableCancel=".no-drag"
         compactType="vertical"

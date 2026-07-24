@@ -68,12 +68,16 @@ describe('AppShell', () => {
     expect(document.documentElement.getAttribute('data-theme')).toBe('light');
   });
 
-  it('collapses the sidebar — hiding the wordmark and nav labels', () => {
+  it('collapses the sidebar — hiding the wordmark and nav labels on the desktop rail', () => {
     renderShell();
-    expect(screen.getByText('OpenLDR')).toBeInTheDocument();
+    const brand = screen.getByText('OpenLDR');
+    expect(brand).toBeInTheDocument();
+    expect(brand.className).not.toContain('md:hidden');
     fireEvent.click(screen.getByLabelText('Collapse sidebar'));
-    expect(screen.queryByText('OpenLDR')).not.toBeInTheDocument();
-    expect(screen.queryByText('Reports')).not.toBeInTheDocument();
+    // On collapse the wordmark and nav labels stay in the DOM (the mobile drawer renders the
+    // sidebar expanded and needs them) but are hidden on the desktop rail via `md:hidden`.
+    expect(screen.getByText('OpenLDR').className).toContain('md:hidden');
+    expect(screen.getByText('Reports').className).toContain('md:hidden');
   });
 
   it('does not show DHIS2 or a top-level Settings link in the primary nav', () => {

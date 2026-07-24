@@ -843,6 +843,8 @@ export const pt: EnShape = {
   a11y: {
     expandSidebar: 'Expandir barra lateral',
     collapseSidebar: 'Recolher barra lateral',
+    openMenu: 'Abrir menu',
+    closeMenu: 'Fechar menu',
     switchToLight: 'Mudar para modo claro',
     switchToDark: 'Mudar para modo escuro',
     lightMode: 'Modo claro',

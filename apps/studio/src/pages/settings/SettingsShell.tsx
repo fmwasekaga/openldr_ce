@@ -49,16 +49,18 @@ export function SettingsShell() {
 
   return (
     <AppShell title={t('settings.title')} fullBleed>
-      <div className="flex h-full min-h-0">
-        <aside className="w-52 shrink-0 border-r border-border">
-          <nav className="flex flex-col gap-1 p-3">
+      {/* On mobile the section selector is a horizontal scrolling tab strip above the content;
+          on desktop it's the familiar left-hand column. */}
+      <div className="flex h-full min-h-0 flex-col md:flex-row">
+        <aside className="shrink-0 border-b border-border md:w-52 md:border-b-0 md:border-r">
+          <nav className="flex flex-row gap-1 overflow-x-auto p-2 md:flex-col md:p-3">
             {visible.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
                 className={({ isActive }) =>
                   cn(
-                    'rounded-md px-3 py-2 text-sm no-underline transition-colors',
+                    'whitespace-nowrap rounded-md px-3 py-2 text-sm no-underline transition-colors',
                     isActive
                       ? 'bg-accent font-medium text-primary'
                       : 'text-muted-foreground hover:bg-accent hover:text-foreground',

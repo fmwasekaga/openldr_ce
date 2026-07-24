@@ -847,6 +847,8 @@ export const en = {
   a11y: {
     expandSidebar: 'Expand sidebar',
     collapseSidebar: 'Collapse sidebar',
+    openMenu: 'Open menu',
+    closeMenu: 'Close menu',
     switchToLight: 'Switch to light mode',
     switchToDark: 'Switch to dark mode',
     lightMode: 'Light mode',

@@ -469,7 +469,7 @@ export function Terminology(): JSX.Element {
 
         <div className="flex flex-1 overflow-hidden">
           {/* ── Publisher rail ──────────────────────────────────────────── */}
-          <div className="flex w-60 shrink-0 flex-col border-r border-border">
+          <div className="flex w-40 shrink-0 flex-col border-r border-border sm:w-52 md:w-60">
             {/* Rail header */}
             <div className="flex h-9 items-center border-b border-border px-3 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               Publishers
@@ -516,7 +516,7 @@ export function Terminology(): JSX.Element {
             ) : (
               <>
                 {/* Breadcrumb */}
-                <div className="flex h-9 items-center gap-1 border-b border-border px-3 text-xs text-muted-foreground">
+                <div className="flex h-9 items-center gap-1 overflow-x-auto border-b border-border px-3 text-xs text-muted-foreground [&>*]:shrink-0">
                   <span className="text-foreground">{activeSection.publisher.name}</span>
                   {activeImportJob && (activeImportJob.status === 'queued' || activeImportJob.status === 'running') && (
                     <Badge variant="outline" className="text-[9px] uppercase">

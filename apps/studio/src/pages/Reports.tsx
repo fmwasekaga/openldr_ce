@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { AppShell } from '../shell/AppShell';
+import { isNarrowViewport } from '@/lib/viewport';
 import { FileText } from 'lucide-react';
 import {
   fetchReports, fetchReport, fetchReportOptions, logReportRun,
@@ -37,7 +38,11 @@ export function Reports() {
   const [categories, setCategories] = useState<ReportCategory[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [collapsed, setCollapsed] = useState(false);
+  // Collapse the report-list rail by default on phone-width screens so the selected report /
+  // empty state gets the full width; desktop opens expanded as before.
+  const [collapsed, setCollapsed] = useState(
+    isNarrowViewport,
+  );
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
   const [params, setParams] = useState<Record<string, string>>({});
   // Params snapshotted at the moment of the last Run, so both result tabs (document
