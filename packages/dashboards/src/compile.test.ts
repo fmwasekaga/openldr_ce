@@ -378,12 +378,13 @@ describe('compileBuilderQuery with an adhoc join column', () => {
   });
 
   it('runBuilderQuery accepts a column the policy exposes that the union would hide', async () => {
-    // 'source_system' is in the union fallback (hidden) but an explicit empty policy exposes it.
-    // No measure, so runBuilderQuery validates via effectiveModel then returns its early "no measure"
-    // result without reaching db.execute() (this suite's `db` is a compile-only stub, no real driver).
+    // 'surname' IS in HARDCODED_DENY_UNION.patients (hidden by the fallback); an explicit empty-Set
+    // policy override for 'patients' exposes it instead. No measure, so runBuilderQuery validates via
+    // effectiveModel then returns its early "no measure" result without reaching db.execute() (this
+    // suite's `db` is a compile-only stub, no real driver).
     const policy: ColumnPolicy = new Map([['patients', new Set()]]);
     const res = await runBuilderQuery(db, getModel('service_requests')!, q({
-      adhocDimensions: [{ key: 'ss', label: 'SS', column: 'source_system', kind: 'string', join: 'jp' }],
+      adhocDimensions: [{ key: 'sn', label: 'Surname', column: 'surname', kind: 'string', join: 'jp' }],
       metric: undefined,
     }) as any, policy);
     expect(res).toBeTruthy(); // no throw = column accepted
