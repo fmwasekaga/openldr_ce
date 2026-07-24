@@ -337,6 +337,20 @@ export async function deleteDashboard(id: string): Promise<void> {
   const r = await authFetch(`/api/dashboards/${id}`, { method: 'DELETE' }); if (!r.ok) throw new Error(`delete failed: ${r.status}`);
 }
 
+export interface ColumnPolicyColumn { name: string; hidden: boolean; pii: boolean }
+export interface ColumnPolicyTable { table: string; label: string; columns: ColumnPolicyColumn[] }
+
+export async function getColumnPolicy(): Promise<ColumnPolicyTable[]> {
+  return authFetch('/api/dashboards/column-policy')
+    .then((r) => okJson<{ tables: ColumnPolicyTable[] }>(r, 'load column policy'))
+    .then((b) => b.tables);
+}
+
+export async function saveColumnPolicy(payload: Record<string, string[]>): Promise<void> {
+  const r = await authFetch('/api/dashboards/column-policy', { ...json(payload), method: 'PUT' });
+  if (!r.ok) throw new Error(`save column policy failed: ${r.status}`);
+}
+
 export interface OidcConfig { issuerUrl: string; clientId: string; audience: string | null }
 export interface ClientConfig { dashboardSqlEnabled: boolean; authEnforced: boolean; version: string; environment: string; oidc: OidcConfig | null }
 export async function fetchClientConfig(): Promise<ClientConfig> {
