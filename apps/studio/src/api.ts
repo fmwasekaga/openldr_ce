@@ -638,6 +638,35 @@ export const sendUserResetEmail = (id: string): Promise<void> =>
 export const forceUserLogout = (id: string): Promise<void> =>
   authFetch(`/api/users/${id}/force-logout`, { method: 'POST' }).then((r) => { if (!r.ok) throw new Error(`force logout failed: ${r.status}`); });
 
+// Roles / capabilities (capability-based RBAC)
+export interface RoleRecord {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  isSystem: boolean;
+  locked: boolean;
+  capabilities: string[];
+  memberCount: number;
+}
+export interface CapabilityMeta { key: string; group: string; label: string; description: string }
+export interface CapabilityGroup { key: string; label: string; capabilities: CapabilityMeta[] }
+
+export const getMyCapabilities = (): Promise<string[]> =>
+  authFetch('/api/me/capabilities').then((r) => okJson<{ capabilities: string[] }>(r, 'get capabilities')).then((x) => x.capabilities);
+export const listRoles = (): Promise<RoleRecord[]> => apiGet('/api/roles', 'list roles');
+export const getRoleCatalog = (): Promise<{ groups: CapabilityGroup[] }> => apiGet('/api/roles/catalog', 'role catalog');
+export const getRole = (id: string): Promise<RoleRecord> => apiGet(`/api/roles/${id}`, 'get role');
+export const createRole = (input: { name: string; slug?: string; description?: string | null; capabilities: string[] }): Promise<RoleRecord> =>
+  authFetch('/api/roles', jbody(input, 'POST')).then((r) => okJson<RoleRecord>(r, 'create role'));
+export const updateRole = (id: string, input: { name?: string; description?: string | null; capabilities?: string[] }): Promise<RoleRecord> =>
+  authFetch(`/api/roles/${id}`, jbody(input, 'PUT')).then((r) => okJson<RoleRecord>(r, 'update role'));
+export const deleteRole = (id: string): Promise<void> =>
+  authFetch(`/api/roles/${id}`, { method: 'DELETE' }).then((r) => { if (!r.ok) throw new Error(`delete role failed: ${r.status}`); });
+export const getUserRoles = (id: string): Promise<RoleRecord[]> => apiGet(`/api/users/${id}/roles`, 'get user roles');
+export const setUserRoles = (id: string, roleIds: string[]): Promise<RoleRecord[]> =>
+  authFetch(`/api/users/${id}/roles`, jbody({ roleIds }, 'PUT')).then((r) => okJson<RoleRecord[]>(r, 'set user roles'));
+
 // Forms
 export type FormStatus = 'draft' | 'published' | 'archived';
 export interface FormSummary {
