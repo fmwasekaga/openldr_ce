@@ -19,6 +19,7 @@ import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, run
 import { runMarketVerify, runMarketInstall, runMarketList, runMarketRollback, runMarketEnable, runMarketDisable, runMarketRemove } from './market';
 import { runArtifactKeygen, runArtifactNew, runArtifactBuild, runArtifactPack, runArtifactSign, runArtifactTest, runArtifactPublish } from './artifact';
 import { runSettingsFlagsList, runSettingsFlagsSet, runSettingsDanger, runSettingsSyncShow, runSettingsSyncSet, runSettingsNumbersList, runSettingsNumbersSet, runSettingsValidationShow, runSettingsValidationSet } from './settings';
+import { runRolesList, runRolesShow, runRolesCreate, runRolesEdit, runRolesDelete, runRolesGrant, runRolesRevoke, runUserAssignRole, runUserUnassignRole } from './roles';
 import { runSyncStatus, runSyncNow, runSyncEnroll, runSyncList, runSyncRotate, runSyncRevoke, runSyncAmend, runSyncMergePatient, runSyncExport, runSyncImport, runSyncQuarantineList, runSyncQuarantineRetry, runSyncDivergenceList, runSyncDivergenceShow, runSyncDivergenceClear } from './sync';
 import { runErrorsList } from './errors';
 import { setActorOverride } from './cli-actor';
@@ -165,6 +166,44 @@ settings.command('danger <action>')
   .option('--json', 'emit JSON', false)
   .action(async (action: string, opts: { force: boolean; json: boolean }) => {
     try { process.exitCode = await runSettingsDanger(action, opts); } catch (err) { process.stderr.write(`settings danger failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+
+const rolesCmd = program.command('roles').description('Capability roles — CRUD + grant/revoke');
+rolesCmd.command('list').description('List all roles').option('--json', 'emit JSON', false)
+  .action(async (opts: { json: boolean }) => {
+    try { process.exitCode = await runRolesList(opts); } catch (err) { process.stderr.write(`roles list failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+rolesCmd.command('show <slug>').description('Show one role by slug').option('--json', 'emit JSON', false)
+  .action(async (slug: string, opts: { json: boolean }) => {
+    try { process.exitCode = await runRolesShow(slug, opts); } catch (err) { process.stderr.write(`roles show failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+rolesCmd.command('create <name>').description('Create a new role')
+  .option('--slug <slug>', 'role slug (default: slugified name)')
+  .option('--desc <text>', 'role description')
+  .option('--caps <list>', 'comma-separated capability keys')
+  .option('--json', 'emit JSON', false)
+  .action(async (name: string, opts: { slug?: string; desc?: string; caps?: string; json: boolean }) => {
+    try { process.exitCode = await runRolesCreate(name, opts); } catch (err) { process.stderr.write(`roles create failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+rolesCmd.command('edit <slug>').description('Edit a role\'s name, description, or capabilities')
+  .option('--name <n>', 'new name')
+  .option('--desc <text>', 'new description')
+  .option('--caps <list>', 'comma-separated capability keys (replaces the current set)')
+  .option('--json', 'emit JSON', false)
+  .action(async (slug: string, opts: { name?: string; desc?: string; caps?: string; json: boolean }) => {
+    try { process.exitCode = await runRolesEdit(slug, opts); } catch (err) { process.stderr.write(`roles edit failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+rolesCmd.command('delete <slug>').description('Delete a role').option('--json', 'emit JSON', false)
+  .action(async (slug: string, opts: { json: boolean }) => {
+    try { process.exitCode = await runRolesDelete(slug, opts); } catch (err) { process.stderr.write(`roles delete failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+rolesCmd.command('grant <slug> <capability>').description('Add one capability to a role').option('--json', 'emit JSON', false)
+  .action(async (slug: string, capability: string, opts: { json: boolean }) => {
+    try { process.exitCode = await runRolesGrant(slug, capability, opts); } catch (err) { process.stderr.write(`roles grant failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+rolesCmd.command('revoke <slug> <capability>').description('Remove one capability from a role').option('--json', 'emit JSON', false)
+  .action(async (slug: string, capability: string, opts: { json: boolean }) => {
+    try { process.exitCode = await runRolesRevoke(slug, capability, opts); } catch (err) { process.stderr.write(`roles revoke failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
 
 const syncGroup = program.command('sync').description('lab⇄central sync status + control');
@@ -519,6 +558,14 @@ user.command('activate <id>').option('--json', 'emit JSON', false).action(async 
 user.command('deactivate <id>').option('--json', 'emit JSON', false).action(async (id: string, opts: { json: boolean }) => {
   try { process.exitCode = await runUserSetStatus(id, 'disabled', opts); } catch (err) { process.stderr.write(`user deactivate failed: ${redactError(err)}\n`); process.exitCode = 1; }
 });
+user.command('assign-role <subject> <slug>').description('Assign a capability role to a user').option('--json', 'emit JSON', false)
+  .action(async (subject: string, slug: string, opts: { json: boolean }) => {
+    try { process.exitCode = await runUserAssignRole(subject, slug, opts); } catch (err) { process.stderr.write(`user assign-role failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+user.command('unassign-role <subject> <slug>').description('Remove a capability role from a user').option('--json', 'emit JSON', false)
+  .action(async (subject: string, slug: string, opts: { json: boolean }) => {
+    try { process.exitCode = await runUserUnassignRole(subject, slug, opts); } catch (err) { process.stderr.write(`user unassign-role failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
 
 program
   .command('export')
