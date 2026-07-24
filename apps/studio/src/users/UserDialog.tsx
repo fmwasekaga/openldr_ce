@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import {
   createUser, updateUser, listPublishedForms, getForm,
   listRoles, getUserRoles, setUserRoles,
-  type UserSummary, type RoleRecord,
+  type UserSummary, type RoleRecord, type CreateUserPayload,
 } from '@/api';
 import { FormRuntime } from '@/forms-runtime/FormRuntime';
 import type { FormSchema, RuntimeAnswers } from '@/forms-runtime/types';
@@ -17,6 +17,13 @@ import { FormSchema as FormSchemaZ } from '@openldr/forms/pure';
 // CORE apiProperty keys that map to Keycloak identity fields. OpenLDR role assignment is
 // handled separately (below) via the roles.* capability API, not written to Keycloak here.
 const CORE_KEYS = new Set(['firstName', 'lastName', 'email']);
+
+// Sentinel value for the "no role" option in the role Select — Radix Select disallows an
+// empty-string item value, so we map this sentinel back to '' (no role) at the state boundary.
+const NO_ROLE_VALUE = '__none__';
+
+type IdentityPatch = { firstName?: string | null; lastName?: string | null; email?: string | null };
+type FormMeta = Pick<CreateUserPayload, 'formSchemaId' | 'formVersion'>;
 
 interface UserDialogProps {
   open: boolean;
@@ -88,10 +95,11 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
   const [initialAnswers, setInitialAnswers] = useState<RuntimeAnswers>({});
 
   // OpenLDR role assignment — separate from the Keycloak identity fields above. Roles are
-  // read/written via /api/users/:id/roles, not the identity create/update payload.
+  // read/written via /api/users/:id/roles, not the identity create/update payload. A role now
+  // *is* a precise capability set, so a user gets at most one ('' = no role).
   const [roles, setRoles] = useState<RoleRecord[]>([]);
   const [rolesLoading, setRolesLoading] = useState(false);
-  const [selectedRoleIds, setSelectedRoleIds] = useState<Set<string>>(new Set());
+  const [selectedRoleId, setSelectedRoleId] = useState('');
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -140,13 +148,15 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, user?.id]);
 
-  // Load the role catalog + (when editing) the user's current role assignment.
+  // Load the role catalog + (when editing) the user's current role assignment. A user may have
+  // at most one role; if the API ever returns several (legacy data), take the first and don't
+  // crash.
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     setRolesLoading(true);
     setRoles([]);
-    setSelectedRoleIds(new Set());
+    setSelectedRoleId('');
 
     const load = async () => {
       const allRoles = await listRoles();
@@ -154,7 +164,7 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
       setRoles(allRoles);
       if (user) {
         const current = await getUserRoles(user.id);
-        if (!cancelled) setSelectedRoleIds(new Set(current.map((r) => r.id)));
+        if (!cancelled) setSelectedRoleId(current[0]?.id ?? '');
       }
     };
     load()
@@ -167,20 +177,24 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
     return () => { cancelled = true; };
   }, [open, user?.id]);
 
-  const toggleRole = (roleId: string, checked: boolean) => {
-    setSelectedRoleIds((prev) => {
-      const next = new Set(prev);
-      if (checked) next.add(roleId); else next.delete(roleId);
-      return next;
-    });
+  /** Shared create-only validation for the fixed username/password fields above the form. */
+  const validateCore = (): boolean => {
+    if (!isEdit && !username.trim() && !savedIdentity) { setError('Username is required.'); return false; }
+    if (!isEdit && password && password !== confirmPassword && !savedIdentity) { setError(t('users.passwordMismatch')); return false; }
+    return true;
   };
 
-  const handleSubmit = async (answers: RuntimeAnswers) => {
-    if (!schema) return;
-    if (!isEdit && !username.trim() && !savedIdentity) { setError('Username is required.'); return; }
-    if (!isEdit && password && password !== confirmPassword && !savedIdentity) { setError(t('users.passwordMismatch')); return; }
-
-    const { identity, extras } = splitAnswers(schema, answers);
+  /**
+   * Shared create/update + role-assignment logic used by both the form-present path
+   * (identity + extras collected from the published Users form) and the no-form path
+   * (identity/extras are empty — only username/password/role apply). The published Users form
+   * is optional enrichment on top of this core; it is never required to create or edit a user.
+   */
+  const persist = async (
+    identity: IdentityPatch,
+    extras: Record<string, { value: string; fhirPath: string | null }>,
+    formMeta: FormMeta,
+  ) => {
     setSaving(true);
     setError(null);
     try {
@@ -193,8 +207,7 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
         saved = await updateUser(user.id, {
           ...identity,
           extras,
-          formSchemaId: schema.id,
-          formVersion: schema.version,
+          ...formMeta,
         });
       } else {
         saved = await createUser({
@@ -203,14 +216,13 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
           // password is optional on create: Keycloak account is created; password set later via reset/activation email.
           ...(password ? { password } : {}),
           extras,
-          formSchemaId: schema.id,
-          formVersion: schema.version,
+          ...formMeta,
         });
       }
       if (!savedIdentity) { setSavedIdentity(saved); onSaved(saved); }
 
       try {
-        await setUserRoles(saved.id, [...selectedRoleIds]);
+        await setUserRoles(saved.id, selectedRoleId ? [selectedRoleId] : []);
       } catch (roleErr) {
         // The identity write already succeeded and onSaved has already run — surface this
         // inline and keep the dialog open so the user can retry role assignment (or close and
@@ -225,6 +237,33 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
       setSaving(false);
     }
   };
+
+  /** Form-present path: FormRuntime hands back validated answers, split into identity + extras. */
+  const handleSubmit = async (answers: RuntimeAnswers) => {
+    if (!schema) return;
+    if (!validateCore()) return;
+    const { identity, extras } = splitAnswers(schema, answers);
+    await persist(identity, extras, { formSchemaId: schema.id, formVersion: schema.version });
+  };
+
+  /**
+   * No-form path (seedless deployments, or the Users form failed to load): no extra profile
+   * fields to collect, so identity/extras are empty and formSchemaId/formVersion are omitted
+   * entirely — both are optional on CreateUserPayload/the server's create/update input schemas.
+   */
+  const handleCoreSubmit = async () => {
+    if (!validateCore()) return;
+    await persist({}, {}, {});
+  };
+
+  // Whether the published Users form is loaded and usable this render — everything else
+  // (loading, no published form, or a form that failed schema validation) falls back to the
+  // dialog's own core-only Save path so the user can always be created/edited.
+  const formReady = !schemaLoading && !noForm && schema !== null;
+  // Whether we've conclusively determined there is no usable form yet — guards the no-form
+  // Save button so it isn't clickable during the brief window before the load effect has even
+  // set schemaLoading (avoids racing ahead of a form that's about to load).
+  const formUnresolved = !noForm && schema === null;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -277,43 +316,39 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
             </div>
           )}
 
-          {/* OpenLDR role assignment — separate from the form-template identity fields below */}
+          {/* OpenLDR role assignment — separate from the form-template identity fields below.
+              A role now IS a precise capability set, so a user gets exactly one (or none). */}
           <div className="grid gap-2 px-6 py-4 border-b border-border">
-            <Label>{t('users.rolesLabel')}</Label>
+            <Label htmlFor="user-role-select">{t('users.rolesLabel')}</Label>
             {rolesLoading ? (
               <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
             ) : roles.length === 0 ? (
               <p className="text-sm text-muted-foreground">{t('users.noRolesAvailable')}</p>
             ) : (
-              <div className="flex flex-col gap-2" data-testid="user-roles-list">
-                {roles.map((r) => {
-                  const checkboxId = `user-role-${r.id}`;
-                  const checked = selectedRoleIds.has(r.id);
-                  return (
-                    <div key={r.id} className="flex items-center gap-2">
-                      <Checkbox
-                        id={checkboxId}
-                        checked={checked}
-                        onCheckedChange={(v) => toggleRole(r.id, v === true)}
-                      />
-                      <Label htmlFor={checkboxId} className="cursor-pointer text-sm font-normal">
-                        {r.name}
-                      </Label>
-                    </div>
-                  );
-                })}
-              </div>
+              <Select
+                value={selectedRoleId || NO_ROLE_VALUE}
+                onValueChange={(v) => setSelectedRoleId(v === NO_ROLE_VALUE ? '' : v)}
+              >
+                <SelectTrigger id="user-role-select" className="w-full" aria-label={t('users.rolesLabel')}>
+                  <SelectValue placeholder={t('users.selectRolePlaceholder')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_ROLE_VALUE}>{t('users.noRoleOption')}</SelectItem>
+                  {roles.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
           </div>
 
-          {/* Form-template body */}
+          {/* Form-template body — the published Users form is optional enrichment on top of the
+              core username/password/role above; it is never required to create or edit a user. */}
           {schemaLoading ? (
             <div className="px-6 py-8 text-center text-sm text-muted-foreground">{t('common.loading')}</div>
-          ) : noForm ? (
-            <div className="px-6 py-8 text-center text-sm text-muted-foreground">
-              {t('users.noUsersForm')}
-            </div>
-          ) : schema ? (
+          ) : null}
+
+          {formReady && schema ? (
             <FormRuntime
               key={`${schema.id}-${user?.id ?? 'new'}`}
               schema={schema}
@@ -329,10 +364,21 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
               }
             />
           ) : (
-            // No schema loaded yet but not in loading/error state — render footer only
-            <SheetFooter className="border-t border-border px-6 py-4 sm:justify-end">
-              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>{t('common.cancel')}</Button>
-            </SheetFooter>
+            <>
+              {noForm && !schemaLoading ? (
+                <div className="px-6 py-8 text-center text-sm text-muted-foreground">
+                  {t('users.noUsersForm')}
+                </div>
+              ) : null}
+              {/* No-form (or form-load-error) path: always-present, always-working Save —
+                  creating/editing a user must never depend on a published Users form existing. */}
+              <SheetFooter className="border-t border-border px-6 py-4 sm:justify-end">
+                <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>{t('common.cancel')}</Button>
+                <Button onClick={() => void handleCoreSubmit()} disabled={saving || schemaLoading || formUnresolved}>
+                  {saving ? t('common.saving') : isEdit ? t('common.save') : t('common.create')}
+                </Button>
+              </SheetFooter>
+            </>
           )}
         </div>
       </SheetContent>
