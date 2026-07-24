@@ -182,7 +182,7 @@ describe('UserDialog — role assignment (single-select)', () => {
     await waitFor(() => expect(api.setUserRoles).toHaveBeenCalledWith('new-directory-id', ['r1']));
   });
 
-  it('surfaces a setUserRoles rejection inline and keeps the dialog open (identity already saved)', async () => {
+  it('surfaces a setUserRoles rejection inline, withholds success, and keeps the dialog open', async () => {
     (api.updateUser as ReturnType<typeof vi.fn>).mockResolvedValue({ ...editUser });
     (api.setUserRoles as ReturnType<typeof vi.fn>).mockRejectedValue(
       new Error('cannot remove the last member of a role granting roles.manage'),
@@ -195,9 +195,10 @@ describe('UserDialog — role assignment (single-select)', () => {
     clickMenuItem(/^save$/i);
 
     expect(await screen.findByText(/cannot remove the last member/i)).toBeTruthy();
-    // The identity write did succeed — the parent list is still updated — but the sheet
-    // stays open so the error is visible and the user can retry role assignment.
-    expect(onSaved).toHaveBeenCalled();
+    // Success is withheld when the role change is rejected: onSaved does NOT fire (so no
+    // misleading "saved" toast), and the sheet stays open so the error is visible and the
+    // user can pick a valid role and retry.
+    expect(onSaved).not.toHaveBeenCalled();
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
 
