@@ -10,8 +10,8 @@ import { ReportNotFoundError } from '@openldr/bootstrap';
 const ALL_REPORTS_CAPS = ['reports.view', 'reports.run', 'reports.export', 'reports.edit_templates'];
 
 function withAuth(app: ReturnType<typeof Fastify>, capabilities: string[] = ALL_REPORTS_CAPS) {
-  app.addHook('onRequest', async (req) => {
-    (req as { user?: unknown }).user = { id: 'u1', username: 'ada', displayName: 'Ada', roles: ['lab_admin'], capabilities, status: 'active' };
+  app.addHook('onRequest', async (req: { user?: unknown }) => {
+    req.user = { id: 'u1', username: 'ada', displayName: 'Ada', roles: ['lab_admin'], capabilities, status: 'active' };
   });
   return app;
 }
