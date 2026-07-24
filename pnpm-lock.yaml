@@ -877,6 +877,9 @@ importers:
       '@openldr/ports':
         specifier: workspace:*
         version: link:../ports
+      '@openldr/rbac':
+        specifier: workspace:*
+        version: link:../rbac
       kysely:
         specifier: ^0.28.17
         version: 0.28.17
