@@ -10,3 +10,5 @@ export * from './custom-query-run';
 export { SAMPLE_DASHBOARD } from './samples';
 export { recognizeSql, type RecognizeResult, type RecognizeCode } from './recognize-sql';
 export { formatSql } from './format-sql';
+export { createColumnPolicyStore, seedColumnExposurePolicy, type ColumnPolicyStore } from './column-policy-store';
+export { HARDCODED_DENY_UNION, PII_COLUMNS, type ColumnPolicy } from './models/registry';
