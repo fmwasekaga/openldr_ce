@@ -9,7 +9,7 @@ import { Activity } from './pages/Activity';
 import { Notifications } from './pages/Notifications';
 import { Users } from './pages/Users';
 import { Sites } from './pages/settings/Sites';
-import { SettingsShell } from '@/pages/settings/SettingsShell';
+import { SettingsShell, SettingsIndexRedirect } from '@/pages/settings/SettingsShell';
 import { General } from '@/pages/settings/General';
 import { NotificationPreferences } from '@/pages/settings/NotificationPreferences';
 import { DistributedSync } from '@/pages/settings/DistributedSync';
@@ -44,8 +44,22 @@ export function App() {
       {/* Sites moved under Settings (was top-level /sites) so it isn't confused with a future
           Facilities / master facility list. The old path redirects so existing links keep working. */}
       <Route path="/sites" element={<Navigate to="/settings/sites" replace />} />
-      <Route path="/settings" element={<RequireCapability cap="settings.view"><SettingsShell /></RequireCapability>}>
-        <Route index element={<Navigate to="general" replace />} />
+      {/* Children are reached through this parent, so its gate must be an OR of every
+          child sub-page's cap (kept in sync with SettingsShell's SUB_NAV) — not just
+          settings.view — or a non-admin who can reach one sub-page (e.g. notifications.view)
+          would be denied before ever getting to it. Each child route keeps its own,
+          narrower cap below. */}
+      <Route
+        path="/settings"
+        element={
+          <RequireCapability
+            caps={['settings.view', 'notifications.view', 'sync.view', 'sync.manage', 'marketplace.view', 'connectors.manage', 'roles.view']}
+          >
+            <SettingsShell />
+          </RequireCapability>
+        }
+      >
+        <Route index element={<SettingsIndexRedirect />} />
         <Route path="general" element={<RequireCapability cap="settings.view"><General /></RequireCapability>} />
         <Route path="notifications" element={<RequireCapability cap="notifications.view"><NotificationPreferences /></RequireCapability>} />
         <Route path="sites" element={<RequireCapability cap="sync.manage"><Sites /></RequireCapability>} />

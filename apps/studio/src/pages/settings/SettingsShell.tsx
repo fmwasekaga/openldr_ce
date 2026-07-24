@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Navigate, Outlet } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { AppShell } from '@/shell/AppShell';
 import { useAuth } from '@/auth/AuthProvider';
@@ -20,6 +20,20 @@ const SUB_NAV: SubNavItem[] = [
   { labelKey: 'settings.subNav.marketplace', to: '/settings/marketplace', caps: ['marketplace.view'] },
   { labelKey: 'settings.subNav.roles', to: '/settings/roles', caps: ['roles.view'] },
 ];
+
+/**
+ * Default landing page for bare `/settings`. The parent route admits anyone who
+ * can reach at least one sub-page (see App.tsx), but not every such user can
+ * reach `general` (that one needs `settings.view` specifically) — a hardcoded
+ * `Navigate to="general"` would bounce e.g. a notifications-only actor straight
+ * back out to "/" via that child route's own RequireCapability. Land on the
+ * first sub-nav entry the current user actually has a capability for instead.
+ */
+export function SettingsIndexRedirect() {
+  const { hasCapability } = useAuth();
+  const first = SUB_NAV.find((item) => !item.caps || item.caps.some((c) => hasCapability(c)));
+  return <Navigate to={first ? first.to : '/settings/general'} replace />;
+}
 
 /**
  * Settings shell with a left-hand section selector, mirroring corlix's

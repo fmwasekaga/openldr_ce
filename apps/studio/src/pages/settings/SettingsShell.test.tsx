@@ -8,7 +8,8 @@ vi.mock('@/auth/AuthProvider', () => ({
   useAuth: () => ({ user: { id: 'me', username: 'me', displayName: null, roles: [] }, loading: false, hasCapability, signOut: vi.fn() }),
 }));
 
-import { SettingsShell } from './SettingsShell';
+import { SettingsShell, SettingsIndexRedirect } from './SettingsShell';
+import { RequireCapability } from '@/auth/RequireCapability';
 
 function renderAt(path: string) {
   return render(
@@ -17,6 +18,35 @@ function renderAt(path: string) {
         <Route path="/settings" element={<SettingsShell />}>
           <Route path="marketplace" element={<div>marketplace child</div>} />
           <Route path="connectors" element={<div>connectors child</div>} />
+        </Route>
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
+/**
+ * Mirrors the real App.tsx settings subtree (parent OR-gate + per-child gates +
+ * SettingsIndexRedirect) closely enough to catch the "over-gated parent" and
+ * "hardcoded index redirect" regressions this fix addresses.
+ */
+function renderAppLikeSettingsTree(path: string) {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route path="/" element={<div>home</div>} />
+        <Route
+          path="/settings"
+          element={
+            <RequireCapability
+              caps={['settings.view', 'notifications.view', 'sync.view', 'sync.manage', 'marketplace.view', 'connectors.manage', 'roles.view']}
+            >
+              <SettingsShell />
+            </RequireCapability>
+          }
+        >
+          <Route index element={<SettingsIndexRedirect />} />
+          <Route path="general" element={<RequireCapability cap="settings.view"><div>general child</div></RequireCapability>} />
+          <Route path="notifications" element={<RequireCapability cap="notifications.view"><div>notifications child</div></RequireCapability>} />
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -53,5 +83,31 @@ describe('SettingsShell', () => {
     hasCapability.mockImplementation((c: string) => c === 'connectors.manage');
     renderAt('/settings/connectors');
     expect(screen.getByRole('link', { name: 'Connectors' })).toHaveAttribute('href', '/settings/connectors');
+  });
+
+  it('lets a notifications.view-only actor reach /settings/notifications through the parent gate (not bounced to home)', () => {
+    hasCapability.mockImplementation((c: string) => c === 'notifications.view');
+    renderAppLikeSettingsTree('/settings/notifications');
+    expect(screen.getByText('notifications child')).toBeInTheDocument();
+    expect(screen.queryByText('home')).not.toBeInTheDocument();
+  });
+
+  it('lands a notifications.view-only actor on notifications (not general) when visiting bare /settings', () => {
+    hasCapability.mockImplementation((c: string) => c === 'notifications.view');
+    renderAppLikeSettingsTree('/settings');
+    expect(screen.getByText('notifications child')).toBeInTheDocument();
+    expect(screen.queryByText('home')).not.toBeInTheDocument();
+  });
+
+  it('still lands an admin (settings.view) on general at bare /settings', () => {
+    hasCapability.mockImplementation((c: string) => c === 'settings.view');
+    renderAppLikeSettingsTree('/settings');
+    expect(screen.getByText('general child')).toBeInTheDocument();
+  });
+
+  it('denies a user with none of the settings sub-caps at the parent gate', () => {
+    hasCapability.mockReturnValue(false);
+    renderAppLikeSettingsTree('/settings');
+    expect(screen.getByText('home')).toBeInTheDocument();
   });
 });
