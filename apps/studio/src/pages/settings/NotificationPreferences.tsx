@@ -100,14 +100,14 @@ export function NotificationPreferences() {
                   <thead>
                     <tr className="border-b border-border text-xs text-muted-foreground">
                       <th className="pb-2 pr-4 pl-4 text-left font-medium">{t('notifications.eventColumn')}</th>
-                      <th className="pb-2 px-3 text-center font-medium">{t('notifications.enabledColumn')}</th>
+                      <th className="pb-2 pr-4 pl-3 text-right font-medium">{t('notifications.enabledColumn')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {TRIGGER_TYPES.map((type) => (
                       <tr key={type} className="border-b border-border/50 last:border-0">
                         <td className="py-2.5 pr-4 pl-4 text-foreground">{t(`notifications.triggers.${type}`)}</td>
-                        <td className="py-2.5 px-3 text-center">
+                        <td className="py-2.5 pr-4 pl-3 text-right">
                           <Switch
                             checked={enabled.get(type) ?? true}
                             disabled={busy}
