@@ -23,6 +23,7 @@ import { limitHandler } from './limit';
 import { removeDuplicatesHandler } from './remove-duplicates';
 import { renameKeysHandler } from './rename-keys';
 import { splitOutHandler } from './split-out';
+import { unwrapBundleHandler } from './unwrap-bundle';
 import { aggregateHandler } from './aggregate';
 import { summarizeHandler } from './summarize';
 import { dateTimeHandler } from './date-time';
@@ -71,6 +72,7 @@ const ACTION_HANDLERS: Record<string, NodeHandler> = {
   'remove-duplicates': removeDuplicatesHandler,
   'rename-keys': renameKeysHandler,
   'split-out': splitOutHandler,
+  'unwrap-bundle': unwrapBundleHandler,
   'aggregate': aggregateHandler,
   'summarize': summarizeHandler,
   'date-time': dateTimeHandler,
