@@ -26,7 +26,11 @@ export const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        'fixed left-1/2 top-1/2 z-50 flex max-h-[95vh] max-w-[95vw] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg border border-border bg-background p-6 shadow-lg focus:outline-none',
+        // `w-full` makes dialogs fill the available width up to their max-width — so on a phone
+        // they stretch to the `max-w-[95vw]` margin instead of shrinking to their content (which
+        // left a small centered card with lots of dead space). Instances that set their own width
+        // (e.g. the widget editor's w-[95vw], the lightbox's w-[90vw]) override this.
+        'fixed left-1/2 top-1/2 z-50 flex max-h-[95vh] w-full max-w-[95vw] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg border border-border bg-background p-6 shadow-lg focus:outline-none',
         className,
       )}
       {...props}

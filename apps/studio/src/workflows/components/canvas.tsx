@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, type DragEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, type DragEvent } from 'react';
 import {
   ReactFlow,
   MiniMap,
@@ -27,7 +27,7 @@ interface CanvasProps {
 
 export function Canvas({ onFireTrigger }: CanvasProps) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, fitView } = useReactFlow();
   const nodes = useWorkflowStore((s) => s.nodes);
   const edges = useWorkflowStore((s) => s.edges);
   const onNodesChange = useWorkflowStore((s) => s.onNodesChange);
@@ -118,6 +118,35 @@ export function Canvas({ onFireTrigger }: CanvasProps) {
     setSelectedNode(null);
     setConfigNode(null);
   }, [setSelectedNode, setConfigNode]);
+
+  // The `fitView` prop only fits on mount, but a saved workflow loads its nodes from the API
+  // *after* mount — so that first fit runs on an empty graph and the nodes end up parked at their
+  // raw coordinates (off-screen on a narrow phone). Fit once, on the frame after the nodes first
+  // arrive, so the whole graph is centered in view.
+  const didInitialFit = useRef(false);
+  useEffect(() => {
+    if (didInitialFit.current || nodes.length === 0) return;
+    didInitialFit.current = true;
+    const id = requestAnimationFrame(() => void fitView({ padding: 0.2 }));
+    return () => cancelAnimationFrame(id);
+  }, [nodes.length, fitView]);
+
+  // Re-fit when the canvas area resizes — the node library collapsing/expanding, the config panel
+  // opening, or a phone rotating — so the graph stays framed instead of drifting off the edge.
+  useEffect(() => {
+    const el = reactFlowWrapper.current;
+    if (!el) return;
+    let raf = 0;
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => void fitView({ padding: 0.2 }));
+    });
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      cancelAnimationFrame(raf);
+    };
+  }, [fitView]);
 
   return (
     <div
