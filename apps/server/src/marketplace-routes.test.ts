@@ -100,15 +100,15 @@ type SeedRegistry = { id: string; name: string; kind: 'local' | 'http'; location
 async function appWith(
   cfg: Record<string, unknown>,
   plugins: unknown,
-  opts: { roles?: string[]; fetchImpl?: typeof fetch; marketplaceForms?: unknown; seed?: SeedRegistry[] } = {},
+  opts: { roles?: string[]; capabilities?: string[]; fetchImpl?: typeof fetch; marketplaceForms?: unknown; seed?: SeedRegistry[] } = {},
 ) {
-  const { roles = ['lab_admin'], fetchImpl, marketplaceForms, seed = [] } = opts;
+  const { roles = ['lab_admin'], capabilities = ['marketplace.view', 'marketplace.manage'], fetchImpl, marketplaceForms, seed = [] } = opts;
   const db = await makeMigratedDb();
   const store = createRegistryStore(db);
   for (const r of seed) await store.create(r);
   const app = Fastify();
   app.addHook('onRequest', async (req) => {
-    req.user = { id: 'admin', username: 'admin', displayName: null, roles } as never;
+    req.user = { id: 'admin', username: 'admin', displayName: null, roles, capabilities } as never;
   });
   const audited: Array<{ action: string; entityType: string; entityId: string; metadata?: Record<string, unknown> }> = [];
   registerMarketplaceRoutes(app, fakeCtx(plugins, cfg, db, marketplaceForms, audited), fetchImpl);
@@ -133,7 +133,7 @@ describe('marketplace routes', () => {
 
   it('403s without lab_admin', async () => {
     const { runtime } = fakePlugins();
-    const { app } = await appWith({}, runtime, { roles: [], seed: [localReg()] });
+    const { app } = await appWith({}, runtime, { roles: [], capabilities: [], seed: [localReg()] });
     const res = await app.inject({ method: 'GET', url: '/api/marketplace/installed' });
     expect(res.statusCode).toBe(403);
   });
@@ -404,7 +404,7 @@ describe('marketplace routes', () => {
 
     it('CRUD requires lab_admin', async () => {
       const { runtime } = fakePlugins();
-      const { app } = await appWith({}, runtime, { roles: [] });
+      const { app } = await appWith({}, runtime, { roles: [], capabilities: [] });
       const res = await app.inject({ method: 'GET', url: '/api/marketplace/registries' });
       expect(res.statusCode).toBe(403);
     });
@@ -455,7 +455,7 @@ describe('marketplace routes', () => {
       const ctx = fakeCtx(realRuntime, { PLUGIN_UI_ENABLED: true }, db);
       const app = Fastify();
       app.addHook('onRequest', async (req) => {
-        req.user = { id: 'admin', username: 'admin', displayName: null, roles: ['lab_admin'] } as never;
+        req.user = { id: 'admin', username: 'admin', displayName: null, roles: ['lab_admin'], capabilities: ['marketplace.view', 'marketplace.manage'] } as never;
       });
       registerMarketplaceRoutes(app, ctx);
       registerPluginUiRoutes(app, ctx);
