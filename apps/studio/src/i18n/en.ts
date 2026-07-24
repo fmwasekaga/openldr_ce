@@ -120,6 +120,9 @@ export const en = {
     forceSignOutTitle: 'Force sign-out of {{username}}?',
     forceSignOutDescription: 'All of their active sessions will be terminated.',
     forceSignOutToast: 'Signed out all sessions for {{username}}',
+    rolesLabel: 'Roles',
+    noRolesAvailable: 'No roles defined yet. Create one in Settings → Roles.',
+    rolesSaveError: 'User saved, but role assignment failed: {{error}}',
     roleNames: {
       lab_admin: 'Lab Admin',
       lab_manager: 'Lab Manager',

@@ -24,14 +24,16 @@ export interface PageTarget {
  * The pages a template can target. Order here is the order shown in the builder
  * picker. `requiredKeys` are derived from each page's persist layer:
  * - forms:      no required keys (form templates are self-contained)
- * - users:      UserDialog CORE identity fields (firstName/lastName/email/roles)
+ * - users:      UserDialog CORE identity fields (firstName/lastName/email). OpenLDR role
+ *               assignment is a dedicated control outside the template (getUserRoles/
+ *               setUserRoles), not an apiProperty a template needs to define.
  * - facilities: facilities table — only `name` is NOT NULL
  * - patients:   Patient record — firstName/lastName/dateOfBirth/sex are required
  * - orders:     Lab order — patient reference + tests reference are required
  */
 export const PAGE_TARGETS: readonly PageTarget[] = [
   { id: 'forms', label: 'Forms', match: 'fieldId', requiredKeys: [], available: true },
-  { id: 'users', label: 'Users', match: 'apiProperty', requiredKeys: ['firstName', 'lastName', 'email', 'roles'], available: true },
+  { id: 'users', label: 'Users', match: 'apiProperty', requiredKeys: ['firstName', 'lastName', 'email'], available: true },
   // Not available yet — these pages don't exist. Kept for their persist contract; flip
   // `available` to true when the page ships.
   { id: 'facilities', label: 'Facilities', match: 'apiProperty', requiredKeys: ['name'], available: false },

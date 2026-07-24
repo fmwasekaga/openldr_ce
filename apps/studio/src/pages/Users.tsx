@@ -82,9 +82,6 @@ export function Users() {
         return name ? name : <span className="text-muted-foreground">-</span>;
       }, type: 'text', defaultVisible: true, sortable: true, filterable: true },
     { id: 'email', labelKey: 'users.email', accessor: (u) => u.email || <span className="text-muted-foreground">-</span>, type: 'text', defaultVisible: true, sortable: true, filterable: true },
-    { id: 'roles', labelKey: 'users.roles', accessor: (u) => (
-        <div className="flex flex-wrap gap-1">{u.roles.length === 0 ? <span className="text-muted-foreground">-</span> : u.roles.map((r) => <Badge key={r} variant="outline" className="whitespace-nowrap text-[10px]">{t(`users.roleNames.${r}`, { defaultValue: r })}</Badge>)}</div>
-      ), type: 'text', defaultVisible: true, sortable: true, filterable: true },
     { id: 'status', labelKey: 'users.status', accessor: (u) => u.enabled
         ? <Badge className="border-transparent bg-emerald-500/15 text-emerald-700">{t('users.statusActive')}</Badge>
         : <Badge variant="outline" className="text-muted-foreground">{t('users.statusDisabled')}</Badge>,
@@ -130,7 +127,6 @@ export function Users() {
     username: (u: UserSummary) => u.username,
     fullName: (u: UserSummary) => [u.firstName, u.lastName].filter(Boolean).join(' '),
     email: (u: UserSummary) => u.email ?? '',
-    roles: (u: UserSummary) => u.roles.join(', '),
     status: (u: UserSummary) => String(u.enabled),
     createdAt: (u: UserSummary) => u.createdAt ?? '',
   }), []);

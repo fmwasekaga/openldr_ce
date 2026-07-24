@@ -124,6 +124,9 @@ export const fr: EnShape = {
     forceSignOutTitle: 'Forcer la déconnexion de {{username}} ?',
     forceSignOutDescription: 'Toutes leurs sessions actives seront terminées.',
     forceSignOutToast: 'Toutes les sessions déconnectées pour {{username}}',
+    rolesLabel: 'Rôles',
+    noRolesAvailable: 'Aucun rôle défini pour le moment. Créez-en un dans Paramètres → Rôles.',
+    rolesSaveError: "Utilisateur enregistré, mais l'attribution des rôles a échoué : {{error}}",
     roleNames: {
       lab_admin: 'Admin laboratoire',
       lab_manager: 'Responsable laboratoire',

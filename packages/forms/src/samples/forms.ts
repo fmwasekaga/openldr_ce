@@ -171,28 +171,9 @@ const usersForm: FormSchema = {
       cardinality: { min: 0, max: '1' },
       apiProperty: 'email',
     },
-    {
-      id: 'fld-usr-roles',
-      fhirPath: null,
-      displayLabel: 'Roles',
-      description: null,
-      fieldType: 'multiselect',
-      required: false,
-      enabled: true,
-      order: 3,
-      cardinality: { min: 0, max: '*' },
-      apiProperty: 'roles',
-      // Codes must match the Keycloak realm roles (infra/keycloak/openldr-realm.json)
-      // and the i18n users.roleNames keys, so a user's real role shows as selected on
-      // edit and saving writes role codes the identity provider recognises.
-      valueSetOptions: [
-        { code: 'lab_admin', display: 'Lab Admin' },
-        { code: 'lab_manager', display: 'Lab Manager' },
-        { code: 'lab_technician', display: 'Lab Technician' },
-        { code: 'data_analyst', display: 'Data Analyst' },
-        { code: 'system_auditor', display: 'System Auditor' },
-      ],
-    },
+    // Role assignment is NOT a form field: the Users page renders a dedicated OpenLDR role
+    // multi-select (backed by /api/users/:id/roles) alongside this template, independent of
+    // whatever fields the template defines. See apps/studio/src/users/UserDialog.tsx.
   ],
 }
 

@@ -124,6 +124,9 @@ export const pt: EnShape = {
     forceSignOutTitle: 'Forçar término de sessão de {{username}}?',
     forceSignOutDescription: 'Todas as sessões ativas serão encerradas.',
     forceSignOutToast: 'Todas as sessões encerradas para {{username}}',
+    rolesLabel: 'Funções',
+    noRolesAvailable: 'Ainda não há funções definidas. Crie uma em Definições → Funções.',
+    rolesSaveError: 'Utilizador guardado, mas a atribuição de funções falhou: {{error}}',
     roleNames: {
       lab_admin: 'Administrador do laboratório',
       lab_manager: 'Gestor do laboratório',
