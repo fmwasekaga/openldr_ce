@@ -24,9 +24,9 @@ const minimal = {
   id: 'r1', name: 'AMR', description: '', category: 'amr', designId: 'd1', primaryQueryId: 'q1',
 };
 
-function appWith(ctx: any, roles: string[] = ['lab_admin']) {
+function appWith(ctx: any, roles: string[] = ['lab_admin'], capabilities: string[] = ['reports.edit_templates']) {
   const app = Fastify();
-  app.addHook('onRequest', async (req) => { (req as any).user = { id: 'u', username: 'u', displayName: null, roles }; });
+  app.addHook('onRequest', async (req) => { (req as any).user = { id: 'u', username: 'u', displayName: null, roles, capabilities }; });
   registerReportDefRoutes(app, ctx);
   return app;
 }
@@ -58,7 +58,7 @@ describe('report-defs routes', () => {
   });
 
   it('403s a create from a non-manager role', async () => {
-    const app = appWith(fakeCtx(), ['lab_technician']);
+    const app = appWith(fakeCtx(), ['lab_technician'], []);
     const res = await app.inject({ method: 'POST', url: '/api/report-defs', payload: minimal });
     expect(res.statusCode).toBe(403);
   });

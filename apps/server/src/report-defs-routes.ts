@@ -2,12 +2,12 @@ import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { ReportDefSchema } from '@openldr/reporting';
 import { recordAudit } from './audit-helper';
-import { requireRole } from './rbac';
+import { requireCapability } from './rbac';
 
 export function registerReportDefRoutes(
   app: FastifyInstance<any, any, any, any>, ctx: AppContext,
 ): void {
-  const MANAGE = { preHandler: requireRole('lab_admin', 'lab_manager') };
+  const MANAGE = { preHandler: requireCapability('reports.edit_templates') };
 
   app.get('/api/report-defs', async () => ctx.reportDefs.list());
 
