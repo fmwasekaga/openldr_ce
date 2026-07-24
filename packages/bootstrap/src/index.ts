@@ -16,7 +16,7 @@ import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore, createUserProfileStore, type UserProfileStore } from '@openldr/users';
 import { createFormStore, type FormStore } from '@openldr/forms';
 import { getEventSource, eventSourceCatalog, toCsv, type ReportResult, type ReportSummary, type ReportParamMeta, type ReportMetricMeta } from '@openldr/reporting';
-import { createDashboardStore, getModel, runBuilderQuery, runSqlQuery, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, seedDefaultDashboard, runStoredQuery, compileBuilderQuery, formatSql, modelsForClient, joinableTablesForClient, type DashboardStore, type WidgetQuery, type RunStoredQueryDeps, type ClientQueryModel, type ClientJoinableTable } from '@openldr/dashboards';
+import { createDashboardStore, getModel, runBuilderQuery, runSqlQuery, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, seedDefaultDashboard, runStoredQuery, compileBuilderQuery, formatSql, modelsForClient, joinableTablesForClient, createColumnPolicyStore, seedColumnExposurePolicy, type DashboardStore, type WidgetQuery, type RunStoredQueryDeps, type ClientQueryModel, type ClientJoinableTable, type ColumnPolicyStore, type ColumnPolicy } from '@openldr/dashboards';
 import { createReportDesignStore, renderReportDesignPdf, resolveDesignTables, type ReportDesignStore } from '@openldr/report-designer';
 import {
   createWorkflowStore, type WorkflowStore,
@@ -99,6 +99,13 @@ export interface DashboardsApi {
   /** Builder→SQL eject: compile a builder-mode query to its SQL text (parameters inlined as
    *  readable literals). Display-only — the returned text is never executed. */
   compileSql(q: Extract<WidgetQuery, { mode: 'builder' }>): Promise<string>;
+  /** Data Exposure Task 5: the column_exposure_policy store handle (admin CRUD — Settings→Data
+   *  Exposure reads/writes through this). Distinct from the in-memory cache the hot path reads. */
+  columnPolicy: ColumnPolicyStore;
+  /** Re-read the column policy from the DB into the in-memory cache that models()/joinableTables()/
+   *  query()/compileSql() read. Call after any columnPolicy write so the change takes effect without
+   *  a restart (mirrors syncRuntime.reconcile()'s no-restart-required pattern). */
+  reloadColumnPolicy(): Promise<void>;
 }
 
 export interface ReportingApi {
@@ -384,6 +391,17 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   await roles.seedSystemRoles().catch((err) => {
     logger.warn({ err }, 'system-role seed failed');
   });
+  // Data Exposure Task 5: seed column_exposure_policy from HARDCODED_DENY_UNION on every boot —
+  // UNCONDITIONAL and best-effort, mirroring the role seed immediately above (NOT routed through
+  // seedEssentials()/seedDatabase(), which take a forms/workflows surface with no db handle and are
+  // gated behind SEED_ON_START for optional demo data; this is neither). A failure here must never
+  // abort boot: the in-memory policy cache built below (`columnPolicy`/`policyCache`) falls back to
+  // the same HARDCODED_DENY_UNION per table when a row is missing (registry.ts's `hiddenFor`), so an
+  // unseeded or partially-seeded table still denies known PII. seedColumnExposurePolicy is idempotent
+  // (ON CONFLICT DO NOTHING), so re-running on every boot is safe.
+  await seedColumnExposurePolicy(internal.db).catch((err) => {
+    logger.warn({ err }, 'column-exposure-policy seed failed');
+  });
   const userProfiles = createUserProfileStore(internal.db);
   // Sync S2: pass referenceCapture so central config authoring lands rows in reference_change_log
   // (the pull endpoint's source). Safe on every node: a lab serves no pull so its log is inert, and
@@ -489,12 +507,29 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   });
 
   const dashboardStore = createDashboardStore(internal.db, referenceCapture);
+  // Data Exposure Task 5: the column_exposure_policy store + an in-memory cache of it, loaded ONCE
+  // here (after the unconditional seed above, so a fresh/upgraded install's seeded rows are already
+  // reflected in the first load) and re-read only on explicit reloadColumnPolicy() calls (e.g. after
+  // the Settings→Data Exposure save route writes through `columnPolicy`). The hot path — models(),
+  // joinableTables(), query(), compileSql() — reads `policyCache` only, never the DB, per request.
+  // The initial load is wrapped best-effort like the seed above: a transient DB failure (or, in this
+  // package's own health-check test, a deliberately unreachable INTERNAL_DATABASE_URL) must not abort
+  // boot — an empty cache still falls back to HARDCODED_DENY_UNION per table (registry.ts's
+  // `hiddenFor`), so known PII stays denied either way.
+  const columnPolicy = createColumnPolicyStore(internal.db);
+  let policyCache: ColumnPolicy = new Map();
+  const reloadColumnPolicy = async (): Promise<void> => {
+    policyCache = await columnPolicy.load();
+  };
+  await reloadColumnPolicy().catch((err) => {
+    logger.warn({ err }, 'column-exposure-policy cache load failed; falling back to HARDCODED_DENY_UNION per table');
+  });
   const runDashboardQuery = async (q: WidgetQuery): Promise<ReportResult> => {
     let data;
     if (q.mode === 'builder') {
       const model = getModel(q.model);
       if (!model) throw new DashboardQueryError(`unknown model: ${q.model}`);
-      data = await runBuilderQuery(reportingDb, model, q);
+      data = await runBuilderQuery(reportingDb, model, q, policyCache);
     } else {
       // `q.sql` is the STORED template verbatim (the client sends resolved filter `values`
       // separately and the server applies the substitution). Vet the untouched template against
@@ -518,10 +553,18 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   const compileDashboardSql = async (q: Extract<WidgetQuery, { mode: 'builder' }>): Promise<string> => {
     const model = getModel(q.model);
     if (!model) throw new DashboardQueryError(`unknown model: ${q.model}`);
-    const { sql: compiledSql, parameters } = compileBuilderQuery(reportingDb, model, q).compile();
+    const { sql: compiledSql, parameters } = compileBuilderQuery(reportingDb, model, q, policyCache).compile();
     return formatSql(compiledSql, parameters);
   };
-  const dashboards: DashboardsApi = { store: dashboardStore, models: () => modelsForClient(), joinableTables: () => joinableTablesForClient(), query: runDashboardQuery, compileSql: compileDashboardSql };
+  const dashboards: DashboardsApi = {
+    store: dashboardStore,
+    models: () => modelsForClient(undefined, policyCache),
+    joinableTables: () => joinableTablesForClient(policyCache),
+    query: runDashboardQuery,
+    compileSql: compileDashboardSql,
+    columnPolicy,
+    reloadColumnPolicy,
+  };
   const workflowStore = createWorkflowStore(internal.db);
   const workflowRuns = createWorkflowRunStore(internal.db);
   const workflowSchedules = createWorkflowScheduleStore(internal.db);

@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { makeMigratedDb } from '@openldr/db/testing';
 import { createAppSettingsStore, createReportStore, createRoleStore, referenceCapture } from '@openldr/db';
-import { createDashboardStore } from '@openldr/dashboards';
+import { createDashboardStore, createColumnPolicyStore, joinableTablesForClient, HARDCODED_DENY_UNION } from '@openldr/dashboards';
 import { createFormStore } from '@openldr/forms';
 import type { Config } from '@openldr/config';
 import { createAppContext, type AppContext } from './index';
@@ -64,6 +64,65 @@ describe('createAppContext', () => {
     expect(jp?.exposableColumns).toContain('managing_organization');
     expect(jp?.exposableColumns).not.toContain('surname'); // denied PII absent
   }, 20000);
+
+  // Data Exposure Task 5: DashboardsApi grows a `columnPolicy` store handle + `reloadColumnPolicy()`
+  // beside the existing models()/joinableTables()/query()/compileSql() surface. This cfg's
+  // INTERNAL_DATABASE_URL is deliberately unreachable (127.0.0.1:5499, see the class comment above)
+  // so this is a SHAPE check only — but it also proves the boot-time cache load (`columnPolicy.load()`
+  // called once inside createAppContext, before this object is returned) is wrapped best-effort:
+  // construction must still succeed against an unreachable DB, exactly like the other unconditional
+  // best-effort seeds/migrations in createAppContext (roles.seedSystemRoles(), migrateLegacySyncConfig,
+  // etc.) — an empty cache still falls back to HARDCODED_DENY_UNION per table (registry.ts's
+  // `hiddenFor`), so known PII stays denied either way. The real read/write/reload round trip against a
+  // live DB is proven below (against pg-mem, mirroring bootstrap's exact construction — createAppContext
+  // itself can't run against pg-mem; see the reference-capture describe block's comment for why).
+  it('dashboards.columnPolicy + reloadColumnPolicy are wired (shape check; unreachable DB tolerated)', async () => {
+    ctx = await createAppContext(cfg);
+    expect(typeof ctx.dashboards.columnPolicy.load).toBe('function');
+    expect(typeof ctx.dashboards.columnPolicy.listHidden).toBe('function');
+    expect(typeof ctx.dashboards.columnPolicy.replaceTable).toBe('function');
+    expect(typeof ctx.dashboards.reloadColumnPolicy).toBe('function');
+  }, 20000);
+});
+
+/**
+ * Data Exposure Task 5 (behavioral): proves the actual cache-threading contract createAppContext
+ * wires — `columnPolicy.replaceTable()` followed by `reloadColumnPolicy()` changes what the NEXT
+ * `joinableTables()`/`models()` call reports, with no per-request DB read in between. createAppContext
+ * itself can't run against pg-mem (real pg pools + a LISTEN client — see the reference-capture describe
+ * block's comment), so this mirrors its exact construction (`createColumnPolicyStore(internal.db)`,
+ * cache variable + `reloadColumnPolicy` closure, `joinableTablesForClient(policyCache)`) against a
+ * fully-migrated pg-mem db, the same pattern already used above for the role-seed and
+ * reference-capture guarantees.
+ */
+describe('createAppContext column-policy cache wiring (Data Exposure Task 5)', () => {
+  it('replaceTable + reload changes joinableTablesForClient(policyCache) without re-querying per call', async () => {
+    const db = await makeMigratedDb();
+    const columnPolicy = createColumnPolicyStore(db); // bootstrap construction: createColumnPolicyStore(internal.db)
+    let policyCache = await columnPolicy.load(); // bootstrap construction: initial cache load
+    const reloadColumnPolicy = async () => { policyCache = await columnPolicy.load(); };
+
+    // Before: patients has no policy rows yet, so hiddenFor() falls back to HARDCODED_DENY_UNION —
+    // national_id stays denied.
+    const before = joinableTablesForClient(policyCache).find((t) => t.table === 'patients')!;
+    expect(before.columns).not.toContain('national_id');
+
+    // Un-hide just national_id, keeping every other hardcoded-deny column explicitly hidden — NOT
+    // `replaceTable('patients', [])`. An empty hidden list deletes every row for the table, so
+    // `load()`'s map has no entry for it and `hiddenFor()` (registry.ts) falls back to
+    // HARDCODED_DENY_UNION — the "expose everything" write would silently revert to the default,
+    // which is what a real admin UI must avoid by always sending the explicit reduced list (this is
+    // a pre-existing column-policy-store/registry contract from Tasks 1/4, out of scope to change
+    // here — see column-policy-store.test.ts's "replaceTable with an empty hidden array clears the
+    // table rows" case, which proves the same absent-vs-empty behavior).
+    const stillHidden = HARDCODED_DENY_UNION.patients.filter((c) => c !== 'national_id');
+    await columnPolicy.replaceTable('patients', stillHidden, 'test');
+    await reloadColumnPolicy();
+
+    const after = joinableTablesForClient(policyCache).find((t) => t.table === 'patients')!;
+    expect(after.columns).toContain('national_id');
+    expect(after.columns).not.toContain('surname'); // still explicitly denied
+  });
 });
 
 /**
