@@ -23,7 +23,7 @@ function fakeCtx() {
 describe('ontology routes audit', () => {
   it('audits a distribution delete with the request actor', async () => {
     const app = Fastify();
-    app.addHook('onRequest', async (req) => { req.user = { id: 'admin1', username: 'admin', displayName: null, roles: ['lab_admin'], capabilities: [] }; });
+    app.addHook('onRequest', async (req) => { req.user = { id: 'admin1', username: 'admin', displayName: null, roles: ['lab_admin'], capabilities: ['terminology.manage'] }; });
     const { ctx, auditEvents } = fakeCtx();
     registerOntologyRoutes(app, ctx);
     const res = await app.inject({ method: 'DELETE', url: '/api/terminology/ontology/distributions/dist1' });
