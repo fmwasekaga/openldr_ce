@@ -4,9 +4,22 @@ import { registerReportRoutes } from './reports-routes';
 import { registerErrorHandler } from './error-handler';
 import { ReportNotFoundError } from '@openldr/bootstrap';
 
+// These routes were previously mostly UNGATED. Tests below cover route BEHAVIOR, not RBAC, so
+// grant every reports.* capability by default — RBAC itself is covered by the dedicated 403 tests
+// further down that pass an explicit (possibly empty) capabilities set.
+const ALL_REPORTS_CAPS = ['reports.view', 'reports.run', 'reports.export', 'reports.edit_templates'];
+
+function withAuth(app: ReturnType<typeof Fastify>, capabilities: string[] = ALL_REPORTS_CAPS) {
+  app.addHook('onRequest', async (req) => {
+    (req as { user?: unknown }).user = { id: 'u1', username: 'ada', displayName: 'Ada', roles: ['lab_admin'], capabilities, status: 'active' };
+  });
+  return app;
+}
+
 function appWith(reporting: unknown) {
   const app = Fastify();
   registerErrorHandler(app);
+  withAuth(app);
   registerReportRoutes(app, { reporting } as never);
   return app;
 }
@@ -14,6 +27,7 @@ function appWith(reporting: unknown) {
 function appWithCtx(ctx: unknown) {
   const app = Fastify();
   registerErrorHandler(app);
+  withAuth(app);
   registerReportRoutes(app, ctx as never);
   return app;
 }
@@ -149,9 +163,7 @@ describe('report run history routes', () => {
 
     const app = Fastify();
     registerErrorHandler(app);
-    app.addHook('onRequest', async (req) => {
-      (req as { user?: unknown }).user = { id: 'u1', username: 'ada', displayName: 'Ada', roles: [], status: 'active' };
-    });
+    withAuth(app, ['reports.view', 'reports.run']);
     registerReportRoutes(app, ctx);
     return { app, recorded };
   }
@@ -200,7 +212,7 @@ describe('report run history routes', () => {
 });
 
 describe('report schedule routes', () => {
-  function appWithSchedules(roles = ['lab_manager']) {
+  function appWithSchedules(capabilities = ['reports.view', 'reports.edit_templates']) {
     const created: any[] = [];
     const ctx = {
       reporting: {
@@ -218,7 +230,7 @@ describe('report schedule routes', () => {
     } as unknown as Parameters<typeof registerReportRoutes>[1];
     const app = Fastify();
     registerErrorHandler(app);
-    app.addHook('onRequest', async (req) => { (req as { user?: unknown }).user = { id: 'u1', username: 'ada', displayName: 'Ada', roles, status: 'active' }; });
+    withAuth(app, capabilities);
     registerReportRoutes(app, ctx);
     return { app, created };
   }
@@ -244,7 +256,7 @@ describe('report schedule routes', () => {
   });
 
   it('forbids creation for a non-manager (403)', async () => {
-    const { app } = appWithSchedules(['lab_technician']);
+    const { app } = appWithSchedules([]);
     await app.ready();
     const res = await app.inject({ method: 'POST', url: '/api/reports/amr-resistance/schedules', payload: { frequency: 'daily', outputFormat: 'csv' } });
     expect(res.statusCode).toBe(403);
@@ -272,7 +284,7 @@ describe('report schedule-run routes', () => {
     } as unknown as Parameters<typeof registerReportRoutes>[1];
     const app = Fastify();
     registerErrorHandler(app);
-    app.addHook('onRequest', async (req) => { (req as { user?: unknown }).user = { id: 'u1', username: 'ada', displayName: 'Ada', roles: ['lab_technician'], status: 'active' }; });
+    withAuth(app, ['reports.view', 'reports.export']);
     registerReportRoutes(app, ctx);
     return { app };
   }
