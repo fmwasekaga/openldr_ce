@@ -21,7 +21,7 @@ export function requireCapability(cap: string) {
       reply.code(401);
       return reply.send({ error: 'authentication required' });
     }
-    if (!req.user.capabilities.includes(cap)) {
+    if (!(req.user.capabilities ?? []).includes(cap)) {
       reply.code(403);
       return reply.send({ error: 'insufficient capability' });
     }
@@ -35,7 +35,7 @@ export function requireAnyCapability(...caps: string[]) {
       reply.code(401);
       return reply.send({ error: 'authentication required' });
     }
-    if (!req.user.capabilities.some((c) => caps.includes(c))) {
+    if (!(req.user.capabilities ?? []).some((c) => caps.includes(c))) {
       reply.code(403);
       return reply.send({ error: 'insufficient capability' });
     }
