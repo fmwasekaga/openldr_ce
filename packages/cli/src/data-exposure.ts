@@ -1,4 +1,4 @@
-import { createAppContext } from '@openldr/bootstrap';
+import { createAppContext, recordAuditEvent } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import { cliActor } from './cli-actor';
 
@@ -37,6 +37,13 @@ async function mutate(table: string, columns: string[], hide: boolean, opts: Jso
       process.stderr.write(`${e instanceof Error ? e.message : String(e)}\n`);
       return 1;
     }
+    await recordAuditEvent(ctx, cliActor(), {
+      action: 'data_exposure.policy.updated',
+      entityType: 'column_exposure_policy',
+      entityId: 'global',
+      before: hiddenMap,
+      after: { ...hiddenMap, [table]: [...set] },
+    });
     await ctx.dashboards.reloadColumnPolicy();
     emit(opts.json, { table, hidden: [...set] }, `${table} hidden: ${[...set].join(', ') || '(none)'}`);
     return 0;
