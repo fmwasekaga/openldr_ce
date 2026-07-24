@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Kysely, SqliteDialect } from 'kysely';
 import { compileBuilderQuery, collectUsedJoins, effectiveModel, runBuilderQuery } from './compile';
-import { getModel } from './models/registry';
+import { getModel, type ColumnPolicy } from './models/registry';
 
 // A dummy Kysely instance just for .compile() — no real DB.
 const db = new Kysely<any>({ dialect: new SqliteDialect({ database: {} as any }) });
@@ -367,6 +367,26 @@ describe('compileBuilderQuery with an adhoc join column', () => {
     await expect(runBuilderQuery(db, getModel('service_requests')!, q({
       adhocDimensions: [{ key: 'x', label: 'X', join: 'jp', column: 'surname', kind: 'string' }],
     }) as any)).rejects.toThrow(/column/i);
+  });
+
+  it('runBuilderQuery rejects an adhoc column the runtime policy hides', async () => {
+    // 'sex' is normally exposable on patients; a policy that hides it must reject the adhoc dim.
+    const policy: ColumnPolicy = new Map([['patients', new Set(['sex'])]]);
+    await expect(runBuilderQuery(db, getModel('service_requests')!, q({
+      adhocDimensions: [{ key: 'x', label: 'X', column: 'sex', kind: 'string', join: 'jp' }],
+    }) as any, policy)).rejects.toThrow(/not exposable/);
+  });
+
+  it('runBuilderQuery accepts a column the policy exposes that the union would hide', async () => {
+    // 'source_system' is in the union fallback (hidden) but an explicit empty policy exposes it.
+    // No measure, so runBuilderQuery validates via effectiveModel then returns its early "no measure"
+    // result without reaching db.execute() (this suite's `db` is a compile-only stub, no real driver).
+    const policy: ColumnPolicy = new Map([['patients', new Set()]]);
+    const res = await runBuilderQuery(db, getModel('service_requests')!, q({
+      adhocDimensions: [{ key: 'ss', label: 'SS', column: 'source_system', kind: 'string', join: 'jp' }],
+      metric: undefined,
+    }) as any, policy);
+    expect(res).toBeTruthy(); // no throw = column accepted
   });
 
   it('adds the LEFT JOIN when the adhoc column is used as a breakdown', () => {

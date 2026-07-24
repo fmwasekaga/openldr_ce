@@ -1,7 +1,7 @@
 import { type Kysely, sql, expressionBuilder, type SelectQueryBuilder } from 'kysely';
 import type { ExternalSchema } from '@openldr/db';
 import type { QueryModel, ModelDimension, ModelJoin, AgeBandCompute } from './models/registry';
-import { exposableFor, getJoinableTable, joinableColumns } from './models/registry';
+import { exposableFor, getJoinableTable, joinableColumns, type ColumnPolicy } from './models/registry';
 import { EXTERNAL_TABLE_COLUMNS } from '@openldr/db/schema/external';
 import type { WidgetQuery, Metric, QueryFilter, DateGrain, ConditionNode, ConditionRule, Expr, Operand } from './types';
 import { customColumnKind } from './types';
@@ -207,7 +207,7 @@ function ageBandExprs(d: ModelDimension, reference?: string) {
  *     user could already group by).
  * No-op (returns the same model) when the query has neither.
  */
-export function effectiveModel(model: QueryModel, q: BuilderQuery): QueryModel {
+export function effectiveModel(model: QueryModel, q: BuilderQuery, policy?: ColumnPolicy): QueryModel {
   let eff = model;
 
   // 0) User-defined joins → synthesized ModelJoins, validated against the admin joinable universe.
@@ -221,7 +221,7 @@ export function effectiveModel(model: QueryModel, q: BuilderQuery): QueryModel {
       const rightCols = EXTERNAL_TABLE_COLUMNS[uj.table as keyof typeof EXTERNAL_TABLE_COLUMNS];
       if (!baseCols.includes(uj.left)) throw new Error(`user join ${uj.id}: unknown left key: ${uj.left}`);
       if (!rightCols || !rightCols.includes(uj.right)) throw new Error(`user join ${uj.id}: unknown right key: ${uj.right}`);
-      synth.push({ table: uj.table as ModelJoin['table'], alias: uj.id, left: uj.left, right: uj.right, optional: true, exposable: joinableColumns(jt) });
+      synth.push({ table: uj.table as ModelJoin['table'], alias: uj.id, left: uj.left, right: uj.right, optional: true, exposable: joinableColumns(jt, policy) });
     }
     // Admin joins FIRST, synth (user) joins after: `exposableFor` and `collectUsedJoins` both use
     // first-match `Array.find` by alias, so this order makes a trusted admin join shadow any user
@@ -237,7 +237,7 @@ export function effectiveModel(model: QueryModel, q: BuilderQuery): QueryModel {
     for (const a of adhoc) {
       const j = (eff.joins ?? []).find((x) => x.alias === a.join);
       if (!j || !j.optional) throw new Error(`adhoc dimension ${a.key}: unknown or non-optional join: ${a.join}`);
-      if (!exposableFor(eff, a.join).includes(a.column)) throw new Error(`adhoc dimension ${a.key}: column not exposable: ${a.column}`);
+      if (!exposableFor(eff, a.join, policy).includes(a.column)) throw new Error(`adhoc dimension ${a.key}: column not exposable: ${a.column}`);
       // idempotent: safe to call on an already-merged model. A collision with a REAL model dimension key
       // is also intentionally skipped — the trusted base dimension wins (fail-safe; an adhoc dim can never shadow it).
       if (existing.has(a.key)) continue;
@@ -299,8 +299,8 @@ export function collectUsedJoins(model: QueryModel, q: BuilderQuery): ModelJoin[
 }
 
 /** Build the Kysely query (no grain bucketing — date grain is applied in JS after fetch). */
-export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery): AnyQB {
-  model = effectiveModel(model, q);
+export function compileBuilderQuery(db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery, policy?: ColumnPolicy): AnyQB {
+  model = effectiveModel(model, q, policy);
   const wide = !!(q.metrics && q.metrics.length > 0);
   let qb = db.selectFrom(model.table) as unknown as AnyQB;
   const usedJoins = collectUsedJoins(model, q);
@@ -395,13 +395,13 @@ function applyTopN(
 
 /** Shape a multi-metric (wide) query into a table: label + one column per metric (aggregate or derived). */
 async function runWideQuery(
-  db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery,
+  db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery, policy?: ColumnPolicy,
 ): Promise<ReportResultData> {
-  model = effectiveModel(model, q);
+  model = effectiveModel(model, q, policy);
   const metrics = q.metrics!;
   const aggKeys = metrics.filter((m) => !m.derived).map((m) => m.key);
   const derivedMetrics = metrics.filter((m) => m.derived);
-  const rows = (await compileBuilderQuery(db, model, q).execute()) as Record<string, unknown>[];
+  const rows = (await compileBuilderQuery(db, model, q, policy).execute()) as Record<string, unknown>[];
   const d = q.dimension ? dim(model, q.dimension.key) : undefined;
 
   let shaped: Record<string, unknown>[];
@@ -446,12 +446,12 @@ async function runWideQuery(
 
 /** Execute and shape into ReportResultData, applying date-grain bucketing in JS. */
 export async function runBuilderQuery(
-  db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery,
+  db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery, policy?: ColumnPolicy,
 ): Promise<ReportResultData> {
-  model = effectiveModel(model, q);
+  model = effectiveModel(model, q, policy);
   if (!hasMeasure(q)) return { columns: [], rows: [], chart: { type: 'stat', value: '', label: 'No measure' } };
-  if (q.metrics && q.metrics.length > 0) return runWideQuery(db, model, q);
-  const rows = (await compileBuilderQuery(db, model, q).execute()) as { value: number; label?: unknown; series?: unknown }[];
+  if (q.metrics && q.metrics.length > 0) return runWideQuery(db, model, q, policy);
+  const rows = (await compileBuilderQuery(db, model, q, policy).execute()) as { value: number; label?: unknown; series?: unknown }[];
   const d = q.dimension ? dim(model, q.dimension.key) : undefined;
 
   if (q.breakdown) {
