@@ -200,10 +200,12 @@ function fakeCtx() {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+const ADMIN_CAPS = ['users.view', 'users.manage', 'users.reset_password', 'users.force_logout'];
+
 function adminApp(ctx: AppContext) {
   const app = Fastify();
   app.addHook('onRequest', async (req) => {
-    req.user = { id: 'admin', username: 'admin', displayName: null, roles: ['lab_admin'], capabilities: [] };
+    req.user = { id: 'admin', username: 'admin', displayName: null, roles: ['lab_admin'], capabilities: ADMIN_CAPS };
   });
   registerUsersRoutes(app, ctx);
   return app;
@@ -581,7 +583,7 @@ describe('users routes — SP4 admin actions (reset-password / send-reset-email 
     const ctx = fakeCtx();
     const app = Fastify();
     app.addHook('onRequest', async (req) => {
-      req.user = { id: 'admin1', username: 'admin1', displayName: null, roles: ['lab_admin'], capabilities: [] };
+      req.user = { id: 'admin1', username: 'admin1', displayName: null, roles: ['lab_admin'], capabilities: ADMIN_CAPS };
     });
     registerUsersRoutes(app, ctx);
 

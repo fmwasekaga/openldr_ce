@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
 import { z } from 'zod';
-import { requireRole } from './rbac';
+import { requireCapability } from './rbac';
 import { recordAudit } from './audit-helper';
 
 const resetPasswordInput = z.object({ password: z.string().min(1), temporary: z.boolean().optional() });
@@ -114,7 +114,7 @@ export function registerUsersRoutes(app: FastifyInstance<any, any, any, any>, ct
   // ------------------------------------------------------------------
   // GET /api/users — composes directory + profiles; falls back to local
   // ------------------------------------------------------------------
-  app.get('/api/users', { preHandler: requireRole('lab_admin') }, async () => {
+  app.get('/api/users', { preHandler: requireCapability('users.view') }, async () => {
     try {
       const users = await ctx.auth.directory.list();
       const profiles = await ctx.userProfiles.list(users.map((u) => u.id));
@@ -130,7 +130,7 @@ export function registerUsersRoutes(app: FastifyInstance<any, any, any, any>, ct
   // ------------------------------------------------------------------
   // GET /api/users/:id
   // ------------------------------------------------------------------
-  app.get('/api/users/:id', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.get('/api/users/:id', { preHandler: requireCapability('users.view') }, async (req, reply) => {
     const id = (req.params as { id: string }).id;
     try {
       const du = await ctx.auth.directory.get(id);
@@ -156,7 +156,7 @@ export function registerUsersRoutes(app: FastifyInstance<any, any, any, any>, ct
   // ------------------------------------------------------------------
   // POST /api/users — create in directory + upsert profile
   // ------------------------------------------------------------------
-  app.post('/api/users', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.post('/api/users', { preHandler: requireCapability('users.manage') }, async (req, reply) => {
     const p = createInput.safeParse(req.body);
     if (!p.success) {
       reply.code(400);
@@ -191,7 +191,7 @@ export function registerUsersRoutes(app: FastifyInstance<any, any, any, any>, ct
   // ------------------------------------------------------------------
   // PUT /api/users/:id — update directory + profile
   // ------------------------------------------------------------------
-  app.put('/api/users/:id', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.put('/api/users/:id', { preHandler: requireCapability('users.manage') }, async (req, reply) => {
     const p = updateInput.safeParse(req.body);
     if (!p.success) {
       reply.code(400);
@@ -237,7 +237,7 @@ export function registerUsersRoutes(app: FastifyInstance<any, any, any, any>, ct
   // ------------------------------------------------------------------
   // POST /api/users/:id/status — enable/disable in directory
   // ------------------------------------------------------------------
-  app.post('/api/users/:id/status', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.post('/api/users/:id/status', { preHandler: requireCapability('users.manage') }, async (req, reply) => {
     const id = (req.params as { id: string }).id;
     const body = req.body as { enabled?: boolean; status?: string };
 
@@ -288,7 +288,7 @@ export function registerUsersRoutes(app: FastifyInstance<any, any, any, any>, ct
   // ------------------------------------------------------------------
   // SP4 routes — id IS the provider subject; no local lookup
   // ------------------------------------------------------------------
-  app.post('/api/users/:id/reset-password', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.post('/api/users/:id/reset-password', { preHandler: requireCapability('users.reset_password') }, async (req, reply) => {
     const p = resetPasswordInput.safeParse(req.body);
     if (!p.success) { reply.code(400); return { error: p.error.message }; }
     const id = (req.params as { id: string }).id;
@@ -302,7 +302,7 @@ export function registerUsersRoutes(app: FastifyInstance<any, any, any, any>, ct
     reply.code(204); return null;
   });
 
-  app.post('/api/users/:id/send-reset-email', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.post('/api/users/:id/send-reset-email', { preHandler: requireCapability('users.reset_password') }, async (req, reply) => {
     const id = (req.params as { id: string }).id;
     try {
       await ctx.auth.sendPasswordResetEmail(id);
@@ -314,7 +314,7 @@ export function registerUsersRoutes(app: FastifyInstance<any, any, any, any>, ct
     reply.code(204); return null;
   });
 
-  app.post('/api/users/:id/force-logout', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.post('/api/users/:id/force-logout', { preHandler: requireCapability('users.force_logout') }, async (req, reply) => {
     const id = (req.params as { id: string }).id;
     if (req.user?.id === id) { reply.code(400); return { error: 'cannot force-logout your own account' }; }
     try {
