@@ -129,7 +129,7 @@ function fakeCtx() {
 function adminApp(ctx: AppContext) {
   const app = Fastify();
   app.addHook('onRequest', async (req) => {
-    req.user = { id: 'admin', username: 'admin', displayName: null, roles: ['lab_admin'] };
+    req.user = { id: 'admin', username: 'admin', displayName: null, roles: ['lab_admin'], capabilities: [] };
   });
   registerSettingsRoutes(app, ctx);
   return app;
@@ -330,7 +330,7 @@ describe('settings sync enrollment routes', () => {
     const ctx = fakeCtx();
     const app = Fastify();
     app.addHook('onRequest', async (req) => {
-      req.user = { id: 'tech', username: 'tech', displayName: null, roles: ['lab_technician'] };
+      req.user = { id: 'tech', username: 'tech', displayName: null, roles: ['lab_technician'], capabilities: [] };
     });
     registerSettingsRoutes(app, ctx);
 
@@ -418,7 +418,7 @@ describe('settings sync amend route', () => {
     const ctx = fakeCtx();
     const app = Fastify();
     app.addHook('onRequest', async (req) => {
-      req.user = { id: 'tech', username: 'tech', displayName: null, roles: ['lab_technician'] };
+      req.user = { id: 'tech', username: 'tech', displayName: null, roles: ['lab_technician'], capabilities: [] };
     });
     registerSettingsRoutes(app, ctx);
     const res = await app.inject({
@@ -591,7 +591,7 @@ describe('settings sync merge-patient route', () => {
     const ctx = fakeCtx();
     const app = Fastify();
     app.addHook('onRequest', async (req) => {
-      req.user = { id: 'tech', username: 'tech', displayName: null, roles: ['lab_technician'] };
+      req.user = { id: 'tech', username: 'tech', displayName: null, roles: ['lab_technician'], capabilities: [] };
     });
     registerSettingsRoutes(app, ctx);
     const res = await app.inject({
@@ -688,7 +688,7 @@ describe('settings sync divergence routes', () => {
     const { ctx } = divergenceCtx();
     const app = Fastify();
     app.addHook('onRequest', async (req) => {
-      req.user = { id: 'tech', username: 'tech', displayName: null, roles: ['lab_technician'] };
+      req.user = { id: 'tech', username: 'tech', displayName: null, roles: ['lab_technician'], capabilities: [] };
     });
     registerSettingsRoutes(app, ctx);
     expect((await app.inject({ method: 'GET', url: '/api/settings/sync/divergences' })).statusCode).toBe(403);

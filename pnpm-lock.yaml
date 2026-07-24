@@ -87,6 +87,9 @@ importers:
       '@openldr/marketplace':
         specifier: workspace:*
         version: link:../../packages/marketplace
+      '@openldr/rbac':
+        specifier: workspace:*
+        version: link:../../packages/rbac
       '@openldr/report-designer':
         specifier: workspace:*
         version: link:../../packages/report-designer
@@ -9595,6 +9598,14 @@ snapshots:
     optionalDependencies:
       vite: 5.4.21(@types/node@22.19.21)(lightningcss@1.32.0)
 
+  '@vitest/mocker@2.1.8(vite@5.4.21(@types/node@25.9.3)(lightningcss@1.32.0))':
+    dependencies:
+      '@vitest/spy': 2.1.8
+      estree-walker: 3.0.3
+      magic-string: 0.30.21
+    optionalDependencies:
+      vite: 5.4.21(@types/node@25.9.3)(lightningcss@1.32.0)
+
   '@vitest/pretty-format@2.1.8':
     dependencies:
       tinyrainbow: 1.2.0
@@ -13161,7 +13172,7 @@ snapshots:
   vitest@2.1.8(@types/node@25.9.3)(jsdom@25.0.1)(lightningcss@1.32.0):
     dependencies:
       '@vitest/expect': 2.1.8
-      '@vitest/mocker': 2.1.8(vite@5.4.21(@types/node@22.19.21)(lightningcss@1.32.0))
+      '@vitest/mocker': 2.1.8(vite@5.4.21(@types/node@25.9.3)(lightningcss@1.32.0))
       '@vitest/pretty-format': 2.1.8
       '@vitest/runner': 2.1.8
       '@vitest/snapshot': 2.1.8

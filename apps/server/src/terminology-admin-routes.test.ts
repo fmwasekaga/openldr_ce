@@ -50,7 +50,7 @@ function fakeCtx() {
 
 function appWith(ctx: AppContext, roles: string[] = ['lab_admin']) {
   const app = Fastify();
-  app.addHook('onRequest', async (req) => { req.user = { id: 'admin1', username: 'admin', displayName: null, roles }; });
+  app.addHook('onRequest', async (req) => { req.user = { id: 'admin1', username: 'admin', displayName: null, roles, capabilities: [] }; });
   registerTerminologyAdminRoutes(app, ctx);
   return app;
 }

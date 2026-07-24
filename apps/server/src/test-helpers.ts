@@ -415,6 +415,10 @@ export function ctxWith(status: 'up' | 'down'): AppContext {
       list: async () => [],
       get: async () => undefined,
     } as never,
+    roles: {
+      resolveCapabilities: async () => [],
+      backfillUserFromRoleNames: async () => {},
+    } as never,
     userProfiles: {
       get: async () => undefined,
       list: async () => new Map(),

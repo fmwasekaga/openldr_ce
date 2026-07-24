@@ -6,7 +6,7 @@ import './auth-plugin'; // pulls in the req.user type augmentation
 function appWith(actorRoles: string[] | null) {
   const app = Fastify();
   app.addHook('onRequest', async (req) => {
-    if (actorRoles) req.user = { id: 'a', username: 'a', displayName: null, roles: actorRoles };
+    if (actorRoles) req.user = { id: 'a', username: 'a', displayName: null, roles: actorRoles, capabilities: [] };
   });
   app.post('/api/admin', { preHandler: requireRole('lab_admin') }, async () => ({ ok: true }));
   return app;

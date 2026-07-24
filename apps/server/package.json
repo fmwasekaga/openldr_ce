@@ -27,6 +27,7 @@
     "@openldr/dhis2": "workspace:*",
     "@openldr/forms": "workspace:*",
     "@openldr/marketplace": "workspace:*",
+    "@openldr/rbac": "workspace:*",
     "@openldr/report-designer": "workspace:*",
     "@openldr/reporting": "workspace:*",
     "@openldr/sync": "workspace:*",

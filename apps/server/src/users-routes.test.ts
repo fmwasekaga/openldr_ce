@@ -69,6 +69,7 @@ function fakeCtx() {
           status: 'active',
           lastLoginAt: null,
           createdAt: new Date().toISOString(),
+          rbacInitialized: false,
         };
         localUsers.push(user);
         return user;
@@ -202,7 +203,7 @@ function fakeCtx() {
 function adminApp(ctx: AppContext) {
   const app = Fastify();
   app.addHook('onRequest', async (req) => {
-    req.user = { id: 'admin', username: 'admin', displayName: null, roles: ['lab_admin'] };
+    req.user = { id: 'admin', username: 'admin', displayName: null, roles: ['lab_admin'], capabilities: [] };
   });
   registerUsersRoutes(app, ctx);
   return app;
@@ -408,7 +409,7 @@ describe('users routes — composed directory + profiles', () => {
     const ctx = fakeCtx();
     const app = Fastify();
     app.addHook('onRequest', async (req) => {
-      req.user = { id: 'tech', username: 'tech', displayName: null, roles: ['lab_technician'] };
+      req.user = { id: 'tech', username: 'tech', displayName: null, roles: ['lab_technician'], capabilities: [] };
     });
     registerUsersRoutes(app, ctx);
 
@@ -561,7 +562,7 @@ describe('users routes — SP4 admin actions (reset-password / send-reset-email 
     const ctx = fakeCtx();
     const app = Fastify();
     app.addHook('onRequest', async (req) => {
-      req.user = { id: 'tech', username: 'tech', displayName: null, roles: ['lab_technician'] };
+      req.user = { id: 'tech', username: 'tech', displayName: null, roles: ['lab_technician'], capabilities: [] };
     });
     registerUsersRoutes(app, ctx);
     const res = await app.inject({ method: 'POST', url: '/api/users/whatever/reset-password', payload: { password: 'pw' } });
@@ -580,7 +581,7 @@ describe('users routes — SP4 admin actions (reset-password / send-reset-email 
     const ctx = fakeCtx();
     const app = Fastify();
     app.addHook('onRequest', async (req) => {
-      req.user = { id: 'admin1', username: 'admin1', displayName: null, roles: ['lab_admin'] };
+      req.user = { id: 'admin1', username: 'admin1', displayName: null, roles: ['lab_admin'], capabilities: [] };
     });
     registerUsersRoutes(app, ctx);
 

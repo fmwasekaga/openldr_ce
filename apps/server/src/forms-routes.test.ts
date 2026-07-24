@@ -394,7 +394,7 @@ describe('forms routes', () => {
     const app = Fastify();
     const ctx = fakeCtx();
     app.addHook('onRequest', async (req) => {
-      req.user = { id: 'u-forms', username: 'former', displayName: null, roles: ['lab_admin'] };
+      req.user = { id: 'u-forms', username: 'former', displayName: null, roles: ['lab_admin'], capabilities: [] };
     });
     registerFormsRoutes(app, ctx);
 

@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { safeRecord } from '@openldr/audit';
+import { CAPABILITY_KEYS } from '@openldr/rbac';
 import { reasonFromError, createAuthFailedThrottle, subFromUnverifiedToken, type AuthFailReason } from './auth-failed';
 
 export interface RequestActor {
@@ -8,6 +9,7 @@ export interface RequestActor {
   username: string;
   displayName: string | null;
   roles: string[];
+  capabilities: string[];
 }
 
 declare module 'fastify' {
@@ -56,10 +58,10 @@ async function devActor(ctx: AppContext): Promise<RequestActor> {
   try {
     const existing = await ctx.users.getByUsername(username);
     const u = existing ?? (await ctx.users.create({ username, displayName: 'Dev Admin', roles }));
-    return { id: u.id, username: u.username, displayName: u.displayName, roles: u.roles.length > 0 ? u.roles : roles };
+    return { id: u.id, username: u.username, displayName: u.displayName, roles: u.roles.length > 0 ? u.roles : roles, capabilities: [...CAPABILITY_KEYS] };
   } catch (e) {
     ctx.logger.warn({ error: e instanceof Error ? e.message : String(e) }, 'dev-bypass actor fell back to synthetic (user store unavailable)');
-    return { id: `dev:${username}`, username, displayName: 'Dev Admin', roles };
+    return { id: `dev:${username}`, username, displayName: 'Dev Admin', roles, capabilities: [...CAPABILITY_KEYS] };
   }
 }
 
@@ -120,7 +122,15 @@ export function registerAuth(app: FastifyInstance<any, any, any, any>, ctx: AppC
         reply.code(403);
         return reply.send({ error: 'account disabled' });
       }
-      req.user = { id: u.id, username: u.username, displayName: u.displayName, roles: realmRolesFromClaims(claims) };
+      // One-time migration: map the token's realm roles to system roles the first
+      // time we see this user. After that, user_roles (DB) is authoritative.
+      if (!u.rbacInitialized) {
+        await ctx.roles.backfillUserFromRoleNames(u.subject ?? (claims as { sub?: string }).sub ?? u.id, realmRolesFromClaims(claims));
+        await ctx.users.markRbacInitialized(u.id);
+      }
+      const subject = u.subject ?? (claims as { sub?: string }).sub ?? u.id;
+      const capabilities = await ctx.roles.resolveCapabilities(subject);
+      req.user = { id: u.id, username: u.username, displayName: u.displayName, roles: realmRolesFromClaims(claims), capabilities };
     } catch (e) {
       ctx.logger.error({ error: e instanceof Error ? e.message : String(e) }, 'user sync failed');
       recordAuthFailed(req, 'sync-failed', (claims as { sub?: string }).sub ?? null);
