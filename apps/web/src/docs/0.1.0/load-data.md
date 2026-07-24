@@ -18,15 +18,21 @@ to the workflow as its input, and **what gets stored is whatever the workflow do
 so you control the exact shape (a form submission, a vendor payload, or a FHIR Bundle you
 normalise inside the workflow).
 
-A fresh install already ships a sample **"lab orders"** webhook workflow. To use it, or to
-build your own:
+A fresh install ships **two** ingestion webhook workflows, split by the **shape** of the data the
+sender posts. **Both are disabled by default** — each exposes a live HTTP endpoint, so you opt in
+by enabling the one you need and copying its per-install secret:
 
-1. In the app, open **Workflows** and open the sample workflow (or create a new one).
-2. On its **Webhook** trigger, **enable** the workflow and **copy the secret**. The trigger has
-   a URL path (the sample's is `lab-orders`) and a per-install secret.
-3. (If building your own) add nodes that validate/transform the JSON and a **Persist / Store**
-   node that writes the result.
-4. Send the payload from your external system:
+| Workflow | Webhook path | Expects | Use when |
+|---|---|---|---|
+| **Ingest-form** | `lab-orders` | **form answers** (a `{…}` object of field values) | a form/UI-driven source posts answers, not FHIR — validated against the seeded "Lab order" form, then persisted |
+| **Ingest-raw** | `cdr-ingest` | a **bare JSON array** of pre-built FHIR resources | an external system posts ready-made FHIR (e.g. the **CDR toolchain**) — each resource is persisted and the projection routes it by type |
+
+To use either one:
+
+1. In the app, open **Workflows** and open **Ingest-form** or **Ingest-raw**.
+2. On its **Webhook** trigger, **enable** the workflow and **copy the secret**. Each trigger has a
+   fixed URL path (above) and a per-install secret generated at seed time.
+3. Send the payload from your external system:
 
 ```bash
 curl -X POST https://your-host/api/workflows/hooks/lab-orders \
@@ -40,21 +46,40 @@ the server. Always POST over **HTTPS** so the token isn't exposed, treat the sec
 password, and rotate it by editing the workflow's webhook trigger. A wrong or missing token is
 rejected with `401`; an unknown path returns `404`.
 
-The request body is whatever your workflow expects — the bundled `lab-orders` sample validates
-the incoming order against a Form and persists the extracted FHIR resources.
+You can also build your own webhook workflow (**Webhook → transform/validate → Persist / Store**)
+for any other payload shape — the two seeded ones are just the common cases.
 
-### Raw FHIR without a form
+### Post pre-built FHIR (the CDR toolchain)
 
-The sample is form-based, but a webhook workflow does **not** have to use a form. To accept raw
-FHIR, build **Webhook → (a transform that expands the Bundle) → Persist / Store**:
+The **Ingest-raw** workflow is the front door for a system that already emits FHIR resources — most
+notably the **CDR toolchain**, whose default target path (`OPENLDR_CE_HOOK_PATH`) is exactly
+`/api/workflows/hooks/cdr-ingest`, so it lines up with a fresh install out of the box. The pipeline
+is **Webhook → Split Out (`body`) → Persist / Store → Log**:
 
-- The **Persist / Store** node persists **one FHIR resource per input item** — the same write path
-  the CLI uses, including the **validation strictness gate** (so at High a lab result still needs
-  its order; see the strictness note under [§2](#example-payloads)).
-- Because the node persists one resource per item, a **Bundle** must first be **expanded** into
-  individual resources — add a transform node that turns the Bundle's `entry[]` array into one
-  item per `entry.resource` before the Persist / Store node. You configure that mapping visually in
-  the builder and can preview it on sample input.
+- The request body is a **bare JSON array** of FHIR resources. **Split Out** unwraps the webhook
+  envelope's `body` array into **one item per resource**, because **Persist / Store persists one
+  FHIR resource per input item** — the same write path (and **validation strictness gate**) the CLI
+  uses.
+- **One webhook handles tests and questionnaires together.** Persist stores every resource, and the
+  projection routes each by `resourceType` (`Observation` → `lab_results`, `ServiceRequest` →
+  `lab_requests`, `QuestionnaireResponse` → `questionnaire_responses`, …).
+
+To point the CDR toolchain at a deployment, enable **Ingest-raw**, copy its secret, and set:
+
+```bash
+OPENLDR_CE_URL=https://your-host        # base URL of the CE deployment
+OPENLDR_CE_WEBHOOK_TOKEN=<the-secret>   # the Ingest-raw webhook secret you copied
+OPENLDR_CE_TIMEZONE=+03:00              # UTC offset for DISA's unzoned timestamps (per country)
+```
+
+`OPENLDR_CE_TIMEZONE` is **required** and has no safe default: DISA stores local wall-clock times
+with no zone, so an omitted offset would silently shift every clinical timestamp. Set it to the
+deployment's country (Tanzania `+03:00`; Mozambique/Zambia `+02:00`).
+
+> **A bare array is what the webhook wants — but not what the CLI wants.** The `cdr-ingest` webhook
+> expects a bare array of resources (Split Out expands it). The `openldr ingest` **CLI** below is the
+> opposite: it takes a FHIR **Bundle** (or one bare resource), not an array. Send each payload to the
+> path that matches its shape.
 
 If you just have a Bundle file and a source checkout, `openldr ingest bundle.json` (below) is the
 turnkey path — it applies the same converter + strictness gate without building a workflow.
