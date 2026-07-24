@@ -141,35 +141,34 @@ export function RoleSheet({ open, onOpenChange, role, onSaved }: RoleSheetProps)
             </div>
           ) : null}
 
-          <div className="grid gap-4">
-            <div className="space-y-1">
-              <Label htmlFor="role-name">{t('roles.fieldName')}</Label>
-              <Input id="role-name" data-testid="role-name" value={name} onChange={(e) => handleNameChange(e.target.value)} disabled={readOnly} />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="role-slug">{t('roles.fieldSlug')}</Label>
-              {/* Slug is immutable once a role exists (the API's updateRole doesn't accept it) —
-                  so it's only ever editable while creating a new role. */}
-              <Input
-                id="role-slug"
-                data-testid="role-slug"
-                value={slug}
-                onChange={(e) => { setSlugTouched(true); setSlug(e.target.value); }}
-                disabled={readOnly || isEdit}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="role-description">{t('roles.fieldDescription')}</Label>
-              <Textarea
-                id="role-description"
-                data-testid="role-description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder={t('roles.descriptionPlaceholder')}
-                disabled={readOnly}
-                rows={2}
-              />
-            </div>
+          <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3">
+            <Label htmlFor="role-name" className="whitespace-nowrap">{t('roles.fieldName')}</Label>
+            <Input id="role-name" data-testid="role-name" value={name} onChange={(e) => handleNameChange(e.target.value)} disabled={readOnly} />
+
+            {/* Slug is immutable once a role exists (the API's updateRole doesn't accept it) —
+                so it's only ever editable while creating a new role. */}
+            <Label htmlFor="role-slug" className="whitespace-nowrap">{t('roles.fieldSlug')}</Label>
+            <Input
+              id="role-slug"
+              data-testid="role-slug"
+              value={slug}
+              onChange={(e) => { setSlugTouched(true); setSlug(e.target.value); }}
+              disabled={readOnly || isEdit}
+            />
+
+            {/* Multi-line field: align the label to the top of the textarea instead of centering
+                it against the full textarea height. */}
+            <Label htmlFor="role-description" className="whitespace-nowrap self-start pt-2">{t('roles.fieldDescription')}</Label>
+            <Textarea
+              id="role-description"
+              data-testid="role-description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder={t('roles.descriptionPlaceholder')}
+              disabled={readOnly}
+              rows={2}
+              className="self-start"
+            />
           </div>
 
           <div className="mt-6">
