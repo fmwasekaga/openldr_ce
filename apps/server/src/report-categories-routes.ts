@@ -2,13 +2,16 @@ import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { ReportCategoryListSchema } from '@openldr/reporting';
 import { recordAudit } from './audit-helper';
-import { requireRole } from './rbac';
+import { requireCapability } from './rbac';
 
 export function registerReportCategoryRoutes(
   app: FastifyInstance<any, any, any, any>, ctx: AppContext,
 ): void {
-  const MANAGE = { preHandler: requireRole('lab_admin', 'lab_manager') };
+  const MANAGE = { preHandler: requireCapability('reports.edit_templates') };
 
+  // GET was, and remains, ungated — the mapping table for this file covers only the existing
+  // MANAGE guard (PUT); it does not call for tightening this read the way forms/reports-routes
+  // explicitly does for THEIR previously-ungated routes.
   app.get('/api/report-categories', async () => ctx.reportCategories.list());
 
   app.put('/api/report-categories', MANAGE, async (req, reply) => {
