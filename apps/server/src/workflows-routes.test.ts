@@ -127,8 +127,8 @@ function fakeCtx() {
   } as any;
 }
 
-const MANAGER_USER = { id: 'u1', username: 'manager', displayName: null, roles: ['lab_manager'] };
-const TECHNICIAN_USER = { id: 'u2', username: 'tech', displayName: null, roles: ['lab_technician'] };
+const MANAGER_USER = { id: 'u1', username: 'manager', displayName: null, roles: ['lab_manager'], capabilities: ['workflows.view', 'workflows.edit', 'workflows.run', 'workflows.manage_secrets'] };
+const TECHNICIAN_USER = { id: 'u2', username: 'tech', displayName: null, roles: ['lab_technician'], capabilities: [] };
 
 const SAMPLE_WORKFLOW = {
   id: 'wf1',

@@ -25,6 +25,7 @@
     "@openldr/dashboards": "workspace:*",
     "@openldr/forms": "workspace:*",
     "@openldr/plugin-ui-sdk": "workspace:*",
+    "@openldr/rbac": "workspace:*",
     "@openldr/report-designer": "workspace:*",
     "@radix-ui/react-alert-dialog": "^1.1.16",
     "@radix-ui/react-checkbox": "^1.3.4",

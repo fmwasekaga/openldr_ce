@@ -6,7 +6,7 @@ import { redact } from '@openldr/core';
 import { toQuestionnaire, toQuestionnaireResponse } from '@openldr/forms';
 import { z } from 'zod';
 import { recordAudit } from './audit-helper';
-import { requireRole } from './rbac';
+import { requireCapability } from './rbac';
 
 function slug(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'form';
@@ -33,15 +33,28 @@ const responseInput = z.object({
   answers: z.record(z.unknown()),
 });
 
-export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
-  app.get('/api/forms', async () => ctx.forms.list());
+// These routes were previously UNGATED (no requireRole at all — any authenticated user could hit
+// them). Task 8 adds capability gates per the mapping table: read/fill routes require forms.view
+// (held by every system-role preset, including lab_technician — so no preset loses access);
+// create/edit/delete/export routes require forms.edit; publish-adjacent routes require
+// forms.publish. NOTE: POST /:id/status can transition a form to 'published' (and audits as
+// 'form.publish' when it does) — it is therefore gated on forms.publish rather than forms.edit,
+// even though a plain draft<->archived toggle is arguably a lesser action. This avoids a custom
+// role holding forms.edit-without-forms.publish being able to publish via this side door; no
+// system-role preset is harmed since every preset that holds forms.edit also holds forms.publish.
+const VIEW = { preHandler: requireCapability('forms.view') };
+const EDIT = { preHandler: requireCapability('forms.edit') };
+const PUBLISH = { preHandler: requireCapability('forms.publish') };
 
-  app.get('/api/forms/published', async (req) => {
+export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
+  app.get('/api/forms', VIEW, async () => ctx.forms.list());
+
+  app.get('/api/forms/published', VIEW, async (req) => {
     const query = req.query as Record<string, string | undefined>;
     return ctx.forms.listPublished(query.targetPage || undefined);
   });
 
-  app.get('/api/forms/:id', async (req, reply) => {
+  app.get('/api/forms/:id', VIEW, async (req, reply) => {
     const f = await ctx.forms.get((req.params as { id: string }).id);
     if (!f) {
       reply.code(404);
@@ -50,7 +63,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     return f;
   });
 
-  app.post('/api/forms', async (req, reply) => {
+  app.post('/api/forms', EDIT, async (req, reply) => {
     const p = formInput.safeParse(req.body);
     if (!p.success) {
       reply.code(400);
@@ -67,7 +80,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     }
   });
 
-  app.put('/api/forms/:id', async (req, reply) => {
+  app.put('/api/forms/:id', EDIT, async (req, reply) => {
     const p = formInput.safeParse(req.body);
     if (!p.success) {
       reply.code(400);
@@ -84,7 +97,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     return after;
   });
 
-  app.post('/api/forms/:id/status', async (req, reply) => {
+  app.post('/api/forms/:id/status', PUBLISH, async (req, reply) => {
     const status = (req.body as { status?: string }).status;
     if (status !== 'draft' && status !== 'published' && status !== 'archived') {
       reply.code(400);
@@ -101,7 +114,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     return after;
   });
 
-  app.post('/api/forms/:id/publish', async (req, reply) => {
+  app.post('/api/forms/:id/publish', PUBLISH, async (req, reply) => {
     const p = publishInput.safeParse(req.body ?? {});
     if (!p.success) {
       reply.code(400);
@@ -118,7 +131,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     return after;
   });
 
-  app.post('/api/forms/:id/duplicate', async (req, reply) => {
+  app.post('/api/forms/:id/duplicate', EDIT, async (req, reply) => {
     const id = (req.params as { id: string }).id;
     if (!(await ctx.forms.get(id))) {
       reply.code(404);
@@ -130,7 +143,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     return copy;
   });
 
-  app.get('/api/forms/:id/versions', async (req, reply) => {
+  app.get('/api/forms/:id/versions', VIEW, async (req, reply) => {
     const id = (req.params as { id: string }).id;
     if (!(await ctx.forms.get(id))) {
       reply.code(404);
@@ -139,7 +152,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     return ctx.forms.listVersions(id);
   });
 
-  app.get('/api/forms/:id/versions/:version', async (req, reply) => {
+  app.get('/api/forms/:id/versions/:version', VIEW, async (req, reply) => {
     const { id, version } = req.params as { id: string; version: string };
     if (!/^[1-9]\d*$/.test(version)) {
       reply.code(400);
@@ -162,7 +175,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     return snapshot;
   });
 
-  app.delete('/api/forms/:id', async (req, reply) => {
+  app.delete('/api/forms/:id', EDIT, async (req, reply) => {
     const id = (req.params as { id: string }).id;
     const before = await ctx.forms.get(id);
     if (!before) {
@@ -175,7 +188,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     return null;
   });
 
-  app.get('/api/forms/:id/questionnaire', async (req, reply) => {
+  app.get('/api/forms/:id/questionnaire', VIEW, async (req, reply) => {
     const f = await ctx.forms.get((req.params as { id: string }).id);
     if (!f) {
       reply.code(404);
@@ -189,7 +202,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     }
   });
 
-  app.get('/api/forms/:id/export-bundle', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.get('/api/forms/:id/export-bundle', EDIT, async (req, reply) => {
     const { id } = req.params as { id: string };
     const form = await ctx.forms.get(id);
     if (!form) {
@@ -236,7 +249,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     return reply.send(buf);
   });
 
-  app.post('/api/forms/:id/responses', async (req, reply) => {
+  app.post('/api/forms/:id/responses', VIEW, async (req, reply) => {
     const p = responseInput.safeParse(req.body);
     if (!p.success) {
       reply.code(400);

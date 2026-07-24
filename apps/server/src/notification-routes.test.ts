@@ -14,9 +14,9 @@ async function buildCtx() {
   return { internalDb, syncActivity, audit, logger: nullLogger } as any;
 }
 
-function appWithUser(roles: string[], ctx: any) {
+function appWithUser(roles: string[], ctx: any, capabilities: string[] = ['notifications.view']) {
   const app = Fastify();
-  app.addHook('preHandler', async (req: any) => { req.user = { id: 'u1', username: 'analyst', roles }; });
+  app.addHook('preHandler', async (req: any) => { req.user = { id: 'u1', username: 'analyst', roles, capabilities }; });
   registerNotificationRoutes(app, ctx);
   return app;
 }
@@ -37,7 +37,7 @@ describe('notification routes', () => {
 
   it('GET /api/notifications is role-gated: wrong role -> 403', async () => {
     const ctx = await buildCtx();
-    const app = appWithUser(['lab_technician'], ctx);
+    const app = appWithUser(['lab_technician'], ctx, []);
     const res = await app.inject({ method: 'GET', url: '/api/notifications' });
     expect(res.statusCode).toBe(403);
   });

@@ -6,7 +6,7 @@ import { WorkflowSchema, WorkflowDefinitionSchema, runWorkflow, type RunEvent, c
 import { ConfigError, appError } from '@openldr/core';
 import { toCsv } from '@openldr/reporting';
 import { recordAudit } from './audit-helper';
-import { requireRole } from './rbac';
+import { requireCapability } from './rbac';
 import { resolveNodeOptions, resolveNodeDetail } from './workflows-node-options';
 
 /** Sync a workflow's trigger nodes into the derived registries (webhooks + schedules). */
@@ -141,7 +141,9 @@ export function registerWorkflowRoutes(
   ctx: AppContext,
   deps?: { connectors: { list(): Promise<Array<{ id: string; name: string; pluginId: string | null; type: string | null }>> } },
 ): void {
-  const MANAGE = { preHandler: requireRole('lab_admin', 'lab_manager') };
+  const VIEW = { preHandler: requireCapability('workflows.view') };
+  const EDIT = { preHandler: requireCapability('workflows.edit') };
+  const RUN = { preHandler: requireCapability('workflows.run') };
 
   // Octet-stream passthrough parser (stream → body). Guard prevents double-registration
   // when terminology-admin (or another route file) already added this parser to the app.
@@ -151,7 +153,7 @@ export function registerWorkflowRoutes(
 
   // Upload a binary file for use as a workflow trigger input. Returns a BinaryRef that can be
   // passed into execute-stream's `files` map or as a webhook body substitute.
-  app.post('/api/workflows/:id/uploads', MANAGE, async (req) => {
+  app.post('/api/workflows/:id/uploads', RUN, async (req) => {
     const max = ctx.cfg.WORKFLOW_FILE_MAX_BYTES;
     // Deliberately no local catch: readBinaryBody throws AppErrors, and letting them propagate to
     // the central error handler is what earns this route the app-wide {error, code, correlationId}
@@ -167,12 +169,12 @@ export function registerWorkflowRoutes(
   // SEC-06: workflow definitions are manager-level config (they can embed
   // webhook secrets, HTTP auth headers, tokens, and SQL). Reads require the same
   // role as writes; the LIST response is additionally redacted (defense in depth).
-  app.get('/api/workflows', MANAGE, async () => {
+  app.get('/api/workflows', VIEW, async () => {
     const all = await ctx.workflows.store.list();
     return all.map((w) => ({ ...w, definition: redactWorkflowSecrets(w.definition) }));
   });
 
-  app.get('/api/workflows/:id', MANAGE, async (req, reply) => {
+  app.get('/api/workflows/:id', VIEW, async (req, reply) => {
     const { id } = req.params as { id: string };
     const w = await ctx.workflows.store.get(id);
     if (!w) { reply.code(404); return { error: `unknown workflow: ${id}` }; }
@@ -180,7 +182,7 @@ export function registerWorkflowRoutes(
     return w;
   });
 
-  app.post('/api/workflows', MANAGE, async (req, reply) => {
+  app.post('/api/workflows', EDIT, async (req, reply) => {
     try {
       const parsed = WorkflowSchema.parse(req.body);
       // SEC-06: seal plaintext secrets into the store; persist refs only. Built fully
@@ -196,7 +198,7 @@ export function registerWorkflowRoutes(
     } catch (err) { return mapError(err, reply); }
   });
 
-  app.put('/api/workflows/:id', MANAGE, async (req, reply) => {
+  app.put('/api/workflows/:id', EDIT, async (req, reply) => {
     const { id } = req.params as { id: string };
     try {
       const before = await ctx.workflows.store.get(id);
@@ -214,7 +216,7 @@ export function registerWorkflowRoutes(
     } catch (err) { return mapError(err, reply); }
   });
 
-  app.delete('/api/workflows/:id', MANAGE, async (req) => {
+  app.delete('/api/workflows/:id', EDIT, async (req) => {
     const { id } = req.params as { id: string };
     const before = await ctx.workflows.store.get(id);
     await ctx.workflows.store.remove(id);
@@ -232,7 +234,7 @@ export function registerWorkflowRoutes(
   });
 
   // SSE execution. POST so the client can pass an optional trigger `input` body.
-  app.post('/api/workflows/:id/execute-stream', MANAGE, async (req, reply) => {
+  app.post('/api/workflows/:id/execute-stream', RUN, async (req, reply) => {
     const { id } = req.params as { id: string };
     const workflow = await ctx.workflows.store.get(id);
     if (!workflow) { reply.code(404); return { error: `unknown workflow: ${id}` }; }
@@ -277,13 +279,13 @@ export function registerWorkflowRoutes(
     return reply;
   });
 
-  app.get('/api/workflows/:id/runs', MANAGE, async (req) => {
+  app.get('/api/workflows/:id/runs', VIEW, async (req) => {
     const { id } = req.params as { id: string };
     const q = req.query as { limit?: string; offset?: string };
     return ctx.workflows.runs.list(id, { limit: q.limit ? Number(q.limit) : 50, offset: q.offset ? Number(q.offset) : 0 });
   });
 
-  app.get('/api/workflows/runs/:runId', MANAGE, async (req, reply) => {
+  app.get('/api/workflows/runs/:runId', VIEW, async (req, reply) => {
     const { runId } = req.params as { runId: string };
     const run = await ctx.workflows.runs.get(runId);
     if (!run) { reply.code(404); return { error: `unknown run: ${runId}` }; }
@@ -295,7 +297,7 @@ export function registerWorkflowRoutes(
   // plugin_data instead of through the broker. Returns the connectorId too so the form's
   // "Test connection" works without the host dhis2-context. Empty when dhis2-sink isn't
   // installed (graceful).
-  app.get('/api/workflows/dhis2-mappings', MANAGE, async () => {
+  app.get('/api/workflows/dhis2-mappings', VIEW, async () => {
     const rows = await ctx.pluginData.list('dhis2-sink', 'mappings');
     return rows.map((r) => {
       const d = r.doc as { id?: string; name?: string; definition?: { connectorId?: string } };
@@ -306,7 +308,7 @@ export function registerWorkflowRoutes(
   // Node registry: built-in host nodes merged with nodes scanned from installed+enabled plugins.
   // Discovery only (SP-1) — no execution, no builder changes. Invalid plugin nodes are dropped
   // + logged inside the registry, never crashing the listing.
-  app.get('/api/workflows/nodes', MANAGE, async () => {
+  app.get('/api/workflows/nodes', VIEW, async () => {
     const registry = createWorkflowNodeRegistry({
       plugins: ctx.plugins,
       hostNodes: HOST_NODE_DESCRIPTORS,
@@ -317,7 +319,7 @@ export function registerWorkflowRoutes(
 
   // optionsSource resolver for declarative `select`/`multiselect` config fields.
   // Resolves connectors, datasets, dhis2-mappings, fhir-resource-types, forms; unknown → []; never throws.
-  app.get('/api/workflows/node-options/:source', MANAGE, async (req) => {
+  app.get('/api/workflows/node-options/:source', VIEW, async (req) => {
     const { source } = req.params as { source: string };
     const pluginId = String((req.query as { pluginId?: string }).pluginId ?? '') || undefined;
     return resolveNodeOptions(source, {
@@ -337,7 +339,7 @@ export function registerWorkflowRoutes(
   // detailSource resolver for declarative config fields that denormalize a picked
   // value into the node config (e.g. dhis2-mapping → mapping definition + org-unit map).
   // Reads plugin_data (the dhis2-sink plugin's mappings). Missing → 404; never throws.
-  app.get('/api/workflows/node-detail/:source', MANAGE, async (req, reply) => {
+  app.get('/api/workflows/node-detail/:source', VIEW, async (req, reply) => {
     const { source } = req.params as { source: string };
     const value = String((req.query as { value?: string }).value ?? '');
     const detail = await resolveNodeDetail(source, value, {
@@ -358,10 +360,10 @@ export function registerWorkflowRoutes(
   });
 
   // Materialized datasets produced by workflow sink nodes.
-  app.get('/api/workflows/datasets', MANAGE, async () => ctx.workflows.datasets.list());
+  app.get('/api/workflows/datasets', VIEW, async () => ctx.workflows.datasets.list());
 
   // CSV download for a dataset (declared before :name so the .csv suffix isn't swallowed).
-  app.get('/api/workflows/datasets/:name.csv', MANAGE, async (req, reply) => {
+  app.get('/api/workflows/datasets/:name.csv', VIEW, async (req, reply) => {
     const { name } = req.params as { name: string };
     const d = await ctx.workflows.datasets.getByName(name);
     if (!d) { reply.code(404); return { error: `unknown dataset: ${name}` }; }
@@ -370,7 +372,7 @@ export function registerWorkflowRoutes(
     return toCsv(d.columns, d.rows);
   });
 
-  app.get('/api/workflows/datasets/:name', MANAGE, async (req, reply) => {
+  app.get('/api/workflows/datasets/:name', VIEW, async (req, reply) => {
     const { name } = req.params as { name: string };
     const d = await ctx.workflows.datasets.getByName(name);
     if (!d) { reply.code(404); return { error: `unknown dataset: ${name}` }; }
@@ -381,7 +383,7 @@ export function registerWorkflowRoutes(
   // SEC-08: exports are written under `workflow-artifacts/` (see bootstrap
   // exportArtifact). Constrain the caller-controlled key to that namespace and
   // reject path traversal so a manager cannot fetch blobs outside it.
-  app.get('/api/workflows/artifacts/*', MANAGE, async (req, reply) => {
+  app.get('/api/workflows/artifacts/*', VIEW, async (req, reply) => {
     const raw = (req.params as Record<string, string>)['*'] ?? '';
     let key: string;
     try { key = decodeURIComponent(raw); } catch { key = raw; }

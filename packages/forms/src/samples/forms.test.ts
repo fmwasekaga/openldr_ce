@@ -35,19 +35,8 @@ describe('sample forms', () => {
     expect(fieldIds).toContain('patient');
     expect(fieldIds).toContain('tests');
   });
-  it('users form roles options use the canonical system role codes', () => {
-    // These must match the Keycloak realm roles (infra/keycloak/openldr-realm.json)
-    // and the i18n users.roleNames keys — otherwise a user's real role never shows
-    // as checked on edit and saving writes role codes the IdP does not recognise.
+  it('users form has no roles field — role assignment is a dedicated control outside the template', () => {
     const users = sampleForms.find((f) => f.id === 'sample-users');
-    const rolesField = users?.fields.find((x) => x.apiProperty === 'roles');
-    const codes = (rolesField?.valueSetOptions ?? []).map((o) => o.code);
-    expect(codes).toEqual([
-      'lab_admin',
-      'lab_manager',
-      'lab_technician',
-      'data_analyst',
-      'system_auditor',
-    ]);
+    expect(users?.fields.some((x) => x.apiProperty === 'roles')).toBe(false);
   });
 });

@@ -13,8 +13,11 @@ import {
 } from '@openldr/marketplace';
 import { createRegistryStore, type RegistryRecord } from '@openldr/db';
 import { redact } from '@openldr/core';
-import { requireRole } from './rbac';
+import { requireCapability } from './rbac';
 import { recordAudit } from './audit-helper';
+
+const VIEW = { preHandler: requireCapability('marketplace.view') };
+const MANAGE = { preHandler: requireCapability('marketplace.manage') };
 
 function actor(req: FastifyRequest): { id?: string | null; name: string } {
   return { id: req.user?.id ?? null, name: req.user?.username ?? 'unknown' };
@@ -60,7 +63,7 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
   const publishBranch = ctx.cfg.MARKETPLACE_PUBLISH_BRANCH ?? 'main';
   const publishConfigured = Boolean(publishToken && publishRepoCfg && stagingDir);
 
-  app.get('/api/marketplace/installed', { preHandler: requireRole('lab_admin') }, async () => {
+  app.get('/api/marketplace/installed', VIEW, async () => {
     const rows = await ctx.plugins.list();
     const pluginRows = rows.map((r) => {
       const g = readGrant(r.manifest);
@@ -92,7 +95,7 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
     return [...pluginRows, ...formRows];
   });
 
-  app.get('/api/marketplace/available', { preHandler: requireRole('lab_admin') }, async () => {
+  app.get('/api/marketplace/available', VIEW, async () => {
     const regs = await enabledRegistries();
     if (regs.length === 0) return { configured: false, bundles: [], source: null, host: null };
     const bundles: unknown[] = [];
@@ -123,7 +126,7 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
     };
   });
 
-  app.get('/api/marketplace/available/:ref', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.get('/api/marketplace/available/:ref', VIEW, async (req, reply) => {
     const parsed = unpackRef(decodeURIComponent((req.params as { ref: string }).ref));
     if (!parsed) { reply.code(400); return { error: 'invalid bundle ref' }; }
     const reg = await registries.get(parsed.registryId);
@@ -152,7 +155,7 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
   // On-demand rich detail for an INSTALLED plugin, read from its stored manifest. Mirrors
   // the available/:ref detail (readme, payload, compatibility) so the Installed detail view
   // reaches parity with Browse without bloating the installed LIST with every readme.
-  app.get('/api/marketplace/installed/:id', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.get('/api/marketplace/installed/:id', VIEW, async (req, reply) => {
     const id = (req.params as { id: string }).id;
     const row = (await ctx.plugins.list()).find((r) => r.id === id);
     if (!row) { reply.code(404); return { error: 'plugin not installed' }; }
@@ -173,7 +176,7 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
     };
   });
 
-  app.post('/api/marketplace/install', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.post('/api/marketplace/install', MANAGE, async (req, reply) => {
     const body = (req.body ?? {}) as { ref?: unknown; acknowledgedCapabilities?: unknown };
     const parsed = unpackRef(typeof body.ref === 'string' ? body.ref : '');
     if (!parsed) { reply.code(400); return { error: 'invalid bundle ref' }; }
@@ -206,7 +209,7 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
     }
   });
 
-  app.post('/api/marketplace/refresh', { preHandler: requireRole('lab_admin') }, async () => {
+  app.post('/api/marketplace/refresh', MANAGE, async () => {
     for (const reg of await enabledRegistries()) (await sourceFor(reg)).refresh();
     return { ok: true };
   });
@@ -215,9 +218,9 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
   const regInput = z.object({ name: z.string().min(1), kind: z.enum(['local', 'http']), location: z.string().min(1), enabled: z.boolean().optional() });
   const regPatch = z.object({ name: z.string().min(1).optional(), kind: z.enum(['local', 'http']).optional(), location: z.string().min(1).optional(), enabled: z.boolean().optional() });
 
-  app.get('/api/marketplace/registries', { preHandler: requireRole('lab_admin') }, async () => registries.list());
+  app.get('/api/marketplace/registries', VIEW, async () => registries.list());
 
-  app.post('/api/marketplace/registries', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.post('/api/marketplace/registries', MANAGE, async (req, reply) => {
     const p = regInput.safeParse(req.body);
     if (!p.success) { reply.code(400); return { error: 'invalid registry' }; }
     const id = randomUUID();
@@ -230,7 +233,7 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
     return registries.get(id);
   });
 
-  app.put('/api/marketplace/registries/:id', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.put('/api/marketplace/registries/:id', MANAGE, async (req, reply) => {
     const { id } = req.params as { id: string };
     const p = regPatch.safeParse(req.body);
     if (!p.success) { reply.code(400); return { error: 'invalid patch' }; }
@@ -243,7 +246,7 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
     return registries.get(id);
   });
 
-  app.delete('/api/marketplace/registries/:id', { preHandler: requireRole('lab_admin') }, async (req) => {
+  app.delete('/api/marketplace/registries/:id', MANAGE, async (req) => {
     const { id } = req.params as { id: string };
     const existing = await registries.get(id);
     await registries.remove(id);
@@ -254,11 +257,11 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
     return { ok: true };
   });
 
-  app.get('/api/marketplace/publish/status', { preHandler: requireRole('lab_admin') }, async () => {
+  app.get('/api/marketplace/publish/status', VIEW, async () => {
     return { configured: publishConfigured, repo: publishConfigured ? publishRepoCfg : null };
   });
 
-  app.post('/api/marketplace/publish', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.post('/api/marketplace/publish', MANAGE, async (req, reply) => {
     if (!publishConfigured || !stagingDir || !publishRepoCfg || !publishToken) {
       reply.code(412);
       return { error: 'publishing not configured' };
@@ -330,17 +333,17 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
     }
   });
 
-  app.post('/api/marketplace/:id/enable', { preHandler: requireRole('lab_admin') }, async (req) => {
+  app.post('/api/marketplace/:id/enable', MANAGE, async (req) => {
     await ctx.plugins.setEnabled((req.params as { id: string }).id, true, { actor: actor(req) });
     return { ok: true };
   });
 
-  app.post('/api/marketplace/:id/disable', { preHandler: requireRole('lab_admin') }, async (req) => {
+  app.post('/api/marketplace/:id/disable', MANAGE, async (req) => {
     await ctx.plugins.setEnabled((req.params as { id: string }).id, false, { actor: actor(req) });
     return { ok: true };
   });
 
-  app.post('/api/marketplace/:id/rollback', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.post('/api/marketplace/:id/rollback', MANAGE, async (req, reply) => {
     const { id } = req.params as { id: string };
     const version = (req.body as { version?: string } | undefined)?.version;
     if (!version) {
@@ -356,12 +359,12 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
     }
   });
 
-  app.post('/api/marketplace/:id/detach', { preHandler: requireRole('lab_admin') }, async (req) => {
+  app.post('/api/marketplace/:id/detach', MANAGE, async (req) => {
     await ctx.marketplaceForms.detach((req.params as { id: string }).id, { actor: actor(req) });
     return { ok: true };
   });
 
-  app.delete('/api/marketplace/:id', { preHandler: requireRole('lab_admin') }, async (req) => {
+  app.delete('/api/marketplace/:id', MANAGE, async (req) => {
     const { id } = req.params as { id: string };
     const version = (req.query as { version?: string } | undefined)?.version;
     await ctx.plugins.remove(id, version, { actor: actor(req) });

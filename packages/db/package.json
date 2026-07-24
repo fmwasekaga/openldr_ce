@@ -17,6 +17,7 @@
     "@openldr/core": "workspace:*",
     "@openldr/fhir": "workspace:*",
     "@openldr/ports": "workspace:*",
+    "@openldr/rbac": "workspace:*",
     "kysely": "^0.28.17",
     "pg": "^8.13.1"
   },

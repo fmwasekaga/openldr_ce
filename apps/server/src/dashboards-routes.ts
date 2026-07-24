@@ -3,14 +3,17 @@ import { ZodError } from 'zod';
 import { DashboardQueryError, type AppContext } from '@openldr/bootstrap';
 import { DashboardSchema, WidgetQuerySchema, type Dashboard } from '@openldr/dashboards';
 import { recordAudit } from './audit-helper';
-import { requireRole } from './rbac';
+import { requireCapability } from './rbac';
 
-// Reads and query execution are available to reporting/analytics roles; authoring (create/update/delete
-// of shared operational dashboards) is restricted to admins and managers. Raw-SQL widget authoring is
-// gated further by the `dashboard.raw_sql` feature flag (see assertSqlAuthoringAllowed), and dashboard
-// query execution itself is SELECT-only/read-only in @openldr/dashboards.
-const VIEW = { preHandler: requireRole('lab_admin', 'lab_manager', 'data_analyst', 'system_auditor') };
-const MANAGE = { preHandler: requireRole('lab_admin', 'lab_manager') };
+// Reads and query execution require dashboards.view; authoring (create/update/delete of shared
+// operational dashboards) is split by verb into dashboards.create/edit/delete. Raw-SQL widget
+// authoring is gated further by the `dashboard.raw_sql` feature flag (see
+// assertSqlAuthoringAllowed), and dashboard query execution itself is SELECT-only/read-only in
+// @openldr/dashboards.
+const VIEW = { preHandler: requireCapability('dashboards.view') };
+const CREATE = { preHandler: requireCapability('dashboards.create') };
+const EDIT = { preHandler: requireCapability('dashboards.edit') };
+const DELETE = { preHandler: requireCapability('dashboards.delete') };
 
 // Collect the set of already-vetted SQL templates (trimmed) from a persisted dashboard. On
 // UPDATE these are the SQL widgets the user is allowed to keep — layout/chart/config edits to
@@ -80,7 +83,7 @@ export function registerDashboardRoutes(app: FastifyInstance<any, any, any, any>
     return d;
   });
 
-  app.post('/api/dashboards', MANAGE, async (req, reply) => {
+  app.post('/api/dashboards', CREATE, async (req, reply) => {
     try {
       const parsed = DashboardSchema.parse(req.body);
       // CREATE: no prior dashboard, so no SQL is vetted — any sql-mode widget is new and gated.
@@ -92,7 +95,7 @@ export function registerDashboardRoutes(app: FastifyInstance<any, any, any, any>
     } catch (err) { return mapError(err, reply); }
   });
 
-  app.put('/api/dashboards/:id', MANAGE, async (req, reply) => {
+  app.put('/api/dashboards/:id', EDIT, async (req, reply) => {
     const { id } = req.params as { id: string };
     try {
       const parsed = DashboardSchema.parse(req.body);
@@ -107,7 +110,7 @@ export function registerDashboardRoutes(app: FastifyInstance<any, any, any, any>
     } catch (err) { return mapError(err, reply); }
   });
 
-  app.delete('/api/dashboards/:id', MANAGE, async (req) => {
+  app.delete('/api/dashboards/:id', DELETE, async (req) => {
     const { id } = req.params as { id: string };
     const before = await ctx.dashboards.store.get(id);
     await ctx.dashboards.store.remove(id);

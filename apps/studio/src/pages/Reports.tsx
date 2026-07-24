@@ -30,8 +30,8 @@ type Tab = 'document' | 'spreadsheet';
 
 export function Reports() {
   const { t } = useTranslation();
-  const { hasRole } = useAuth();
-  const canManageSchedules = hasRole('lab_admin') || hasRole('lab_manager');
+  const { hasCapability } = useAuth();
+  const canManageSchedules = hasCapability('reports.edit_templates');
   const [schedulesOpen, setSchedulesOpen] = useState(false);
   const [reports, setReports] = useState<ReportSummary[]>([]);
   const [categories, setCategories] = useState<ReportCategory[]>([]);

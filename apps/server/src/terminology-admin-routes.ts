@@ -4,13 +4,13 @@ import { resolveCodingSystemId, type AppContext } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
 import { z } from 'zod';
 import { recordAudit } from './audit-helper';
-import { requireRole } from './rbac';
+import { requireCapability } from './rbac';
 import { canonicalSystemUrl, isFhirValueSetCatalog, parseTerminologyTerms, parseTerminologyTermsStream, terminologyImportTemplate } from '@openldr/terminology';
 
 // Mutations, imports, and server-side loader paths (e.g. LOINC import) alter shared terminology
 // configuration for the whole install, so they are gated to admin/manager roles. Read-only GETs stay
 // available to any authenticated user because terminology lookups are used broadly across the app.
-const MANAGE = { preHandler: requireRole('lab_admin', 'lab_manager') };
+const MANAGE = { preHandler: requireCapability('terminology.manage') };
 
 const publisherInput = z.object({
   name: z.string().min(1),
@@ -362,7 +362,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
   });
 
   // ── Distribution upload / status / purge ────────────────────────────────
-  const UPLOAD = { preHandler: requireRole('lab_admin', 'lab_manager'), bodyLimit: 1_073_741_824 };
+  const UPLOAD = { preHandler: requireCapability('terminology.manage'), bodyLimit: 1_073_741_824 };
   const SUPPORTED_SYSTEMS = new Set(['loinc', 'snomed', 'rxnorm']);
 
   app.post('/api/terminology/publishers/:publisherId/distribution', UPLOAD, async (req, reply) => {

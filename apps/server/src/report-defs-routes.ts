@@ -2,16 +2,17 @@ import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { ReportDefSchema } from '@openldr/reporting';
 import { recordAudit } from './audit-helper';
-import { requireRole } from './rbac';
+import { requireCapability } from './rbac';
 
 export function registerReportDefRoutes(
   app: FastifyInstance<any, any, any, any>, ctx: AppContext,
 ): void {
-  const MANAGE = { preHandler: requireRole('lab_admin', 'lab_manager') };
+  const MANAGE = { preHandler: requireCapability('reports.edit_templates') };
+  const VIEW = { preHandler: requireCapability('reports.view') };
 
-  app.get('/api/report-defs', async () => ctx.reportDefs.list());
+  app.get('/api/report-defs', VIEW, async () => ctx.reportDefs.list());
 
-  app.get('/api/report-defs/:id', async (req, reply) => {
+  app.get('/api/report-defs/:id', VIEW, async (req, reply) => {
     const { id } = req.params as { id: string };
     const r = await ctx.reportDefs.get(id);
     if (!r) { reply.code(404); return { error: 'not found' }; }

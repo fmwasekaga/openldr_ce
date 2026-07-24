@@ -1,10 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
-import { requireRole } from './rbac';
+import { requireCapability } from './rbac';
 
-// Audit metadata exposes who did what across the install; restrict reads to admins and auditors.
-const VIEW = { preHandler: requireRole('lab_admin', 'system_auditor') };
+// Audit metadata exposes who did what across the install; restrict reads to audit.view holders.
+const VIEW = { preHandler: requireCapability('audit.view') };
 
 export function registerAuditRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
   app.get('/api/audit', VIEW, async (req, reply) => {

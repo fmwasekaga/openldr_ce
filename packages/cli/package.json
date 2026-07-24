@@ -22,6 +22,7 @@
     "@openldr/sync": "workspace:*",
     "@openldr/core": "workspace:*",
     "@openldr/db": "workspace:*",
+    "@openldr/rbac": "workspace:*",
     "@openldr/dashboards": "workspace:*",
     "@openldr/fhir": "workspace:*",
     "@openldr/reporting": "workspace:*",

@@ -22,7 +22,7 @@ vi.mock('@/api', () => ({
   markAllNotificationsRead: vi.fn(async () => undefined),
 }));
 vi.mock('@/auth/AuthProvider', () => ({
-  useAuth: () => ({ user: { id: 'me', username: 'me', displayName: null, roles: ['lab_admin'] }, loading: false, hasRole: () => true }),
+  useAuth: () => ({ user: { id: 'me', username: 'me', displayName: null, roles: ['lab_admin'] }, loading: false, hasCapability: () => true }),
 }));
 
 import { Activity } from './Activity';

@@ -9,7 +9,7 @@ import { Activity } from './pages/Activity';
 import { Notifications } from './pages/Notifications';
 import { Users } from './pages/Users';
 import { Sites } from './pages/settings/Sites';
-import { SettingsShell } from '@/pages/settings/SettingsShell';
+import { SettingsShell, SettingsIndexRedirect } from '@/pages/settings/SettingsShell';
 import { General } from '@/pages/settings/General';
 import { NotificationPreferences } from '@/pages/settings/NotificationPreferences';
 import { DistributedSync } from '@/pages/settings/DistributedSync';
@@ -23,7 +23,8 @@ import { Workflows } from './workflows/page';
 import { QueryPage } from './query/QueryPage';
 import { WorkflowList } from './workflows/WorkflowList';
 import { PluginContainer } from './plugins/PluginContainer';
-import { RequireRole } from './auth/RequireRole';
+import { RequireCapability } from './auth/RequireCapability';
+import { Roles } from './pages/Roles';
 import { CallbackPage } from './auth/CallbackPage';
 import { Toaster } from './components/ui/sonner';
 
@@ -34,23 +35,38 @@ export function App() {
       <Route path="/auth/callback" element={<CallbackPage />} />
       <Route path="/" element={<DashboardPage />} />
       <Route path="/reports" element={<Reports />} />
-      <Route path="/workflows" element={<RequireRole roles={['lab_admin', 'lab_manager']}><WorkflowList /></RequireRole>} />
-      <Route path="/workflows/new" element={<RequireRole roles={['lab_admin', 'lab_manager']}><Workflows /></RequireRole>} />
-      <Route path="/workflows/:id" element={<RequireRole roles={['lab_admin', 'lab_manager']}><Workflows /></RequireRole>} />
-      <Route path="/query" element={<RequireRole roles={['lab_admin', 'lab_manager', 'data_analyst']}><QueryPage /></RequireRole>} />
+      <Route path="/workflows" element={<RequireCapability cap="workflows.view"><WorkflowList /></RequireCapability>} />
+      <Route path="/workflows/new" element={<RequireCapability cap="workflows.view"><Workflows /></RequireCapability>} />
+      <Route path="/workflows/:id" element={<RequireCapability cap="workflows.view"><Workflows /></RequireCapability>} />
+      <Route path="/query" element={<RequireCapability cap="query.run"><QueryPage /></RequireCapability>} />
       <Route path="/terminology" element={<Terminology />} />
-      <Route path="/users" element={<RequireRole role="lab_admin"><Users /></RequireRole>} />
+      <Route path="/users" element={<RequireCapability cap="users.view"><Users /></RequireCapability>} />
       {/* Sites moved under Settings (was top-level /sites) so it isn't confused with a future
           Facilities / master facility list. The old path redirects so existing links keep working. */}
       <Route path="/sites" element={<Navigate to="/settings/sites" replace />} />
-      <Route path="/settings" element={<RequireRole><SettingsShell /></RequireRole>}>
-        <Route index element={<Navigate to="general" replace />} />
-        <Route path="general" element={<RequireRole><General /></RequireRole>} />
-        <Route path="notifications" element={<RequireRole roles={['lab_admin', 'lab_manager', 'data_analyst', 'system_auditor']}><NotificationPreferences /></RequireRole>} />
-        <Route path="sites" element={<RequireRole role="lab_admin"><Sites /></RequireRole>} />
-        <Route path="sync" element={<RequireRole role="lab_admin"><DistributedSync /></RequireRole>} />
-        <Route path="marketplace" element={<RequireRole role="lab_admin"><Marketplace /></RequireRole>} />
-        <Route path="connectors" element={<RequireRole role="lab_admin"><Connectors /></RequireRole>} />
+      {/* Children are reached through this parent, so its gate must be an OR of every
+          child sub-page's cap (kept in sync with SettingsShell's SUB_NAV) — not just
+          settings.view — or a non-admin who can reach one sub-page (e.g. notifications.view)
+          would be denied before ever getting to it. Each child route keeps its own,
+          narrower cap below. */}
+      <Route
+        path="/settings"
+        element={
+          <RequireCapability
+            caps={['settings.view', 'notifications.view', 'sync.view', 'sync.manage', 'marketplace.view', 'connectors.manage', 'roles.view']}
+          >
+            <SettingsShell />
+          </RequireCapability>
+        }
+      >
+        <Route index element={<SettingsIndexRedirect />} />
+        <Route path="general" element={<RequireCapability cap="settings.view"><General /></RequireCapability>} />
+        <Route path="notifications" element={<RequireCapability cap="notifications.view"><NotificationPreferences /></RequireCapability>} />
+        <Route path="sites" element={<RequireCapability cap="sync.manage"><Sites /></RequireCapability>} />
+        <Route path="sync" element={<RequireCapability cap="sync.view"><DistributedSync /></RequireCapability>} />
+        <Route path="marketplace" element={<RequireCapability cap="marketplace.view"><Marketplace /></RequireCapability>} />
+        <Route path="connectors" element={<RequireCapability cap="connectors.manage"><Connectors /></RequireCapability>} />
+        <Route path="roles" element={<RequireCapability cap="roles.view"><Roles /></RequireCapability>} />
       </Route>
       <Route path="/audit" element={<Audit />} />
       <Route path="/activity" element={<Activity />} />
@@ -58,10 +74,10 @@ export function App() {
       <Route path="/forms" element={<Forms />} />
       <Route path="/forms/new" element={<FormBuilderPage />} />
       <Route path="/forms/:id/builder" element={<FormBuilderPage />} />
-      <Route path="/report-designer" element={<RequireRole roles={['lab_admin', 'lab_manager']}><ReportDesignerPage /></RequireRole>} />
-      <Route path="/report-designer/:id" element={<RequireRole roles={['lab_admin', 'lab_manager']}><ReportDesignerPage /></RequireRole>} />
+      <Route path="/report-designer" element={<RequireCapability cap="reports.edit_templates"><ReportDesignerPage /></RequireCapability>} />
+      <Route path="/report-designer/:id" element={<RequireCapability cap="reports.edit_templates"><ReportDesignerPage /></RequireCapability>} />
       <Route path="/forms/:id" element={<FormCapture />} />
-      <Route path="/x/:pluginId" element={<RequireRole><PluginContainer /></RequireRole>} />
+      <Route path="/x/:pluginId" element={<RequireCapability><PluginContainer /></RequireCapability>} />
       <Route path="/docs" element={<Docs />} />
       <Route path="/docs/:slug" element={<Docs />} />
       <Route path="*" element={<AppShell title="Not found"><div className="card">Page not found.</div></AppShell>} />

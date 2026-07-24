@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import Fastify from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
+import { CAPABILITY_KEYS } from '@openldr/rbac';
 import { registerAuth } from './auth-plugin';
 
 type Claims = { sub: string; [k: string]: unknown };
@@ -8,18 +9,39 @@ type Claims = { sub: string; [k: string]: unknown };
 function ctx(opts: {
   bypass?: boolean;
   verify?: (t: string) => Promise<Claims>;
-  user?: { id: string; username: string; displayName: string | null; roles: string[]; status: 'active' | 'disabled' };
+  user?: {
+    id: string;
+    username: string;
+    displayName: string | null;
+    roles: string[];
+    status: 'active' | 'disabled';
+    subject?: string | null;
+    rbacInitialized?: boolean;
+  };
+  roles?: {
+    resolveCapabilities?: (subject: string) => Promise<string[]>;
+    backfillUserFromRoleNames?: (subject: string, roleNames: string[]) => Promise<void>;
+  };
+  markRbacInitialized?: (id: string) => Promise<void>;
 }): AppContext {
-  const u = opts.user ?? { id: 'u1', username: 'ada', displayName: 'Ada', roles: ['lab_manager'], status: 'active' as const };
+  const providedUser = opts.user ?? { id: 'u1', username: 'ada', displayName: 'Ada', roles: ['lab_manager'], status: 'active' as const };
+  // Default already-initialized so pre-existing tests (which don't care about RBAC backfill)
+  // don't trip the once-only migration path.
+  const u = { subject: null as string | null, rbacInitialized: true, ...providedUser };
   return {
     cfg: { AUTH_DEV_BYPASS: opts.bypass ?? false, AUTH_DEV_USERNAME: 'dev-admin', AUTH_DEV_ROLES: 'lab_admin' },
     logger: { warn() {}, error() {}, info() {} },
     auth: { verifyToken: opts.verify ?? (async () => { throw new Error('bad'); }) },
     audit: { record: vi.fn(async (e: unknown) => ({ ...(e as object), id: 'x', occurredAt: 't' })) },
+    roles: {
+      resolveCapabilities: opts.roles?.resolveCapabilities ?? (async () => []),
+      backfillUserFromRoleNames: opts.roles?.backfillUserFromRoleNames ?? (async () => {}),
+    },
     users: {
       syncFromClaims: async () => u,
       getByUsername: async () => undefined,
       create: async () => ({ id: 'dev1', username: 'dev-admin', displayName: 'Dev Admin', roles: ['lab_admin'], status: 'active' }),
+      markRbacInitialized: opts.markRbacInitialized ?? (async () => {}),
     },
   } as unknown as AppContext;
 }
@@ -140,5 +162,68 @@ describe('registerAuth', () => {
     await app.inject({ method: 'GET', url: '/api/probe', headers: { authorization: 'Bearer super-secret-token-value' } });
     const calls = (c.audit.record as any).mock.calls;
     expect(JSON.stringify(calls)).not.toContain('super-secret-token-value');
+  });
+
+  it("resolves req.user.capabilities from the user's assigned-role capabilities", async () => {
+    const c = ctx({
+      verify: async () => ({ sub: 's1' }),
+      user: { id: 'u1', username: 'ada', displayName: 'Ada', roles: [], status: 'active', subject: 's1', rbacInitialized: true },
+      roles: { resolveCapabilities: async (subject) => (subject === 's1' ? ['patients.read', 'reports.view'] : []) },
+    });
+    const app = await appWith(c);
+    const res = await app.inject({ method: 'GET', url: '/api/probe', headers: { authorization: 'Bearer good' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().user.capabilities).toEqual(['patients.read', 'reports.view']);
+  });
+
+  it('gives the dev-bypass actor every capability', async () => {
+    const app = await appWith(ctx({ bypass: true }));
+    const res = await app.inject({ method: 'GET', url: '/api/probe' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().user.capabilities).toHaveLength(CAPABILITY_KEYS.length);
+    expect(new Set(res.json().user.capabilities as string[])).toEqual(new Set(CAPABILITY_KEYS));
+  });
+
+  it('backfills token realm roles into user_roles exactly once, on first login', async () => {
+    let rbacInitialized = false;
+    let assignedRoles: string[] = [];
+    const backfillUserFromRoleNames = vi.fn(async (_subject: string, roleNames: string[]) => {
+      assignedRoles = [...assignedRoles, ...roleNames];
+    });
+    const resolveCapabilities = vi.fn(async () => (assignedRoles.includes('lab_manager') ? ['reports.manage'] : []));
+    const markRbacInitialized = vi.fn(async () => {
+      rbacInitialized = true;
+    });
+    let realmRoles = ['lab_manager'];
+    const c: AppContext = {
+      cfg: { AUTH_DEV_BYPASS: false, AUTH_DEV_USERNAME: 'dev-admin', AUTH_DEV_ROLES: 'lab_admin' },
+      logger: { warn() {}, error() {}, info() {} },
+      auth: { verifyToken: async () => ({ sub: 's1', realm_access: { roles: realmRoles } }) },
+      audit: { record: vi.fn(async (e: unknown) => ({ ...(e as object), id: 'x', occurredAt: 't' })) },
+      roles: { resolveCapabilities, backfillUserFromRoleNames },
+      users: {
+        syncFromClaims: async () => ({ id: 'u1', username: 'ada', displayName: 'Ada', roles: [], status: 'active', subject: 's1', rbacInitialized }),
+        getByUsername: async () => undefined,
+        create: async () => ({ id: 'dev1', username: 'dev-admin', displayName: 'Dev Admin', roles: ['lab_admin'], status: 'active' }),
+        markRbacInitialized,
+      },
+    } as unknown as AppContext;
+    const app = await appWith(c);
+
+    const first = await app.inject({ method: 'GET', url: '/api/probe', headers: { authorization: 'Bearer good' } });
+    expect(first.statusCode).toBe(200);
+    expect(backfillUserFromRoleNames).toHaveBeenCalledTimes(1);
+    expect(backfillUserFromRoleNames).toHaveBeenCalledWith('s1', ['lab_manager']);
+    expect(markRbacInitialized).toHaveBeenCalledTimes(1);
+    expect(markRbacInitialized).toHaveBeenCalledWith('u1');
+    expect(first.json().user.capabilities).toEqual(['reports.manage']);
+
+    // Second login: token now carries a different realm role. Since rbac_initialized is
+    // already true, the backfill must NOT run again — the DB role assignment stays authoritative.
+    realmRoles = ['lab_tech'];
+    const second = await app.inject({ method: 'GET', url: '/api/probe', headers: { authorization: 'Bearer good' } });
+    expect(second.statusCode).toBe(200);
+    expect(backfillUserFromRoleNames).toHaveBeenCalledTimes(1); // still 1 — not re-invoked
+    expect(second.json().user.capabilities).toEqual(['reports.manage']); // unaffected by the new token roles
   });
 });

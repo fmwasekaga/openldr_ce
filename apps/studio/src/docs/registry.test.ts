@@ -22,7 +22,7 @@ describe('docs registry', () => {
     ]);
   });
 
-  it('defines exactly the seventeen approved guides in navigation order', () => {
+  it('defines exactly the eighteen approved guides in navigation order', () => {
     expect(DOC_GUIDES.map((guide) => guide.slug)).toEqual([
       'start-here',
       'dashboard',
@@ -34,6 +34,7 @@ describe('docs registry', () => {
       'forms',
       'terminology',
       'users',
+      'roles',
       'audit',
       'settings',
       'sync',
@@ -58,9 +59,10 @@ describe('docs registry', () => {
       'report-designer': ['reports', 'query', 'connectors'],
       forms: ['terminology', 'marketplace'],
       terminology: ['forms', 'audit'],
-      users: ['audit', 'settings'],
+      users: ['roles', 'audit', 'settings'],
+      roles: ['users', 'audit', 'settings'],
       audit: ['users', 'workflows'],
-      settings: ['connectors', 'marketplace', 'environment', 'sync'],
+      settings: ['roles', 'connectors', 'marketplace', 'environment', 'sync'],
       sync: ['settings', 'users', 'environment'],
       connectors: ['report-pipeline', 'settings', 'workflows', 'marketplace', 'query'],
       marketplace: ['settings', 'connectors', 'forms'],

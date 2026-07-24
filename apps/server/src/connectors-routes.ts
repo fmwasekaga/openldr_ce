@@ -5,7 +5,7 @@ import type { AppContext } from '@openldr/bootstrap';
 import { createPluginTarget, testConnector } from '@openldr/bootstrap';
 import type { ConnectorStore } from '@openldr/db';
 import { redact } from '@openldr/core';
-import { requireRole } from './rbac';
+import { requireCapability } from './rbac';
 import { recordAudit } from './audit-helper';
 
 export interface ConnectorsRouteDeps {
@@ -65,7 +65,7 @@ export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any
   const key = (): string | undefined => ctx.cfg.SECRETS_ENCRYPTION_KEY;
 
   // Installed sink plugins, for the "pick a plugin" dropdown.
-  app.get('/api/connectors/sink-plugins', { preHandler: requireRole('lab_admin') }, async () => {
+  app.get('/api/connectors/sink-plugins', { preHandler: requireCapability('connectors.manage') }, async () => {
     const rows = await ctx.plugins.list();
     return rows
       .filter((r) => {
@@ -75,16 +75,16 @@ export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any
       .map((r) => ({ id: r.id, version: r.version, enabled: r.enabled }));
   });
 
-  app.get('/api/connectors', { preHandler: requireRole('lab_admin') }, async () => connectors.list());
+  app.get('/api/connectors', { preHandler: requireCapability('connectors.manage') }, async () => connectors.list());
 
-  app.get('/api/connectors/:id', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.get('/api/connectors/:id', { preHandler: requireCapability('connectors.manage') }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const c = await connectors.get(id);
     if (!c) { reply.code(404); return { error: 'connector not found' }; }
     return c;
   });
 
-  app.post('/api/connectors', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.post('/api/connectors', { preHandler: requireCapability('connectors.manage') }, async (req, reply) => {
     const parsed = createInput.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: 'invalid connector input' }; }
     const { name, pluginId, type, config, allowedHost } = parsed.data;
@@ -124,7 +124,7 @@ export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any
     return connectors.get(id);
   });
 
-  app.put('/api/connectors/:id', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.put('/api/connectors/:id', { preHandler: requireCapability('connectors.manage') }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const parsed = updateInput.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: 'invalid connector patch' }; }
@@ -154,7 +154,7 @@ export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any
     return connectors.get(id);
   });
 
-  app.delete('/api/connectors/:id', { preHandler: requireRole('lab_admin') }, async (req) => {
+  app.delete('/api/connectors/:id', { preHandler: requireCapability('connectors.manage') }, async (req) => {
     const { id } = req.params as { id: string };
     const existing = await connectors.get(id);
     await connectors.remove(id);
@@ -166,7 +166,7 @@ export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any
   });
 
   // Live connection test: resolve → loadSink → health_check + pull_metadata (restricted to allowedHost).
-  app.post('/api/connectors/:id/test', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.post('/api/connectors/:id/test', { preHandler: requireCapability('connectors.manage') }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const connector = await connectors.get(id);
     if (!connector) { reply.code(404); return { error: 'connector not found' }; }

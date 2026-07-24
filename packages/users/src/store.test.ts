@@ -5,7 +5,7 @@ import { internalMigrations, type InternalSchema } from '@openldr/db';
 import type { TokenClaims } from '@openldr/ports';
 import { createUserStore, type User } from './store';
 
-const mk = (over: Partial<User>): User => ({ id: over.id ?? 'id', subject: over.subject ?? null, username: over.username ?? 'u', displayName: null, email: null, roles: [], status: 'active', lastLoginAt: null, createdAt: null });
+const mk = (over: Partial<User>): User => ({ id: over.id ?? 'id', subject: over.subject ?? null, username: over.username ?? 'u', displayName: null, email: null, roles: [], status: 'active', lastLoginAt: null, createdAt: null, rbacInitialized: over.rbacInitialized ?? false });
 
 async function makeMigratedDb(): Promise<Kysely<InternalSchema>> {
   const mem = newDb();
@@ -81,5 +81,17 @@ describe('createUserStore', () => {
     const created = await store.create({ username: 'turing' });
     expect(typeof created.createdAt).toBe('string');
     expect(Number.isNaN(Date.parse(created.createdAt!))).toBe(false);
+  });
+
+  it('rbacInitialized defaults false and markRbacInitialized flips it true', async () => {
+    const db = await makeMigratedDb();
+    const store = createUserStore(db);
+    const created = await store.create({ username: 'lovelace' });
+    expect(created.rbacInitialized).toBe(false);
+
+    await store.markRbacInitialized(created.id);
+
+    const after = await store.get(created.id);
+    expect(after?.rbacInitialized).toBe(true);
   });
 });

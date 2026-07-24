@@ -2,12 +2,12 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
 import { recordAudit } from './audit-helper';
-import { requireRole } from './rbac';
+import { requireCapability } from './rbac';
 
 // Deleting a distribution and building/rebuilding ontology indexes mutate shared, install-wide
-// terminology state (and drive server-side loader paths), so they are admin/manager gated. Read-only
+// terminology state (and drive server-side loader paths), so they require terminology.manage. Read-only
 // tree/search/lookup GETs stay open to any authenticated user.
-const MANAGE = { preHandler: requireRole('lab_admin', 'lab_manager') };
+const MANAGE = { preHandler: requireCapability('terminology.manage') };
 
 export function registerOntologyRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
   const ontology = ctx.terminology.ontology;

@@ -75,9 +75,17 @@ function fakeCtx(syncEnabled = true) {
   };
 }
 
-function appWithUser(roles: string[], reg: (app: any) => void) {
+const ALL_SETTINGS_CAPS = ['settings.feature_flags', 'settings.edit_general', 'settings.danger_zone', 'sync.view', 'sync.manage'];
+
+// Tests below cover route BEHAVIOR (previously role-gated to lab_admin only), not RBAC boundaries
+// per se — grant every settings/sync capability to a 'lab_admin' actor and none to anyone else,
+// mirroring the old role check 1:1. Explicit 403 tests below assert the boundary itself.
+// `capsOverride` lets a test express a narrower actor (e.g. sync.view but not sync.manage)
+// instead of the blanket all-or-nothing default below.
+function appWithUser(roles: string[], reg: (app: any) => void, capsOverride?: string[]) {
+  const capabilities = capsOverride ?? (roles.includes('lab_admin') ? ALL_SETTINGS_CAPS : []);
   const app = Fastify();
-  app.addHook('preHandler', async (req: any) => { req.user = { id: 'u1', username: 'admin', roles }; });
+  app.addHook('preHandler', async (req: any) => { req.user = { id: 'u1', username: 'admin', roles, capabilities }; });
   reg(app);
   return app;
 }
@@ -217,6 +225,15 @@ describe('settings routes', () => {
     const app = appWithUser(['lab_technician'], (a) => registerSettingsRoutes(a, ctx, deps));
     const res = await app.inject({ method: 'GET', url: '/api/settings/sync/status' });
     expect(res.statusCode).toBe(403);
+  });
+
+  it('an actor with only sync.view can read status but not manage sites (sync.manage boundary)', async () => {
+    const { ctx, deps } = fakeCtx();
+    const app = appWithUser(['lab_technician'], (a) => registerSettingsRoutes(a, ctx, deps), ['sync.view']);
+    const status = await app.inject({ method: 'GET', url: '/api/settings/sync/status' });
+    expect(status.statusCode).toBe(200);
+    const sites = await app.inject({ method: 'GET', url: '/api/settings/sync/sites' });
+    expect(sites.statusCode).toBe(403);
   });
 
   it('POST /api/settings/sync/now triggers + audits when enabled', async () => {

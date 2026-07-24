@@ -34,9 +34,9 @@ function fakeDeps(runConnectorSql: any = fakeRun): any {
   return { customQueries: fakeCq, runConnectorSql };
 }
 
-function appWith(ctx: any, roles: string[] = ['lab_admin'], deps: any = fakeDeps()) {
+function appWith(ctx: any, roles: string[] = ['lab_admin'], deps: any = fakeDeps(), capabilities: string[] = ['reports.edit_templates', 'reports.run', 'reports.view']) {
   const app = Fastify();
-  app.addHook('onRequest', async (req) => { (req as any).user = { id: 'u', username: 'u', displayName: null, roles }; });
+  app.addHook('onRequest', async (req) => { (req as any).user = { id: 'u', username: 'u', displayName: null, roles, capabilities }; });
   registerReportDesignRoutes(app, ctx, deps);
   return app;
 }
@@ -68,7 +68,7 @@ describe('report-design routes', () => {
   });
 
   it('403s a create from a non-manager role', async () => {
-    const app = appWith(fakeCtx(), ['lab_technician']);
+    const app = appWith(fakeCtx(), ['lab_technician'], fakeDeps(), []);
     const res = await app.inject({ method: 'POST', url: '/api/report-designs', payload: minimal });
     expect(res.statusCode).toBe(403);
   });
@@ -77,6 +77,21 @@ describe('report-design routes', () => {
     const app = appWith(fakeCtx());
     const res = await app.inject({ method: 'GET', url: '/api/report-designs/nope' });
     expect(res.statusCode).toBe(404);
+  });
+
+  it('403s a GET list from an actor without reports.view', async () => {
+    const app = appWith(fakeCtx(), ['lab_technician'], fakeDeps(), []);
+    const res = await app.inject({ method: 'GET', url: '/api/report-designs' });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('403s a GET-by-id from an actor without reports.view', async () => {
+    const ctx = fakeCtx();
+    const adminApp = appWith(ctx);
+    await adminApp.inject({ method: 'POST', url: '/api/report-designs', payload: minimal });
+    const app = appWith(ctx, ['lab_technician'], fakeDeps(), []);
+    const res = await app.inject({ method: 'GET', url: '/api/report-designs/rd1' });
+    expect(res.statusCode).toBe(403);
   });
 
   it('404s a PUT of an unknown id', async () => {
@@ -100,7 +115,7 @@ describe('report-design routes', () => {
   });
 
   it('renders a design body to a PDF (bound table resolved)', async () => {
-    const app = appWith(fakeCtx(), ['data_analyst']);
+    const app = appWith(fakeCtx(), ['data_analyst'], fakeDeps(), ['reports.run']);
     const design = { id: 'd', name: 'N', paper: 'A4', orientation: 'portrait',
       parameters: [{ key: 'facility', label: 'F', type: 'text', value: 'HQ' }],
       pages: [{ id: 'p', elements: [{ id: 't', kind: 'table', name: 'T', rect: { x: 0, y: 0, w: 200, h: 80 }, dataSource: { kind: 'custom-query', queryId: 'cq_1' } }] }] };
@@ -117,7 +132,7 @@ describe('report-design routes', () => {
   });
 
   it('403s a non-manager/non-analyst role', async () => {
-    const app = appWith(fakeCtx(), ['lab_technician']);
+    const app = appWith(fakeCtx(), ['lab_technician'], fakeDeps(), []);
     const res = await app.inject({ method: 'POST', url: '/api/report-designs/preview', payload: { id: 'd', name: 'N' } });
     expect(res.statusCode).toBe(403);
   });

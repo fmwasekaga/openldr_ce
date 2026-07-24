@@ -6,12 +6,26 @@ import type { FormDefinition, FormInput, FormVersion, FormVersionSummary } from 
 import { registerFormsRoutes } from './forms-routes';
 import './auth-plugin';
 
-function appWithForms(ctx: Record<string, unknown>, roles: string[] = ['lab_admin']) {
+const ALL_FORMS_CAPS = ['forms.view', 'forms.edit', 'forms.publish'];
+
+function appWithForms(ctx: Record<string, unknown>, roles: string[] = ['lab_admin'], capabilities: string[] = ALL_FORMS_CAPS) {
   const app = Fastify();
   app.addHook('onRequest', async (req) => {
-    req.user = { id: 'admin', username: 'admin', displayName: null, roles } as never;
+    req.user = { id: 'admin', username: 'admin', displayName: null, roles, capabilities } as never;
   });
   registerFormsRoutes(app, ctx as never);
+  return app;
+}
+
+/** Forms routes were previously ungated; tests below drive them directly without appWithForms.
+ *  authedApp grants every forms.* capability so pre-existing behavioral coverage (not RBAC
+ *  coverage) is unaffected by the new gates. */
+function authedApp(ctx: AppContext, capabilities: string[] = ALL_FORMS_CAPS) {
+  const app = Fastify();
+  app.addHook('onRequest', async (req) => {
+    req.user = { id: 'admin', username: 'admin', displayName: null, roles: ['lab_admin'], capabilities } as never;
+  });
+  registerFormsRoutes(app, ctx);
   return app;
 }
 
@@ -211,8 +225,7 @@ function fakeCtx(): AppContext & { audits: AuditInput[] } {
 
 describe('forms routes', () => {
   it('creates, lists, publishes, exports questionnaires, and validates responses', async () => {
-    const app = Fastify();
-    registerFormsRoutes(app, fakeCtx());
+    const app = authedApp(fakeCtx());
 
     const created = await app.inject({
       method: 'POST',
@@ -252,8 +265,7 @@ describe('forms routes', () => {
   });
 
   it('publishes, duplicates, and returns form versions', async () => {
-    const app = Fastify();
-    registerFormsRoutes(app, fakeCtx());
+    const app = authedApp(fakeCtx());
 
     const created = await app.inject({
       method: 'POST',
@@ -280,8 +292,7 @@ describe('forms routes', () => {
   });
 
   it('rejects malformed form version route params', async () => {
-    const app = Fastify();
-    registerFormsRoutes(app, fakeCtx());
+    const app = authedApp(fakeCtx());
 
     const created = await app.inject({
       method: 'POST',
@@ -299,9 +310,8 @@ describe('forms routes', () => {
   });
 
   it('audits published status changes as publish events', async () => {
-    const app = Fastify();
     const ctx = fakeCtx();
-    registerFormsRoutes(app, ctx);
+    const app = authedApp(ctx);
 
     const created = await app.inject({
       method: 'POST',
@@ -318,9 +328,8 @@ describe('forms routes', () => {
   });
 
   it('audits draft and archived status changes as status events', async () => {
-    const app = Fastify();
     const ctx = fakeCtx();
-    registerFormsRoutes(app, ctx);
+    const app = authedApp(ctx);
 
     const created = await app.inject({
       method: 'POST',
@@ -338,9 +347,8 @@ describe('forms routes', () => {
   });
 
   it('records audit events for form lifecycle operations', async () => {
-    const app = Fastify();
     const ctx = fakeCtx();
-    registerFormsRoutes(app, ctx);
+    const app = authedApp(ctx);
 
     const created = await app.inject({
       method: 'POST',
@@ -394,7 +402,7 @@ describe('forms routes', () => {
     const app = Fastify();
     const ctx = fakeCtx();
     app.addHook('onRequest', async (req) => {
-      req.user = { id: 'u-forms', username: 'former', displayName: null, roles: ['lab_admin'] };
+      req.user = { id: 'u-forms', username: 'former', displayName: null, roles: ['lab_admin'], capabilities: ['forms.edit'] };
     });
     registerFormsRoutes(app, ctx);
 
@@ -410,9 +418,8 @@ describe('forms routes', () => {
   });
 
   it('does not audit missing deletes', async () => {
-    const app = Fastify();
     const ctx = fakeCtx();
-    registerFormsRoutes(app, ctx);
+    const app = authedApp(ctx);
 
     const created = await app.inject({
       method: 'POST',
@@ -429,8 +436,7 @@ describe('forms routes', () => {
   });
 
   it('returns 404 for missing lifecycle resources', async () => {
-    const app = Fastify();
-    registerFormsRoutes(app, fakeCtx());
+    const app = authedApp(fakeCtx());
 
     const publish = await app.inject({ method: 'POST', url: '/api/forms/missing/publish', payload: { versionLabel: 'v1' } });
     expect(publish.statusCode).toBe(404);
@@ -498,9 +504,8 @@ describe('forms routes', () => {
   });
 
   it('returns 404 for orphaned version snapshots after the parent form is deleted', async () => {
-    const app = Fastify();
     const ctx = fakeCtx();
-    registerFormsRoutes(app, ctx);
+    const app = authedApp(ctx);
 
     const created = await app.inject({
       method: 'POST',

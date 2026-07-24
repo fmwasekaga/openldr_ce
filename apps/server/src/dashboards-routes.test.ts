@@ -38,9 +38,11 @@ const dashWithSql = { id: 'd1', name: 'M', layout: [], widgets: [sqlWidget], fil
 
 // Dashboard routes are RBAC-gated (VIEW: reporting roles; MANAGE: admin/manager). Inject an authorized
 // actor so tests exercise the handlers, not the role guard. `id:'admin1'` matches the audit assertion.
-function appWith(ctx: any = fakeCtx(), roles: string[] = ['lab_admin']) {
+const ADMIN_CAPS = ['dashboards.view', 'dashboards.create', 'dashboards.edit', 'dashboards.delete'];
+
+function appWith(ctx: any = fakeCtx(), roles: string[] = ['lab_admin'], capabilities: string[] = ADMIN_CAPS) {
   const app = Fastify();
-  app.addHook('onRequest', async (req: any) => { req.user = { id: 'admin1', username: 'admin', displayName: null, roles }; });
+  app.addHook('onRequest', async (req: any) => { req.user = { id: 'admin1', username: 'admin', displayName: null, roles, capabilities }; });
   registerDashboardRoutes(app, ctx);
   return app;
 }
@@ -153,11 +155,11 @@ describe('dashboard routes', () => {
 
   it('RBAC: a lab_technician cannot author dashboards but a data_analyst may view/query', async () => {
     // Writes are MANAGE (admin/manager); a technician is rejected.
-    const tech = appWith(fakeCtx(), ['lab_technician']);
+    const tech = appWith(fakeCtx(), ['lab_technician'], []);
     expect((await tech.inject({ method: 'POST', url: '/api/dashboards', payload: { id: 'd1', name: 'M', layout: [], widgets: [], filters: [], refreshIntervalSec: 0, isDefault: false, ownerId: null } })).statusCode).toBe(403);
     expect((await tech.inject({ method: 'GET', url: '/api/dashboards' })).statusCode).toBe(403);
-    // Reads/query are VIEW (reporting roles); a data_analyst is allowed.
-    const analyst = appWith(fakeCtx(), ['data_analyst']);
+    // Reads/query require dashboards.view; a data_analyst holding it is allowed.
+    const analyst = appWith(fakeCtx(), ['data_analyst'], ['dashboards.view']);
     expect((await analyst.inject({ method: 'GET', url: '/api/dashboards' })).statusCode).toBe(200);
     expect((await analyst.inject({ method: 'POST', url: '/api/dashboards/query', payload: { mode: 'builder', model: 'service_requests', metric: { key: 'count', agg: 'count' }, filters: [] } })).statusCode).toBe(200);
   });

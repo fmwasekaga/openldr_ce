@@ -32,7 +32,7 @@ function makeDeps(): QueryRouteDeps {
 async function build(deps = makeDeps()): Promise<FastifyInstance> {
   const app = Fastify();
   // Inject an authenticated actor with the analyst role.
-  app.addHook('preHandler', async (req) => { (req as any).user = { sub: 'u1', roles: ['data_analyst'] }; });
+  app.addHook('preHandler', async (req) => { (req as any).user = { sub: 'u1', roles: ['data_analyst'], capabilities: ['query.run'] }; });
   registerQueryRoutes(app, fakeCtx(), deps);
   await app.ready();
   return app;

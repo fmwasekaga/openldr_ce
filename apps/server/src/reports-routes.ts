@@ -4,7 +4,7 @@ import { z, ZodError } from 'zod';
 import { ReportNotFoundError, type AppContext } from '@openldr/bootstrap';
 import { toCsv, nextRunAt, type ScheduleFrequency } from '@openldr/reporting';
 import { appError } from '@openldr/core';
-import { requireRole } from './rbac';
+import { requireCapability } from './rbac';
 
 const runBeaconBody = z.object({
   format: z.enum(['preview', 'csv', 'pdf', 'xlsx']),
@@ -35,11 +35,23 @@ const schedulePatch = z.object({
   params: z.record(z.string()).optional(),
 });
 
+// These routes (other than the schedule-mutation ones, which were already MANAGE-gated) were
+// previously UNGATED (no requireRole at all). Task 8 adds capability gates per the mapping table:
+// read/list/options/run-history routes require reports.view; report execution (the JSON preview
+// at GET /:id, and the run-record beacon) requires reports.run; downloads (csv/pdf/schedule-run
+// artifact) require reports.export; schedule create/update/delete/run-now — previously grouped
+// under one MANAGE guard — require reports.edit_templates (kept as one group, matching the
+// pre-existing single guard object).
+const VIEW = { preHandler: requireCapability('reports.view') };
+const RUN = { preHandler: requireCapability('reports.run') };
+const EXPORT = { preHandler: requireCapability('reports.export') };
+const EDIT_TEMPLATES = { preHandler: requireCapability('reports.edit_templates') };
+
 export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
-  app.get('/api/reports', async () => ctx.reporting.listAll());
+  app.get('/api/reports', VIEW, async () => ctx.reporting.listAll());
 
   // Register the .csv route BEFORE the bare :id route so it is matched first.
-  app.get('/api/reports/:id.csv', async (req, reply) => {
+  app.get('/api/reports/:id.csv', EXPORT, async (req, reply) => {
     const { id } = req.params as { id: string };
     try {
       const result = await ctx.reporting.run(id, req.query);
@@ -50,7 +62,7 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
     }
   });
 
-  app.get('/api/reports/glass/ris.csv', async (req, reply) => {
+  app.get('/api/reports/glass/ris.csv', EXPORT, async (req, reply) => {
     try {
       const result = await ctx.reporting.run('r-amr-glass-ris', req.query as Record<string, unknown>);
       reply.header('content-type', 'text/csv').header('content-disposition', 'attachment; filename="glass-ris.csv"');
@@ -58,7 +70,7 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
     } catch (err) { rethrowAsAppError(err); }
   });
 
-  app.get('/api/reports/:id.pdf', async (req, reply) => {
+  app.get('/api/reports/:id.pdf', EXPORT, async (req, reply) => {
     const { id } = req.params as { id: string };
     try {
       const buf = await ctx.reporting.renderPdf(id, req.query);
@@ -67,7 +79,7 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
     } catch (err) { rethrowAsAppError(err); }
   });
 
-  app.get('/api/reports/:id/options', async (req, reply) => {
+  app.get('/api/reports/:id/options', VIEW, async (req, reply) => {
     const { id } = req.params as { id: string };
     try {
       return await ctx.reporting.options(id);
@@ -76,14 +88,14 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
     }
   });
 
-  app.get('/api/reports/runs', async (req) => {
+  app.get('/api/reports/runs', VIEW, async (req) => {
     const q = req.query as { reportId?: string; limit?: string; offset?: string };
     const limit = Math.min(Math.max(Number(q.limit ?? 50) || 50, 1), 200);
     const offset = Math.max(Number(q.offset ?? 0) || 0, 0);
     return ctx.reportRuns.list({ reportId: q.reportId, limit, offset });
   });
 
-  app.post('/api/reports/:id/runs', async (req, reply) => {
+  app.post('/api/reports/:id/runs', RUN, async (req, reply) => {
     const { id } = req.params as { id: string };
     let body: z.infer<typeof runBeaconBody>;
     try {
@@ -107,9 +119,7 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
     return { ok: true };
   });
 
-  const MANAGE = { preHandler: requireRole('lab_admin', 'lab_manager') };
-
-  app.get('/api/reports/:id/schedules', async (req) => {
+  app.get('/api/reports/:id/schedules', VIEW, async (req) => {
     const { id } = req.params as { id: string };
     const q = req.query as { limit?: string; offset?: string };
     const limit = Math.min(Math.max(Number(q.limit ?? 50) || 50, 1), 200);
@@ -117,7 +127,7 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
     return ctx.reportSchedules.listPaged({ reportId: id, limit, offset });
   });
 
-  app.post('/api/reports/:id/schedules', MANAGE, async (req, reply) => {
+  app.post('/api/reports/:id/schedules', EDIT_TEMPLATES, async (req, reply) => {
     const { id } = req.params as { id: string };
     let body: z.infer<typeof scheduleCreate>;
     try { body = scheduleCreate.parse(req.body); } catch (err) { rethrowAsAppError(err); }
@@ -134,7 +144,7 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
     return await ctx.reportSchedules.get(sid);
   });
 
-  app.patch('/api/reports/schedules/:sid', MANAGE, async (req, reply) => {
+  app.patch('/api/reports/schedules/:sid', EDIT_TEMPLATES, async (req, reply) => {
     const { sid } = req.params as { sid: string };
     let body: z.infer<typeof schedulePatch>;
     try { body = schedulePatch.parse(req.body); } catch (err) { rethrowAsAppError(err); }
@@ -151,13 +161,13 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
     return await ctx.reportSchedules.get(sid);
   });
 
-  app.delete('/api/reports/schedules/:sid', MANAGE, async (req) => {
+  app.delete('/api/reports/schedules/:sid', EDIT_TEMPLATES, async (req) => {
     const { sid } = req.params as { sid: string };
     await ctx.reportSchedules.remove(sid);
     return { ok: true };
   });
 
-  app.post('/api/reports/schedules/:sid/run', MANAGE, async (req, reply) => {
+  app.post('/api/reports/schedules/:sid/run', EDIT_TEMPLATES, async (req, reply) => {
     const { sid } = req.params as { sid: string };
     if (!(await ctx.reportSchedules.get(sid))) { reply.code(404); return { error: `schedule not found: ${sid}` }; }
     ctx.reportScheduler.runNow(sid);
@@ -165,14 +175,14 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
     return { ok: true };
   });
 
-  app.get('/api/reports/schedule-runs', async (req) => {
+  app.get('/api/reports/schedule-runs', VIEW, async (req) => {
     const q = req.query as { reportId?: string; scheduleId?: string; limit?: string; offset?: string };
     const limit = Math.min(Math.max(Number(q.limit ?? 50) || 50, 1), 200);
     const offset = Math.max(Number(q.offset ?? 0) || 0, 0);
     return ctx.reportSchedules.listRuns({ reportId: q.reportId, scheduleId: q.scheduleId, limit, offset });
   });
 
-  app.get('/api/reports/schedule-runs/:runId/download', async (req, reply) => {
+  app.get('/api/reports/schedule-runs/:runId/download', EXPORT, async (req, reply) => {
     const { runId } = req.params as { runId: string };
     const run = await ctx.reportSchedules.getRun(runId);
     if (!run || !run.objectKey) { reply.code(404); return { error: 'run output not found' }; }
@@ -183,7 +193,7 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
     return reply.send(Buffer.from(bytes));
   });
 
-  app.get('/api/reports/:id', async (req, reply) => {
+  app.get('/api/reports/:id', RUN, async (req, reply) => {
     const { id } = req.params as { id: string };
     try {
       return await ctx.reporting.run(id, req.query);

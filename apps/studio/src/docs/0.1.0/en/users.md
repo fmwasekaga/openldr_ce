@@ -21,7 +21,7 @@ You can search the user list, create a user, edit profile fields, assign roles, 
 3. Select the create action to add a new user when needed.
 4. Enter profile fields such as username, display name, and email.
 5. On the row for the account you want to change, open its **Actions** menu (the **⋯** button, labelled *Actions for &lt;username&gt;*) and choose **Edit**.
-6. Assign only the roles required for the user’s tasks.
+6. Assign only the roles required for the user’s tasks — see [Roles](/docs/roles) for what each built-in role grants and how to build a custom one.
 7. Enable or disable the account state.
 8. Use reset actions only when the UI shows they are available for the account type.
 9. Save the changes.
@@ -45,5 +45,6 @@ Use least privilege: grant the smallest role set that lets the user complete the
 
 ## Related guides
 
+- [Roles](/docs/roles)
 - [Audit](/docs/audit)
 - [Settings](/docs/settings)

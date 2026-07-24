@@ -192,6 +192,25 @@ export interface UsersTable {
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
   last_login_at: Date | null;
+  rbac_initialized: Generated<boolean>;
+}
+
+export interface RolesTable {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  is_system: Generated<boolean>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+export interface RoleCapabilitiesTable {
+  role_id: string;
+  capability: string;
+}
+export interface UserRolesTable {
+  user_id: string; // Keycloak subject (directory id), NOT local users.id
+  role_id: string;
 }
 
 export interface DashboardsTable {
@@ -736,4 +755,7 @@ export interface InternalSchema {
   sync_sites: SyncSitesTable;
   workflow_secrets: WorkflowSecretsTable;
   terminology_ingest_jobs: TerminologyIngestJobsTable;
+  roles: RolesTable;
+  role_capabilities: RoleCapabilitiesTable;
+  user_roles: UserRolesTable;
 }

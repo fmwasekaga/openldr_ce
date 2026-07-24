@@ -16,6 +16,7 @@ import { registerOntologyRoutes } from './ontology-routes';
 import { registerDashboardRoutes } from './dashboards-routes';
 import { registerAuditRoutes } from './audit-routes';
 import { registerUsersRoutes } from './users-routes';
+import { registerRolesRoutes } from './roles-routes';
 import { registerFormsRoutes } from './forms-routes';
 import { registerReportDesignRoutes } from './report-designs-routes';
 import { registerReportDefRoutes } from './report-defs-routes';
@@ -128,6 +129,14 @@ export async function buildApp(ctx: AppContext) {
     return req.user;
   });
 
+  app.get('/api/me/capabilities', async (req, reply) => {
+    if (!req.user) {
+      reply.code(401);
+      return { error: 'authentication required' };
+    }
+    return { capabilities: req.user.capabilities };
+  });
+
   registerConfigRoute(app, ctx);
   registerReportRoutes(app, ctx);
   registerTerminologyRoutes(app, ctx);
@@ -136,6 +145,7 @@ export async function buildApp(ctx: AppContext) {
   registerDashboardRoutes(app, ctx);
   registerAuditRoutes(app, ctx);
   registerUsersRoutes(app, ctx);
+  registerRolesRoutes(app, ctx);
   registerFormsRoutes(app, ctx);
   registerReportDesignRoutes(app, ctx, {
     customQueries: createCustomQueryStore(ctx.internalDb),

@@ -13,6 +13,8 @@ export interface User {
   status: 'active' | 'disabled';
   lastLoginAt: string | null;
   createdAt: string | null;
+  /** True once the one-time token-roles -> RBAC user_roles backfill has run for this user. */
+  rbacInitialized: boolean;
 }
 
 export interface CreateUserInput {
@@ -43,6 +45,8 @@ export interface UserStore {
    * reject the returned user when `status === 'disabled'`; this never reactivates.
    */
   syncFromClaims(claims: TokenClaims): Promise<User>;
+  /** Marks the one-time token-roles -> RBAC user_roles backfill as done for this user. */
+  markRbacInitialized(id: string): Promise<void>;
 }
 
 interface Row {
@@ -55,6 +59,7 @@ interface Row {
   status: string;
   last_login_at: Date | null;
   created_at: Date | null;
+  rbac_initialized: unknown;
 }
 
 function toUser(r: Row): User {
@@ -68,10 +73,11 @@ function toUser(r: Row): User {
     status: r.status === 'disabled' ? 'disabled' : 'active',
     lastLoginAt: r.last_login_at instanceof Date ? r.last_login_at.toISOString() : (r.last_login_at as string | null),
     createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : (r.created_at as string | null),
+    rbacInitialized: r.rbac_initialized === true,
   };
 }
 
-const COLS = ['id', 'subject', 'username', 'display_name', 'email', 'roles', 'status', 'last_login_at', 'created_at'] as const;
+const COLS = ['id', 'subject', 'username', 'display_name', 'email', 'roles', 'status', 'last_login_at', 'created_at', 'rbac_initialized'] as const;
 
 export function createUserStore(db: Kysely<InternalSchema>): UserStore {
   async function get(id: string): Promise<User | undefined> {
@@ -121,6 +127,9 @@ export function createUserStore(db: Kysely<InternalSchema>): UserStore {
     },
     async setStatus(id, status) {
       await db.updateTable('users').set({ status, updated_at: new Date() }).where('id', '=', id).execute();
+    },
+    async markRbacInitialized(id) {
+      await db.updateTable('users').set({ rbac_initialized: true, updated_at: new Date() }).where('id', '=', id).execute();
     },
     async syncFromClaims(claims) {
       const sub = typeof claims.sub === 'string' ? claims.sub : '';

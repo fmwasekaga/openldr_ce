@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Navigate, Outlet } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { AppShell } from '@/shell/AppShell';
 import { useAuth } from '@/auth/AuthProvider';
@@ -7,22 +7,33 @@ import { cn } from '@/lib/cn';
 interface SubNavItem {
   labelKey: string;
   to: string;
-  /** Role gate — missing means visible to everyone. */
-  roles?: string[];
+  /** Capability gate — missing means visible to everyone who can see /settings. */
+  caps?: string[];
 }
 
 const SUB_NAV: SubNavItem[] = [
-  { labelKey: 'settings.subNav.general', to: '/settings/general' },
-  {
-    labelKey: 'settings.subNav.notifications',
-    to: '/settings/notifications',
-    roles: ['lab_admin', 'lab_manager', 'data_analyst', 'system_auditor'],
-  },
-  { labelKey: 'settings.subNav.sites', to: '/settings/sites', roles: ['lab_admin'] },
-  { labelKey: 'settings.subNav.sync', to: '/settings/sync', roles: ['lab_admin'] },
-  { labelKey: 'settings.subNav.connectors', to: '/settings/connectors', roles: ['lab_admin'] },
-  { labelKey: 'settings.subNav.marketplace', to: '/settings/marketplace', roles: ['lab_admin'] },
+  { labelKey: 'settings.subNav.general', to: '/settings/general', caps: ['settings.view'] },
+  { labelKey: 'settings.subNav.notifications', to: '/settings/notifications', caps: ['notifications.view'] },
+  { labelKey: 'settings.subNav.sites', to: '/settings/sites', caps: ['sync.manage'] },
+  { labelKey: 'settings.subNav.sync', to: '/settings/sync', caps: ['sync.view'] },
+  { labelKey: 'settings.subNav.connectors', to: '/settings/connectors', caps: ['connectors.manage'] },
+  { labelKey: 'settings.subNav.marketplace', to: '/settings/marketplace', caps: ['marketplace.view'] },
+  { labelKey: 'settings.subNav.roles', to: '/settings/roles', caps: ['roles.view'] },
 ];
+
+/**
+ * Default landing page for bare `/settings`. The parent route admits anyone who
+ * can reach at least one sub-page (see App.tsx), but not every such user can
+ * reach `general` (that one needs `settings.view` specifically) — a hardcoded
+ * `Navigate to="general"` would bounce e.g. a notifications-only actor straight
+ * back out to "/" via that child route's own RequireCapability. Land on the
+ * first sub-nav entry the current user actually has a capability for instead.
+ */
+export function SettingsIndexRedirect() {
+  const { hasCapability } = useAuth();
+  const first = SUB_NAV.find((item) => !item.caps || item.caps.some((c) => hasCapability(c)));
+  return <Navigate to={first ? first.to : '/settings/general'} replace />;
+}
 
 /**
  * Settings shell with a left-hand section selector, mirroring corlix's
@@ -32,8 +43,8 @@ const SUB_NAV: SubNavItem[] = [
  */
 export function SettingsShell() {
   const { t } = useTranslation();
-  const { hasRole } = useAuth();
-  const visible = SUB_NAV.filter((item) => !item.roles || item.roles.some((r) => hasRole(r)));
+  const { hasCapability } = useAuth();
+  const visible = SUB_NAV.filter((item) => !item.caps || item.caps.some((c) => hasCapability(c)));
 
   return (
     <AppShell title={t('settings.title')} fullBleed>

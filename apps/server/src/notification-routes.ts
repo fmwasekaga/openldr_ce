@@ -4,9 +4,9 @@ import {
   listNotifications, markNotificationsRead, markAllNotificationsRead,
   getNotificationPrefs, saveNotificationPrefs, type NotificationPreference, type NotificationPriority,
 } from '@openldr/bootstrap';
-import { requireRole } from './rbac';
+import { requireCapability } from './rbac';
 
-const VIEW = { preHandler: requireRole('lab_admin', 'lab_manager', 'data_analyst', 'system_auditor') };
+const VIEW = { preHandler: requireCapability('notifications.view') };
 
 function userId(req: { user?: { id?: string } }): string {
   return req.user?.id ?? 'anonymous';

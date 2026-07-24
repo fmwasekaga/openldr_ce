@@ -4,11 +4,10 @@ import { z } from 'zod';
 import type { AppContext } from '@openldr/bootstrap';
 import { CustomQueryInputSchema, validateSelectSql } from '@openldr/dashboards';
 import type { CustomQueryStore } from '@openldr/db';
-import { requireRole } from './rbac';
+import { requireCapability } from './rbac';
 import { recordAudit } from './audit-helper';
 import { prepareSelect } from './run-stored-query';
 
-const AUTHOR_ROLES = ['lab_admin', 'lab_manager', 'data_analyst'];
 const ROW_CAP = 1000;
 
 export interface QueryRouteDeps {
@@ -25,7 +24,7 @@ export interface QueryRouteDeps {
 }
 
 export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext, deps: QueryRouteDeps): void {
-  const GUARD = { preHandler: requireRole(...AUTHOR_ROLES) };
+  const GUARD = { preHandler: requireCapability('query.run') };
 
   // ---- Custom Query CRUD ----
   app.get('/api/custom-queries', GUARD, async () => deps.customQueries.list());

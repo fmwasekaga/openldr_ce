@@ -58,9 +58,9 @@ function fakeCtx(over: Partial<{ key: string | undefined; loadSink: (id: string)
   } as unknown as AppContext;
 }
 
-function appWith(store: ConnectorStore, ctx: AppContext = fakeCtx(), roles: string[] = ['lab_admin']) {
+function appWith(store: ConnectorStore, ctx: AppContext = fakeCtx(), roles: string[] = ['lab_admin'], capabilities: string[] = ['connectors.manage']) {
   const app = Fastify();
-  app.addHook('onRequest', async (req) => { req.user = { id: 'admin', username: 'admin', displayName: null, roles } as never; });
+  app.addHook('onRequest', async (req) => { req.user = { id: 'admin', username: 'admin', displayName: null, roles, capabilities } as never; });
   registerConnectorsRoutes(app, ctx, { connectors: store });
   return app;
 }
@@ -212,7 +212,7 @@ describe('connectors routes', () => {
   });
 
   it('403s a non-admin', async () => {
-    const res = await appWith(fakeStore(), fakeCtx(), ['lab_technician']).inject({ method: 'GET', url: '/api/connectors' });
+    const res = await appWith(fakeStore(), fakeCtx(), ['lab_technician'], []).inject({ method: 'GET', url: '/api/connectors' });
     expect(res.statusCode).toBe(403);
   });
 

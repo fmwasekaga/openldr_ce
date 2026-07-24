@@ -2,8 +2,18 @@ import type { FastifyInstance } from 'fastify';
 import { readFile } from 'node:fs/promises';
 import type { AppContext } from '@openldr/bootstrap';
 import { dangerResetDashboards, dangerFactoryReset, dangerClearAudit, getSyncConfig, setSyncConfig, enrollSite, listSites, rotateSite, revokeSite, mergePatients } from '@openldr/bootstrap';
-import { requireRole } from './rbac';
+import { requireCapability } from './rbac';
 import { recordAudit } from './audit-helper';
+
+// Sync routes: only status/activity/quarantine (read) map to sync.view per the mapping table;
+// everything else — including the bare sync-config GET/PUT, divergence list/detail (detail
+// carries PHI), the site list, and the central-certificate download — stays on sync.manage. These
+// were previously uniformly lab_admin-only, so this is at most equally strict, never looser.
+const FEATURE_FLAGS = { preHandler: requireCapability('settings.feature_flags') };
+const EDIT_GENERAL = { preHandler: requireCapability('settings.edit_general') };
+const DANGER_ZONE = { preHandler: requireCapability('settings.danger_zone') };
+const SYNC_VIEW = { preHandler: requireCapability('sync.view') };
+const SYNC_MANAGE = { preHandler: requireCapability('sync.manage') };
 
 // Duck-type by error name — robust across module/bundle boundaries and consistent with the
 // `IdentityAdminNotConfiguredError` handling in users-routes (that class lives in @openldr/ports,
@@ -27,15 +37,15 @@ const defaultDeps: DangerDeps = {
 };
 
 export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext, deps: DangerDeps = defaultDeps): void {
-  app.get('/api/settings/flags', { preHandler: requireRole('lab_admin') }, async () => ctx.featureFlags.all());
+  app.get('/api/settings/flags', FEATURE_FLAGS, async () => ctx.featureFlags.all());
 
   // Lab⇄central sync config — writes the discrete `sync.*` app_settings keys the sync workers read
   // (client secret encrypted + write-only). Admin-only + audited, mirrored by `openldr settings sync …`.
-  app.get('/api/settings/sync', { preHandler: requireRole('lab_admin') }, async () =>
+  app.get('/api/settings/sync', SYNC_MANAGE, async () =>
     getSyncConfig(ctx.appSettings),
   );
 
-  app.put('/api/settings/sync', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.put('/api/settings/sync', SYNC_MANAGE, async (req, reply) => {
     const before = await getSyncConfig(ctx.appSettings);
     let after;
     try {
@@ -59,9 +69,9 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
   // Live sync status + manual trigger (T6). User-authed under /api/settings/* (admin-only) — NOT under
   // /api/sync/* (that surface is machine-cred and skips the user auth gate). status() is always present
   // on ctx.sync even when sync is disabled; `now` refuses (409) when disabled so it never no-ops silently.
-  app.get('/api/settings/sync/status', { preHandler: requireRole('lab_admin') }, async () => ctx.sync.status());
+  app.get('/api/settings/sync/status', SYNC_VIEW, async () => ctx.sync.status());
 
-  app.post('/api/settings/sync/now', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.post('/api/settings/sync/now', SYNC_MANAGE, async (req, reply) => {
     const s = await ctx.sync.status();
     if (!s.enabled) { reply.code(409); return { triggered: false, reason: 'disabled' }; }
     ctx.sync.triggerNow();
@@ -71,7 +81,7 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
 
   // Track A: recent sync activity feed (bounded, high-signal). Admin-only, user-authed. Optional
   // ?direction=push|pull|amend filter. Populated by the sync runners, not by routes.
-  app.get('/api/settings/sync/activity', { preHandler: requireRole('lab_admin') }, async (req) => {
+  app.get('/api/settings/sync/activity', SYNC_VIEW, async (req) => {
     const q = req.query as { direction?: string };
     const direction =
       q.direction === 'push' || q.direction === 'pull' || q.direction === 'amend' ? q.direction : undefined;
@@ -79,10 +89,10 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
   });
 
   // Sync S7-A: list quarantined poison-bulk records (lab_admin, user-authed).
-  app.get('/api/settings/sync/quarantine', { preHandler: requireRole('lab_admin') }, async () => ctx.sync.listQuarantine());
+  app.get('/api/settings/sync/quarantine', SYNC_VIEW, async () => ctx.sync.listQuarantine());
 
   // Sync S7-A: manually retry a quarantined bulk entity — clears + re-syncs it by url.
-  app.post('/api/settings/sync/quarantine/retry', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.post('/api/settings/sync/quarantine/retry', SYNC_MANAGE, async (req, reply) => {
     const b = (req.body ?? {}) as { entityType?: unknown; entityId?: unknown };
     if (typeof b.entityType !== 'string' || !b.entityType || typeof b.entityId !== 'string' || !b.entityId) {
       return reply.code(400).send({ error: 'entityType and entityId are required' });
@@ -105,13 +115,13 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
   //
   // LIST is PHI-FREE (the store does not select incoming_body). This is the surface a UI lands on;
   // reading the dropped result content requires the explicit detail call below, which is audited.
-  app.get('/api/settings/sync/divergences', { preHandler: requireRole('lab_admin') }, async () =>
+  app.get('/api/settings/sync/divergences', SYNC_MANAGE, async () =>
     ctx.sync.listDivergences(),
   );
 
   // DETAIL returns incomingBody = the dropped content = PHI. Audited for that reason, even though the
   // audit row itself carries only the key.
-  app.get('/api/settings/sync/divergences/:resourceType/:resourceId/:version', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.get('/api/settings/sync/divergences/:resourceType/:resourceId/:version', SYNC_MANAGE, async (req, reply) => {
     const p = req.params as { resourceType: string; resourceId: string; version: string };
     const version = Number(p.version);
     if (!Number.isInteger(version) || version < 1) {
@@ -133,7 +143,7 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
   // Clearing is the ONLY lifecycle a divergence has (spec decision 3): nothing auto-resolves it. A
   // later higher version arriving would tell you the disagreement ENDED, not that the RIGHT content
   // won — auto-closing on that would reintroduce the silent loss this slice exists to eliminate.
-  app.post('/api/settings/sync/divergences/:resourceType/:resourceId/:version/clear', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.post('/api/settings/sync/divergences/:resourceType/:resourceId/:version/clear', SYNC_MANAGE, async (req, reply) => {
     const p = req.params as { resourceType: string; resourceId: string; version: string };
     const version = Number(p.version);
     if (!Number.isInteger(version) || version < 1) {
@@ -160,7 +170,7 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
   // surface is machine-cred). fhirStore.amend does the transactional version-bump + Provenance + outbox
   // write, keeping the owning lab's site_id; the amendment then flows down that lab's pull-amendments
   // stream. Audited SECRET/PHI-free: resource reference + new version only.
-  app.post('/api/settings/sync/amend', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.post('/api/settings/sync/amend', SYNC_MANAGE, async (req, reply) => {
     const b = (req.body ?? {}) as { resourceType?: unknown; id?: unknown; status?: unknown; reason?: unknown; patch?: unknown; agent?: unknown; activity?: unknown };
     if (typeof b.resourceType !== 'string' || !b.resourceType || typeof b.id !== 'string' || !b.id || typeof b.status !== 'string' || !b.status) {
       return reply.code(400).send({ error: 'resourceType, id and status are required' });
@@ -194,7 +204,7 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
   // POST /api/settings/sync/merge-patient — intra-lab patient merge (Sync S6b). lab_admin, user-authed.
   // Delegates to the bootstrap orchestrator (enumerate refs + atomic cascade); the merge then flows down
   // the owning lab's amendment stream. Audited PHI-free: patient ids + counts only.
-  app.post('/api/settings/sync/merge-patient', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.post('/api/settings/sync/merge-patient', SYNC_MANAGE, async (req, reply) => {
     const b = (req.body ?? {}) as { survivorId?: unknown; duplicateId?: unknown; reason?: unknown; agent?: unknown };
     if (typeof b.survivorId !== 'string' || !b.survivorId || typeof b.duplicateId !== 'string' || !b.duplicateId) {
       return reply.code(400).send({ error: 'survivorId and duplicateId are required' });
@@ -225,7 +235,7 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
   // user auth gate). The client secret is returned ONCE in the enroll/rotate response body (over
   // HTTPS); no GET ever returns it and it is never written to the audit log.
   // ------------------------------------------------------------------
-  app.post('/api/settings/sync/enroll', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.post('/api/settings/sync/enroll', SYNC_MANAGE, async (req, reply) => {
     const body = (req.body ?? {}) as { siteId?: string; name?: string | null; centralUrl?: string };
     if (!body.siteId) { reply.code(400); return { error: 'siteId required' }; }
     if (!body.centralUrl) { reply.code(400); return { error: 'centralUrl required' }; }
@@ -256,14 +266,14 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
     return r;
   });
 
-  app.get('/api/settings/sync/sites', { preHandler: requireRole('lab_admin') }, async () => listSites(ctx));
+  app.get('/api/settings/sync/sites', SYNC_MANAGE, async () => listSites(ctx));
 
   // Serve this server's public TLS cert (PEM) so a remote lab can trust a self-signed central. The
   // cert is public (presented in every TLS handshake) but the route is lab_admin like the rest of
   // /api/settings/*. Path = TLS_CERT_PATH (installer-mounted fullchain.pem). No AppError/appError
   // here: this file's own convention (see the divergence/enroll/danger routes above) is a plain
   // reply.code(status).send({ error }) body, not the catalog — mirrored rather than introduced.
-  app.get('/api/settings/sync/central-certificate', { preHandler: requireRole('lab_admin') }, async (_req, reply) => {
+  app.get('/api/settings/sync/central-certificate', SYNC_MANAGE, async (_req, reply) => {
     const path = ctx.cfg.TLS_CERT_PATH;
     if (!path) return reply.code(404).send({ error: 'no TLS certificate is configured (set TLS_CERT_PATH / mount the cert)' });
     let pem: string;
@@ -281,7 +291,7 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
     return reply.send(pem);
   });
 
-  app.post('/api/settings/sync/sites/:siteId/rotate', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.post('/api/settings/sync/sites/:siteId/rotate', SYNC_MANAGE, async (req, reply) => {
     const { siteId } = req.params as { siteId: string };
     // Audit after the try (see enroll) so an audit failure never masks a successful rotation and
     // loses the one-time regenerated secret.
@@ -302,7 +312,7 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
     return r;
   });
 
-  app.post('/api/settings/sync/sites/:siteId/revoke', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.post('/api/settings/sync/sites/:siteId/revoke', SYNC_MANAGE, async (req, reply) => {
     const { siteId } = req.params as { siteId: string };
     try {
       await revokeSite(ctx, siteId);
@@ -314,7 +324,7 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
     return { revoked: true };
   });
 
-  app.put('/api/settings/flags/:key', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.put('/api/settings/flags/:key', FEATURE_FLAGS, async (req, reply) => {
     const { key } = req.params as { key: string };
     const { value } = req.body as { value: boolean };
     const after = Boolean(value);
@@ -330,11 +340,11 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
 
   // Admin-tunable number settings (operational limits). Admin-only + audited, mirrored by
   // `openldr settings numbers …`.
-  app.get('/api/settings/numbers', { preHandler: requireRole('lab_admin') }, async () =>
+  app.get('/api/settings/numbers', EDIT_GENERAL, async () =>
     ctx.numberSettings.all(),
   );
 
-  app.put('/api/settings/numbers/:key', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.put('/api/settings/numbers/:key', EDIT_GENERAL, async (req, reply) => {
     const { key } = req.params as { key: string };
     const { value } = req.body as { value: number };
     const before = await ctx.numberSettings.get(key).catch(() => null);
@@ -354,11 +364,11 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
 
   // FHIR validation strictness (Task 9) — admin-tunable gate level read by createValidationStrictness.
   // Admin-only + audited, same shape as the flags/numbers routes above.
-  app.get('/api/settings/validation', { preHandler: requireRole('lab_admin') }, async () =>
+  app.get('/api/settings/validation', EDIT_GENERAL, async () =>
     ({ strictness: await ctx.validationStrictness.get() }),
   );
 
-  app.put('/api/settings/validation', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.put('/api/settings/validation', EDIT_GENERAL, async (req, reply) => {
     const body = req.body as { strictness?: string };
     const levels = ['low', 'medium', 'high'];
     if (!body?.strictness || !levels.includes(body.strictness)) {
@@ -381,7 +391,7 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
     'clear-audit': 'clearAudit',
   };
 
-  app.post('/api/settings/danger/:action', { preHandler: requireRole('lab_admin') }, async (req, reply) => {
+  app.post('/api/settings/danger/:action', DANGER_ZONE, async (req, reply) => {
     const { action } = req.params as { action: string };
     const fn = DANGER[action];
     if (!fn) { reply.code(404); return { error: 'unknown action' }; }

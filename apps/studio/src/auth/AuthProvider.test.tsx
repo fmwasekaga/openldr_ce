@@ -4,16 +4,20 @@ import { MemoryRouter } from 'react-router-dom';
 import '@/i18n';
 import { AuthProvider, useAuth, __resetAuthProviderState } from './AuthProvider';
 
-vi.mock('@/api', () => ({ authFetch: vi.fn(), getMe: vi.fn() }));
+vi.mock('@/api', () => ({ authFetch: vi.fn(), getMe: vi.fn(), getMyCapabilities: vi.fn() }));
 vi.mock('./oidc', () => ({ getOidc: vi.fn(), createOidc: vi.fn(), __resetOidc: vi.fn() }));
 
-import { authFetch, getMe } from '@/api';
+import { authFetch, getMe, getMyCapabilities } from '@/api';
 import { getOidc } from './oidc';
 
 function Probe() {
-  const { user, loading, hasRole } = useAuth();
+  const { user, loading, hasCapability } = useAuth();
   if (loading) return <div>loading</div>;
-  return <div>{user ? `${user.username}:${hasRole('lab_admin')}` : 'anon'}</div>;
+  return (
+    <div>
+      {user ? `${user.username}:${hasCapability('roles:manage')}:${hasCapability('roles:missing')}` : 'anon'}
+    </div>
+  );
 }
 
 const okConfig = (cfg: object) =>
@@ -36,13 +40,15 @@ describe('AuthProvider', () => {
       displayName: null,
       roles: ['lab_admin'],
     });
+    (getMyCapabilities as ReturnType<typeof vi.fn>).mockResolvedValue(['roles:manage']);
     render(
       <MemoryRouter>
         <AuthProvider><Probe /></AuthProvider>
       </MemoryRouter>,
     );
-    await waitFor(() => expect(screen.getByText('dev-admin:true')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('dev-admin:true:false')).toBeTruthy());
     expect(getOidc).not.toHaveBeenCalled();
+    expect(getMyCapabilities).toHaveBeenCalled();
   });
 
   it('enforced + no stored session: triggers signinRedirect', async () => {
@@ -76,12 +82,15 @@ describe('AuthProvider', () => {
       displayName: null,
       roles: ['lab_admin'],
     });
+    // Failed capabilities fetch must degrade safely to an empty set (hasCapability => false),
+    // rather than crashing the provider.
+    (getMyCapabilities as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('network'));
     render(
       <MemoryRouter>
         <AuthProvider><Probe /></AuthProvider>
       </MemoryRouter>,
     );
-    await waitFor(() => expect(screen.getByText('ada:true')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('ada:false:false')).toBeTruthy());
   });
 
   it('enforced + at /auth/callback: skips signinRedirect (callback route)', async () => {
@@ -114,6 +123,7 @@ describe('AuthProvider', () => {
       expect(screen.getByText('Cannot reach the server. Please reload.')).toBeTruthy(),
     );
     expect(getMe).not.toHaveBeenCalled();
+    expect(getMyCapabilities).not.toHaveBeenCalled();
   });
 
   it('config fetch rejects: renders error card, does not call getMe', async () => {
@@ -127,5 +137,6 @@ describe('AuthProvider', () => {
       expect(screen.getByText('Cannot reach the server. Please reload.')).toBeTruthy(),
     );
     expect(getMe).not.toHaveBeenCalled();
+    expect(getMyCapabilities).not.toHaveBeenCalled();
   });
 });

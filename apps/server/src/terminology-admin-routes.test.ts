@@ -48,9 +48,9 @@ function fakeCtx() {
   return { ctx, auditEvents, ctxState };
 }
 
-function appWith(ctx: AppContext, roles: string[] = ['lab_admin']) {
+function appWith(ctx: AppContext, roles: string[] = ['lab_admin'], capabilities: string[] = ['terminology.manage']) {
   const app = Fastify();
-  app.addHook('onRequest', async (req) => { req.user = { id: 'admin1', username: 'admin', displayName: null, roles }; });
+  app.addHook('onRequest', async (req) => { req.user = { id: 'admin1', username: 'admin', displayName: null, roles, capabilities }; });
   registerTerminologyAdminRoutes(app, ctx);
   return app;
 }
@@ -58,14 +58,14 @@ function appWith(ctx: AppContext, roles: string[] = ['lab_admin']) {
 describe('terminology admin RBAC', () => {
   it('a lab_technician cannot mutate terminology (create/import) — 403', async () => {
     const { ctx } = fakeCtx();
-    const app = appWith(ctx, ['lab_technician']);
+    const app = appWith(ctx, ['lab_technician'], []);
     expect((await app.inject({ method: 'POST', url: '/api/terminology/publishers', payload: { name: 'P', role: 'local' } })).statusCode).toBe(403);
     expect((await app.inject({ method: 'DELETE', url: '/api/terminology/systems/sys9' })).statusCode).toBe(403);
   });
 
   it('read-only terminology GETs are NOT role-gated (a lab_technician is not rejected)', async () => {
     const { ctx } = fakeCtx();
-    const app = appWith(ctx, ['lab_technician']);
+    const app = appWith(ctx, ['lab_technician'], []);
     // The handler runs (no 401/403 from the guard); the fake ctx's list is not fully stubbed, so the
     // status itself is not asserted — only that RBAC did not block the read.
     const res = await app.inject({ method: 'GET', url: '/api/terminology/publishers' });
@@ -231,7 +231,7 @@ describe('terminology distribution upload/status/purge (publisher-scoped)', () =
 
   it('a lab_technician is rejected (403) on upload', async () => {
     const { ctx } = fakeCtx();
-    const res = await appWith(ctx, ['lab_technician']).inject({ method: 'POST', url: '/api/terminology/publishers/pub-loinc/distribution?systemType=loinc&acceptLicense=true', headers: { 'content-type': 'application/octet-stream' }, payload: Buffer.from('x') });
+    const res = await appWith(ctx, ['lab_technician'], []).inject({ method: 'POST', url: '/api/terminology/publishers/pub-loinc/distribution?systemType=loinc&acceptLicense=true', headers: { 'content-type': 'application/octet-stream' }, payload: Buffer.from('x') });
     expect(res.statusCode).toBe(403);
   });
 });

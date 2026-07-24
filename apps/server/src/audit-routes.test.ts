@@ -27,10 +27,10 @@ function fakeCtx() {
   } as AppContext;
 }
 
-// Audit reads are RBAC-gated (lab_admin / system_auditor). Inject an authorized actor by default.
-function appWith(ctx: AppContext = fakeCtx(), roles: string[] = ['system_auditor']) {
+// Audit reads are RBAC-gated on the audit.view capability. Inject an authorized actor by default.
+function appWith(ctx: AppContext = fakeCtx(), roles: string[] = ['system_auditor'], capabilities: string[] = ['audit.view']) {
   const app = Fastify();
-  app.addHook('onRequest', async (req: any) => { req.user = { id: 'auditor', username: 'auditor', displayName: null, roles }; });
+  app.addHook('onRequest', async (req: any) => { req.user = { id: 'auditor', username: 'auditor', displayName: null, roles, capabilities }; });
   registerAuditRoutes(app, ctx);
   return app;
 }
@@ -61,12 +61,12 @@ describe('audit routes', () => {
   });
 
   it('lab_admin may also read the audit log', async () => {
-    const app = appWith(fakeCtx(), ['lab_admin']);
+    const app = appWith(fakeCtx(), ['lab_admin'], ['audit.view']);
     expect((await app.inject({ method: 'GET', url: '/api/audit' })).statusCode).toBe(200);
   });
 
   it('a non-privileged role (lab_technician) is rejected with 403', async () => {
-    const app = appWith(fakeCtx(), ['lab_technician']);
+    const app = appWith(fakeCtx(), ['lab_technician'], []);
     expect((await app.inject({ method: 'GET', url: '/api/audit' })).statusCode).toBe(403);
     expect((await app.inject({ method: 'GET', url: '/api/audit/a1' })).statusCode).toBe(403);
   });

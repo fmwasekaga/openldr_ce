@@ -12,7 +12,7 @@ vi.mock('@/auth/AuthProvider', () => ({
   useAuth: () => ({
     user: { id: 'me', username: 'admin', displayName: null, roles: ['lab_admin'] },
     loading: false,
-    hasRole: (r: string) => r === 'lab_admin',
+    hasCapability: () => true,
     signOut: vi.fn(),
   }),
 }));

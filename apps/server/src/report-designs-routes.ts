@@ -4,17 +4,18 @@ import { ReportDesignSchema } from '@openldr/report-designer/pure';
 import { renderReportDesignPdf, resolveDesignTables } from '@openldr/report-designer';
 import { runStoredQuery, type RunStoredQueryDeps } from './run-stored-query';
 import { recordAudit } from './audit-helper';
-import { requireRole } from './rbac';
+import { requireCapability } from './rbac';
 
 export function registerReportDesignRoutes(
   app: FastifyInstance<any, any, any, any>, ctx: AppContext, deps: RunStoredQueryDeps,
 ): void {
-  const MANAGE = { preHandler: requireRole('lab_admin', 'lab_manager') };
-  const PREVIEW = { preHandler: requireRole('lab_admin', 'lab_manager', 'data_analyst') };
+  const MANAGE = { preHandler: requireCapability('reports.edit_templates') };
+  const PREVIEW = { preHandler: requireCapability('reports.run') };
+  const VIEW = { preHandler: requireCapability('reports.view') };
 
-  app.get('/api/report-designs', async () => ctx.reportDesigns.list());
+  app.get('/api/report-designs', VIEW, async () => ctx.reportDesigns.list());
 
-  app.get('/api/report-designs/:id', async (req, reply) => {
+  app.get('/api/report-designs/:id', VIEW, async (req, reply) => {
     const { id } = req.params as { id: string };
     const d = await ctx.reportDesigns.get(id);
     if (!d) { reply.code(404); return { error: 'not found' }; }

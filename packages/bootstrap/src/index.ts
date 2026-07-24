@@ -9,7 +9,7 @@ import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import { toS3BucketConfig } from './s3-config';
 import type { Config } from '@openldr/config';
 import { createLogger, HealthRegistry, open, seal, parseSecretKey, redact, type Logger } from '@openldr/core';
-import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore } from '@openldr/db';
+import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema, Provenance, SyncActivityStore } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
@@ -273,6 +273,10 @@ export interface AppContext {
   reportScheduler: ReportScheduler;
   pluginScheduleRunner: PluginScheduleRunner;
   users: UserStore;
+  /** Capability-based roles (RBAC Task 4): system + custom roles, capability grants, and
+   *  user↔role assignment. Seeded with the 5 system roles on every `createAppContext` boot —
+   *  see the `seedSystemRoles()` call beside its construction below. */
+  roles: RoleStore;
   userProfiles: UserProfileStore;
   forms: FormStore;
   marketplaceForms: FormArtifactInstaller;
@@ -368,6 +372,18 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   const reportSchedules = createReportScheduleStore(internal.db);
   const plugins = createPluginRegistry({ blob, internalDb: internal.db, logger, audit, devAllowUnsigned: cfg.MARKETPLACE_DEV_ALLOW_UNSIGNED });
   const users = createUserStore(internal.db);
+  const roles = createRoleStore(internal.db);
+  // RBAC Task 4: seed the 5 system roles (lab_admin/lab_manager/data_analyst/system_auditor/
+  // lab_technician) on every boot. Deliberately UNCONDITIONAL — NOT routed through seedDatabase()/
+  // SEED_ON_START (apps/server/src/index.ts), because that flag defaults to false and only guards
+  // optional demo/sample data (see seed.ts); a real production install would never seed roles if
+  // this depended on it. seedSystemRoles() is idempotent (safe to call on every boot) so this
+  // covers a fresh install AND an existing-DB upgrade to this feature identically. Mirrors the
+  // migrateWorkflowSecrets/migrateLegacySyncConfig best-effort shims further below: wrapped so a
+  // pre-migration DB or a transient connection failure logs a warning and never aborts boot.
+  await roles.seedSystemRoles().catch((err) => {
+    logger.warn({ err }, 'system-role seed failed');
+  });
   const userProfiles = createUserProfileStore(internal.db);
   // Sync S2: pass referenceCapture so central config authoring lands rows in reference_change_log
   // (the pull endpoint's source). Safe on every node: a lab serves no pull so its log is inert, and
@@ -1200,6 +1216,7 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     reportScheduler,
     pluginScheduleRunner,
     users,
+    roles,
     userProfiles,
     forms,
     marketplaceForms,
@@ -1332,5 +1349,13 @@ export async function dangerFactoryReset(ctx: AppContext): Promise<void> {
   } finally {
     await dbCtx.close();
   }
+  // Admin-lockout guard: wipeInternalDatabase() TRUNCATEs roles/role_capabilities/user_roles
+  // along with everything else, and seedDatabase() deliberately does NOT reseed roles (that
+  // seed is routed through createAppContext's unconditional boot-time call — see the comment
+  // beside `const roles = createRoleStore(internal.db)` above). Without this call a live server
+  // would be left with zero roles — and once RBAC enforcement lands, nobody holding
+  // `roles.manage` — until the process restarts. seedSystemRoles() is idempotent, so calling it
+  // here is safe even though createAppContext already seeded it once at boot.
+  await ctx.roles.seedSystemRoles();
   ctx.featureFlags.invalidate();
 }
