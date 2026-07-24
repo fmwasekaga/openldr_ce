@@ -6,6 +6,7 @@ import { projectObservation } from './observation';
 import { projectFacility } from './facility';
 import { projectSpecimen } from './specimen';
 import { projectDiagnosticReport } from './diagnostic-report';
+import { projectQuestionnaireResponse } from './questionnaire-response';
 
 export * from './patient';
 export * from './service-request';
@@ -13,6 +14,7 @@ export * from './observation';
 export * from './facility';
 export * from './specimen';
 export * from './diagnostic-report';
+export * from './questionnaire-response';
 
 export interface RelationalResult {
   table: keyof ExternalSchema;
@@ -30,6 +32,7 @@ export function projectResource(resource: unknown, prov: Provenance = {}): Relat
     case 'Location': return { table: 'facilities', row: projectFacility(r, prov) };
     case 'Specimen': return { table: 'specimens', row: projectSpecimen(r, prov) };
     case 'DiagnosticReport': return { table: 'diagnostic_reports', row: projectDiagnosticReport(r, prov) };
+    case 'QuestionnaireResponse': return { table: 'questionnaire_responses', row: projectQuestionnaireResponse(r, prov) };
     default: return null;
   }
 }
@@ -43,6 +46,7 @@ export function tableForResourceType(resourceType: string): keyof ExternalSchema
     case 'Location': return 'facilities';
     case 'Specimen': return 'specimens';
     case 'DiagnosticReport': return 'diagnostic_reports';
+    case 'QuestionnaireResponse': return 'questionnaire_responses';
     default: return null;
   }
 }

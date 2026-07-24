@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { EXTERNAL_TABLE_COLUMNS } from './schema/external';
 
 describe('EXTERNAL_TABLE_COLUMNS', () => {
-  it('covers the 6 canonical external flat tables', () => {
+  it('covers the 7 canonical external flat tables', () => {
     expect(Object.keys(EXTERNAL_TABLE_COLUMNS).sort()).toEqual(
-      ['diagnostic_reports', 'facilities', 'lab_requests', 'lab_results', 'patients', 'specimens'],
+      ['diagnostic_reports', 'facilities', 'lab_requests', 'lab_results', 'patients', 'questionnaire_responses', 'specimens'],
     );
   });
   it('every table includes id + provenance columns', () => {

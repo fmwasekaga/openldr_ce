@@ -82,6 +82,17 @@ export interface DiagnosticReportsTable extends ProvenanceColumns {
   conclusion: string | null;
 }
 
+export interface QuestionnaireResponsesTable extends ProvenanceColumns {
+  id: string;
+  questionnaire: string | null;
+  form_code: string | null;
+  subject_id: string | null;
+  authored: string | null;
+  based_on_id: string | null;
+  /** JSON string of the QuestionnaireResponse.item[] array (linkId/text/answer). */
+  items: string | null;
+}
+
 export interface ExternalSchema {
   patients: PatientsTable;
   lab_requests: LabRequestsTable;
@@ -89,6 +100,7 @@ export interface ExternalSchema {
   facilities: FacilitiesTable;
   specimens: SpecimensTable;
   diagnostic_reports: DiagnosticReportsTable;
+  questionnaire_responses: QuestionnaireResponsesTable;
 }
 
 /**
@@ -104,4 +116,5 @@ export const EXTERNAL_TABLE_COLUMNS: Record<keyof ExternalSchema, string[]> = {
   facilities: ['id', 'facility_code', 'facility_name', 'facility_type', 'source_resource', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   specimens: ['id', 'patient_id', 'received_time', 'accession', 'status', 'type_code', 'type_text', 'origin', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   diagnostic_reports: ['id', 'patient_id', 'status', 'code_code', 'code_text', 'issued', 'effective', 'conclusion', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
+  questionnaire_responses: ['id', 'questionnaire', 'form_code', 'subject_id', 'authored', 'based_on_id', 'items', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
 };

@@ -52,3 +52,20 @@ describe('validateBatch', () => {
     }
   });
 });
+
+describe('QuestionnaireResponse (documentation) is not a lab result', () => {
+  const qr = {
+    resourceType: 'QuestionnaireResponse',
+    id: 'qr1',
+    status: 'completed',
+    questionnaire: 'urn:openldr:form:hiv_vl_documentation',
+    subject: { reference: 'Patient/p1' },
+    authored: '2026-01-01T00:00:00+02:00',
+    item: [{ linkId: 'VL_REASON', text: 'VL reason', answer: [{ valueString: 'Routine monitoring' }] }],
+  };
+
+  it('passes at high with no basedOn / ServiceRequest', async () => {
+    const r = await validateBatch([qr], { level: 'high', resolveServiceRequest: async () => false });
+    expect(r.ok).toBe(true);
+  });
+});
