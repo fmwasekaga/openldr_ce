@@ -326,30 +326,28 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
 
           {/* Fixed fields above the form — create only */}
           {!isEdit && (
-            <div className="grid gap-4 px-6 py-4 border-b border-border">
-              <div className="space-y-1">
-                <Label htmlFor="user-username">{t('users.username')}</Label>
-                <Input
-                  id="user-username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  autoComplete="off"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="user-password">{t('users.newPassword')}</Label>
-                <Input
-                  id="user-password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="new-password"
-                  placeholder={t('users.newPasswordPlaceholder')}
-                />
-              </div>
+            <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3 px-6 py-4 border-b border-border">
+              <Label htmlFor="user-username" className="whitespace-nowrap">{t('users.username')}</Label>
+              <Input
+                id="user-username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                autoComplete="off"
+              />
+
+              <Label htmlFor="user-password" className="whitespace-nowrap">{t('users.newPassword')}</Label>
+              <Input
+                id="user-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password"
+                placeholder={t('users.newPasswordPlaceholder')}
+              />
+
               {password && (
-                <div className="space-y-1">
-                  <Label htmlFor="user-confirm-password">{t('users.confirmPassword')}</Label>
+                <>
+                  <Label htmlFor="user-confirm-password" className="whitespace-nowrap">{t('users.confirmPassword')}</Label>
                   <Input
                     id="user-confirm-password"
                     type="password"
@@ -357,15 +355,15 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     autoComplete="new-password"
                   />
-                </div>
+                </>
               )}
             </div>
           )}
 
           {/* OpenLDR role assignment — separate from the form-template identity fields below.
               A role now IS a precise capability set, so a user gets exactly one (or none). */}
-          <div className="grid gap-2 px-6 py-4 border-b border-border">
-            <Label htmlFor="user-role-select">{t('users.rolesLabel')}</Label>
+          <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3 px-6 py-4 border-b border-border">
+            <Label htmlFor="user-role-select" className="whitespace-nowrap">{t('users.rolesLabel')}</Label>
             {rolesLoading ? (
               <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
             ) : roles.length === 0 ? (

@@ -27,6 +27,13 @@ function openDropdown(trigger: HTMLElement) {
   if (!document.querySelector('[role="menu"]')) fireEvent.keyDown(trigger, { key: 'Enter' });
 }
 
+// "Create role" now lives behind the page header's ⋯ menu (consistency pass — mirrors
+// Connectors' openAddConnector helper).
+async function openCreateRole() {
+  openDropdown(await screen.findByTestId('roles-menu-trigger'));
+  fireEvent.click(await screen.findByTestId('create-role'));
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockCanManage = true;
@@ -85,16 +92,18 @@ describe('Roles page', () => {
     expect(screen.queryByText('Reviewer')).toBeNull();
   });
 
-  it('"Create role" is shown when the user has roles.manage', async () => {
+  it('"Create role" is shown (behind the header ⋯ menu) when the user has roles.manage', async () => {
     render(<MemoryRouter><Roles /></MemoryRouter>);
     await screen.findByText('Administrator');
-    expect(screen.getByTestId('create-role')).toBeTruthy();
+    openDropdown(await screen.findByTestId('roles-menu-trigger'));
+    expect(await screen.findByTestId('create-role')).toBeTruthy();
   });
 
-  it('"Create role" and the actions kebab are hidden without roles.manage', async () => {
+  it('the header ⋯ menu (and "Create role" within it) and the row actions kebab are hidden without roles.manage', async () => {
     mockCanManage = false;
     render(<MemoryRouter><Roles /></MemoryRouter>);
     await screen.findByText('Administrator');
+    expect(screen.queryByTestId('roles-menu-trigger')).toBeNull();
     expect(screen.queryByTestId('create-role')).toBeNull();
     expect(screen.queryByTestId('role-actions-admin')).toBeNull();
     expect(screen.queryByTestId('role-actions-r3')).toBeNull();
@@ -117,7 +126,7 @@ describe('Roles page', () => {
     render(<MemoryRouter><Roles /></MemoryRouter>);
     await screen.findByText('Administrator');
 
-    fireEvent.click(screen.getByTestId('create-role'));
+    await openCreateRole();
     fireEvent.change(await screen.findByTestId('role-name'), { target: { value: 'New Role' } });
 
     // RoleSheet's Save lives in its own ⋯ (Actions) menu, not a footer button.

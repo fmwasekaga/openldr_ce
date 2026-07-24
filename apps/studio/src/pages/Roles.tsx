@@ -66,7 +66,18 @@ export function Roles() {
       <SettingsHeader
         description={t('roles.subtitle')}
         actions={canManage ? (
-          <Button size="sm" data-testid="create-role" onClick={() => setCreateOpen(true)}>{t('roles.createRole')}</Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8" data-testid="roles-menu-trigger" aria-label={t('roles.actions')}>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem data-testid="create-role" onSelect={() => setCreateOpen(true)}>
+                {t('roles.createRole')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         ) : undefined}
       />
 
