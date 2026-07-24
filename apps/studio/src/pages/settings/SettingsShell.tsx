@@ -7,21 +7,18 @@ import { cn } from '@/lib/cn';
 interface SubNavItem {
   labelKey: string;
   to: string;
-  /** Role gate — missing means visible to everyone. */
-  roles?: string[];
+  /** Capability gate — missing means visible to everyone who can see /settings. */
+  caps?: string[];
 }
 
 const SUB_NAV: SubNavItem[] = [
-  { labelKey: 'settings.subNav.general', to: '/settings/general' },
-  {
-    labelKey: 'settings.subNav.notifications',
-    to: '/settings/notifications',
-    roles: ['lab_admin', 'lab_manager', 'data_analyst', 'system_auditor'],
-  },
-  { labelKey: 'settings.subNav.sites', to: '/settings/sites', roles: ['lab_admin'] },
-  { labelKey: 'settings.subNav.sync', to: '/settings/sync', roles: ['lab_admin'] },
-  { labelKey: 'settings.subNav.connectors', to: '/settings/connectors', roles: ['lab_admin'] },
-  { labelKey: 'settings.subNav.marketplace', to: '/settings/marketplace', roles: ['lab_admin'] },
+  { labelKey: 'settings.subNav.general', to: '/settings/general', caps: ['settings.view'] },
+  { labelKey: 'settings.subNav.notifications', to: '/settings/notifications', caps: ['notifications.view'] },
+  { labelKey: 'settings.subNav.sites', to: '/settings/sites', caps: ['sync.manage'] },
+  { labelKey: 'settings.subNav.sync', to: '/settings/sync', caps: ['sync.view'] },
+  { labelKey: 'settings.subNav.connectors', to: '/settings/connectors', caps: ['connectors.manage'] },
+  { labelKey: 'settings.subNav.marketplace', to: '/settings/marketplace', caps: ['marketplace.view'] },
+  { labelKey: 'settings.subNav.roles', to: '/settings/roles', caps: ['roles.view'] },
 ];
 
 /**
@@ -32,8 +29,8 @@ const SUB_NAV: SubNavItem[] = [
  */
 export function SettingsShell() {
   const { t } = useTranslation();
-  const { hasRole } = useAuth();
-  const visible = SUB_NAV.filter((item) => !item.roles || item.roles.some((r) => hasRole(r)));
+  const { hasCapability } = useAuth();
+  const visible = SUB_NAV.filter((item) => !item.caps || item.caps.some((c) => hasCapability(c)));
 
   return (
     <AppShell title={t('settings.title')} fullBleed>

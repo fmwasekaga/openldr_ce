@@ -11,11 +11,11 @@ import { authFetch, getMe, getMyCapabilities } from '@/api';
 import { getOidc } from './oidc';
 
 function Probe() {
-  const { user, loading, hasRole, hasCapability } = useAuth();
+  const { user, loading, hasCapability } = useAuth();
   if (loading) return <div>loading</div>;
   return (
     <div>
-      {user ? `${user.username}:${hasRole('lab_admin')}:${hasCapability('roles:manage')}:${hasCapability('roles:missing')}` : 'anon'}
+      {user ? `${user.username}:${hasCapability('roles:manage')}:${hasCapability('roles:missing')}` : 'anon'}
     </div>
   );
 }
@@ -46,7 +46,7 @@ describe('AuthProvider', () => {
         <AuthProvider><Probe /></AuthProvider>
       </MemoryRouter>,
     );
-    await waitFor(() => expect(screen.getByText('dev-admin:true:true:false')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('dev-admin:true:false')).toBeTruthy());
     expect(getOidc).not.toHaveBeenCalled();
     expect(getMyCapabilities).toHaveBeenCalled();
   });
@@ -90,7 +90,7 @@ describe('AuthProvider', () => {
         <AuthProvider><Probe /></AuthProvider>
       </MemoryRouter>,
     );
-    await waitFor(() => expect(screen.getByText('ada:true:false:false')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('ada:false:false')).toBeTruthy());
   });
 
   it('enforced + at /auth/callback: skips signinRedirect (callback route)', async () => {

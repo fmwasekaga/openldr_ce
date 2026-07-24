@@ -47,8 +47,8 @@ interface Props {
 
 export function NewReportSheet({ open, onOpenChange, onCreated, initialDesignId }: Props): JSX.Element {
   const { t } = useTranslation();
-  const { hasRole } = useAuth();
-  const canManageCategories = hasRole('lab_admin') || hasRole('lab_manager');
+  const { hasCapability } = useAuth();
+  const canManageCategories = hasCapability('reports.edit_templates');
   const [designs, setDesigns] = useState<ReportDesign[]>([]);
   const [queries, setQueries] = useState<CustomQuery[]>([]);
   const [categories, setCategories] = useState<ReportCategory[]>([]);

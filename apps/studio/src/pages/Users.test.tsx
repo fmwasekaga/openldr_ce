@@ -19,7 +19,7 @@ vi.mock('@/api', async (orig) => {
   };
 });
 vi.mock('@/auth/AuthProvider', () => ({
-  useAuth: () => ({ user: { id: 'me', username: 'me', displayName: null, roles: ['lab_admin'] }, loading: false, hasRole: () => true }),
+  useAuth: () => ({ user: { id: 'me', username: 'me', displayName: null, roles: ['lab_admin'] }, loading: false, hasCapability: () => true }),
 }));
 
 import { listUsers, setUserStatus, createUser, updateUser, sendUserResetEmail, listPublishedForms, getForm, type UserSummary } from '@/api';

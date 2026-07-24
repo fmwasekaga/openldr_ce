@@ -23,8 +23,13 @@ type PendingDanger = null | 'reset-dashboards' | 'clear-audit' | 'factory-reset'
 
 export function General() {
   const { t } = useTranslation();
-  const { hasRole } = useAuth();
-  const isAdmin = hasRole('lab_admin');
+  const { hasCapability } = useAuth();
+  // Split per-control, matching the server's route-level gates (settings-routes.ts):
+  // feature flags, numbers/validation ("general edits"), and the destructive danger-zone
+  // actions are three independent capabilities, not one admin flag.
+  const canFeatureFlags = hasCapability('settings.feature_flags');
+  const canEditGeneral = hasCapability('settings.edit_general');
+  const canDangerZone = hasCapability('settings.danger_zone');
   const [config, setConfig] = useState<ClientConfig | null>(null);
   const [flags, setFlags] = useState<FeatureFlag[]>([]);
   const [busyFlag, setBusyFlag] = useState<string | null>(null);
@@ -40,15 +45,15 @@ export function General() {
     try {
       const cfg = await fetchClientConfig();
       setConfig(cfg);
-      if (isAdmin) {
-        setFlags(await fetchFeatureFlags());
+      if (canFeatureFlags) setFlags(await fetchFeatureFlags());
+      if (canEditGeneral) {
         setNumbers(await fetchNumberSettings());
         setValidationLevel((await getValidation()).strictness);
       }
     } catch (e) {
       toast.error(String(e instanceof Error ? e.message : e));
     }
-  }, [isAdmin]);
+  }, [canFeatureFlags, canEditGeneral]);
 
   const commitNumber = useCallback(async (setting: NumberSetting) => {
     setBusyNumber(setting.id);
@@ -138,8 +143,8 @@ export function General() {
         </CardContent>
       </Card>
 
-      {/* Feature Flags — admin only */}
-      {isAdmin && (
+      {/* Feature Flags */}
+      {canFeatureFlags && (
       <Card>
         <CardHeader><CardTitle>{t('settings.general.flags.title')}</CardTitle></CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -157,8 +162,8 @@ export function General() {
       </Card>
       )}
 
-      {/* Limits & tuning — admin only. DB-backed number settings migrated from env vars. */}
-      {isAdmin && numbers.length > 0 && (
+      {/* Limits & tuning — DB-backed number settings migrated from env vars. */}
+      {canEditGeneral && numbers.length > 0 && (
       <Card>
         <CardHeader><CardTitle>{t('settings.general.numbers.title')}</CardTitle></CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -186,13 +191,16 @@ export function General() {
       </Card>
       )}
 
-      {/* Danger Zone — admin only */}
-      {isAdmin && (
+      {/* Danger Zone. The validation-strictness control is gated by settings.edit_general
+          (it's a validation setting, not a destructive action — matches EDIT_GENERAL on the
+          server's /api/settings/validation route); the three destructive actions below it
+          are gated by settings.danger_zone (server's DANGER_ZONE gate). */}
+      {(canEditGeneral || canDangerZone) && (
       <Card className="border-destructive/40">
         <CardHeader><CardTitle className="text-destructive">{t('settings.general.danger.title')}</CardTitle></CardHeader>
         <CardContent className="flex flex-col gap-4">
           <p className="text-sm text-muted-foreground">{t('settings.general.danger.description')}</p>
-          {validationLevel && (
+          {canEditGeneral && validationLevel && (
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="text-sm font-medium">{t('settings.general.danger.validation.label')}</div>
@@ -217,7 +225,7 @@ export function General() {
               </Select>
             </div>
           )}
-          {(['reset-dashboards', 'clear-audit', 'factory-reset'] as const).map((action) => {
+          {canDangerZone && (['reset-dashboards', 'clear-audit', 'factory-reset'] as const).map((action) => {
             const k = dangerMeta[action].key;
             return (
               <div key={action} className="flex items-start justify-between gap-4">
@@ -235,7 +243,7 @@ export function General() {
       </Card>
       )}
 
-      {isAdmin && pending && (
+      {canDangerZone && pending && (
         <DangerConfirmDialog
           open={pending !== null}
           onOpenChange={(o) => { if (!o) setPending(null); }}
@@ -247,7 +255,7 @@ export function General() {
         />
       )}
 
-      {isAdmin && pendingValidation && validationLevel && (() => {
+      {canEditGeneral && pendingValidation && validationLevel && (() => {
         // Warn/destructive by DIRECTION of change, not the absolute target level: a
         // low→medium change RAISES strictness even though 'medium' !== 'high'. The dialog
         // is only opened when pending !== current, so these are the two cases.

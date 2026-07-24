@@ -1,7 +1,24 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import '@/i18n/index';
+
+// AppShell's NAV entries are capability-gated (Task 10). Default to an authenticated user
+// with every capability so the "happy path" tests below see the full nav; a dedicated test
+// flips `mockUser` to null to exercise the anonymous/default-context fallback.
+let mockUser: { id: string; username: string; displayName: string | null; roles: string[] } | null = {
+  id: 'me', username: 'admin', displayName: null, roles: ['lab_admin'],
+};
+vi.mock('@/auth/AuthProvider', () => ({
+  useAuth: () => ({
+    user: mockUser,
+    loading: false,
+    hasCapability: () => mockUser !== null,
+    signOut: vi.fn(),
+    authEnforced: true,
+  }),
+}));
+
 import { AppShell } from './AppShell';
 
 beforeEach(() => {
@@ -11,6 +28,7 @@ beforeEach(() => {
     // ignore
   }
   document.documentElement.setAttribute('data-theme', 'dark');
+  mockUser = { id: 'me', username: 'admin', displayName: null, roles: ['lab_admin'] };
 });
 
 function renderShell() {
@@ -22,12 +40,17 @@ function renderShell() {
 }
 
 describe('AppShell', () => {
-  it('renders brand, nav, title, content, and the avatar/user area', () => {
+  it('renders brand, nav, title, and content', () => {
     renderShell();
     expect(screen.getByText('OpenLDR')).toBeInTheDocument();
     expect(screen.getAllByText('Dashboard').length).toBeGreaterThan(0);
     expect(screen.getByText('Reports')).toBeInTheDocument();
     expect(screen.getByText('content')).toBeInTheDocument();
+  });
+
+  it('falls back to the "O" avatar initial when no user is logged in', () => {
+    mockUser = null;
+    renderShell();
     // The avatar initial falls back to 'O' when no user is logged in (user?.username?.[0] ?? 'O').
     expect(screen.getByText('O')).toBeInTheDocument();
   });

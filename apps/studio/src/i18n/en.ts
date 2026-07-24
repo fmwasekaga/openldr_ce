@@ -195,6 +195,7 @@ export const en = {
       sync: 'Distributed sync',
       connectors: 'Connectors',
       marketplace: 'Marketplace',
+      roles: 'Roles',
     },
     sync: {
       tabs: { settings: 'Settings', activity: 'Activity' },

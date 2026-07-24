@@ -15,8 +15,7 @@ export function __resetAuthProviderState(): void { redirecting = false; }
 interface AuthState {
   user: CurrentUser | null;
   loading: boolean;
-  hasRole: (role: string) => boolean;
-  /** Capability-based authorization check (replaces hasRole once all callers are migrated — Task 10). */
+  /** Capability-based authorization check. */
   hasCapability: (cap: string) => boolean;
   signOut: () => void;
   /** Whether the server enforces auth. False when AUTH_DEV_BYPASS is on (dev only). Defaults true (fail-safe). */
@@ -26,7 +25,6 @@ interface AuthState {
 const AuthContext = createContext<AuthState>({
   user: null,
   loading: true,
-  hasRole: () => false,
   hasCapability: () => false,
   signOut: () => {},
   authEnforced: true,
@@ -94,7 +92,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => { active = false; };
   }, [location.pathname]);
 
-  const hasRole = (role: string) => user?.roles.includes(role) ?? false;
   const hasCapability = (cap: string) => capabilities.includes(cap);
   const signOut = () => { void oidcRef.current?.signoutRedirect(); };
 
@@ -124,5 +121,5 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
   }
 
-  return <AuthContext.Provider value={{ user, loading, hasRole, hasCapability, signOut, authEnforced }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, loading, hasCapability, signOut, authEnforced }}>{children}</AuthContext.Provider>;
 }

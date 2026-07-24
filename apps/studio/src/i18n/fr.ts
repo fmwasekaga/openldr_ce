@@ -199,6 +199,7 @@ export const fr: EnShape = {
       sync: 'Synchronisation distribuée',
       connectors: 'Connecteurs',
       marketplace: 'Marketplace',
+      roles: 'Rôles',
     },
     sync: {
       tabs: { settings: 'Paramètres', activity: 'Activité' },

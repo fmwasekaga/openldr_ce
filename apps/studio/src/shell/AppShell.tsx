@@ -22,21 +22,19 @@ import { pluginIcon } from '@/plugins/icons';
 import { NotificationBell } from './NotificationBell';
 import { NotificationToaster } from './NotificationToaster';
 
-const NOTIFICATION_ROLES = ['lab_admin', 'lab_manager', 'data_analyst', 'system_auditor'];
-
-const NAV: { to: string; labelKey: string; end: boolean; icon: LucideIcon; roles?: string[] }[] = [
-  { to: '/', labelKey: 'nav.dashboard', end: true, icon: LayoutDashboard },
-  { to: '/reports', labelKey: 'nav.reports', end: false, icon: FileText },
-  { to: '/report-designer', labelKey: 'nav.reportDesigner', end: false, icon: PencilRuler, roles: ['lab_admin', 'lab_manager'] },
-  { to: '/query', labelKey: 'nav.query', end: false, icon: Database, roles: ['lab_admin', 'lab_manager', 'data_analyst'] },
-  { to: '/workflows', labelKey: 'nav.workflows', end: false, icon: Workflow, roles: ['lab_admin', 'lab_manager'] },
+const NAV: { to: string; labelKey: string; end: boolean; icon: LucideIcon; caps?: string[] }[] = [
+  { to: '/', labelKey: 'nav.dashboard', end: true, icon: LayoutDashboard, caps: ['dashboards.view'] },
+  { to: '/reports', labelKey: 'nav.reports', end: false, icon: FileText, caps: ['reports.view'] },
+  { to: '/report-designer', labelKey: 'nav.reportDesigner', end: false, icon: PencilRuler, caps: ['reports.edit_templates'] },
+  { to: '/query', labelKey: 'nav.query', end: false, icon: Database, caps: ['query.run'] },
+  { to: '/workflows', labelKey: 'nav.workflows', end: false, icon: Workflow, caps: ['workflows.view'] },
   { to: '/terminology', labelKey: 'nav.terminology', end: false, icon: Library },
   { to: '/forms', labelKey: 'nav.forms', end: false, icon: FileInput },
-  { to: '/users', labelKey: 'nav.users', end: false, icon: Users },
+  { to: '/users', labelKey: 'nav.users', end: false, icon: Users, caps: ['users.view'] },
   // Sites lives under Settings → Sites (not a top-level nav item) so it isn't mistaken for a
   // Facilities / master facility list.
   { to: '/audit', labelKey: 'nav.audit', end: false, icon: ShieldCheck },
-  { to: '/activity', labelKey: 'nav.activity', end: false, icon: Activity, roles: ['lab_admin', 'lab_manager', 'data_analyst', 'system_auditor'] },
+  { to: '/activity', labelKey: 'nav.activity', end: false, icon: Activity, caps: ['activity.view'] },
   { to: '/docs', labelKey: 'nav.docs', end: false, icon: BookOpen },
 ];
 
@@ -81,7 +79,7 @@ export function AppShell({
 }) {
   const [theme, toggleTheme] = useTheme();
   const [collapsed, toggleSidebar] = useSidebar();
-  const { user, signOut, hasRole, authEnforced } = useAuth();
+  const { user, signOut, hasCapability, authEnforced } = useAuth();
   const [pluginUis, setPluginUis] = useState<PluginUiEntry[]>([]);
   useEffect(() => {
     let cancelled = false;
@@ -142,7 +140,7 @@ export function AppShell({
         </div>
 
         <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
-          {NAV.filter((n) => !n.roles || n.roles.some((r) => hasRole(r))).map(({ to, labelKey, end, icon: Icon }) => (
+          {NAV.filter((n) => !n.caps || n.caps.some((c) => hasCapability(c))).map(({ to, labelKey, end, icon: Icon }) => (
             <SidebarNavItem key={to} to={to} end={end} icon={Icon} label={t(labelKey)} collapsed={collapsed} />
           ))}
           {pluginUis.map((p) => (
@@ -183,7 +181,7 @@ export function AppShell({
               <DropdownMenuSeparator />
               {/* TODO(phase3): generalize to "user can see >=1 Settings sub-nav section" once
                   General/Marketplace (broader-role) sections land; for SP-0 DHIS2 is admin-only. */}
-              {hasRole('lab_admin') && (
+              {hasCapability('settings.view') && (
                 <DropdownMenuItem onClick={() => navigate('/settings')}>
                   <Settings className="mr-2 h-4 w-4" />
                   {t('layout.settings')}
@@ -216,7 +214,7 @@ export function AppShell({
                 <TooltipContent side="bottom" className="max-w-xs">{t('a11y.devBypassTooltip')}</TooltipContent>
               </Tooltip>
             )}
-            {NOTIFICATION_ROLES.some((r) => hasRole(r)) && <NotificationBell />}
+            {hasCapability('notifications.view') && <NotificationBell />}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
