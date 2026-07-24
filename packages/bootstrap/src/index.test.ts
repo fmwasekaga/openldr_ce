@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { makeMigratedDb } from '@openldr/db/testing';
-import { createAppSettingsStore, createReportStore, referenceCapture } from '@openldr/db';
+import { createAppSettingsStore, createReportStore, createRoleStore, referenceCapture } from '@openldr/db';
 import { createDashboardStore } from '@openldr/dashboards';
 import { createFormStore } from '@openldr/forms';
 import type { Config } from '@openldr/config';
@@ -36,6 +36,10 @@ describe('createAppContext', () => {
     expect(typeof ctx.terminology.ontology.listDistributions).toBe('function');
     expect(typeof ctx.terminology.loaders.loinc).toBe('function');
     expect(typeof ctx.forms.list).toBe('function');
+    // RBAC Task 4: ctx.roles is on AppContext (shape check only — no live DB here, see below
+    // for the seeded-roles integration test against a real migrated db).
+    expect(typeof ctx.roles.list).toBe('function');
+    expect(typeof ctx.roles.seedSystemRoles).toBe('function');
     expect(typeof ctx.plugins.list).toBe('function');
     expect(typeof ctx.plugins.install).toBe('function');
     expect(typeof ctx.plugins.rollback).toBe('function');
@@ -116,5 +120,33 @@ describe('createAppContext reference-capture wiring (S2 pull source)', () => {
     const log = await refLog(db, created.id);
     expect(log.length).toBeGreaterThanOrEqual(1);
     expect(log.at(-1)).toMatchObject({ entity_type: 'form', op: 'upsert' });
+  });
+});
+
+/**
+ * RBAC Task 4: `createAppContext` seeds the 5 system roles UNCONDITIONALLY (via
+ * `roles.seedSystemRoles()` beside `const roles = createRoleStore(internal.db)` in index.ts) —
+ * deliberately NOT gated behind SEED_ON_START, which defaults to false and only guards optional
+ * demo/sample data (see seed.ts). `createAppContext` itself can't run against pg-mem (real pg
+ * pools + a LISTEN client, per the comment above), so this mirrors the exact bootstrap
+ * construction (`createRoleStore(internal.db)`) against a fully-migrated db, the same pattern the
+ * reference-capture tests above use, and proves the seed call's idempotent semantics: 5 roles
+ * after one call, still 5 after a second (both fresh install and an existing-DB upgrade re-run it
+ * on every boot).
+ */
+describe('createAppContext system-role seed (RBAC Task 4)', () => {
+  it('seedSystemRoles produces the 5 system roles, idempotently', async () => {
+    const db = await makeMigratedDb();
+    const roles = createRoleStore(db); // bootstrap construction: createRoleStore(internal.db)
+    await roles.seedSystemRoles();
+    await roles.seedSystemRoles(); // second call (mirrors every-boot re-seed) — no duplicates
+    const list = await roles.list();
+    expect(list).toHaveLength(5);
+    expect(list.map((r) => r.slug).sort()).toEqual(
+      ['data_analyst', 'lab_admin', 'lab_manager', 'lab_technician', 'system_auditor'].sort(),
+    );
+    const admin = list.find((r) => r.slug === 'lab_admin')!;
+    expect(admin.isSystem).toBe(true);
+    expect(admin.locked).toBe(true);
   });
 });
